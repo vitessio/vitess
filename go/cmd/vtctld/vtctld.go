@@ -62,7 +62,7 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
-	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
+	templateLoader = NewTemplateLoader(*templateDir, *debug)
 
 	ts = topo.GetServer()
 	defer topo.CloseServers()

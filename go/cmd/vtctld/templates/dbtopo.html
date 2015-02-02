@@ -70,7 +70,6 @@
       </thead>
       <tbody>
         {{range $processedType := $shards.TabletTypes}}
-
         <tr>
           {{range $i, $shard := $shards.ShardNodes}}
           {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}

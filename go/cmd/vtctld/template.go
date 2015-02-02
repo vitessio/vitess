@@ -90,7 +90,9 @@ func breadCrumbs(fullPath string) template.HTML {
 	return template.HTML(b.String())
 }
 
-var funcMap = template.FuncMap{
+// FuncMap defines functions accessible in templates. It can be modified in
+// init() method by plugins to provide extra formatting.
+var FuncMap = template.FuncMap{
 	"htmlize": func(o interface{}) template.HTML {
 		return template.HTML(Htmlize(o))
 	},
@@ -131,7 +133,30 @@ var funcMap = template.FuncMap{
 	},
 }
 
-var dummyTemplate = template.Must(template.New("dummy").Funcs(funcMap).Parse(`
+// TemplateLoader is a helper class to load html templates.
+type TemplateLoader struct {
+	Directory string
+	usesDummy bool
+	template  *template.Template
+}
+
+func (loader *TemplateLoader) compile() (*template.Template, error) {
+	return template.New("main").Funcs(FuncMap).ParseGlob(path.Join(loader.Directory, "[a-z]*"))
+}
+
+func (loader *TemplateLoader) makeErrorTemplate(errorMessage string) *template.Template {
+	return template.Must(template.New("error").Parse(fmt.Sprintf("Error in template: %s", errorMessage)))
+}
+
+// NewTemplateLoader returns a template loader with templates from
+// directory. If directory is "", fallbackTemplate will be used
+// (regardless of the wanted template name). If debug is true,
+// templates will be recompiled each time.
+func NewTemplateLoader(directory string, debug bool) *TemplateLoader {
+	loader := &TemplateLoader{Directory: directory}
+	if directory == "" {
+		loader.usesDummy = true
+		loader.template = template.Must(template.New("dummy").Funcs(FuncMap).Parse(`
 <!DOCTYPE HTML>
 <html>
 <head>
@@ -149,31 +174,6 @@ var dummyTemplate = template.Must(template.New("dummy").Funcs(funcMap).Parse(`
 </body>
 </html>
 `))
-
-// TemplateLoader is a helper class to load html templates
-type TemplateLoader struct {
-	Directory string
-	usesDummy bool
-	template  *template.Template
-}
-
-func (loader *TemplateLoader) compile() (*template.Template, error) {
-	return template.New("main").Funcs(funcMap).ParseGlob(path.Join(loader.Directory, "[a-z]*"))
-}
-
-func (loader *TemplateLoader) makeErrorTemplate(errorMessage string) *template.Template {
-	return template.Must(template.New("error").Parse(fmt.Sprintf("Error in template: %s", errorMessage)))
-}
-
-// NewTemplateLoader returns a template loader with templates from
-// directory. If directory is "", fallbackTemplate will be used
-// (regardless of the wanted template name). If debug is true,
-// templates will be recompiled each time.
-func NewTemplateLoader(directory string, fallbackTemplate *template.Template, debug bool) *TemplateLoader {
-	loader := &TemplateLoader{Directory: directory}
-	if directory == "" {
-		loader.usesDummy = true
-		loader.template = fallbackTemplate
 		return loader
 	}
 	if !debug {
