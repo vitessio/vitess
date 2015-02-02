@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 // FHtmlize writes data to w as debug HTML (using definition lists).
@@ -110,17 +111,17 @@ var funcMap = template.FuncMap{
 		}
 		return template.HTML(link(keyspace, explorer.GetSrvKeyspacePath(cell, keyspace)))
 	},
-	"shard": func(keyspace, shard string) template.HTML {
+	"shard": func(keyspace string, shard *topotools.ShardNodes) template.HTML {
 		if explorer == nil {
-			return template.HTML(shard)
+			return template.HTML(shard.Name)
 		}
-		return template.HTML(link(shard, explorer.GetShardPath(keyspace, shard)))
+		return template.HTML(link(shard.Name, explorer.GetShardPath(keyspace, shard.Name)))
 	},
-	"srv_shard": func(cell, keyspace, shard string) template.HTML {
+	"srv_shard": func(cell, keyspace string, shard *topotools.ShardNodes) template.HTML {
 		if explorer == nil {
-			return template.HTML(shard)
+			return template.HTML(shard.Name)
 		}
-		return template.HTML(link(shard, explorer.GetSrvShardPath(cell, keyspace, shard)))
+		return template.HTML(link(shard.Name, explorer.GetSrvShardPath(cell, keyspace, shard.Name)))
 	},
 	"tablet": func(alias topo.TabletAlias, shortname string) template.HTML {
 		if explorer == nil {
@@ -192,7 +193,7 @@ func (loader *TemplateLoader) Lookup(name string) (*template.Template, error) {
 	}
 	var err error
 	source := loader.template
-	if loader.template == nil {
+	if source == nil {
 		source, err = loader.compile()
 		if err != nil {
 			return nil, err
