@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 )
@@ -229,4 +231,27 @@ func (loader *TemplateLoader) ServeTemplate(templateName string, data interface{
 			httpError(w, "error executing template: %v", err)
 		}
 	}
+}
+
+var (
+	modifyDbTopology     func(context.Context, topo.Server, *topotools.Topology) error
+	modifyDbServingGraph func(topo.Server, *topotools.ServingGraph)
+)
+
+// SetDbTopologyPostprocessor installs a hook that can modify
+// topotools.Topology struct before it's displayed.
+func SetDbTopologyPostprocessor(f func(context.Context, topo.Server, *topotools.Topology) error) {
+	if modifyDbTopology != nil {
+		panic("Cannot set multiple DbTopology postprocessors")
+	}
+	modifyDbTopology = f
+}
+
+// SetDbServingGraphPostprocessor installs a hook that can modify
+// topotools.ServingGraph struct before it's displayed.
+func SetDbServingGraphPostprocessor(f func(topo.Server, *topotools.ServingGraph)) {
+	if modifyDbTopology != nil {
+		panic("Cannot set multiple DbServingGraph postprocessors")
+	}
+	modifyDbServingGraph = f
 }
