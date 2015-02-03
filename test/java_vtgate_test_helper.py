@@ -99,7 +99,8 @@ class TestEnv(object):
       t.remove_tree()
 
 
-def main():
+def parse_args():
+  global options, args
   parser = optparse.OptionParser(usage="usage: %prog [options]")
   parser.add_option("--shards", action="store", type="string",
                     help="comma separated list of shard names, e.g: '-80,80-'")
@@ -112,6 +113,8 @@ def main():
   utils.add_options(parser)
   (options, args) = parser.parse_args()
   utils.set_options(options)
+
+def main():
   env = TestEnv(options)
   if args[0] == 'setup':
     env.set_up()
@@ -124,5 +127,6 @@ def main():
 
 
 if __name__ == '__main__':
+  parse_args()
   main()
 

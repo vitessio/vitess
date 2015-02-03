@@ -57,6 +57,7 @@ class LoggingStream(object):
     pass
 
 def add_options(parser):
+  environment.add_options(parser)
   parser.add_option('-d', '--debug', action='store_true',
                     help='utils.pause() statements will wait for user input')
   parser.add_option('-k', '--keep-logs', action='store_true',
@@ -99,6 +100,9 @@ def main(mod=None):
 
   set_options(options)
 
+  run_tests(mod, args)
+
+def run_tests(mod, args):
   try:
     suite = unittest.TestSuite()
     if not args:

@@ -97,6 +97,7 @@ medium_integration_test_files = \
 	tabletmanager.py \
 	reparent.py \
 	vtdb_test.py \
+	vtgate_utils_test.py \
 	rowcache_invalidator.py
 
 large_integration_test_files = \
@@ -163,7 +164,6 @@ java_test:
 	cd java && mvn verify
 
 java_vtgate_client_test:
-	mvn -f java/gorpc/pom.xml clean install -DskipTests
 	mvn -f java/vtgate-client/pom.xml clean verify
 
 v3_test:
