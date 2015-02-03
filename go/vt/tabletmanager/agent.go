@@ -59,7 +59,7 @@ type ActionAgent struct {
 	MysqlDaemon     mysqlctl.MysqlDaemon
 	DBConfigs       *dbconfigs.DBConfigs
 	SchemaOverrides []tabletserver.SchemaOverride
-	BinlogPlayerMap *BinlogPlayerMap
+	BinlogPlayerMap BinlogPlayerMapInterface
 	LockTimeout     time.Duration
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
@@ -189,7 +189,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		MysqlDaemon:        mysqlDaemon,
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
-		BinlogPlayerMap:    nil,
+		BinlogPlayerMap:    &FakeBinlogPlayerMap{},
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
