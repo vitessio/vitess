@@ -1,7 +1,7 @@
 <div class="container-fluid">
   <div class="row">
-    <div data-ng-include="'editor/sidebar.html'"></div>
-    <div class="col-md-10">
+    <div data-ng-include="'/content/editor/sidebar.html'"></div>
+    <div class="col-md-4">
       <h4 data-ng-show="keyspaceName">
         Keyspace: {{keyspaceName}} <span class="btn-group ">
           <button type="button"
@@ -21,12 +21,12 @@
     </div>
     <div data-ng-switch="keyspace.Sharded">
       <div data-ng-switch-when="true">
-        <div data-ng-include="'editor/tables.html'"></div>
-        <div data-ng-include="'editor/classes.html'"></div>
-        <div data-ng-include="'editor/vindexes.html'"></div>
+        <div data-ng-include="'/content/editor/tables.html'"></div>
+        <div data-ng-include="'/content/editor/classes.html'"></div>
+        <div data-ng-include="'/content/editor/vindexes.html'"></div>
       </div>
       <div data-ng-switch-default>
-        <div data-ng-include="'editor/unsharded_tables.html'"></div>
+        <div data-ng-include="'/content/editor/unsharded_tables.html'"></div>
       </div>
     </div>
   </div>
