@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -51,7 +52,7 @@ type Fixture struct {
 
 // New creates a topology fixture.
 func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
-	wr := wrangler.New(logger, ts, 1*time.Second)
+	wr := wrangler.New(logger, ts, tmclient.NewTabletManagerClient(), 1*time.Second)
 
 	return &Fixture{
 		T:        t,

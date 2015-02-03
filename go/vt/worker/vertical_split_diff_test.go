@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -220,7 +221,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 
 func testVerticalSplitDiff(t *testing.T, strategy string) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, faketmclient.NewFakeTabletManagerClient(), time.Second)
 	ctx := context.Background()
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,

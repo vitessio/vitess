@@ -21,10 +21,8 @@ import (
 
 type timeoutError error
 
-func init() {
-	tmclient.RegisterTabletManagerClientFactory("fake", func() tmclient.TabletManagerClient {
-		return &FakeTabletManagerClient{}
-	})
+func NewFakeTabletManagerClient() tmclient.TabletManagerClient {
+	return &FakeTabletManagerClient{}
 }
 
 // FakeTabletManagerClient implements tmclient.TabletManagerClient
