@@ -48,14 +48,7 @@ type IndexContent struct {
 // used at runtime by plug-ins
 var templateLoader *TemplateLoader
 var actionRepo *ActionRepository
-var indexContent = IndexContent{
-	ToplevelLinks: map[string]string{
-		"DbTopology Tool": "/dbtopo",
-		"Serving Graph":   "/serving_graph",
-		"Schema editor":   "/schema_editor",
-		"Schema view":     "/vschema",
-	},
-}
+
 var ts topo.Server
 
 func main() {
@@ -151,11 +144,6 @@ func main() {
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.DeleteTablet(tabletAlias)
 		})
-
-	// toplevel index
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		templateLoader.ServeTemplate("index.html", indexContent, w, r)
-	})
 
 	// keyspace actions
 	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +254,11 @@ func main() {
 
 		servingGraph := topotools.DbServingGraph(ts, cell)
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
+	})
+
+	// vschema editor
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, *schemaEditorDir+"/schema_editor/index.html")
 	})
 
 	// vschema editor
