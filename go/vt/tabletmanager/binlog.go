@@ -285,20 +285,6 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) 
 	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
 
-type BinlogPlayerMapInterface interface {
-	size() int64
-
-	StopAllPlayersAndReset()
-	RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo)
-	Stop()
-	Start()
-	BlpPositionList() (*blproto.BlpPositionList, error)
-	RunUntil(blpPositionList *blproto.BlpPositionList, waitTimeout time.Duration) error
-
-	getMu() *sync.Mutex
-	getPlayers() map[uint32]*BinlogPlayerController
-}
-
 // BinlogPlayerMap controls all the players.
 // It can be stopped and restarted.
 type BinlogPlayerMap struct {
@@ -311,38 +297,6 @@ type BinlogPlayerMap struct {
 	mu      sync.Mutex
 	players map[uint32]*BinlogPlayerController
 	state   int64
-}
-
-// Dummy BinlogPlayerMap used for tests. It has very minimal functionality.
-type FakeBinlogPlayerMap struct {
-	mu      sync.Mutex
-	players map[uint32]*BinlogPlayerController
-}
-
-func (fblm *FakeBinlogPlayerMap) size() int64 {
-	return int64(len(fblm.players))
-}
-
-func (fblm *FakeBinlogPlayerMap) StopAllPlayersAndReset() {}
-func (fblm *FakeBinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
-}
-func (fblm *FakeBinlogPlayerMap) Stop()  {}
-func (fblm *FakeBinlogPlayerMap) Start() {}
-
-func (fblm *FakeBinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) {
-	return &blproto.BlpPositionList{}, nil
-}
-
-func (fblm *FakeBinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, waitTimeout time.Duration) error {
-	return nil
-}
-
-func (fblm *FakeBinlogPlayerMap) getMu() *sync.Mutex {
-	return &fblm.mu
-}
-
-func (fblm *FakeBinlogPlayerMap) getPlayers() map[uint32]*BinlogPlayerController {
-	return fblm.players
 }
 
 const (
@@ -362,59 +316,51 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld
 }
 
 // RegisterBinlogPlayerMap registers the varz for the players
-func RegisterBinlogPlayerMap(blm BinlogPlayerMapInterface) {
+func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
 	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
 		sbm := int64(0)
-		blm.getMu().Lock()
-		for _, bpc := range blm.getPlayers() {
+		blm.mu.Lock()
+		for _, bpc := range blm.players {
 			psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
 			if psbm > sbm {
 				sbm = psbm
 			}
 		}
-		blm.getMu().Unlock()
+		blm.mu.Unlock()
 		return sbm
 	}))
 	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
-		blm.getMu().Lock()
-		result := make(map[string]int64, len(blm.getPlayers()))
-		for i, bpc := range blm.getPlayers() {
+		blm.mu.Lock()
+		result := make(map[string]int64, len(blm.players))
+		for i, bpc := range blm.players {
 			sbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
 			result[fmt.Sprintf("%v", i)] = sbm
 		}
-		blm.getMu().Unlock()
+		blm.mu.Unlock()
 		return result
 	}))
 	stats.Publish("BinlogPlayerSourceShardNameMap", stats.StringMapFunc(func() map[string]string {
-		blm.getMu().Lock()
-		result := make(map[string]string, len(blm.getPlayers()))
-		for i, bpc := range blm.getPlayers() {
+		blm.mu.Lock()
+		result := make(map[string]string, len(blm.players))
+		for i, bpc := range blm.players {
 			name := bpc.sourceShard.Keyspace + "/" + bpc.sourceShard.Shard
 			result[fmt.Sprintf("%v", i)] = name
 		}
-		blm.getMu().Unlock()
+		blm.mu.Unlock()
 		return result
 	}))
 	stats.Publish("BinlogPlayerSourceTabletAliasMap", stats.StringMapFunc(func() map[string]string {
-		blm.getMu().Lock()
-		result := make(map[string]string, len(blm.getPlayers()))
-		for i, bpc := range blm.getPlayers() {
+		blm.mu.Lock()
+		result := make(map[string]string, len(blm.players))
+		for i, bpc := range blm.players {
 			bpc.playerMutex.Lock()
 			result[fmt.Sprintf("%v", i)] = bpc.sourceTablet.String()
 			bpc.playerMutex.Unlock()
 		}
-		blm.getMu().Unlock()
+		blm.mu.Unlock()
 		return result
 	}))
-}
-
-func (blm *BinlogPlayerMap) getMu() *sync.Mutex {
-	return &blm.mu
-}
-
-func (blm *BinlogPlayerMap) getPlayers() map[uint32]*BinlogPlayerController {
-	return blm.players
 }
 
 func (blm *BinlogPlayerMap) size() int64 {
