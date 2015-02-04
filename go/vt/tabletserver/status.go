@@ -33,9 +33,16 @@ function drawQPSChart() {
     }
   };
 
+  // If we're accessing status through a proxy that requires a URL prefix,
+  // add the prefix to the vars URL.
+  var vars_url = '/debug/vars';
+  var pos = window.location.pathname.lastIndexOf('/debug/status');
+  if (pos > 0) {
+    vars_url = window.location.pathname.substring(0, pos) + vars_url;
+  }
 
   var redraw = function() {
-    $.getJSON("/debug/vars", function(input_data) {
+    $.getJSON(vars_url, function(input_data) {
       var now = new Date();
       var qps = input_data.QPS;
       var planTypes = Object.keys(qps);
