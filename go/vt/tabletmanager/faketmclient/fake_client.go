@@ -4,6 +4,11 @@
 
 package faketmclient
 
+// This file contains a "fake" implementation of the TabletManagerClient interface, which
+// may be useful for running tests without having to bring up a cluster. The implementation
+// is very minimal, and only works for specific use-cases. If you find that it doesn't work
+// for yours, feel free to extend this implementation.
+
 import (
 	"time"
 
@@ -21,12 +26,28 @@ import (
 
 type timeoutError error
 
+// NewFakeTabletManagerClient should be used to create a new FakeTabletManagerClient.
+// There is intentionally no init in this file with a call to RegisterTabletManagerClientFactory.
+// There shouldn't be any legitimate use-case where we would want to start a vitess cluster
+// with a FakeTMC, and we don't want to do it by accident.
 func NewFakeTabletManagerClient() tmclient.TabletManagerClient {
-	return &FakeTabletManagerClient{}
+	return &FakeTabletManagerClient{
+		tmc: tmclient.NewTabletManagerClient(),
+	}
 }
 
 // FakeTabletManagerClient implements tmclient.TabletManagerClient
-type FakeTabletManagerClient struct{}
+// TODO(aaijazi): this is a pretty complicated and inconsistent implementation. It can't
+// make up its mind on whether it wants to be a fake, a mock, or act like the real thing.
+// We probably want to move it more consistently towards being a mock, once we standardize
+// how we want to do mocks in vitess. We don't currently have a good way to configure
+// specific return values.
+type FakeTabletManagerClient struct {
+	// Keep a real TMC, so we can pass through certain calls.
+	// This is to let us essentially fake out only part of the interface, while deferring
+	// to the real implementation for things that we don't need to fake out yet.
+	tmc tmclient.TabletManagerClient
+}
 
 //
 // Various read-only methods
@@ -50,8 +71,9 @@ func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *
 
 // GetSchema is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	var sd myproto.SchemaDefinition
-	return &sd, nil
+	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews)
+	// var sd myproto.SchemaDefinition
+	// return &sd, nil
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
@@ -187,7 +209,16 @@ func (client *FakeTabletManagerClient) WaitBlpPosition(ctx context.Context, tabl
 
 // StopBlp is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) StopBlp(ctx context.Context, tablet *topo.TabletInfo) (*blproto.BlpPositionList, error) {
-	var bpl blproto.BlpPositionList
+	// TODO(aaijazi): this works because all tests so far only need to rely on Uid 0.
+	// Ideally, this should turn into a full mock, where the caller can configure the exact
+	// return value.
+	bpl := blproto.BlpPositionList{
+		Entries: []blproto.BlpPosition{
+			blproto.BlpPosition{
+				Uid: uint32(0),
+			},
+		},
+	}
 	return &bpl, nil
 }
 
