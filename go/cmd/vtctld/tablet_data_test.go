@@ -16,7 +16,7 @@ import (
 
 func TestTabletData(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)

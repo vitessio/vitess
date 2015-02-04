@@ -45,11 +45,11 @@ type Wrangler struct {
 // of the time, we want to immediately know that our action will
 // fail. However, automated action will need some time to arbitrate
 // the locks.
-func New(logger logutil.Logger, ts topo.Server, lockTimeout time.Duration) *Wrangler {
+func New(logger logutil.Logger, ts topo.Server, tmc tmclient.TabletManagerClient, lockTimeout time.Duration) *Wrangler {
 	return &Wrangler{
 		logger:      logger,
 		ts:          ts,
-		tmc:         tmclient.NewTabletManagerClient(),
+		tmc:         tmc,
 		lockTimeout: lockTimeout,
 	}
 }

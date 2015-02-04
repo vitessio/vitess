@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -235,7 +236,7 @@ func TestSplitClonePopulateBlpCheckpoint(t *testing.T) {
 
 func testSplitClone(t *testing.T, strategy string) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, time.Second)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
