@@ -160,8 +160,17 @@ isStacked: true,
 
 function update() {
   var varzData;
+
+  // If we're accessing status through a proxy that requires a URL prefix,
+  // add the prefix to the vars URL.
+  var vars_url = '/debug/vars';
+  var pos = window.location.pathname.lastIndexOf('/debug/status');
+  if (pos > 0) {
+    vars_url = window.location.pathname.substring(0, pos) + vars_url;
+  }
+
   var up = function() {
-  $.getJSON('/debug/vars', function(d) {
+  $.getJSON(vars_url, function(d) {
     for (var i = 0; i < updateCallbacks.length; i++) {
       updateCallbacks[i](d, new Date());
     }
