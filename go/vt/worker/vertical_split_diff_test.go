@@ -6,6 +6,7 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,10 @@ func (sq *VerticalDiffSqlQuery) GetSessionId(sessionParams *proto.SessionParams,
 }
 
 func (sq *VerticalDiffSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
+		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", query.Sql)
+	}
+
 	sq.t.Logf("VerticalDiffSqlQuery: got query: %v", *query)
 
 	// Send the headers
