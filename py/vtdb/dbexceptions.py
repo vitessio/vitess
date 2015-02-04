@@ -63,6 +63,6 @@ class RequestBacklog(DatabaseError):
 
 
 # ThrottledError is raised when client exceeds allocated quota on the server
-class ThrottledError(OperationalError):
+class ThrottledError(DatabaseError):
   pass
 
