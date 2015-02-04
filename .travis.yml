@@ -18,4 +18,4 @@ install:
   - bash -v bootstrap.sh
 script:
   - source dev.env
-  - travis_retry make $MAKE_TARGET
+  - travis_retry make build $MAKE_TARGET
