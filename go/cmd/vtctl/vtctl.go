@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -77,7 +78,7 @@ func main() {
 	defer topo.CloseServers()
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, *lockWaitTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient(), *lockWaitTimeout)
 	installSignalHandlers(cancel)
 
 	err := vtctl.RunCommand(ctx, wr, args)

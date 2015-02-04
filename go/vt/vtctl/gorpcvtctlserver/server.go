@@ -13,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
@@ -47,7 +48,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(ctx context.Context, query *gorpcproto
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, query.LockTimeout)
+	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), query.LockTimeout)
 	// FIXME(alainjobart) use a single context, copy the source info from it
 	ctx, cancel := context.WithTimeout(context.TODO(), query.ActionTimeout)
 

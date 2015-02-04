@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -98,7 +99,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action(ctx, wr, keyspace, r)
 	cancel()
 	if err != nil {
@@ -126,7 +127,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action(ctx, wr, keyspace, shard, r)
 	cancel()
 	if err != nil {
@@ -158,7 +159,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	// run the action
 	// FIXME(alainjobart) copy web context info
 	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, *lockTimeout)
+	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action.method(ctx, wr, tabletAlias, r)
 	cancel()
 	if err != nil {

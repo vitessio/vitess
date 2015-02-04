@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -100,7 +101,7 @@ func main() {
 	defer topo.CloseServers()
 
 	// The logger will be replaced when we start a job.
-	wr = wrangler.New(logutil.NewConsoleLogger(), ts, 30*time.Second)
+	wr = wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), 30*time.Second)
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
 		initInteractiveMode()
