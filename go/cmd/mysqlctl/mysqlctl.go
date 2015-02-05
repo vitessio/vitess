@@ -202,7 +202,7 @@ func main() {
 		log.Errorf("%v", err)
 		exit.Return(1)
 	}
-	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
 	defer mysqld.Close()
 
 	action := flag.Arg(0)

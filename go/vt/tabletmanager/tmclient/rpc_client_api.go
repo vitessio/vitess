@@ -83,7 +83,7 @@ type TabletManagerClient interface {
 	// ApplySchema will apply a schema change
 	ApplySchema(ctx context.Context, tablet *topo.TabletInfo, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
 
-	// ExecuteFetch executes a query remotely using the DBA pool
+	// ExecuteFetchAsDba executes a query remotely using the DBA pool
 	ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool

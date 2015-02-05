@@ -69,7 +69,7 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
 
-	ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error)
+	ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, dbconfigName string) (*proto.QueryResult, error)
 
 	// Replication related methods
 
@@ -273,9 +273,9 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 
 // ExecuteFetch will execute the given query, possibly disabling binlogs.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool) (*proto.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, dbconfigName string) (*proto.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetDbaConnection()
+	conn, err := agent.MysqlDaemon.GetDbConnection(dbconfigName)
 	if err != nil {
 		return nil, err
 	}

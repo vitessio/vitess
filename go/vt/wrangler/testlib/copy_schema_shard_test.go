@@ -135,12 +135,8 @@ func TestCopySchemaShard(t *testing.T) {
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-40"))
-	// one destination RdOnly, so we know that schema copies propogate from masters
-	destinationRdonly := NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-40"),
-		TabletParent(destinationMaster.Tablet.Alias))
 
-	for _, ft := range []*FakeTablet{sourceMaster, sourceRdonly, destinationMaster, destinationRdonly} {
+	for _, ft := range []*FakeTablet{sourceMaster, sourceRdonly, destinationMaster} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
@@ -162,7 +158,6 @@ func TestCopySchemaShard(t *testing.T) {
 	}
 
 	destinationMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
-	destinationRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
 
 	if err := wr.CopySchemaShard(context.Background(), sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)

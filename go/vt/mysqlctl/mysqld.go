@@ -42,7 +42,9 @@ const (
 )
 
 var (
-	dbaPoolSize    = flag.Int("dba_pool_size", 10, "Size of the connection pool for dba connections")
+	// TODO(aaijazi): for reasons I don't understand, the dba pool size needs to be fairly large (15+)
+	// for test/clone.py to pass.
+	dbaPoolSize    = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
 	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
@@ -83,7 +85,7 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *mysql.Con
 
 	// create and open the connection pool for app access
 	appMysqlStats := stats.NewTimings("Mysql" + appName)
-	appPool := dbconnpool.NewConnectionPool(appName+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	appPool := dbconnpool.NewConnectionPool(appName+"ConnPool", *appPoolSize, *appIdleTimeout)
 	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
 
 	return &Mysqld{
@@ -530,16 +532,16 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	return nil
 }
 
-// GetDbaConnection returns a connection from the dba pool.
+// GetDbConnection returns a connection from the pool chosen by dbconfigName.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.dbaPool.Get(0)
-}
-
-// GetAppConnection returns a connection from the app pool.
-// Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetAppConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.appPool.Get(0)
+func (mysqld *Mysqld) GetDbConnection(dbconfigName string) (dbconnpool.PoolConnection, error) {
+	switch dbconfigName {
+	case "dba":
+		return mysqld.dbaPool.Get(0)
+	case "app":
+		return mysqld.appPool.Get(0)
+	}
+	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

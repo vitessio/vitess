@@ -296,7 +296,7 @@ func testSplitClone(t *testing.T, strategy string) {
 				},
 			},
 		}
-		sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = SourceRdonlyFactory(t)
+		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = SourceRdonlyFactory(t)
 		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
 			Position: myproto.ReplicationPosition{
 				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
@@ -312,10 +312,10 @@ func testSplitClone(t *testing.T, strategy string) {
 	// That means 3 insert statements on each target (each
 	// containing half of the rows, i.e. 2 + 2 + 1 rows). So 3 * 10
 	// = 30 insert statements on each destination.
-	leftMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
-	leftRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
-	rightMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
-	rightRdonly.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t, 30)
+	leftMaster.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
+	leftRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
+	rightMaster.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
+	rightRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
 
 	wrk.Run()
 	status := wrk.StatusAsText()

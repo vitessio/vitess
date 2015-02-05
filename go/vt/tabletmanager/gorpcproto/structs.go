@@ -64,6 +64,7 @@ type ExecuteFetchArgs struct {
 	MaxRows        int
 	WantFields     bool
 	DisableBinlogs bool
+	DBConfigName   string
 }
 
 // gorpc doesn't support returning a streaming type during streaming

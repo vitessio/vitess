@@ -109,7 +109,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	defer retryCancel()
 	for {
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
+		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false, disableBinLogs)
 		cancel()
 		switch {
 		case err == nil:
@@ -190,7 +190,7 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	qr, err := wr.TabletManagerClient().ExecuteFetch(ctx, ti, query, 1, true, false)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true, false)
 	cancel()
 	if err != nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)

@@ -14,13 +14,14 @@ import (
 	"github.com/youtube/vitess/go/vt/env"
 )
 
-var MYCNF_PATH = "/tmp/my.cnf"
+var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "GoogleMysql")
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
+	appConfig := dbconfigs.DefaultDBConfigs.App.ConnectionParams
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
-	tablet0 := NewMysqld("Dba", NewMycnf(0, 6802), &dbaConfig, &replConfig)
+	tablet0 := NewMysqld("Dba", "App", NewMycnf(0, 6802), &dbaConfig, &appConfig, &replConfig)
 	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {
@@ -37,16 +38,16 @@ func TestMycnf(t *testing.T) {
 	} else {
 		t.Logf("data: %v", data)
 	}
-	err = ioutil.WriteFile(MYCNF_PATH, []byte(data), 0666)
+	err = ioutil.WriteFile(MycnfPath, []byte(data), 0666)
 	if err != nil {
 		t.Errorf("failed creating my.cnf %v", err)
 	}
-	_, err = ioutil.ReadFile(MYCNF_PATH)
+	_, err = ioutil.ReadFile(MycnfPath)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
-	mycnf, err := ReadMycnf(MYCNF_PATH)
+	mycnf, err := ReadMycnf(MycnfPath)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 	} else {

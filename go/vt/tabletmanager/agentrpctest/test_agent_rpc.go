@@ -445,7 +445,7 @@ var testExecuteFetchResult = &mproto.QueryResult{
 	},
 }
 
-func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, dbconfigName string) (*mproto.QueryResult, error) {
 	compare(fra.t, "ExecuteFetch query", query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetch maxrows", maxrows, testExecuteFetchMaxRows)
 	compareBool(fra.t, "ExecuteFetch wantFields", wantFields)
@@ -454,7 +454,9 @@ func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	qr, err := client.ExecuteFetch(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
+	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
 	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
 }
 

@@ -219,10 +219,31 @@ func (client *GoRPCTabletManagerClient) ApplySchema(ctx context.Context, tablet 
 	return &scr, nil
 }
 
-// ExecuteFetch is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) ExecuteFetch(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
 	var qr mproto.QueryResult
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_EXECUTE_FETCH, &gorpcproto.ExecuteFetchArgs{Query: query, MaxRows: maxRows, WantFields: wantFields, DisableBinlogs: disableBinlogs}, &qr); err != nil {
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_EXECUTE_FETCH, &gorpcproto.ExecuteFetchArgs{
+		Query:          query,
+		MaxRows:        maxRows,
+		WantFields:     wantFields,
+		DisableBinlogs: disableBinlogs,
+		DBConfigName:   "dba",
+	}, &qr); err != nil {
+		return nil, err
+	}
+	return &qr, nil
+}
+
+// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+	var qr mproto.QueryResult
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_EXECUTE_FETCH, &gorpcproto.ExecuteFetchArgs{
+		Query:          query,
+		MaxRows:        maxRows,
+		WantFields:     wantFields,
+		DisableBinlogs: disableBinlogs,
+		DBConfigName:   "app",
+	}, &qr); err != nil {
 		return nil, err
 	}
 	return &qr, nil
