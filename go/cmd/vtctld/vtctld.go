@@ -62,7 +62,7 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
-	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
+	templateLoader = NewTemplateLoader(*templateDir, *debug)
 
 	ts = topo.GetServer()
 	defer topo.CloseServers()
@@ -240,7 +240,11 @@ func main() {
 			return
 		}
 		result := DbTopologyResult{}
-		topology, err := topotools.DbTopology(context.TODO(), ts)
+		ctx := context.TODO()
+		topology, err := topotools.DbTopology(ctx, ts)
+		if err == nil && modifyDbTopology != nil {
+			err = modifyDbTopology(ctx, ts, topology)
+		}
 		if err != nil {
 			result.Error = err.Error()
 		} else {
@@ -265,6 +269,9 @@ func main() {
 		}
 
 		servingGraph := topotools.DbServingGraph(ts, cell)
+		if modifyDbServingGraph != nil {
+			modifyDbServingGraph(ts, servingGraph)
+		}
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 

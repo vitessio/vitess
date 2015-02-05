@@ -71,30 +71,30 @@
     <table class="keyspace">
       <thead>
         {{range $i, $shard := $shards.ShardNodes}}
-  	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	  <td>
-            {{srv_shard $cell $keyspace $shard.Name}}<br/>
+          {{if intequal $i 0}}<td class="legend">type</td>{{end}}
+          <td>
+            {{srv_shard $.Cell $keyspace $shard}}<br/>
             {{range $j, $servedType := $shard.ServedTypes}}
               <i>{{$servedType}}</i><br/>
             {{end}}
           </td>
-	{{end}}
+        {{end}}
       </thead>
       <tbody>
-	{{range $processedType := $shards.TabletTypes}}
-	<tr>
-	  {{range $i, $shard := $shards.ShardNodes}}
-	  {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
-	  <td>
-	    <ul class="tablet-list">
-	      {{range index $shard.TabletNodes $processedType}}
-              <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
-	      {{end}}
-	    </ul>
-	  </td>
-	  {{end}}
-	</tr>
-	{{end}}
+        {{range $processedType := $shards.TabletTypes}}
+          <tr>
+            {{range $i, $shard := $shards.ShardNodes}}
+              {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
+              <td>
+                <ul class="tablet-list">
+                  {{range index $shard.TabletNodes $processedType}}
+                    <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
+                  {{end}}
+                </ul>
+              </td>
+            {{end}}
+          </tr>
+        {{end}}
       </tbody>
     </table>
   {{end}}

@@ -62,29 +62,28 @@
     {{range $keyspace, $shards := .Assigned}}
       <h2><a name="keyspace_{{$keyspace}}"></a>{{keyspace $keyspace}}</h2>
       <table class="keyspace">
-	<thead>
-	  {{ range $i, $shard := $shards.ShardNodes }}
-	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	  <td>{{shard $keyspace $shard.Name}}</td>
-	  {{end}}
-	</thead>
-	<tbody>
-	  {{range $processedType := $shards.TabletTypes}}
-
-	  <tr>
-	    {{range $i, $shard := $shards.ShardNodes}}
-	    {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
-	    <td>
-	      <ul class="tablet-list">
-		{{range index $shard.TabletNodes $processedType}}
-		  <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
-		{{end}}
-	      </ul>
-	    </td>
-	    {{end}}
-	  </tr>
-	  {{end}}
-	</tbody>
+      <thead>
+        {{ range $i, $shard := $shards.ShardNodes }}
+        {{if intequal $i 0}}<td class="legend">type</td>{{end}}
+        <td>{{shard $keyspace $shard}}</td>
+        {{end}}
+      </thead>
+      <tbody>
+        {{range $processedType := $shards.TabletTypes}}
+        <tr>
+          {{range $i, $shard := $shards.ShardNodes}}
+          {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
+          <td>
+            <ul class="tablet-list">
+              {{range index $shard.TabletNodes $processedType}}
+                <li title="{{.Alias}}">{{tablet .Alias .ShortName}}</li>
+              {{end}}
+            </ul>
+          </td>
+          {{end}}
+        </tr>
+        {{end}}
+      </tbody>
       </table>
     {{end}}
     <h1>Idle</h1>

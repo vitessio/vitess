@@ -67,6 +67,7 @@ type ShardNodes struct {
 	Name        string
 	TabletNodes TabletNodesByType
 	ServedTypes []topo.TabletType
+	Tag         interface{} // Tag is an arbitrary value manageable by a plugin.
 }
 
 type numericShardNodesList []*ShardNodes
