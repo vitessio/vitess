@@ -26,6 +26,8 @@ func (pc *PooledDBConnection) Recycle() {
 	}
 }
 
+// Reconnect replaces the existing underlying connection
+// with a new one.
 func (pc *PooledDBConnection) Reconnect() error {
 	pc.DBConnection.Close()
 	newConn, err := NewDBConnection(pc.info, pc.mysqlStats)
@@ -47,7 +49,6 @@ func (pc *PooledDBConnection) Reconnect() error {
 // conn, err := pool.Get()
 // ...
 func DBConnectionCreator(info *mysql.ConnectionParams, mysqlStats *stats.Timings) CreateConnectionFunc {
-	newInfo := *info
 	return func(pool *ConnectionPool) (PoolConnection, error) {
 		c, err := NewDBConnection(info, mysqlStats)
 		if err != nil {
@@ -55,7 +56,7 @@ func DBConnectionCreator(info *mysql.ConnectionParams, mysqlStats *stats.Timings
 		}
 		return &PooledDBConnection{
 			DBConnection: c,
-			info:         &newInfo,
+			info:         info,
 			mysqlStats:   mysqlStats,
 			pool:         pool,
 		}, nil
