@@ -31,6 +31,7 @@ var (
 // paths were covered.
 // TODO(sougou): Figure out a way to automoatae this.
 func TestConnectivity(t *testing.T) {
+	t.Skip("manual test")
 	killStats = stats.NewCounters("TestKills")
 	internalErrors = stats.NewCounters("TestInternalErrors")
 	mysqlStats = stats.NewTimings("TestMySQLStats")
