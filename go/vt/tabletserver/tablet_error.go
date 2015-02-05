@@ -90,7 +90,7 @@ func IsConnErr(err error) bool {
 		sqlError = err.Number()
 	default:
 		match := errExtract.FindStringSubmatch(err.Error())
-		if match != nil {
+		if len(match) < 2 {
 			return false
 		}
 		var convErr error

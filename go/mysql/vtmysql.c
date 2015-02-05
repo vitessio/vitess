@@ -165,6 +165,6 @@ void vt_shutdown(VT_CONN *conn) {
   mysql_thread_init();
 
   // Shut down the underlying socket of a MYSQL connection object.
-  if (conn->mysql->net.vio)
+  if (conn->mysql && conn->mysql->net.vio)
     vio_socket_shutdown(conn->mysql->net.vio, 2 /* SHUT_RDWR */);
 }
