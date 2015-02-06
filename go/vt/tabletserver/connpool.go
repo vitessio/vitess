@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -21,16 +20,6 @@ var (
 	// connection pool is closed.
 	ErrConnPoolClosed = errors.New("connection pool is closed")
 )
-
-// PoolConn is the interface implemented by users of this specialized pool.
-type PoolConn interface {
-	Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error)
-	Stream(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
-	Current() string
-	Close()
-	Recycle()
-	Kill()
-}
 
 // ConnPool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -163,6 +152,7 @@ func (cp *ConnPool) SetIdleTimeout(idleTimeout time.Duration) {
 	if cp.connections != nil {
 		cp.connections.SetIdleTimeout(idleTimeout)
 	}
+	cp.dbaPool.SetIdleTimeout(idleTimeout)
 	cp.idleTimeout = idleTimeout
 }
 

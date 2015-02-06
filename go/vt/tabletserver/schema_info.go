@@ -16,10 +16,10 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -81,7 +81,7 @@ type SchemaInfo struct {
 	tables     map[string]*TableInfo
 	overrides  []SchemaOverride
 	queries    *cache.LRUCache
-	connPool   *dbconnpool.ConnectionPool
+	connPool   *ConnPool
 	cachePool  *CachePool
 	lastChange time.Time
 	ticks      *timer.Timer
@@ -90,7 +90,7 @@ type SchemaInfo struct {
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:  cache.NewLRUCache(int64(queryCacheSize)),
-		connPool: dbconnpool.NewConnectionPool("", 2, idleTimeout),
+		connPool: NewConnPool("", 2, idleTimeout),
 		ticks:    timer.NewTimer(reloadTime),
 	}
 	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
@@ -113,20 +113,20 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory dbconnpool.CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
-	si.connPool.Open(connFactory)
+func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
+	si.connPool.Open(appParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime()
 
 	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
 
-	if strictMode && !conn.(*dbconnpool.PooledDBConnection).VerifyStrict() {
+	if strictMode && !conn.VerifyStrict() {
 		panic(NewTabletError(ErrFatal, "Could not verify strict mode"))
 	}
 
 	si.cachePool = cachePool
-	tables, err := conn.ExecuteFetch(base_show_tables, maxTableCount, false)
+	tables, err := conn.Exec(base_show_tables, maxTableCount, false, NewDeadline(1*time.Minute))
 	if err != nil {
 		panic(NewTabletError(ErrFatal, "Could not get table list: %v", err))
 	}
@@ -220,7 +220,7 @@ func (si *SchemaInfo) Reload() {
 	func() {
 		conn := getOrPanic(si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
+		tables, err = conn.Exec(fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false, NewDeadline(1*time.Minute))
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
@@ -238,7 +238,7 @@ func (si *SchemaInfo) Reload() {
 func (si *SchemaInfo) mysqlTime() time.Time {
 	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
-	tm, err := conn.ExecuteFetch("select unix_timestamp()", 1, false)
+	tm, err := conn.Exec("select unix_timestamp()", 1, false, NewDeadline(1*time.Minute))
 	if err != nil {
 		panic(NewTabletError(ErrFail, "Could not get MySQL time: %v", err))
 	}
@@ -271,7 +271,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
 
 	conn := getOrPanic(si.connPool)
 	defer conn.Recycle()
-	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
+	tables, err := conn.Exec(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false, NewDeadline(1*time.Minute))
 	if err != nil {
 		panic(NewTabletError(ErrFail, "Error fetching table %s: %v", tableName, err))
 	}
@@ -360,7 +360,7 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 			defer conn.Recycle()
 			sql := plan.FieldQuery.Query
 			start := time.Now()
-			r, err := conn.ExecuteFetch(sql, 1, true)
+			r, err := conn.Exec(sql, 1, true, NewDeadline(1*time.Minute))
 			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
 				panic(NewTabletError(ErrFail, "Error fetching fields: %v", err))

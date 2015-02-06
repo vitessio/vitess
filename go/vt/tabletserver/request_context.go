@@ -9,10 +9,14 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"golang.org/x/net/context"
 )
+
+// PoolConn is the interface implemented by users of this specialized pool.
+type PoolConn interface {
+	Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error)
+}
 
 // RequestContext encapsulates a context and associated variables for a request
 type RequestContext struct {
@@ -22,7 +26,7 @@ type RequestContext struct {
 	deadline Deadline
 }
 
-func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
+func (rqc *RequestContext) getConn(pool *ConnPool) *DBConn {
 	start := time.Now()
 	timeout, err := rqc.deadline.Timeout()
 	if err != nil {
@@ -33,10 +37,9 @@ func (rqc *RequestContext) getConn(pool *dbconnpool.ConnectionPool) dbconnpool.P
 	case nil:
 		rqc.logStats.WaitingForConnection += time.Now().Sub(start)
 		return conn
-	case dbconnpool.ErrConnPoolClosed:
+	case ErrConnPoolClosed:
 		panic(connPoolClosedErr)
 	}
-	go CheckMySQL()
 	panic(NewTabletErrorSql(ErrFatal, err))
 }
 
@@ -53,7 +56,6 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 		conn, err := rqc.qe.connPool.Get(timeout)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			go CheckMySQL()
 			q.Err = NewTabletErrorSql(ErrFatal, err)
 		} else {
 			defer conn.Recycle()
@@ -69,18 +71,18 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 	return q.Result
 }
 
-func (rqc *RequestContext) directFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (rqc *RequestContext) directFetch(conn PoolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	return rqc.execSQL(conn, sql, false)
 }
 
 // fullFetch also fetches field info
-func (rqc *RequestContext) fullFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (rqc *RequestContext) fullFetch(conn PoolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	return rqc.execSQL(conn, sql, true)
 }
 
-func (rqc *RequestContext) fullStreamFetch(conn dbconnpool.PoolConnection, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+func (rqc *RequestContext) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
 	sql := rqc.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
 	rqc.execStreamSQL(conn, sql, callback)
 }
@@ -99,7 +101,7 @@ func (rqc *RequestContext) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, 
 	return hack.String(sql)
 }
 
-func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, wantfields bool) *mproto.QueryResult {
+func (rqc *RequestContext) execSQL(conn PoolConn, sql string, wantfields bool) *mproto.QueryResult {
 	result, err := rqc.execSQLNoPanic(conn, sql, true)
 	if err != nil {
 		panic(err)
@@ -107,44 +109,14 @@ func (rqc *RequestContext) execSQL(conn dbconnpool.PoolConnection, sql string, w
 	return result
 }
 
-func (rqc *RequestContext) execSQLNoPanic(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := rqc.execSQLOnce(conn, sql, wantfields)
-		switch {
-		case err == nil:
-			return r, nil
-		case !IsConnErr(err):
-			return nil, NewTabletErrorSql(ErrFail, err)
-		case attempt == 2:
-			return nil, NewTabletErrorSql(ErrFatal, err)
-		}
-		err2 := conn.Reconnect()
-		if err2 != nil {
-			go CheckMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, err)
-		}
-	}
-	panic("unreachable")
+func (rqc *RequestContext) execSQLNoPanic(conn PoolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
+	defer rqc.logStats.AddRewrittenSql(sql, time.Now())
+	return conn.Exec(sql, int(rqc.qe.maxResultSize.Get()), wantfields, rqc.deadline)
 }
 
-// execSQLOnce returns a normal error that needs to be wrapped into a TabletError by the caller.
-func (rqc *RequestContext) execSQLOnce(conn dbconnpool.PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	if qd := rqc.qe.connKiller.SetDeadline(conn.ID(), rqc.deadline); qd != nil {
-		defer qd.Done()
-	}
-
+func (rqc *RequestContext) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) {
 	start := time.Now()
-	result, err := conn.ExecuteFetch(sql, int(rqc.qe.maxResultSize.Get()), wantfields)
-	rqc.logStats.AddRewrittenSql(sql, start)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (rqc *RequestContext) execStreamSQL(conn dbconnpool.PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
-	start := time.Now()
-	err := conn.ExecuteStreamFetch(sql, callback, int(rqc.qe.streamBufferSize.Get()))
+	err := conn.Stream(sql, callback, int(rqc.qe.streamBufferSize.Get()))
 	rqc.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		panic(NewTabletErrorSql(ErrFail, err))

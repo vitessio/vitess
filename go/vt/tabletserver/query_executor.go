@@ -12,7 +12,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -117,7 +116,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	conn := qre.getConn(qre.qe.streamConnPool)
 	defer conn.Recycle()
 
-	qd := NewQueryDetail(qre.query, qre.logStats.context, conn.ID())
+	qd := NewQueryDetail(qre.logStats.context, conn)
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
@@ -292,7 +291,7 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 }
 
 // execDirect always sends the query to mysql
-func (qre *QueryExecutor) execDirect(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDirect(conn PoolConn) (result *mproto.QueryResult) {
 	if qre.plan.Fields != nil {
 		result = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		result.Fields = qre.plan.Fields
@@ -315,7 +314,7 @@ func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
 	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
-func (qre *QueryExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPK(conn PoolConn) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -323,7 +322,7 @@ func (qre *QueryExecutor) execInsertPK(conn dbconnpool.PoolConnection) (result *
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertSubquery(conn PoolConn) (result *mproto.QueryResult) {
 	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -345,7 +344,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn dbconnpool.PoolConnection) (re
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertPKRows(conn dbconnpool.PoolConnection, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPKRows(conn PoolConn, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -355,7 +354,7 @@ func (qre *QueryExecutor) execInsertPKRows(conn dbconnpool.PoolConnection, pkRow
 	return result
 }
 
-func (qre *QueryExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPK(conn PoolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -363,12 +362,12 @@ func (qre *QueryExecutor) execDMLPK(conn dbconnpool.PoolConnection, invalidator 
 	return qre.execDMLPKRows(conn, pkRows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLSubquery(conn dbconnpool.PoolConnection, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLSubquery(conn PoolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLPKRows(conn dbconnpool.PoolConnection, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPKRows(conn PoolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
@@ -447,7 +446,6 @@ func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
 		qre.qe.connPool.SetIdleTimeout(t)
 		qre.qe.streamConnPool.SetIdleTimeout(t)
 		qre.qe.txPool.pool.SetIdleTimeout(t)
-		qre.qe.connKiller.SetIdleTimeout(t)
 	case "vt_spot_check_ratio":
 		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * spotCheckMultiplier))
 	case "vt_strict_mode":

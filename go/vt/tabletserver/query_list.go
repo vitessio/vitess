@@ -11,29 +11,34 @@ import (
 	"golang.org/x/net/context"
 )
 
-// QueryDetail is a simple wrapper for Query, Context and PoolConnection
+// QueryDetail is a simple wrapper for Query, Context and a killable conn.
 type QueryDetail struct {
-	query   string
 	context context.Context
+	conn    killable
 	connID  int64
 	start   time.Time
 }
 
+type killable interface {
+	Current() string
+	ID() int64
+	Kill()
+}
+
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(query string, context context.Context, connID int64) *QueryDetail {
-	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
+func NewQueryDetail(context context.Context, conn killable) *QueryDetail {
+	return &QueryDetail{context: context, conn: conn, connID: conn.ID(), start: time.Now()}
 }
 
 // QueryList holds a thread safe list of QueryDetails
 type QueryList struct {
 	mu           sync.Mutex
 	queryDetails map[int64]*QueryDetail
-	connKiller   *ConnectionKiller
 }
 
 // NewQueryList creates a new QueryList
-func NewQueryList(connKiller *ConnectionKiller) *QueryList {
-	return &QueryList{queryDetails: make(map[int64]*QueryDetail), connKiller: connKiller}
+func NewQueryList() *QueryList {
+	return &QueryList{queryDetails: make(map[int64]*QueryDetail)}
 }
 
 // Add adds a QueryDetail to QueryList
@@ -58,9 +63,7 @@ func (ql *QueryList) Terminate(connID int64) error {
 	if qd == nil {
 		return fmt.Errorf("query %v not found", connID)
 	}
-	if err := ql.connKiller.Kill(connID); err != nil {
-		return err
-	}
+	qd.conn.Kill()
 	return nil
 }
 
@@ -69,7 +72,7 @@ func (ql *QueryList) TerminateAll() {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
 	for _, qd := range ql.queryDetails {
-		ql.connKiller.Kill(qd.connID)
+		qd.conn.Kill()
 	}
 }
 
@@ -96,7 +99,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
-			Query:       qd.query,
+			Query:       qd.conn.Current(),
 			ContextHTML: callinfo.FromContext(qd.context).HTML(),
 			Start:       qd.start,
 			Duration:    time.Now().Sub(qd.start),

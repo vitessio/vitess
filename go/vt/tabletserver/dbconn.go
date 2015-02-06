@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
@@ -48,7 +48,7 @@ func NewDBConn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*DBC
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
+func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := dbc.execOnce(query, maxrows, wantfields, deadline)
 		switch {
@@ -68,7 +68,7 @@ func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Dea
 	panic("unreachable")
 }
 
-func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
+func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
 	dbc.startRequest(query)
 	defer dbc.endRequest()
 
@@ -85,20 +85,25 @@ func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
 	dbc.startRequest(query)
 	defer dbc.endRequest()
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
-// Current returns the currently executing query.
-func (dbc *DBConn) Current() string {
-	return dbc.current.Get()
+// VerifyStrict returns true if MySQL is in STRICT mode.
+func (dbc *DBConn) VerifyStrict() bool {
+	return dbc.conn.VerifyStrict()
 }
 
 // Close closes the DBConn.
 func (dbc *DBConn) Close() {
 	dbc.conn.Close()
+}
+
+// IsClosed returns true if DBConn is closed.
+func (dbc *DBConn) IsClosed() bool {
+	return dbc.conn.IsClosed()
 }
 
 // Recycle returns the DBConn to the pool.
@@ -139,6 +144,16 @@ func (dbc *DBConn) Kill() {
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
 	}
+}
+
+// Current returns the currently executing query.
+func (dbc *DBConn) Current() string {
+	return dbc.current.Get()
+}
+
+// ID returns the connection id.
+func (dbc *DBConn) ID() int64 {
+	return dbc.conn.ID()
 }
 
 func (dbc *DBConn) startRequest(query string) {
