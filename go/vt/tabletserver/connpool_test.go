@@ -29,7 +29,7 @@ var (
 // Run the test normally once. Then you add a 20s sleep in dbconn.execOnce
 // and run it again. You also have to check the code coverage to see that all critical
 // paths were covered.
-// TODO(sougou): Figure out a way to automoatae this.
+// TODO(sougou): Figure out a way to automatae this.
 func TestConnectivity(t *testing.T) {
 	t.Skip("manual test")
 	killStats = stats.NewCounters("TestKills")
@@ -49,7 +49,7 @@ func TestConnectivity(t *testing.T) {
 	conn.Close()
 	_, err = conn.Exec("select * from a", 1000, true, NewDeadline(2*time.Second))
 	// You'll get a timedout error in slow mode. Otherwise, this should succeed.
-	timedout := "error: SetDeadline: timed out"
+	timedout := "error: setDeadline: timed out"
 	if err != nil && err.Error() != timedout {
 		t.Errorf("got: %v, want nil or %s", err, timedout)
 	}

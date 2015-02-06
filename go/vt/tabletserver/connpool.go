@@ -79,7 +79,7 @@ func (cp *ConnPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
 	defer cp.mu.Unlock()
 
 	f := func() (pools.Resource, error) {
-		return newdbconn(cp, appParams, dbaParams)
+		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, mysqlStats))
@@ -102,8 +102,8 @@ func (cp *ConnPool) Close() {
 }
 
 // Get returns a connection.
-// You must call Recycle on the PoolConn once done.
-func (cp *ConnPool) Get(timeout time.Duration) (PoolConn, error) {
+// You must call Recycle on DBConn once done.
+func (cp *ConnPool) Get(timeout time.Duration) (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
@@ -112,12 +112,12 @@ func (cp *ConnPool) Get(timeout time.Duration) (PoolConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.(PoolConn), nil
+	return r.(*DBConn), nil
 }
 
 // TryGet returns a connection, or nil.
-// You must call Recycle on the PoolConn once done.
-func (cp *ConnPool) TryGet() (PoolConn, error) {
+// You must call Recycle on the DBConn once done.
+func (cp *ConnPool) TryGet() (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
@@ -126,16 +126,20 @@ func (cp *ConnPool) TryGet() (PoolConn, error) {
 	if err != nil || r == nil {
 		return nil, err
 	}
-	return r.(PoolConn), nil
+	return r.(*DBConn), nil
 }
 
 // Put puts a connection into the pool.
-func (cp *ConnPool) Put(conn PoolConn) {
+func (cp *ConnPool) Put(conn *DBConn) {
 	p := cp.pool()
 	if p == nil {
 		panic(ErrConnPoolClosed)
 	}
-	p.Put(conn)
+	if conn == nil {
+		p.Put(nil)
+	} else {
+		p.Put(conn)
+	}
 }
 
 // SetCapacity alters the size of the pool at runtime.
