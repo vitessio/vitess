@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -21,16 +20,6 @@ var (
 	// connection pool is closed.
 	ErrConnPoolClosed = errors.New("connection pool is closed")
 )
-
-// PoolConn is the interface implemented by users of this specialized pool.
-type PoolConn interface {
-	Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error)
-	Stream(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
-	Current() string
-	Close()
-	Recycle()
-	Kill()
-}
 
 // ConnPool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -79,7 +68,7 @@ func (cp *ConnPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
 	defer cp.mu.Unlock()
 
 	f := func() (pools.Resource, error) {
-		return newdbconn(cp, appParams, dbaParams)
+		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, mysqlStats))
@@ -102,8 +91,8 @@ func (cp *ConnPool) Close() {
 }
 
 // Get returns a connection.
-// You must call Recycle on the PoolConn once done.
-func (cp *ConnPool) Get(timeout time.Duration) (PoolConn, error) {
+// You must call Recycle on DBConn once done.
+func (cp *ConnPool) Get(timeout time.Duration) (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
@@ -112,12 +101,12 @@ func (cp *ConnPool) Get(timeout time.Duration) (PoolConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.(PoolConn), nil
+	return r.(*DBConn), nil
 }
 
 // TryGet returns a connection, or nil.
-// You must call Recycle on the PoolConn once done.
-func (cp *ConnPool) TryGet() (PoolConn, error) {
+// You must call Recycle on the DBConn once done.
+func (cp *ConnPool) TryGet() (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
@@ -126,16 +115,20 @@ func (cp *ConnPool) TryGet() (PoolConn, error) {
 	if err != nil || r == nil {
 		return nil, err
 	}
-	return r.(PoolConn), nil
+	return r.(*DBConn), nil
 }
 
 // Put puts a connection into the pool.
-func (cp *ConnPool) Put(conn PoolConn) {
+func (cp *ConnPool) Put(conn *DBConn) {
 	p := cp.pool()
 	if p == nil {
 		panic(ErrConnPoolClosed)
 	}
-	p.Put(conn)
+	if conn == nil {
+		p.Put(nil)
+	} else {
+		p.Put(conn)
+	}
 }
 
 // SetCapacity alters the size of the pool at runtime.
@@ -159,6 +152,7 @@ func (cp *ConnPool) SetIdleTimeout(idleTimeout time.Duration) {
 	if cp.connections != nil {
 		cp.connections.SetIdleTimeout(idleTimeout)
 	}
+	cp.dbaPool.SetIdleTimeout(idleTimeout)
 	cp.idleTimeout = idleTimeout
 }
 

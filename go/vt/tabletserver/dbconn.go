@@ -10,17 +10,17 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
-// dbconn is a db connection for tabletserver.
+// DBConn is a db connection for tabletserver.
 // It performs automatic reconnects as needed.
 // Its Execute function has a timeout that can kill
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
-type dbconn struct {
+type DBConn struct {
 	conn *dbconnpool.DBConnection
 	info *mysql.ConnectionParams
 	pool *ConnPool
@@ -31,13 +31,14 @@ type dbconn struct {
 	killed chan bool
 }
 
-func newdbconn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*dbconn, error) {
+// NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
+func NewDBConn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, mysqlStats)
 	if err != nil {
 		go CheckMySQL()
 		return nil, err
 	}
-	return &dbconn{
+	return &DBConn{
 		conn:   c,
 		info:   appParams,
 		pool:   cp,
@@ -45,7 +46,9 @@ func newdbconn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*dbc
 	}, nil
 }
 
-func (dbc *dbconn) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
+// Exec executes the specified query. If there is a connection error, it will reconnect
+// and retry. A failed reconnect will trigger a CheckMySQL.
+func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
 		r, err := dbc.execOnce(query, maxrows, wantfields, deadline)
 		switch {
@@ -65,37 +68,46 @@ func (dbc *dbconn) Exec(query string, maxrows int, wantfields bool, deadline Dea
 	panic("unreachable")
 }
 
-func (dbc *dbconn) execOnce(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
+func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
 	dbc.startRequest(query)
 	defer dbc.endRequest()
 
-	qd, err := SetDeadline(dbc, deadline)
+	done, err := dbc.setDeadline(deadline)
 	if err != nil {
 		return nil, err
 	}
-	if qd != nil {
-		defer qd.Done()
+	if done != nil {
+		defer close(done)
 	}
 	// Uncomment this line for manual testing.
 	// defer time.Sleep(20 * time.Second)
 	return dbc.conn.ExecuteFetch(query, maxrows, wantfields)
 }
 
-func (dbc *dbconn) Stream(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
+// Stream executes the query and streams the results.
+func (dbc *DBConn) Stream(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
 	dbc.startRequest(query)
 	defer dbc.endRequest()
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
-func (dbc *dbconn) Current() string {
-	return dbc.current.Get()
+// VerifyStrict returns true if MySQL is in STRICT mode.
+func (dbc *DBConn) VerifyStrict() bool {
+	return dbc.conn.VerifyStrict()
 }
 
-func (dbc *dbconn) Close() {
+// Close closes the DBConn.
+func (dbc *DBConn) Close() {
 	dbc.conn.Close()
 }
 
-func (dbc *dbconn) Recycle() {
+// IsClosed returns true if DBConn is closed.
+func (dbc *DBConn) IsClosed() bool {
+	return dbc.conn.IsClosed()
+}
+
+// Recycle returns the DBConn to the pool.
+func (dbc *DBConn) Recycle() {
 	if dbc.conn.IsClosed() {
 		dbc.pool.Put(nil)
 	} else {
@@ -103,7 +115,10 @@ func (dbc *dbconn) Recycle() {
 	}
 }
 
-func (dbc *dbconn) Kill() {
+// Kill kills the currently executing query both on MySQL side
+// and on the connection side. If no query is executing, it's a no-op.
+// Kill will also not kill a query more than once.
+func (dbc *DBConn) Kill() {
 	select {
 	case killed := <-dbc.killed:
 		defer func() { dbc.killed <- true }()
@@ -131,12 +146,22 @@ func (dbc *dbconn) Kill() {
 	}
 }
 
-func (dbc *dbconn) startRequest(query string) {
+// Current returns the currently executing query.
+func (dbc *DBConn) Current() string {
+	return dbc.current.Get()
+}
+
+// ID returns the connection id.
+func (dbc *DBConn) ID() int64 {
+	return dbc.conn.ID()
+}
+
+func (dbc *DBConn) startRequest(query string) {
 	dbc.current.Set(query)
 	dbc.killed <- false
 }
 
-func (dbc *dbconn) endRequest() {
+func (dbc *DBConn) endRequest() {
 	killed := <-dbc.killed
 	defer dbc.current.Set("")
 	if killed {
@@ -144,7 +169,7 @@ func (dbc *dbconn) endRequest() {
 	}
 }
 
-func (dbc *dbconn) reconnect() error {
+func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
 	newConn, err := dbconnpool.NewDBConnection(dbc.info, mysqlStats)
 	if err != nil {
@@ -154,25 +179,22 @@ func (dbc *dbconn) reconnect() error {
 	return nil
 }
 
-// SetDeadline starts a timer for the specified connection and returns
-// a QueryDeadline. If Done is not called before the timer runs out, the
-// timer kills the connection.
-func SetDeadline(conn PoolConn, deadline Deadline) (QueryDeadliner, error) {
+func (dbc *DBConn) setDeadline(deadline Deadline) (done chan bool, err error) {
 	timeout, err := deadline.Timeout()
 	if err != nil {
-		return nil, fmt.Errorf("SetDeadline: %v", err)
+		return nil, fmt.Errorf("setDeadline: %v", err)
 	}
 	if timeout == 0 {
 		return nil, nil
 	}
-	qd := make(QueryDeadliner)
+	done = make(chan bool)
 	tmr := time.NewTimer(timeout)
 	go func() {
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
-			conn.Kill()
-		case <-qd:
+			dbc.Kill()
+		case <-done:
 			return
 		}
 
@@ -182,12 +204,12 @@ func SetDeadline(conn PoolConn, deadline Deadline) (QueryDeadliner, error) {
 		select {
 		case <-tmr2.C:
 			internalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", conn.Current())
-		case <-qd:
+			log.Warningf("Query may be hung: %s", dbc.Current())
+		case <-done:
 			return
 		}
-		<-qd
+		<-done
 		log.Warningf("Hung query returned")
 	}()
-	return qd, nil
+	return done, nil
 }

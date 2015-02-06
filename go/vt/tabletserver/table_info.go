@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -23,7 +23,7 @@ type TableInfo struct {
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn dbconnpool.PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
+func NewTableInfo(conn *DBConn, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func NewTableInfo(conn dbconnpool.PoolConnection, tableName string, tableType st
 	return ti, nil
 }
 
-func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableInfo, err error) {
+func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
 	if err = ti.fetchColumns(conn); err != nil {
 		return nil, err
@@ -43,8 +43,8 @@ func loadTableInfo(conn dbconnpool.PoolConnection, tableName string) (ti *TableI
 	return ti, nil
 }
 
-func (ti *TableInfo) fetchColumns(conn dbconnpool.PoolConnection) error {
-	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
+func (ti *TableInfo) fetchColumns(conn *DBConn) error {
+	columns, err := conn.Exec(fmt.Sprintf("describe `%s`", ti.Name), 10000, false, NewDeadline(1*time.Minute))
 	if err != nil {
 		return err
 	}
@@ -78,8 +78,8 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) error {
-	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from `%s`", ti.Name), 10000, false)
+func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
+	indexes, err := conn.Exec(fmt.Sprintf("show index from `%s`", ti.Name), 10000, false, NewDeadline(1*time.Minute))
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (ti *TableInfo) fetchIndexes(conn dbconnpool.PoolConnection) error {
 	return nil
 }
 
-func (ti *TableInfo) initRowCache(conn dbconnpool.PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}

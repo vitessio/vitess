@@ -43,15 +43,14 @@ type QueryEngine struct {
 
 	// Pools
 	cachePool      *CachePool
-	connPool       *dbconnpool.ConnectionPool
-	streamConnPool *dbconnpool.ConnectionPool
+	connPool       *ConnPool
+	streamConnPool *ConnPool
 
 	// Services
 	txPool       *TxPool
 	consolidator *Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
-	connKiller   *ConnectionKiller
 	tasks        sync.WaitGroup
 
 	// Vars
@@ -99,12 +98,12 @@ type CacheInvalidator interface {
 }
 
 // Helper method for conn pools to convert errors
-func getOrPanic(pool *dbconnpool.ConnectionPool) dbconnpool.PoolConnection {
+func getOrPanic(pool *ConnPool) *DBConn {
 	conn, err := pool.Get(0)
 	if err == nil {
 		return conn
 	}
-	if err == dbconnpool.ErrConnPoolClosed {
+	if err == ErrConnPoolClosed {
 		panic(connPoolClosedErr)
 	}
 	panic(NewTabletErrorSql(ErrFatal, err))
@@ -130,12 +129,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.QueryTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.connPool = dbconnpool.NewConnectionPool(
+	qe.connPool = NewConnPool(
 		"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.streamConnPool = dbconnpool.NewConnectionPool(
+	qe.streamConnPool = NewConnPool(
 		"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
@@ -149,10 +148,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.connKiller = NewConnectionKiller(1, time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.invalidator = NewRowcacheInvalidator(qe)
-	qe.streamQList = NewQueryList(qe.connKiller)
+	qe.streamQList = NewQueryList()
 
 	// Vars
 	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
@@ -192,15 +190,14 @@ func NewQueryEngine(config Config) *QueryEngine {
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) {
 	qe.dbconfigs = dbconfigs
-	connFactory := dbconnpool.DBConnectionCreator(&dbconfigs.App.ConnectionParams, mysqlStats)
+	appParams := dbconfigs.App.ConnectionParams
 	// Create dba params based on App connection params
 	// and Dba credentials.
-	dba := dbconfigs.App.ConnectionParams
+	dbaParams := dbconfigs.App.ConnectionParams
 	if dbconfigs.Dba.Uname != "" {
-		dba.Uname = dbconfigs.Dba.Uname
-		dba.Pass = dbconfigs.Dba.Pass
+		dbaParams.Uname = dbconfigs.Dba.Uname
+		dbaParams.Pass = dbconfigs.Dba.Pass
 	}
-	dbaConnFactory := dbconnpool.DBConnectionCreator(&dba, mysqlStats)
 
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
@@ -221,7 +218,7 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
-	qe.schemaInfo.Open(dbaConnFactory, schemaOverrides, qe.cachePool, strictMode)
+	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, qe.cachePool, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	// Start the invalidator only after schema is loaded.
@@ -231,10 +228,9 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	if dbconfigs.App.EnableInvalidator {
 		qe.invalidator.Open(dbconfigs.App.DbName, mysqld)
 	}
-	qe.connPool.Open(connFactory)
-	qe.streamConnPool.Open(connFactory)
-	qe.txPool.Open(connFactory)
-	qe.connKiller.Open(dbaConnFactory)
+	qe.connPool.Open(&appParams, &dbaParams)
+	qe.streamConnPool.Open(&appParams, &dbaParams)
+	qe.txPool.Open(&appParams, &dbaParams)
 }
 
 // Launch launches the specified function inside a goroutine.
@@ -283,7 +279,6 @@ func (qe *QueryEngine) WaitForTxEmpty() {
 func (qe *QueryEngine) Close() {
 	qe.tasks.Wait()
 	// Close in reverse order of Open.
-	qe.connKiller.Close()
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()

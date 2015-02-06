@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -13,12 +12,13 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 )
 
 /* Function naming convention:
@@ -48,7 +48,7 @@ const (
 const txLogInterval = time.Duration(1 * time.Minute)
 
 type TxPool struct {
-	pool        *dbconnpool.ConnectionPool
+	pool        *ConnPool
 	activePool  *pools.Numbered
 	lastId      sync2.AtomicInt64
 	timeout     sync2.AtomicDuration
@@ -63,7 +63,7 @@ type TxPool struct {
 
 func NewTxPool(name string, capacity int, timeout, poolTimeout, idleTimeout time.Duration) *TxPool {
 	axp := &TxPool{
-		pool:        dbconnpool.NewConnectionPool(name, capacity, idleTimeout),
+		pool:        NewConnPool(name, capacity, idleTimeout),
 		activePool:  pools.NewNumbered(),
 		lastId:      sync2.AtomicInt64(time.Now().UnixNano()),
 		timeout:     sync2.AtomicDuration(timeout),
@@ -78,9 +78,9 @@ func NewTxPool(name string, capacity int, timeout, poolTimeout, idleTimeout time
 	return axp
 }
 
-func (axp *TxPool) Open(connFactory dbconnpool.CreateConnectionFunc) {
+func (axp *TxPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
 	log.Infof("Starting transaction id: %d", axp.lastId)
-	axp.pool.Open(connFactory)
+	axp.pool.Open(appParams, dbaParams)
 	axp.ticks.Start(func() { axp.TransactionKiller() })
 }
 
@@ -115,7 +115,7 @@ func (axp *TxPool) Begin() int64 {
 	conn, err := axp.pool.Get(axp.poolTimeout.Get())
 	if err != nil {
 		switch err {
-		case dbconnpool.ErrConnPoolClosed:
+		case ErrConnPoolClosed:
 			panic(connPoolClosedErr)
 		case pools.TIMEOUT_ERR:
 			axp.LogActive()
@@ -123,7 +123,8 @@ func (axp *TxPool) Begin() int64 {
 		}
 		panic(NewTabletErrorSql(ErrFatal, err))
 	}
-	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
+	// TODO(sougou): Use deadline from context here.
+	if _, err := conn.Exec(BEGIN, 1, false, NewDeadline(1*time.Minute)); err != nil {
 		conn.Recycle()
 		panic(NewTabletErrorSql(ErrFail, err))
 	}
@@ -140,7 +141,8 @@ func (axp *TxPool) SafeCommit(transactionId int64) (invalidList map[string]Dirty
 	// Assign this upfront to make sure we always return the invalidList.
 	invalidList = conn.dirtyTables
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	if _, fetchErr := conn.ExecuteFetch(COMMIT, 1, false); fetchErr != nil {
+	// TODO(sougou): Use deadline from context here.
+	if _, fetchErr := conn.Exec(COMMIT, 1, false, NewDeadline(1*time.Minute)); fetchErr != nil {
 		conn.Close()
 		err = NewTabletErrorSql(ErrFail, fetchErr)
 	}
@@ -151,7 +153,8 @@ func (axp *TxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
-	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
+	// TODO(sougou): Use deadline from context here.
+	if _, err := conn.Exec(ROLLBACK, 1, false, NewDeadline(1*time.Minute)); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(ErrFail, err))
 	}
@@ -195,7 +198,7 @@ func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
 }
 
 type TxConnection struct {
-	dbconnpool.PoolConnection
+	*DBConn
 	TransactionID int64
 	pool          *TxPool
 	inUse         bool
@@ -207,14 +210,14 @@ type TxConnection struct {
 	LogToFile     sync2.AtomicInt32
 }
 
-func newTxConnection(conn dbconnpool.PoolConnection, transactionId int64, pool *TxPool) *TxConnection {
+func newTxConnection(conn *DBConn, transactionId int64, pool *TxPool) *TxConnection {
 	return &TxConnection{
-		PoolConnection: conn,
-		TransactionID:  transactionId,
-		pool:           pool,
-		StartTime:      time.Now(),
-		dirtyTables:    make(map[string]DirtyKeys),
-		Queries:        make([]string, 0, 8),
+		DBConn:        conn,
+		TransactionID: transactionId,
+		pool:          pool,
+		StartTime:     time.Now(),
+		dirtyTables:   make(map[string]DirtyKeys),
+		Queries:       make([]string, 0, 8),
 	}
 }
 
@@ -227,16 +230,24 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 	return list
 }
 
+func (txc *TxConnection) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
+	r, err := txc.DBConn.execOnce(query, maxrows, wantfields, deadline)
+	if err != nil {
+		if IsConnErr(err) {
+			go CheckMySQL()
+			return nil, NewTabletErrorSql(ErrFatal, err)
+		}
+		return nil, NewTabletErrorSql(ErrFail, err)
+	}
+	return r, nil
+}
+
 func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
 		txc.discard(TX_CLOSE)
 	} else {
 		txc.pool.activePool.Put(txc.TransactionID)
 	}
-}
-
-func (txc *TxConnection) Reconnect() error {
-	return errors.New("Reconnect not allowed for TxConnection")
 }
 
 func (txc *TxConnection) RecordQuery(query string) {
@@ -247,9 +258,9 @@ func (txc *TxConnection) discard(conclusion string) {
 	txc.Conclusion = conclusion
 	txc.EndTime = time.Now()
 	txc.pool.activePool.Unregister(txc.TransactionID)
-	txc.PoolConnection.Recycle()
+	txc.DBConn.Recycle()
 	// Ensure PoolConnection won't be accessed after Recycle.
-	txc.PoolConnection = nil
+	txc.DBConn = nil
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}
