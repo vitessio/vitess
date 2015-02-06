@@ -172,12 +172,32 @@ $ pgrep -u $USER -f -l $VTDATAROOT
 $ pkill -u $USER -f $VTDATAROOT
 ```
 
-To start over, you should also clear out the contents of `VTDATAROOT`:
+## Note about cluster state
+
+There are two components in the cluster that are stateful: ZooKeeper and MySQL.
+
+In the `zk-up.sh` and `vttablet-up.sh` scripts, we run `zkctl` and `mysqlctl`
+with the `init` command, in order to bootstrap the data directories before
+running `zkd` and `mysqld`. If you stop ZooKeeper or MySQL and want to restart
+them with existing saved state, you should run `zkctl` or `mysqlctl` with the
+`start` command instead of `init`.
+
+If instead you want to start over from scratch, you must first clear out the
+data directory, or else the `init` command will fail because it requires the
+directory to be empty:
 
 ```
 $ cd $VTDATAROOT
 /home/user/vt/vtdataroot$ rm -rf *
 ```
+
+Note that it's important to have a separate initialization command, instead of
+always bootstrapping if the directory is empty. For example, suppose you start
+up a stateful server that ought to have existing data, but it finds the
+directory empty due to a misconfiguration. You would not want that server to
+automatically bootstrap the data directory, because then it would come up and
+serve the wrong data. Similarly, if you instruct it to initialize, you would not
+want it to silently succeed if there is already existing data there.
 
 ## Troubleshooting
 
