@@ -95,9 +95,11 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     entity_id_map = None
 
     entity_id_map = kargs.get("entity_id_map", None)
+    logging.info("entity_id_map %s" % entity_id_map)
     if entity_id_map is None:
       kr = None
       key_range = kargs.get("keyrange", None)
+      logging.info("keyrange %s" % key_range)
       if isinstance(key_range, keyrange.KeyRange):
         kr = key_range
       else:
@@ -128,6 +130,7 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
       routing.entity_id_sharding_key_map = class_.lookup_sharding_key_from_entity_id(
           lookup_cursor_method, entity_id_col, entity_id)
 
+    logging.info("routing %s" % routing.__dict__)
     return routing
 
   @classmethod
@@ -172,6 +175,8 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     """Return the lookup column name for a column name from this table.
     If the entry doesn't exist it is assumed that the column_name is same.
     """
+    if class_.column_lookup_name_map is None:
+      return column_name
     return class_.column_lookup_name_map.get(column_name, column_name)
 
   @classmethod
@@ -185,14 +190,27 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     Returns:
       sharding key to be used for routing.
     """
-    lookup_column = class_.get_lookup_column_name(entity_id_column)
-    lookup_class = class_.entity_id_lookup_map[lookup_column]
-    rows = lookup_class.get(cursor_method, entity_id_column, entity_id)
+    entity_lookup_column = class_.get_lookup_column_name(entity_id_column)
+    lookup_class = class_.entity_id_lookup_map[entity_id_column]
+    rows = lookup_class.get(cursor_method, entity_lookup_column, entity_id)
 
-    sk_lookup_column = class_.get_lookup_column_name(class_.sharding_key_column_name)
     entity_id_sharding_key_map = {}
+    if len(rows) == 0:
+      #return entity_id_sharding_key_map
+      raise dbexceptions.DatabaseError("LookupRow not found")
+
+    if class_.sharding_key_column_name is not None:
+      sk_lookup_column = class_.get_lookup_column_name(class_.sharding_key_column_name)
+    else:
+      # This is needed since the table may not have a sharding key column name
+      # but the lookup map will have it.
+      lookup_column_names = rows[0].keys()
+      if len(lookup_column_names) != 2:
+        raise dbexceptions.ProgrammingError(
+            "lookup table has more than two columns.")
+      sk_lookup_column = list(set(lookup_column_names) - set(list(entity_lookup_column)))[0]
     for row in rows:
-      en_id = row[lookup_column]
+      en_id = row[entity_lookup_column]
       sk = row[sk_lookup_column]
       entity_id_sharding_key_map[en_id] = sk
 
@@ -327,6 +345,7 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     if not where_column_value_pairs:
       raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
 
+    logging.info("where_column_value_pairs %s cursor dict %s" % (where_column_value_pairs,cursor.__dict__))
     where_column_value_pairs = class_._add_keyspace_id(
         unpack_keyspace_id(cursor.keyspace_ids[0]), where_column_value_pairs)
 
@@ -423,13 +442,17 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     # Used for routing the insert_primary
     entity_id_map = {}
 
+    if (not class_.entity_id_lookup_map
+        or not isinstance(class_.entity_id_lookup_map, dict)):
+      raise dbexceptions.ProgrammingError(
+          "Invalid entity_id_lookup_map %s" % class_.entity_id_lookup_map)
+    entity_col = class_.entity_id_lookup_map.keys()[0]
 
     # Create the lookup entry first
     if class_.sharding_key_column_name in bind_vars:
       # Secondary entity creation
       sharding_key = bind_vars[class_.sharding_key_column_name]
-      entity_col = class_.entity_id_lookup_map.keys()[0]
-      lookup_bind_vars = {class_.sharding_key_column_name, sharding_key}
+      lookup_bind_vars = {class_.sharding_key_column_name: sharding_key}
       entity_id = class_.get_insert_id_from_lookup(cursor_method, entity_col,
                                                    **lookup_bind_vars)
       bind_vars[entity_col] = entity_id
@@ -440,7 +463,6 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
       # FIXME: what if class_.entity_id_lookup_map was empty ?
       # there would need to be some table on which there was an auto-inc
       # to generate the primary sharding key.
-      entity_col = class_.entity_id_lookup_map.keys()[0]
       entity_id = bind_vars[entity_col]
       lookup_bind_vars = {entity_col: entity_id}
       sharding_key = class_.get_insert_id_from_lookup(cursor_method, entity_col,
@@ -455,7 +477,6 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
       bind_vars['keyspace_id'] = keyspace_id
 
     # entity_id_map is used for routing and hence passed to cursor_method
-    #bind_vars['entity_id_map'] = entity_id_map
     new_cursor = functools.partial(cursor_method, entity_id_map=entity_id_map)
     class_.insert_primary(new_cursor, **bind_vars)
     return new_inserted_key

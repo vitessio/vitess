@@ -300,6 +300,18 @@ def insert_query(table_name, columns_list, **bind_variables):
   return query, bind_variables
 
 
+def build_aggregate_query(table_name, id_column_name):
+  query = ('SELECT %(id_col)s FROM %(table_name)s ORDER BY %(id_col)s DESC '
+           'LIMIT 1') % {'id_col': id_column_name, 'table_name': table_name}
+  return query
+
+
+def build_count_query(table_name, column_value_pairs):
+  where_clause, bind_vars = build_where_clause(column_value_pairs)
+  query = 'SELECT count(1) FROM %s WHERE %s' % (table_name, where_clause)
+  return query, bind_vars
+
+
 def choose_bind_name(base, counter=None):
   if counter:
     base += '_%d' % counter.next()
