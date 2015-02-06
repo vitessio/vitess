@@ -22,7 +22,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-type timeoutError error
+type timeoutError struct {
+	error
+}
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory("bson", func() tmclient.TabletManagerClient {
@@ -41,7 +43,7 @@ func (client *GoRPCTabletManagerClient) rpcCallTablet(ctx context.Context, table
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return timeoutError(fmt.Errorf("timeout connecting to TabletManager.%v on %v", name, tablet.Alias))
+			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.%v on %v", name, tablet.Alias)}
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
@@ -55,7 +57,7 @@ func (client *GoRPCTabletManagerClient) rpcCallTablet(ctx context.Context, table
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return timeoutError(fmt.Errorf("timeout waiting for TabletManager.%v to %v", name, tablet.Alias))
+			return timeoutError{fmt.Errorf("timeout waiting for TabletManager.%v to %v", name, tablet.Alias)}
 		}
 		return fmt.Errorf("interrupted waiting for TabletManager.%v to %v", name, tablet.Alias)
 	case <-call.Done:
@@ -156,7 +158,7 @@ func (client *GoRPCTabletManagerClient) HealthStream(ctx context.Context, tablet
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return nil, nil, timeoutError(fmt.Errorf("timeout connecting to TabletManager.HealthStream on %v", tablet.Alias))
+			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.HealthStream on %v", tablet.Alias)}
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
@@ -390,7 +392,7 @@ func (client *GoRPCTabletManagerClient) Snapshot(ctx context.Context, tablet *to
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return nil, nil, timeoutError(fmt.Errorf("timeout connecting to TabletManager.Snapshot on %v", tablet.Alias))
+			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Snapshot on %v", tablet.Alias)}
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
@@ -454,7 +456,7 @@ func (client *GoRPCTabletManagerClient) Restore(ctx context.Context, tablet *top
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return nil, nil, timeoutError(fmt.Errorf("timeout connecting to TabletManager.Restore on %v", tablet.Alias))
+			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Restore on %v", tablet.Alias)}
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
