@@ -15,8 +15,13 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	// GoRPCProtocol is a vtgate protocol based on go rpc
+	GoRPCProtocol = "gorpc"
+)
+
 var (
-	vtgateProtocol = flag.String("vtgate_protocol", "gorpc", "how to talk to vtgate")
+	vtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
 )
 
 // ServerError represents an error that was returned from
@@ -74,16 +79,23 @@ var dialers = make(map[string]DialerFunc)
 // to self register.
 func RegisterDialer(name string, dialer DialerFunc) {
 	if _, ok := dialers[name]; ok {
-		log.Fatalf("Dialer %s already exists", name)
+		log.Warningf("Dialer %s already exists", name)
+		return
 	}
 	dialers[name] = dialer
 }
 
 // GetDialer returns the dialer to use, described by the command line flag
 func GetDialer() DialerFunc {
-	td, ok := dialers[*vtgateProtocol]
+	return GetDialerWithProtocol(*vtgateProtocol)
+}
+
+// GetDialerWithProtocol returns the dialer to use, described by the given protocol
+func GetDialerWithProtocol(protocol string) DialerFunc {
+	td, ok := dialers[protocol]
 	if !ok {
-		log.Fatalf("No dialer registered for VTGate protocol %s", *vtgateProtocol)
+		log.Warningf("No dialer registered for VTGate protocol %s", protocol)
+		return nil
 	}
 	return td
 }
