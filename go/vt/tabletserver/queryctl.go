@@ -270,6 +270,7 @@ var QueryServiceControlRegisterFunctions []QueryServiceControlRegisterFunction
 
 // Register is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) Register() {
+	rqsc.registerCheckMySQL()
 	for _, f := range QueryServiceControlRegisterFunctions {
 		f(rqsc)
 	}
@@ -280,7 +281,6 @@ func (rqsc *realQueryServiceControl) Register() {
 	rqsc.registerQueryzHandler()
 	rqsc.registerSchemazHandler()
 	rqsc.registerStreamQueryzHandlers()
-	rqsc.registerCheckMySQL()
 }
 
 // AllowQueries starts the query service.
@@ -307,13 +307,13 @@ func (rqsc *realQueryServiceControl) ReloadSchema() {
 	rqsc.sqlQueryRPCService.qe.schemaInfo.triggerReload()
 }
 
-// CheckMySQL verifies that MySQL is still reachable by connecting to it.
+// checkMySQL verifies that MySQL is still reachable by connecting to it.
 // If it's not reachable, it shuts down the query service.
 // This function rate-limits the check to no more than once per second.
-var CheckMySQL = func() {}
+var checkMySQL = func() {}
 
 func (rqsc *realQueryServiceControl) registerCheckMySQL() {
-	CheckMySQL = func() {
+	checkMySQL = func() {
 		if !checkMySLQThrottler.TryAcquire() {
 			return
 		}
@@ -328,11 +328,6 @@ func (rqsc *realQueryServiceControl) registerCheckMySQL() {
 		log.Infof("Check MySQL failed. Shutting down query service")
 		rqsc.DisallowQueries()
 	}
-}
-
-// GetQueryRules is the tabletserver level API to get current query rules
-func GetQueryRules(ruleSource string) (*QueryRules, error) {
-	return QueryRuleSources.GetRules(ruleSource)
 }
 
 // SetQueryRules is the tabletserver level API to write current query rules
