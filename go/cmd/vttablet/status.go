@@ -169,29 +169,27 @@ func healthHTMLName() template.HTML {
 // For use by plugins which wish to avoid racing when registering status page parts.
 var onStatusRegistered func()
 
-func init() {
-	servenv.OnRun(func() {
-		servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
-			return map[string]interface{}{
-				"Tablet":              agent.Tablet(),
-				"BlacklistedTables":   agent.BlacklistedTables(),
-				"DisableQueryService": agent.DisableQueryService(),
-			}
-		})
-		if agent.IsRunningHealthCheck() {
-			servenv.AddStatusFuncs(template.FuncMap{
-				"github_com_youtube_vitess_health_html_name": healthHTMLName,
-			})
-			servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-				return &healthStatus{Records: agent.History.Records()}
-			})
-		}
-		tabletserver.AddStatusPart()
-		servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
-			return agent.BinlogPlayerMap.Status()
-		})
-		if onStatusRegistered != nil {
-			onStatusRegistered()
+func addStatusParts(qsc tabletserver.QueryServiceControl) {
+	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
+		return map[string]interface{}{
+			"Tablet":              agent.Tablet(),
+			"BlacklistedTables":   agent.BlacklistedTables(),
+			"DisableQueryService": agent.DisableQueryService(),
 		}
 	})
+	if agent.IsRunningHealthCheck() {
+		servenv.AddStatusFuncs(template.FuncMap{
+			"github_com_youtube_vitess_health_html_name": healthHTMLName,
+		})
+		servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
+			return &healthStatus{Records: agent.History.Records()}
+		})
+	}
+	qsc.AddStatusPart()
+	servenv.AddStatusPart("Binlog Player", binlogTemplate, func() interface{} {
+		return agent.BinlogPlayerMap.Status()
+	})
+	if onStatusRegistered != nil {
+		onStatusRegistered()
+	}
 }

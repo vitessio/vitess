@@ -73,21 +73,25 @@ func main() {
 	if *tableAclConfig != "" {
 		tableacl.Init(*tableAclConfig)
 	}
-	tabletserver.InitQueryService()
+	qsc := tabletserver.NewQueryServiceControl()
+	tabletserver.InitQueryService(qsc)
 
 	// Query service can go into NOT_SERVING state if mysql goes down.
 	// So, continuously retry starting the service. So, it tries to come
 	// back up if it went down.
 	go func() {
 		for {
-			_ = tabletserver.AllowQueries(dbConfigs, schemaOverrides, mysqld)
+			_ = qsc.AllowQueries(dbConfigs, schemaOverrides, mysqld)
 			time.Sleep(30 * time.Second)
 		}
 	}()
 
 	log.Infof("starting vtocc %v", *servenv.Port)
+	servenv.OnRun(func() {
+		addStatusParts(qsc)
+	})
 	servenv.OnTerm(func() {
-		tabletserver.DisallowQueries()
+		qsc.DisallowQueries()
 		mysqld.Close()
 	})
 	servenv.RunDefault()

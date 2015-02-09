@@ -82,19 +82,26 @@ func main() {
 	if *tableAclConfig != "" {
 		tableacl.Init(*tableAclConfig)
 	}
-	tabletserver.InitQueryService()
+
+	// creates and registers the query service
+	qsc := tabletserver.NewQueryServiceControl()
+	tabletserver.InitQueryService(qsc)
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(qsc, context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)
 	}
 
 	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
+	servenv.OnRun(func() {
+		addStatusParts(qsc)
+		registerHealthReporters(qsc)
+	})
 	servenv.OnTerm(func() {
-		tabletserver.DisallowQueries()
+		qsc.DisallowQueries()
 		binlog.DisableUpdateStreamService()
 		agent.Stop()
 	})

@@ -53,14 +53,15 @@ var (
 // ActionAgent is the main class for the agent.
 type ActionAgent struct {
 	// The following fields are set during creation
-	TopoServer      topo.Server
-	TabletAlias     topo.TabletAlias
-	Mysqld          *mysqlctl.Mysqld
-	MysqlDaemon     mysqlctl.MysqlDaemon
-	DBConfigs       *dbconfigs.DBConfigs
-	SchemaOverrides []tabletserver.SchemaOverride
-	BinlogPlayerMap *BinlogPlayerMap
-	LockTimeout     time.Duration
+	QueryServiceControl tabletserver.QueryServiceControl
+	TopoServer          topo.Server
+	TabletAlias         topo.TabletAlias
+	Mysqld              *mysqlctl.Mysqld
+	MysqlDaemon         mysqlctl.MysqlDaemon
+	DBConfigs           *dbconfigs.DBConfigs
+	SchemaOverrides     []tabletserver.SchemaOverride
+	BinlogPlayerMap     *BinlogPlayerMap
+	LockTimeout         time.Duration
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
@@ -117,6 +118,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // batchCtx is the context that the agent will use for any background tasks
 // it spawns.
 func NewActionAgent(
+	queryServiceControl tabletserver.QueryServiceControl,
 	batchCtx context.Context,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
@@ -131,18 +133,19 @@ func NewActionAgent(
 	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	agent = &ActionAgent{
-		batchCtx:           batchCtx,
-		TopoServer:         topoServer,
-		TabletAlias:        tabletAlias,
-		Mysqld:             mysqld,
-		MysqlDaemon:        mysqld,
-		DBConfigs:          dbcfgs,
-		SchemaOverrides:    schemaOverrides,
-		LockTimeout:        lockTimeout,
-		History:            history.New(historyLength),
-		lastHealthMapCount: stats.NewInt("LastHealthMapCount"),
-		_healthy:           fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
+		QueryServiceControl: queryServiceControl,
+		batchCtx:            batchCtx,
+		TopoServer:          topoServer,
+		TabletAlias:         tabletAlias,
+		Mysqld:              mysqld,
+		MysqlDaemon:         mysqld,
+		DBConfigs:           dbcfgs,
+		SchemaOverrides:     schemaOverrides,
+		LockTimeout:         lockTimeout,
+		History:             history.New(historyLength),
+		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
+		_healthy:            fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 
 	// try to initialize the tablet if we have to
@@ -182,18 +185,19 @@ func NewActionAgent(
 // subset of features are supported now, but we'll add more over time.
 func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
 	agent = &ActionAgent{
-		batchCtx:           batchCtx,
-		TopoServer:         ts,
-		TabletAlias:        tabletAlias,
-		Mysqld:             nil,
-		MysqlDaemon:        mysqlDaemon,
-		DBConfigs:          nil,
-		SchemaOverrides:    nil,
-		BinlogPlayerMap:    nil,
-		History:            history.New(historyLength),
-		lastHealthMapCount: new(stats.Int),
-		_healthy:           fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:    make(map[int]chan<- *actionnode.HealthStreamReply),
+		QueryServiceControl: tabletserver.NewTestQueryServiceControl(),
+		batchCtx:            batchCtx,
+		TopoServer:          ts,
+		TabletAlias:         tabletAlias,
+		Mysqld:              nil,
+		MysqlDaemon:         mysqlDaemon,
+		DBConfigs:           nil,
+		SchemaOverrides:     nil,
+		BinlogPlayerMap:     nil,
+		History:             history.New(historyLength),
+		lastHealthMapCount:  new(stats.Int),
+		_healthy:            fmt.Errorf("healthcheck not run yet"),
+		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 	if err := agent.Start(0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))

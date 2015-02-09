@@ -22,7 +22,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
@@ -241,7 +240,7 @@ func (agent *ActionAgent) ReloadSchema(ctx context.Context) {
 	// This adds a dependency between tabletmanager and tabletserver,
 	// so it's not ideal. But I (alainjobart) think it's better
 	// to have up to date schema in vttablet.
-	tabletserver.ReloadSchema()
+	agent.QueryServiceControl.ReloadSchema()
 }
 
 // PreflightSchema will try out the schema change
