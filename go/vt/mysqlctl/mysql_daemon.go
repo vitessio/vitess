@@ -7,6 +7,7 @@ package mysqlctl
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -30,7 +31,7 @@ type MysqlDaemon interface {
 
 	// GetDbConnection returns a connection to be able to talk to the database.
 	// It accepts a dbconfig name to determine which db user it the connection should have.
-	GetDbConnection(dbconfigName string) (dbconnpool.PoolConnection, error)
+	GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error)
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
@@ -109,14 +110,14 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 }
 
 // GetDbConnection is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetDbConnection(dbconfigName string) (dbconnpool.PoolConnection, error) {
+func (fmd *FakeMysqlDaemon) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
 	switch dbconfigName {
-	case "dba":
+	case dbconfigs.DbaConfigName:
 		if fmd.DbaConnectionFactory == nil {
 			return nil, fmt.Errorf("no DbaConnectionFactory set in this FakeMysqlDaemon")
 		}
 		return fmd.DbaConnectionFactory()
-	case "app":
+	case dbconfigs.AppConfigName:
 		if fmd.DbAppConnectionFactory == nil {
 			return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
 		}

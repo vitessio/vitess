@@ -148,7 +148,7 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*mproto.QueryResult, error) {
 	var qr mproto.QueryResult
 	return &qr, nil
 }

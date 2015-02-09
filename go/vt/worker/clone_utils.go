@@ -102,14 +102,14 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
-func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string) error {
 	retryDuration := 2 * time.Hour
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	for {
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false, disableBinLogs)
+		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
 		cancel()
 		switch {
 		case err == nil:
@@ -151,14 +151,14 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string, disableBinLogs bool) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string) error {
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		err = executeFetchWithRetries(ctx, wr, ti, command, disableBinLogs)
+		err = executeFetchWithRetries(ctx, wr, ti, command)
 		if err != nil {
 			return err
 		}
@@ -190,7 +190,7 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true, false)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true)
 	cancel()
 	if err != nil {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
@@ -345,7 +345,7 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, disableBinLogs bool) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string) error {
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -354,7 +354,7 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.Table
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			err := executeFetchWithRetries(ctx, wr, ti, cmd, disableBinLogs)
+			err := executeFetchWithRetries(ctx, wr, ti, cmd)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
