@@ -307,6 +307,8 @@ func (rqsc *realQueryServiceControl) ReloadSchema() {
 // checkMySQL verifies that MySQL is still reachable by connecting to it.
 // If it's not reachable, it shuts down the query service.
 // This function rate-limits the check to no more than once per second.
+// FIXME(alainjobart) this global variable is accessed from many parts
+// of this library, this needs refactoring, probably using an interface.
 var checkMySQL = func() {}
 
 func (rqsc *realQueryServiceControl) registerCheckMySQL() {
