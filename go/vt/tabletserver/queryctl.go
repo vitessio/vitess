@@ -170,6 +170,9 @@ type QueryServiceControl interface {
 
 	// SetQueryRules sets the query rules for this QueryService
 	SetQueryRules(ruleSource string, qrs *QueryRules) error
+
+	// SqlQuery returns the SqlQuery object used by this QueryServiceControl
+	SqlQuery() *SqlQuery
 }
 
 // TestQueryServiceControl is a fake version of QueryServiceControl
@@ -237,6 +240,11 @@ func (tqsc *TestQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 	return nil
 }
 
+// SqlQuery is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) SqlQuery() *SqlQuery {
+	return nil
+}
+
 // realQueryServiceControl implements QueryServiceControl for real
 type realQueryServiceControl struct {
 	sqlQueryRPCService *SqlQuery
@@ -250,14 +258,6 @@ func NewQueryServiceControl() QueryServiceControl {
 }
 
 // registration service for all server protocols
-
-// SqlQueryRegisterFunction is a callback type to be called when we
-// Register() a QueryServiceControl
-type SqlQueryRegisterFunction func(*SqlQuery)
-
-// SqlQueryRegisterFunctions is an array of all the SqlQueryRegisterFunction
-// that will be called upon Register() on a QueryServiceControl
-var SqlQueryRegisterFunctions []SqlQueryRegisterFunction
 
 // QueryServiceControlRegisterFunction is a callback type to be called when we
 // Register() a QueryServiceControl
@@ -273,9 +273,6 @@ func (rqsc *realQueryServiceControl) Register() {
 	rqsc.registerCheckMySQL()
 	for _, f := range QueryServiceControlRegisterFunctions {
 		f(rqsc)
-	}
-	for _, f := range SqlQueryRegisterFunctions {
-		f(rqsc.sqlQueryRPCService)
 	}
 	rqsc.registerDebugHealthHandler()
 	rqsc.registerQueryzHandler()
@@ -338,6 +335,11 @@ func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 	}
 	rqsc.sqlQueryRPCService.qe.schemaInfo.ClearQueryPlanCache()
 	return nil
+}
+
+// SqlQuery is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) SqlQuery() *SqlQuery {
+	return rqsc.sqlQueryRPCService
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
