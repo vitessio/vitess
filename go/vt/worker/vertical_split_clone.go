@@ -426,9 +426,6 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		mu.Unlock()
 	}
 
-	// since we're writing only to masters, we need to enable bin logs so that replication happens
-	disableBinLogs := false
-
 	insertChannels := make([]chan string, len(vscw.destinationAliases))
 	destinationWaitGroup := sync.WaitGroup{}
 	for i, tabletAlias := range vscw.destinationAliases {
@@ -445,7 +442,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 				go func() {
 					defer destinationWaitGroup.Done()
 
-					if err := executeFetchLoop(vscw.ctx, vscw.wr, ti, insertChannel, disableBinLogs); err != nil {
+					if err := executeFetchLoop(vscw.ctx, vscw.wr, ti, insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -527,7 +524,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				vscw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(vscw.ctx, vscw.wr, ti, queries, disableBinLogs); err != nil {
+				if err := runSqlCommands(vscw.ctx, vscw.wr, ti, queries); err != nil {
 					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
 				}
 			}(vscw.destinationTablets[tabletAlias])

@@ -24,7 +24,7 @@ var (
 	mysqld *mysqlctl.Mysqld
 
 	mysqlPort   = flag.Int("mysql_port", 3306, "mysql port")
-	tabletUid   = flag.Uint("tablet_uid", 41983, "tablet uid")
+	tabletUID   = flag.Uint("tablet_uid", 41983, "tablet uid")
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
@@ -50,7 +50,7 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
 	}
@@ -60,7 +60,7 @@ func main() {
 		log.Errorf("%v", err)
 		exit.Return(255)
 	}
-	mysqld = mysqlctl.NewMysqld("Dba", mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
+	mysqld = mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
 
 	// Register OnTerm handler before mysqld starts, so we get notified if mysqld
 	// dies on its own without us (or our RPC client) telling it to.

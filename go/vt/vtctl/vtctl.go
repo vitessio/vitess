@@ -116,7 +116,7 @@ var commands = []commandGroup{
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
-			command{"ExecuteFetch", commandExecuteFetch,
+			command{"ExecuteFetchAsDba", commandExecuteFetchAsDba,
 				"[--max_rows=10000] [--want_fields] [--disable_binlogs] <tablet alias> <sql command>",
 				"Runs the given sql command as a DBA on the remote tablet"},
 		},
@@ -957,7 +957,7 @@ func commandClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	return wr.Clone(ctx, srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
-func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "maximum number of rows to allow in reset")
 	wantFields := subFlags.Bool("want_fields", false, "also get the field names")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "disable writing to binlogs during the query")
@@ -965,7 +965,7 @@ func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ExecuteFetch requires <tablet alias> <sql command>")
+		return fmt.Errorf("action ExecuteFetchAsDba requires <tablet alias> <sql command>")
 	}
 
 	alias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
@@ -973,7 +973,7 @@ func commandExecuteFetch(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetch(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs)
+	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs)
 	if err == nil {
 		wr.Logger().Printf("%v\n", jscfg.ToJson(qr))
 	}

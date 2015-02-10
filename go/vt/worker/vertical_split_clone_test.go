@@ -284,7 +284,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 				},
 			},
 		}
-		sourceRdonly.FakeMysqlDaemon.DbaConnectionFactory = VerticalSourceRdonlyFactory(t)
+		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalSourceRdonlyFactory(t)
 		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
 			Position: myproto.ReplicationPosition{
 				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
@@ -299,8 +299,8 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	// at once. So we'll process 4 + 4 + 2 rows to get to 10.
 	// That means 3 insert statements on the target. So 3 * 10
 	// = 30 insert statements on the destination.
-	destMaster.FakeMysqlDaemon.DbaConnectionFactory = VerticalDestinationsFactory(t, 30)
-	destRdonly.FakeMysqlDaemon.DbaConnectionFactory = VerticalDestinationsFactory(t, 30)
+	destMaster.FakeMysqlDaemon.DbAppConnectionFactory = VerticalDestinationsFactory(t, 30)
+	destRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalDestinationsFactory(t, 30)
 
 	wrk.Run()
 	status := wrk.StatusAsText()
