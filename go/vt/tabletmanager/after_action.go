@@ -41,26 +41,24 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
-	if agent.DBConfigs == nil {
-		// test instance, do nothing
-		return nil
-	}
-
 	// if the query service is already running, we're not starting it again
 	if agent.QueryServiceControl.IsServing() {
 		return nil
 	}
 
-	// Update our DB config to match the info we have in the tablet
-	if agent.DBConfigs.App.DbName == "" {
-		agent.DBConfigs.App.DbName = tablet.DbName()
-	}
-	agent.DBConfigs.App.Keyspace = tablet.Keyspace
-	agent.DBConfigs.App.Shard = tablet.Shard
-	if tablet.Type != topo.TYPE_MASTER {
-		agent.DBConfigs.App.EnableInvalidator = true
-	} else {
-		agent.DBConfigs.App.EnableInvalidator = false
+	// only for real instances
+	if agent.DBConfigs != nil {
+		// Update our DB config to match the info we have in the tablet
+		if agent.DBConfigs.App.DbName == "" {
+			agent.DBConfigs.App.DbName = tablet.DbName()
+		}
+		agent.DBConfigs.App.Keyspace = tablet.Keyspace
+		agent.DBConfigs.App.Shard = tablet.Shard
+		if tablet.Type != topo.TYPE_MASTER {
+			agent.DBConfigs.App.EnableInvalidator = true
+		} else {
+			agent.DBConfigs.App.EnableInvalidator = false
+		}
 	}
 
 	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)

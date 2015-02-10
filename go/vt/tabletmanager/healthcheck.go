@@ -184,7 +184,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// try to figure out the mysql port if we don't have it yet
 	if _, ok := tablet.Portmap["mysql"]; !ok {
 		// we don't know the port, try to get it from mysqld
-		mysqlPort, err := agent.Mysqld.GetMysqlPort()
+		mysqlPort, err := agent.MysqlDaemon.GetMysqlPort()
 		if err != nil {
 			// Don't log if we're already in a waiting-for-mysql state.
 			agent.mutex.Lock()
