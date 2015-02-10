@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -444,17 +445,28 @@ var testExecuteFetchResult = &mproto.QueryResult{
 		},
 	},
 }
+var testExecuteFetchDbConfigName dbconfigs.DbConfigName
 
-func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, dbconfigName dbconfigs.DbConfigName) (*mproto.QueryResult, error) {
 	compare(fra.t, "ExecuteFetch query", query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetch maxrows", maxrows, testExecuteFetchMaxRows)
 	compareBool(fra.t, "ExecuteFetch wantFields", wantFields)
-	compareBool(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs)
+	compare(fra.t, "ExecuteFetch dbconfigName", dbconfigName, testExecuteFetchDbConfigName)
+	switch dbconfigName {
+	case dbconfigs.DbaConfigName:
+		compareBool(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs)
+	case dbconfigs.AppConfigName:
+		compare(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs, false)
+	}
 	return testExecuteFetchResult, nil
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	qr, err := client.ExecuteFetch(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	testExecuteFetchDbConfigName = dbconfigs.DbaConfigName
+	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
+	testExecuteFetchDbConfigName = dbconfigs.AppConfigName
+	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
 	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
 }
 

@@ -61,7 +61,7 @@ func main() {
 		}
 	}
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
-	mysqld := mysqlctl.NewMysqld("Dba", mycnf, &dbConfigs.Dba, &dbConfigs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbConfigs.Dba, &dbConfigs.App.ConnectionParams, &dbConfigs.Repl)
 
 	if err := unmarshalFile(*overridesFile, &schemaOverrides); err != nil {
 		log.Error(err)

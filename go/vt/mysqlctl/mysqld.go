@@ -37,12 +37,17 @@ import (
 )
 
 const (
-	MysqlWaitTime = 120 * time.Second // default number of seconds to wait
+	// MysqlWaitTime is the default number of seconds to wait for mysql
+	MysqlWaitTime = 120 * time.Second
 )
 
 var (
-	dbaPoolSize    = flag.Int("dba_pool_size", 50, "Size of the connection pool for dba connections")
+	// TODO(aaijazi): for reasons I don't understand, the dba pool size needs to be fairly large (15+)
+	// for test/clone.py to pass.
+	dbaPoolSize    = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
 	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
+	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
+	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
 	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 )
@@ -51,7 +56,9 @@ var (
 type Mysqld struct {
 	config      *Mycnf
 	dba         *mysql.ConnectionParams
+	dbApp       *mysql.ConnectionParams
 	dbaPool     *dbconnpool.ConnectionPool
+	appPool     *dbconnpool.ConnectionPool
 	replParams  *mysql.ConnectionParams
 	TabletDir   string
 	SnapshotDir string
@@ -65,21 +72,28 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-// name is the base for stats exports, use 'Dba', except in tests
-func NewMysqld(name string, config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
+// dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
+func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *mysql.ConnectionParams) *Mysqld {
 	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
 	}
 
 	// create and open the connection pool for dba access
-	mysqlStats := stats.NewTimings("Mysql" + name)
-	dbaPool := dbconnpool.NewConnectionPool(name+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
-	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, mysqlStats))
+	dbaMysqlStats := stats.NewTimings("Mysql" + dbaName)
+	dbaPool := dbconnpool.NewConnectionPool(dbaName+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, dbaMysqlStats))
+
+	// create and open the connection pool for app access
+	appMysqlStats := stats.NewTimings("Mysql" + appName)
+	appPool := dbconnpool.NewConnectionPool(appName+"ConnPool", *appPoolSize, *appIdleTimeout)
+	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
 
 	return &Mysqld{
 		config:      config,
 		dba:         dba,
+		dbApp:       app,
 		dbaPool:     dbaPool,
+		appPool:     appPool,
 		replParams:  repl,
 		TabletDir:   TabletDir(config.ServerId),
 		SnapshotDir: SnapshotDir(config.ServerId),
@@ -489,8 +503,8 @@ func (mysqld *Mysqld) Addr() string {
 	return netutil.JoinHostPort(hostname, mysqld.config.MysqlPort)
 }
 
-// IpAddr returns the IP address for this instance
-func (mysqld *Mysqld) IpAddr() string {
+// IPAddr returns the IP address for this instance
+func (mysqld *Mysqld) IPAddr() string {
 	addr, err := netutil.ResolveIpAddr(mysqld.Addr())
 	if err != nil {
 		panic(err) // should never happen
@@ -518,16 +532,23 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	return nil
 }
 
-// GetDbaConnection returns a connection from the dba pool.
+// GetDbConnection returns a connection from the pool chosen by dbconfigName.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetDbaConnection() (dbconnpool.PoolConnection, error) {
-	return mysqld.dbaPool.Get(0)
+func (mysqld *Mysqld) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
+	switch dbconfigName {
+	case dbconfigs.DbaConfigName:
+		return mysqld.dbaPool.Get(0)
+	case dbconfigs.AppConfigName:
+		return mysqld.appPool.Get(0)
+	}
+	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba
 // queries to be finished.
 func (mysqld *Mysqld) Close() {
 	mysqld.dbaPool.Close()
+	mysqld.appPool.Close()
 }
 
 // OnTerm registers a function to be called if mysqld terminates for any

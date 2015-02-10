@@ -276,7 +276,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 		if err != nil {
 			return
 		}
-		masterAddr = mysqld.IpAddr()
+		masterAddr = mysqld.IPAddr()
 	} else {
 		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 			return
@@ -291,7 +291,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 		// We are a slave, check our replication strategy before
 		// choosing the master address.
 		if allowHierarchicalReplication {
-			masterAddr = mysqld.IpAddr()
+			masterAddr = mysqld.IPAddr()
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
@@ -310,7 +310,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 		logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 		var sm *SnapshotManifest
-		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.IpAddr(),
+		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.IPAddr(),
 			masterAddr, dbName, dataFiles, replicationPosition, proto.ReplicationPosition{})
 		if snapshotErr != nil {
 			logger.Errorf("CreateSnapshot failed: %v", snapshotErr)

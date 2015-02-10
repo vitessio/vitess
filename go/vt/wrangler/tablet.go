@@ -268,11 +268,11 @@ func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
 	return wr.TopoServer().DeleteTablet(tabletAlias)
 }
 
-// ExecuteFetch will get data from a remote tablet
-func (wr *Wrangler) ExecuteFetch(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+// ExecuteFetchAsDba executes a query remotely using the DBA pool
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetch(ctx, ti, query, maxRows, wantFields, disableBinlogs)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, wantFields, disableBinlogs)
 }

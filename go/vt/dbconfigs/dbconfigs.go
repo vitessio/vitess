@@ -34,8 +34,24 @@ const (
 	ReplConfig
 )
 
+// DbConfigName describes which DB config we should use
+type DbConfigName string
+
+// DBA config
+const DbaConfigName DbConfigName = "dba"
+
+// Regular app config
+const AppConfigName DbConfigName = "app"
+
+// Config for filtered replication
+const FilteredConfigName DbConfigName = "filtered"
+
+// Config for replication
+const ReplConfigName DbConfigName = "repl"
+
 // The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultParams mysql.ConnectionParams) {
+func registerConnFlags(connParams *mysql.ConnectionParams, cnfName DbConfigName, defaultParams mysql.ConnectionParams) {
+	name := string(cnfName)
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", defaultParams.Port, "db "+name+" connection port")
 	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", defaultParams.Uname, "db "+name+" connection uname")
@@ -59,19 +75,19 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	}
 	registeredFlags := EmptyConfig
 	if AppConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
+		registerConnFlags(&dbConfigs.App.ConnectionParams, AppConfigName, DefaultDBConfigs.App.ConnectionParams)
 		registeredFlags |= AppConfig
 	}
 	if DbaConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
+		registerConnFlags(&dbConfigs.Dba, DbaConfigName, DefaultDBConfigs.Dba)
 		registeredFlags |= DbaConfig
 	}
 	if FilteredConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Filtered, "filtered", DefaultDBConfigs.Filtered)
+		registerConnFlags(&dbConfigs.Filtered, FilteredConfigName, DefaultDBConfigs.Filtered)
 		registeredFlags |= FilteredConfig
 	}
 	if ReplConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
+		registerConnFlags(&dbConfigs.Repl, ReplConfigName, DefaultDBConfigs.Repl)
 		registeredFlags |= ReplConfig
 	}
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", DefaultDBConfigs.App.Keyspace, "db app connection keyspace")
