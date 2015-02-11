@@ -55,6 +55,7 @@ func init() {
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
 }
 
+// RowCacheConfig encapsulates the configuration for RowCache
 type RowCacheConfig struct {
 	Binary      string
 	Memory      int
@@ -65,6 +66,7 @@ type RowCacheConfig struct {
 	LockPaged   bool
 }
 
+// GetSubprocessFlags returns the flags to use to call memcached
 func (c *RowCacheConfig) GetSubprocessFlags() []string {
 	cmd := []string{}
 	if c.Binary == "" {
@@ -93,6 +95,7 @@ func (c *RowCacheConfig) GetSubprocessFlags() []string {
 	return cmd
 }
 
+// Config contains all the configuration for query service
 type Config struct {
 	PoolSize           int
 	StreamPoolSize     int
@@ -141,105 +144,233 @@ var DefaultQsConfig = Config{
 
 var qsConfig Config
 
-var SqlQueryRpcService *SqlQuery
+// QueryServiceControl is the interface implemented by the controller
+// for the query service.
+type QueryServiceControl interface {
+	// Register registers this query service with the RPC layer.
+	Register()
+
+	// AddStatusPart adds the status part to the status page
+	AddStatusPart()
+
+	// AllowQueries enables queries.
+	AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, *mysqlctl.Mysqld) error
+
+	// DisallowQueries shuts down the query service.
+	DisallowQueries()
+
+	// IsServing returns true if the query service is running
+	IsServing() bool
+
+	// IsHealthy returns the health status of the QueryService
+	IsHealthy() error
+
+	// ReloadSchema makes the quey service reload its schema cache
+	ReloadSchema()
+
+	// SetQueryRules sets the query rules for this QueryService
+	SetQueryRules(ruleSource string, qrs *QueryRules) error
+
+	// SqlQuery returns the SqlQuery object used by this QueryServiceControl
+	SqlQuery() *SqlQuery
+}
+
+// TestQueryServiceControl is a fake version of QueryServiceControl
+type TestQueryServiceControl struct {
+	// QueryServiceEnabled is a state variable
+	QueryServiceEnabled bool
+
+	// AllowQueriesError is the return value for AllowQueries
+	AllowQueriesError error
+
+	// IsHealthy is the return value for IsHealthy
+	IsHealthyError error
+
+	// ReloadSchemaCount counts how many times ReloadSchema was called
+	ReloadSchemaCount int
+}
+
+// NewTestQueryServiceControl returns an implementation of QueryServiceControl
+// that is entirely fake
+func NewTestQueryServiceControl() *TestQueryServiceControl {
+	return &TestQueryServiceControl{
+		QueryServiceEnabled: false,
+		AllowQueriesError:   nil,
+		IsHealthyError:      nil,
+		ReloadSchemaCount:   0,
+	}
+}
+
+// Register is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) Register() {
+}
+
+// AddStatusPart is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) AddStatusPart() {
+}
+
+// AllowQueries is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, *mysqlctl.Mysqld) error {
+	tqsc.QueryServiceEnabled = tqsc.AllowQueriesError == nil
+	return tqsc.AllowQueriesError
+}
+
+// DisallowQueries is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) DisallowQueries() {
+	tqsc.QueryServiceEnabled = false
+}
+
+// IsServing is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) IsServing() bool {
+	return tqsc.QueryServiceEnabled
+}
+
+// IsHealthy is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) IsHealthy() error {
+	return tqsc.IsHealthyError
+}
+
+// ReloadSchema is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) ReloadSchema() {
+	tqsc.ReloadSchemaCount++
+}
+
+// SetQueryRules is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) SetQueryRules(ruleSource string, qrs *QueryRules) error {
+	return nil
+}
+
+// SqlQuery is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) SqlQuery() *SqlQuery {
+	return nil
+}
+
+// realQueryServiceControl implements QueryServiceControl for real
+type realQueryServiceControl struct {
+	sqlQueryRPCService *SqlQuery
+}
+
+// NewQueryServiceControl returns a real implementation of QueryServiceControl
+func NewQueryServiceControl() QueryServiceControl {
+	return &realQueryServiceControl{
+		sqlQueryRPCService: NewSqlQuery(qsConfig),
+	}
+}
 
 // registration service for all server protocols
 
-type SqlQueryRegisterFunction func(*SqlQuery)
+// QueryServiceControlRegisterFunction is a callback type to be called when we
+// Register() a QueryServiceControl
+type QueryServiceControlRegisterFunction func(QueryServiceControl)
 
-var SqlQueryRegisterFunctions []SqlQueryRegisterFunction
+// QueryServiceControlRegisterFunctions is an array of all the
+// QueryServiceControlRegisterFunction that will be called upon
+// Register() on a QueryServiceControl
+var QueryServiceControlRegisterFunctions []QueryServiceControlRegisterFunction
 
-func RegisterQueryService() {
-	if SqlQueryRpcService != nil {
-		log.Warningf("RPC service already up %v", SqlQueryRpcService)
-		return
+// Register is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) Register() {
+	rqsc.registerCheckMySQL()
+	for _, f := range QueryServiceControlRegisterFunctions {
+		f(rqsc)
 	}
-	SqlQueryRpcService = NewSqlQuery(qsConfig)
-	for _, f := range SqlQueryRegisterFunctions {
-		f(SqlQueryRpcService)
-	}
-	http.HandleFunc("/debug/health", healthCheck)
+	rqsc.registerDebugHealthHandler()
+	rqsc.registerQueryzHandler()
+	rqsc.registerSchemazHandler()
+	rqsc.registerStreamQueryzHandlers()
 }
 
 // AllowQueries starts the query service.
-func AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) error {
-	return SqlQueryRpcService.allowQueries(dbconfigs, schemaOverrides, mysqld)
+func (rqsc *realQueryServiceControl) AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) error {
+	return rqsc.sqlQueryRPCService.allowQueries(dbconfigs, schemaOverrides, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
-func DisallowQueries() {
+func (rqsc *realQueryServiceControl) DisallowQueries() {
 	defer logError()
-	SqlQueryRpcService.disallowQueries()
+	rqsc.sqlQueryRPCService.disallowQueries()
+}
+
+// IsServing is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) IsServing() bool {
+	return rqsc.sqlQueryRPCService.GetState() == "SERVING"
 }
 
 // Reload the schema. If the query service is not running, nothing will happen
-func ReloadSchema() {
+func (rqsc *realQueryServiceControl) ReloadSchema() {
 	defer logError()
-	SqlQueryRpcService.qe.schemaInfo.triggerReload()
+	rqsc.sqlQueryRPCService.qe.schemaInfo.triggerReload()
 }
 
-// CheckMySQL verifies that MySQL is still reachable by connecting to it.
+// checkMySQL verifies that MySQL is still reachable by connecting to it.
 // If it's not reachable, it shuts down the query service.
 // This function rate-limits the check to no more than once per second.
-func CheckMySQL() {
-	if !checkMySLQThrottler.TryAcquire() {
-		return
-	}
-	defer func() {
-		time.Sleep(1 * time.Second)
-		checkMySLQThrottler.Release()
-	}()
-	defer logError()
-	if SqlQueryRpcService.checkMySQL() {
-		return
-	}
-	log.Infof("Check MySQL failed. Shutting down query service")
-	DisallowQueries()
-}
+// FIXME(alainjobart) this global variable is accessed from many parts
+// of this library, this needs refactoring, probably using an interface.
+var checkMySQL = func() {}
 
-func GetSessionId() int64 {
-	return SqlQueryRpcService.sessionId
-}
-
-// GetQueryRules is the tabletserver level API to get current query rules
-func GetQueryRules(ruleSource string) (*QueryRules, error) {
-	return QueryRuleSources.GetRules(ruleSource)
+func (rqsc *realQueryServiceControl) registerCheckMySQL() {
+	checkMySQL = func() {
+		if !checkMySLQThrottler.TryAcquire() {
+			return
+		}
+		defer func() {
+			time.Sleep(1 * time.Second)
+			checkMySLQThrottler.Release()
+		}()
+		defer logError()
+		if rqsc.sqlQueryRPCService.checkMySQL() {
+			return
+		}
+		log.Infof("Check MySQL failed. Shutting down query service")
+		rqsc.DisallowQueries()
+	}
 }
 
 // SetQueryRules is the tabletserver level API to write current query rules
-func SetQueryRules(ruleSource string, qrs *QueryRules) error {
+func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *QueryRules) error {
 	err := QueryRuleSources.SetRules(ruleSource, qrs)
 	if err != nil {
 		return err
 	}
-	SqlQueryRpcService.qe.schemaInfo.ClearQueryPlanCache()
+	rqsc.sqlQueryRPCService.qe.schemaInfo.ClearQueryPlanCache()
 	return nil
+}
+
+// SqlQuery is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) SqlQuery() *SqlQuery {
+	return rqsc.sqlQueryRPCService
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
-func IsHealthy() error {
-	return SqlQueryRpcService.Execute(
+func (rqsc *realQueryServiceControl) IsHealthy() error {
+	return rqsc.sqlQueryRPCService.Execute(
 		context.Background(),
-		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
+		&proto.Query{
+			Sql:       "select 1 from dual",
+			SessionId: rqsc.sqlQueryRPCService.sessionId,
+		},
 		new(mproto.QueryResult),
 	)
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
-		acl.SendError(w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	if err := IsHealthy(); err != nil {
-		w.Write([]byte("not ok"))
-		return
-	}
-	w.Write([]byte("ok"))
+func (rqsc *realQueryServiceControl) registerDebugHealthHandler() {
+	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		if err := rqsc.IsHealthy(); err != nil {
+			w.Write([]byte("not ok"))
+			return
+		}
+		w.Write([]byte("ok"))
+	})
 }
 
 func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
@@ -258,8 +389,8 @@ func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) st
 
 // InitQueryService registers the query service, after loading any
 // necessary config files. It also starts any relevant streaming logs.
-func InitQueryService() {
+func InitQueryService(qsc QueryServiceControl) {
 	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
-	RegisterQueryService()
+	qsc.Register()
 }

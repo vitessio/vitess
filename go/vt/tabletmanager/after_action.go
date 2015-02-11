@@ -41,26 +41,24 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 const blacklistQueryRules string = "BlacklistQueryRules"
 
 func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
-	if agent.DBConfigs == nil {
-		// test instance, do nothing
-		return nil
-	}
-
 	// if the query service is already running, we're not starting it again
-	if tabletserver.SqlQueryRpcService.GetState() == "SERVING" {
+	if agent.QueryServiceControl.IsServing() {
 		return nil
 	}
 
-	// Update our DB config to match the info we have in the tablet
-	if agent.DBConfigs.App.DbName == "" {
-		agent.DBConfigs.App.DbName = tablet.DbName()
-	}
-	agent.DBConfigs.App.Keyspace = tablet.Keyspace
-	agent.DBConfigs.App.Shard = tablet.Shard
-	if tablet.Type != topo.TYPE_MASTER {
-		agent.DBConfigs.App.EnableInvalidator = true
-	} else {
-		agent.DBConfigs.App.EnableInvalidator = false
+	// only for real instances
+	if agent.DBConfigs != nil {
+		// Update our DB config to match the info we have in the tablet
+		if agent.DBConfigs.App.DbName == "" {
+			agent.DBConfigs.App.DbName = tablet.DbName()
+		}
+		agent.DBConfigs.App.Keyspace = tablet.Keyspace
+		agent.DBConfigs.App.Shard = tablet.Shard
+		if tablet.Type != topo.TYPE_MASTER {
+			agent.DBConfigs.App.EnableInvalidator = true
+		} else {
+			agent.DBConfigs.App.EnableInvalidator = false
+		}
 	}
 
 	err := agent.loadKeyspaceAndBlacklistRules(tablet, blacklistedTables)
@@ -68,7 +66,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		return err
 	}
 
-	return tabletserver.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld)
+	return agent.QueryServiceControl.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:
@@ -120,12 +118,12 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 		blacklistRules.Add(qr)
 	}
 	// Push all three sets of QueryRules to SqlQueryRpcService
-	loadRuleErr := tabletserver.SetQueryRules(keyrangeQueryRules, keyrangeRules)
+	loadRuleErr := agent.QueryServiceControl.SetQueryRules(keyrangeQueryRules, keyrangeRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", keyrangeQueryRules, loadRuleErr)
 	}
 
-	loadRuleErr = tabletserver.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr = agent.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
 	if loadRuleErr != nil {
 		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
 	}
@@ -137,7 +135,7 @@ func (agent *ActionAgent) disallowQueries() {
 		// test instance, do nothing
 		return
 	}
-	tabletserver.DisallowQueries()
+	agent.QueryServiceControl.DisallowQueries()
 }
 
 // changeCallback is run after every action that might

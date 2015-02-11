@@ -11,7 +11,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
@@ -42,7 +41,7 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 }
 
 // Open try to build query rules from local file and push the rules to vttablet
-func (fcr *FileCustomRule) Open(rulePath string) error {
+func (fcr *FileCustomRule) Open(qsc tabletserver.QueryServiceControl, rulePath string) error {
 	fcr.path = rulePath
 	if fcr.path == "" {
 		// Don't go further if path is empty
@@ -63,7 +62,7 @@ func (fcr *FileCustomRule) Open(rulePath string) error {
 	fcr.currentRuleSetTimestamp = time.Now().Unix()
 	fcr.currentRuleSet = qrs.Copy()
 	// Push query rules to vttablet
-	tabletserver.SetQueryRules(FileCustomRuleSource, qrs.Copy())
+	qsc.SetQueryRules(FileCustomRuleSource, qrs.Copy())
 	log.Infof("Custom rule loaded from file: %s", fcr.path)
 	return nil
 }
@@ -74,13 +73,13 @@ func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int
 }
 
 // ActivateFileCustomRules activates this static file based custom rule mechanism
-func ActivateFileCustomRules() {
+func ActivateFileCustomRules(qsc tabletserver.QueryServiceControl) {
 	if *fileRulePath != "" {
 		tabletserver.QueryRuleSources.RegisterQueryRuleSource(FileCustomRuleSource)
-		fileCustomRule.Open(*fileRulePath)
+		fileCustomRule.Open(qsc, *fileRulePath)
 	}
 }
 
 func init() {
-	servenv.OnRun(ActivateFileCustomRules)
+	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, ActivateFileCustomRules)
 }

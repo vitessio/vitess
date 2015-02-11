@@ -8,7 +8,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -18,16 +17,18 @@ var (
 )
 
 // queryServiceRunning implements health.Reporter
-type queryServiceRunning struct{}
+type queryServiceRunning struct {
+	qsc tabletserver.QueryServiceControl
+}
 
 // Report is part of the health.Reporter interface
 func (qsr *queryServiceRunning) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	isQueryServiceRunning := tabletserver.SqlQueryRpcService.GetState() == "SERVING"
+	isQueryServiceRunning := qsr.qsc.IsServing()
 	if shouldQueryServiceBeRunning != isQueryServiceRunning {
 		return 0, fmt.Errorf("QueryService running=%v, expected=%v", isQueryServiceRunning, shouldQueryServiceBeRunning)
 	}
 	if isQueryServiceRunning {
-		if err := tabletserver.IsHealthy(); err != nil {
+		if err := qsr.qsc.IsHealthy(); err != nil {
 			return 0, fmt.Errorf("QueryService is running, but not healthy: %v", err)
 		}
 	}
@@ -39,11 +40,9 @@ func (qsr *queryServiceRunning) HTMLName() template.HTML {
 	return template.HTML("QueryServiceRunning")
 }
 
-func init() {
-	servenv.OnRun(func() {
-		if *enableReplicationLagCheck {
-			health.Register("replication_reporter", mysqlctl.MySQLReplicationLag(agent.Mysqld))
-		}
-		health.Register("query_service_reporter", &queryServiceRunning{})
-	})
+func registerHealthReporters(qsc tabletserver.QueryServiceControl) {
+	if *enableReplicationLagCheck {
+		health.Register("replication_reporter", mysqlctl.MySQLReplicationLag(agent.Mysqld))
+	}
+	health.Register("query_service_reporter", &queryServiceRunning{qsc})
 }

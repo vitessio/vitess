@@ -35,7 +35,7 @@ type DBConn struct {
 func NewDBConn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, mysqlStats)
 	if err != nil {
-		go CheckMySQL()
+		go checkMySQL()
 		return nil, err
 	}
 	return &DBConn{
@@ -61,7 +61,7 @@ func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Dea
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
-			go CheckMySQL()
+			go checkMySQL()
 			return nil, NewTabletErrorSql(ErrFatal, err)
 		}
 	}

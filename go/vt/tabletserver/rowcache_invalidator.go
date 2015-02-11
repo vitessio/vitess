@@ -120,7 +120,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 			break
 		}
 		if IsConnErr(err) {
-			go CheckMySQL()
+			go checkMySQL()
 		}
 		log.Errorf("binlog.ServeUpdateStream returned err '%v', retrying in 1 second.", err.Error())
 		internalErrors.Add("Invalidation", 1)

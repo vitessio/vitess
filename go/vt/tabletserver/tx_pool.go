@@ -234,7 +234,7 @@ func (txc *TxConnection) Exec(query string, maxrows int, wantfields bool, deadli
 	r, err := txc.DBConn.execOnce(query, maxrows, wantfields, deadline)
 	if err != nil {
 		if IsConnErr(err) {
-			go CheckMySQL()
+			go checkMySQL()
 			return nil, NewTabletErrorSql(ErrFatal, err)
 		}
 		return nil, NewTabletErrorSql(ErrFail, err)

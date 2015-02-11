@@ -26,6 +26,8 @@ var customRule1 = `[
 			]`
 
 func TestFileCustomRule(t *testing.T) {
+	tqsc := tabletserver.NewTestQueryServiceControl()
+
 	var qrs *tabletserver.QueryRules
 	rulepath := path.Join(os.TempDir(), ".customrule.json")
 	// Set r1 and try to get it back
@@ -36,7 +38,7 @@ func TestFileCustomRule(t *testing.T) {
 
 	fcr := NewFileCustomRule()
 	// Let FileCustomRule to build rule from the local file
-	err = fcr.Open(rulepath)
+	err = fcr.Open(tqsc, rulepath)
 	if err != nil {
 		t.Fatalf("Cannot open file custom rule service, err=%v", err)
 	}

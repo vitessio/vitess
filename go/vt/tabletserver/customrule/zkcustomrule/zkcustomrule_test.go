@@ -15,7 +15,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-var customRule1 string = `[
+var customRule1 = `[
 				{
 					"Name": "r1",
 					"Description": "disallow bindvar 'asdfg'",
@@ -27,7 +27,7 @@ var customRule1 string = `[
 				}
 			]`
 
-var customRule2 string = `[
+var customRule2 = `[
                                 {
 					"Name": "r2",
 					"Description": "disallow insert on table test",
@@ -47,9 +47,11 @@ func setUpFakeZk(t *testing.T) {
 }
 
 func TestZkCustomRule(t *testing.T) {
+	tqsc := tabletserver.NewTestQueryServiceControl()
+
 	setUpFakeZk(t)
 	zkcr := NewZkCustomRule(conn)
-	err := zkcr.Open("/zk/fake/customrules/testrules")
+	err := zkcr.Open(tqsc, "/zk/fake/customrules/testrules")
 	if err != nil {
 		t.Fatalf("Cannot open zookeeper custom rule service, err=%v", err)
 	}
