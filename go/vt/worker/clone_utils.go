@@ -26,6 +26,55 @@ import (
 // This file contains utility functions for clone workers.
 //
 
+// Does a topo lookup for a single shard, and returns the tablet record of the master tablet.
+func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
+	var ti *topo.TabletInfo
+	newCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	si, err := topo.GetShard(newCtx, wr.TopoServer(), keyspace, shard)
+	cancel()
+	if err != nil {
+		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)
+	}
+
+	if si.MasterAlias.IsZero() {
+		return ti, fmt.Errorf("no master in destination shard %v/%v", keyspace, shard)
+	}
+
+	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
+
+	newCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	ti, err = topo.GetTablet(newCtx, wr.TopoServer(), si.MasterAlias)
+	cancel()
+	if err != nil {
+		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
+			si.MasterAlias, keyspace, shard)
+	}
+	return ti, nil
+}
+
+// Does a topo lookup for a single shard, and returns:
+//	1. Slice of all tablet aliases for the shard.
+//	2. Map of tablet alias : tablet record for all tablets.
+func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []topo.TabletAlias, reloadTablets map[topo.TabletAlias]*topo.TabletInfo, err error) {
+	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
+	newCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	reloadAliases, err = topo.FindAllTabletAliasesInShard(newCtx, wr.TopoServer(), keyspace, shard)
+	cancel()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
+	}
+	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
+
+	newCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+	reloadTablets, err = topo.GetTabletMap(newCtx, wr.TopoServer(), reloadAliases)
+	cancel()
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
+			keyspace, shard, err)
+	}
+	return reloadAliases, reloadTablets, nil
+}
+
 // tableStatus keeps track of the status for a given table
 type tableStatus struct {
 	name   string

@@ -33,3 +33,11 @@ type Worker interface {
 	// It will only be called after Run() has completed.
 	Error() error
 }
+
+// Resolver is an interface that should be implemented by any workers that need to
+// resolve the topology.
+type Resolver interface {
+	// ResolveDestinationMasters forces the worker to (re)resolve the topology and update
+	// the destination masters that it knows about.
+	ResolveDestinationMasters() error
+}

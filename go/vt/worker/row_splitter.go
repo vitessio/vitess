@@ -71,19 +71,17 @@ func (rs *RowSplitter) Split(result [][][]sqltypes.Value, rows [][]sqltypes.Valu
 }
 
 // Send will send the rows to the list of channels. Returns true if aborted.
-func (rs *RowSplitter) Send(fields []mproto.Field, result [][][]sqltypes.Value, baseCmd string, insertChannels [][]chan string, abort <-chan struct{}) bool {
-	for i, cs := range insertChannels {
+func (rs *RowSplitter) Send(fields []mproto.Field, result [][][]sqltypes.Value, baseCmd string, insertChannels []chan string, abort <-chan struct{}) bool {
+	for i, c := range insertChannels {
 		// one of the chunks might be empty, so no need
 		// to send data in that case
 		if len(result[i]) > 0 {
 			cmd := baseCmd + makeValueString(fields, result[i])
-			for _, c := range cs {
-				// also check on abort, so we don't wait forever
-				select {
-				case c <- cmd:
-				case <-abort:
-					return true
-				}
+			// also check on abort, so we don't wait forever
+			select {
+			case c <- cmd:
+			case <-abort:
+				return true
 			}
 		}
 	}
