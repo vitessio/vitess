@@ -131,10 +131,6 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 }
 
 func (agent *ActionAgent) disallowQueries() {
-	if agent.DBConfigs == nil {
-		// test instance, do nothing
-		return
-	}
 	agent.QueryServiceControl.DisallowQueries()
 }
 

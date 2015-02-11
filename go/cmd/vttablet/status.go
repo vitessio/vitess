@@ -163,7 +163,7 @@ func (hs *healthStatus) CurrentHTML() template.HTML {
 }
 
 func healthHTMLName() template.HTML {
-	return health.HTMLName()
+	return health.DefaultAggregator.HTMLName()
 }
 
 // For use by plugins which wish to avoid racing when registering status page parts.

@@ -38,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -54,6 +55,7 @@ var (
 type ActionAgent struct {
 	// The following fields are set during creation
 	QueryServiceControl tabletserver.QueryServiceControl
+	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         topo.TabletAlias
 	Mysqld              *mysqlctl.Mysqld
@@ -134,6 +136,7 @@ func NewActionAgent(
 
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
+		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          topoServer,
 		TabletAlias:         tabletAlias,
@@ -183,9 +186,10 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) (agent *ActionAgent) {
-	agent = &ActionAgent{
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+	agent := &ActionAgent{
 		QueryServiceControl: tabletserver.NewTestQueryServiceControl(),
+		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,

@@ -1,15 +1,14 @@
 package tabletmanager
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -86,6 +85,16 @@ func TestHealthRecordClass(t *testing.T) {
 	}
 }
 
+// constants used for tests
+const (
+	keyspace        = "test_keyspace"
+	shard           = "0"
+	cell            = "cell1"
+	uid      uint32 = 42
+)
+
+var tabletAlias = topo.TabletAlias{Cell: cell, Uid: uid}
+
 // fakeHealthCheck implements health.Reporter interface
 type fakeHealthCheck struct {
 	reportReplicationDelay time.Duration
@@ -100,15 +109,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
 }
 
-func TestHealthCheck(t *testing.T) {
-	// register a fake reporter for our tests
-	fhc := &fakeHealthCheck{}
-	health.Register("fakeHealthCheck", fhc)
-
-	keyspace := "test_keyspace"
-	shard := "0"
-	cell := "cell1"
-	var uid uint32 = 42
+func createTestAgent(t *testing.T) *ActionAgent {
 	ts := zktopo.NewTestServer(t, []string{cell})
 
 	if err := ts.CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil {
@@ -119,7 +120,6 @@ func TestHealthCheck(t *testing.T) {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 
-	tabletAlias := topo.TabletAlias{Cell: cell, Uid: uid}
 	port := 1234
 	tablet := &topo.Tablet{
 		Alias:    tabletAlias,
@@ -140,12 +140,21 @@ func TestHealthCheck(t *testing.T) {
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
 	agent := NewTestActionAgent(context.Background(), ts, tabletAlias, port, mysqlDaemon)
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, nil, nil)
+	agent.HealthReporter = &fakeHealthCheck{}
+
+	return agent
+}
+
+// TestHealthCheckControlsQueryService verifies that a tablet going healthy
+// starts the query service, and going unhealthy stops it.
+func TestHealthCheckControlsQueryService(t *testing.T) {
+	agent := createTestAgent(t)
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica, and update the
 	// mysql port to 3306
 	agent.runHealthCheck(targetTabletType)
-	ti, err := ts.GetTablet(tabletAlias)
+	ti, err := agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -160,21 +169,36 @@ func TestHealthCheck(t *testing.T) {
 	}
 
 	// now make the tablet unhealthy
-	fhc.reportError = fmt.Errorf("tablet is unhealthy")
+	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	agent.runHealthCheck(targetTabletType)
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	data, err := json.MarshalIndent(ti, "", "  ")
-	println(string(data))
 	if ti.Type != topo.TYPE_SPARE {
 		t.Errorf("Unhappy health check failed to go to spare: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {
-		// FIXME(alainjobart) the query service should be stopped there, but it's not.
-		// See b/19309685 for the tracking bug.
-		// t.Errorf("Query service should not be running")
+		t.Errorf("Query service should not be running")
 	}
+}
 
+// TestQueryServiceNotStarting verifies that if a tablet cannot start the
+// query service, it should not go healthy
+func TestQueryServiceNotStarting(t *testing.T) {
+	agent := createTestAgent(t)
+	targetTabletType := topo.TYPE_REPLICA
+	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
+
+	agent.runHealthCheck(targetTabletType)
+	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != topo.TYPE_SPARE {
+		t.Errorf("Happy health check which cannot start query service should stay spare: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
 }
