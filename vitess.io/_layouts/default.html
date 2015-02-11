@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{% if page.title %}{{ page.title }} • {% endif %}{{ site.title }}</title>
+    {% if page.excerpt %}<meta name="description" content="{{ page.excerpt | strip_html }}">{% endif %}
+    {% if page.tags %}<meta name="keywords" content="{{ page.tags | join: ', ' }}">{% endif %}
+    {% if page.author %}
+      {% assign author = site.data.authors[page.author] %}{% else %}{% assign author = site.owner %}
+    {% endif %}
+    {% include open-graph.html %}
+
+    <link rel="canonical" href="{{ page.url | replace:'index.html','' | prepend: site.url }}">
+
+    <link href="{{ site.url }}/sitemap.xml" type="application/xml" rel="sitemap" title="Sitemap">
+
+    <meta name="HandheldFriendly" content="True">
+    <meta name="MobileOptimized" content="320">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="cleartype" content="on">
+
+    <style>
+    .sliding-menu-content {
+      top: 0;
+      right: 0;
+      text-align: center;
+      visibility: hidden;
+      height: 100%;
+      width: 100%;
+      -webkit-transform: translateX(100%);
+      -moz-transform: translateX(100%);
+      -ms-transform: translateX(100%);
+      -o-transform: translateX(100%);
+      transform: translateX(100%);
+    }
+    </style>
+
+    <link rel="stylesheet" href="{{ site.url }}/css/main.css">
+    <!-- HTML5 Shiv and Media Query Support for IE -->
+    <!--[if lt IE 9]>
+      <script src="{{ site.url }}/js/vendor/html5shiv.min.js"></script>
+      <script src="{{ site.url }}/js/vendor/respond.min.js"></script>
+    <![endif]-->
+
+  </head>
+
+  <body>
+    {% include header.html %}
+    {% include navigation-sliding.html %}
+
+    <div id="page-wrapper">
+      {% include browser-upgrade.html %}
+
+      {{ content }}
+
+      {% include footer.html %}
+    </div>
+
+    <script src="{{ site.url }}/js/vendor/jquery-1.9.1.min.js"></script>
+    <script src="{{ site.url }}/js/main.js"></script>
+    
+    {% if page.toc == true %}
+    <script type="text/javascript">
+      $('.toc').toc({
+        'selectors': 'h2', //elements to use as headings
+        'container': '.page-content', //element to find all selectors in
+        'smoothScrolling': true, //enable or disable smooth scrolling on click
+        'prefix': 'toc', //prefix for anchor tags and class names
+        'onHighlight': function(el) {}, //called when a new section is highlighted 
+        'highlightOnScroll': true, //add class to heading that is currently in focus
+        'highlightOffset': 100, //offset to trigger the next headline
+        'anchorName': function(i, heading, prefix) { //custom function for anchor name
+          return prefix+i;
+        },
+        'headerText': function(i, heading, $heading) { //custom function building the header-item text
+          return $heading.text();
+        },
+        'itemClass': function(i, heading, $heading, prefix) { //custom function for item class
+          return $heading[0].tagName.toLowerCase();
+        }
+      });
+    </script>
+    {% endif %}
+
+  </body>
+
+</html>

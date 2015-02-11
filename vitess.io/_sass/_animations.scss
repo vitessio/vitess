@@ -1,0 +1,30 @@
+// ANIMATIONS
+// --------------------------------------------------
+
+@include keyframes(wiggle) {
+	25%, 50%, 75%, 100% { @include transform-origin(top center); }
+	25% { @include transform(rotate(8deg)); }
+	50% { @include transform(rotate(-4deg)); }
+	75% { @include transform(rotate(2deg)); }
+	100% { @include transform(rotate(0deg)); }
+}
+
+
+@include keyframes(pop) {
+	50% { @include transform(scale(1.1)); }
+	100% { @include transform(scale(1)); }
+}
+
+
+@include keyframes(hang) {
+	50% { @include transform(translateY(-3px)); }
+	100% { @include transform(translateY(-6px)); }
+}
+.hang {
+	display: inline-block;
+	@include animation-name(hang);
+	@include animation-duration(0.5s);
+	@include animation-timing-function(linear);
+	@include animation-iteration-count(infinite);
+	@include animation-direction(alternate);
+}
