@@ -174,3 +174,14 @@ func TestServiceManagerJoinReturn(t *testing.T) {
 		t.Errorf("Join().Error() = %#v, want %#v", got, want)
 	}
 }
+
+func TestServiceManagerRace(t *testing.T) {
+	var sm ServiceManager
+	sm.Go(func(sc *ServiceContext) error {
+		if sc.ShuttingDown == nil {
+			t.Errorf("ShuttingDown: nil, want non-nil")
+		}
+		return nil
+	})
+	sm.Stop()
+}
