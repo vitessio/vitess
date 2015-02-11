@@ -116,7 +116,7 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 			}()
 			return evs.Stream(ctx)
 		}()
-		if err == nil {
+		if err == nil || !ctx.IsRunning() {
 			break
 		}
 		if IsConnErr(err) {
