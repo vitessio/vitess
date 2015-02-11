@@ -1,0 +1,43 @@
+$parent-columns: $grid-columns !default;
+$fg-column: $column;
+$fg-gutter: $gutter;
+$fg-max-columns: $grid-columns;
+$container-display-table: false !default;
+$layout-direction: nil !default;
+
+@function flex-grid($columns, $container-columns: $fg-max-columns) {
+  $width: $columns * $fg-column + ($columns - 1) * $fg-gutter;
+  $container-width: $container-columns * $fg-column + ($container-columns - 1) * $fg-gutter;
+  @return percentage($width / $container-width);
+}
+
+@function flex-gutter($container-columns: $fg-max-columns, $gutter: $fg-gutter) {
+  $container-width: $container-columns * $fg-column + ($container-columns - 1) * $fg-gutter;
+  @return percentage($gutter / $container-width);
+}
+
+@function grid-width($n) {
+  @return $n * $gw-column + ($n - 1) * $gw-gutter;
+}
+
+@function get-parent-columns($columns) {
+  @if $columns != $grid-columns {
+    $parent-columns: $columns !global;
+  } @else {
+    $parent-columns: $grid-columns !global;
+  }
+
+  @return $parent-columns;
+}
+
+@function is-display-table($container-is-display-table, $display) {
+  $display-table: false;
+
+  @if $container-is-display-table == true {
+    $display-table: true;
+  } @else if $display == table {
+    $display-table: true;
+  }
+
+  @return $display-table;
+}
