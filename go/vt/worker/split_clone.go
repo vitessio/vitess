@@ -67,18 +67,22 @@ type SplitCloneWorker struct {
 	destinationShards []*topo.ShardInfo
 
 	// populated during stateSCFindTargets, read-only after that
-	sourceAliases      []topo.TabletAlias
-	sourceTablets      []*topo.TabletInfo
-	destinationTablets []*topo.TabletInfo
-	// aliases of tablets that need to have their schema reloaded
-	reloadAliases [][]topo.TabletAlias
-	reloadTablets []map[topo.TabletAlias]*topo.TabletInfo
+	sourceAliases []topo.TabletAlias
+	sourceTablets []*topo.TabletInfo
 
 	// populated during stateSCCopy
 	tableStatus []*tableStatus
 	startTime   time.Time
+	// aliases of tablets that need to have their schema reloaded.
+	// Only populated once, read-only after that.
+	reloadAliases [][]topo.TabletAlias
+	reloadTablets []map[topo.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
+
+	// Mutex to protect fields that might change when (re)resolving topology.
+	resolveMu          sync.Mutex
+	destinationTablets []*topo.TabletInfo
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
@@ -358,55 +362,39 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	return scw.findMasterTargets()
+	return scw.ResolveDestinationMasters()
 }
 
-// findMasterTargets looks up the masters for all destination shards, and set the destinations appropriately.
-// It should be used if vtworker will only want to write to masters.
-func (scw *SplitCloneWorker) findMasterTargets() error {
-	var err error
+// ResolveDestinationMasters implements the Resolver interface.
+func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+	scw.resolveMu.Lock()
+	defer scw.resolveMu.Unlock()
 
-	destinationAliases := make([]topo.TabletAlias, len(scw.destinationShards))
 	scw.destinationTablets = make([]*topo.TabletInfo, len(scw.destinationShards))
 
+	for shardIndex, si := range scw.destinationShards {
+		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
+		if err != nil {
+			return err
+		}
+		scw.destinationTablets[shardIndex] = ti
+	}
+
+	return nil
+}
+
+// Find all tablets on all destination shards. This should be done immediately before reloading
+// the schema on these tablets, to minimize the chances of the topo changing in between.
+func (scw *SplitCloneWorker) findReloadTargets() error {
 	scw.reloadAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-		scw.reloadAliases[shardIndex], err = topo.FindAllTabletAliasesInShard(ctx, scw.wr.TopoServer(), si.Keyspace(), si.ShardName())
-		cancel()
+		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
-			return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", si.Keyspace(), si.ShardName(), err)
+			return err
 		}
-		scw.wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(scw.reloadAliases[shardIndex]), si.Keyspace(), si.ShardName())
-
-		// get the TabletInfo for all targets
-		ctx, cancel = context.WithTimeout(scw.ctx, 60*time.Second)
-		scw.reloadTablets[shardIndex], err = topo.GetTabletMap(ctx, scw.wr.TopoServer(), scw.reloadAliases[shardIndex])
-		cancel()
-		if err != nil {
-			return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
-				si.Keyspace(), si.ShardName(), err)
-		}
-
-		// find and validate the master
-		for tabletAlias, ti := range scw.reloadTablets[shardIndex] {
-			if ti.Type == topo.TYPE_MASTER {
-				if destinationAliases[shardIndex].IsZero() {
-					destinationAliases[shardIndex] = tabletAlias
-					scw.destinationTablets[shardIndex] = ti
-				} else {
-					return fmt.Errorf("multiple masters in destination shard %v/%v: %v and %v at least",
-						si.Keyspace(), si.ShardName(), destinationAliases[shardIndex], tabletAlias)
-				}
-			}
-		}
-		if destinationAliases[shardIndex].IsZero() {
-			return fmt.Errorf("no master in destination shard %v/%v", si.Keyspace(), si.ShardName())
-		}
-		scw.wr.Logger().Infof("Found target master alias %v in shard %v/%v",
-			destinationAliases[shardIndex], si.Keyspace(), si.ShardName())
+		scw.reloadAliases[shardIndex], scw.reloadTablets[shardIndex] = reloadAliases, reloadTablets
 	}
 
 	return nil
@@ -616,11 +604,15 @@ func (scw *SplitCloneWorker) copy() error {
 			err := scw.wr.SetSourceShards(ctx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
 			cancel()
 			if err != nil {
-				return fmt.Errorf("Failed to set source shards: %v", err)
+				return fmt.Errorf("failed to set source shards: %v", err)
 			}
 		}
 	}
 
+	err = scw.findReloadTargets()
+	if err != nil {
+		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
+	}
 	// And force a schema reload on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.

@@ -37,6 +37,7 @@ type Worker interface {
 // Resolver is an interface that should be implemented by any workers that need to
 // resolve the topology.
 type Resolver interface {
-	// Resolve forces the worker to (re)resolve the topology
-	Resolve() error
+	// ResolveDestinationMasters forces the worker to (re)resolve the topology and update
+	// the destination masters that it knows about.
+	ResolveDestinationMasters() error
 }

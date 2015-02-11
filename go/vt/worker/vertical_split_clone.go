@@ -64,18 +64,22 @@ type VerticalSplitCloneWorker struct {
 	sourceKeyspace string
 
 	// populated during stateVSCFindTargets, read-only after that
-	sourceAlias       topo.TabletAlias
-	sourceTablet      *topo.TabletInfo
-	destinationTablet *topo.TabletInfo
-	// aliases of tablets that need to have their schema reloaded
-	reloadAliases []topo.TabletAlias
-	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
+	sourceAlias  topo.TabletAlias
+	sourceTablet *topo.TabletInfo
 
 	// populated during stateVSCCopy
 	tableStatus []*tableStatus
 	startTime   time.Time
+	// aliases of tablets that need to have their schema reloaded.
+	// Only populated once, read-only after that.
+	reloadAliases []topo.TabletAlias
+	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
+
+	// Mutex to protect fields that might change when (re)resolving topology.
+	resolveMu         sync.Mutex
+	destinationTablet *topo.TabletInfo
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -324,52 +328,31 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 	}
 	action.TabletType = topo.TYPE_SPARE
 
-	return vscw.findMasterTargets()
+	return vscw.ResolveDestinationMasters()
 }
 
-// findMasterTargets looks up the master for the destination shard, and set the destinations appropriately.
-// It should be used if vtworker will only want to write to masters.
-func (vscw *VerticalSplitCloneWorker) findMasterTargets() error {
-	var err error
-	var destinationAlias topo.TabletAlias
+// ResolveDestinationMasters implements the Resolver interface.
+func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
+	vscw.resolveMu.Lock()
+	defer vscw.resolveMu.Unlock()
 
-	// find all the targets in the destination keyspace / shard
-	ctx, cancel := context.WithTimeout(vscw.ctx, 60*time.Second)
-	vscw.reloadAliases, err = topo.FindAllTabletAliasesInShard(ctx, vscw.wr.TopoServer(), vscw.destinationKeyspace, vscw.destinationShard)
-	cancel()
+	ti, err := resolveDestinationShardMaster(vscw.ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
 	if err != nil {
-		return fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", vscw.destinationKeyspace, vscw.destinationShard, err)
+		return err
 	}
-	vscw.wr.Logger().Infof("Found %v reload target aliases in shard %v/%v",
-		len(vscw.reloadAliases), vscw.destinationKeyspace, vscw.destinationShard)
+	vscw.destinationTablet = ti
+	return nil
+}
 
-	// get the TabletInfo for all targets
-	ctx, cancel = context.WithTimeout(vscw.ctx, 60*time.Second)
-	vscw.reloadTablets, err = topo.GetTabletMap(ctx, vscw.wr.TopoServer(), vscw.reloadAliases)
-	cancel()
+// Find all tablets on the destination shard. This should be done immediately before reloading
+// the schema on these tablets, to minimize the chances of the topo changing in between.
+
+func (vscw *VerticalSplitCloneWorker) findReloadTargets() error {
+	reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(vscw.ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
 	if err != nil {
-		return fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
-			vscw.destinationKeyspace, vscw.destinationShard, err)
+		return err
 	}
-
-	// find and validate the master
-	for tabletAlias, ti := range vscw.reloadTablets {
-		if ti.Type == topo.TYPE_MASTER {
-			if destinationAlias.IsZero() {
-				destinationAlias = tabletAlias
-				vscw.destinationTablet = ti
-			} else {
-				return fmt.Errorf("multiple masters in destination shard %v/%v: %v and %v at least",
-					vscw.destinationKeyspace, vscw.destinationShard, destinationAlias, tabletAlias)
-			}
-		}
-	}
-	if destinationAlias.IsZero() {
-		return fmt.Errorf("no master in destination shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
-	}
-	vscw.wr.Logger().Infof("Found target master alias %v in shard %v/%v",
-		destinationAlias, vscw.destinationKeyspace, vscw.destinationShard)
-
+	vscw.reloadAliases, vscw.reloadTablets = reloadAliases, reloadTablets
 	return nil
 }
 
@@ -544,6 +527,10 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		}
 	}
 
+	err = vscw.findReloadTargets()
+	if err != nil {
+		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
+	}
 	// And force a schema reload on all destination tablets.
 	// The master tablet will end up starting filtered replication
 	// at this point.
