@@ -78,8 +78,8 @@ type VerticalSplitCloneWorker struct {
 	ev *events.VerticalSplitClone
 
 	// Mutex to protect fields that might change when (re)resolving topology.
-	resolveMu         sync.Mutex
-	destinationTablet *topo.TabletInfo
+	resolveMu                  sync.Mutex
+	destinationShardsToTablets map[string]*topo.TabletInfo
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -340,8 +340,19 @@ func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
 	if err != nil {
 		return err
 	}
-	vscw.destinationTablet = ti
+	vscw.destinationShardsToTablets = map[string]*topo.TabletInfo{vscw.destinationShard: ti}
 	return nil
+}
+
+// GetDestinationMaster implements the Resolver interface
+func (vscw *VerticalSplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
+	vscw.resolveMu.Lock()
+	defer vscw.resolveMu.Unlock()
+	ti, ok := vscw.destinationShardsToTablets[shardName]
+	if !ok {
+		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
+	}
+	return ti, nil
 }
 
 // Find all tablets on the destination shard. This should be done immediately before reloading
@@ -421,18 +432,18 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// destinationWriterCount go routines reading from it.
 	insertChannel := make(chan string, vscw.destinationWriterCount*2)
 
-	go func(ti *topo.TabletInfo, insertChannel chan string) {
+	go func(shardName string, insertChannel chan string) {
 		for j := 0; j < vscw.destinationWriterCount; j++ {
 			destinationWaitGroup.Add(1)
 			go func() {
 				defer destinationWaitGroup.Done()
 
-				if err := executeFetchLoop(vscw.ctx, vscw.wr, ti, insertChannel); err != nil {
+				if err := executeFetchLoop(vscw.ctx, vscw.wr, vscw, shardName, insertChannel); err != nil {
 					processError("executeFetchLoop failed: %v", err)
 				}
 			}()
 		}
-	}(vscw.destinationTablet, insertChannel)
+	}(vscw.destinationShard, insertChannel)
 
 	// Now for each table, read data chunks and send them to insertChannel
 	sourceWaitGroup := sync.WaitGroup{}
@@ -501,13 +512,13 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		destinationWaitGroup.Add(1)
-		go func(ti *topo.TabletInfo) {
+		go func(shardName string) {
 			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-			if err := runSqlCommands(vscw.ctx, vscw.wr, ti, queries); err != nil {
-				processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
+			vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
+			if err := runSqlCommands(vscw.ctx, vscw.wr, vscw, shardName, queries); err != nil {
+				processError("blp_checkpoint queries failed: %v", err)
 			}
-		}(vscw.destinationTablet)
+		}(vscw.destinationShard)
 		destinationWaitGroup.Wait()
 		if firstError != nil {
 			return firstError

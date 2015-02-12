@@ -151,14 +151,18 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
-func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string) error {
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, command string) error {
 	retryDuration := 2 * time.Hour
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	for {
+		ti, err := r.GetDestinationMaster(shard)
+		if err != nil {
+			return fmt.Errorf("unable to run ExecuteFetch due to: %v", err)
+		}
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
+		_, err = wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
 		cancel()
 		switch {
 		case err == nil:
@@ -183,7 +187,10 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
 		case <-t.C:
 			// Re-resolve and retry 30s after the failure
-			// TODO(aaijazi): Re-resolve before retrying
+			err = r.ResolveDestinationMasters()
+			if err != nil {
+				return fmt.Errorf("unable to re-resolve masters for ExecuteFetch, due to: %v", err)
+			}
 		}
 
 	}
@@ -200,14 +207,19 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
+	ti, err := r.GetDestinationMaster(shard)
+	if err != nil {
+		return fmt.Errorf("runSqlCommands failed: %v", err)
+	}
+
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		err = executeFetchWithRetries(ctx, wr, ti, command)
+		err = executeFetchWithRetries(ctx, wr, r, shard, command)
 		if err != nil {
 			return err
 		}
@@ -394,7 +406,11 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, insertChannel chan string) error {
+	ti, err := r.GetDestinationMaster(shard)
+	if err != nil {
+		return fmt.Errorf("executeFetchLoop failed: %v", err)
+	}
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -403,7 +419,7 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.Table
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			err := executeFetchWithRetries(ctx, wr, ti, cmd)
+			err := executeFetchWithRetries(ctx, wr, r, shard, cmd)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
