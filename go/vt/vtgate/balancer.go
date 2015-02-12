@@ -5,10 +5,8 @@
 package vtgate
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
-	"sort"
 	"sync"
 	"time"
 
@@ -16,20 +14,17 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
-
 type GetEndPointsFunc func() (*topo.EndPoints, error)
 
 // Balancer is a simple round-robin load balancer.
 // It allows you to temporarily mark down nodes that
 // are non-functional.
 type Balancer struct {
-	mu                 sync.Mutex
-	addressNodes       []*addressStatus
-	index              int
-	getEndPoints       GetEndPointsFunc
-	retryDelay         time.Duration
-	resetDownConnDelay time.Duration
+	mu           sync.Mutex
+	addressNodes []*addressStatus
+	index        int
+	getEndPoints GetEndPointsFunc
+	retryDelay   time.Duration
 }
 
 type addressStatus struct {
@@ -47,7 +42,6 @@ func NewBalancer(getEndPoints GetEndPointsFunc, retryDelay time.Duration) *Balan
 	blc := new(Balancer)
 	blc.getEndPoints = getEndPoints
 	blc.retryDelay = retryDelay
-	blc.resetDownConnDelay = *resetDownConnDelay
 	return blc
 }
 
@@ -60,27 +54,15 @@ func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 
-	// Clear timeRetry if it has been a long time
-	for _, addrNode := range blc.addressNodes {
-		if time.Now().Sub(addrNode.timeRetry) > blc.resetDownConnDelay {
-			addrNode.timeRetry = time.Time{}
-		}
-	}
-
-	// Get the latest endpoints
+	// Get the latest non-markdown endpoints
 	err = blc.refresh()
 	if err != nil {
 		return topo.EndPoint{}, err
 	}
 
-	// Return the first endpoint, sleep if we need to
+	// Shuffle and return the first endpoint
+	shuffle(blc.addressNodes, len(blc.addressNodes))
 	addrNode := blc.addressNodes[0]
-	if addrNode.timeRetry.After(time.Now()) {
-		// Allow mark downs to happen while sleeping
-		blc.mu.Unlock()
-		time.Sleep(addrNode.timeRetry.Sub(time.Now()))
-		blc.mu.Lock()
-	}
 	return addrNode.endPoint, nil
 }
 
@@ -123,13 +105,23 @@ func (blc *Balancer) refresh() error {
 		}
 		i++
 	}
+
+	// Remove nodes that are still under mark down.
+	// Reset timeRetry for nodes that are past the retryDelay.
+	for i, addrNode := range blc.addressNodes {
+		if !addrNode.timeRetry.IsZero() {
+			if addrNode.timeRetry.After(time.Now()) {
+				blc.addressNodes = delAddrNode(blc.addressNodes, i)
+			} else {
+				addrNode.timeRetry = time.Time{}
+			}
+		}
+	}
+
 	if len(blc.addressNodes) == 0 {
 		return fmt.Errorf("no available addresses")
 	}
-	// Sort endpoints by timeRetry (from ZERO to largest)
-	sort.Sort(AddressList(blc.addressNodes))
-	// Randomize endpoints with ZERO timeRetry
-	shuffle(blc.addressNodes, findFirstAddrNodeNonZeroTimeRetry(blc.addressNodes))
+
 	return nil
 }
 
@@ -145,15 +137,6 @@ func (al AddressList) Swap(i, j int) {
 
 func (al AddressList) Less(i, j int) bool {
 	return al[i].timeRetry.Before(al[j].timeRetry)
-}
-
-func findFirstAddrNodeNonZeroTimeRetry(addressNodes []*addressStatus) (index int) {
-	for i, addrNode := range addressNodes {
-		if !addrNode.timeRetry.IsZero() {
-			return i
-		}
-	}
-	return len(addressNodes)
 }
 
 func findAddrNode(addressNodes []*addressStatus, uid uint32) (index int) {

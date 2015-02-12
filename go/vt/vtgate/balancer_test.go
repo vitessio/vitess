@@ -154,11 +154,13 @@ func TestMarkDown(t *testing.T) {
 	addr, _ = b.Get()
 	b.MarkDown(addr.Uid, "")
 	// All were marked down. Get should return only after the retry delay since first markdown.
+	// All were marked down. There is no sleep in Get; it should return immediately.only after the retry delay since first markdown.
 	done := make(chan struct{})
+	noDelay := 1 * time.Millisecond
 	go func() {
 		addr, _ = b.Get()
-		if got := time.Now().Sub(startTime); got < retryDelay {
-			t.Errorf("Get() returned too soon, want >= %v, got %v", retryDelay, got)
+		if got := time.Now().Sub(startTime); got > noDelay {
+			t.Errorf("Get() should return immediately, want <= %v, got %v", noDelay, got)
 		}
 		close(done)
 	}()
@@ -232,13 +234,8 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("got other than -1: %v", index)
 	}
 	index = findAddrNode(b.addressNodes, 1)
-	// "1" should be marked down (non-zero timeRetry)
-	if b.addressNodes[index].timeRetry.IsZero() {
-		t.Errorf("want non-zero, got 0")
-	}
-	// "1" should have the updated port 12
-	port_new := b.addressNodes[index].endPoint.NamedPortMap["vt"]
-	if port_new != 12 {
-		t.Errorf("want 12, got %v", port_new)
+	// "1" should be marked down; hence removed from the list.
+	if index != -1 {
+		t.Errorf("want -1, got index %v", index)
 	}
 }
