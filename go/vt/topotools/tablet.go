@@ -99,7 +99,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string, runHooks bool) error {
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -107,16 +107,6 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlia
 
 	if !topo.IsTrivialTypeChange(tablet.Type, newType) || !topo.IsValidTypeChange(tablet.Type, newType) {
 		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
-	}
-
-	if runHooks {
-		// Only run the preflight_serving_type hook when
-		// transitioning from non-serving to serving.
-		if !topo.IsInServingGraph(tablet.Type) && topo.IsInServingGraph(newType) {
-			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
-				return err
-			}
-		}
 	}
 
 	tablet.Type = newType

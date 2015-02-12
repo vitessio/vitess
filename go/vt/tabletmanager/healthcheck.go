@@ -277,7 +277,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health, false /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -314,7 +314,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string)); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}

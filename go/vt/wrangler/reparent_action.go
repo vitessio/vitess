@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/hook"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -313,12 +312,12 @@ func (wr *Wrangler) restartSlave(ctx context.Context, ti *topo.TabletInfo, rsd *
 }
 
 func (wr *Wrangler) checkMasterElect(ctx context.Context, ti *topo.TabletInfo) error {
-	// Check the master-elect is fit for duty - call out for hardware checks.
+	// Check the master-elect is fit for duty - try to ping it.
 	// if the server was already serving live traffic, it's probably good
 	if ti.IsInServingGraph() {
 		return nil
 	}
-	return wr.ExecuteOptionalTabletInfoHook(ctx, ti, hook.NewSimpleHook("preflight_serving_type"))
+	return wr.tmc.Ping(ctx, ti)
 }
 
 func (wr *Wrangler) finishReparent(ctx context.Context, si *topo.ShardInfo, masterElect *topo.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
