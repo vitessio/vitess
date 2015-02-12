@@ -21,13 +21,13 @@ import (
 // be concurrently used across goroutines. Such requests are
 // interleaved on the same underlying connection.
 type ShardConn struct {
-	keyspace   string
-	shard      string
-	tabletType topo.TabletType
-	retryDelay time.Duration
-	retryCount int
-	timeout    time.Duration
-	balancer   *Balancer
+	keyspace    string
+	shard       string
+	tabletType  topo.TabletType
+	retryDelay  time.Duration
+	retryCount  int
+	connTimeout time.Duration
+	balancer    *Balancer
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
 	mu   sync.Mutex
@@ -37,7 +37,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, timeout time.Duration) *ShardConn {
+func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
@@ -47,13 +47,13 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
 	return &ShardConn{
-		keyspace:   keyspace,
-		shard:      shard,
-		tabletType: tabletType,
-		retryDelay: retryDelay,
-		retryCount: retryCount,
-		timeout:    timeout,
-		balancer:   blc,
+		keyspace:    keyspace,
+		shard:       shard,
+		tabletType:  tabletType,
+		retryDelay:  retryDelay,
+		retryCount:  retryCount,
+		connTimeout: connTimeout,
+		balancer:    blc,
 	}
 }
 
@@ -185,25 +185,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			}
 			return sdc.WrapError(err, endPoint, inTransaction)
 		}
-		// no timeout for streaming query
-		if isStreaming {
-			err = action(conn)
-		} else {
-			tmr := time.NewTimer(sdc.timeout)
-			done := make(chan int)
-			var errAction error
-			go func() {
-				errAction = action(conn)
-				close(done)
-			}()
-			select {
-			case <-tmr.C:
-				err = tabletconn.OperationalError("vttablet: call timeout")
-			case <-done:
-				err = errAction
-			}
-			tmr.Stop()
-		}
+		err = action(conn)
 		if sdc.canRetry(err, transactionID, conn) {
 			continue
 		}
@@ -236,7 +218,7 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	if err != nil {
 		return nil, topo.EndPoint{}, err, false
 	}
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.timeout)
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.connTimeout)
 	if err != nil {
 		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
 		return nil, endPoint, err, true

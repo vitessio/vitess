@@ -359,7 +359,8 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
           '-retry-count', str(retry_count),
           '-log_dir', environment.vtlogroot,
           '-srv_topo_cache_ttl', cache_ttl,
-          '-timeout', timeout,
+          '-conn-timeout', timeout,
+          '-bsonrpc_timeout', '5s',
           ] + protocols_flavor().tabletconn_protocol_flags()
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])

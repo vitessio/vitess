@@ -153,9 +153,8 @@ def setup_tablets():
   vtgate_server, vtgate_port = utils.vtgate_start()
 
 
-def get_connection(user=None, password=None):
+def get_connection(user=None, password=None, timeout=10.0):
   global vtgate_port
-  timeout = 10.0
   conn = None
   vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
   conn = conn_class.connect(vtgate_addrs, timeout,
@@ -774,25 +773,24 @@ class TestFailures(unittest.TestCase):
     vtgate_conn.commit()
 
   # test timeout between py client and vtgate
-  # the default timeout is 10 seconds
   def test_vtgate_timeout(self):
     try:
-      vtgate_conn = get_connection()
+      vtgate_conn = get_connection(timeout=3.0)
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
       vtgate_conn._execute(
-          "select sleep(12) from dual", {},
+          "select sleep(4) from dual", {},
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
 
     try:
-      vtgate_conn = get_connection()
+      vtgate_conn = get_connection(timeout=3.0)
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
       vtgate_conn._execute(
-          "select sleep(12) from dual", {},
+          "select sleep(4) from dual", {},
           KEYSPACE_NAME, 'master',
           keyranges=[self.keyrange])
      # Currently this is causing vttablet to become unreachable at
@@ -803,7 +801,7 @@ class TestFailures(unittest.TestCase):
     time.sleep(3)
 
   # test timeout between vtgate and vttablet
-  # the default timeout is 5 seconds
+  # the timeout is set to 5 seconds
   def test_tablet_timeout(self):
     try:
       vtgate_conn = get_connection()
