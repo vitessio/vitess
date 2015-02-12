@@ -957,8 +957,7 @@ class TestFailures(unittest.TestCase):
       # Restart tablet and put it back to SERVING state
       utils.wait_procs([shard_0_replica.start_mysql(),])
       shard_0_replica.kill_vttablet()
-      shard_0_replica.start_vttablet(wait_for_state=None)
-      shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
+      shard_0_replica.start_vttablet(wait_for_state='NOT_SERVING')
       utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, tablet_type])
       shard_0_replica.wait_for_vttablet_state('SERVING')
     except Exception, e:
