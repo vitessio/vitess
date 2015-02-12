@@ -15,7 +15,7 @@ Life of A Query
 
 A query means a request for information from database and it involves four componenets in the case of Vitess, including client application, VtGate, VtTablet and MySQL instance. This doc explains interaction happens between and within components.
 
-![](./life_of_a_query.png)
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query.png)
 
 At a very high level, as the graph shows, first client sends a query to VtGate. VtGate then resolves the query and routes it to the right VtTablets. For each VtTablet that receives the query, it does necessary validations and passes the query to underlying MySQL instance. After gathering results from MySQL, VtTablet sends response back to VtGate. Once VtGate receives response from all VtTablets, it sends the combined result to client. In the presence of VtTablet errors, VtGate will retry the query if errors are recoverable and it only fails the query if either errors are unrecoverable or maximum retry times has been reached.
 
@@ -23,13 +23,13 @@ At a very high level, as the graph shows, first client sends a query to VtGate. 
 
 A client application first sends a bson rpc with an embedded sql query to VtGate. VtGate's rpc server unmarshals this rpc request, call appropriate VtGate method and return its result back to client. As following graph shows, VtGate has a rpc server that listens to localhost:port/\_bson\_rpc\_ for http requests and localhost:port/\_bson\_rpc\_/auth for https requests.
 
-![](./life_of_a_query_client_to_vtgate.png)
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_client_to_vtgate.png)
 
 VtGate keeps an in-memory table that stores all available rpc methods for each service, e.g. VtGate uses "VTGate" as its service name and most its methods defined in [go/vt/vtgate/vtgate.go](../go/vt/vtgate/vtgate.go) are used to serve rpc request [go/rpcplus/server.go](../go/rpcplus/server.go).
 
 ## From VtGate to VtTablet
 
-![](./life_of_a_query_vtgate_to_vttablet.png)
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_vtgate_to_vttablet.png)
 
 After receiving a rpc call from client and one of its Execute* method being invoked, VtGate needs to figure out which shards should receive the query and send query to each of them. In addition, VtGate talks to topo server to get necessary information to create a VtTablet connection for each shard. At this point, VtGate is able to send query to the right VtTablets in parallel. VtGate also does retry if timeout happens or some VtTablets return recoverable errors.
 
@@ -39,13 +39,13 @@ A ShardConn object represents a load balanced connection to a group of VtTablets
 
 ## From VtTablet to MySQL
 
-![](./life_of_a_query_vttablet_to_mysql.png)
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_vttablet_to_mysql.png)
 
 Once received a rpc call from VtGate, VtTablet do a few checks before passing query to MySQL. It first validates the current VtTablet state including sessions id, then generates a query plan and applies predefined query rules and do ACL check. It also checks whether the query hits row cache and returns result immediately if so. In addition, VtTablet consolidates duplicate queries from executing simultaneously and shares results between them. At this point, VtTablet has no way but pass the query down to MySQL layer and waits for the result.
 
 ## Put it all together
 
-![](./life_of_a_query_all.png)
+![](https://raw.githubusercontent.com/youtube/vitess/master/doc/life_of_a_query_all.png)
 
 ## TopoServer
 
