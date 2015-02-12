@@ -43,9 +43,9 @@ type Resolver struct {
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration) *Resolver {
+func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, timeout),
+		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, connTimeout),
 	}
 }
 

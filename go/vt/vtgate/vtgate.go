@@ -82,12 +82,12 @@ type RegisterVTGate func(*VTGate)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, timeout time.Duration, maxInFlight int) {
+func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeout time.Duration, maxInFlight int) {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	rpcVTGate = &VTGate{
-		resolver:     NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, timeout),
+		resolver:     NewResolver(serv, "VttabletCall", cell, retryDelay, retryCount, connTimeout),
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
