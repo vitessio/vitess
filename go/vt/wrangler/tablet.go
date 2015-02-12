@@ -207,7 +207,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.Ta
 	}
 
 	if force {
-		if err := topotools.ChangeType(ctx, wr.ts, tabletAlias, tabletType, nil, false); err != nil {
+		if err := topotools.ChangeType(ctx, wr.ts, tabletAlias, tabletType, nil); err != nil {
 			return false, "", "", "", err
 		}
 	} else {

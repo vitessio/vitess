@@ -17,7 +17,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -150,7 +149,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-	replicationDelay, err := health.Run(typeForHealthCheck, shouldQueryServiceBeRunning)
+	replicationDelay, err := agent.HealthReporter.Report(typeForHealthCheck, shouldQueryServiceBeRunning)
 	health := make(map[string]string)
 	if err == nil {
 		if replicationDelay > *unhealthyThreshold {
@@ -160,16 +159,23 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		}
 	}
 
-	// Figure out if we should be running QueryService. If we should,
-	// and we aren't, try to start it (even if we're not healthy,
-	// the reason we might not be healthy is the query service not running!)
+	// Figure out if we should be running QueryService, see if we are,
+	// and reconcile.
+	if err != nil {
+		// we are not healthy, we should not be running QueryService
+		shouldQueryServiceBeRunning = false
+	}
+	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
 	if shouldQueryServiceBeRunning {
-		if err == nil {
+		if !isQueryServiceRunning {
 			// we remember this new possible error
 			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
-		} else {
-			// we ignore the error
-			agent.allowQueries(tablet.Tablet, blacklistedTables)
+		}
+	} else {
+		if isQueryServiceRunning {
+			// we are not healthy or should not be running the
+			// query service, shut it down.
+			agent.disallowQueries()
 		}
 	}
 
@@ -271,7 +277,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Change the Type, update the health. Note we pass in a map
 	// that's not nil, meaning if it's empty, we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health, false /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, newTabletType, health); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}
@@ -308,7 +314,7 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 
 	// Change the Type to spare, update the health. Note we pass in a map
 	// that's not nil, meaning we will clear it.
-	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string), true /*runHooks*/); err != nil {
+	if err := topotools.ChangeType(agent.batchCtx, agent.TopoServer, tablet.Alias, topo.TYPE_SPARE, make(map[string]string)); err != nil {
 		log.Infof("Error updating tablet record: %v", err)
 		return
 	}

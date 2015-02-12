@@ -511,18 +511,25 @@ class TestTabletManager(unittest.TestCase):
         ]
     utils.wait_procs(start_procs)
 
-    # wait for the tablets to become healthy and fix their mysql port
-    for t in tablet_62344, tablet_62044:
-      t.wait_for_vttablet_state('SERVING')
-
-      # we need to do one more health check here, so it sees the query service
-      # is now running, and turns green.
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+    # the master should still be healthy
+    utils.run_vtctl(['RunHealthCheck', tablet_62344.tablet_alias, 'replica'],
                       auto_log=True)
-
-    # master will be healthy, slave's replication won't be running
     self.check_healthz(tablet_62344, True)
+    
+    # the slave won't be healthy at first, as replication is not running
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
+                      auto_log=True)
     self.check_healthz(tablet_62044, False)
+    tablet_62044.wait_for_vttablet_state('NOT_SERVING')
+
+    # restart replication
+    tablet_62044.mquery('', ['START SLAVE'])
+
+    # wait for the tablet to become healthy and fix its mysql port
+    utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
+                    auto_log=True)
+    tablet_62044.wait_for_vttablet_state('SERVING')
+    self.check_healthz(tablet_62044, True)
 
     for t in tablet_62344, tablet_62044:
       # wait for mysql port to show up

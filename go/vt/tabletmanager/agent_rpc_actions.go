@@ -177,7 +177,7 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil, true /*runHooks*/)
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
 }
 
 // Scrap scraps the live running tablet
@@ -580,7 +580,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 		tablet.Tablet.Type = topo.TYPE_BACKUP
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string), true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string))
 	}
 	if err != nil {
 		return nil, err
@@ -614,7 +614,7 @@ func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.Snapsho
 		tablet.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newType, nil, true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newType, nil)
 	}
 	if err != nil {
 		// failure in changing the topology type is probably worse,
@@ -670,7 +670,7 @@ func (agent *ActionAgent) SnapshotSourceEnd(ctx context.Context, args *actionnod
 		tablet.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string), true /*runHooks*/)
+		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string))
 	}
 
 	return err
@@ -822,5 +822,5 @@ func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreA
 	agent.ReloadSchema(ctx)
 
 	// change to TYPE_SPARE, we're done!
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil, true)
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil)
 }

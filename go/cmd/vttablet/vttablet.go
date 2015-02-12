@@ -98,7 +98,7 @@ func main() {
 	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 	servenv.OnRun(func() {
 		addStatusParts(qsc)
-		registerHealthReporters(qsc)
+		registerHealthReporter(qsc)
 	})
 	servenv.OnTerm(func() {
 		qsc.DisallowQueries()

@@ -20,7 +20,7 @@ func TestReporters(t *testing.T) {
 		return 5 * time.Second, nil
 	}))
 
-	delay, err := ag.Run(topo.TYPE_REPLICA, true)
+	delay, err := ag.Report(topo.TYPE_REPLICA, true)
 
 	if err != nil {
 		t.Error(err)
@@ -32,7 +32,7 @@ func TestReporters(t *testing.T) {
 	ag.Register("c", FunctionReporter(func(topo.TabletType, bool) (time.Duration, error) {
 		return 0, errors.New("e error")
 	}))
-	if _, err := ag.Run(topo.TYPE_REPLICA, false); err == nil {
+	if _, err := ag.Report(topo.TYPE_REPLICA, false); err == nil {
 		t.Errorf("ag.Run: expected error")
 	}
 

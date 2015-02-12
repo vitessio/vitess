@@ -13,11 +13,13 @@ import (
 )
 
 var (
-	defaultAggregator *Aggregator
+	// DefaultAggregator is the global aggregator to use for real
+	// programs. Use a custom one for tests.
+	DefaultAggregator *Aggregator
 )
 
 func init() {
-	defaultAggregator = NewAggregator()
+	DefaultAggregator = NewAggregator()
 }
 
 // Reporter reports the health status of a tablet.
@@ -49,6 +51,7 @@ func (fc FunctionReporter) HTMLName() template.HTML {
 }
 
 // Aggregator aggregates the results of many Reporters.
+// It also implements the Reporter interface.
 type Aggregator struct {
 	// mu protects all fields below its declaration.
 	mu        sync.Mutex
@@ -62,13 +65,13 @@ func NewAggregator() *Aggregator {
 	}
 }
 
-// Run aggregates health statuses from all the reporters. If any
+// Report aggregates health statuses from all the reporters. If any
 // errors occur during the reporting, they will be logged, but only
 // the first error will be returned.
 // The returned replication delay will be the highest of all the replication
 // delays returned by the Reporter implementations (although typically
 // only one implementation will actually return a meaningful one).
-func (ag *Aggregator) Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+func (ag *Aggregator) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	var (
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
@@ -127,22 +130,4 @@ func (ag *Aggregator) HTMLName() template.HTML {
 	}
 	sort.Strings(result)
 	return template.HTML(strings.Join(result, "&nbsp; + &nbsp;"))
-}
-
-// Run collects all the health statuses from the default health
-// aggregator.
-func Run(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	return defaultAggregator.Run(tabletType, shouldQueryServiceBeRunning)
-}
-
-// Register registers rep under name with the default health
-// aggregator. Only keys specified in keys will be aggregated from
-// this particular Reporter.
-func Register(name string, rep Reporter) {
-	defaultAggregator.Register(name, rep)
-}
-
-// HTMLName returns an aggregate name for the default reporter
-func HTMLName() template.HTML {
-	return defaultAggregator.HTMLName()
 }
