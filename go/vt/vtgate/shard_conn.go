@@ -180,6 +180,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, endPoint, err, retry = sdc.getConn(ctx)
 		if err != nil {
+			// No sleep while retrying on connection error.
 			if retry {
 				continue
 			}
@@ -204,7 +205,9 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			}
 			tmr.Stop()
 		}
+		// sleep for retryDelay and retry.
 		if sdc.canRetry(err, transactionID, conn) {
+			time.Sleep(sdc.retryDelay)
 			continue
 		}
 		return sdc.WrapError(err, endPoint, inTransaction)
