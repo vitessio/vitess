@@ -101,12 +101,32 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
 	return fmd.CurrentSlaveStatus, nil
 }
 
+// ExcludeTables copies the current schema, excluding tables specified by name.
+func ExcludeTables(sd *proto.SchemaDefinition, excludeTables []string) *proto.SchemaDefinition {
+	copy := *sd
+	filteredTables := make(proto.TableDefinitions, 0, len(sd.TableDefinitions))
+	for _, table := range sd.TableDefinitions {
+		excluded := false
+		for _, excludedTableName := range excludeTables {
+			if table.Name == excludedTableName {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			filteredTables = append(filteredTables, table)
+		}
+	}
+	copy.TableDefinitions = filteredTables
+	return &copy
+}
+
 // GetSchema is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return fmd.Schema, nil
+	return ExcludeTables(fmd.Schema, excludeTables), nil
 }
 
 // GetDbConnection is part of the MysqlDaemon interface
