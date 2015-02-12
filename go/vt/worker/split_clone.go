@@ -81,8 +81,10 @@ type SplitCloneWorker struct {
 	ev *events.SplitClone
 
 	// Mutex to protect fields that might change when (re)resolving topology.
-	resolveMu          sync.Mutex
-	destinationTablets []*topo.TabletInfo
+	// TODO(aaijazi): we might want to have a Mutex per shard. Having a single mutex
+	// could become a bottleneck, as it needs to be locked for every ExecuteFetch.
+	resolveMu                  sync.Mutex
+	destinationShardsToTablets map[string]*topo.TabletInfo
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
@@ -370,17 +372,28 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	scw.resolveMu.Lock()
 	defer scw.resolveMu.Unlock()
 
-	scw.destinationTablets = make([]*topo.TabletInfo, len(scw.destinationShards))
+	scw.destinationShardsToTablets = make(map[string]*topo.TabletInfo)
 
-	for shardIndex, si := range scw.destinationShards {
+	for _, si := range scw.destinationShards {
 		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
-		scw.destinationTablets[shardIndex] = ti
+		scw.destinationShardsToTablets[si.ShardName()] = ti
 	}
 
 	return nil
+}
+
+// GetDestinationMaster implements the Resolver interface
+func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
+	scw.resolveMu.Lock()
+	defer scw.resolveMu.Unlock()
+	ti, ok := scw.destinationShardsToTablets[shardName]
+	if !ok {
+		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
+	}
+	return ti, nil
 }
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
@@ -477,7 +490,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
-	for shardIndex := range scw.destinationShards {
+	for shardIndex, si := range scw.destinationShards {
 		// we create one channel per destination tablet.  It
 		// is sized to have a buffer of a maximum of
 		// destinationWriterCount * 2 items, to hopefully
@@ -485,17 +498,17 @@ func (scw *SplitCloneWorker) copy() error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
 
-		go func(ti *topo.TabletInfo, insertChannel chan string) {
+		go func(shardName string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(scw.ctx, scw.wr, ti, insertChannel); err != nil {
+					if err := executeFetchLoop(scw.ctx, scw.wr, scw, shardName, insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
 			}
-		}(scw.destinationTablets[shardIndex], insertChannels[shardIndex])
+		}(si.ShardName(), insertChannels[shardIndex])
 	}
 
 	// Now for each table, read data chunks and send them to all
@@ -575,15 +588,15 @@ func (scw *SplitCloneWorker) copy() error {
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
 
-		for shardIndex := range scw.destinationShards {
+		for _, si := range scw.destinationShards {
 			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
+			go func(shardName string) {
 				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.ctx, scw.wr, ti, queries); err != nil {
-					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
+				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
+				if err := runSqlCommands(scw.ctx, scw.wr, scw, shardName, queries); err != nil {
+					processError("blp_checkpoint queries failed: %v", err)
 				}
-			}(scw.destinationTablets[shardIndex])
+			}(si.ShardName())
 		}
 		destinationWaitGroup.Wait()
 		if firstError != nil {
