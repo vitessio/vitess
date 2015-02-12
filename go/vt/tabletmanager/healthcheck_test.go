@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -158,7 +159,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_REPLICA {
+	if ti.Type != targetTabletType {
 		t.Errorf("First health check failed to go to replica: %v", ti.Type)
 	}
 	if ti.Portmap["mysql"] != 3306 {
@@ -197,6 +198,130 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	}
 	if ti.Type != topo.TYPE_SPARE {
 		t.Errorf("Happy health check which cannot start query service should stay spare: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+}
+
+// TestQueryServiceStopped verifies that if a healthy tablet's query
+// service is shut down, the tablet does unhealthy
+func TestQueryServiceStopped(t *testing.T) {
+	agent := createTestAgent(t)
+	targetTabletType := topo.TYPE_REPLICA
+
+	// first health check, should change us to replica
+	agent.runHealthCheck(targetTabletType)
+	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("First health check failed to go to replica: %v", ti.Type)
+	}
+	if !agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should be running")
+	}
+
+	// shut down query service and prevent it from starting again
+	agent.QueryServiceControl.DisallowQueries()
+	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
+
+	// health check should now fail
+	agent.runHealthCheck(targetTabletType)
+	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != topo.TYPE_SPARE {
+		t.Errorf("Happy health check which cannot start query service should stay spare: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+}
+
+// TestTabletControl verifies the shard's TabletControl record can disable
+// query service in a tablet.
+func TestTabletControl(t *testing.T) {
+	agent := createTestAgent(t)
+	targetTabletType := topo.TYPE_REPLICA
+
+	// first health check, should change us to replica
+	agent.runHealthCheck(targetTabletType)
+	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("First health check failed to go to replica: %v", ti.Type)
+	}
+	if !agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should be running")
+	}
+
+	// now update the shard
+	si, err := agent.TopoServer.GetShard(keyspace, shard)
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.TabletControlMap = map[topo.TabletType]*topo.TabletControl{
+		targetTabletType: &topo.TabletControl{
+			DisableQueryService: true,
+		},
+	}
+	if err := topo.UpdateShard(context.Background(), agent.TopoServer, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+
+	// now refresh the tablet state, as the resharding process would do
+	ctx := context.Background()
+	agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_REFRESH_STATE, "", "", true, func() error {
+		agent.RefreshState(ctx)
+		return nil
+	})
+
+	// check we shutdown query service
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+
+	// check running a health check will not start it again
+	agent.runHealthCheck(targetTabletType)
+	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("Health check failed to go to replica: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+
+	// go unhealthy, check we go to spare and QS is not running
+	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	agent.runHealthCheck(targetTabletType)
+	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != topo.TYPE_SPARE {
+		t.Errorf("Unhealthy health check should go to spare: %v", ti.Type)
+	}
+	if agent.QueryServiceControl.IsServing() {
+		t.Errorf("Query service should not be running")
+	}
+
+	// go back healthy, check QS is still not running
+	agent.HealthReporter.(*fakeHealthCheck).reportError = nil
+	agent.runHealthCheck(targetTabletType)
+	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	if ti.Type != targetTabletType {
+		t.Errorf("Healthy health check should go to replica: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
