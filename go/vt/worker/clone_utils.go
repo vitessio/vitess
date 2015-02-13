@@ -151,7 +151,11 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
-func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string) error {
+//
+// executeFetchWithRetries will also re-resolve the topology after errors, to be resistant to a reparent.
+// It takes in a tablet record that it will initially attempt to write to, and will return the final tablet
+// record that it used.
+func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, r Resolver, shard string, command string) (*topo.TabletInfo, error) {
 	retryDuration := 2 * time.Hour
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
@@ -163,13 +167,13 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		switch {
 		case err == nil:
 			// success!
-			return nil
+			return ti, nil
 		case wr.TabletManagerClient().IsTimeoutError(err):
 			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
 		case strings.Contains(err.Error(), "retry: "):
 			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
 		default:
-			return err
+			return ti, err
 		}
 		t := time.NewTimer(30 * time.Second)
 		// don't leak memory if the timer isn't triggered
@@ -178,12 +182,20 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		select {
 		case <-retryCtx.Done():
 			if retryCtx.Err() == context.DeadlineExceeded {
-				return fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
+				return ti, fmt.Errorf("failed to connect to destination tablet %v after retrying for %v", ti, retryDuration)
 			}
-			return fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
+			return ti, fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
 		case <-t.C:
 			// Re-resolve and retry 30s after the failure
-			// TODO(aaijazi): Re-resolve before retrying
+			err = r.ResolveDestinationMasters()
+			if err != nil {
+				return ti, fmt.Errorf("unable to re-resolve masters for ExecuteFetch, due to: %v", err)
+			}
+			ti, err = r.GetDestinationMaster(shard)
+			if err != nil {
+				// At this point, we probably don't have a valid tablet record to return
+				return nil, fmt.Errorf("unable to run ExecuteFetch due to: %v", err)
+			}
 		}
 
 	}
@@ -200,14 +212,19 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 }
 
 // runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, commands []string) error {
+func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
+	ti, err := r.GetDestinationMaster(shard)
+	if err != nil {
+		return fmt.Errorf("runSqlCommands failed: %v", err)
+	}
+
 	for _, command := range commands {
 		command, err := fillStringTemplate(command, map[string]string{"DatabaseName": ti.DbName()})
 		if err != nil {
 			return fmt.Errorf("fillStringTemplate failed: %v", err)
 		}
 
-		err = executeFetchWithRetries(ctx, wr, ti, command)
+		ti, err = executeFetchWithRetries(ctx, wr, ti, r, shard, command)
 		if err != nil {
 			return err
 		}
@@ -394,7 +411,11 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
-func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string) error {
+func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, insertChannel chan string) error {
+	ti, err := r.GetDestinationMaster(shard)
+	if err != nil {
+		return fmt.Errorf("executeFetchLoop failed: %v", err)
+	}
 	for {
 		select {
 		case cmd, ok := <-insertChannel:
@@ -403,14 +424,14 @@ func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.Table
 				return nil
 			}
 			cmd = "INSERT INTO `" + ti.DbName() + "`." + cmd
-			err := executeFetchWithRetries(ctx, wr, ti, cmd)
+			ti, err = executeFetchWithRetries(ctx, wr, ti, r, shard, cmd)
 			if err != nil {
 				return fmt.Errorf("ExecuteFetch failed: %v", err)
 			}
 		case <-ctx.Done():
 			// Doesn't really matter if this select gets starved, because the other case
 			// will also return an error due to executeFetch's context being closed. This case
-			// does prevent us from blocking indefinitely on inserChannel when the worker is canceled.
+			// does prevent us from blocking indefinitely on insertChannel when the worker is canceled.
 			return nil
 		}
 	}

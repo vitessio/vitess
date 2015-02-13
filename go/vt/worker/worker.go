@@ -10,6 +10,9 @@ package worker
 
 import (
 	"html/template"
+	"time"
+
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // Worker is the base interface for all long running workers.
@@ -40,4 +43,11 @@ type Resolver interface {
 	// ResolveDestinationMasters forces the worker to (re)resolve the topology and update
 	// the destination masters that it knows about.
 	ResolveDestinationMasters() error
+
+	// GetDestinationMaster returns the most recently resolved destination master for a particular shard.
+	GetDestinationMaster(shardName string) (*topo.TabletInfo, error)
 }
+
+// Resolvers should attempt to keep the previous topo resolution cached for at
+// least this long.
+const resolveTTL = 15 * time.Second

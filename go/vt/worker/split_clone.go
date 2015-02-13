@@ -81,8 +81,11 @@ type SplitCloneWorker struct {
 	ev *events.SplitClone
 
 	// Mutex to protect fields that might change when (re)resolving topology.
-	resolveMu          sync.Mutex
-	destinationTablets []*topo.TabletInfo
+	// TODO(aaijazi): we might want to have a Mutex per shard. Having a single mutex
+	// could become a bottleneck, as it needs to be locked for every ExecuteFetch.
+	resolveMu                  sync.Mutex
+	destinationShardsToTablets map[string]*topo.TabletInfo
+	resolveTime                time.Time
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
@@ -366,21 +369,43 @@ func (scw *SplitCloneWorker) findTargets() error {
 }
 
 // ResolveDestinationMasters implements the Resolver interface.
+// It will attempt to resolve all shards and update scw.destinationShardsToTablets;
+// if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
 func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
+
+	// Allow at most one resolution request at a time; if there are concurrent requests, only
+	// one of them will actualy hit the topo server.
 	scw.resolveMu.Lock()
 	defer scw.resolveMu.Unlock()
 
-	scw.destinationTablets = make([]*topo.TabletInfo, len(scw.destinationShards))
+	// If the last resolution was fresh enough, return it.
+	if time.Now().Sub(scw.resolveTime) < resolveTTL {
+		return nil
+	}
 
-	for shardIndex, si := range scw.destinationShards {
+	for _, si := range scw.destinationShards {
 		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
-		scw.destinationTablets[shardIndex] = ti
+		destinationShardsToTablets[si.ShardName()] = ti
 	}
-
+	scw.destinationShardsToTablets = destinationShardsToTablets
+	// save the time of the last successful resolution
+	scw.resolveTime = time.Now()
 	return nil
+}
+
+// GetDestinationMaster implements the Resolver interface
+func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
+	scw.resolveMu.Lock()
+	ti, ok := scw.destinationShardsToTablets[shardName]
+	scw.resolveMu.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
+	}
+	return ti, nil
 }
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
@@ -477,7 +502,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
-	for shardIndex := range scw.destinationShards {
+	for shardIndex, si := range scw.destinationShards {
 		// we create one channel per destination tablet.  It
 		// is sized to have a buffer of a maximum of
 		// destinationWriterCount * 2 items, to hopefully
@@ -485,17 +510,17 @@ func (scw *SplitCloneWorker) copy() error {
 		// destinationWriterCount go routines reading from it.
 		insertChannels[shardIndex] = make(chan string, scw.destinationWriterCount*2)
 
-		go func(ti *topo.TabletInfo, insertChannel chan string) {
+		go func(shardName string, insertChannel chan string) {
 			for j := 0; j < scw.destinationWriterCount; j++ {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(scw.ctx, scw.wr, ti, insertChannel); err != nil {
+					if err := executeFetchLoop(scw.ctx, scw.wr, scw, shardName, insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
 			}
-		}(scw.destinationTablets[shardIndex], insertChannels[shardIndex])
+		}(si.ShardName(), insertChannels[shardIndex])
 	}
 
 	// Now for each table, read data chunks and send them to all
@@ -575,15 +600,15 @@ func (scw *SplitCloneWorker) copy() error {
 			queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		}
 
-		for shardIndex := range scw.destinationShards {
+		for _, si := range scw.destinationShards {
 			destinationWaitGroup.Add(1)
-			go func(ti *topo.TabletInfo) {
+			go func(shardName string) {
 				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Making and populating blp_checkpoint table on tablet %v", ti.Alias)
-				if err := runSqlCommands(scw.ctx, scw.wr, ti, queries); err != nil {
-					processError("blp_checkpoint queries failed on tablet %v: %v", ti.Alias, err)
+				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
+				if err := runSqlCommands(scw.ctx, scw.wr, scw, shardName, queries); err != nil {
+					processError("blp_checkpoint queries failed: %v", err)
 				}
-			}(scw.destinationTablets[shardIndex])
+			}(si.ShardName())
 		}
 		destinationWaitGroup.Wait()
 		if firstError != nil {
