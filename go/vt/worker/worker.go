@@ -10,6 +10,7 @@ package worker
 
 import (
 	"html/template"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -46,3 +47,7 @@ type Resolver interface {
 	// GetDestinationMaster returns the most recently resolved destination master for a particular shard.
 	GetDestinationMaster(shardName string) (*topo.TabletInfo, error)
 }
+
+// Resolvers should attempt to keep the previous topo resolution cached for at
+// least this long.
+const resolveTTL = 15 * time.Second

@@ -80,6 +80,7 @@ type VerticalSplitCloneWorker struct {
 	// Mutex to protect fields that might change when (re)resolving topology.
 	resolveMu                  sync.Mutex
 	destinationShardsToTablets map[string]*topo.TabletInfo
+	resolveTime                time.Time
 }
 
 // NewVerticalSplitCloneWorker returns a new VerticalSplitCloneWorker object.
@@ -332,15 +333,26 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 }
 
 // ResolveDestinationMasters implements the Resolver interface.
+// It will attempt to resolve all shards and update vscw.destinationShardsToTablets;
+// if it is unable to do so, it will not modify vscw.destinationShardsToTablets at all.
 func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
+	// Allow at most one resolution request at a time; if there are concurrent requests, only
+	// one of them will actualy hit the topo server.
 	vscw.resolveMu.Lock()
 	defer vscw.resolveMu.Unlock()
+
+	// If the last resolution was fresh enough, return it.
+	if time.Now().Sub(vscw.resolveTime) < resolveTTL {
+		return nil
+	}
 
 	ti, err := resolveDestinationShardMaster(vscw.ctx, vscw.destinationKeyspace, vscw.destinationShard, vscw.wr)
 	if err != nil {
 		return err
 	}
 	vscw.destinationShardsToTablets = map[string]*topo.TabletInfo{vscw.destinationShard: ti}
+	// save the time of the last successful resolution
+	vscw.resolveTime = time.Now()
 	return nil
 }
 
