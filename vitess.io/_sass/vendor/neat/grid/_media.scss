@@ -1,0 +1,38 @@
+@mixin media($query:$feature $value $columns, $total-columns: $grid-columns) {
+  @if length($query) == 1 {
+    @media screen and ($default-feature: nth($query, 1)) {
+      $default-grid-columns: $grid-columns;
+      $grid-columns: $total-columns !global;
+      @content;
+      $grid-columns: $default-grid-columns !global;
+    }
+  }
+
+  @else {
+    $loopTo: length($query);
+    $mediaQuery: 'screen and ';
+    $default-grid-columns: $grid-columns;
+    $grid-columns: $total-columns !global;
+
+    @if length($query) % 2 != 0 {
+      $grid-columns: nth($query, $loopTo) !global;
+      $loopTo: $loopTo - 1;
+    }
+
+    $i: 1;
+    @while $i <= $loopTo {
+      $mediaQuery: $mediaQuery + '(' + nth($query, $i) + ': ' + nth($query, $i + 1) + ') ';
+
+      @if ($i + 1) != $loopTo {
+        $mediaQuery: $mediaQuery + 'and ';
+      }
+
+      $i: $i + 2;
+    }
+
+    @media #{$mediaQuery} {
+      @content;
+      $grid-columns: $default-grid-columns !global;
+    }
+  }
+}

@@ -1,0 +1,43 @@
+@mixin span-columns($span: $columns of $container-columns, $display: block) {
+  $columns: nth($span, 1);
+  $container-columns: container-span($span);
+
+  // Set nesting context (used by shift())
+  $parent-columns: get-parent-columns($container-columns) !global;
+
+  $direction: get-direction($layout-direction, $default-layout-direction);
+  $opposite-direction: get-opposite-direction($direction);
+
+  $display-table: is-display-table($container-display-table, $display);
+
+  @if $display-table  {
+    display: table-cell;
+    width: percentage($columns / $container-columns);
+  } @else {
+    float: #{$opposite-direction};
+
+    @if $display != no-display {
+      display: block;
+    }
+
+    @if $display == collapse {
+      @warn "The 'collapse' argument will be deprecated. Use 'block-collapse' instead."
+    }
+
+    @if $display == collapse or $display == block-collapse {
+      width: flex-grid($columns, $container-columns) + flex-gutter($container-columns);
+
+      &:last-child {
+        width: flex-grid($columns, $container-columns);
+      }
+
+    } @else {
+      margin-#{$direction}: flex-gutter($container-columns);
+      width: flex-grid($columns, $container-columns);
+
+      &:last-child {
+        margin-#{$direction}: 0;
+      }
+    }
+  }
+}

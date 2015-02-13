@@ -1,0 +1,122 @@
+// BUTTONS
+// --------------------------------------------------
+
+// call to action
+.btn {
+	display: inline-block;
+	padding: 8px 20px;
+	@include font-size(14);
+	font-family: $alt-font;
+	background-color: $primary-color;
+	color: $white;
+	text-decoration: none;
+	border: 0 !important;
+	border-radius: 10 * $border-radius;
+	@include transition(background 0.2s, border 0.2s);
+	&:hover {
+		color: $white;
+		background-color: lighten($primary-color, 10);
+	}
+	&:active {
+		// move button slightly on click
+		@include transform(translateY(1px));
+	}
+}
+.btn-inverse {
+	@extend .btn;
+	background-color: $white;
+	color: $text-color;
+	&:visited,
+	&:active {
+		color: $text-color;
+	}
+	&:hover {
+		color: $white;
+		background-color: $text-color;
+	}
+}
+.btn-info {
+	@extend .btn;
+	background-color: $info-color;
+	color: $white;
+	&:visited {
+		color: $white;
+	}
+	&:hover {
+		background-color: lighten($info-color, 10);
+	}
+}
+.btn-warning {
+	@extend .btn;
+	background-color: $warning-color;
+	color: $white;
+	&:visited {
+		color: $white;
+	}
+	&:hover {
+		background-color: lighten($warning-color ,10);
+	}
+}
+.btn-success {
+	@extend .btn;
+	background-color: $success-color;
+	color: $white;
+	&:visited {
+		color: $white;
+	}
+	&:hover {
+		background-color:lighten($success-color, 10);
+	}
+}
+.btn-danger {
+	@extend .btn;
+	background-color: $danger-color;
+	color: $white;
+	&:visited {
+		color: $white;
+	}
+	&:hover {
+		background-color: lighten($danger-color, 10);
+	}
+}
+.btn-social {
+	$social: 
+    (facebook, $facebook-color),
+		(flickr, $flickr-color),
+		(foursquare, $foursquare-color),
+		(google-plus, $google-plus-color),
+		(instagram, $instagram-color),
+		(linkedin, $linkedin-color),
+		(pinterest, $pinterest-color),
+		(rss, $rss-color),
+		(tumblr, $tumblr-color),
+		(twitter, $twitter-color),
+		(vimeo, $vimeo-color),
+		(youtube, $youtube-color);
+	@extend .btn-inverse;
+	color: $text-color !important;
+	&:visited,
+	&:active {
+		color: $text-color;
+	}
+	border: 1px solid $border-color !important;
+	@each $socialnetwork, $color in $social {
+		i.fa-#{$socialnetwork} {
+	    color: $color;
+    }    
+	}
+	&:hover {
+		color: $white !important;
+	}
+	@each $socialnetwork, $color in $social {
+		&.#{$socialnetwork}:hover {
+		    background: $color;
+		    border-color: $color;
+		    @each $socialnetwork, $color in $social {
+					i.fa-#{$socialnetwork} {
+				    color: $white;
+			    }    
+				}
+	    }    
+	}
+}

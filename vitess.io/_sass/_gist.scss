@@ -1,0 +1,20 @@
+//Set max height of embedded gist 
+.gist div {
+	max-height:75em;
+}
+
+//Remove extra padding
+.gist table {
+	margin-top:0px;
+
+}
+
+//Remove hover effect
+.gist tbody
+{
+	tr:hover > td, tr:hover > th {
+		background-color:transparent;
+	};
+	background-color:white; //Background color white
+}
+
