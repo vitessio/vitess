@@ -85,6 +85,7 @@ type SplitCloneWorker struct {
 	// could become a bottleneck, as it needs to be locked for every ExecuteFetch.
 	resolveMu                  sync.Mutex
 	destinationShardsToTablets map[string]*topo.TabletInfo
+	resolveTime                time.Time
 }
 
 // NewSplitCloneWorker returns a new SplitCloneWorker object.
@@ -368,28 +369,39 @@ func (scw *SplitCloneWorker) findTargets() error {
 }
 
 // ResolveDestinationMasters implements the Resolver interface.
+// It will attempt to resolve all shards and update scw.destinationShardsToTablets;
+// if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
 func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
+
+	// Allow at most one resolution request at a time; if there are concurrent requests, only
+	// one of them will actualy hit the topo server.
 	scw.resolveMu.Lock()
 	defer scw.resolveMu.Unlock()
 
-	scw.destinationShardsToTablets = make(map[string]*topo.TabletInfo)
+	// If the last resolution was fresh enough, return it.
+	if time.Now().Sub(scw.resolveTime) < resolveTTL {
+		return nil
+	}
 
 	for _, si := range scw.destinationShards {
 		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
-		scw.destinationShardsToTablets[si.ShardName()] = ti
+		destinationShardsToTablets[si.ShardName()] = ti
 	}
-
+	scw.destinationShardsToTablets = destinationShardsToTablets
+	// save the time of the last successful resolution
+	scw.resolveTime = time.Now()
 	return nil
 }
 
 // GetDestinationMaster implements the Resolver interface
 func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.TabletInfo, error) {
 	scw.resolveMu.Lock()
-	defer scw.resolveMu.Unlock()
 	ti, ok := scw.destinationShardsToTablets[shardName]
+	scw.resolveMu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("no tablet found for destination shard %v", shardName)
 	}
