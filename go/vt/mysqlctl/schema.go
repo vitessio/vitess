@@ -30,30 +30,6 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	}
 	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
 
-	// build a list of regexp to match table names against
-	var tableRegexps []*regexp.Regexp
-	if len(tables) > 0 {
-		tableRegexps = make([]*regexp.Regexp, len(tables))
-		for i, table := range tables {
-			var err error
-			tableRegexps[i], err = regexp.Compile(table)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
-			}
-		}
-	}
-	var excludeTableRegexps []*regexp.Regexp
-	if len(excludeTables) > 0 {
-		excludeTableRegexps = make([]*regexp.Regexp, len(excludeTables))
-		for i, table := range excludeTables {
-			var err error
-			excludeTableRegexps[i], err = regexp.Compile(table)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
-			}
-		}
-	}
-
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
@@ -71,30 +47,6 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	for _, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
-
-		// check it's a table we want
-		if tableRegexps != nil {
-			foundMatch := false
-			for _, tableRegexp := range tableRegexps {
-				if tableRegexp.Match(row[0].Raw()) {
-					foundMatch = true
-					break
-				}
-			}
-			if !foundMatch {
-				continue
-			}
-		}
-		foundMatch := false
-		for _, tableRegexp := range excludeTableRegexps {
-			if tableRegexp.Match(row[0].Raw()) {
-				foundMatch = true
-				break
-			}
-		}
-		if foundMatch {
-			continue
-		}
 
 		// compute dataLength
 		var dataLength uint64
@@ -152,6 +104,10 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
+	sd, err = sd.FilterTables(tables, excludeTables, includeViews)
+	if err != nil {
+		return nil, err
+	}
 	sd.GenerateSchemaVersion()
 	return sd, nil
 }

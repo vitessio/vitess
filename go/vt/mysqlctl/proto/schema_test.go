@@ -177,3 +177,115 @@ func TestSchemaDiff(t *testing.T) {
 	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TABLE_BASE_TABLE})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
 }
+
+func TestFilterTables(t *testing.T) {
+	var testcases = []struct {
+		desc          string
+		input         *SchemaDefinition
+		tables        []string
+		excludeTables []string
+		includeViews  bool
+		want          *SchemaDefinition
+	}{
+		{
+			desc: "filter based on tables (whitelist)",
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			tables: []string{basicTable1.Name},
+			want: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+				},
+			},
+		},
+		{
+			desc: "filter based on excludeTables (blacklist)",
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			excludeTables: []string{basicTable1.Name},
+			want: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable2,
+				},
+			},
+		},
+		{
+			desc: "excludeTables may filter out a whitelisted item from tables",
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			tables:        []string{basicTable1.Name, basicTable2.Name},
+			excludeTables: []string{basicTable1.Name},
+			want: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable2,
+				},
+			},
+		},
+		{
+			desc: "exclude views",
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+					view1,
+				},
+			},
+			includeViews: false,
+			want: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+		},
+		{
+			desc: "generate new schema version hash when list of tables has changed",
+			input: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+				Version: "dummy-version",
+			},
+			excludeTables: []string{basicTable1.Name},
+			want: &SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+				TableDefinitions: []*TableDefinition{
+					basicTable2,
+				},
+				Version: "6d1d294def9febdb21b35dd19a1dd4c6",
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		got, err := tc.input.FilterTables(tc.tables, tc.excludeTables, tc.includeViews)
+		if err != nil {
+			t.Errorf("FilterTables() test '%v' on SchemaDefinition %v failed with error %v, want %v", tc.desc, tc.input, err, tc.want)
+		}
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("FilterTables() test '%v' on SchemaDefinition %v returned %v; want %v", tc.desc, tc.input, got, tc.want)
+		}
+	}
+}
