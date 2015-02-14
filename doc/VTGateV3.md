@@ -109,3 +109,126 @@ This gives rise to distributed transaction consistency issues that are discussed
 
 #### The VSchema
 The full set of keyspaces, tables, their classes all the way to the vindexes constitutes the vschema. This is currently represented as a JSON file.
+
+### The rules
+By the fact that vindexes have unique properties, there are automatic restrictions on where they can or cannot be used. These rules can be logically derived, but it’s not obvious. So, it’s better if these are spelled out.
+
+#### The vindex owner
+A vindex can specify an owner table. This means that VTGate will automatically call the Create, Generate or Delete functions when rows in the owner table are created or deleted. This implies that vindexes can be shared by multiple tables. If vindexes are shared, a row must be created in the owner table first before other sub-table rows are created for that main table row. Conversely, an owner table row should be deleted only after all corresponding sub-table rows are deleted first. There is no efficient way to enforce this rule. So, we must rely on good behavior from the app.
+
+#### The primary ColVindex
+Every table needs a primary ColVindex. It’s always the first ColVindex of the table. VTGate will use this ColVindex to compute the keyspace id for the row on inserts. The value for a ColVindex must either be supplied by the app, or it should have a Generate function.
+
+This means that an *owned primary ColVindex cannot be a Lookup*. If it was owned, then it would need to call Create, but the Create function needs the keyspace id, which is not computed yet.
+
+A table *could have a Lookup ColVindex that is primary but not owned*. In that case, VTGate will just use the Map function of the Vindex to compute the keyspace_id.
+
+*A primary vindex must also be unique.* Otherwise, VTGate cannot compute a unique keyspace id for the row being inserted.
+
+#### The non-primary ColVindex
+Any ColVindex that is not the first one is considered non-primary. For these, VTGate uses the computed keyspace id to validate or populate them:
+
+* If the vindex is owned
+  * If no value was supplied
+    * If the vindex has a generator, then the generator is used to create an association between the newly generated value and the keyspace id.
+    * *Functional vindexes are not allowed* here because there is no way to guarantee that a generated value that did not use keyspace id as input will map to a previously computed keyspace id.
+  * If a value was specified
+    * If the vindex is a lookup, then we use the Create function
+    * Again, *functional vindexes are not allowed here*
+* If the vindex is not owned
+  * If no value was supplied and if the vindex has a ReverseMap, it’s used to compute and fill the value. Otherwise, the insert is failed
+  * If a value was specified, then VTGate uses Verify to make sure that it agrees with the keyspace_id.
+
+#### Unique table name
+One of Vitess’s features is transparent vertical resharding. This means that a table can migrate from one keyspace to another. In order to support this, the application needs to be agnostic of the physical location of a table. This automatically means that a table has to be unique across the entire set of keyspaces.
+
+Although this is currently not enforced by the rest of the vitess system, VTGate will start enforcing this as one of the vschema constraints.
+
+### Plan building
+When a query is received and parsed into an AST, the plan builder first analyzes the complexity of the query. If there are any constructs that it cannot handle, it returns a NoPlan and documents a reason code, which is essentially an error for the app.
+
+Once the query passes the complexity check, it’s branched off into different analysis paths depending on the statement type. For example, VTGate will currently reject any queries that involve unions, joins or subqueries. It will be an ongoing project to support more and more such constructs.
+
+#### selects
+For selects, we try to look at the where clause and collect equality constraints that matched a ColVindex. Out of all those matches, we choose the one with the lowest cost.
+
+In the case of a select, if no ColVindex is matched, the query is treated as a scatter.
+
+One of the results of the initial analysis of a query is whether it requires post-processing. This basically means that the results cannot be returned as is to the client. For example, aggregations, order by, etc. are post-processing constructs. If the select had any such constructs, then the initial implementation of VTGate will fail queries that target more than one keyspace_id. Having VTGate handle post-processing constructs will be another ongoing project that will include more and more use cases as it evolves.
+
+#### updates
+The routing of updates is similar to select. We use the same strategy. However, multi-keyspace-id updates are not allowed because our resharding tools cannot handle such statements. Also, VTGate will currently not allow you to modify a ColVindex column. This is because such changes could effectively require us to migrate a row from one shard to another. However, this is definitely something we can look at supporting in the future.
+
+#### inserts
+inserts are slightly more involved because we have to guarantee data integrity. We compute the keyspace id using the primary vindex value. Then we verify or generate the rest of the ColVindex values and ensure that everything is consistent. The details of an insert action are already explained in the vindex section.
+
+#### deletes
+Deletes are a bigger challenge. If the app issues a delete for a table that has multiple ColVindexes, it would usually specify only one of them in the where clause. However, vitess is responsible for deleting lookup rows for all owned ColVindexes. Also, a delete that matches a ColVindex does not guarantee that such a row will be deleted if there are other constraints in the where clause.
+
+For this reason, VTGate first issues a ‘select for update’ using the specified where clause. And then, issues Vindex deletes only based on the returned rows. Finally, it sends in the actual delete statement to the computed shards.
+
+#### DDLs (not implemented yet)
+Should VTGate support DDLs? This is a question that needs to be answered first. The main issue with DDLs is that they’re dangerous, and it may not be wise to allow the app to run them. Also, it’s difficult to repair DDLs that partially failed. So, it may be better to support these using workflows.
+
+However, if VTGate were to support DDLs, this is how it would do it. All DDLs will be treated as full-scatter operations. The table addressed by the DDL must already be present in the vschema. In the case of a create table, a vschema entry must first be created for it, and then the DDL will be issued. The vschema entry will be used to figure out which keyspace the table will be created on.
+
+#### Query splitting
+For map-reducers, we need the ability to split queries into ones that target specific shards. The current v2 implementation uses keyranges for this purpose. However, this violates the V3 design constraint that only a tablet type can be specified along with the query and nothing else.
+
+In order to support this, we introduce a new function called keyrange. This is a special construct that VTGate will use and treat it exactly like a V2 keyrange constraint. For example, a query like
+
+```select * from user``` will be split into queries like this:
+
+```select * from user where keyrange(‘’, ‘\x80’)```, and
+
+```select * from user where keyrange(‘\x80’, ‘’)```
+
+VTGate will remove these keyrange constructs before passing the query on to the appropriate shard.
+
+### Execution
+Execution details were mostly covered in the previous sections.
+
+The Execute function itself will support all plans. ExecuteStream will support only the ‘Select’ plans. ExecuteBatch is currently an open issue. The initial implementation could just loop through the list of requests and ‘Execute’ them, and then return the combined results. In a future optimization, it could analyze the routing upfront, and prepare separate ExecuteBatch calls to the vttablets, and then combine the results in the correct order.
+
+Additionally, in the case of DMLs, the execution appends a keyspace_id comment that can be used to handle resharding.
+
+### The schema editor
+In order to make V3 user-friendly, we need the ability to easily maintain the vschema. The schema editor will run as a javascript app under vtctld.
+
+In terms of frameworks, we’ll use AngularJS and twitter’s bootstrap. To the extent possible, we should minimize the amount of html and custom css we write ourselves. A secondary purpose of the schema editor is to prototype a framework for the Vitess dashboard, which will be used to manage all the other workflows.
+
+#### The load workflow
+When you fire up the schema editor, it should take you to the load workflow. The default implementation will allow you to load a schema from the topology. It will also allow you to upload a vschema file.
+
+#### The editor
+The schema picks up the loaded JSON, parse it and display the various components of the schema in a page where the relationships are easily visualized. The vschema has four main components: keyspaces, tables, table classes and vindexes.
+
+Keyspaces can be on a left navbar. Once you select the keyspaces, it will display the the rest of the three components in one column each.
+
+The schema editor will sanity check the JSON file for inconsistencies and flag them using various color codes:
+* Red: This schema file will not compile until you fix the issue. If you hover the mouse over such items, the tooltip should tell you why. For example, a table referring to a class that doesn't exist is an incorrect vschema.
+* Yellow: Even though the file will compile, things don’t look consistent. For example, if a table is not referring to a vindex it’s supposed to own, that’s a warning.
+
+Once you’ve performed all the edits, the output will be a JSON, and it will be shown as a diff against the original one. Once you’re satisfied, you go into the ‘Save’ workflow.
+
+Although mostly static, the list of vindex types should not be hardcoded. There is a data structure that generically describes each vindex type and its abilities. This should be supplied by vtctl to the schema editor.
+
+#### The save workflow
+The save workflow will show the new JSON file as a diff against the old one. At this point, you have the option of saving it to the topo, or downloading the file.  This is done through an ajax call to vtctld, which first tries to parse the schema. If the parse fails, the save is rejected. If the save is successful, then VTGate can load this schema and route queries accordingly.
+
+There is also an opportunity to revisit this after the auto-schema feature is implemented; a schema change is likely to require a corresponding change in the vschema.
+
+### Tying it all together
+At a high level, VTGate will define new entry points to support the new API. These functions will have plain names, unlike the previous versions of the API. For example, instead of ExecuteShard, etc, it will just be Execute.
+
+VTGate will load the vschema from the topo on startup. It can also load it from a file, but we don’t expect to use this feature. There is a separate project to change VTGate’s polling code to use notifications. When this is done, we’ll change VTGate to listen on changes to the vschema.
+
+Once up and running, the same approach as VTTablet will be used to process a query. A brand new query will first be parsed, and the AST will be handed over to a planbuilder that returns a plan. This plan will then be cached for future reuse. Subsequent such queries will just reuse the originally computed plan.
+
+### Monitoring and diagnostics
+We have the opportunity to mimic many of vttablet’s features that have helped us in the past:
+* /queryz (will display query plans and their stats)
+* /schemaz (will display the vschema)
+* /querylogz
+* /debug/ urls that serve the above data in JSON format
+* streamlog
