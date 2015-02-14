@@ -269,3 +269,29 @@ As applications evolve, they may notice that one of their low qps scatter querie
 
 There is currently no process in vitess to do this. One way would be to create this table and have a special VTGate index that will update this table on DMLs, but will return a scatter plan for selects. After this is setup, we need a workflow that will backfill the vindex with the old data. Once the backfill is done, we should be able to turn on the full functionality of the lookup vindex.
  
+## Project Information
+A good chunk of the work described in the doc is already complete. The parts that are yet to be done are:
+* Schema editor
+  * Remove hard coding of vindex types
+  * Upload/download file
+  * JSON diff
+  * Import keyspace & table info from topo & vttablet
+  * Testing
+  * Add label ACL restrictions
+* VTGate
+  * ExecuteBatch
+  * DDL
+  * Schema change notification
+  * Audit of error messages
+* More comprehensive integration tests
+* Monitoring
+
+## Caveats
+The current json format for the vschema needs to be revisited. It’s a monolithic file that covers all keyspaces. If you perform keyspace maintenance, then you have to remember to make updates to vschema accordingly. If we instead split this into individual, per-keyspace vschemas, then those would live and die with the keyspaces. It will also make it easier to refresh only a keyspace that has changed. The downside, however, is that it increases the complexity of the system.
+
+## Testing plan
+Unit tests have been written to cover every code path that can be seen on production, and expected functionality has been verified.
+
+There is also a vtgatev3_test.py that performs some end-to-end tests. This, coupled with the unit tests, should cover everything needed. However, it may be a good idea to add a few more cases to the integration test for good measure.
+
+Once the new API is established as the only official API of Vitess, we’ll need to migrate our existing V2 tests to V3.
