@@ -232,3 +232,40 @@ We have the opportunity to mimic many of vttablet’s features that have helped 
 * /querylogz
 * /debug/ urls that serve the above data in JSON format
 * streamlog
+
+## Future improvements
+VTGate has a lot of room to evolve. Many of the features listed below can become their own independent long-running projects with their own design document:
+
+### Transactions
+#### 2PC
+We know that we’re doing best-effort distributed transactions. This means that we don’t really support cross-shard or cross-keyspace consistency. If we can make 2PC work, then this story will be complete.
+
+This becomes more relevant for the V3 project because VTGate takes over the maintenance of vindex (lookup) tables. What looks like a simple insert on the application side may actually be a multi-keyspace transaction under the covers, for which there is no guaranteed consistency. We’re still better off than V2 where this burden falls on the app, but it’s not good enough.
+
+#### Savepoints
+There is a more subtle failure scenario: If the app issues a DML that requires VTGate to also update a vindex. There is a possibility that the vindex update succeeds and the DML fails. Today, we just return an error, but the statement is partially complete. If the app retries that statement, it may fail due to the fact that the vindexes have already changed. Even worse, the app could later commit the transaction which would cause this partial work to be committed.
+
+In order to be consistent, we have to make sure that we rollback all statements we executed to fulfil a request before we return an error.
+
+The way to do this is by using savepoints. MySQL allows you to set savepoints and then partially rollback up to that save point. We need to investigate the viability of using this feature to make sure that a request is either fully applied or any partial work done up to a failure point is reverted.
+
+### Resharding workflows
+The current resharding features only support horizontal or vertical splitting. However, we may want to migrate a table out of an unsharded database to sharded one, or vice versa. When we get to this point, we can have tablet-type specific vschemas that route queries for a table as unsharded for one tablet-type, and as sharded for another.
+
+Functionally, this will be a superset of the specific cases we handle today. This means that this scheme will work equally well for vertical sharding. This will also allow us to get rid of the keyspace alias hack.
+
+### Post-processing
+Ideally, we’d like to cover the entire SQL grammar and semantics. However, we know that it’s an endeavour with diminishing returns. On the other hand, there’s still a lot of ground to cover before we can reach that point. Here’s a proposed laundry list that we have to tick in order to reach the comfort zone:
+* Joins
+  * Identify joins that have trivial routing: These are joins where you’d get the same result back if you scattered the join statement to the various shards vs. if you sent the statement to a single database that contained all the data.
+  * Cross-keyspace join: Simple join where you load data from one keyspace and use the results to look up another table.
+* aggregations & group by: We need to support the most common such functions like count, sum, etc.
+* order by: We should be able to support most order by queries using a merge-sort algorithm. Initially, we can support this for numeric and binary columns. We can consider adding unicode sorting if there is a demand for it.
+* limit clauses.
+* Subqueries
+
+### Live vindex creation
+As applications evolve, they may notice that one of their low qps scatter queries is beginning to slam the databases. At that point, they may want to create a new lookup Vindex to make it more efficient.
+
+There is currently no process in vitess to do this. One way would be to create this table and have a special VTGate index that will update this table on DMLs, but will return a scatter plan for selects. After this is setup, we need a workflow that will backfill the vindex with the old data. Once the backfill is done, we should be able to turn on the full functionality of the lookup vindex.
+ 
