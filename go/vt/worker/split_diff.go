@@ -37,13 +37,14 @@ const (
 // SplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type SplitDiffWorker struct {
-	wr        *wrangler.Wrangler
-	cell      string
-	keyspace  string
-	shard     string
-	cleaner   *wrangler.Cleaner
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	wr            *wrangler.Wrangler
+	cell          string
+	keyspace      string
+	shard         string
+	excludeTables []string
+	cleaner       *wrangler.Cleaner
+	ctx           context.Context
+	ctxCancel     context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -66,16 +67,17 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitDiffWorker{
-		wr:        wr,
-		cell:      cell,
-		keyspace:  keyspace,
-		shard:     shard,
-		cleaner:   &wrangler.Cleaner{},
-		ctx:       ctx,
-		ctxCancel: cancel,
+		wr:            wr,
+		cell:          cell,
+		keyspace:      keyspace,
+		shard:         shard,
+		excludeTables: excludeTables,
+		cleaner:       &wrangler.Cleaner{},
+		ctx:           ctx,
+		ctxCancel:     cancel,
 
 		state: stateSDNotSarted,
 	}
@@ -397,7 +399,8 @@ func (sdw *SplitDiffWorker) diff() error {
 	go func() {
 		var err error
 		ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(ctx, sdw.destinationAlias, nil, nil, false)
+		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
+			ctx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
@@ -408,7 +411,8 @@ func (sdw *SplitDiffWorker) diff() error {
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
 			ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
-			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(ctx, sourceAlias, nil, nil, false)
+			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(
+				ctx, sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 			cancel()
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)

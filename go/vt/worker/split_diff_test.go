@@ -28,7 +28,8 @@ import (
 
 // This is a local SqlQuery RPC implementation to support the tests
 type DestinationSqlQuery struct {
-	t *testing.T
+	t             *testing.T
+	excludedTable string
 }
 
 func (sq *DestinationSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
@@ -36,6 +37,9 @@ func (sq *DestinationSqlQuery) GetSessionId(sessionParams *proto.SessionParams, 
 }
 
 func (sq *DestinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	if strings.Contains(query.Sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+	}
 
 	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
 		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
@@ -82,7 +86,8 @@ func (sq *DestinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Q
 }
 
 type SourceSqlQuery struct {
-	t *testing.T
+	t             *testing.T
+	excludedTable string
 }
 
 func (sq *SourceSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
@@ -90,6 +95,9 @@ func (sq *SourceSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessi
 }
 
 func (sq *SourceSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	if strings.Contains(query.Sql, sq.excludedTable) {
+		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+	}
 
 	// we test for a keyspace_id where clause, except for on views.
 	if !strings.Contains(query.Sql, "view") {
@@ -182,7 +190,8 @@ func TestSplitDiff(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk := NewSplitDiffWorker(wr, "cell1", "ks", "-40")
+	excludedTable := "excludedTable1"
+	gwrk := NewSplitDiffWorker(wr, "cell1", "ks", "-40", []string{excludedTable})
 	wrk := gwrk.(*SplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, leftRdonly1, leftRdonly2} {
@@ -200,6 +209,12 @@ func TestSplitDiff(t *testing.T) {
 					Type:              myproto.TABLE_BASE_TABLE,
 				},
 				&myproto.TableDefinition{
+					Name:              excludedTable,
+					Columns:           []string{"id", "msg", "keyspace_id"},
+					PrimaryKeyColumns: []string{"id"},
+					Type:              myproto.TABLE_BASE_TABLE,
+				},
+				&myproto.TableDefinition{
 					Name: "view1",
 					Type: myproto.TABLE_VIEW,
 				},
@@ -207,10 +222,10 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	leftRdonly1.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t})
-	leftRdonly2.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t})
-	sourceRdonly1.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t})
-	sourceRdonly2.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t})
+	leftRdonly1.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t, excludedTable: excludedTable})
+	leftRdonly2.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t, excludedTable: excludedTable})
+	sourceRdonly1.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t, excludedTable: excludedTable})
+	sourceRdonly2.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t, excludedTable: excludedTable})
 
 	wrk.Run()
 	status := wrk.StatusAsText()
