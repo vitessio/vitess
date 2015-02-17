@@ -27,7 +27,8 @@ import (
 
 // This is a local VerticalDiffSqlQuery RPC implementation to support the tests
 type VerticalDiffSqlQuery struct {
-	t *testing.T
+	t             *testing.T
+	excludedTable string
 }
 
 func (sq *VerticalDiffSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
@@ -35,6 +36,10 @@ func (sq *VerticalDiffSqlQuery) GetSessionId(sessionParams *proto.SessionParams,
 }
 
 func (sq *VerticalDiffSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+	if strings.Contains(query.Sql, sq.excludedTable) {
+		sq.t.Errorf("Vertical Split Diff operation should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
+	}
+
 	if hasKeyspace := strings.Contains(query.Sql, "WHERE keyspace_id"); hasKeyspace == true {
 		sq.t.Errorf("Sql query for VerticalSplitDiff should never contain a keyspace_id WHERE clause; query received: %v", query.Sql)
 	}
@@ -124,7 +129,8 @@ func TestVerticalSplitDiff(t *testing.T) {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
-	gwrk := NewVerticalSplitDiffWorker(wr, "cell1", "destination_ks", "0")
+	excludedTable := "excludedTable1"
+	gwrk := NewVerticalSplitDiffWorker(wr, "cell1", "destination_ks", "0", []string{excludedTable})
 	wrk := gwrk.(*VerticalSplitDiffWorker)
 
 	for _, rdonly := range []*testlib.FakeTablet{sourceRdonly1, sourceRdonly2, destRdonly1, destRdonly2} {
@@ -139,12 +145,18 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Type:              myproto.TABLE_BASE_TABLE,
 				},
 				&myproto.TableDefinition{
+					Name:              excludedTable,
+					Columns:           []string{"id", "msg"},
+					PrimaryKeyColumns: []string{"id"},
+					Type:              myproto.TABLE_BASE_TABLE,
+				},
+				&myproto.TableDefinition{
 					Name: "view1",
 					Type: myproto.TABLE_VIEW,
 				},
 			},
 		}
-		rdonly.RPCServer.RegisterName("SqlQuery", &VerticalDiffSqlQuery{t: t})
+		rdonly.RPCServer.RegisterName("SqlQuery", &VerticalDiffSqlQuery{t: t, excludedTable: excludedTable})
 	}
 
 	wrk.Run()

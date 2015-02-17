@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -35,9 +36,29 @@ const splitDiffHTML = `
 </body>
 `
 
+const splitDiffHTML2 = `
+<!DOCTYPE html>
+<head>
+  <title>Split Diff Action</title>
+</head>
+<body>
+  <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
+  <h1>Split Diff Action</h1>
+    <form action="/Diffs/SplitDiff" method="post">
+      <LABEL for="excludeTables">Exclude Tables: </LABEL>
+        <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
+      <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
+      <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
+      <INPUT type="submit" name="submit" value="Split Diff"/>
+    </form>
+  </body>
+`
+
 var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
+var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
 func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
@@ -46,7 +67,11 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	if err != nil {
 		return nil, err
 	}
-	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard), nil
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray), nil
 }
 
 // shardsWithSources returns all the shards that have SourceShards set
@@ -125,8 +150,22 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 		return
 	}
 
+	submitButtonValue := r.FormValue("submit")
+	if submitButtonValue == "" {
+		// display the input form
+		result := make(map[string]interface{})
+		result["Keyspace"] = keyspace
+		result["Shard"] = shard
+		executeTemplate(w, splitDiffTemplate2, result)
+		return
+	}
+
+	// Process input form.
+	excludeTables := r.FormValue("excludeTables")
+	excludeTableArray := strings.Split(excludeTables, ",")
+
 	// start the diff job
-	wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
+	wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray)
 	if _, err := setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
@@ -138,6 +177,6 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 func init() {
 	addCommand("Diffs", command{"SplitDiff",
 		commandSplitDiff, interactiveSplitDiff,
-		"<keyspace/shard>",
+		"[--exclude_tables=''] <keyspace/shard>",
 		"Diffs a rdonly destination shard against its SourceShards"})
 }

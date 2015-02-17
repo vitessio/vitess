@@ -37,13 +37,14 @@ const (
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type VerticalSplitDiffWorker struct {
-	wr        *wrangler.Wrangler
-	cell      string
-	keyspace  string
-	shard     string
-	cleaner   *wrangler.Cleaner
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	wr            *wrangler.Wrangler
+	cell          string
+	keyspace      string
+	shard         string
+	excludeTables []string
+	cleaner       *wrangler.Cleaner
+	ctx           context.Context
+	ctxCancel     context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -66,16 +67,17 @@ type VerticalSplitDiffWorker struct {
 }
 
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
-func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Worker {
+func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &VerticalSplitDiffWorker{
-		wr:        wr,
-		cell:      cell,
-		keyspace:  keyspace,
-		shard:     shard,
-		cleaner:   &wrangler.Cleaner{},
-		ctx:       ctx,
-		ctxCancel: cancel,
+		wr:            wr,
+		cell:          cell,
+		keyspace:      keyspace,
+		shard:         shard,
+		excludeTables: excludeTables,
+		cleaner:       &wrangler.Cleaner{},
+		ctx:           ctx,
+		ctxCancel:     cancel,
 
 		state: stateVSDNotSarted,
 	}
@@ -399,7 +401,8 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	go func() {
 		var err error
 		ctx, cancel := context.WithTimeout(vsdw.ctx, 60*time.Second)
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.destinationAlias, nil, nil, false)
+		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
+			ctx, vsdw.destinationAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
@@ -409,7 +412,8 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	go func() {
 		var err error
 		ctx, cancel := context.WithTimeout(vsdw.ctx, 60*time.Second)
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(ctx, vsdw.sourceAlias, nil, nil, false)
+		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
+			ctx, vsdw.sourceAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
