@@ -106,7 +106,7 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return fmd.Schema, nil
+	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
 }
 
 // GetDbConnection is part of the MysqlDaemon interface
