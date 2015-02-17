@@ -6,7 +6,7 @@
   image: 400x250.gif
 
 - title: Documentation
-  url: /documentation/
+  url: /doc/
   excerpt: "Vitess Docs."
   image: 400x250.gif
 
