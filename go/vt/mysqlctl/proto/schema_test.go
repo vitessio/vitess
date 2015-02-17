@@ -5,6 +5,7 @@
 package proto
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -186,11 +187,11 @@ func TestFilterTables(t *testing.T) {
 		excludeTables []string
 		includeViews  bool
 		want          *SchemaDefinition
+		wantError     error
 	}{
 		{
 			desc: "filter based on tables (whitelist)",
 			input: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -198,7 +199,6 @@ func TestFilterTables(t *testing.T) {
 			},
 			tables: []string{basicTable1.Name},
 			want: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 				},
@@ -207,7 +207,6 @@ func TestFilterTables(t *testing.T) {
 		{
 			desc: "filter based on excludeTables (blacklist)",
 			input: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -215,7 +214,6 @@ func TestFilterTables(t *testing.T) {
 			},
 			excludeTables: []string{basicTable1.Name},
 			want: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable2,
 				},
@@ -224,7 +222,6 @@ func TestFilterTables(t *testing.T) {
 		{
 			desc: "excludeTables may filter out a whitelisted item from tables",
 			input: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -233,7 +230,6 @@ func TestFilterTables(t *testing.T) {
 			tables:        []string{basicTable1.Name, basicTable2.Name},
 			excludeTables: []string{basicTable1.Name},
 			want: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable2,
 				},
@@ -242,7 +238,6 @@ func TestFilterTables(t *testing.T) {
 		{
 			desc: "exclude views",
 			input: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -251,7 +246,6 @@ func TestFilterTables(t *testing.T) {
 			},
 			includeViews: false,
 			want: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -259,9 +253,8 @@ func TestFilterTables(t *testing.T) {
 			},
 		},
 		{
-			desc: "generate new schema version hash when list of tables has changed",
+			desc: "update schema version hash when list of tables has changed",
 			input: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable1,
 					basicTable2,
@@ -270,22 +263,50 @@ func TestFilterTables(t *testing.T) {
 			},
 			excludeTables: []string{basicTable1.Name},
 			want: &SchemaDefinition{
-				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 				TableDefinitions: []*TableDefinition{
 					basicTable2,
 				},
 				Version: "6d1d294def9febdb21b35dd19a1dd4c6",
 			},
 		},
+		{
+			desc: "invalid regex for tables returns an error",
+			input: &SchemaDefinition{
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+				},
+			},
+			tables:    []string{"("},
+			wantError: errors.New("cannot compile regexp ( for table: error parsing regexp: missing closing ): `(`"),
+		},
+		{
+			desc: "invalid regex for excludeTables returns an error",
+			input: &SchemaDefinition{
+				TableDefinitions: []*TableDefinition{
+					basicTable1,
+				},
+			},
+			excludeTables: []string{"("},
+			wantError:     errors.New("cannot compile regexp ( for excludeTable: error parsing regexp: missing closing ): `(`"),
+		},
 	}
 
 	for _, tc := range testcases {
 		got, err := tc.input.FilterTables(tc.tables, tc.excludeTables, tc.includeViews)
-		if err != nil {
-			t.Errorf("FilterTables() test '%v' on SchemaDefinition %v failed with error %v, want %v", tc.desc, tc.input, err, tc.want)
-		}
-		if !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("FilterTables() test '%v' on SchemaDefinition %v returned %v; want %v", tc.desc, tc.input, got, tc.want)
+		if tc.wantError != nil {
+			if err == nil {
+				t.Fatalf("FilterTables() test '%v' on SchemaDefinition %v did not return an error (result: %v), but should have, wantError %v", tc.desc, tc.input, got, tc.wantError)
+			}
+			if err.Error() != tc.wantError.Error() {
+				t.Errorf("FilterTables() test '%v' on SchemaDefinition %v returned wrong error '%v'; wanted error '%v'", tc.desc, tc.input, err, tc.wantError)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("FilterTables() test '%v' on SchemaDefinition %v failed with error %v, want %v", tc.desc, tc.input, err, tc.want)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("FilterTables() test '%v' on SchemaDefinition %v returned %v; want %v", tc.desc, tc.input, got, tc.want)
+			}
 		}
 	}
 }
