@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	RETRY_DELAY = time.Duration(1 * time.Second)
+	RetryDelay = time.Duration(1 * time.Second)
 )
 
 var counter = 0
@@ -49,11 +49,11 @@ func endPoints3() (*topo.EndPoints, error) {
 
 func TestRandomness(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		b := NewBalancer(endPoints3, RETRY_DELAY)
-		endPoint, _ := b.Get()
-		// Ensure that you don't always get the first element
+		b := NewBalancer(endPoints3, RetryDelay)
+		endPoints, _ := b.Get()
+		// Ensure that you don't always get the first element at front
 		// in the balancer.
-		if endPoint.Uid == 0 {
+		if endPoints[0].Uid == 0 {
 			continue
 		}
 		return
@@ -98,7 +98,7 @@ func endPointsNone() (*topo.EndPoints, error) {
 }
 
 func TestGetAddressesFail(t *testing.T) {
-	b := NewBalancer(endPointsError, RETRY_DELAY)
+	b := NewBalancer(endPointsError, RetryDelay)
 	_, err := b.Get()
 	// Ensure that end point errors are returned correctly.
 	want := "expected error"
@@ -123,42 +123,46 @@ func TestGetAddressesFail(t *testing.T) {
 }
 
 func TestGetSimple(t *testing.T) {
-	b := NewBalancer(endPoints3, RETRY_DELAY)
-	firstEndPoint, _ := b.Get()
+	b := NewBalancer(endPoints3, RetryDelay)
+	firstEndPoints, _ := b.Get()
 	for i := 0; i < 100; i++ {
-		endPoint, _ := b.Get()
-		if endPoint.Uid == firstEndPoint.Uid {
+		endPoints, _ := b.Get()
+		if endPoints[0].Uid == firstEndPoints[0].Uid {
 			continue
 		}
 		return
 	}
 	// Ensure that the same address is not always returned.
-	t.Errorf("ids are equal: %v", firstEndPoint)
+	t.Errorf("ids are equal: %v", firstEndPoints[0])
 }
 
 func TestMarkDown(t *testing.T) {
 	start := counter
 	retryDelay := 100 * time.Millisecond
 	b := NewBalancer(endPoints3, retryDelay)
-	addr, _ := b.Get()
-	startTime := time.Now()
-	b.MarkDown(addr.Uid, "")
-	addr, _ = b.Get()
-	b.MarkDown(addr.Uid, "")
-	addr1, _ := b.Get()
-	addr2, _ := b.Get()
+	addrs, _ := b.Get()
+	b.MarkDown(addrs[0].Uid, "")
+	addrs, _ = b.Get()
+	b.MarkDown(addrs[0].Uid, "")
+	addrs1, _ := b.Get()
+	addrs2, _ := b.Get()
 	// Two addresses are marked down. Only one address is avaiilable.
-	if addr1.Uid != addr2.Uid {
-		t.Errorf("ids are not equal: %v, %v", addr1, addr2)
+	if addrs1[0].Uid != addrs2[0].Uid {
+		t.Errorf("ids are not equal: %v, %v", addrs1[0], addrs2[0])
 	}
-	addr, _ = b.Get()
-	b.MarkDown(addr.Uid, "")
-	// All were marked down. Get should return only after the retry delay since first markdown.
+	addrs, _ = b.Get()
+	b.MarkDown(addrs[0].Uid, "")
+	// All were marked down. Get should return immediately with empty endpoints.
 	done := make(chan struct{})
 	go func() {
-		addr, _ = b.Get()
-		if got := time.Now().Sub(startTime); got < retryDelay {
-			t.Errorf("Get() returned too soon, want >= %v, got %v", retryDelay, got)
+		addrs, _ = b.Get()
+		if len(addrs) != 0 {
+			t.Errorf("Get() returned endpoints, want 0, got %v", len(addrs))
+		}
+		time.Sleep(retryDelay)
+		addrs, _ = b.Get()
+		if len(addrs) == 0 {
+			t.Errorf("Get() returned no endpoints, want >0, got %v", len(addrs))
 		}
 		close(done)
 	}()
@@ -167,7 +171,7 @@ func TestMarkDown(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Errorf("Get() is stuck in Sleep()")
 	}
-	if addr.Host == "" {
+	if addrs[0].Host == "" {
 		t.Errorf("want non-empty")
 	}
 	// Ensure end points were refreshed, counter should have gone up.
@@ -208,7 +212,7 @@ func endPointsMorph() (*topo.EndPoints, error) {
 }
 
 func TestRefresh(t *testing.T) {
-	b := NewBalancer(endPointsMorph, RETRY_DELAY)
+	b := NewBalancer(endPointsMorph, RetryDelay)
 	b.refresh()
 	index := findAddrNode(b.addressNodes, 11)
 	// "11" should be found in the list.
@@ -216,9 +220,9 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want other than -1: %v", index)
 	}
 	// "1" should be in the list with port 11
-	port_start := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.NamedPortMap["vt"]
-	if port_start != 11 {
-		t.Errorf("want 11, got %v", port_start)
+	portStart := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.NamedPortMap["vt"]
+	if portStart != 11 {
+		t.Errorf("want 11, got %v", portStart)
 	}
 	b.MarkDown(1, "")
 	b.refresh()
@@ -237,8 +241,8 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want non-zero, got 0")
 	}
 	// "1" should have the updated port 12
-	port_new := b.addressNodes[index].endPoint.NamedPortMap["vt"]
-	if port_new != 12 {
-		t.Errorf("want 12, got %v", port_new)
+	portNew := b.addressNodes[index].endPoint.NamedPortMap["vt"]
+	if portNew != 12 {
+		t.Errorf("want 12, got %v", portNew)
 	}
 }

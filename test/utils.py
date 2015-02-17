@@ -346,7 +346,7 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
     )
 
 # vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1,
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
                  auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
                  socket_file=None, extra_args=None):

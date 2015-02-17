@@ -78,28 +78,28 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
 	s := createSandbox(KsTestUnshardedServedFrom)
-	sbc := &sandboxConn{mustFailRetry: 3}
+	sbc := &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
 	_, err := f([]string{"0"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	// Ensure that we tried 4 times, 3 for retry and 1 for redirect.
-	if sbc.ExecCount != 4 {
-		t.Errorf("want 4, got %v", sbc.ExecCount)
+	// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
+	if sbc.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc.ExecCount)
 	}
 
 	// Fatal Error, for keyspace that is redirected should succeed.
 	s.Reset()
-	sbc = &sandboxConn{mustFailFatal: 3}
+	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	// Ensure that we tried 4 times, 3 for retry and 1 for redirect.
-	if sbc.ExecCount != 4 {
-		t.Errorf("want 4, got %v", sbc.ExecCount)
+	// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
+	if sbc.ExecCount != 2 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
 	//  Error, for keyspace that is redirected should succeed.

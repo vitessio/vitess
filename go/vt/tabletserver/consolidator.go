@@ -13,7 +13,6 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/mysql/proto"
 )
 
 var (
@@ -29,18 +28,20 @@ type Consolidator struct {
 }
 
 // NewConsolidator creates a new Consolidator
-func NewConsolidator() *Consolidator {
+func NewConsolidator(httpHandle bool) *Consolidator {
 	co := &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
-	http.Handle("/debug/consolidations", co)
+	if httpHandle {
+		http.Handle("/debug/consolidations", co)
+	}
 	return co
 }
 
-// Result is a wrapper for QueryResult of a query.
+// Result is a wrapper for result of a query.
 type Result struct {
 	executing    sync.RWMutex
 	consolidator *Consolidator
 	sql          string
-	Result       *proto.QueryResult
+	Result       interface{}
 	Err          error
 }
 

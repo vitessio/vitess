@@ -148,7 +148,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.consolidator = NewConsolidator()
+	qe.consolidator = NewConsolidator(true)
 	qe.invalidator = NewRowcacheInvalidator(qe)
 	qe.streamQList = NewQueryList()
 

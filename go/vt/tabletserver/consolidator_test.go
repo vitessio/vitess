@@ -26,7 +26,7 @@ func TestConsolidator(t *testing.T) {
 	}()
 	dup.Wait()
 
-	if orig.Result.InsertId != dup.Result.InsertId {
+	if orig.Result.(*proto.QueryResult).InsertId != dup.Result.(*proto.QueryResult).InsertId {
 		t.Errorf("failed to share the result")
 	}
 
