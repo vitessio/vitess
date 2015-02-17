@@ -30,7 +30,7 @@ if __name__ == '__main__':
         if filename in filename_dict:
             ans.append(line[pos:m.start()])
             ans.append('[' + title + ']')
-            ans.append('(' + filename_dict[filename] + ')')
+            ans.append('( {{ site.url }}/' + filename_dict[filename] + ')')
             pos = m.end()
     ans.append(line[pos:])
     print ''.join(ans)
