@@ -13,7 +13,7 @@ that keyspace. It contains:
 - a shard map, for each serving type.
 - (optional) information about the sharding key for that keyspace.
 - (optional) a redirection map, in case some keyspaces are served by another keyspace (this feature is used during
-vrtical splits).
+vertical splits).
 
 It is rebuilt by running 'vtctl RebuildKeyspaceGraph'. It is not automatically rebuilt when adding new tablets in a cell.
 It may also be changed during horizontal and vertical splits.
