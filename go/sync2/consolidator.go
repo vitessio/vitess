@@ -14,10 +14,6 @@ import (
 	"github.com/youtube/vitess/go/cache"
 )
 
-var (
-	waitError = fmt.Errorf("Error waiting for consolidation")
-)
-
 // Consolidator consolidates duplicate queries from executing simulaneously
 // and shares results between them.
 type Consolidator struct {
@@ -49,9 +45,7 @@ func (co *Consolidator) Create(query string) (r *Result, created bool) {
 	if r, ok := co.queries[query]; ok {
 		return r, false
 	}
-	// Preset the error. If there was an unexpected panic during the main
-	// query, then all those who waited will return the waitError.
-	r = &Result{consolidator: co, query: query, Err: waitError}
+	r = &Result{consolidator: co, query: query}
 	r.executing.Lock()
 	co.queries[query] = r
 	return r, true

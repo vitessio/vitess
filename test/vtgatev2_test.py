@@ -925,8 +925,6 @@ class TestFailures(unittest.TestCase):
     fail-fast (returning an appropriate error) without waiting around till the
     request deadline expires.
     """
-    # TODO(liguo): verify the upper bound for max RTT enable this test after bug fix
-    return
     try:
       tablet_type = 'replica'
       keyranges = [get_keyrange(shard_names[0])]
@@ -936,8 +934,8 @@ class TestFailures(unittest.TestCase):
 
       # Shutdown mysql and ensure tablet is in NOT_SERVING state
       utils.wait_procs([shard_0_replica.shutdown_mysql()])
-      utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, tablet_type])
       try:
+        get_rtt(KEYSPACE_NAME, query, tablet_type, keyranges)
         shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
       except Exception, e:
         self.fail('unable to set tablet to NOT_SERVING state')
@@ -954,15 +952,14 @@ class TestFailures(unittest.TestCase):
       rt_times = []
       for async_result in async_results:
         rt_times.append(async_result.get())
-      # The true upper limit is 2 seconds (200ms *10 retries). To account for
+      # The true upper limit is 2 seconds (1s * 2 retries as in utils.py). To account for
       # network latencies and other variances, we keep an upper bound of 3 here.
       self.assertTrue(max(rt_times) < 3, 'at least one request did not fail-fast; round trip times: %s' % rt_times)
 
       # Restart tablet and put it back to SERVING state
       utils.wait_procs([shard_0_replica.start_mysql(),])
       shard_0_replica.kill_vttablet()
-      shard_0_replica.start_vttablet(wait_for_state='NOT_SERVING')
-      utils.run_vtctl(['RunHealthCheck', shard_0_replica.tablet_alias, tablet_type])
+      shard_0_replica.start_vttablet()
       shard_0_replica.wait_for_vttablet_state('SERVING')
     except Exception, e:
       logging.debug("failed with error %s, %s" % (str(e), traceback.print_exc()))
