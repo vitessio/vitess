@@ -63,12 +63,14 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 		}
 	} else {
 		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
+		startTime := time.Now()
 		q.Wait()
+		waitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
 		panic(q.Err)
 	}
-	return q.Result
+	return q.Result.(*mproto.QueryResult)
 }
 
 func (rqc *RequestContext) directFetch(conn PoolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {

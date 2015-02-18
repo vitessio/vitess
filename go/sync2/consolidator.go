@@ -2,22 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package sync2
 
 import (
 	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/mysql/proto"
-)
-
-var (
-	waitError = NewTabletError(ErrFail, "Error waiting for consolidation")
 )
 
 // Consolidator consolidates duplicate queries from executing simulaneously
@@ -30,34 +24,30 @@ type Consolidator struct {
 
 // NewConsolidator creates a new Consolidator
 func NewConsolidator() *Consolidator {
-	co := &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
-	http.Handle("/debug/consolidations", co)
-	return co
+	return &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
 }
 
-// Result is a wrapper for QueryResult of a query.
+// Result is a wrapper for result of a query.
 type Result struct {
 	executing    sync.RWMutex
 	consolidator *Consolidator
-	sql          string
-	Result       *proto.QueryResult
+	query        string
+	Result       interface{}
 	Err          error
 }
 
 // Create adds a query to currently executing queries and acquires a
 // lock on its Result if it is not already present. If the query is
 // a duplicate, Create returns false.
-func (co *Consolidator) Create(sql string) (r *Result, created bool) {
+func (co *Consolidator) Create(query string) (r *Result, created bool) {
 	co.mu.Lock()
 	defer co.mu.Unlock()
-	if r, ok := co.queries[sql]; ok {
+	if r, ok := co.queries[query]; ok {
 		return r, false
 	}
-	// Preset the error. If there was an unexpected panic during the main
-	// query, then all those who waited will return the waitError.
-	r = &Result{consolidator: co, sql: sql, Err: waitError}
+	r = &Result{consolidator: co, query: query}
 	r.executing.Lock()
-	co.queries[sql] = r
+	co.queries[query] = r
 	return r, true
 }
 
@@ -78,12 +68,12 @@ func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 }
 
-func (co *Consolidator) record(sql string) {
-	if v, ok := co.consolidations.Get(sql); ok {
+func (co *Consolidator) record(query string) {
+	if v, ok := co.consolidations.Get(query); ok {
 		v.(*ccount).Add(1)
 	} else {
 		c := ccount(1)
-		co.consolidations.Set(sql, &c)
+		co.consolidations.Set(query, &c)
 	}
 }
 
@@ -93,15 +83,14 @@ func (co *Consolidator) record(sql string) {
 func (rs *Result) Broadcast() {
 	rs.consolidator.mu.Lock()
 	defer rs.consolidator.mu.Unlock()
-	delete(rs.consolidator.queries, rs.sql)
+	delete(rs.consolidator.queries, rs.query)
 	rs.executing.Unlock()
 }
 
 // Wait waits for the original query to complete execution. Wait should
 // be invoked for duplicate queries.
 func (rs *Result) Wait() {
-	rs.consolidator.record(rs.sql)
-	defer waitStats.Record("Consolidations", time.Now())
+	rs.consolidator.record(rs.query)
 	rs.executing.RLock()
 }
 

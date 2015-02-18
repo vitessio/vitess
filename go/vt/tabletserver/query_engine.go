@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ type QueryEngine struct {
 
 	// Services
 	txPool       *TxPool
-	consolidator *Consolidator
+	consolidator *sync2.Consolidator
 	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	tasks        sync.WaitGroup
@@ -148,7 +149,8 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
-	qe.consolidator = NewConsolidator()
+	qe.consolidator = sync2.NewConsolidator()
+	http.Handle("/debug/consolidations", qe.consolidator)
 	qe.invalidator = NewRowcacheInvalidator(qe)
 	qe.streamQList = NewQueryList()
 

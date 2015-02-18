@@ -10,6 +10,8 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -21,13 +23,14 @@ import (
 // be concurrently used across goroutines. Such requests are
 // interleaved on the same underlying connection.
 type ShardConn struct {
-	keyspace    string
-	shard       string
-	tabletType  topo.TabletType
-	retryDelay  time.Duration
-	retryCount  int
-	connTimeout time.Duration
-	balancer    *Balancer
+	keyspace     string
+	shard        string
+	tabletType   topo.TabletType
+	retryDelay   time.Duration
+	retryCount   int
+	connTimeout  time.Duration
+	balancer     *Balancer
+	consolidator *sync2.Consolidator
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
 	mu   sync.Mutex
@@ -47,16 +50,18 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
 	return &ShardConn{
-		keyspace:    keyspace,
-		shard:       shard,
-		tabletType:  tabletType,
-		retryDelay:  retryDelay,
-		retryCount:  retryCount,
-		connTimeout: connTimeout,
-		balancer:    blc,
+		keyspace:     keyspace,
+		shard:        shard,
+		tabletType:   tabletType,
+		retryDelay:   retryDelay,
+		retryCount:   retryCount,
+		connTimeout:  connTimeout,
+		balancer:     blc,
+		consolidator: sync2.NewConsolidator(),
 	}
 }
 
+// ShardConnError is the shard conn specific error.
 type ShardConnError struct {
 	Code            int
 	ShardIdentifier string
@@ -144,6 +149,7 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 	}, transactionID, false)
 }
 
+// SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
 func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
@@ -174,71 +180,119 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 	var conn tabletconn.TabletConn
 	var endPoint topo.EndPoint
 	var err error
-	var retry bool
+	var isTimeout bool
 	inTransaction := (transactionID != 0)
 	// execute the action at least once even without retrying
 	for i := 0; i < sdc.retryCount+1; i++ {
-		conn, endPoint, err, retry = sdc.getConn(ctx)
+		conn, endPoint, isTimeout, err = sdc.getConn(ctx)
 		if err != nil {
-			if retry {
-				continue
+			if isTimeout || i == sdc.retryCount {
+				break
 			}
-			return sdc.WrapError(err, endPoint, inTransaction)
-		}
-		err = action(conn)
-		if sdc.canRetry(err, transactionID, conn) {
+			time.Sleep(sdc.retryDelay)
 			continue
 		}
-		return sdc.WrapError(err, endPoint, inTransaction)
+		err = action(conn)
+		if sdc.canRetry(ctx, err, transactionID, conn) {
+			continue
+		}
+		break
 	}
 	return sdc.WrapError(err, endPoint, inTransaction)
 }
 
-// getConn reuses an existing connection if possible. Otherwise
-// it returns a connection which it will save for future reuse.
-// If it returns an error, retry will tell you if getConn can be retried.
-// If the context has a deadline and exceeded, it returns error and no-retry immediately.
-func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, err error, retry bool) {
-	sdc.mu.Lock()
-	defer sdc.mu.Unlock()
+type connectResult struct {
+	Conn      tabletconn.TabletConn
+	EndPoint  topo.EndPoint
+	IsTimeout bool
+}
 
-	// fail-fast if deadline exceeded
-	deadline, ok := ctx.Deadline()
+// getConn reuses an existing connection if possible.
+// If no connection is available,
+// it creates a new connection if no connection is being created.
+// Otherwise it waits for the connection to be created.
+func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, isTimeout bool, err error) {
+	sdc.mu.Lock()
+	if sdc.conn != nil {
+		conn = sdc.conn
+		endPoint = conn.EndPoint()
+		sdc.mu.Unlock()
+		return conn, endPoint, false, nil
+	}
+
+	key := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
+	q, ok := sdc.consolidator.Create(key)
+	sdc.mu.Unlock()
 	if ok {
-		if time.Now().After(deadline) {
-			return nil, topo.EndPoint{}, tabletconn.OperationalError("vttablet: deadline exceeded"), false
+		defer q.Broadcast()
+		conn, endPoint, isTimeout, err := sdc.getNewConn(ctx)
+		q.Result = &connectResult{Conn: conn, EndPoint: endPoint, IsTimeout: isTimeout}
+		q.Err = err
+	} else {
+		q.Wait()
+	}
+
+	connResult := q.Result.(*connectResult)
+	return connResult.Conn, connResult.EndPoint, connResult.IsTimeout, q.Err
+}
+
+// getNewConn creates a new tablet connection.
+// It limits the overall timeout to connTimeout by checking elapsed time after each blocking call.
+func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, isTimeout bool, err error) {
+	startTime := time.Now()
+
+	endPoints, err := sdc.balancer.Get()
+	if err != nil {
+		// Error when getting endpoint
+		return nil, topo.EndPoint{}, false, err
+	}
+	if len(endPoints) == 0 {
+		// No valid endpoint
+		return nil, topo.EndPoint{}, false, fmt.Errorf("no valid endpoint")
+	}
+	if time.Now().Sub(startTime) >= sdc.connTimeout {
+		return nil, topo.EndPoint{}, true, fmt.Errorf("timeout when getting endpoints")
+	}
+
+	// Iterate through all endpoints to create a connection
+	allErrors := new(concurrency.AllErrorRecorder)
+	for _, endPoint := range endPoints {
+		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.connTimeout)
+		if err == nil {
+			sdc.mu.Lock()
+			defer sdc.mu.Unlock()
+			sdc.conn = conn
+			return conn, endPoint, false, nil
+		}
+		// Markdown the endpoint if it failed to connect
+		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
+		allErrors.RecordError(fmt.Errorf("%v %+v", err, endPoint))
+		if time.Now().Sub(startTime) >= sdc.connTimeout {
+			err = fmt.Errorf("timeout when connecting to %+v", endPoint)
+			allErrors.RecordError(err)
+			return nil, topo.EndPoint{}, true, allErrors.Error()
 		}
 	}
-
-	if sdc.conn != nil {
-		return sdc.conn, sdc.conn.EndPoint(), nil, false
-	}
-
-	endPoint, err = sdc.balancer.Get()
-	if err != nil {
-		return nil, topo.EndPoint{}, err, false
-	}
-	conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.connTimeout)
-	if err != nil {
-		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
-		return nil, endPoint, err, true
-	}
-	sdc.conn = conn
-	return sdc.conn, endPoint, nil, false
+	return nil, topo.EndPoint{}, false, allErrors.Error()
 }
 
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(err error, transactionID int64, conn tabletconn.TabletConn) bool {
+func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn) bool {
 	if err == nil {
 		return false
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
 		case tabletconn.ERR_TX_POOL_FULL:
+			// Do not retry if deadline passed.
+			if deadline, ok := ctx.Deadline(); ok {
+				if deadline.Before(time.Now()) {
+					return false
+				}
+			}
 			// Retry without reconnecting.
-			time.Sleep(sdc.retryDelay)
 			return true
 		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
 			// No-op: treat these errors as operational by breaking out of this switch
@@ -250,6 +304,12 @@ func (sdc *ShardConn) canRetry(err error, transactionID int64, conn tabletconn.T
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
 	inTransaction := (transactionID != 0)
 	sdc.markDown(conn, err.Error())
+	// Do not retry if deadline passed.
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return false
+		}
+	}
 	return !inTransaction
 }
 

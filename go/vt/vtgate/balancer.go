@@ -18,6 +18,7 @@ import (
 
 var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
 
+// GetEndPointsFunc defines the callback to topo server.
 type GetEndPointsFunc func() (*topo.EndPoints, error)
 
 // Balancer is a simple round-robin load balancer.
@@ -56,7 +57,7 @@ func NewBalancer(getEndPoints GetEndPointsFunc, retryDelay time.Duration) *Balan
 // it refreshes the list of addresses and returns the next available
 // node. If all addresses are marked down, it waits and retries.
 // If a refresh fails, it returns an error.
-func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
+func (blc *Balancer) Get() (endPoints []topo.EndPoint, err error) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 
@@ -70,18 +71,21 @@ func (blc *Balancer) Get() (endPoint topo.EndPoint, err error) {
 	// Get the latest endpoints
 	err = blc.refresh()
 	if err != nil {
-		return topo.EndPoint{}, err
+		return []topo.EndPoint{}, err
 	}
 
-	// Return the first endpoint, sleep if we need to
-	addrNode := blc.addressNodes[0]
-	if addrNode.timeRetry.After(time.Now()) {
-		// Allow mark downs to happen while sleeping
-		blc.mu.Unlock()
-		time.Sleep(addrNode.timeRetry.Sub(time.Now()))
-		blc.mu.Lock()
+	// Return all endpoints without markdown and timeRetry < now(),
+	// so endpoints just marked down (within retryDelay) are ignored.
+	validEndPoints := make([]topo.EndPoint, 0, 1)
+	for _, addrNode := range blc.addressNodes {
+		if addrNode.timeRetry.IsZero() || addrNode.timeRetry.Before(time.Now()) {
+			validEndPoints = append(validEndPoints, addrNode.endPoint)
+			continue
+		}
+		break
 	}
-	return addrNode.endPoint, nil
+
+	return validEndPoints, nil
 }
 
 // MarkDown marks the specified address down. Such addresses
@@ -133,6 +137,7 @@ func (blc *Balancer) refresh() error {
 	return nil
 }
 
+// AddressList is the slice of addressStatus.
 type AddressList []*addressStatus
 
 func (al AddressList) Len() int {

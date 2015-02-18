@@ -1,38 +1,38 @@
-package tabletserver
+package sync2
 
-import (
-	"testing"
-
-	"github.com/youtube/vitess/go/mysql/proto"
-)
+import "testing"
 
 func TestConsolidator(t *testing.T) {
-	qe := NewQueryEngine(qsConfig)
+	con := NewConsolidator()
 	sql := "select * from SomeTable"
 
-	orig, added := qe.consolidator.Create(sql)
+	orig, added := con.Create(sql)
 	if !added {
 		t.Errorf("expected consolidator to register a new entry")
 	}
 
-	dup, added := qe.consolidator.Create(sql)
+	dup, added := con.Create(sql)
 	if added {
 		t.Errorf("did not expect consolidator to register a new entry")
 	}
 
+	result := 1
 	go func() {
-		orig.Result = &proto.QueryResult{InsertId: 145}
+		orig.Result = &result
 		orig.Broadcast()
 	}()
 	dup.Wait()
 
-	if orig.Result.InsertId != dup.Result.InsertId {
+	if *orig.Result.(*int) != result {
+		t.Errorf("failed to pass result")
+	}
+	if *orig.Result.(*int) != *dup.Result.(*int) {
 		t.Errorf("failed to share the result")
 	}
 
 	// Running the query again should add a new entry since the original
 	// query execution completed
-	_, added = qe.consolidator.Create(sql)
+	_, added = con.Create(sql)
 	if !added {
 		t.Errorf("expected consolidator to register a new entry")
 	}
