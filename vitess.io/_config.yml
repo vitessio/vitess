@@ -5,7 +5,7 @@ description: "A set of servers and tools meant to facilitate scaling of MySQL da
 logo: 120x120.gif
 teaser: 400x250.gif
 locale: en_US
-url: vitess.io
+url: http://vitess.io
 project-name: Vitess
 repo: https://github.com/youtube/vitess
 
