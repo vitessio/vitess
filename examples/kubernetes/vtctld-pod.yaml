@@ -19,7 +19,7 @@ desiredState:
           - >-
             mkdir -p $VTDATAROOT/tmp &&
             chown -R vitess /vt &&
-            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
+            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -schema-editor-dir $VTTOP/go/cmd/vtctld -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
     volumes:
       - name: syslog
         source: {hostDir: {path: /dev/log}}
