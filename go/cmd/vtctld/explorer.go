@@ -73,7 +73,7 @@ func HandleExplorer(name, url, templateName string, exp Explorer) {
 
 	explorer = exp
 	explorerName = name
-
+	indexContent.ToplevelLinks[name+" Explorer"] = url
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)

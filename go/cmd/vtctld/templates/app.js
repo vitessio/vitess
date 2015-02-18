@@ -15,24 +15,24 @@ angular.module('app', ['ngRoute'])
 .controller('SubmitController', SubmitController)
 .config(['$routeProvider', function($routeProvider) {
   $routeProvider
-  .when('/',{
-    templateUrl: "editor/keyspace.html",
+  .when('/editor',{
+    templateUrl: "/content/editor/keyspace.html",
     controller: "KeyspaceController"
   })
   .when('/editor/:keyspaceName',{
-    templateUrl: "editor/keyspace.html",
+    templateUrl: "/content/editor/keyspace.html",
     controller: "KeyspaceController"
   })
   .when('/editor/:keyspaceName/class/:className',{
-    templateUrl: "editor/class/class.html",
+    templateUrl: "/content/editor/class/class.html",
     controller: "ClassController"
   })
   .when('/load',{
-    templateUrl: "load/load.html",
+    templateUrl: "/content/load/load.html",
     controller: "LoadController"
   })
   .when('/submit',{
-    templateUrl: "submit/submit.html",
+    templateUrl: "/content/submit/submit.html",
     controller: "SubmitController"
   })
   .otherwise({redirectTo: '/'});

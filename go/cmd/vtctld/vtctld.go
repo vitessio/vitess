@@ -18,9 +18,8 @@ import (
 )
 
 var (
-	templateDir     = flag.String("templates", "", "directory containing templates")
-	debug           = flag.Bool("debug", false, "recompile templates for every request")
-	schemaEditorDir = flag.String("schema-editor-dir", "", "directory containing schema_editor/")
+	templateDir = flag.String("templates", "", "directory containing templates")
+	debug       = flag.Bool("debug", false, "recompile templates for every request")
 )
 
 func init() {
@@ -48,6 +47,9 @@ type IndexContent struct {
 // used at runtime by plug-ins
 var templateLoader *TemplateLoader
 var actionRepo *ActionRepository
+var indexContent = IndexContent{
+	ToplevelLinks: map[string]string{},
+}
 
 var ts topo.Server
 
@@ -265,12 +267,12 @@ func main() {
 
 	// vschema editor
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, *schemaEditorDir+"/schema_editor/index.html")
+		templateLoader.ServeTemplate("index.html", indexContent, w, r)
 	})
 
 	// vschema editor
-	http.HandleFunc("/schema_editor/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, *schemaEditorDir+r.URL.Path)
+	http.HandleFunc("/content/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, *templateDir+r.URL.Path[8:])
 	})
 
 	// vschema viewer

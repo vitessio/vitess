@@ -9,7 +9,7 @@ license that can be found in the LICENSE file.
 <link rel="stylesheet"
   href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
 <head>
-<base href="/schema_editor/" />
+<base href="/" />
 <meta charset="US-ASCII">
 <title>VTGate schema editor</title>
 </head>
@@ -23,10 +23,13 @@ license that can be found in the LICENSE file.
           <ul class="nav navbar-nav">
             <li><a href="/dbtopo">Topology</a></li>
             <li><a href="/serving_graph">Serving graph</a></li>
-            <li><a href="/etcd">etcd browser</a></li>
-            <li><a href="/zk">zk browser</a></li>
-            <li><a href="/schema_editor">Schema editor</a></li>
+            <li><a href="#/editor">Schema editor</a></li>
             <li><a href="/vschema">Schema View</a></li>
+            {{with .ToplevelLinks}}
+            {{range $name, $href := .}}
+            <li><a href="{{$href}}">{{$name}}</a></li>
+            {{end}}
+            {{end}}
           </ul>
         </div>
       </div>
@@ -51,28 +54,28 @@ license that can be found in the LICENSE file.
     type="text/javascript">
 
     </script>
-  <script src="vindex_info.js" type="text/javascript">
+  <script src="content/vindex_info.js" type="text/javascript">
 
     </script>
-  <script src="curschema.js" type="text/javascript">
+  <script src="content/curschema.js" type="text/javascript">
 
     </script>
-  <script src="editor/sidebar.js" type="text/javascript">
+  <script src="content/editor/sidebar.js" type="text/javascript">
 
     </script>
-  <script src="editor/keyspace.js" type="text/javascript">
+  <script src="content/editor/keyspace.js" type="text/javascript">
 
     </script>
-  <script src="editor/class/class.js" type="text/javascript">
+  <script src="content/editor/class/class.js" type="text/javascript">
 
     </script>
-  <script src="load/load.js" type="text/javascript">
+  <script src="content/load/load.js" type="text/javascript">
 
     </script>
-  <script src="submit/submit.js" type="text/javascript">
+  <script src="content/submit/submit.js" type="text/javascript">
 
     </script>
-  <script src="app.js" type="text/javascript">
+  <script src="content/app.js" type="text/javascript">
 
     </script>
 </body>

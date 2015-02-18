@@ -695,7 +695,6 @@ class Vtctld(object):
     args = environment.binary_args('vtctld') + [
             '-debug',
             '-templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '-schema-editor-dir', environment.vttop + '/go/cmd/vtctld',
             '-log_dir', environment.vtlogroot,
             '-port', str(self.port),
             ] + \

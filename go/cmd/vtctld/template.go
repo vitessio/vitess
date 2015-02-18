@@ -143,7 +143,7 @@ type TemplateLoader struct {
 }
 
 func (loader *TemplateLoader) compile() (*template.Template, error) {
-	return template.New("main").Funcs(FuncMap).ParseGlob(path.Join(loader.Directory, "[a-z]*"))
+	return template.New("main").Funcs(FuncMap).ParseGlob(path.Join(loader.Directory, "[a-z]*.html"))
 }
 
 func (loader *TemplateLoader) makeErrorTemplate(errorMessage string) *template.Template {
