@@ -10,8 +10,8 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -23,7 +23,6 @@ import (
 // be concurrently used across goroutines. Such requests are
 // interleaved on the same underlying connection.
 type ShardConn struct {
-	cell         string
 	keyspace     string
 	shard        string
 	tabletType   topo.TabletType
@@ -31,7 +30,7 @@ type ShardConn struct {
 	retryCount   int
 	connTimeout  time.Duration
 	balancer     *Balancer
-	consolidator *tabletserver.Consolidator
+	consolidator *sync2.Consolidator
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
 	mu   sync.Mutex
@@ -41,7 +40,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeout time.Duration, consolidator *tabletserver.Consolidator) *ShardConn {
+func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
@@ -51,7 +50,6 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
 	return &ShardConn{
-		cell:         cell,
 		keyspace:     keyspace,
 		shard:        shard,
 		tabletType:   tabletType,
@@ -59,7 +57,7 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		retryCount:   retryCount,
 		connTimeout:  connTimeout,
 		balancer:     blc,
-		consolidator: consolidator,
+		consolidator: sync2.NewConsolidator(),
 	}
 }
 
@@ -221,10 +219,10 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 		sdc.mu.Unlock()
 		return conn, endPoint, false, nil
 	}
-	sdc.mu.Unlock()
 
-	key := fmt.Sprintf("%s.%s.%s.%s", sdc.cell, sdc.keyspace, sdc.shard, sdc.tabletType)
+	key := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
 	q, ok := sdc.consolidator.Create(key)
+	sdc.mu.Unlock()
 	if ok {
 		defer q.Broadcast()
 		conn, endPoint, isTimeout, err := sdc.getNewConn(ctx)

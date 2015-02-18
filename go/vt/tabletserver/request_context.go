@@ -48,6 +48,10 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 	q, ok := rqc.qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()
+		// Wrap default error to TabletError
+		if q.Err != nil {
+			q.Err = NewTabletError(ErrFail, q.Err.Error())
+		}
 		waitingForConnectionStart := time.Now()
 		timeout, err := rqc.deadline.Timeout()
 		if err != nil {
@@ -63,7 +67,9 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 		}
 	} else {
 		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
+		startTime := time.Now()
 		q.Wait()
+		waitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
 		panic(q.Err)
