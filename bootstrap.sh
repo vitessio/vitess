@@ -89,7 +89,13 @@ ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql
 case "$MYSQL_FLAVOR" in
-  "MariaDB")
+  "Mysql56")
+    echo "Mysql 5.6 support is under development and not supported yet."
+    exit 1
+    ;;
+
+  *)
+    export MYSQL_FLAVOR=MariaDB
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
     if [ "$myversion" == "" ]; then
       echo "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
@@ -98,27 +104,6 @@ case "$MYSQL_FLAVOR" in
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
     ;;
 
-  *)
-    export VT_MYSQL_ROOT=$VTROOT/dist/mysql
-	if [ -d $VT_MYSQL_ROOT ]; then
-      echo "Skipping Google MySQL build. Delete $VT_MYSQL_ROOT to force rebuild."
-    else
-      echo "Getting and compiling Google MySQL"
-      git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
-      pushd third_party/mysql
-      set -e
-      git apply ../mysql.patch
-      source google/env.inc
-      source google/compile.inc
-
-      # Install
-      make -s install #DESTDIR=$VTROOT/dist/mysql
-      rm -rf $VTROOT/dist/mysql/mysql-test
-      rm -rf $VTROOT/dist/mysql/sql-bench
-      popd
-      rm -rf third_party/mysql
-    fi
-  ;;
 esac
 
 # save the flavor that was used in bootstrap, so it can be restored

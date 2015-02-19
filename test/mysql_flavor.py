@@ -70,45 +70,6 @@ class MysqlFlavor(object):
     return
 
 
-class GoogleMysql(MysqlFlavor):
-  """Overrides specific to Google MySQL"""
-
-  def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_google.cnf"
-
-  def master_position(self, tablet):
-    conn, cursor = tablet.connect_dict("")
-    try:
-      cursor.execute("SHOW MASTER STATUS")
-      group_id = cursor.fetchall()[0]["Group_ID"]
-
-      cursor.execute("SHOW BINLOG INFO FOR " + str(group_id))
-      server_id = cursor.fetchall()[0]["Server_ID"]
-
-      return {"GoogleMysql": "%u-%u" % (server_id, group_id)}
-    finally:
-      conn.close()
-
-  def position_equal(self, a, b):
-    return int(a["GoogleMysql"].split("-")[1]) == int(
-        b["GoogleMysql"].split("-")[1])
-
-  def position_at_least(self, a, b):
-    return int(a["GoogleMysql"].split("-")[1]) >= int(
-        b["GoogleMysql"].split("-")[1])
-
-  def change_master_commands(self, host, port, pos):
-    parts = pos["GoogleMysql"].split("-")
-    server_id = parts[0]
-    group_id = parts[1]
-    return [
-        "SET binlog_group_id = %s, master_server_id = %s" %
-        (group_id, server_id),
-        "CHANGE MASTER TO "
-        "MASTER_HOST='%s', MASTER_PORT=%u, MASTER_USER='vt_repl', CONNECT_USING_GROUP_ID" %
-        (host, port)]
-
-
 class MariaDB(MysqlFlavor):
   """Overrides specific to MariaDB"""
 
@@ -174,10 +135,10 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "GoogleMysql")
+    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
     # The environment variable might be set, but equal to "".
     if flavor == "":
-      flavor = "GoogleMysql"
+      flavor = "MariaDB"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.
@@ -185,8 +146,9 @@ def set_mysql_flavor(flavor):
 
   if flavor == "MariaDB":
     __mysql_flavor = MariaDB()
-  elif flavor == "GoogleMysql":
-    __mysql_flavor = GoogleMysql()
+  elif flavor == "Mysql56":
+    logging.error("Mysql56 support is currently under development, and not supported yet")
+    exit(1)
   else:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)
