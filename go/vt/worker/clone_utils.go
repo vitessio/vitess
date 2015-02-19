@@ -7,6 +7,7 @@ package worker
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,6 +149,11 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 	return result, eta
 }
 
+var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
+
+// The amount of time we should wait before retrying ExecuteFetch calls
+var executeFetchRetryTime = (30 * time.Second)
+
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
@@ -160,22 +166,39 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
+	// Is this current attempt a retry of a previous attempt?
+	isRetry := false
 	for {
 		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
 		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false)
 		cancel()
-		switch {
-		case err == nil:
+		if err == nil {
 			// success!
 			return ti, nil
+		}
+		// If the ExecuteFetch call failed because of an application error, we will try to figure out why.
+		// We need to extract the MySQL error number, and will attempt to retry if we think the error is recoverable.
+		match := errExtract.FindStringSubmatch(err.Error())
+		var errNo string
+		if len(match) == 2 {
+			errNo = match[1]
+		}
+		switch {
 		case wr.TabletManagerClient().IsTimeoutError(err):
-			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
-		case strings.Contains(err.Error(), "retry: "):
-			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
+			wr.Logger().Warningf("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
+		case errNo == "1290":
+			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", ti, err)
+		case errNo == "1062":
+			if !isRetry {
+				return ti, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", ti, err)
+			}
+			wr.Logger().Infof("ExecuteFetch failed on %v with a duplicate entry error; marking this as a success, because of the likelihood that this query has already succeeded before being retried: %v", ti, err)
+			return ti, nil
 		default:
+			// Unknown error
 			return ti, err
 		}
-		t := time.NewTimer(30 * time.Second)
+		t := time.NewTimer(executeFetchRetryTime)
 		// don't leak memory if the timer isn't triggered
 		defer t.Stop()
 
@@ -197,7 +220,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 				return nil, fmt.Errorf("unable to run ExecuteFetch due to: %v", err)
 			}
 		}
-
+		isRetry = true
 	}
 }
 
