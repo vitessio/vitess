@@ -112,13 +112,14 @@ type FakePoolConnection struct {
 	ExpectedExecuteFetchIndex int
 }
 
-func NewFakePoolConnectionQuery(t *testing.T, query string) *FakePoolConnection {
+func NewFakePoolConnectionQuery(t *testing.T, query string, err error) *FakePoolConnection {
 	return &FakePoolConnection{
 		t: t,
 		ExpectedExecuteFetch: []ExpectedExecuteFetch{
 			ExpectedExecuteFetch{
 				Query:       query,
 				QueryResult: &mproto.QueryResult{},
+				Error:       err,
 			},
 		},
 	}
@@ -145,6 +146,9 @@ func (fpc *FakePoolConnection) ExecuteFetch(query string, maxrows int, wantfield
 	defer func() {
 		fpc.ExpectedExecuteFetchIndex++
 	}()
+	if fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].Error != nil {
+		return nil, fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].Error
+	}
 	return fpc.ExpectedExecuteFetch[fpc.ExpectedExecuteFetchIndex].QueryResult, nil
 }
 
@@ -210,20 +214,26 @@ func DestinationsFactory(t *testing.T, insertCount int64) func() (dbconnpool.Poo
 	return func() (dbconnpool.PoolConnection, error) {
 		qi := atomic.AddInt64(&queryIndex, 1)
 		switch {
-		case qi < insertCount:
-			return NewFakePoolConnectionQuery(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*"), nil
-		case qi == insertCount:
-			return NewFakePoolConnectionQuery(t, "CREATE DATABASE IF NOT EXISTS _vt"), nil
+		// Return an error on the first query, to make sure that it's retried successfully
+		case qi == 0:
+			return NewFakePoolConnectionQuery(t,
+				"INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*",
+				fmt.Errorf("The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) during query:"),
+			), nil
+		case qi <= insertCount:
+			return NewFakePoolConnectionQuery(t, "INSERT INTO `vt_ks`.table1(id, msg, keyspace_id) VALUES (*", nil), nil
 		case qi == insertCount+1:
+			return NewFakePoolConnectionQuery(t, "CREATE DATABASE IF NOT EXISTS _vt", nil), nil
+		case qi == insertCount+2:
 			return NewFakePoolConnectionQuery(t, "CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 				"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
 				"  pos VARCHAR(250) DEFAULT NULL,\n"+
 				"  time_updated BIGINT UNSIGNED NOT NULL,\n"+
 				"  transaction_timestamp BIGINT UNSIGNED NOT NULL,\n"+
 				"  flags VARCHAR(250) DEFAULT NULL,\n"+
-				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB"), nil
-		case qi == insertCount+2:
-			return NewFakePoolConnectionQuery(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *"), nil
+				"  PRIMARY KEY (source_shard_uid)) ENGINE=InnoDB", nil), nil
+		case qi == insertCount+3:
+			return NewFakePoolConnectionQuery(t, "INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *", nil), nil
 		}
 
 		return nil, fmt.Errorf("Unexpected connection")
@@ -316,6 +326,9 @@ func testSplitClone(t *testing.T, strategy string) {
 	leftRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
 	rightMaster.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
 	rightRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
+
+	// Only wait 1 ms between retries, so that the test passes faster
+	executeFetchRetryTime = (1 * time.Millisecond)
 
 	wrk.Run()
 	status := wrk.StatusAsText()
