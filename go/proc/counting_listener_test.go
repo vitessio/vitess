@@ -19,8 +19,9 @@ func TestPublished(t *testing.T) {
 	}
 	go http.Serve(l, nil)
 
+	url := fmt.Sprintf("http://%s/debug/vars", l.Addr().String())
 	for i := 1; i <= 3; i++ {
-		resp, err := http.Get(fmt.Sprintf("http://%s/debug/vars", l.Addr().String()))
+		resp, err := http.Get(url)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -32,7 +33,7 @@ func TestPublished(t *testing.T) {
 		vars := make(map[string]interface{})
 		err = json.Unmarshal(val, &vars)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("%s response is not valid JSON. error: %v, response: %q", url, err, val)
 		}
 		if vars["ConnCount"].(float64) != 1 {
 			t.Errorf("want 1, got %v", vars["connection-count"])
