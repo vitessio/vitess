@@ -127,11 +127,23 @@ $ kvtctl
 We launch vttablet in a
 [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
 along with mysqld. The following script will instantiate `vttablet-pod-template.yaml`
-for three replicas.
+for a single shard with three replicas.
 
 ```
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
+
+For more tablets or shards, use the environment variables NUM_SHARDS and
+TABLETS_PER_SHARD.  Example:
+
+```
+vitess/examples/kubernetes$ export NUM_SHARDS=2
+vitess/examples/kubernetes$ export TABLETS_PER_SHARD=4
+vitess/examples/kubernetes$ ./vttablet-up.sh
+```
+
+When using vttablet-down.sh, make sure to use the same environment variables so
+all the pods are correctly brought down.
 
 Wait for the pods to enter Running state (`$KUBECTL get pods`).
 Again, this may take a while if a pod was scheduled on a minion that needs to
@@ -171,7 +183,13 @@ usual validation of each tablet's replication state.
 
 ```
 $ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
+$ kvtctl ReparentShard -force test_keyspace/1 test-0000000200
+$ kvtctl ReparentShard -force test_keyspace/2 test-0000000300
+$ kvtctl ReparentShard -force test_keyspace/3 test-0000000400
+...
 ```
+
+Repeat this pattern for all shards that exist in the keyspace.
 
 Once this is done, you should see one master and two replicas in vtctld's web
 interface. You can also check this on the command line with vtctlclient:
@@ -269,3 +287,29 @@ $ $KUBECTL log vttablet-100 mysql
 You can post the logs somewhere and send a link to the
 [Vitess mailing list](https://groups.google.com/forum/#!forum/vitess)
 to get more help.
+
+## Automatically run Vitess on Container Engine
+
+The following command will create a GCE cluster and bring up Vitess:
+(Note that it does not bring up the Guestbook example)
+
+```
+vitess/examples/kubernetes$ ./cluster-up.sh
+```
+
+The above script accepts several environment variables, including:
+NUM_SHARDS - shard count (default 1 for unsharded)
+TABLETS_PER_SHARD - vttablet count for each shard
+
+For example, to run a cluster with two shards, run:
+
+```
+export NUM_SHARDS=2
+vitess/examples/kubernetes$ ./cluster-up.sh
+```
+
+Run the following to tear down the entire Vitess + GCE cluster:
+
+```
+vitess/examples/kubernetes$ ./cluster-down.sh
+```
