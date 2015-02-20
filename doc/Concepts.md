@@ -20,8 +20,8 @@ modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it '0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
 
-We support [dynamic resharding](Resharding.md), when one shard is split into 2 shards for instance. In this case, the data in the
-source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
+We support [dynamic resharding](Resharding.md), when one shard is split into two shards for instance. In this case, the data in the
+source shard is duplicated into the two destination shards, but only during the transition. Afterwards, the source shard is
 deleted.
 
 A shard usually contains one MySQL master, and many MySQL slaves. The slaves are used to serve read-only traffic (with
@@ -41,7 +41,7 @@ It has a type. The commonly used types are:
 - master: for the mysql master, RW database.
 - replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
 - rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
-- spare: for a mysql slave not use at the moment (hot spare).
+- spare: for a mysql slave not used at the moment (hot spare).
 - experimental, schema, lag, backup, restore, checker, ... : various types for specific purposes.
 
 Only master, replica and rdonly are advertised in the Serving Graph.
@@ -71,13 +71,13 @@ TODO: The keyspace id rules need to be solidified once VTGate features are final
 ### Shard graph
 The shard graph defines how a keyspace has been sharded. It's basically a per-keyspace
 list of non-intersecting ranges that cover all possible values a keyspace id can cover.
-In other words, any given keypsace id is guaranteed to map to one and only one
+In other words, any given keyspace id is guaranteed to map to one and only one
 shard of the shard graph.
 
 We are going with range based sharding.
 The main advantage of this scheme is that the shard map is a simple in-memory lookup.
 The downside of this scheme is that it creates hot-spots for sequentially increasing keys.
-In such cases, we recommend that the application hash the keys so they
+In such cases, we recommend that the application hashes the keys so they
 distribute more randomly.
 
 For instance, an application may use an incrementing UserId as a primary key for user records,
@@ -93,7 +93,7 @@ repointed to the new master so that replication can resume.
 
 ### Serving graph
 The [Serving Graph](ServingGraph.md) is derived from the shard and replication graph.
-It represens the list of active servers that are available to serve
+It represents the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
 they are allowed to send queries to.

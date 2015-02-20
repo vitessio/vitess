@@ -78,7 +78,7 @@ vtocc also accepts list bind variables (TO BE IMPLEMENTED):
     bindVars = {"list": [1, 2, 3]}
 
 Additionally, vtocc tracks statistics grouped by these query strings, which are
-useful for analysis and trouble-shooting.
+useful for analysis and troubleshooting.
 
 ## Execute functions
 There are three Execute functions:
@@ -120,7 +120,7 @@ All timeout related parameters below are specified in seconds. A value of zero m
 * **queryserver-config-schema-reload-time=1800**: This specifies how often the schema is reloaded by vtocc. If you rollout schema changes to a live serving database, you can be sure that it has been read by vtocc after the reload time has elapsed. If needed, there are ways to make vtocc reload the schema immediately.
 * **queryserver-config-stream-buffer-size=32768**: This is the buffer size for streaming queries.
 * **queryserver-config-stream-pool-size=750**: Connection pool size for streaming queries.
-* **queryserver-config-strict-mode=true**: If this is turned off, vtocc allows all DMLs and does not enforce MySQL's `STRICT_TRANS_TABLES`. This setting can be tuned off for migration purposes if the database is not already configured with these settings.
+* **queryserver-config-strict-mode=true**: If this is turned off, vtocc allows all DMLs and does not enforce MySQL's `STRICT_TRANS_TABLES`. This setting can be turned off for migration purposes if the database is not already configured with these settings.
 * **queryserver-config-transaction-cap=20**: This value limits the number of allowed concurrent transactions.
 * **queryserver-config-transaction-timeout=30**: The amount of time to allow a transaction to complete before killing it.
 

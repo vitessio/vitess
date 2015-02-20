@@ -140,7 +140,7 @@ Any ColVindex that is not the first one is considered non-primary. For these, VT
   * If a value was specified, then VTGate uses Verify to make sure that it agrees with the keyspace_id.
 
 #### Unique table name
-One of Vitess’s features is transparent vertical resharding. This means that a table can migrate from one keyspace to another. In order to support this, the application needs to be agnostic of the physical location of a table. This automatically means that a table has to be unique across the entire set of keyspaces.
+One of Vitess’ features is transparent vertical resharding. This means that a table can migrate from one keyspace to another. In order to support this, the application needs to be agnostic of the physical location of a table. This automatically means that a table has to be unique across the entire set of keyspaces.
 
 Although this is currently not enforced by the rest of the vitess system, VTGate will start enforcing this as one of the vschema constraints.
 
