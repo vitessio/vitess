@@ -364,14 +364,13 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), len(self.user_song_map[user_id]), "wrong number of rows fetched")
 
-
-
   def test_entity_id_read(self):
+    user_id = self.user_id_list[0]
     with database_context.ReadFromMaster(self.dc) as context:
       entity_id_map = {'username': 'user0'}
       rows = db_class_sharded.VtUser.select_by_columns(
           context.get_cursor(entity_id_map=entity_id_map),
-          [('id', self.user_id_list[0]),])
+          [('id', user_id),])
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
 
       where_column_value_pairs = [('id', self.user_song_map[user_id][0]),]
@@ -388,7 +387,6 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
 
-
   def test_in_clause_read(self):
     with database_context.ReadFromMaster(self.dc) as context:
       user_id_list = [self.user_id_list[0], self.user_id_list[1]]
@@ -403,7 +401,8 @@ class TestRangeSharded(unittest.TestCase):
       got.sort()
       self.assertEqual(user_id_list, got, "wrong rows fetched; expected %s got %s" % (user_id_list, got))
 
-      username_list = [row.username for row in got]
+      username_list = [row.username for row in rows]
+      username_list.sort()
       where_column_value_pairs = (('username', username_list),)
       entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtUser.select_by_ids(
@@ -427,19 +426,24 @@ class TestRangeSharded(unittest.TestCase):
       song_id_list = []
       for user_id in user_id_list:
         song_id_list.extend(self.user_song_map[user_id])
+      song_id_list.sort()
       where_column_value_pairs = [('id', song_id_list),]
       entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtSong.select_by_columns(
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
-      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      got = [row.id for row in rows]
+      got.sort()
+      self.assertEqual(song_id_list, got, "wrong rows fetched %s got %s" % (song_id_list, got))
 
       where_column_value_pairs = [('song_id', song_id_list),]
       entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtSongDetail.select_by_columns(
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
-      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+      got = [row.song_id for row in rows]
+      got.sort()
+      self.assertEqual(song_id_list, got, "wrong rows fetched %s got %s" % (song_id_list, got))
 
 
   def test_keyrange_read(self):
