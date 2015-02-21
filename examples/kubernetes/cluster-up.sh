@@ -17,7 +17,7 @@ GCE_ZONE=${GCE_ZONE:-'us-central1-b'}
 GCE_MACHINE_TYPE=${GCE_MACHINE_TYPE:-'n1-standard-1'}
 GCE_NUM_NODES=${GCE_NUM_NODES:-3}
 GCE_CLUSTER_NAME=${GCE_CLUSTER_NAME:-'example'}
-NUM_SHARDS=${NUM_SHARDS:-1} # 1 for unsharded
+SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
@@ -44,7 +44,7 @@ function run_script_and_wait () {
   echo "Running ${script}..."
   ./$script
 
-  echo "Waiting for $num_tasks $task_name to enter state Running"
+  echo "Waiting for ${num_tasks}x $task_name to enter state Running"
 
   while [ $counter -lt $MAX_TASK_WAIT_RETRIES ]; do
     # Get status column of pods with name starting with $task_name,
@@ -82,7 +82,7 @@ echo "*Creating cluster:"
 echo "*  Zone: $GCE_ZONE"
 echo "*  Machine type: $GCE_MACHINE_TYPE"
 echo "*  Num nodes: $GCE_NUM_NODES"
-echo "*  Shards: $NUM_SHARDS"
+echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Cluster name: $GCE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
@@ -99,7 +99,8 @@ vtctl_ip=`gcloud compute forwarding-rules list | awk '$1=="vtctld" {print $3}'`
 vtctl_server="$vtctl_ip:$vtctl_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 
-total_tablets=$(($NUM_SHARDS*$TABLETS_PER_SHARD))
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
+total_tablets=$(($num_shards*$TABLETS_PER_SHARD))
 run_script_and_wait vttablet-up.sh vttablet $total_tablets
 
 echo Waiting for tablets to be visible in the topology
@@ -123,7 +124,7 @@ while [ $counter -lt $MAX_VTTABLET_TOPO_WAIT_RETRIES ]; do
 done
 
 # split_shard_count = num_shards for sharded keyspace, 0 for unsharded
-split_shard_count=$NUM_SHARDS
+split_shard_count=$num_shards
 if [ $split_shard_count -eq 1 ]; then
   split_shard_count=0
 fi
@@ -135,8 +136,10 @@ echo -n Rebuilding Keyspace Graph...
 $kvtctl RebuildKeyspaceGraph test_keyspace
 echo Done
 echo -n Reparenting...
-for shard in `seq 0 $(($NUM_SHARDS-1))`; do
-  $kvtctl ReparentShard -force test_keyspace/$shard test-0000000$(($shard+1))00
+shard_num=1
+for shard in $(echo $SHARDS | tr "," " "); do
+  $kvtctl ReparentShard -force test_keyspace/$shard test-0000000${shard_num}00
+  let shard_num=shard_num+1
 done
 echo Done
 echo -n Applying Schema...

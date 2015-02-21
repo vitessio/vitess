@@ -10,12 +10,12 @@ source $script_root/env.sh
 # Create the pods for shard-0
 cell='test'
 keyspace='test_keyspace'
-NUM_SHARDS=${NUM_SHARDS:-1}
+SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 port=15002
+uid_base=100
 
-for shard in `seq 0 $(($NUM_SHARDS-1))`; do
-  uid_base=$((100*($shard+1)))
+for shard in $(echo $SHARDS | tr "," " "); do
   echo "Creating $keyspace.shard-$shard pods in cell $cell..."
   for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
     uid=$[$uid_base + $uid_index]
@@ -35,4 +35,5 @@ for shard in `seq 0 $(($NUM_SHARDS-1))`; do
       sed -e "$sed_script" | \
       $KUBECTL create -f -
   done
+  let uid_base=uid_base+100
 done

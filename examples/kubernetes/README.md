@@ -133,11 +133,11 @@ for a single shard with three replicas.
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
 
-For more tablets or shards, use the environment variables NUM_SHARDS and
+For more tablets or shards, use the environment variables SHARDS and
 TABLETS_PER_SHARD.  Example:
 
 ```
-vitess/examples/kubernetes$ export NUM_SHARDS=2
+vitess/examples/kubernetes$ export SHARDS=-80,80-
 vitess/examples/kubernetes$ export TABLETS_PER_SHARD=4
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
@@ -298,13 +298,13 @@ vitess/examples/kubernetes$ ./cluster-up.sh
 ```
 
 The above script accepts several environment variables, including:
-NUM_SHARDS - shard count (default 1 for unsharded)
+SHARDS - comma delimitedshard keyranges (default '0' for unsharded)
 TABLETS_PER_SHARD - vttablet count for each shard
 
 For example, to run a cluster with two shards, run:
 
 ```
-export NUM_SHARDS=2
+export SHARDS=-80,80-
 vitess/examples/kubernetes$ ./cluster-up.sh
 ```
 

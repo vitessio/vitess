@@ -8,15 +8,15 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-# Delete the pods for shard-0
+# Delete the pods for all shards
 cell='test'
 keyspace='test_keyspace'
-NUM_SHARDS=${NUM_SHARDS:-1}
+SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
-uid_base=100
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
 
-for shard in `seq 0 $(($NUM_SHARDS-1))`; do
-  uid_base=$((100*($shard+1)))
+for shard in `seq 1 $num_shards`; do
+  uid_base=$((100*$shard))
   for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
     uid=$[$uid_base + $uid_index]
     printf -v alias '%s-%010d' $cell $uid
