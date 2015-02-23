@@ -127,23 +127,11 @@ $ kvtctl
 We launch vttablet in a
 [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
 along with mysqld. The following script will instantiate `vttablet-pod-template.yaml`
-for a single shard with three replicas.
+for three replicas.
 
 ```
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
-
-For more tablets or shards, use the environment variables SHARDS and
-TABLETS_PER_SHARD.  Example:
-
-```
-vitess/examples/kubernetes$ export SHARDS=-80,80-
-vitess/examples/kubernetes$ export TABLETS_PER_SHARD=4
-vitess/examples/kubernetes$ ./vttablet-up.sh
-```
-
-When using vttablet-down.sh, make sure to use the same environment variables so
-all the pods are correctly brought down.
 
 Wait for the pods to enter Running state (`$KUBECTL get pods`).
 Again, this may take a while if a pod was scheduled on a minion that needs to
@@ -177,28 +165,22 @@ The vttablets have all been started as replicas, but there is no master yet.
 When we pick a master vttablet, Vitess will also take care of connecting the
 other replicas' mysqld instances to start replicating from the master mysqld.
 
-Since this is the first time we're starting up the shard, there is no existing
+Since this is the first time we're starting up the shards, there is no existing
 replication happening, so we use the -force flag on ReparentShard to skip the
 usual validation of each tablet's replication state.
 
 ```
 $ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
-$ kvtctl ReparentShard -force test_keyspace/1 test-0000000200
-$ kvtctl ReparentShard -force test_keyspace/2 test-0000000300
-$ kvtctl ReparentShard -force test_keyspace/3 test-0000000400
-...
 ```
 
-Repeat this pattern for all shards that exist in the keyspace.
-
-Once this is done, you should see one master and two replicas in vtctld's web
-interface. You can also check this on the command line with vtctlclient:
+Once this is done, you should see one master and two replicas in vtctld's
+web interface. You can also check this on the command line with vtctlclient:
 
 ```
 $ kvtctl ListAllTablets test
-test-0000000100 test_keyspace 0 master 10.244.4.6:15002 10.244.4.6:3306 []
-test-0000000101 test_keyspace 0 replica 10.244.1.8:15002 10.244.1.8:3306 []
-test-0000000102 test_keyspace 0 replica 10.244.1.9:15002 10.244.1.9:3306 []
+test-0000000100 test_keyspace -80 master 10.244.4.6:15002 10.244.4.6:3306 []
+test-0000000101 test_keyspace -80 replica 10.244.1.8:15002 10.244.1.8:3306 []
+test-0000000102 test_keyspace -80 replica 10.244.1.9:15002 10.244.1.9:3306 []
 ```
 
 ## Create a table
@@ -287,29 +269,3 @@ $ $KUBECTL log vttablet-100 mysql
 You can post the logs somewhere and send a link to the
 [Vitess mailing list](https://groups.google.com/forum/#!forum/vitess)
 to get more help.
-
-## Automatically run Vitess on Container Engine
-
-The following command will create a GCE cluster and bring up Vitess:
-(Note that it does not bring up the Guestbook example)
-
-```
-vitess/examples/kubernetes$ ./cluster-up.sh
-```
-
-The above script accepts several environment variables, including:
-SHARDS - comma delimitedshard keyranges (default '0' for unsharded)
-TABLETS_PER_SHARD - vttablet count for each shard
-
-For example, to run a cluster with two shards, run:
-
-```
-export SHARDS=-80,80-
-vitess/examples/kubernetes$ ./cluster-up.sh
-```
-
-Run the following to tear down the entire Vitess + GCE cluster:
-
-```
-vitess/examples/kubernetes$ ./cluster-down.sh
-```

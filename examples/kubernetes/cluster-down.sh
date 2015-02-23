@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Tears down the gce cluster, removes rules/pools
-GCE_CLUSTER_NAME=${GCE_CLUSTER_NAME:-'example'}
-gcloud preview container clusters delete $GCE_CLUSTER_NAME
+# Tears down the container engine cluster, removes rules/pools
+GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
+gcloud preview container clusters delete $GKE_CLUSTER_NAME
 gcloud compute forwarding-rules delete vtctld -q --region=us-central1
 gcloud compute forwarding-rules delete vtgate -q --region=us-central1
 gcloud compute firewall-rules delete vtctld -q

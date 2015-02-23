@@ -2,7 +2,7 @@
 
 # This is an example script that creates a fully functional vitess cluster.
 # It performs the following steps:
-# 1. Create a GCE cluster
+# 1. Create a container engine cluster
 # 2. Create etcd clusters
 # 3. Create vtctld clusters
 # 4. Forward vtctld port
@@ -13,14 +13,18 @@
 # 8. Forward vtgate port
 
 # Customizable parameters
-GCE_ZONE=${GCE_ZONE:-'us-central1-b'}
-GCE_MACHINE_TYPE=${GCE_MACHINE_TYPE:-'n1-standard-1'}
-GCE_NUM_NODES=${GCE_NUM_NODES:-3}
-GCE_CLUSTER_NAME=${GCE_CLUSTER_NAME:-'example'}
-SHARDS=${SHARDS:-'0'}
+GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
+GKE_MACHINE_TYPE=${GKE_MACHINE_TYPE:-'n1-standard-1'}
+GKE_NUM_NODES=${GKE_NUM_NODES:-3}
+GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
+SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
+
+# export for vttablet scripts
+export SHARDS=$SHARDS
+export TABLETS_PER_SHARD=$TABLETS_PER_SHARD
 
 function update_spinner_value () {
   spinner='-\|/'
@@ -74,20 +78,20 @@ fi
 
 export KUBECTL='gcloud preview container kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
-gcloud config set compute/zone $GCE_ZONE
+gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
 
 echo "****************************"
 echo "*Creating cluster:"
-echo "*  Zone: $GCE_ZONE"
-echo "*  Machine type: $GCE_MACHINE_TYPE"
-echo "*  Num nodes: $GCE_NUM_NODES"
+echo "*  Zone: $GKE_ZONE"
+echo "*  Machine type: $GKE_MACHINE_TYPE"
+echo "*  Num nodes: $GKE_NUM_NODES"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
-echo "*  Cluster name: $GCE_CLUSTER_NAME"
+echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud preview container clusters create $GCE_CLUSTER_NAME --machine-type $GCE_MACHINE_TYPE --num-nodes $GCE_NUM_NODES
+gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $GKE_NUM_NODES
 
 run_script_and_wait etcd-up.sh etcd 6
 run_script_and_wait vtctld-up.sh vtctld 1
@@ -152,7 +156,12 @@ echo Creating firewall rule for vtgate
 vtgate_port=15001
 gcloud compute firewall-rules create vtgate --allow tcp:$vtgate_port
 vtgate_ip=`gcloud compute forwarding-rules list | awk '$1=="vtgate" {print $3}'`
-vtgate_server="$vtgate_ip:$vtgate_port"
+if [ -z "$vtgate_ip" ]
+then
+  vtgate_server="No firewall rules created for vtgate. Add createExternalLoadBalancer: true if access to vtgate is desired"
+else
+  vtgate_server="$vtgate_ip:$vtgate_port"
+fi
 
 echo "****************************"
 echo "* Complete!"
