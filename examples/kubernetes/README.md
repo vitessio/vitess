@@ -178,9 +178,9 @@ web interface. You can also check this on the command line with vtctlclient:
 
 ```
 $ kvtctl ListAllTablets test
-test-0000000100 test_keyspace -80 master 10.244.4.6:15002 10.244.4.6:3306 []
-test-0000000101 test_keyspace -80 replica 10.244.1.8:15002 10.244.1.8:3306 []
-test-0000000102 test_keyspace -80 replica 10.244.1.9:15002 10.244.1.9:3306 []
+test-0000000100 test_keyspace 0 master 10.244.4.6:15002 10.244.4.6:3306 []
+test-0000000101 test_keyspace 0 replica 10.244.1.8:15002 10.244.1.8:3306 []
+test-0000000102 test_keyspace 0 replica 10.244.1.9:15002 10.244.1.9:3306 []
 ```
 
 ## Create a table
