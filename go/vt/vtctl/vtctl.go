@@ -303,6 +303,15 @@ var commands = []commandGroup{
 	},
 }
 
+func init() {
+	// This cannot be in the static 'commands ' array, as commands
+	// would reference commandHelp that references commands
+	// (circular reference)
+	addCommand("Generic", command{"Help", commandHelp,
+		"[command name]",
+		"Prints the list of available commands, or help on a specific command."})
+}
+
 func addCommand(groupName string, c command) {
 	for i, group := range commands {
 		if group.name == groupName {
@@ -2138,6 +2147,23 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 		wr.Logger().Printf("%v\n", jscfg.ToJson(shardReplication))
 	}
 	return err
+}
+
+func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	switch subFlags.NArg() {
+	case 0:
+		wr.Logger().Printf("Available commands:\n\n")
+		PrintAllCommands(wr.Logger())
+	case 1:
+		RunCommand(ctx, wr, []string{subFlags.Arg(0), "--help"})
+	default:
+		return fmt.Errorf("action Help takes no parameter, or just the name of the command to get help on")
+	}
+
+	return nil
 }
 
 type rTablet struct {
