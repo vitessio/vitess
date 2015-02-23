@@ -165,7 +165,7 @@ The vttablets have all been started as replicas, but there is no master yet.
 When we pick a master vttablet, Vitess will also take care of connecting the
 other replicas' mysqld instances to start replicating from the master mysqld.
 
-Since this is the first time we're starting up the shard, there is no existing
+Since this is the first time we're starting up the shards, there is no existing
 replication happening, so we use the -force flag on ReparentShard to skip the
 usual validation of each tablet's replication state.
 
@@ -173,8 +173,8 @@ usual validation of each tablet's replication state.
 $ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
 ```
 
-Once this is done, you should see one master and two replicas in vtctld's web
-interface. You can also check this on the command line with vtctlclient:
+Once this is done, you should see one master and two replicas in vtctld's
+web interface. You can also check this on the command line with vtctlclient:
 
 ```
 $ kvtctl ListAllTablets test
