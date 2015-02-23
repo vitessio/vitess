@@ -76,6 +76,7 @@ And the associated ApplySchema remote action for a tablet. Then the performed st
 - if AllowReplication is false, we’ll disable replication (adding SET sql_log_bin=0 before the Sql).
 - We will then apply the Sql command.
 - (if AfterSchema is not nil) read the schema again, make sure it is equal to AfterSchema. If not equal: if Force is not set, we will issue an error, if Force is set, we’ll issue a warning.
+
 We will return the following information:
 - whether it worked or not (doh!)
 - BeforeSchema
@@ -92,7 +93,7 @@ We will return the following information:
 - if simple:
  - nobody has it: apply to master, very similar to a single tablet update.
  - some tablets have it but not others: error out
-- if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent a the end.
+- if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent at the end.
  - Note the Backup, and Lag servers won't apply a complex schema change. Only the servers actively in the replication graph will.
  - the process can be interrupted at any time, restarting it as a complex schema upgrade should just work.
 
@@ -122,7 +123,7 @@ a PreflightSchema operation will first be used to make sure the schema is OK (un
 ```
 ApplySchemaShard {-sql=<sql> || -sql_file=<filename>} [-simple] [-new_parent=<tablet alias>] <keyspace/shard>
 ```
-apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise we do the shell game and will optionally re-parent.
+apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise, we do the shell game and will optionally re-parent.
 if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
 
 ```

@@ -18,7 +18,7 @@ As vtctl performs operations, it updates the necessary
 changes to the lockserver (zookeeper).
 The rest of the vitess servers observe those changes
 and react accordingly.
-For example, if a master database if failed over to a new
+For example, if a master database failed over to a new
 one, the vitess servers will see the change and redirect
 future writes to the new master.
 
@@ -35,13 +35,13 @@ filtered replication and data export.
 
 #### vtocc
 Vtocc is the previous version of vttablet. It handles query management
-(same as vttablet) but is not part of a larger system, it's a standalone
+(same as vttablet) but is not part of a larger system. It's a standalone
 program that doesn't require a Topology Server. It is useful for
 unit tests and when the only required feature is the query service
 (with connection pooling, query de-dup, ...).
 
 Note we may eventually produce a version of vttablet that runs
-without a Topology Server, and use it instead of vtocc.
+without a Topology Server, and use that instead of vtocc.
 
 ### vtgate
 vtgate's goal is to provide a unified view of the entire fleet.
@@ -52,7 +52,7 @@ vttablets, and return the consolidated results back to the client.
 ### vtctld
 vtctld is an HTTP server that lets you browse the information stored
 in the lockserver.
-This is useful for trouble-shooting, or to get a good high
+This is useful for troubleshooting, or to get a good high
 level picture of all the servers and their current state.
 
 ### vtworker

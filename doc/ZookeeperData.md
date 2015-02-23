@@ -67,7 +67,7 @@ type Shard struct {
         SourceShards []SourceShard
 
         // Cells is the list of cells that have tablets for this shard.
-        // It is populated at InitTablet time when a tabelt is added
+        // It is populated at InitTablet time when a tablet is added
         // in a cell that is not in the list yet.
         Cells []string
 }
@@ -149,7 +149,7 @@ type Tablet struct {
         // What is this tablet?
         Alias TabletAlias
 
-        // Locaiton of the tablet
+        // Location of the tablet
         Hostname string
         IPAddr   string
 
@@ -345,7 +345,7 @@ The shard serving graph can be re-built using the 'vtctl RebuildShardGraph <keys
 Note this will rebuild the serving graph for all cells, not just one cell.
 
 Rebuilding a shard serving graph will:
-- compute the data to write by looking at all the tablets from the replicaton graph
+- compute the data to write by looking at all the tablets from the replication graph
 - write all the `/zk/<cell>/vt/ns/<keyspace>/<shard>/<type>` nodes everywhere
 - delete any pre-existing `/zk/<cell>/vt/ns/<keyspace>/<shard>/<type>` that is not in use any more
 - compute and write all the `/zk/<cell>/vt/ns/<keyspace>/<shard>` nodes everywhere
