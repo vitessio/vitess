@@ -36,10 +36,10 @@ func TestPublished(t *testing.T) {
 			t.Fatalf("%s response is not valid JSON. error: %v, response: %q", url, err, val)
 		}
 		if vars["ConnCount"].(float64) != 1 {
-			t.Errorf("want 1, got %v", vars["connection-count"])
+			t.Errorf("want 1, got %v", vars["ConnCount"])
 		}
 		if vars["ConnAccepted"].(float64) != float64(i) {
-			t.Errorf("want %d, got %v", i, vars["connection-count"])
+			t.Errorf("want %d, got %v", i, vars["ConnAccepted"])
 		}
 	}
 	l.Close()
