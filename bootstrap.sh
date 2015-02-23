@@ -88,20 +88,27 @@ ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 # install mysql
+if [ -z "$MYSQL_FLAVOR" ]; then
+  export MYSQL_FLAVOR=MariaDB
+fi
 case "$MYSQL_FLAVOR" in
   "Mysql56")
     echo "Mysql 5.6 support is under development and not supported yet."
     exit 1
     ;;
 
-  *)
-    export MYSQL_FLAVOR=MariaDB
+  "MariaDB")
     myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep MariaDB`
     if [ "$myversion" == "" ]; then
       echo "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       exit 1
     fi
     echo "Found MariaDB installation in $VT_MYSQL_ROOT."
+    ;;
+
+  *)
+    echo "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
+    exit 1
     ;;
 
 esac
