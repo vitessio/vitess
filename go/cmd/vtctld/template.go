@@ -250,7 +250,7 @@ func SetDbTopologyPostprocessor(f func(context.Context, topo.Server, *topotools.
 // SetDbServingGraphPostprocessor installs a hook that can modify
 // topotools.ServingGraph struct before it's displayed.
 func SetDbServingGraphPostprocessor(f func(topo.Server, *topotools.ServingGraph)) {
-	if modifyDbTopology != nil {
+	if modifyDbServingGraph != nil {
 		panic("Cannot set multiple DbServingGraph postprocessors")
 	}
 	modifyDbServingGraph = f
