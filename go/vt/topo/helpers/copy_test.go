@@ -53,7 +53,6 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topo.TYPE_MASTER,
-		State:          topo.STATE_READ_WRITE,
 		DbNameOverride: "",
 		KeyRange:       key.KeyRange{},
 	}); err != nil {
@@ -75,7 +74,6 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topo.TYPE_REPLICA,
-		State:          topo.STATE_READ_ONLY,
 		DbNameOverride: "",
 		KeyRange:       key.KeyRange{},
 	}); err != nil {

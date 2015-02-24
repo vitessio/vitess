@@ -338,18 +338,6 @@ func IsSlaveType(tt TabletType) bool {
 	return true
 }
 
-// TabletState describe if the tablet is read-only or read-write.
-type TabletState string
-
-const (
-	// STATE_READ_WRITE is the normal state for a master
-	STATE_READ_WRITE = TabletState("ReadWrite")
-
-	// STATE_READ_ONLY is the normal state for a slave, or temporarily a master.
-	// Not to be confused with type, which implies a workload.
-	STATE_READ_ONLY = TabletState("ReadOnly")
-)
-
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
@@ -376,9 +364,6 @@ type Tablet struct {
 	Keyspace string
 	Shard    string
 	Type     TabletType
-
-	// Is the tablet read-only?
-	State TabletState
 
 	// Normally the database name is implied by "vt_" + keyspace. I
 	// really want to remove this but there are some databases that are
@@ -506,15 +491,6 @@ func (ti *TabletInfo) Version() int64 {
 // Complete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
 func (tablet *Tablet) Complete() error {
-	switch tablet.Type {
-	case TYPE_MASTER:
-		tablet.State = STATE_READ_WRITE
-	case TYPE_IDLE:
-		fallthrough
-	default:
-		tablet.State = STATE_READ_ONLY
-	}
-
 	var err error
 	tablet.Shard, tablet.KeyRange, err = ValidateShardName(tablet.Shard)
 	return err
