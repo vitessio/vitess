@@ -476,9 +476,10 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 
 var testReplicationStatus = &myproto.ReplicationStatus{
 	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.GoogleGTID{
-			ServerID: 345,
-			GroupID:  789,
+		GTIDSet: myproto.MariadbGTID{
+			Domain:   1,
+			Server:   345,
+			Sequence: 789,
 		},
 	},
 	SlaveIORunning:      true,
