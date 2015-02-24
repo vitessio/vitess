@@ -84,6 +84,13 @@ func (r *HealthRecord) IsDuplicate(other interface{}) bool {
 	return (unhealthy && unhealthyOther) || (!unhealthy && !unhealthyOther)
 }
 
+// ConfigHTML returns a formatted summary of health checking config values.
+func ConfigHTML() template.HTML {
+	return template.HTML(fmt.Sprintf(
+		"healthCheckInterval: %v; degradedThreshold: %v; unhealthyThreshold: %v",
+		healthCheckInterval, degradedThreshold, unhealthyThreshold))
+}
+
 // IsRunningHealthCheck indicates if the agent is configured to run healthchecks.
 func (agent *ActionAgent) IsRunningHealthCheck() bool {
 	return *targetTabletType != ""
