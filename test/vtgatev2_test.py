@@ -842,6 +842,7 @@ class TestFailures(unittest.TestCase):
           "select 1 from vt_insert_test", {},
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
     except Exception, e:
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
