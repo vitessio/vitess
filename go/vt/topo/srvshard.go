@@ -26,10 +26,6 @@ type SrvShard struct {
 	// MasterCell indicates the cell that master tablet resides
 	MasterCell string
 
-	// TabletTypes represents the list of types we have serving tablets
-	// for, in this cell only.
-	TabletTypes []TabletType
-
 	// For atomic updates
 	version int64
 }
@@ -52,6 +48,7 @@ func (sa SrvShardArray) Swap(i, j int) {
 	sa[i], sa[j] = sa[j], sa[i]
 }
 
+// Sort will sort the SrvShardArray on keyrange.
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
 // NewSrvShard returns an empty SrvShard with the given version.
@@ -92,17 +89,13 @@ func (kp *KeyspacePartition) HasShard(name string) bool {
 	return false
 }
 
-// A distilled serving copy of keyspace detail stored in the local
+// SrvKeyspace us a distilled serving copy of keyspace detail stored in the local
 // cell for fast access. Derived from the global keyspace, shards and
 // local details.
 // In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
-
-	// List of available tablet types for this keyspace in this cell.
-	// May not have a server for every shard, but we have some.
-	TabletTypes []TabletType
 
 	// Copied from Keyspace
 	ShardingColumnName string

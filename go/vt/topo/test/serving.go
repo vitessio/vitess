@@ -95,7 +95,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	// test cell/keyspace/shard entries (SrvShard)
 	srvShard := topo.SrvShard{
 		ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
-		TabletTypes: []topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_RDONLY},
 	}
 	if err := ts.UpdateSrvShard(cell, "test_keyspace", "-10", &srvShard); err != nil {
 		t.Fatalf("UpdateSrvShard(1): %v", err)
@@ -105,10 +104,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 	if s, err := ts.GetSrvShard(cell, "test_keyspace", "-10"); err != nil ||
 		len(s.ServedTypes) != 1 ||
-		s.ServedTypes[0] != topo.TYPE_MASTER ||
-		len(s.TabletTypes) != 2 ||
-		s.TabletTypes[0] != topo.TYPE_REPLICA ||
-		s.TabletTypes[1] != topo.TYPE_RDONLY {
+		s.ServedTypes[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvShard(valid): %v", err)
 	}
 
@@ -123,7 +119,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 				},
 			},
 		},
-		TabletTypes:        []topo.TabletType{topo.TYPE_MASTER},
 		ShardingColumnName: "video_id",
 		ShardingColumnType: key.KIT_UINT64,
 		ServedFrom: map[topo.TabletType]string{
@@ -137,8 +132,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvKeyspace(invalid): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
-		len(k.TabletTypes) != 1 ||
-		k.TabletTypes[0] != topo.TYPE_MASTER ||
 		len(k.Partitions) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
@@ -157,8 +150,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspace(cell, "unknown_keyspace_so_far"); err != nil ||
-		len(k.TabletTypes) != 1 ||
-		k.TabletTypes[0] != topo.TYPE_MASTER ||
 		len(k.Partitions) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||

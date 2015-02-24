@@ -517,12 +517,6 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 		result += "<br>"
 	}
 
-	result += "<b>TabletTypes:</b>"
-	for _, tabletType := range st.Value.TabletTypes {
-		result += "&nbsp;" + string(tabletType)
-	}
-	result += "<br>"
-
 	if st.Value.ShardingColumnName != "" {
 		result += "<b>ShardingColumnName:</b>&nbsp;" + st.Value.ShardingColumnName + "<br>"
 		result += "<b>ShardingColumnType:</b>&nbsp;" + string(st.Value.ShardingColumnType) + "<br>"
@@ -584,12 +578,6 @@ func (st *SrvShardCacheStatus) StatusAsHTML() template.HTML {
 	result += "<br>"
 
 	result += "<b>MasterCell:</b>&nbsp;" + st.Value.MasterCell + "<br>"
-
-	result += "<b>TabletTypes:</b>"
-	for _, tabletType := range st.Value.TabletTypes {
-		result += "&nbsp;" + string(tabletType)
-	}
-	result += "<br>"
 
 	return template.HTML(result)
 }

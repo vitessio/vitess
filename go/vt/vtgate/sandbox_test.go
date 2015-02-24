@@ -172,7 +172,6 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 		shard := topo.SrvShard{
 			KeyRange:    shardKrArray[i],
 			ServedTypes: allTabletTypes,
-			TabletTypes: allTabletTypes,
 		}
 		shards = append(shards, shard)
 	}
@@ -188,7 +187,6 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 				Shards: shards,
 			},
 		},
-		TabletTypes: allTabletTypes,
 	}
 	if servedFromKeyspace != "" {
 		shardedSrvKeyspace.ServedFrom = map[topo.TabletType]string{
@@ -204,7 +202,6 @@ func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
 	shard := topo.SrvShard{
 		KeyRange:    key.KeyRange{Start: "", End: ""},
 		ServedTypes: allTabletTypes,
-		TabletTypes: allTabletTypes,
 	}
 
 	unshardedSrvKeyspace := &topo.SrvKeyspace{
@@ -219,7 +216,6 @@ func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
 				Shards: []topo.SrvShard{shard},
 			},
 		},
-		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
 	}
 	return unshardedSrvKeyspace, nil
 }

@@ -221,10 +221,6 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 			KeyRange:    shardInfo.KeyRange,
 			ServedTypes: shardInfo.GetServedTypesPerCell(cell),
 			MasterCell:  shardInfo.MasterAlias.Cell,
-			TabletTypes: make([]topo.TabletType, 0, len(locationAddrsMap)),
-		}
-		for tabletType := range locationAddrsMap {
-			srvShard.TabletTypes = append(srvShard.TabletTypes, tabletType)
 		}
 
 		span := trace.NewSpanFromContext(ctx)

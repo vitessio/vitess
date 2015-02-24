@@ -123,7 +123,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for shard, si := range shardCache {
 			srvShard, err := wr.ts.GetSrvShard(cell, keyspace, shard)
@@ -141,9 +140,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 			default:
 				return err
 			}
-			for _, tabletType := range srvShard.TabletTypes {
-				keyspaceDbTypes[tabletType] = true
-			}
 
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
@@ -154,11 +150,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 				}
 				srvKeyspace.Partitions[tabletType].Shards = append(srvKeyspace.Partitions[tabletType].Shards, *srvShard)
 			}
-		}
-
-		srvKeyspace.TabletTypes = make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType := range keyspaceDbTypes {
-			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
 		if err := wr.checkPartitions(cell, srvKeyspace); err != nil {
