@@ -132,7 +132,6 @@ func createTestAgent(t *testing.T) *ActionAgent {
 		Keyspace: keyspace,
 		Shard:    shard,
 		Type:     topo.TYPE_SPARE,
-		State:    topo.STATE_READ_ONLY,
 	}
 	if err := topo.CreateTablet(ts, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)

@@ -332,7 +332,6 @@ var testHealthStreamHealthStreamReply = &actionnode.HealthStreamReply{
 		Keyspace:       "keyspace",
 		Shard:          "shard",
 		Type:           topo.TYPE_MASTER,
-		State:          topo.STATE_READ_WRITE,
 		DbNameOverride: "overruled!",
 	},
 	BinlogPlayerMapSize: 3,

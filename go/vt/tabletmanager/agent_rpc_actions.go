@@ -157,21 +157,7 @@ func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissi
 // SetReadOnly makes the mysql instance read-only or read-write
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
-	err := agent.Mysqld.SetReadOnly(rdonly)
-	if err != nil {
-		return err
-	}
-
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if rdonly {
-		tablet.State = topo.STATE_READ_ONLY
-	} else {
-		tablet.State = topo.STATE_READ_WRITE
-	}
-	return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	return agent.Mysqld.SetReadOnly(rdonly)
 }
 
 // ChangeType changes the tablet type
@@ -422,18 +408,11 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) error {
 	_, err := agent.Mysqld.DemoteMaster()
-	if err != nil {
-		return err
-	}
-
+	return err
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
 	// until well promote the master.
-	return agent.TopoServer.UpdateTabletFields(agent.TabletAlias, func(tablet *topo.Tablet) error {
-		tablet.State = topo.STATE_READ_ONLY
-		return nil
-	})
 }
 
 // PromoteSlave transforms the current tablet from a slave to a master.
@@ -504,7 +483,6 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	// Once this action completes, update authoritative tablet node first.
 	if tablet.Type == topo.TYPE_MASTER {
 		tablet.Type = topo.TYPE_SPARE
-		tablet.State = topo.STATE_READ_ONLY
 	}
 	err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	if err != nil {
@@ -532,7 +510,6 @@ func (agent *ActionAgent) BreakSlaves(ctx context.Context) error {
 // is correctly represented in the replication graph
 func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	// Update tablet regardless - trend towards consistency.
-	tablet.State = topo.STATE_READ_WRITE
 	tablet.Type = topo.TYPE_MASTER
 	tablet.Health = nil
 	err := topo.UpdateTablet(ctx, agent.TopoServer, tablet)
