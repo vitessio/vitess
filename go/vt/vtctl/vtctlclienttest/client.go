@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	// register the go rpc tablet manager client
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
@@ -37,7 +38,6 @@ func VtctlClientTestSuite(t *testing.T, ts topo.Server, client vtctlclient.Vtctl
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)

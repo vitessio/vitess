@@ -77,10 +77,6 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
-	state := topo.STATE_READ_ONLY
-	if tabletType == topo.TYPE_MASTER {
-		state = topo.STATE_READ_WRITE
-	}
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
@@ -93,7 +89,6 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     tabletType,
-		State:    state,
 	}
 	for _, option := range options {
 		option(tablet)

@@ -84,7 +84,6 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 	oldTablet := *tablet.Tablet
 	newTablet := oldTablet
 	newTablet.Type = topo.TYPE_MASTER
-	newTablet.State = topo.STATE_READ_WRITE
 	newTablet.Health = nil
 	agent.setTablet(topo.NewTabletInfo(&newTablet, -1))
 	if err := agent.updateState(ctx, &oldTablet, "fastTabletExternallyReparented"); err != nil {
@@ -143,7 +142,6 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
 			func(tablet *topo.Tablet) error {
 				tablet.Type = topo.TYPE_MASTER
-				tablet.State = topo.STATE_READ_WRITE
 				tablet.Health = nil
 				return nil
 			})
