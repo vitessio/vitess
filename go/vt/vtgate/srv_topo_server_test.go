@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 )
 
@@ -189,6 +190,7 @@ func TestFilterUnhealthy(t *testing.T) {
 // fakeTopo is used in testing ResilientSrvTopoServer logic.
 // returns errors for everything, except the one keyspace.
 type fakeTopo struct {
+	faketopo.FakeTopo
 	keyspace  string
 	callCount int
 }
@@ -208,77 +210,6 @@ func (ft *fakeTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 func (ft *fakeTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	return nil, fmt.Errorf("No endpoints")
 }
-func (ft *fakeTopo) Close()                                                     {}
-func (ft *fakeTopo) GetKnownCells() ([]string, error)                           { return nil, nil }
-func (ft *fakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error { return nil }
-func (ft *fakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	return 0, nil
-}
-func (ft *fakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error)     { return nil, nil }
-func (ft *fakeTopo) GetKeyspaces() ([]string, error)                             { return nil, nil }
-func (ft *fakeTopo) DeleteKeyspaceShards(keyspace string) error                  { return nil }
-func (ft *fakeTopo) CreateShard(keyspace, shard string, value *topo.Shard) error { return nil }
-func (ft *fakeTopo) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	return 0, nil
-}
-func (ft *fakeTopo) ValidateShard(keyspace, shard string) error               { return nil }
-func (ft *fakeTopo) GetShard(keyspace, shard string) (*topo.ShardInfo, error) { return nil, nil }
-func (ft *fakeTopo) GetShardNames(keyspace string) ([]string, error)          { return nil, nil }
-func (ft *fakeTopo) DeleteShard(keyspace, shard string) error                 { return nil }
-func (ft *fakeTopo) CreateTablet(tablet *topo.Tablet) error                   { return nil }
-func (ft *fakeTopo) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
-	return 0, nil
-}
-func (ft *fakeTopo) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
-	return nil
-}
-func (ft *fakeTopo) DeleteTablet(alias topo.TabletAlias) error                  { return nil }
-func (ft *fakeTopo) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) { return nil, nil }
-func (ft *fakeTopo) GetTabletsByCell(cell string) ([]topo.TabletAlias, error)   { return nil, nil }
-func (ft *fakeTopo) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
-	return nil
-}
-func (ft *fakeTopo) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
-	return nil, nil
-}
-func (ft *fakeTopo) DeleteShardReplication(cell, keyspace, shard string) error { return nil }
-func (ft *fakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	return "", nil
-}
-func (ft *fakeTopo) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
-	return nil
-}
-func (ft *fakeTopo) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
-	return nil, nil
-}
-func (ft *fakeTopo) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
-	return nil
-}
-func (ft *fakeTopo) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
-	return nil
-}
-func (ft *fakeTopo) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (notifications <-chan *topo.EndPoints, stopWatching chan<- struct{}, err error) {
-	return nil, nil, nil
-}
-func (ft *fakeTopo) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
-	return nil
-}
-func (ft *fakeTopo) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) { return nil, nil }
-func (ft *fakeTopo) DeleteSrvShard(cell, keyspace, shard string) error                { return nil }
-func (ft *fakeTopo) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
-	return nil
-}
-func (ft *fakeTopo) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	return nil
-}
-func (ft *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	return "", nil
-}
-func (ft *fakeTopo) UnlockKeyspaceForAction(keyspace, lockPath, results string) error { return nil }
-func (ft *fakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	return "", nil
-}
-func (ft *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error { return nil }
 
 type fakeTopoRemoteMaster struct {
 	fakeTopo
