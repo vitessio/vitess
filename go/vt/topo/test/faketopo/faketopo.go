@@ -3,129 +3,171 @@
 package faketopo
 
 import (
-	"fmt"
-	"testing"
-	"time"
+	"errors"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 
-const (
-	// TestShard is the shard we use in tests
-	TestShard = "0"
+var errNotImplemented = errors.New("Not implemented")
 
-	// TestKeyspace is the keyspace we use in tests
-	TestKeyspace = "test_keyspace"
-)
+// FakeTopo is a topo.Server implementation that always returns errNotImplemented errors.
+type FakeTopo struct{}
 
-func newKeyRange(value string) key.KeyRange {
-	_, result, err := topo.ValidateShardName(value)
-	if err != nil {
-		panic(err)
-	}
-	return result
+func (ft FakeTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	return nil, errNotImplemented
 }
 
-type tabletPack struct {
-	*topo.Tablet
-	mysql *mysqlctl.FakeMysqlDaemon
+func (ft FakeTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+	return nil, errNotImplemented
 }
 
-// Fixture is a fixture that provides a fresh topology, to which you
-// can add tablets that react to events and have fake MySQL
-// daemons. It uses an in memory fake ZooKeeper to store its
-// data. When you are done with the fixture you have to call its
-// TearDown method.
-type Fixture struct {
-	*testing.T
-	tablets  map[int]*tabletPack
-	done     chan struct{}
-	Topo     topo.Server
-	Wrangler *wrangler.Wrangler
+func (ft FakeTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	return nil, errNotImplemented
 }
 
-// New creates a topology fixture.
-func New(t *testing.T, logger logutil.Logger, ts topo.Server, cells []string) *Fixture {
-	wr := wrangler.New(logger, ts, tmclient.NewTabletManagerClient(), 1*time.Second)
+func (ft FakeTopo) Close() {}
 
-	return &Fixture{
-		T:        t,
-		Topo:     ts,
-		Wrangler: wr,
-		done:     make(chan struct{}, 1),
-		tablets:  make(map[int]*tabletPack),
-	}
+func (ft FakeTopo) GetKnownCells() ([]string, error) {
+	return nil, errNotImplemented
 }
 
-// TearDown releases any resources used by the fixture.
-func (fix *Fixture) TearDown() {
-	close(fix.done)
+func (ft FakeTopo) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
+	return errNotImplemented
 }
 
-// MakeMySQLMaster makes the (fake) MySQL used by tablet identified by
-// uid the master.
-func (fix *Fixture) MakeMySQLMaster(uid int) {
-	newMaster, ok := fix.tablets[uid]
-	if !ok {
-		fix.Fatalf("bad tablet uid: %v", uid)
-	}
-	for id, tablet := range fix.tablets {
-		if id == uid {
-			tablet.mysql.MasterAddr = ""
-		} else {
-			tablet.mysql.MasterAddr = newMaster.MysqlIPAddr()
-		}
-	}
+func (ft FakeTopo) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
+	return 0, errNotImplemented
 }
 
-// AddTablet adds a new tablet to the topology and starts its event
-// loop.
-func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, master *topo.Tablet) *topo.Tablet {
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: uint32(uid)},
-		Hostname: fmt.Sprintf("%vbsr%v", cell, uid),
-		IPAddr:   fmt.Sprintf("212.244.218.%v", uid),
-		Portmap: map[string]int{
-			"vt":    3333 + 10*uid,
-			"mysql": 3334 + 10*uid,
-		},
-		Keyspace: TestKeyspace,
-		Type:     tabletType,
-		Shard:    TestShard,
-		KeyRange: newKeyRange(TestShard),
-	}
-
-	if err := fix.Wrangler.InitTablet(context.Background(), tablet, true, true, false); err != nil {
-		fix.Fatalf("CreateTablet: %v", err)
-	}
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if master != nil {
-		mysqlDaemon.MasterAddr = master.MysqlIPAddr()
-	}
-	mysqlDaemon.MysqlPort = 3334 + 10*uid
-
-	pack := &tabletPack{Tablet: tablet, mysql: mysqlDaemon}
-	fix.tablets[uid] = pack
-
-	return tablet
+func (ft FakeTopo) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+	return nil, errNotImplemented
 }
 
-// GetTablet returns a fresh copy of the tablet identified by uid.
-func (fix *Fixture) GetTablet(uid int) *topo.TabletInfo {
-	tablet, ok := fix.tablets[uid]
-	if !ok {
-		panic("bad tablet uid")
-	}
-	ti, err := fix.Topo.GetTablet(tablet.Alias)
-	if err != nil {
-		fix.Fatalf("GetTablet %v: %v", tablet.Alias, err)
-	}
-	return ti
+func (ft FakeTopo) GetKeyspaces() ([]string, error) {
+	return nil, errNotImplemented
+}
 
+func (ft FakeTopo) DeleteKeyspaceShards(keyspace string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) CreateShard(keyspace, shard string, value *topo.Shard) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
+	return 0, errNotImplemented
+}
+
+func (ft FakeTopo) ValidateShard(keyspace, shard string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) GetShardNames(keyspace string) ([]string, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) DeleteShard(keyspace, shard string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) CreateTablet(tablet *topo.Tablet) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
+	return 0, errNotImplemented
+}
+
+func (ft FakeTopo) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) DeleteTablet(alias topo.TabletAlias) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) DeleteShardReplication(cell, keyspace, shard string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
+	return "", errNotImplemented
+}
+
+func (ft FakeTopo) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+	return nil, nil, errNotImplemented
+}
+
+func (ft FakeTopo) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
+	return nil, errNotImplemented
+}
+
+func (ft FakeTopo) DeleteSrvShard(cell, keyspace, shard string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
+	return "", errNotImplemented
+}
+
+func (ft FakeTopo) UnlockKeyspaceForAction(keyspace, lockPath, results string) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
+	return "", errNotImplemented
+}
+
+func (ft FakeTopo) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
+	return errNotImplemented
 }
