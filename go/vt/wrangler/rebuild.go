@@ -169,7 +169,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
-		if err := wr.checkPartitions(cell, srvKeyspace); err != nil {
+		if err := wr.orderAndCheckPartitions(cell, srvKeyspace); err != nil {
 			return err
 		}
 	}
@@ -184,8 +184,9 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	return nil
 }
 
-// checkPartitions will check the partition list is correct.
-func (wr *Wrangler) checkPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
+// orderAndCheckPartitions will re-order the partition list, and check
+// it's correct.
+func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
 
 	// now check them all
 	for tabletType, partition := range srvKeyspace.Partitions {
