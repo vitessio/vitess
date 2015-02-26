@@ -43,6 +43,11 @@ func TestSrvKeySpace(t *testing.T) {
 						MasterCell:  "test_cell",
 					},
 				},
+				ShardReferences: []ShardReference{
+					ShardReference{
+						Name: "test_shard",
+					},
+				},
 			},
 		},
 		TabletTypes:        []TabletType{TYPE_MASTER},
@@ -67,6 +72,11 @@ func TestSrvKeySpace(t *testing.T) {
 						ServedTypes: []TabletType{TYPE_MASTER},
 						MasterCell:  "test_cell",
 						TabletTypes: []TabletType{},
+					},
+				},
+				ShardReferences: []ShardReference{
+					ShardReference{
+						Name: "test_shard",
 					},
 				},
 			},

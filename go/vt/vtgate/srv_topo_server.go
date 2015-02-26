@@ -512,7 +512,7 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 	for tabletType, keyspacePartition := range st.Value.Partitions {
 		result += "&nbsp;<b>" + string(tabletType) + "</b>"
 		for _, shard := range keyspacePartition.Shards {
-			result += "&nbsp;" + shard.ShardName()
+			result += "&nbsp;" + shard.Name
 		}
 		result += "<br>"
 	}

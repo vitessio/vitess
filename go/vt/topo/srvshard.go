@@ -5,15 +5,10 @@
 package topo
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
 )
-
-// This is the shard name for when the keyrange covers the entire space
-// for unsharded database.
-const SHARD_ZERO = "0"
 
 // SrvShard contains a roll-up of the shard in the local namespace.
 // By design, it should not contain details about which shard is serving what,
@@ -70,23 +65,14 @@ func NewSrvShard(version int64) *SrvShard {
 	}
 }
 
-// ShardName returns the name of a shard.
-func (ss *SrvShard) ShardName() string {
-	if ss.Name != "" {
-		return ss.Name
-	}
-	if !ss.KeyRange.IsPartial() {
-		return SHARD_ZERO
-	}
-	return fmt.Sprintf("%v-%v", string(ss.KeyRange.Start.Hex()), string(ss.KeyRange.End.Hex()))
-}
-
 // ShardReference is the structure used by SrvKeyspace to point to a Shard
 type ShardReference struct {
 	// Copied / inferred from Shard
 	Name     string
 	KeyRange key.KeyRange
 }
+
+//go:generate bsongen -file $GOFILE -type ShardReference -o shard_reference_bson.go
 
 // ShardReferenceArray is used for sorting ShardReference arrays
 type ShardReferenceArray []ShardReference
@@ -124,7 +110,7 @@ type KeyspacePartition struct {
 // using ShardReferences when it is populated.
 func (kp *KeyspacePartition) HasShard(name string) bool {
 	for _, srvShard := range kp.Shards {
-		if srvShard.ShardName() == name {
+		if srvShard.Name == name {
 			return true
 		}
 	}

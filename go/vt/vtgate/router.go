@@ -151,7 +151,7 @@ func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Pl
 	if len(allShards) != 1 {
 		return nil, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
 	}
-	return newScatterParams(vcursor.query.Sql, ks, vcursor.query.BindVariables, []string{allShards[0].ShardName()}), nil
+	return newScatterParams(vcursor.query.Sql, ks, vcursor.query.BindVariables, []string{allShards[0].Name}), nil
 }
 
 func (rtr *Router) paramsSelectEqual(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
@@ -224,7 +224,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilde
 	}
 	var shards []string
 	for _, shard := range allShards {
-		shards = append(shards, shard.ShardName())
+		shards = append(shards, shard.Name)
 	}
 	return newScatterParams(plan.Rewritten, ks, vcursor.query.BindVariables, shards), nil
 }

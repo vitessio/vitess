@@ -269,7 +269,7 @@ func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 					continue
 				}
 				for _, srvShard := range kp.Shards {
-					shard := srvShard.ShardName()
+					shard := srvShard.Name
 					if displayedShards[shard] {
 						continue
 					}
