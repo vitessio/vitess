@@ -47,7 +47,8 @@ type DialerFunc func(ctx context.Context, address string, timeout time.Duration)
 type VTGateConn interface {
 	// Execute executes a non-streaming query on vtgate.
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-
+	// ExecuteShard executes a non-streaming query for multiple shards on vtgate
+	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
 	// ExecuteBatch executes a group of queries.
 	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, tabletType topo.TabletType) (*tproto.QueryResultList, error)
 

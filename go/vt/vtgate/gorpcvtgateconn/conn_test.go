@@ -6,6 +6,7 @@ package gorpcvtgateconn
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -26,10 +27,12 @@ const (
 
 var once sync.Once
 
+var port int
+
 func initEnv() {
 	once.Do(func() {
 		err := vttest.LocalLaunch(
-			[]string{"0"},
+			[]string{"0", "1", "2"},
 			1,
 			0,
 			"test_keyspace",
@@ -40,16 +43,67 @@ func initEnv() {
 			vttest.LocalTeardown()
 			panic(err)
 		}
+		fmt.Println("Launched local cluster")
 	})
 }
 
-/*
 func TestMain(m *testing.M) {
 	r := m.Run()
 	vttest.LocalTeardown()
 	os.Exit(r)
 }
-*/
+
+func TestExecuteShard(t *testing.T) {
+	t.Skip("Take too much time to run, skipping...")
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode.")
+	}
+	initEnv()
+
+	conn := testDial(t)
+	defer conn.Close()
+	keyspace := "test_keyspace"
+	shards := []string{"1", "2"}
+	result, err := testExecShard(conn, "insert into test_table(val) values ('abcd')", nil, actionCommit, keyspace, shards)
+	if err != nil {
+		t.Error(err)
+	}
+	if result.InsertId == 0 {
+		t.Errorf("InsertId: 0, want non-zero")
+	}
+	if result.RowsAffected != 2 {
+		t.Errorf("RowsAffected: %d, want 2", result.RowsAffected)
+	}
+
+	result, err = testExecShard(conn, "select * from test_table", nil, actionSelect, keyspace, shards)
+	if err != nil {
+		t.Error(err)
+	}
+	wantFields := []mproto.Field{
+		{Name: "id", Type: 3},
+		{Name: "val", Type: 253},
+	}
+	wantVal := "abcd"
+	if !reflect.DeepEqual(result.Fields, wantFields) {
+		t.Errorf("Fields: \n%#v, want \n%#v", result.Fields, wantFields)
+	}
+	gotVal := result.Rows[0][1].String()
+	if gotVal != wantVal {
+		t.Errorf("val: %q, want %q", gotVal, wantVal)
+	}
+	gotVal = result.Rows[1][1].String()
+	if gotVal != wantVal {
+		t.Errorf("val: %q, want %q", gotVal, wantVal)
+	}
+
+	_, err = testExecShard(conn, "delete from test_table", nil, actionCommit, keyspace, shards)
+	if err != nil {
+		t.Error(err)
+	}
+	if result.RowsAffected != uint64(len(shards)) {
+		t.Errorf("RowsAffected: %d, want %d", result.RowsAffected, len(shards))
+	}
+}
 
 func TestExecuteCommit(t *testing.T) {
 	t.Skip("skipping for go1.3")
@@ -241,8 +295,7 @@ func TestBadTx(t *testing.T) {
 }
 
 func testDial(t *testing.T) vtgateconn.VTGateConn {
-	// TODO(sougou): Fetch port from the launch output.
-	conn, err := dial(nil, "localhost:15007", time.Duration(3*time.Second))
+	conn, err := dial(nil, fmt.Sprintf("localhost:%d", vttest.VtGatePort()), time.Duration(3*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,6 +303,17 @@ func testDial(t *testing.T) vtgateconn.VTGateConn {
 }
 
 func testExec(conn vtgateconn.VTGateConn, query string, bindVars map[string]interface{}, action int) (*mproto.QueryResult, error) {
+	return testExecHelper(conn, query, bindVars, action, func(ctx context.Context, query string) (*mproto.QueryResult, error) {
+		return conn.Execute(ctx, query, nil, "master")
+	})
+}
+
+func testExecShard(conn vtgateconn.VTGateConn, query string, bindVars map[string]interface{}, action int, keyspace string, shards []string) (*mproto.QueryResult, error) {
+	return testExecHelper(conn, query, bindVars, action, func(ctx context.Context, query string) (*mproto.QueryResult, error) {
+		return conn.ExecuteShard(ctx, query, keyspace, shards, nil, "master")
+	})
+}
+func testExecHelper(conn vtgateconn.VTGateConn, query string, bindVars map[string]interface{}, action int, execFn func(ctx context.Context, query string) (*mproto.QueryResult, error)) (*mproto.QueryResult, error) {
 	ctx := context.Background()
 	var err error
 	if action == actionCommit || action == actionRollback {
@@ -258,7 +322,7 @@ func testExec(conn vtgateconn.VTGateConn, query string, bindVars map[string]inte
 			return nil, err
 		}
 	}
-	result, err := conn.Execute(ctx, query, nil, "master")
+	result, err := execFn(ctx, query)
 	if err != nil {
 		return nil, err
 	}
