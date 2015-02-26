@@ -126,6 +126,8 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for shard, si := range shardCache {
+			servedTypes := si.GetServedTypesPerCell(cell)
+
 			srvShard, err := wr.ts.GetSrvShard(cell, keyspace, shard)
 			switch err {
 			case nil:
@@ -135,7 +137,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 				srvShard = &topo.SrvShard{
 					Name:        si.ShardName(),
 					KeyRange:    si.KeyRange,
-					ServedTypes: si.GetServedTypesPerCell(cell),
+					ServedTypes: servedTypes,
 					MasterCell:  si.MasterAlias.Cell,
 				}
 			default:
@@ -147,12 +149,18 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
-			for _, tabletType := range srvShard.ServedTypes {
+			for _, tabletType := range servedTypes {
 				if _, ok := srvKeyspace.Partitions[tabletType]; !ok {
 					srvKeyspace.Partitions[tabletType] = &topo.KeyspacePartition{
-						Shards: make([]topo.SrvShard, 0)}
+						Shards:          make([]topo.SrvShard, 0),
+						ShardReferences: make([]topo.ShardReference, 0),
+					}
 				}
 				srvKeyspace.Partitions[tabletType].Shards = append(srvKeyspace.Partitions[tabletType].Shards, *srvShard)
+				srvKeyspace.Partitions[tabletType].ShardReferences = append(srvKeyspace.Partitions[tabletType].ShardReferences, topo.ShardReference{
+					Name:     si.ShardName(),
+					KeyRange: si.KeyRange,
+				})
 			}
 		}
 
@@ -161,7 +169,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
-		if err := wr.checkPartitions(cell, srvKeyspace); err != nil {
+		if err := wr.orderAndCheckPartitions(cell, srvKeyspace); err != nil {
 			return err
 		}
 	}
@@ -176,25 +184,26 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	return nil
 }
 
-// checkPartitions will check the partition list is correct.
-// (it will also set Shards, but that should go away soon).
-func (wr *Wrangler) checkPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
+// orderAndCheckPartitions will re-order the partition list, and check
+// it's correct.
+func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *topo.SrvKeyspace) error {
 
 	// now check them all
 	for tabletType, partition := range srvKeyspace.Partitions {
 		topo.SrvShardArray(partition.Shards).Sort()
+		topo.ShardReferenceArray(partition.ShardReferences).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,
 		// and the values in between match: End[i] == Start[i+1]
-		if partition.Shards[0].KeyRange.Start != key.MinKey {
+		if partition.ShardReferences[0].KeyRange.Start != key.MinKey {
 			return fmt.Errorf("keyspace partition for %v in cell %v does not start with %v", tabletType, cell, key.MinKey)
 		}
-		if partition.Shards[len(partition.Shards)-1].KeyRange.End != key.MaxKey {
+		if partition.ShardReferences[len(partition.ShardReferences)-1].KeyRange.End != key.MaxKey {
 			return fmt.Errorf("keyspace partition for %v in cell %v does not end with %v", tabletType, cell, key.MaxKey)
 		}
-		for i := range partition.Shards[0 : len(partition.Shards)-1] {
-			if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
-				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
+		for i := range partition.ShardReferences[0 : len(partition.ShardReferences)-1] {
+			if partition.ShardReferences[i].KeyRange.End != partition.ShardReferences[i+1].KeyRange.Start {
+				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, partition.ShardReferences[i].KeyRange.End.Hex(), partition.ShardReferences[i+1].KeyRange.Start.Hex())
 			}
 		}
 	}

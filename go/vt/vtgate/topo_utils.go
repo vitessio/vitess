@@ -27,7 +27,7 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, k
 		shards[shard] = true
 	}
 	var res = make([]string, 0, len(shards))
-	for s, _ := range shards {
+	for s := range shards {
 		res = append(res, s)
 	}
 	return keyspace, res, nil
@@ -62,7 +62,7 @@ func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId)
 
 	for _, srvShard := range allShards {
 		if srvShard.KeyRange.Contains(keyspaceId) {
-			return srvShard.ShardName(), nil
+			return srvShard.Name, nil
 		}
 	}
 	return "", fmt.Errorf("KeyspaceId %v didn't match any shards %+v", keyspaceId, allShards)
@@ -103,7 +103,7 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 		}
 	}
 	var res = make([]string, 0, len(uniqueShards))
-	for s, _ := range uniqueShards {
+	for s := range uniqueShards {
 		res = append(res, s)
 	}
 	return keyspace, res, nil
@@ -115,14 +115,14 @@ func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]stri
 
 	if !kr.IsPartial() {
 		for j := 0; j < len(allShards); j++ {
-			shards = append(shards, allShards[j].ShardName())
+			shards = append(shards, allShards[j].Name)
 		}
 		return shards, nil
 	}
 	for j := 0; j < len(allShards); j++ {
 		shard := allShards[j]
 		if key.KeyRangesIntersect(kr, shard.KeyRange) {
-			shards = append(shards, shard.ShardName())
+			shards = append(shards, shard.Name)
 		}
 	}
 	return shards, nil
@@ -143,7 +143,7 @@ func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace 
 		shardnum++
 	}
 	for shardnum < len(allShards) {
-		shards = append(shards, allShards[shardnum].ShardName())
+		shards = append(shards, allShards[shardnum].Name)
 		if kr.End == allShards[shardnum].KeyRange.End {
 			return keyspace, shards, nil
 		}
