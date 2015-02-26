@@ -1,0 +1,37 @@
+# Site wide configuration
+
+title: Vitess
+description: "A set of servers and tools meant to facilitate scaling of MySQL databases for the web."
+logo: 120x120.gif
+teaser: 400x250.gif
+locale: en_US
+url: 
+project-name: Vitess
+repo: https://github.com/youtube/vitess
+
+# Jekyll configuration
+sass:
+  sass_dir: _sass
+  style: compressed
+permalink: /:categories/:title/
+highlighter: pygments
+gems:
+  - jekyll-sitemap
+
+markdown: redcarpet
+
+redcarpet:
+  extensions: ["no_intra_emphasis", "fenced_code_blocks", "autolink", "tables", "with_toc_data"]
+
+# Site owner
+owner:
+  name: Vitess Team
+  web: https://github.com/youtube/vitess
+  email: 
+  twitter: 
+  bio: 
+  avatar: 
+  disqus-shortname:
+
+
+exclude: ["lib", "config.rb", ".sass-cache", "Capfile", "config", "log", "Rakefile", "Rakefile.rb", "tmp", "*.sublime-project", "*.sublime-workspace", "Gemfile", "Gemfile.lock", "README.md", "LICENSE", "node_modules", "Gruntfile.js", "package.json"]
