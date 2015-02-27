@@ -36,7 +36,7 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 }
 
 // ExecuteVtctlCommand is part of the pb.VtctlServer interface
-func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, reply pb.Vtctl_ExecuteVtctlCommandServer) error {
+func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stream pb.Vtctl_ExecuteVtctlCommandServer) error {
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
@@ -50,7 +50,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, repl
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			reply.Send(&pb.LoggerEvent{
+			stream.Send(&pb.LoggerEvent{
 				Time: &pb.Time{
 					Seconds:     e.Time.Unix(),
 					Nanoseconds: int64(e.Time.Nanosecond()),
@@ -68,7 +68,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, repl
 	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), time.Duration(args.LockTimeout))
 
 	// execute the command
-	err := vtctl.RunCommand(reply.Context(), wr, args.Args)
+	err := vtctl.RunCommand(stream.Context(), wr, args.Args)
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)
