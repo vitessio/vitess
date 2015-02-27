@@ -121,6 +121,12 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 						ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
 					},
 				},
+				ShardReferences: []topo.ShardReference{
+					topo.ShardReference{
+						Name:     "-80",
+						KeyRange: newKeyRange("-80"),
+					},
+				},
 			},
 		},
 		TabletTypes:        []topo.TabletType{topo.TYPE_MASTER},
@@ -143,6 +149,9 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
+		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
+		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
 		k.ShardingColumnName != "video_id" ||
 		k.ShardingColumnType != key.KIT_UINT64 ||
 		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
@@ -163,6 +172,9 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
+		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
+		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
 		k.ShardingColumnName != "video_id" ||
 		k.ShardingColumnType != key.KIT_UINT64 ||
 		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
