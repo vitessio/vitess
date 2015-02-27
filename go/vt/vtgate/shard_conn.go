@@ -286,31 +286,32 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
 		case tabletconn.ERR_TX_POOL_FULL:
-			// Do not retry if deadline passed.
-			if deadline, ok := ctx.Deadline(); ok {
-				if deadline.Before(time.Now()) {
-					return false
-				}
+			// Do not retry if ctx.Done() is closed.
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+				return true
 			}
-			// Retry without reconnecting.
-			return true
 		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
-			// No-op: treat these errors as operational by breaking out of this switch
+			// Retry on RETRY and FATAL if not in a transaction.
+			inTransaction := (transactionID != 0)
+			sdc.markDown(conn, err.Error())
+			// Do not retry if ctx.Done() is closed.
+			select {
+			case <-ctx.Done():
+				return false
+			default:
+				return !inTransaction
+			}
 		default:
 			// Should not retry for normal server errors.
 			return false
 		}
 	}
-	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	inTransaction := (transactionID != 0)
+	// Do not retry on operational error.
 	sdc.markDown(conn, err.Error())
-	// Do not retry if deadline passed.
-	if deadline, ok := ctx.Deadline(); ok {
-		if deadline.Before(time.Now()) {
-			return false
-		}
-	}
-	return !inTransaction
+	return false
 }
 
 // markDown closes conn and temporarily marks the associated
