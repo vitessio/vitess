@@ -1,0 +1,44 @@
+// FIXME(alainjobart): I had to compile protoc from:
+// https://github.com/google/protobuf/blob/master/INSTALL.txt
+// and then run:
+// protoc vtctl.proto --go_out=plugins=grpc:.
+// to generate this file. We need to streamline this.
+//
+// (this is in addition to running:
+// go get -a github.com/golang/protobuf/protoc-gen-go
+// but that is in bootstrap.sh)
+
+// This package contains a service allowing you to use vtctld as a
+// proxy for vt commands.
+syntax = "proto3";
+
+package vtctl;
+
+// ExecuteVtctlCommandArgs arguments to ExecuteVtctlCommand
+// timeouts are in nanoseconds.
+message ExecuteVtctlCommandArgs {
+  repeated string args = 1;
+  optional int64 action_timeout = 2;
+  optional int64 lock_timeout = 3;
+}
+
+// Time represents a time stamp in nanoseconds. In go, use time.Unix to
+// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
+message Time {
+  optional int64 seconds = 1;
+  optional int64 nanoseconds = 2;
+}
+
+// Streamed by ExecuteVtctlCommand
+message LoggerEvent {
+  optional Time time = 1;
+  optional int64 level = 2;
+  optional string file = 3;
+  optional int64 line = 4;
+  optional string value = 5;
+}
+
+// Service Vtctl allows you to call vt commands through gRPC.
+service Vtctl {
+  rpc ExecuteVtctlCommand (ExecuteVtctlCommandArgs) returns (stream LoggerEvent) {};
+}
