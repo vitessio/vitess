@@ -866,11 +866,17 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % str(e))
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
-        "select 1 from vt_insert_test", {},
-        KEYSPACE_NAME, 'replica',
-        keyranges=[self.keyrange])
+          "select 1 from vt_insert_test", {},
+          KEYSPACE_NAME, 'replica',
+          keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     # force health check so tablet can become serving
     utils.run_vtctl(['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],

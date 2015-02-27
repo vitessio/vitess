@@ -7,8 +7,11 @@
 package vttest
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,6 +24,7 @@ var (
 	curKeyspace   string
 	curSchema     string
 	curVSchema    string
+	curVtGatePort int
 )
 
 func run(shardNames []string, replicas, rdonly int, keyspace, schema, vschema, op string) error {
@@ -30,7 +34,6 @@ func run(shardNames []string, replicas, rdonly int, keyspace, schema, vschema, o
 	curKeyspace = keyspace
 	curSchema = schema
 	curVSchema = vschema
-
 	vttop := os.Getenv("VTTOP")
 	if vttop == "" {
 		return errors.New("VTTOP not set")
@@ -59,9 +62,24 @@ func run(shardNames []string, replicas, rdonly int, keyspace, schema, vschema, o
 		cmd.Args = append(cmd.Args, "--vschema", vschema)
 	}
 	cmd.Args = append(cmd.Args, op)
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	var stdout io.ReadCloser
+	var output []byte
+	stdout, err = cmd.StdoutPipe()
+	cmd.Start()
+	r := bufio.NewReader(stdout)
+	output, err = r.ReadBytes('\n')
+	if err == nil {
+		var data map[string]interface{}
+		if err := json.Unmarshal(output, &data); err == nil {
+			curVtGatePortFloat64, ok := data["port"].(float64)
+			if ok {
+				curVtGatePort = int(curVtGatePortFloat64)
+				fmt.Printf("VtGate Port = %d\n", curVtGatePort)
+			}
+		}
+	}
+	return err
 }
 
 // LocalLaunch launches the cluster. Only one cluster can be active at a time.
@@ -81,4 +99,9 @@ func LocalTeardown() error {
 	err := run(curShardNames, curReplicas, curRdonly, curKeyspace, curSchema, curVSchema, "teardown")
 	curShardNames = nil
 	return err
+}
+
+// VtGatePort returns current VtGate port
+func VtGatePort() int {
+	return curVtGatePort
 }

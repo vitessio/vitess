@@ -25,6 +25,7 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 	return string(lj) == string(rj), nil
 }
 
+// CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
@@ -39,7 +40,6 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
 		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
@@ -75,7 +75,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
-	ti.State = topo.STATE_READ_ONLY
+	ti.Hostname = "remotehost"
 	if err := topo.UpdateTablet(ctx, ts, ti); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
@@ -84,12 +84,12 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if want := topo.STATE_READ_ONLY; ti.State != want {
-		t.Errorf("ti.State: want %v, got %v", want, ti.State)
+	if want := "remotehost"; ti.Hostname != want {
+		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
 	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *topo.Tablet) error {
-		t.State = topo.STATE_READ_WRITE
+		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
@@ -99,8 +99,8 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
 
-	if want := topo.STATE_READ_WRITE; ti.State != want {
-		t.Errorf("ti.State: want %v, got %v", want, ti.State)
+	if want := "anotherhost"; ti.Hostname != want {
+		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
 	if err := ts.DeleteTablet(tablet.Alias); err != nil {

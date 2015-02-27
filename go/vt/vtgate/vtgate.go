@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	// import vindexes implementations
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 )
@@ -552,7 +553,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	}
 	keyRangeByShard := map[string]kproto.KeyRange{}
 	for _, shard := range shards {
-		keyRangeByShard[shard.ShardName()] = shard.KeyRange
+		keyRangeByShard[shard.Name] = shard.KeyRange
 	}
 	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
 	splits, err := vtg.resolver.scatterConn.SplitQuery(ctx, req.Query, perShardSplitCount, keyRangeByShard, keyspace)

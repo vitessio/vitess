@@ -29,3 +29,6 @@ third_party/acolyte
 # intellij files
 *.iml
 .idea
+
+## vitess.io preview site
+preview-vitess.io/

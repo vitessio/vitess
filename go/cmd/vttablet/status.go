@@ -42,7 +42,6 @@ var (
       Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}}<br>
       Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard .Tablet.Type}}<br>
       Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
-      State: {{.Tablet.State}}<br>
       {{if .BlacklistedTables}}
         BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
       {{end}}
@@ -75,7 +74,7 @@ var (
 	// healthTemplate is just about the tablet health
 	healthTemplate = `
 <div style="font-size: x-large">Current status: <span style="padding-left: 0.5em; padding-right: 0.5em; padding-bottom: 0.5ex; padding-top: 0.5ex;" class="{{.CurrentClass}}">{{.CurrentHTML}}</span></div>
-<p>Polling health information from {{github_com_youtube_vitess_health_html_name}}.</p>
+<p>Polling health information from {{github_com_youtube_vitess_health_html_name}}. ({{.Config}})</p>
 <h2>History</h2>
 <table>
   <tr>
@@ -146,6 +145,7 @@ No binlog player is running.
 
 type healthStatus struct {
 	Records []interface{}
+	Config  template.HTML
 }
 
 func (hs *healthStatus) CurrentClass() string {
@@ -182,7 +182,10 @@ func addStatusParts(qsc tabletserver.QueryServiceControl) {
 			"github_com_youtube_vitess_health_html_name": healthHTMLName,
 		})
 		servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
-			return &healthStatus{Records: agent.History.Records()}
+			return &healthStatus{
+				Records: agent.History.Records(),
+				Config:  tabletmanager.ConfigHTML(),
+			}
 		})
 	}
 	qsc.AddStatusPart()

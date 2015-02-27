@@ -332,7 +332,6 @@ var testHealthStreamHealthStreamReply = &actionnode.HealthStreamReply{
 		Keyspace:       "keyspace",
 		Shard:          "shard",
 		Type:           topo.TYPE_MASTER,
-		State:          topo.STATE_READ_WRITE,
 		DbNameOverride: "overruled!",
 	},
 	BinlogPlayerMapSize: 3,
@@ -476,9 +475,10 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 
 var testReplicationStatus = &myproto.ReplicationStatus{
 	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.GoogleGTID{
-			ServerID: 345,
-			GroupID:  789,
+		GTIDSet: myproto.MariadbGTID{
+			Domain:   1,
+			Server:   345,
+			Sequence: 789,
 		},
 	},
 	SlaveIORunning:      true,

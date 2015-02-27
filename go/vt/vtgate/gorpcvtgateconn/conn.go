@@ -69,6 +69,26 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return result.Result, nil
 }
 
+func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	request := proto.QueryShard{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    tabletType,
+		Session:       conn.session,
+	}
+	var result proto.QueryResult
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteShard", request, &result); err != nil {
+		return nil, fmt.Errorf("execute: %v", err)
+	}
+	conn.session = result.Session
+	if result.Error != "" {
+		return nil, fmt.Errorf("execute shards: %s", result.Error)
+	}
+	return result.Result, nil
+}
+
 func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, tabletType topo.TabletType) (*tproto.QueryResultList, error) {
 	return nil, fmt.Errorf("not implemented yet")
 }
