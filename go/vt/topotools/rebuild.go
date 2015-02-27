@@ -5,7 +5,6 @@
 package topotools
 
 import (
-	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -17,10 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
-
-// UseSrvShardLocks is a deprecated flag. We leave it here until it's removed
-// from all invocations of the tools.
-var UseSrvShardLocks = flag.Bool("use_srv_shard_locks", true, "DEPRECATED: If true, takes the SrvShard lock for each shard being rebuilt")
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
 //

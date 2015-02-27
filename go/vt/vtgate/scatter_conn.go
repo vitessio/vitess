@@ -92,7 +92,7 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 							errRecorder.RecordError(err)
 							return
 						}
-					}(shard.ShardName(), tabletType)
+					}(shard.Name, tabletType)
 				}
 			}
 		}(ksName)

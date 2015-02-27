@@ -5,17 +5,20 @@
 package topo
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
 )
 
-// This is the shard name for when the keyrange covers the entire space
-// for unsharded database.
-const SHARD_ZERO = "0"
-
 // SrvShard contains a roll-up of the shard in the local namespace.
+// By design, it should not contain details about which shard is serving what,
+// but just internal details to the shard. It should also not contain
+// details that would change when tablets are added / removed in this
+// cell/shard.
+// FIXME(alainjobart) remove ServedTypes as it violates the first rule, and
+// is unused by clients anyway.
+// FIXME(alainjobart) remove TabletTypes as it violates the second rule, and
+// is also unused by clients.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	// Copied / inferred from Shard
@@ -58,40 +61,65 @@ func NewSrvShard(version int64) *SrvShard {
 	}
 }
 
-// ShardName returns the name of a shard.
-func (ss *SrvShard) ShardName() string {
-	if ss.Name != "" {
-		return ss.Name
-	}
-	if !ss.KeyRange.IsPartial() {
-		return SHARD_ZERO
-	}
-	return fmt.Sprintf("%v-%v", string(ss.KeyRange.Start.Hex()), string(ss.KeyRange.End.Hex()))
+// ShardReference is the structure used by SrvKeyspace to point to a Shard
+type ShardReference struct {
+	// Copied / inferred from Shard
+	Name     string
+	KeyRange key.KeyRange
 }
+
+//go:generate bsongen -file $GOFILE -type ShardReference -o shard_reference_bson.go
+
+// ShardReferenceArray is used for sorting ShardReference arrays
+type ShardReferenceArray []ShardReference
+
+// Len implements sort.Interface
+func (sra ShardReferenceArray) Len() int { return len(sra) }
+
+// Len implements sort.Interface
+func (sra ShardReferenceArray) Less(i, j int) bool {
+	return sra[i].KeyRange.Start < sra[j].KeyRange.Start
+}
+
+// Len implements sort.Interface
+func (sra ShardReferenceArray) Swap(i, j int) {
+	sra[i], sra[j] = sra[j], sra[i]
+}
+
+// Sort will sort the list according to KeyRange.Start
+func (sra ShardReferenceArray) Sort() { sort.Sort(sra) }
 
 // KeyspacePartition represents a continuous set of shards to
 // serve an entire data set.
 type KeyspacePartition struct {
 	// List of non-overlapping continuous shards sorted by range.
 	Shards []SrvShard
+
+	// List of non-overlapping continuous shard references sorted by range.
+	ShardReferences []ShardReference
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspacePartition -o keyspace_partition_bson.go
 
 // HasShard returns true if this KeyspacePartition has the shard with
-// the given name in it.
+// the given name in it. It uses Shards for now, we will switch to
+// using ShardReferences when it is populated.
 func (kp *KeyspacePartition) HasShard(name string) bool {
 	for _, srvShard := range kp.Shards {
-		if srvShard.ShardName() == name {
+		if srvShard.Name == name {
 			return true
 		}
 	}
 	return false
 }
 
-// SrvKeyspace us a distilled serving copy of keyspace detail stored in the local
-// cell for fast access. Derived from the global keyspace, shards and
-// local details.
+// SrvKeyspace is a distilled serving copy of keyspace detail stored
+// in the local cell for fast access. Derived from the global
+// keyspace, shards and local details.
+// By design, it should not contain details about the Shards themselves,
+// but just which shards to use for serving.
+// FIXME(alainjobart) KeyspacePartition has SrvShard, to be replaced by
+// ShardReference.
 // In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.

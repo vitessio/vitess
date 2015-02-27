@@ -28,6 +28,15 @@ func (keyspacePartition *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWrite
 		}
 		lenWriter.Close()
 	}
+	// []ShardReference
+	{
+		bson.EncodePrefix(buf, bson.Array, "ShardReferences")
+		lenWriter := bson.NewLenWriter(buf)
+		for _i, _v2 := range keyspacePartition.ShardReferences {
+			_v2.MarshalBson(buf, bson.Itoa(_i))
+		}
+		lenWriter.Close()
+	}
 
 	lenWriter.Close()
 }
@@ -59,6 +68,21 @@ func (keyspacePartition *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kin
 					var _v1 SrvShard
 					_v1.UnmarshalBson(buf, kind)
 					keyspacePartition.Shards = append(keyspacePartition.Shards, _v1)
+				}
+			}
+		case "ShardReferences":
+			// []ShardReference
+			if kind != bson.Null {
+				if kind != bson.Array {
+					panic(bson.NewBsonError("unexpected kind %v for keyspacePartition.ShardReferences", kind))
+				}
+				bson.Next(buf, 4)
+				keyspacePartition.ShardReferences = make([]ShardReference, 0, 8)
+				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+					bson.SkipIndex(buf)
+					var _v2 ShardReference
+					_v2.UnmarshalBson(buf, kind)
+					keyspacePartition.ShardReferences = append(keyspacePartition.ShardReferences, _v2)
 				}
 			}
 		default:

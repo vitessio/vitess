@@ -41,6 +41,11 @@ func TestSrvKeySpace(t *testing.T) {
 						MasterCell:  "test_cell",
 					},
 				},
+				ShardReferences: []ShardReference{
+					ShardReference{
+						Name: "test_shard",
+					},
+				},
 			},
 		},
 		ShardingColumnName: "video_id",
@@ -63,6 +68,11 @@ func TestSrvKeySpace(t *testing.T) {
 						Name:        "test_shard",
 						ServedTypes: []TabletType{TYPE_MASTER},
 						MasterCell:  "test_cell",
+					},
+				},
+				ShardReferences: []ShardReference{
+					ShardReference{
+						Name: "test_shard",
 					},
 				},
 			},
