@@ -677,6 +677,8 @@ class Vtctld(object):
 
   def __init__(self):
     self.port = environment.reserve_ports(1)
+    if protocols_flavor().vtctl_client_protocol() == "grpc":
+      self.grpc_port = environment.reserve_ports(1)
 
   def dbtopo(self):
     data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
@@ -700,6 +702,9 @@ class Vtctld(object):
             ] + \
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags()
+    if protocols_flavor().vtctl_client_protocol() == "grpc":
+      args += ['-grpc_port', str(self.grpc_port),
+              '-service_map', 'grpc-vtctl']
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = run_bg(args, stderr=stderr_fd)
 
@@ -713,11 +718,15 @@ class Vtctld(object):
                           sleep_time=0.2)
 
     # save the running instance so vtctl commands can be remote executed now
+    protocol = protocols_flavor().vtctl_client_protocol()
+    # temporary protocol override until python client support works
+    if protocol == "grpc":
+      protocol = "gorpc"
     global vtctld, vtctld_connection
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          protocols_flavor().vtctl_client_protocol(), 'localhost:%u' % self.port, 30)
+          protocol, 'localhost:%u' % self.port, 30)
 
     return self.proc
 
@@ -732,10 +741,13 @@ class Vtctld(object):
     else:
       log_level='ERROR'
 
+    port = self.port
+    if protocols_flavor().vtctl_client_protocol() == 'grpc':
+      port = self.grpc_port
     out, err = run(environment.binary_args('vtctlclient') +
                    ['-vtctl_client_protocol',
                     protocols_flavor().vtctl_client_protocol(),
-                    '-server', 'localhost:%u' % self.port,
+                    '-server', 'localhost:%u' % port,
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out
