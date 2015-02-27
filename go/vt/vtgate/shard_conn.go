@@ -304,6 +304,9 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 		}
 	}
 	// Do not retry on operational error.
+	// TODO(liang): handle the case when VTGate is idle
+	// while vttablet is gracefully shutdown.
+	// We want to retry in that case.
 	sdc.markDown(conn, err.Error())
 	return false
 }
