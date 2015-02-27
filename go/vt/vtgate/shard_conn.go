@@ -283,27 +283,21 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	if err == nil {
 		return false
 	}
+	// Do not retry if ctx.Done() is closed.
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
 		case tabletconn.ERR_TX_POOL_FULL:
-			// Do not retry if ctx.Done() is closed.
-			select {
-			case <-ctx.Done():
-				return false
-			default:
-				return true
-			}
+			return true
 		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
 			// Retry on RETRY and FATAL if not in a transaction.
 			inTransaction := (transactionID != 0)
 			sdc.markDown(conn, err.Error())
-			// Do not retry if ctx.Done() is closed.
-			select {
-			case <-ctx.Done():
-				return false
-			default:
-				return !inTransaction
-			}
+			return !inTransaction
 		default:
 			// Should not retry for normal server errors.
 			return false
