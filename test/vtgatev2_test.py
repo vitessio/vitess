@@ -890,11 +890,17 @@ class TestFailures(unittest.TestCase):
     self.tablet_start(self.replica_tablet)
     self.replica_tablet.wait_for_vttablet_state('SERVING')
     # TODO: expect to fail until we can detect vttablet proper shuts down vs crashes
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
 
   # Test the case that there are queries sent during vttablet shuts down,
   # and all querys fail because there is only one vttablet.
@@ -904,11 +910,17 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % str(e))
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     # force health check so tablet can become serving
     utils.run_vtctl(['RunHealthCheck', self.replica_tablet.tablet_alias, 'replica'],
@@ -916,17 +928,29 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet.wait_for_vttablet_state('SERVING')
     self.replica_tablet.kill_vttablet(wait=False)
     # send query while vttablet is in lameduck, should fail as no vttablet
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     # send another query, should also fail
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     # sleep over the lameduck period
     time.sleep(1)
     self.tablet_start(self.replica_tablet)
@@ -1007,11 +1031,17 @@ class TestFailures(unittest.TestCase):
         keyranges=[self.keyrange])
     self.replica_tablet2.hard_kill_vttablet()
     # send query after tablet2 is killed, should not retry on the cached conn
-    with self.assertRaises(dbexceptions.DatabaseError):
+    try:
       vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
     # send another query, should succeed on tablet1
     vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
