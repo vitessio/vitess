@@ -21,8 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
 	"github.com/youtube/vitess/go/vt/vtctl"
-	pb "github.com/youtube/vitess/go/vt/vtctl/grpcproto"
 )
 
 // VtctlServer is our RPC server

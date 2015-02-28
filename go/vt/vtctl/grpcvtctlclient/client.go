@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/vtctl/grpcproto"
+	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
 )
 
 type gRPCVtctlClient struct {

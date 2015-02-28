@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/vtctl/grpcproto"
+	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
 )
 
 // the test here creates a fake server implementation, a fake client

@@ -1,13 +1,3 @@
-// FIXME(alainjobart): I had to compile protoc from:
-// https://github.com/google/protobuf/blob/master/INSTALL.txt
-// and then run:
-// protoc vtctl.proto --go_out=plugins=grpc:.
-// to generate this file. We need to streamline this.
-//
-// (this is in addition to running:
-// go get -a github.com/golang/protobuf/protoc-gen-go
-// but that is in bootstrap.sh)
-
 // This package contains a service allowing you to use vtctld as a
 // proxy for vt commands.
 syntax = "proto3";

@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson site_test site_integration_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test
 
 all: build test
 
@@ -171,3 +171,12 @@ v3_test:
 
 bson:
 	go generate ./go/...
+
+# This rule rebuilds all the go files from the proto definitions for gRPC
+# It requires protoc in the path (that supports proto3, with grpc plug-in)
+# Get protoc from: https://github.com/google/protobuf/blob/master/INSTALL.txt
+# And get grpc plug-in with: go get -a github.com/golang/protobuf/protoc-gen-go
+proto:
+	cd go/vt/proto/vtctl && protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/tabletmanager && protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
+	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,"([a-z0-9_]+).pb","github.com/youtube/vitess/go/vt/proto/\1",g'
