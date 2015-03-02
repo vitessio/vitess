@@ -194,4 +194,57 @@ LoggerEvent = _reflection.GeneratedProtocolMessageType('LoggerEvent', (_message.
 _sym_db.RegisterMessage(LoggerEvent)
 
 
+import abc
+from grpc._adapter import fore
+from grpc._adapter import rear
+from grpc.framework.assembly import implementations
+from grpc.framework.assembly import utilities
+class EarlyAdopterVtctlServicer(object):
+  """<fill me in later!>"""
+  __metaclass__ = abc.ABCMeta
+  @abc.abstractmethod
+  def ExecuteVtctlCommand(self, request, context):
+    raise NotImplementedError()
+class EarlyAdopterVtctlServer(object):
+  """<fill me in later!>"""
+  __metaclass__ = abc.ABCMeta
+  @abc.abstractmethod
+  def start(self):
+    raise NotImplementedError()
+  @abc.abstractmethod
+  def stop(self):
+    raise NotImplementedError()
+class EarlyAdopterVtctlStub(object):
+  """<fill me in later!>"""
+  __metaclass__ = abc.ABCMeta
+  @abc.abstractmethod
+  def ExecuteVtctlCommand(self, request):
+    raise NotImplementedError()
+  ExecuteVtctlCommand.async = None
+def early_adopter_create_Vtctl_server(servicer, port, root_certificates, key_chain_pairs):
+  method_implementations = {
+    "ExecuteVtctlCommand": utilities.unary_stream_inline(servicer.ExecuteVtctlCommand),
+  }
+  import vtctl_pb2
+  request_deserializers = {
+    "ExecuteVtctlCommand": vtctl_pb2.ExecuteVtctlCommandArgs.FromString,
+  }
+  response_serializers = {
+    "ExecuteVtctlCommand": lambda x: x.SerializeToString(),
+  }
+  link = fore.activated_fore_link(port, request_deserializers, response_serializers, root_certificates, key_chain_pairs)
+  return implementations.assemble_service(method_implementations, link)
+def early_adopter_create_Vtctl_stub(host, port):
+  method_implementations = {
+    "ExecuteVtctlCommand": utilities.unary_stream_inline(None),
+  }
+  import vtctl_pb2
+  response_deserializers = {
+    "ExecuteVtctlCommand": vtctl_pb2.LoggerEvent.FromString,
+  }
+  request_serializers = {
+    "ExecuteVtctlCommand": lambda x: x.SerializeToString(),
+  }
+  link = rear.activated_rear_link(host, port, request_serializers, response_deserializers)
+  return implementations.assemble_dynamic_inline_stub(method_implementations, link)
 # @@protoc_insertion_point(module_scope)

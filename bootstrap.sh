@@ -69,7 +69,6 @@ else
 fi
 
 # install gRPC C++ base, so we can install the python adapters
-# FIXME(alainjobart) install the python side, with grpc_python_plugin
 grpc_dist=$VTROOT/dist/grpc
 if [ -d $grpc_dist ]; then
   echo "skipping gRPC build"
@@ -80,7 +79,10 @@ else
     cd grpc && \
     git submodule update --init && \
     make && \
-    make install prefix=$grpc_dist)
+    make install prefix=$grpc_dist && \
+    cd src/python/src && \
+    python setup.py build_ext --include-dirs $grpc_dist/include --library-dirs $grpc_dist/lib && \
+    python setup.py install --prefix $grpc_dist)
   if [ $? -ne 0 ]; then
     echo "gRPC build failed"
     exit 1
