@@ -50,11 +50,11 @@ protobuf_dist=$VTROOT/dist/protobuf
 if [ -d $protobuf_dist ]; then
   echo "skipping protobuf build"
 else
-  (mkdir -p $protobuf_dist && \
+  (mkdir -p $protobuf_dist/lib/python2.7/site-packages && \
     cd $protobuf_dist && \
-    wget https://github.com/google/protobuf/archive/master.zip && \
-    unzip master.zip && \
-    cd protobuf-master && \
+    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.zip && \
+    unzip v3.0.0-alpha-2.zip && \
+    cd protobuf-3.0.0-alpha-2 && \
     ./autogen.sh && \
     ./configure --prefix=$protobuf_dist && \
     make -j 4 && \
