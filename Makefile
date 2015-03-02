@@ -173,10 +173,10 @@ bson:
 	go generate ./go/...
 
 # This rule rebuilds all the go files from the proto definitions for gRPC
-# It requires protoc in the path (that supports proto3, with grpc plug-in)
-# Get protoc from: https://github.com/google/protobuf/blob/master/INSTALL.txt
-# And get grpc plug-in with: go get -a github.com/golang/protobuf/protoc-gen-go
+# FIXME(alainjobart) also add support for python gRPC stubs, right now
+# it's only the proto files without gRPC
 proto:
-	cd go/vt/proto/vtctl && protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/tabletmanager && protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/tabletmanager && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,"([a-z0-9_]+).pb","github.com/youtube/vitess/go/vt/proto/\1",g'
+	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctl.proto --python_out=.

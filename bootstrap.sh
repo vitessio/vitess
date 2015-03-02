@@ -45,6 +45,48 @@ else
    fi
 fi
 
+# install protoc and proto python libraries
+protobuf_dist=$VTROOT/dist/protobuf
+if [ -d $protobuf_dist ]; then
+  echo "skipping protobuf build"
+else
+  (mkdir -p $protobuf_dist && \
+    cd $protobuf_dist && \
+    wget https://github.com/google/protobuf/archive/master.zip && \
+    unzip master.zip && \
+    cd protobuf-master && \
+    ./autogen.sh && \
+    ./configure --prefix=$protobuf_dist && \
+    make -j 4 && \
+    make install && \
+    cd python && \
+    python setup.py build --cpp_implementation && \
+    python setup.py install --cpp_implementation --prefix=$protobuf_dist)
+  if [ $? -ne 0 ]; then
+    echo "protobuf build failed"
+    exit 1
+  fi
+fi
+
+# install gRPC C++ base, so we can install the python adapters
+# FIXME(alainjobart) install the python side, with grpc_python_plugin
+grpc_dist=$VTROOT/dist/grpc
+if [ -d $grpc_dist ]; then
+  echo "skipping gRPC build"
+else
+  (mkdir -p $grpc_dist && \
+    cd $grpc_dist && \
+    git clone https://github.com/grpc/grpc.git && \
+    cd grpc && \
+    git submodule update --init && \
+    make && \
+    make install prefix=$grpc_dist)
+  if [ $? -ne 0 ]; then
+    echo "gRPC build failed"
+    exit 1
+  fi
+fi
+
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
