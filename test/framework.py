@@ -67,6 +67,7 @@ class Tailer(object):
     self.pos = self.f.tell()
 
   def read(self):
+    """Returns a string which may contain multiple lines."""
     if self.flush:
       self.flush()
     else:
@@ -79,6 +80,10 @@ class Tailer(object):
     size = newpos-self.pos
     self.pos = newpos
     return self.f.read(size)
+
+  def readLines(self):
+    """Returns a list of read lines."""
+    return self.read().splitlines()
 
 # FIXME: Hijacked from go/vt/tabletserver/test.py
 # Reuse when things come together
