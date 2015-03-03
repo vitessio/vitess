@@ -45,6 +45,50 @@ else
    fi
 fi
 
+# install protoc and proto python libraries
+protobuf_dist=$VTROOT/dist/protobuf
+if [ -d $protobuf_dist ]; then
+  echo "skipping protobuf build"
+else
+  (mkdir -p $protobuf_dist/lib/python2.7/site-packages && \
+    cd $protobuf_dist && \
+    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.zip && \
+    unzip v3.0.0-alpha-2.zip && \
+    cd protobuf-3.0.0-alpha-2 && \
+    ./autogen.sh && \
+    ./configure --prefix=$protobuf_dist && \
+    make -j 4 && \
+    make install && \
+    cd python && \
+    python setup.py build --cpp_implementation && \
+    python setup.py install --cpp_implementation --prefix=$protobuf_dist)
+  if [ $? -ne 0 ]; then
+    echo "protobuf build failed"
+    exit 1
+  fi
+fi
+
+# install gRPC C++ base, so we can install the python adapters
+grpc_dist=$VTROOT/dist/grpc
+if [ -d $grpc_dist ]; then
+  echo "skipping gRPC build"
+else
+  (mkdir -p $grpc_dist && \
+    cd $grpc_dist && \
+    git clone https://github.com/grpc/grpc.git && \
+    cd grpc && \
+    git submodule update --init && \
+    make && \
+    make install prefix=$grpc_dist && \
+    cd src/python/src && \
+    python setup.py build_ext --include-dirs $grpc_dist/include --library-dirs $grpc_dist/lib && \
+    python setup.py install --prefix $grpc_dist)
+  if [ $? -ne 0 ]; then
+    echo "gRPC build failed"
+    exit 1
+  fi
+fi
+
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
@@ -54,6 +98,8 @@ go get golang.org/x/tools/cmd/goimports
 go get github.com/golang/glog
 go get github.com/golang/lint/golint
 go get github.com/tools/godep
+go get google.golang.org/grpc
+go get -a github.com/golang/protobuf/protoc-gen-go
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {

@@ -1,0 +1,19 @@
+// This file contains all the types and servers necessary to make
+// gRPC calls to Vttablet for the management API.
+
+syntax = "proto3";
+
+package tabletmanager;
+
+import "vtctl.proto";
+
+message SnapshotArgs {
+  optional int64 concurrency = 1;
+  optional bool server_mode = 2;
+  optional bool force_master_snapshot = 3;
+}
+
+service TabletManager {
+  // FIXME(alainjobart) need to also return SnapshotReply
+  rpc Snapshot(SnapshotArgs) returns (stream vtctl.LoggerEvent) {};
+}
