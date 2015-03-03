@@ -14,24 +14,27 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/gorpcproto"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"golang.org/x/net/context"
 )
 
-type goRpcVtctlClient struct {
+type goRPCVtctlClient struct {
 	rpcClient *rpc.Client
 }
 
-func goRpcVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
+func goRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
 	// create the RPC client
 	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, dialTimeout, nil)
 	if err != nil {
 		return nil, fmt.Errorf("RPC error for %v: %v", addr, err)
 	}
 
-	return &goRpcVtctlClient{rpcClient}, nil
+	return &goRPCVtctlClient{rpcClient}, nil
 }
 
-// ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *goRpcVtctlClient) ExecuteVtctlCommand(args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
+// ExecuteVtctlCommand is part of the VtctlClient interface.
+// Note the bson rpc version doesn't honor timeouts in the context
+// (but the server side will honor the actionTimeout)
+func (client *goRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
 	req := &gorpcproto.ExecuteVtctlCommandArgs{
 		Args:          args,
 		ActionTimeout: actionTimeout,
@@ -43,10 +46,10 @@ func (client *goRpcVtctlClient) ExecuteVtctlCommand(args []string, actionTimeout
 }
 
 // Close is part of the VtctlClient interface
-func (client *goRpcVtctlClient) Close() {
+func (client *goRPCVtctlClient) Close() {
 	client.rpcClient.Close()
 }
 
 func init() {
-	vtctlclient.RegisterVtctlClientFactory("gorpc", goRpcVtctlClientFactory)
+	vtctlclient.RegisterFactory("gorpc", goRPCVtctlClientFactory)
 }

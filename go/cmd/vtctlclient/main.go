@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"golang.org/x/net/context"
 )
 
 // The default values used by these flags cannot be taken from wrangler and
@@ -38,7 +39,9 @@ func main() {
 	defer client.Close()
 
 	// run the command
-	c, errFunc := client.ExecuteVtctlCommand(flag.Args(), *actionTimeout, *lockWaitTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
+	defer cancel()
+	c, errFunc := client.ExecuteVtctlCommand(ctx, flag.Args(), *actionTimeout, *lockWaitTimeout)
 	if err = errFunc(); err != nil {
 		log.Errorf("Cannot execute remote command: %v", err)
 		exit.Return(1)
