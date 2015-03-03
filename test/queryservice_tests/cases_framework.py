@@ -165,14 +165,15 @@ class Case(object):
       if self.result != result:
         failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
     for i in range(30):
-      line = env.querylog.tailer.read()
-      if line == '':
+      lines = env.querylog.tailer.readLines()
+      if not lines:
         time.sleep(0.1)
         continue
       break
-    case_failures = Log(line).check(self)
-    if case_failures:
-      failures.extend(case_failures)
+    for line in lines:
+      case_failures = Log(line).check(self)
+      if case_failures:
+        failures.extend(case_failures)
 
     if self.is_testing_cache:
       tdelta = self.table_stats_delta(tstart, env)
