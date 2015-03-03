@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	// import vindexes implementations
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 )
 
@@ -52,7 +53,7 @@ var (
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
-// can be created.
+// can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
 	resolver     *Resolver
 	router       *Router
@@ -77,7 +78,7 @@ type VTGate struct {
 }
 
 // RegisterVTGate defines the type of registration mechanism.
-type RegisterVTGate func(*VTGate)
+type RegisterVTGate func(vtgateservice.VTGateService)
 
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
