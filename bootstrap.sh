@@ -53,6 +53,7 @@ else
   # The directory doesn't exist, so it wasn't picked up by dev.env yet,
   # but the install needs it to exist first, and be in PYTHONPATH.
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
+  echo "DEBUG" $PYTHONPATH
   (mkdir -p $protobuf_dist/lib/python2.7/site-packages && \
     cd $protobuf_dist && \
     wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.zip && \
