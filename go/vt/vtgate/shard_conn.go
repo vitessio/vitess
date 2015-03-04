@@ -193,7 +193,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			continue
 		}
 		err = action(conn)
-		if sdc.canRetry(ctx, err, transactionID, conn) {
+		if sdc.canRetry(ctx, err, transactionID, conn, isStreaming) {
 			continue
 		}
 		break
@@ -279,8 +279,11 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn) bool {
+func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn, isStreaming bool) bool {
 	if err == nil {
+		return false
+	}
+	if isStreaming {
 		return false
 	}
 	// Do not retry if ctx.Done() is closed.
