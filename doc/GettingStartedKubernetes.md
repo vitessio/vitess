@@ -53,11 +53,8 @@ account with a project in the Google Developers Console.
     1.  Click **New billing account**
     1.  Assign a name to the billing account -- e.g. "Vitess on
         Kubernetes." Then click **Continue**. You can sign up
-        for the free trial to avoid any charges. However, even if you
-        skip the free trial, you should not come anywhere close to
-        exceeding the [App Engine free quota]
-        (https://cloud.google.com/appengine/#pricing) by
-        completing this exercise.
+        for the [free trial](https://cloud.google.com/free-trial/)
+        to avoid any charges.
 
 1.  Create a project in the Google Developers Console that uses
     your billing account:
