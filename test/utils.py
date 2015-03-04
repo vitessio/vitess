@@ -348,7 +348,8 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
 # vtgate helpers, assuming it always restarts on the same port
 def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
                  topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
-                 auth=False, timeout="5s", cert=None, key=None, ca_cert=None,
+                 auth=False, timeout_total="4s", timeout_per_conn="2s",
+                 cert=None, key=None, ca_cert=None,
                  socket_file=None, extra_args=None):
   port = vtport or environment.reserve_ports(1)
   secure_port = None
@@ -359,7 +360,8 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
           '-retry-count', str(retry_count),
           '-log_dir', environment.vtlogroot,
           '-srv_topo_cache_ttl', cache_ttl,
-          '-conn-timeout', timeout,
+          '-conn-timeout-total', timeout_total,
+          '-conn-timeout-per-conn', timeout_per_conn,
           '-bsonrpc_timeout', '5s',
           ] + protocols_flavor().tabletconn_protocol_flags()
   if topo_impl:

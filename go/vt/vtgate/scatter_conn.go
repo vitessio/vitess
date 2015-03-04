@@ -27,12 +27,13 @@ var idGen sync2.AtomicInt64
 // ScatterConn is used for executing queries across
 // multiple ShardConn connections.
 type ScatterConn struct {
-	toposerv    SrvTopoServer
-	cell        string
-	retryDelay  time.Duration
-	retryCount  int
-	connTimeout time.Duration
-	timings     *stats.MultiTimings
+	toposerv           SrvTopoServer
+	cell               string
+	retryDelay         time.Duration
+	retryCount         int
+	connTimeoutTotal   time.Duration
+	connTimeoutPerConn time.Duration
+	timings            *stats.MultiTimings
 
 	mu         sync.Mutex
 	shardConns map[string]*ShardConn
@@ -47,15 +48,16 @@ type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- 
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
-func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *ScatterConn {
+func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal time.Duration, connTimeoutPerConn time.Duration) *ScatterConn {
 	return &ScatterConn{
-		toposerv:    serv,
-		cell:        cell,
-		retryDelay:  retryDelay,
-		retryCount:  retryCount,
-		connTimeout: connTimeout,
-		timings:     stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		shardConns:  make(map[string]*ShardConn),
+		toposerv:           serv,
+		cell:               cell,
+		retryDelay:         retryDelay,
+		retryCount:         retryCount,
+		connTimeoutTotal:   connTimeoutTotal,
+		connTimeoutPerConn: connTimeoutPerConn,
+		timings:            stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		shardConns:         make(map[string]*ShardConn),
 	}
 }
 
@@ -553,7 +555,7 @@ func (stc *ScatterConn) getConnection(context context.Context, keyspace, shard s
 	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
 	sdc, ok := stc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(context, stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.connTimeout)
+		sdc = NewShardConn(context, stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.connTimeoutTotal, stc.connTimeoutPerConn)
 		stc.shardConns[key] = sdc
 	}
 	return sdc

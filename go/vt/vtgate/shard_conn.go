@@ -23,14 +23,15 @@ import (
 // be concurrently used across goroutines. Such requests are
 // interleaved on the same underlying connection.
 type ShardConn struct {
-	keyspace     string
-	shard        string
-	tabletType   topo.TabletType
-	retryDelay   time.Duration
-	retryCount   int
-	connTimeout  time.Duration
-	balancer     *Balancer
-	consolidator *sync2.Consolidator
+	keyspace           string
+	shard              string
+	tabletType         topo.TabletType
+	retryDelay         time.Duration
+	retryCount         int
+	connTimeoutTotal   time.Duration
+	connTimeoutPerConn time.Duration
+	balancer           *Balancer
+	consolidator       *sync2.Consolidator
 
 	// conn needs a mutex because it can change during the lifetime of ShardConn.
 	mu   sync.Mutex
@@ -40,7 +41,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *ShardConn {
+func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal time.Duration, connTimeoutPerConn time.Duration) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
@@ -50,14 +51,15 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
 	return &ShardConn{
-		keyspace:     keyspace,
-		shard:        shard,
-		tabletType:   tabletType,
-		retryDelay:   retryDelay,
-		retryCount:   retryCount,
-		connTimeout:  connTimeout,
-		balancer:     blc,
-		consolidator: sync2.NewConsolidator(),
+		keyspace:           keyspace,
+		shard:              shard,
+		tabletType:         tabletType,
+		retryDelay:         retryDelay,
+		retryCount:         retryCount,
+		connTimeoutTotal:   connTimeoutTotal,
+		connTimeoutPerConn: connTimeoutPerConn,
+		balancer:           blc,
+		consolidator:       sync2.NewConsolidator(),
 	}
 }
 
@@ -236,8 +238,8 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	return connResult.Conn, connResult.EndPoint, connResult.IsTimeout, q.Err
 }
 
-// getNewConn creates a new tablet connection.
-// It limits the overall timeout to connTimeout by checking elapsed time after each blocking call.
+// getNewConn creates a new tablet connection with a separate per conn timeout.
+// It limits the overall timeout to connTimeoutTotal by checking elapsed time after each blocking call.
 func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, isTimeout bool, err error) {
 	startTime := time.Now()
 
@@ -250,14 +252,15 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		// No valid endpoint
 		return nil, topo.EndPoint{}, false, fmt.Errorf("no valid endpoint")
 	}
-	if time.Now().Sub(startTime) >= sdc.connTimeout {
+	if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
 		return nil, topo.EndPoint{}, true, fmt.Errorf("timeout when getting endpoints")
 	}
 
 	// Iterate through all endpoints to create a connection
+	perConnTimeout := sdc.getConnTimeoutPerConn(len(endPoints))
 	allErrors := new(concurrency.AllErrorRecorder)
 	for _, endPoint := range endPoints {
-		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, sdc.connTimeout)
+		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, perConnTimeout)
 		if err == nil {
 			sdc.mu.Lock()
 			defer sdc.mu.Unlock()
@@ -267,13 +270,24 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		// Markdown the endpoint if it failed to connect
 		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
 		allErrors.RecordError(fmt.Errorf("%v %+v", err, endPoint))
-		if time.Now().Sub(startTime) >= sdc.connTimeout {
+		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
 			err = fmt.Errorf("timeout when connecting to %+v", endPoint)
 			allErrors.RecordError(err)
 			return nil, topo.EndPoint{}, true, allErrors.Error()
 		}
 	}
 	return nil, topo.EndPoint{}, false, allErrors.Error()
+}
+
+// getConnTimeoutPerConn determines the appropriate timeout per connection.
+func (sdc *ShardConn) getConnTimeoutPerConn(endPointCount int) time.Duration {
+	if endPointCount <= 1 {
+		return sdc.connTimeoutTotal
+	}
+	if sdc.connTimeoutPerConn > sdc.connTimeoutTotal {
+		return sdc.connTimeoutTotal
+	}
+	return sdc.connTimeoutPerConn
 }
 
 // canRetry determines whether a query can be retried or not.

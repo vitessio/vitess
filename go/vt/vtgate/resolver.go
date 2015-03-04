@@ -43,9 +43,9 @@ type Resolver struct {
 
 // NewResolver creates a new Resolver. All input parameters are passed through
 // for creating ScatterConn.
-func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeout time.Duration) *Resolver {
+func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal time.Duration, connTimeoutPerConn time.Duration) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, connTimeout),
+		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn),
 	}
 }
 
@@ -310,7 +310,7 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.Ke
 	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
 }
 
-// StreamExecuteShard executes a streaming query on shards resolved by given func.
+// StreamExecute executes a streaming query on shards resolved by given func.
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
