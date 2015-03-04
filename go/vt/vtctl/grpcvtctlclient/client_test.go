@@ -41,5 +41,5 @@ func TestVtctlServer(t *testing.T) {
 	}
 	defer client.Close()
 
-	vtctlclienttest.VtctlClientTestSuite(t, ts, client)
+	vtctlclienttest.TestSuite(t, ts, client)
 }

@@ -42,11 +42,11 @@ func TestVtctlServer(t *testing.T) {
 	go httpServer.Serve(listener)
 
 	// Create a VtctlClient Go Rpc client to talk to the fake server
-	client, err := goRpcVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := goRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
 	defer client.Close()
 
-	vtctlclienttest.VtctlClientTestSuite(t, ts, client)
+	vtctlclienttest.TestSuite(t, ts, client)
 }
