@@ -44,8 +44,28 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def rpc_timeout_message(self):
     return 'timeout waiting for'
 
+class GRpcProtocolsFlavor(ProtocolsFlavor):
+  """Overrides to use gRPC everywhere where it is supported.
+  If not supported yet, use GoRPC."""
+
+  def binlog_player_protocol_flags(self):
+    return ['-binlog_player_protocol', 'gorpc']
+
+  def vtctl_client_protocol(self):
+    return 'grpc'
+
+  def tablet_manager_protocol_flags(self):
+    return ['-tablet_manager_protocol', 'bson']
+
+  def tabletconn_protocol_flags(self):
+    return ['-tablet_protocol', 'gorpc']
+
+  def rpc_timeout_message(self):
+    return 'timeout waiting for'
+
 __knows_protocols_flavor_map = {
   'gorpc': GoRpcProtocolsFlavor,
+  'grpc': GRpcProtocolsFlavor,
 }
 __protocols_flavor = None
 

@@ -1,20 +1,20 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gorpcvtctlclient
+package grpcvtctlclient
 
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlserver"
+	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
+	"google.golang.org/grpc"
+
+	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -30,19 +30,12 @@ func TestVtctlServer(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a Go Rpc server and listen on the port
-	server := rpcplus.NewServer()
-	server.Register(gorpcvtctlserver.NewVtctlServer(ts))
+	server := grpc.NewServer()
+	pb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
+	go server.Serve(listener)
 
-	// create the HTTP server, serve the server from it
-	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
-	httpServer := http.Server{
-		Handler: handler,
-	}
-	go httpServer.Serve(listener)
-
-	// Create a VtctlClient Go Rpc client to talk to the fake server
-	client, err := goRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	// Create a VtctlClient gRPC client to talk to the fake server
+	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

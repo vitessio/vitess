@@ -583,11 +583,20 @@ class Tablet(object):
   def get_healthz(self):
     return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
 
-  def kill_vttablet(self):
-    logging.debug('killing vttablet: %s', self.tablet_alias)
+  def kill_vttablet(self, wait=True):
+    logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias, str(wait))
     if self.proc is not None:
       Tablet.tablets_running -= 1
       self.proc.terminate()
+      if wait:
+        self.proc.wait()
+      self.proc = None
+
+  def hard_kill_vttablet(self):
+    logging.debug('hard killing vttablet: %s', self.tablet_alias)
+    if self.proc is not None:
+      Tablet.tablets_running -= 1
+      self.proc.kill()
       self.proc.wait()
       self.proc = None
 

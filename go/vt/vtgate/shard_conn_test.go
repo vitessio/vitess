@@ -186,20 +186,22 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	}
 
 	// conn error (one failure)
+	// no retry on OperationalError
 	s.Reset()
 	sbc = &sandboxConn{mustFailConn: 1}
 	s.MapTestConn("0", sbc)
 	err = f()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
+	want = fmt.Sprintf("shard, host: %v.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, error: conn", name)
+	if err == nil || err.Error() != want {
+		t.Errorf("want %v, got %v", want, err)
 	}
-	// Ensure we dialed twice (second one succeeded)
-	if s.DialCounter != 2 {
-		t.Errorf("want 2, got %v", s.DialCounter)
+	// Ensure we did not redail.
+	if s.DialCounter != 1 {
+		t.Errorf("want 1, got %v", s.DialCounter)
 	}
-	// Ensure we executed twice (second one succeeded)
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 2, got %v", sbc.ExecCount)
+	// Ensure we did not re-execute.
+	if sbc.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
 	// no failures
@@ -309,9 +311,9 @@ func TestShardConnReconnect(t *testing.T) {
 		t.Errorf("want 2, got %v", s.EndPointCounter)
 	}
 
-	// case 2.2: resolve 1 endpoint and execute failed -> resolve and retry without spamming
+	// case 2.2: resolve 1 endpoint and execute failed with retryable error -> resolve and retry without spamming
 	s.Reset()
-	sbc = &sandboxConn{mustFailConn: 1}
+	sbc = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc)
 	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
 	timeStart = time.Now()
@@ -325,6 +327,21 @@ func TestShardConnReconnect(t *testing.T) {
 	}
 	if s.EndPointCounter != 3 {
 		t.Errorf("want 3, got %v", s.EndPointCounter)
+	}
+
+	// case 2.3: resolve 1 endpoint and execute failed with OperationalError -> no retry
+	s.Reset()
+	sbc = &sandboxConn{mustFailConn: 1}
+	s.MapTestConn("0", sbc)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, 1*time.Millisecond)
+	timeStart = time.Now()
+	sdc.Execute(context.Background(), "query", nil, 0)
+	timeDuration = time.Now().Sub(timeStart)
+	if timeDuration > retryDelay {
+		t.Errorf("want instant fail %v, got %v", retryDelay, timeDuration)
+	}
+	if s.EndPointCounter != 1 {
+		t.Errorf("want 1, got %v", s.EndPointCounter)
 	}
 
 	// case 3.1: resolve 3 endpoints, failed connection to 1st one -> resolve and connect to 2nd one
@@ -355,7 +372,7 @@ func TestShardConnReconnect(t *testing.T) {
 	countConnUse := 0
 	onConnUse := func(conn *sandboxConn) {
 		if countConnUse == 0 {
-			conn.mustFailConn = 1
+			conn.mustFailRetry = 1
 		}
 		countConnUse++
 	}
@@ -388,7 +405,7 @@ func TestShardConnReconnect(t *testing.T) {
 	countConnUse = 0
 	onConnUse = func(conn *sandboxConn) {
 		if countConnUse == 0 {
-			conn.mustFailConn = 1
+			conn.mustFailRetry = 1
 		}
 		countConnUse++
 	}
@@ -425,9 +442,9 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countConnUse++
 	}
-	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc0 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
@@ -460,7 +477,7 @@ func TestShardConnReconnect(t *testing.T) {
 	onConnUse = func(conn *sandboxConn) {
 		if firstConn == nil {
 			firstConn = conn
-			conn.mustFailConn = 1
+			conn.mustFailRetry = 1
 		}
 	}
 	sbc0 = &sandboxConn{onConnUse: onConnUse}
@@ -513,10 +530,10 @@ func TestShardConnReconnect(t *testing.T) {
 		}
 		countConnUse++
 	}
-	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc3 = &sandboxConn{mustFailConn: 1}
+	sbc0 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc3 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("0", sbc0)
 	s.MapTestConn("0", sbc1)
 	s.MapTestConn("0", sbc2)
@@ -563,9 +580,9 @@ func TestShardConnReconnect(t *testing.T) {
 			firstConn = conn
 		}
 	}
-	sbc0 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc1 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
-	sbc2 = &sandboxConn{mustFailConn: 1, onConnUse: onConnUse}
+	sbc0 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc1 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
+	sbc2 = &sandboxConn{mustFailRetry: 1, onConnUse: onConnUse}
 	sbc3 = &sandboxConn{}
 	sbc4 := &sandboxConn{}
 	sbc5 := &sandboxConn{}

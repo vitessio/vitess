@@ -19,7 +19,7 @@ import (
 var (
 	cell        = flag.String("cell", "test_nj", "cell to use")
 	schemaFile  = flag.String("vschema_file", "", "JSON schema file")
-	retryDelay  = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
+	retryDelay  = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
 	retryCount  = flag.Int("retry-count", 2, "retry count")
 	connTimeout = flag.Duration("conn-timeout", 3*time.Second, "vttablet connection timeout")
 	maxInFlight = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")

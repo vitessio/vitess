@@ -17,6 +17,7 @@ GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
 GKE_MACHINE_TYPE=${GKE_MACHINE_TYPE:-'n1-standard-1'}
 GKE_NUM_NODES=${GKE_NUM_NODES:-3}
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
+GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
 SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
@@ -31,22 +32,23 @@ function update_spinner_value () {
   cur_spinner=${spinner:$(($1%${#spinner})):1}
 }
 
-function run_script_and_wait () {
-  # This function runs a script and waits for desired pods to be in the
-  # "Running" state
+function run_script () {
   # Parameters:
   # 1. script: Name of the script to execute
-  # 2. task_name: Name that the desired task begins with
-  # 3. num_tasks: Number of tasks to wait for
-  # Returns:
-  #   0 if successful, -1 if timed out
   script=$1
-  task_name=$2
-  num_tasks=$3
-  counter=0
-
   echo "Running ${script}..."
   ./$script
+}
+
+function wait_for_running_tasks () {
+  # This function waits for pods to be in the "Running" state
+  # 1. task_name: Name that the desired task begins with
+  # 2. num_tasks: Number of tasks to wait for
+  # Returns:
+  #   0 if successful, -1 if timed out
+  task_name=$1
+  num_tasks=$2
+  counter=0
 
   echo "Waiting for ${num_tasks}x $task_name to enter state Running"
 
@@ -86,6 +88,7 @@ echo "*Creating cluster:"
 echo "*  Zone: $GKE_ZONE"
 echo "*  Machine type: $GKE_MACHINE_TYPE"
 echo "*  Num nodes: $GKE_NUM_NODES"
+echo "*  SSD Size: $GKE_SSD_SIZE_GB"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
@@ -93,8 +96,29 @@ echo "*  Project ID: $project_id"
 echo "****************************"
 gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $GKE_NUM_NODES
 
-run_script_and_wait etcd-up.sh etcd 6
-run_script_and_wait vtctld-up.sh vtctld 1
+if [ $GKE_SSD_SIZE_GB -gt 0 ]
+then
+  echo Creating SSDs and attaching to container engine nodes
+  for i in `seq 1 $GKE_NUM_NODES`; do
+    diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
+    gcutil adddisk --zone $GKE_ZONE --disk_type=pd-ssd --size_gb $GKE_SSD_SIZE_GB $diskname
+    gcutil attachdisk --disk $diskname k8s-$GKE_CLUSTER_NAME-node-$i
+  done
+fi
+
+run_script etcd-up.sh
+wait_for_running_tasks etcd 6
+
+run_script vtctld-up.sh
+run_script vttablet-up.sh
+run_script vtgate-up.sh
+
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
+total_tablets=$(($num_shards*$TABLETS_PER_SHARD))
+
+wait_for_running_tasks vtctld 1
+wait_for_running_tasks vttablet $total_tablets
+wait_for_running_tasks vtgate 3
 
 echo Creating firewall rule for vtctld...
 vtctl_port=15000
@@ -102,10 +126,6 @@ gcloud compute firewall-rules create vtctld --allow tcp:$vtctl_port
 vtctl_ip=`gcloud compute forwarding-rules list | awk '$1=="vtctld" {print $3}'`
 vtctl_server="$vtctl_ip:$vtctl_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
-
-num_shards=`echo $SHARDS | tr "," " " | wc -w`
-total_tablets=$(($num_shards*$TABLETS_PER_SHARD))
-run_script_and_wait vttablet-up.sh vttablet $total_tablets
 
 echo Waiting for tablets to be visible in the topology
 counter=0
@@ -149,8 +169,6 @@ echo Done
 echo -n Applying Schema...
 $kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
 echo Done
-
-run_script_and_wait vtgate-up.sh vtgate 3
 
 echo Creating firewall rule for vtgate
 vtgate_port=15001

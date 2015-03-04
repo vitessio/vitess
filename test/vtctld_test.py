@@ -142,7 +142,7 @@ class TestVtctld(unittest.TestCase):
   def test_vtctl(self):
     # standalone RPC client to vtctld
     out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_RPC)
+                               mode=utils.VTCTL_VTCTLCLIENT)
     self._check_all_tablets(out)
 
     # vtctl querying the topology directly

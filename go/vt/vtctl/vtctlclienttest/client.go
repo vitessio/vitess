@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
 )
 
 // CreateTopoServer returns the test topo server properly configured
@@ -23,8 +24,8 @@ func CreateTopoServer(t *testing.T) topo.Server {
 	return zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 }
 
-// VtctlClientTestSuite runs the test suite on the given topo server and client
-func VtctlClientTestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
+// TestSuite runs the test suite on the given topo server and client
+func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	// Create a fake tablet
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: "cell1", Uid: 1},
@@ -44,7 +45,8 @@ func VtctlClientTestSuite(t *testing.T, ts topo.Server, client vtctlclient.Vtctl
 	}
 
 	// run a command that's gonna return something on the log channel
-	logs, errFunc := client.ExecuteVtctlCommand([]string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
+	ctx := context.Background()
+	logs, errFunc := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
 	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
@@ -66,7 +68,7 @@ func VtctlClientTestSuite(t *testing.T, ts topo.Server, client vtctlclient.Vtctl
 	}
 
 	// run a command that's gonna fail
-	logs, errFunc = client.ExecuteVtctlCommand([]string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
+	logs, errFunc = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
 	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}

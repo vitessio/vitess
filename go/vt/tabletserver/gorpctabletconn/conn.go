@@ -274,13 +274,13 @@ func tabletError(err error) error {
 		var code int
 		errStr := err.Error()
 		switch {
-		case strings.HasPrefix(errStr, "fatal"):
+		case strings.Contains(errStr, "fatal: "):
 			code = tabletconn.ERR_FATAL
-		case strings.HasPrefix(errStr, "retry"):
+		case strings.Contains(errStr, "retry: "):
 			code = tabletconn.ERR_RETRY
-		case strings.HasPrefix(errStr, "tx_pool_full"):
+		case strings.Contains(errStr, "tx_pool_full: "):
 			code = tabletconn.ERR_TX_POOL_FULL
-		case strings.HasPrefix(errStr, "not_in_tx"):
+		case strings.Contains(errStr, "not_in_tx: "):
 			code = tabletconn.ERR_NOT_IN_TX
 		default:
 			code = tabletconn.ERR_NORMAL
