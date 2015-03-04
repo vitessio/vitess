@@ -18,16 +18,7 @@ The following sections compare Vitess to two common alternatives, a vanilla MySQ
 
 Vitess improves a vanilla MySQL implementation in several ways:
 
-<style>
-  table td {
-    background: #fff;
-    vertical-align: top;
-    width: 50%;
-    border-bottom: solid 1px #555;
-  }
-</style>
-
-<table>
+<table class="comparison">
   <tr>
     <th>Vanilla MySQL</th>
     <th>Vitess</th>
@@ -58,7 +49,7 @@ Vitess improves a vanilla MySQL implementation in several ways:
 
 If you're considering a NoSQL solution primarily because of concerns about the scalability of MySQL, Vitess might be a more appropriate choice for your application. While NoSQL provides great support for unstructured data, Vitess still offers several benefits not available in NoSQL datastores:
 
-<table>
+<table class="comparison">
   <tr>
     <th>NoSQL</th>
     <th>Vitess</th>
