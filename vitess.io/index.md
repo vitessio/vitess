@@ -5,4 +5,4 @@ image:
   feature: wood-texture-1600x800.jpg
 ---
 
-{% include README.md %}
+{% include index.md %}
