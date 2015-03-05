@@ -1,0 +1,20 @@
+---
+layout: base
+---
+
+<main class="clear">
+
+  <header class="page-header container">
+    <h2 class="xxlarge text-divider">{{ page.title }}</h2>
+    {% if page.description %}
+      <p class="page-header__excerpt g-wide--push-1 g-wide--pull-1">
+        {{ page.description }}
+      </p>
+    {% endif %}
+  </header>
+
+  <div class="container">
+    {{ content}}
+  </div>
+
+</main>
