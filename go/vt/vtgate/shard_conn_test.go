@@ -274,6 +274,43 @@ func TestShardConnBeginOther(t *testing.T) {
 	}
 }
 
+func TestShardConnStreamingRetry(t *testing.T) {
+	// ERR_RETRY
+	s := createSandbox("TestShardConnStreamingRetry")
+	sbc := &sandboxConn{mustFailRetry: 1}
+	s.MapTestConn("0", sbc)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", "", 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connectTimings)
+	_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
+	err := errfunc()
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if s.DialCounter != 2 {
+		t.Errorf("want 2, got %v", s.DialCounter)
+	}
+	if sbc.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc.ExecCount)
+	}
+
+	// ERR_FATAL
+	s.Reset()
+	sbc = &sandboxConn{mustFailFatal: 1}
+	s.MapTestConn("0", sbc)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", "", 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connectTimings)
+	_, errfunc = sdc.StreamExecute(context.Background(), "query", nil, 0)
+	err = errfunc()
+	want := "shard, host: TestShardConnStreamingRetry.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, fatal: err"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %v, got %v", want, err)
+	}
+	if s.DialCounter != 1 {
+		t.Errorf("want 1, got %v", s.DialCounter)
+	}
+	if sbc.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
+	}
+}
+
 func TestShardConnTimeout(t *testing.T) {
 	s := createSandbox("TestShardConnTimeout")
 	// case 1: one endpoint, per conn timeout becomes total timeout
