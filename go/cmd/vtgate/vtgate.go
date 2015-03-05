@@ -17,12 +17,13 @@ import (
 )
 
 var (
-	cell        = flag.String("cell", "test_nj", "cell to use")
-	schemaFile  = flag.String("vschema_file", "", "JSON schema file")
-	retryDelay  = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
-	retryCount  = flag.Int("retry-count", 2, "retry count")
-	connTimeout = flag.Duration("conn-timeout", 3*time.Second, "vttablet connection timeout")
-	maxInFlight = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
+	cell               = flag.String("cell", "test_nj", "cell to use")
+	schemaFile         = flag.String("vschema_file", "", "JSON schema file")
+	retryDelay         = flag.Duration("retry-delay", 2*time.Millisecond, "retry delay")
+	retryCount         = flag.Int("retry-count", 2, "retry count")
+	connTimeoutTotal   = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
+	connTimeoutPerConn = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
+	maxInFlight        = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -82,6 +83,6 @@ startServer:
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeout, *maxInFlight)
+	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *maxInFlight)
 	servenv.RunDefault()
 }

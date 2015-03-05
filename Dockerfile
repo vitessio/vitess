@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-dev \
     python-mysqldb \
     python-software-properties \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install MariaDB 10.0.x

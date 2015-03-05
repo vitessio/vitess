@@ -1,6 +1,8 @@
 ---
-layout: article
-title: "Getting Started with Vitess "
+layout: default
+title: "Running Vitess on Kubernetes"
+description: Vitess runs best in a containerized environment like Kubernetes,
+             which manages a cluster of Linux containers as a single system.
 date: 
 modified:
 excerpt:
@@ -13,4 +15,4 @@ toc: true
 share: false
 ---
 
-{% include README.md %}
+{% include doc/GettingStartedKubernetes.md %}

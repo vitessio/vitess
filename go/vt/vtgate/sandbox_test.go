@@ -77,11 +77,14 @@ type sandbox struct {
 	// EndPointMustFail specifies how often GetEndPoints must fail before succeeding
 	EndPointMustFail int
 
-	// DialerCoun tracks how often sandboxDialer was called
+	// DialCounter tracks how often sandboxDialer was called
 	DialCounter int
 
 	// DialMustFail specifies how often sandboxDialer must fail before succeeding
 	DialMustFail int
+
+	// DialMustTimeout specifies how often sandboxDialer must time out
+	DialMustTimeout int
 
 	// KeyspaceServedFrom specifies the served-from keyspace for vertical resharding
 	KeyspaceServedFrom string
@@ -105,6 +108,7 @@ func (s *sandbox) Reset() {
 	s.EndPointMustFail = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
+	s.DialMustTimeout = 0
 	s.KeyspaceServedFrom = ""
 	s.ShardSpec = DefaultShardSpec
 	s.SrvKeyspaceCallback = nil
@@ -298,6 +302,11 @@ func sandboxDialer(context context.Context, endPoint topo.EndPoint, keyspace, sh
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
 		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
+	}
+	if sand.DialMustTimeout > 0 {
+		time.Sleep(timeout)
+		sand.DialMustTimeout--
+		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
 	}
 	conns := sand.TestConns[shard]
 	if conns == nil {
