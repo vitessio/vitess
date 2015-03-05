@@ -115,7 +115,7 @@ The diagram below illustrates Vitess' components:
 
 ### Topology
 
-The topology is a metadata store that contains information about running servers, the sharding scheme, and the [replication graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph).  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
+The topology is a metadata store that contains information about running servers, the sharding scheme, and the [replication graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.md).  The topology is backed by a consistent data store.  You can explore the topology using **vtctl** (command-line) and **vtctld** (web).
 
 In Kubernetes, the data store is [etcd](https://github.com/coreos/etcd).  Vitess source code also ships with [Apache ZooKeeper](http://zookeeper.apache.org/) support.
 
