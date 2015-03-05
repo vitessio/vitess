@@ -28,7 +28,7 @@ do
 done
 
 # preserve links between docs
-for d in `ls doc/*.md` README.md
+for d in `ls doc/*.md` README.md index.md
 do
   python replace_doc_link.py doc $d > $PREVIEW_DIR/_includes/$d
 done
