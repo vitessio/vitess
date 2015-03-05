@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/schema"
+	"golang.org/x/net/context"
 )
 
 type TableInfo struct {
@@ -44,7 +44,7 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 }
 
 func (ti *TableInfo) fetchColumns(conn *DBConn) error {
-	columns, err := conn.Exec(fmt.Sprintf("describe `%s`", ti.Name), 10000, false, NewDeadline(1*time.Minute))
+	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 }
 
 func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
-	indexes, err := conn.Exec(fmt.Sprintf("show index from `%s`", ti.Name), 10000, false, NewDeadline(1*time.Minute))
+	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from `%s`", ti.Name), 10000, false)
 	if err != nil {
 		return err
 	}

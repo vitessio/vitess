@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/schema"
+	"golang.org/x/net/context"
 )
 
 var cacheStats = stats.NewTimings("Rowcache")
@@ -44,7 +45,7 @@ func NewRowCache(tableInfo *TableInfo, cachePool *CachePool) *RowCache {
 	return &RowCache{tableInfo, prefix, cachePool}
 }
 
-func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
+func (rc *RowCache) Get(ctx context.Context, keys []string) (results map[string]RCResult) {
 	mkeys := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if len(key) > MAX_KEY_LEN {
@@ -53,7 +54,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 		mkeys = append(mkeys, rc.prefix+key)
 	}
 	prefixlen := len(rc.prefix)
-	conn := rc.cachePool.Get(0)
+	conn := rc.cachePool.Get(ctx)
 	// This is not the same as defer rc.cachePool.Put(conn)
 	defer func() { rc.cachePool.Put(conn) }()
 
@@ -82,7 +83,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 	return
 }
 
-func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
+func (rc *RowCache) Set(ctx context.Context, key string, row []sqltypes.Value, cas uint64) {
 	if len(key) > MAX_KEY_LEN {
 		return
 	}
@@ -90,7 +91,7 @@ func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 	if b == nil {
 		return
 	}
-	conn := rc.cachePool.Get(0)
+	conn := rc.cachePool.Get(ctx)
 	defer func() { rc.cachePool.Put(conn) }()
 	mkey := rc.prefix + key
 
@@ -110,11 +111,11 @@ func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 	}
 }
 
-func (rc *RowCache) Delete(key string) {
+func (rc *RowCache) Delete(ctx context.Context, key string) {
 	if len(key) > MAX_KEY_LEN {
 		return
 	}
-	conn := rc.cachePool.Get(0)
+	conn := rc.cachePool.Get(ctx)
 	defer func() { rc.cachePool.Put(conn) }()
 	mkey := rc.prefix + key
 

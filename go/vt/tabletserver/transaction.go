@@ -4,12 +4,16 @@
 
 package tabletserver
 
-import "time"
+import (
+	"time"
+
+	"golang.org/x/net/context"
+)
 
 // Commit commits the specified transaction.
-func Commit(logStats *SQLQueryStats, qe *QueryEngine, transactionID int64) {
+func Commit(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, transactionID int64) {
 	defer queryStats.Record("COMMIT", time.Now())
-	dirtyTables, err := qe.txPool.SafeCommit(transactionID)
+	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)
 		if tableInfo == nil {
@@ -17,7 +21,9 @@ func Commit(logStats *SQLQueryStats, qe *QueryEngine, transactionID int64) {
 		}
 		invalidations := int64(0)
 		for key := range invalidList {
-			tableInfo.Cache.Delete(key)
+			// Use context.Background, becaause we don't want to fail
+			// these deletes.
+			tableInfo.Cache.Delete(context.Background(), key)
 			invalidations++
 		}
 		logStats.CacheInvalidations += invalidations
