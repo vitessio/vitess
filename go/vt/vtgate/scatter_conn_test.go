@@ -324,6 +324,7 @@ func TestScatterConnClose(t *testing.T) {
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond)
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
 	stc.Close()
+	time.Sleep(1)
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CloseCount)
 	}

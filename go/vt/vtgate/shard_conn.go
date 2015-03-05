@@ -173,7 +173,7 @@ func (sdc *ShardConn) Close() {
 	if sdc.conn == nil {
 		return
 	}
-	sdc.conn.Close()
+	go sdc.conn.Close()
 	sdc.conn = nil
 }
 
@@ -351,7 +351,7 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	}
 	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
-	sdc.conn.Close()
+	go sdc.conn.Close()
 	sdc.conn = nil
 }
 
