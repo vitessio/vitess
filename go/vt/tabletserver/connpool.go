@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -92,12 +93,12 @@ func (cp *ConnPool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *ConnPool) Get(timeout time.Duration) (*DBConn, error) {
+func (cp *ConnPool) Get(ctx context.Context) (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(timeout)
+	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err
 	}

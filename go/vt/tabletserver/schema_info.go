@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"golang.org/x/net/context"
 )
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
@@ -114,11 +115,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 }
 
 func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
+	ctx := context.Background()
 	si.connPool.Open(appParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
-	curTime := si.mysqlTime()
+	curTime := si.mysqlTime(ctx)
 
-	conn := getOrPanic(si.connPool)
+	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
 
 	if strictMode && !conn.VerifyStrict() {
@@ -126,7 +128,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaO
 	}
 
 	si.cachePool = cachePool
-	tables, err := conn.Exec(base_show_tables, maxTableCount, false, NewDeadline(1*time.Minute))
+	tables, err := conn.Exec(ctx, base_show_tables, maxTableCount, false)
 	if err != nil {
 		panic(NewTabletError(ErrFatal, "Could not get table list: %v", err))
 	}
@@ -212,15 +214,16 @@ func (si *SchemaInfo) Close() {
 
 func (si *SchemaInfo) Reload() {
 	defer logError()
+	ctx := context.Background()
 	// Get time first because it needs a connection from the pool.
-	curTime := si.mysqlTime()
+	curTime := si.mysqlTime(ctx)
 
 	var tables *mproto.QueryResult
 	var err error
 	func() {
-		conn := getOrPanic(si.connPool)
+		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.Exec(fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false, NewDeadline(1*time.Minute))
+		tables, err = conn.Exec(ctx, fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
@@ -230,15 +233,15 @@ func (si *SchemaInfo) Reload() {
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		log.Infof("Reloading: %s", tableName)
-		si.CreateOrUpdateTable(tableName)
+		si.CreateOrUpdateTable(ctx, tableName)
 	}
 	si.lastChange = curTime
 }
 
-func (si *SchemaInfo) mysqlTime() time.Time {
-	conn := getOrPanic(si.connPool)
+func (si *SchemaInfo) mysqlTime(ctx context.Context) time.Time {
+	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
-	tm, err := conn.Exec("select unix_timestamp()", 1, false, NewDeadline(1*time.Minute))
+	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
 		panic(NewTabletError(ErrFail, "Could not get MySQL time: %v", err))
 	}
@@ -265,13 +268,13 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 	si.queries.Clear()
 }
 
-func (si *SchemaInfo) CreateOrUpdateTable(tableName string) {
+func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	conn := getOrPanic(si.connPool)
+	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
-	tables, err := conn.Exec(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false, NewDeadline(1*time.Minute))
+	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
 		panic(NewTabletError(ErrFail, "Error fetching table %s: %v", tableName, err))
 	}
@@ -324,7 +327,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
+func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql string) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
@@ -356,11 +359,11 @@ func (si *SchemaInfo) GetPlan(logStats *SQLQueryStats, sql string) *ExecPlan {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
-			conn := getOrPanic(si.connPool)
+			conn := getOrPanic(ctx, si.connPool)
 			defer conn.Recycle()
 			sql := plan.FieldQuery.Query
 			start := time.Now()
-			r, err := conn.Exec(sql, 1, true, NewDeadline(1*time.Minute))
+			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
 				panic(NewTabletError(ErrFail, "Error fetching fields: %v", err))

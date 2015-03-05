@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -99,8 +100,8 @@ type CacheInvalidator interface {
 }
 
 // Helper method for conn pools to convert errors
-func getOrPanic(pool *ConnPool) *DBConn {
-	conn, err := pool.Get(0)
+func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
+	conn, err := pool.Get(ctx)
 	if err == nil {
 		return conn
 	}

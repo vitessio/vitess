@@ -15,7 +15,7 @@ import (
 
 // PoolConn is the interface implemented by users of this specialized pool.
 type PoolConn interface {
-	Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error)
+	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error)
 }
 
 // RequestContext encapsulates a context and associated variables for a request
@@ -23,16 +23,11 @@ type RequestContext struct {
 	ctx      context.Context
 	logStats *SQLQueryStats
 	qe       *QueryEngine
-	deadline Deadline
 }
 
 func (rqc *RequestContext) getConn(pool *ConnPool) *DBConn {
 	start := time.Now()
-	timeout, err := rqc.deadline.Timeout()
-	if err != nil {
-		panic(NewTabletError(ErrFail, "getConn: %v", err))
-	}
-	conn, err := pool.Get(timeout)
+	conn, err := pool.Get(rqc.ctx)
 	switch err {
 	case nil:
 		rqc.logStats.WaitingForConnection += time.Now().Sub(start)
@@ -49,11 +44,7 @@ func (rqc *RequestContext) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparse
 	if ok {
 		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		timeout, err := rqc.deadline.Timeout()
-		if err != nil {
-			q.Err = NewTabletError(ErrFail, "qFetch: %v", err)
-		}
-		conn, err := rqc.qe.connPool.Get(timeout)
+		conn, err := rqc.qe.connPool.Get(rqc.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
 			q.Err = NewTabletErrorSql(ErrFatal, err)
@@ -113,7 +104,7 @@ func (rqc *RequestContext) execSQL(conn PoolConn, sql string, wantfields bool) *
 
 func (rqc *RequestContext) execSQLNoPanic(conn PoolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	defer rqc.logStats.AddRewrittenSql(sql, time.Now())
-	return conn.Exec(sql, int(rqc.qe.maxResultSize.Get()), wantfields, rqc.deadline)
+	return conn.Exec(rqc.ctx, sql, int(rqc.qe.maxResultSize.Get()), wantfields)
 }
 
 func (rqc *RequestContext) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) {

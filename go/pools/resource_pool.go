@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sync2"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -86,18 +87,18 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-func (rp *ResourcePool) Get(timeout time.Duration) (resource Resource, err error) {
-	return rp.get(true, timeout)
+func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
+	return rp.get(ctx, true)
 }
 
 // TryGet will return the next available resource. If none is available, and capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will return nil with no error.
 func (rp *ResourcePool) TryGet() (resource Resource, err error) {
-	return rp.get(false, 0)
+	return rp.get(context.TODO(), false)
 }
 
-func (rp *ResourcePool) get(wait bool, timeout time.Duration) (resource Resource, err error) {
+func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, err error) {
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -108,16 +109,10 @@ func (rp *ResourcePool) get(wait bool, timeout time.Duration) (resource Resource
 			return nil, nil
 		}
 		startTime := time.Now()
-		if timeout == 0 {
-			wrapper, ok = <-rp.resources
-		} else {
-			tmr := time.NewTimer(timeout)
-			defer tmr.Stop()
-			select {
-			case wrapper, ok = <-rp.resources:
-			case <-tmr.C:
-				return nil, TIMEOUT_ERR
-			}
+		select {
+		case wrapper, ok = <-rp.resources:
+		case <-ctx.Done():
+			return nil, TIMEOUT_ERR
 		}
 		rp.recordWait(startTime)
 	}

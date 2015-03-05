@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"golang.org/x/net/context"
 )
 
 // RowcacheInvalidator runs the service to invalidate
@@ -190,7 +191,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 		if newKey == "" {
 			continue
 		}
-		tableInfo.Cache.Delete(newKey)
+		tableInfo.Cache.Delete(context.Background(), newKey)
 		invalidations++
 	}
 	tableInfo.invalidations.Add(invalidations)
@@ -206,7 +207,7 @@ func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
 		rci.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
 	if ddlPlan.NewName != "" {
-		rci.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
+		rci.qe.schemaInfo.CreateOrUpdateTable(context.Background(), ddlPlan.NewName)
 	}
 }
 
@@ -252,5 +253,5 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 	// Treat the statement as a DDL.
 	// It will conservatively invalidate all rows of the table.
 	log.Warningf("Treating '%s' as DDL for table %s", sql, tableName)
-	rci.qe.schemaInfo.CreateOrUpdateTable(tableName)
+	rci.qe.schemaInfo.CreateOrUpdateTable(context.Background(), tableName)
 }

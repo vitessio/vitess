@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"golang.org/x/net/context"
 )
 
 const statsURL = "/debug/memcache/"
@@ -179,12 +180,12 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 }
 
 // You must call Put after Get.
-func (cp *CachePool) Get(timeout time.Duration) *memcache.Connection {
+func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	pool := cp.getPool()
 	if pool == nil {
 		panic(NewTabletError(ErrFatal, "cache pool is not open"))
 	}
-	r, err := pool.Get(timeout)
+	r, err := pool.Get(ctx)
 	if err != nil {
 		panic(NewTabletErrorSql(ErrFatal, err))
 	}
@@ -279,8 +280,8 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 	if command == "stats" {
 		command = ""
 	}
-	conn := cp.Get(0)
-	// This is not the same as defer rc.cachePool.Put(conn)
+	conn := cp.Get(context.Background())
+	// This is not the same as defer cp.Put(conn)
 	defer func() { cp.Put(conn) }()
 	r, err := conn.Stats(command)
 	if err != nil {

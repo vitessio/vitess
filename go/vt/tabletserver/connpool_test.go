@@ -7,6 +7,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -29,47 +30,45 @@ var (
 // Run the test normally once. Then you add a 20s sleep in dbconn.execOnce
 // and run it again. You also have to check the code coverage to see that all critical
 // paths were covered.
-// TODO(sougou): Figure out a way to automatae this.
+// TODO(sougou): Figure out a way to automate this.
 func TestConnectivity(t *testing.T) {
 	t.Skip("manual test")
+	ctx := context.Background()
 	killStats = stats.NewCounters("TestKills")
 	internalErrors = stats.NewCounters("TestInternalErrors")
 	mysqlStats = stats.NewTimings("TestMySQLStats")
 	pool := NewConnPool("p1", 1, 30*time.Second)
 	pool.Open(appParams, dbaParams)
-	conn, err := pool.Get(0)
+	conn, err := pool.Get(ctx)
 	if err != nil {
 		t.Error(err)
 	}
 	conn.Kill()
-	_, err = conn.Exec("select * from a", 1000, true, NewDeadline(2*time.Second))
+	newctx, cancel := withTimeout(ctx, 2*time.Second)
+	_, err = conn.Exec(newctx, "select * from a", 1000, true)
+	cancel()
 	if err != nil {
 		t.Error(err)
 	}
 	conn.Close()
-	_, err = conn.Exec("select * from a", 1000, true, NewDeadline(2*time.Second))
+	newctx, cancel = withTimeout(ctx, 2*time.Second)
+	_, err = conn.Exec(newctx, "select * from a", 1000, true)
+	cancel()
 	// You'll get a timedout error in slow mode. Otherwise, this should succeed.
 	timedout := "error: setDeadline: timed out"
 	if err != nil && err.Error() != timedout {
 		t.Errorf("got: %v, want nil or %s", err, timedout)
 	}
 	conn.Recycle()
-	conn, err = pool.Get(0)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = conn.Exec("select id from a", 1000, true, NewDeadline(2*time.Nanosecond))
-	if err == nil || err.Error() != timedout {
-		t.Errorf("got: %v, want %s", err, timedout)
-	}
-	conn.Recycle()
-	conn, err = pool.Get(0)
+	conn, err = pool.Get(ctx)
 	if err != nil {
 		t.Error(err)
 	}
 	ch := make(chan bool)
 	go func() {
-		_, err = conn.Exec("select sleep(1) from dual", 1000, true, NewDeadline(20*time.Millisecond))
+		newctx, cancel = withTimeout(ctx, 2*time.Millisecond)
+		_, err = conn.Exec(newctx, "select sleep(1) from dual", 1000, true)
+		cancel()
 		lostConn := "error: Lost connection to MySQL server during query (errno 2013) during query: select sleep(1) from dual"
 		if err == nil || err.Error() != lostConn {
 			t.Errorf("got: %v, want %s", err, lostConn)

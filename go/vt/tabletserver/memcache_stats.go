@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"golang.org/x/net/context"
 )
 
 var interval = 5 * time.Second
@@ -316,7 +317,7 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 			internalErrors.Add("MemcacheStats", 1)
 		}
 	}()
-	conn := s.cachePool.Get(0)
+	conn := s.cachePool.Get(context.Background())
 	// This is not the same as defer rc.cachePool.Put(conn)
 	defer func() { s.cachePool.Put(conn) }()
 

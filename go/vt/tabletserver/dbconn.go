@@ -13,6 +13,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"golang.org/x/net/context"
 )
 
 // DBConn is a db connection for tabletserver.
@@ -26,9 +27,6 @@ type DBConn struct {
 	pool *ConnPool
 
 	current sync2.AtomicString
-	// killed is used to synchronize between Kill
-	// and exec functions.
-	killed chan bool
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
@@ -39,18 +37,17 @@ func NewDBConn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*DBC
 		return nil, err
 	}
 	return &DBConn{
-		conn:   c,
-		info:   appParams,
-		pool:   cp,
-		killed: make(chan bool, 1),
+		conn: c,
+		info: appParams,
+		pool: cp,
 	}, nil
 }
 
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
-func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
+func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
 	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := dbc.execOnce(query, maxrows, wantfields, deadline)
+		r, err := dbc.execOnce(ctx, query, maxrows, wantfields)
 		switch {
 		case err == nil:
 			return r, nil
@@ -68,11 +65,11 @@ func (dbc *DBConn) Exec(query string, maxrows int, wantfields bool, deadline Dea
 	panic("unreachable")
 }
 
-func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline Deadline) (*mproto.QueryResult, error) {
-	dbc.startRequest(query)
-	defer dbc.endRequest()
+func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+	dbc.current.Set(query)
+	defer dbc.current.Set("")
 
-	done, err := dbc.setDeadline(deadline)
+	done, err := dbc.setDeadline(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +83,8 @@ func (dbc *DBConn) execOnce(query string, maxrows int, wantfields bool, deadline
 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
-	dbc.startRequest(query)
-	defer dbc.endRequest()
+	dbc.current.Set(query)
+	defer dbc.current.Set("")
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
@@ -119,20 +116,8 @@ func (dbc *DBConn) Recycle() {
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill() {
-	select {
-	case killed := <-dbc.killed:
-		defer func() { dbc.killed <- true }()
-		// A previous kill killed this query already.
-		if killed {
-			return
-		}
-	default:
-		// Nothing is executing
-		return
-	}
 	killStats.Add("Queries", 1)
 	log.Infof("killing query %s", dbc.Current())
-	dbc.conn.Shutdown()
 	killConn, err := dbc.pool.dbaPool.Get(0)
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
@@ -156,19 +141,6 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-func (dbc *DBConn) startRequest(query string) {
-	dbc.current.Set(query)
-	dbc.killed <- false
-}
-
-func (dbc *DBConn) endRequest() {
-	killed := <-dbc.killed
-	defer dbc.current.Set("")
-	if killed {
-		dbc.Close()
-	}
-}
-
 func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
 	newConn, err := dbconnpool.NewDBConnection(dbc.info, mysqlStats)
@@ -179,20 +151,21 @@ func (dbc *DBConn) reconnect() error {
 	return nil
 }
 
-func (dbc *DBConn) setDeadline(deadline Deadline) (done chan bool, err error) {
-	timeout, err := deadline.Timeout()
-	if err != nil {
-		return nil, fmt.Errorf("setDeadline: %v", err)
-	}
-	if timeout == 0 {
+func (dbc *DBConn) setDeadline(ctx context.Context) (done chan bool, err error) {
+	if ctx.Done() == nil {
 		return nil, nil
 	}
 	done = make(chan bool)
-	tmr := time.NewTimer(timeout)
 	go func() {
-		defer tmr.Stop()
 		select {
-		case <-tmr.C:
+		case <-ctx.Done():
+			// There is a possibility that the query returned very fast,
+			// which will cause ctx to get canceled. Check for this condition.
+			select {
+			case <-done:
+				return
+			default:
+			}
 			dbc.Kill()
 		case <-done:
 			return

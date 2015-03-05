@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -103,7 +104,9 @@ func (cp *ConnectionPool) Get(timeout time.Duration) (PoolConnection, error) {
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
