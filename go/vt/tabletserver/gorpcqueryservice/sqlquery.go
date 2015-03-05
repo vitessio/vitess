@@ -60,13 +60,13 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	return sq.server.SplitQuery(ctx, req, reply)
 }
 
-// NewSqlQuery returns a new SqlQuery based on the QueryService implementation
-func NewSqlQuery(server queryservice.QueryService) *SqlQuery {
+// New returns a new SqlQuery based on the QueryService implementation
+func New(server queryservice.QueryService) *SqlQuery {
 	return &SqlQuery{server}
 }
 
 func init() {
 	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, func(qsc tabletserver.QueryServiceControl) {
-		servenv.Register("queryservice", NewSqlQuery(qsc.QueryService()))
+		servenv.Register("queryservice", New(qsc.QueryService()))
 	})
 }
