@@ -9,6 +9,7 @@ git rm --ignore-unmatch -rf *
 git checkout master replace_doc_link.py
 git checkout master doc
 git checkout master README.md
+git checkout master index.md
 git checkout master vitess.io
 
 mkdir vitess.io/_includes/doc
