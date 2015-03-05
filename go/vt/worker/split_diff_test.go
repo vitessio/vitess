@@ -17,8 +17,10 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -26,17 +28,15 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This is a local SqlQuery RPC implementation to support the tests
-type DestinationSqlQuery struct {
+// destinationSqlQuery is a local QueryService implementation to
+// support the tests
+type destinationSqlQuery struct {
+	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *DestinationSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	return nil
-}
-
-func (sq *DestinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *destinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -45,7 +45,7 @@ func (sq *DestinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Q
 		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
 	}
 
-	sq.t.Logf("DestinationSqlQuery: got query: %v", *query)
+	sq.t.Logf("destinationSqlQuery: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -85,16 +85,14 @@ func (sq *DestinationSqlQuery) StreamExecute(ctx context.Context, query *proto.Q
 	return nil
 }
 
-type SourceSqlQuery struct {
+// sourceSqlQuery is a local QueryService implementation to support the tests
+type sourceSqlQuery struct {
+	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *SourceSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	return nil
-}
-
-func (sq *SourceSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *sourceSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -106,7 +104,7 @@ func (sq *SourceSqlQuery) StreamExecute(ctx context.Context, query *proto.Query,
 		}
 	}
 
-	sq.t.Logf("SourceSqlQuery: got query: %v", *query)
+	sq.t.Logf("sourceSqlQuery: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -222,10 +220,10 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	leftRdonly1.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t, excludedTable: excludedTable})
-	leftRdonly2.RPCServer.RegisterName("SqlQuery", &DestinationSqlQuery{t: t, excludedTable: excludedTable})
-	sourceRdonly1.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t, excludedTable: excludedTable})
-	sourceRdonly2.RPCServer.RegisterName("SqlQuery", &SourceSqlQuery{t: t, excludedTable: excludedTable})
+	leftRdonly1.RPCServer.Register(gorpcqueryservice.New(&destinationSqlQuery{t: t, excludedTable: excludedTable}))
+	leftRdonly2.RPCServer.Register(gorpcqueryservice.New(&destinationSqlQuery{t: t, excludedTable: excludedTable}))
+	sourceRdonly1.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
+	sourceRdonly2.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
 
 	wrk.Run()
 	status := wrk.StatusAsText()

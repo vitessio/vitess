@@ -20,8 +20,10 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -29,16 +31,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This is a local SqlQuery RCP implementation to support the tests
-type SqlQuery struct {
+// testQueryService is a local QueryService implementation to support the tests
+type testQueryService struct {
+	queryservice.ErrorQueryService
 	t *testing.T
 }
 
-func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	return nil
-}
-
-func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	// Custom parsing of the query we expect
 	min := 100
 	max := 200
@@ -54,7 +53,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 			max, err = strconv.Atoi(part[3:])
 		}
 	}
-	sq.t.Logf("SqlQuery: got query: %v with min %v max %v", *query, min, max)
+	sq.t.Logf("testQueryService: got query: %v with min %v max %v", *query, min, max)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -312,7 +311,7 @@ func testSplitClone(t *testing.T, strategy string) {
 				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 			},
 		}
-		sourceRdonly.RPCServer.Register(&SqlQuery{t: t})
+		sourceRdonly.RPCServer.Register(gorpcqueryservice.New(&testQueryService{t: t}))
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so
