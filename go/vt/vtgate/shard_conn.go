@@ -199,7 +199,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 			continue
 		}
 		err = action(conn)
-		if sdc.canRetry(ctx, err, transactionID, conn) {
+		if sdc.canRetry(ctx, err, transactionID, conn, isStreaming) {
 			continue
 		}
 		break
@@ -299,7 +299,7 @@ func (sdc *ShardConn) getConnTimeoutPerConn(endPointCount int) time.Duration {
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn) bool {
+func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int64, conn tabletconn.TabletConn, isStreaming bool) bool {
 	if err == nil {
 		return false
 	}
@@ -313,7 +313,17 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 		switch serverError.Code {
 		case tabletconn.ERR_TX_POOL_FULL:
 			return true
-		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
+		case tabletconn.ERR_FATAL:
+			// Do not retry on fatal error for streaming query.
+			// For streaming query, vttablet sends:
+			// - RETRY, if streaming is not started yet;
+			// - FATAL, if streaming is broken halfway.
+			// For non-streaming query, handle as ERR_RETRY.
+			if isStreaming {
+				return false
+			}
+			fallthrough
+		case tabletconn.ERR_RETRY:
 			// Retry on RETRY and FATAL if not in a transaction.
 			inTransaction := (transactionID != 0)
 			sdc.markDown(conn, err.Error())
