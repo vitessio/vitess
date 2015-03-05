@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
 )
 
@@ -171,8 +172,9 @@ type QueryServiceControl interface {
 	// SetQueryRules sets the query rules for this QueryService
 	SetQueryRules(ruleSource string, qrs *QueryRules) error
 
-	// SqlQuery returns the SqlQuery object used by this QueryServiceControl
-	SqlQuery() *SqlQuery
+	// QueryService returns the QueryService object used by this
+	// QueryServiceControl
+	QueryService() queryservice.QueryService
 }
 
 // TestQueryServiceControl is a fake version of QueryServiceControl
@@ -240,8 +242,8 @@ func (tqsc *TestQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 	return nil
 }
 
-// SqlQuery is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) SqlQuery() *SqlQuery {
+// QueryService is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) QueryService() queryservice.QueryService {
 	return nil
 }
 
@@ -339,8 +341,8 @@ func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 	return nil
 }
 
-// SqlQuery is part of the QueryServiceControl interface
-func (rqsc *realQueryServiceControl) SqlQuery() *SqlQuery {
+// QueryService is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) QueryService() queryservice.QueryService {
 	return rqsc.sqlQueryRPCService
 }
 

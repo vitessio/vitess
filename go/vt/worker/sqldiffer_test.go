@@ -15,8 +15,10 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
@@ -24,16 +26,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-// This is a local SqlQuery RPC implementation to support the tests
-type SqlDifferSqlQuery struct {
+// sqlDifferSqlQuery is a local QueryService implementation to support the tests
+type sqlDifferSqlQuery struct {
+	queryservice.ErrorQueryService
 	t *testing.T
 }
 
-func (sq *SqlDifferSqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	return nil
-}
-
-func (sq *SqlDifferSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
+func (sq *sqlDifferSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	sq.t.Logf("SqlDifferSqlQuery: got query: %v", *query)
 
 	// Send the headers
@@ -132,7 +131,7 @@ func TestSqlDiffer(t *testing.T) {
 				},
 			},
 		}
-		rdonly.RPCServer.RegisterName("SqlQuery", &SqlDifferSqlQuery{t: t})
+		rdonly.RPCServer.Register(gorpcqueryservice.New(&sqlDifferSqlQuery{t: t}))
 	}
 
 	wrk.Run()

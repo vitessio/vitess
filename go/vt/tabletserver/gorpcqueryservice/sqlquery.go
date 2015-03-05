@@ -9,12 +9,13 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
 )
 
 // SqlQuery is the server object for gorpc SqlQuery
 type SqlQuery struct {
-	server *tabletserver.SqlQuery
+	server queryservice.QueryService
 }
 
 // GetSessionId is exposing tabletserver.SqlQuery.GetSessionId
@@ -59,8 +60,13 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	return sq.server.SplitQuery(ctx, req, reply)
 }
 
+// New returns a new SqlQuery based on the QueryService implementation
+func New(server queryservice.QueryService) *SqlQuery {
+	return &SqlQuery{server}
+}
+
 func init() {
 	tabletserver.QueryServiceControlRegisterFunctions = append(tabletserver.QueryServiceControlRegisterFunctions, func(qsc tabletserver.QueryServiceControl) {
-		servenv.Register("queryservice", &SqlQuery{qsc.SqlQuery()})
+		servenv.Register("queryservice", New(qsc.QueryService()))
 	})
 }
