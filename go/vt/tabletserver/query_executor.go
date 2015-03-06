@@ -156,8 +156,8 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 		panic(NewTabletError(ErrFail, "DDL is not understood"))
 	}
 
-	txid := qre.qe.txPool.Begin()
-	defer qre.qe.txPool.SafeCommit(txid)
+	txid := qre.qe.txPool.Begin(qre.ctx)
+	defer qre.qe.txPool.SafeCommit(qre.ctx, txid)
 
 	// Stolen from Execute
 	conn := qre.qe.txPool.Get(txid)
@@ -169,7 +169,7 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
 	if ddlPlan.NewName != "" {
-		qre.qe.schemaInfo.CreateOrUpdateTable(ddlPlan.NewName)
+		qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName)
 	}
 	return result
 }
@@ -201,7 +201,7 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 	for i, pk := range pkRows {
 		keys[i] = buildKey(pk)
 	}
-	rcresults := tableInfo.Cache.Get(keys)
+	rcresults := tableInfo.Cache.Get(qre.ctx, keys)
 
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	missingRows := make([][]sqltypes.Value, 0, len(pkRows))
@@ -231,7 +231,7 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 		for _, row := range resultFromdb.Rows {
 			rows = append(rows, applyFilter(qre.plan.ColumnNumbers, row))
 			key := buildKey(applyFilter(qre.plan.TableInfo.PKColumns, row))
-			tableInfo.Cache.Set(key, row, rcresults[key].Cas)
+			tableInfo.Cache.Set(qre.ctx, key, row, rcresults[key].Cas)
 		}
 	}
 
@@ -280,7 +280,7 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 	time.Sleep(10 * time.Second)
 	keys := make([]string, 1)
 	keys[0] = buildKey(pk)
-	reloaded := qre.plan.TableInfo.Cache.Get(keys)[keys[0]]
+	reloaded := qre.plan.TableInfo.Cache.Get(context.Background(), keys)[keys[0]]
 	// If reloaded row is absent or has changed, we're good
 	if reloaded.Row == nil || reloaded.Cas != rcresult.Cas {
 		return

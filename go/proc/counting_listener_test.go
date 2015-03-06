@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestPublished(t *testing.T) {
@@ -30,6 +31,7 @@ func TestPublished(t *testing.T) {
 			t.Fatal(err)
 		}
 		http.DefaultTransport.(*http.Transport).CloseIdleConnections()
+		time.Sleep(100 * time.Millisecond)
 		vars := make(map[string]interface{})
 		err = json.Unmarshal(val, &vars)
 		if err != nil {

@@ -225,8 +225,8 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 // Begin starts a new transaction. This is allowed only if the state is SERVING.
-func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
-	logStats := newSqlQueryStats("Begin", context)
+func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+	logStats := newSqlQueryStats("Begin", ctx)
 	logStats.OriginalSql = "begin"
 	sq.mu.RLock()
 	defer sq.mu.RUnlock()
@@ -239,14 +239,16 @@ func (sq *SqlQuery) Begin(context context.Context, session *proto.Session, txInf
 		return NewTabletError(ErrRetry, "Invalid session Id %v", session.SessionId)
 	}
 	defer queryStats.Record("BEGIN", time.Now())
-	txInfo.TransactionId = sq.qe.txPool.Begin()
+	ctx, cancel := withTimeout(ctx, sq.qe.txPool.poolTimeout.Get())
+	defer cancel()
+	txInfo.TransactionId = sq.qe.txPool.Begin(ctx)
 	logStats.TransactionID = txInfo.TransactionId
 	return nil
 }
 
 // Commit commits the specified transaction.
-func (sq *SqlQuery) Commit(context context.Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Commit", context)
+func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session) (err error) {
+	logStats := newSqlQueryStats("Commit", ctx)
 	logStats.OriginalSql = "commit"
 	logStats.TransactionID = session.TransactionId
 	if err = sq.startRequest(session.SessionId, true); err != nil {
@@ -255,13 +257,15 @@ func (sq *SqlQuery) Commit(context context.Context, session *proto.Session) (err
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
 
-	Commit(logStats, sq.qe, session.TransactionId)
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer cancel()
+	Commit(ctx, logStats, sq.qe, session.TransactionId)
 	return nil
 }
 
 // Rollback rollsback the specified transaction.
-func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (err error) {
-	logStats := newSqlQueryStats("Rollback", context)
+func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err error) {
+	logStats := newSqlQueryStats("Rollback", ctx)
 	logStats.OriginalSql = "rollback"
 	logStats.TransactionID = session.TransactionId
 	if err = sq.startRequest(session.SessionId, true); err != nil {
@@ -270,7 +274,9 @@ func (sq *SqlQuery) Rollback(context context.Context, session *proto.Session) (e
 	defer sq.endRequest()
 	defer handleError(&err, logStats)
 	defer queryStats.Record("ROLLBACK", time.Now())
-	sq.qe.txPool.Rollback(session.TransactionId)
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer cancel()
+	sq.qe.txPool.Rollback(ctx, session.TransactionId)
 	return nil
 }
 
@@ -304,8 +310,8 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 }
 
 // Execute executes the query and returns the result as response.
-func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
-	logStats := newSqlQueryStats("Execute", context)
+func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
+	logStats := newSqlQueryStats("Execute", ctx)
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
 		return err
@@ -318,16 +324,17 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 		query.BindVariables = make(map[string]interface{})
 	}
 	stripTrailing(query)
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer cancel()
 	qre := &QueryExecutor{
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
-		plan:          sq.qe.schemaInfo.GetPlan(logStats, query.Sql),
+		plan:          sq.qe.schemaInfo.GetPlan(ctx, logStats, query.Sql),
 		RequestContext: RequestContext{
-			ctx:      context,
+			ctx:      ctx,
 			logStats: logStats,
 			qe:       sq.qe,
-			deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 		},
 	}
 	*reply = *qre.Execute()
@@ -337,13 +344,13 @@ func (sq *SqlQuery) Execute(context context.Context, query *proto.Query, reply *
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
+func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
 		return NewTabletError(ErrFail, "Transactions not supported with streaming")
 	}
 
-	logStats := newSqlQueryStats("StreamExecute", context)
+	logStats := newSqlQueryStats("StreamExecute", ctx)
 	if err = sq.startRequest(query.SessionId, false); err != nil {
 		return err
 	}
@@ -355,16 +362,17 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 		query.BindVariables = make(map[string]interface{})
 	}
 	stripTrailing(query)
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer cancel()
 	qre := &QueryExecutor{
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
 		RequestContext: RequestContext{
-			ctx:      context,
+			ctx:      ctx,
 			logStats: logStats,
 			qe:       sq.qe,
-			deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 		},
 	}
 	qre.Stream(sendReply)
@@ -374,7 +382,7 @@ func (sq *SqlQuery) StreamExecute(context context.Context, query *proto.Query, s
 // ExecuteBatch executes a group of queries and returns their results as a list.
 // ExecuteBatch can be called for an existing transaction, or it can also begin
 // its own transaction, in which case it's expected to commit it also.
-func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
 		return NewTabletError(ErrFail, "Empty query list")
 	}
@@ -400,7 +408,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 				panic(NewTabletError(ErrFail, "Nested transactions disallowed"))
 			}
 			var txInfo proto.TransactionInfo
-			if err = sq.Begin(context, &session, &txInfo); err != nil {
+			if err = sq.Begin(ctx, &session, &txInfo); err != nil {
 				return err
 			}
 			session.TransactionId = txInfo.TransactionId
@@ -410,7 +418,7 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 			if !beginCalled {
 				panic(NewTabletError(ErrFail, "Cannot commit without begin"))
 			}
-			if err = sq.Commit(context, &session); err != nil {
+			if err = sq.Commit(ctx, &session); err != nil {
 				return err
 			}
 			session.TransactionId = 0
@@ -424,9 +432,9 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 				SessionId:     session.SessionId,
 			}
 			var localReply mproto.QueryResult
-			if err = sq.Execute(context, &query, &localReply); err != nil {
+			if err = sq.Execute(ctx, &query, &localReply); err != nil {
 				if beginCalled {
-					sq.Rollback(context, &session)
+					sq.Rollback(ctx, &session)
 				}
 				return err
 			}
@@ -434,15 +442,15 @@ func (sq *SqlQuery) ExecuteBatch(context context.Context, queryList *proto.Query
 		}
 	}
 	if beginCalled {
-		sq.Rollback(context, &session)
+		sq.Rollback(ctx, &session)
 		panic(NewTabletError(ErrFail, "begin called with no commit"))
 	}
 	return nil
 }
 
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
-func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	logStats := newSqlQueryStats("SplitQuery", context)
+func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	logStats := newSqlQueryStats("SplitQuery", ctx)
 	var err error
 	// TODO(sougou/anandhenry): Add session validation.
 	defer handleError(&err, logStats)
@@ -453,11 +461,12 @@ func (sq *SqlQuery) SplitQuery(context context.Context, req *proto.SplitQueryReq
 		return NewTabletError(ErrFail, "query validation error: %s", err)
 	}
 	// Partial initialization or QueryExecutor is enough to call execSQL
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer cancel()
 	requestContext := RequestContext{
-		ctx:      context,
+		ctx:      ctx,
 		logStats: logStats,
 		qe:       sq.qe,
-		deadline: NewDeadline(sq.qe.queryTimeout.Get()),
 	}
 	conn := requestContext.getConn(sq.qe.connPool)
 	defer conn.Recycle()
@@ -507,4 +516,12 @@ func init() {
 // Rand generates a pseudo-random int64 number.
 func Rand() int64 {
 	return rand.Int63()
+}
+
+// withTimeout returns a context based on whether the timeout is 0 or not.
+func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout == 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
 }

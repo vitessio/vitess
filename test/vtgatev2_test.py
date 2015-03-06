@@ -603,8 +603,8 @@ class TestFailures(unittest.TestCase):
     utils.vtgate_kill(vtgate_server)
     vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
 
-  def tablet_start(self, tablet, tablet_type):
-    return tablet.start_vttablet(lameduck_period='500ms')
+  def tablet_start(self, tablet, tablet_type, lameduck_period='0.5s'):
+    return tablet.start_vttablet(lameduck_period=lameduck_period)
     #                             target_tablet_type=tablet_type)
 
   def test_tablet_restart_read(self):
@@ -1230,6 +1230,72 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
 
 
+  def test_lameduck_ongoing_query_single(self):
+    vtgate_conn = get_connection()
+    utils.wait_procs([self.replica_tablet2.shutdown_mysql(),])
+    utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
+                    auto_log=True)
+    self.replica_tablet.kill_vttablet()
+    self.tablet_start(self.replica_tablet, 'replica', '5s')
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    # make sure query can go through tablet1
+    tablet1_vars = utils.get_vars(self.replica_tablet.port)
+    t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
+    vtgate_conn._execute(
+        "select 1 from vt_insert_test", {},
+        KEYSPACE_NAME, 'replica',
+        keyranges=[self.keyrange])
+    tablet1_vars = utils.get_vars(self.replica_tablet.port)
+    t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
+    self.assertTrue((t1_query_count_after-t1_query_count_before) == 1)
+    # start a long running query
+    num_requests = 10
+    pool = ThreadPool(processes=num_requests)
+    async_results = []
+    for i in range(5):
+      async_result = pool.apply_async(send_long_query, (KEYSPACE_NAME, 'replica', [self.keyrange], 2))
+      async_results.append(async_result)
+    # soft kill vttablet
+    # **should wait till previous queries are sent out**
+    time.sleep(1)
+    self.replica_tablet.kill_vttablet(wait=False)
+    # send query while vttablet is in lameduck, should fail as no vttablet
+    time.sleep(0.1)
+    try:
+      vtgate_conn._execute(
+        "select 1 from vt_insert_test", {},
+        KEYSPACE_NAME, 'replica',
+        keyranges=[self.keyrange])
+      self.fail("DatabaseError should have been raised")
+    except Exception, e:
+      self.assertIsInstance(e, dbexceptions.DatabaseError)
+      self.assertNotIsInstance(e, dbexceptions.IntegrityError)
+      self.assertNotIsInstance(e, dbexceptions.OperationalError)
+      self.assertNotIsInstance(e, dbexceptions.TimeoutError)
+    # Fetch all ongoing querie results
+    query_results = []
+    for async_result in async_results:
+      query_results.append(async_result.get())
+    # all should succeed
+    for query_result in query_results:
+      self.assertTrue(query_result)
+    # sleep over lameduck period
+    time.sleep(5)
+    # start tablet1
+    self.tablet_start(self.replica_tablet, 'replica')
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
+    # send another query, should succeed on tablet1
+    vtgate_conn._execute(
+        "select 1 from vt_insert_test", {},
+        KEYSPACE_NAME, 'replica',
+        keyranges=[self.keyrange])
+    # start tablet2
+    utils.wait_procs([self.replica_tablet2.start_mysql(),])
+    utils.run_vtctl(['RunHealthCheck', self.replica_tablet2.tablet_alias, 'replica'],
+                    auto_log=True)
+    self.replica_tablet2.wait_for_vttablet_state('SERVING')
+
+
 # Return round trip time for a VtGate query, ignore any errors
 def get_rtt(keyspace, query, tablet_type, keyranges):
   vtgate_conn = get_connection()
@@ -1241,6 +1307,21 @@ def get_rtt(keyspace, query, tablet_type, keyranges):
     pass
   duration = time.time() - start
   return duration
+
+
+# Send out a long query, return if it succeeds.
+def send_long_query(keyspace, tablet_type, keyranges, delay):
+  try:
+    vtgate_conn = get_connection()
+    cursor = vtgate_conn.cursor(keyspace, tablet_type, keyranges=keyranges)
+    query = "select sleep(%s) from dual" % str(delay)
+    try:
+      cursor.execute(query, {})
+    except Exception, e:
+      return False
+    return True
+  except Exception, e:
+    return False
 
 
 class VTGateTestLogger(vtdb_logger.VtdbLogger):

@@ -1,0 +1,86 @@
+---
+layout: base
+---
+
+<main class="clear">
+
+  <nav class="toc g-wide--1 g-medium--1">
+    {% include toc.liquid top="/documentation/" title=true %}
+  </nav>
+
+  {% assign page__url = page.url | replace:'index.html','' %}
+  {% assign sitenav_item = site.data.sitenav_index[page__url] %}
+
+  {% if page.index %}
+
+    <section class="guides-section g-wide--3 g-wide--last g-medium--2 g-medium--last">
+      <header class="container">
+        <h2 class="xxlarge">{{ page.title }}</h2>
+        {% if page.description %}
+          <p>
+            {{ page.description }}
+          </p>
+        {% endif %}
+      </header>
+      {% assign guide__list = sitenav_item.children %}
+      <ol class="guides-list container">
+        {% for guide__item in guide__list %}
+          <li class="guides-list__item g-wide--half theme--spf">
+            <div class="primary-content">
+              <h3 class="xlarge"><a href="{{ site.baseurl }}{{ guide__item.page.url | replace:'index.html','' }}">{{ guide__item.page.title }}</a></h3>
+               {% if guide__item.page.description %}
+                <p>{{ guide__item.page.description }}</p>
+              {% endif %}
+            </div>
+            <div class="secondary-content">
+              {% if guide__item.children %}
+                <span class="icon-circle themed--background"><i class="icon icon-lessons"></i></span>
+                <ol class="list-links list-links--secondary">
+                  {% for guide__subitem in guide__item.children %}
+                    <li>
+                      <a href="{{ site.baseurl }}{{ guide__subitem.page.url | replace:'index.html','' }}">{{ guide__subitem.page.title }}</a>
+                    </li>
+                  {% endfor %}
+                </ol>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+
+  {% else %}
+
+    <article class="g-wide--3 g-wide--last g-medium--2 g-medium--last">
+      <header class="page-header container">
+        <h2 class="xxlarge text-divider">{{ page.title }}</h2>
+        {% if page.description %}
+          <p class="page-header__excerpt g-wide--push-1 g-wide--pull-1">
+            {{ page.description }}
+          </p>
+        {% endif %}
+      </header>
+      <div class="container">
+        {{ content }}
+      </div>
+    </article>
+
+  {% endif %}
+
+
+  <section class="feedback">
+    <footer class="container"><div class="container">
+      <p>
+        If you have feedback, comments, or questions about Vitess, please send
+        them to
+        <a href="mailto:vitess@googlegroups.com">vitess@googlegroups.com</a>.
+        If you have bugs or feature requests, please file them on
+        <a href="https://github.com/youtube/vitess/issues">GitHub</a>. Join our
+        <a href="https://groups.google.com/group/vitess">mailing list</a> and
+        follow <a href="https://twitter.com/vitess">@vitess</a> on Twitter for
+        updates.
+      </p>
+    </div></footer>
+  </section>
+
+</main>

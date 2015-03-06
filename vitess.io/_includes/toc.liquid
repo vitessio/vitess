@@ -1,0 +1,23 @@
+{% if include.path %}
+  {% assign toc__top = site.data.navindex[include.path] %}
+  {% assign toc__list = toc__top.sub %}
+  {% if include.title %}
+    <p class="toc__title">
+      <a href="{{ site.baseurl }}{{ toc__top.page.url | replace:'index.html','' }}">{{ toc__top.page.title }}</a>
+    </p>
+  {% endif %}
+{% else %}
+  {% assign toc__list = site.data.nav %}
+{% endif %}
+<ol class="toc__list list-links">
+  {% for toc__item in toc__list %}
+    <li>
+      {% if toc__item.page %}
+        <a href="{{ site.baseurl }}{{ toc__item.page.url | replace:'index.html','' }}">{{ toc__item.page.title }}</a>
+      {% endif %}
+      {% if toc__item.sub %}
+        {% include toc.liquid path=toc__item.url %}
+      {% endif %}
+    </li>
+  {% endfor %}
+</ol>

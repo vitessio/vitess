@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"golang.org/x/net/context"
 )
 
 /* Function naming convention:
@@ -111,8 +112,8 @@ func (axp *TxPool) TransactionKiller() {
 	}
 }
 
-func (axp *TxPool) Begin() int64 {
-	conn, err := axp.pool.Get(axp.poolTimeout.Get())
+func (axp *TxPool) Begin(ctx context.Context) int64 {
+	conn, err := axp.pool.Get(ctx)
 	if err != nil {
 		switch err {
 		case ErrConnPoolClosed:
@@ -123,8 +124,7 @@ func (axp *TxPool) Begin() int64 {
 		}
 		panic(NewTabletErrorSql(ErrFatal, err))
 	}
-	// TODO(sougou): Use deadline from context here.
-	if _, err := conn.Exec(BEGIN, 1, false, NewDeadline(1*time.Minute)); err != nil {
+	if _, err := conn.Exec(ctx, BEGIN, 1, false); err != nil {
 		conn.Recycle()
 		panic(NewTabletErrorSql(ErrFail, err))
 	}
@@ -133,7 +133,7 @@ func (axp *TxPool) Begin() int64 {
 	return transactionId
 }
 
-func (axp *TxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
+func (axp *TxPool) SafeCommit(ctx context.Context, transactionId int64) (invalidList map[string]DirtyKeys, err error) {
 	defer handleError(&err, nil)
 
 	conn := axp.Get(transactionId)
@@ -141,20 +141,18 @@ func (axp *TxPool) SafeCommit(transactionId int64) (invalidList map[string]Dirty
 	// Assign this upfront to make sure we always return the invalidList.
 	invalidList = conn.dirtyTables
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
-	// TODO(sougou): Use deadline from context here.
-	if _, fetchErr := conn.Exec(COMMIT, 1, false, NewDeadline(1*time.Minute)); fetchErr != nil {
+	if _, fetchErr := conn.Exec(ctx, COMMIT, 1, false); fetchErr != nil {
 		conn.Close()
 		err = NewTabletErrorSql(ErrFail, fetchErr)
 	}
 	return
 }
 
-func (axp *TxPool) Rollback(transactionId int64) {
+func (axp *TxPool) Rollback(ctx context.Context, transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
-	// TODO(sougou): Use deadline from context here.
-	if _, err := conn.Exec(ROLLBACK, 1, false, NewDeadline(1*time.Minute)); err != nil {
+	if _, err := conn.Exec(ctx, ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(ErrFail, err))
 	}
@@ -230,8 +228,8 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 	return list
 }
 
-func (txc *TxConnection) Exec(query string, maxrows int, wantfields bool, deadline Deadline) (*proto.QueryResult, error) {
-	r, err := txc.DBConn.execOnce(query, maxrows, wantfields, deadline)
+func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+	r, err := txc.DBConn.execOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if IsConnErr(err) {
 			go checkMySQL()

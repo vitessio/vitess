@@ -92,7 +92,6 @@ class TestVerticalSplit(unittest.TestCase):
                                                "test_nj", 30.0)
     self.vtgate_addrs = None
     if client_type == VTGATE:
-      global vtgate_addrs
       self.vtgate_addrs = {"vt": ["localhost:%s"%(self.vtgate_port),]}
 
     self.insert_index = 0

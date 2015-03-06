@@ -18,15 +18,15 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond)
 		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil)
 	})
 }
 
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		qrs, err := stc.ExecuteBatch(context.Background(), queries, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil)
 		if err != nil {
@@ -37,8 +37,8 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 }
 
 func TestStreamExecuteKeyspaceAlias(t *testing.T) {
-	testVerticalSplitGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+	testVerticalSplitGeneric(t, true, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
@@ -53,7 +53,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 
-	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 1*time.Millisecond)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond)
 	session := NewSafeSession(&proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -75,7 +75,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	}
 }
 
-func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
+func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []string) (*mproto.QueryResult, error)) {
 	// Retry Error, for keyspace that is redirected should succeed.
 	s := createSandbox(KsTestUnshardedServedFrom)
 	sbc := &sandboxConn{mustFailRetry: 1}
@@ -94,12 +94,23 @@ func testVerticalSplitGeneric(t *testing.T, f func(shards []string) (*mproto.Que
 	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 1, got %v", sbc.ExecCount)
+	if isStreaming {
+		want := "shard, host: TestUnshardedServedFrom.0.rdonly, {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, fatal: err"
+		if err == nil || err.Error() != want {
+			t.Errorf("want '%v', got '%v'", want, err)
+		}
+		// Ensure that we tried only once.
+		if sbc.ExecCount != 1 {
+			t.Errorf("want 1, got %v", sbc.ExecCount)
+		}
+	} else {
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+		// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
+		if sbc.ExecCount != 2 {
+			t.Errorf("want 2, got %v", sbc.ExecCount)
+		}
 	}
 
 	//  Error, for keyspace that is redirected should succeed.

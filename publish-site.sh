@@ -9,6 +9,7 @@ git rm --ignore-unmatch -rf *
 git checkout master replace_doc_link.py
 git checkout master doc
 git checkout master README.md
+git checkout master index.md
 git checkout master vitess.io
 
 mkdir vitess.io/_includes/doc
@@ -31,7 +32,7 @@ do
 done
 
 # preserve links between docs
-for d in `ls doc/*.md` README.md
+for d in `ls doc/*.md` README.md index.md
 do
   python replace_doc_link.py doc $d > vitess.io/_includes/$d
 done
