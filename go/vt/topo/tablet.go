@@ -391,16 +391,8 @@ func (tablet *Tablet) EndPoint() (*EndPoint, error) {
 	}
 
 	entry.NamedPortMap = map[string]int{}
-
-	if port, ok := tablet.Portmap["vt"]; ok {
-		entry.NamedPortMap["_vtocc"] = port
-		entry.NamedPortMap["vt"] = port
-	}
-	if port, ok := tablet.Portmap["mysql"]; ok {
-		entry.NamedPortMap["mysql"] = port
-	}
-	if port, ok := tablet.Portmap["vts"]; ok {
-		entry.NamedPortMap["vts"] = port
+	for name, port := range tablet.Portmap {
+		entry.NamedPortMap[name] = port
 	}
 
 	if len(tablet.Health) > 0 {
