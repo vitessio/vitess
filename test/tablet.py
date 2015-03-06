@@ -393,7 +393,7 @@ class Tablet(object):
     if extra_args:
       args.extend(extra_args)
 
-    stderr_fd = open(os.path.join(self.tablet_dir, '%s.stderr' % binary), 'w')
+    stderr_fd = open(os.path.join(environment.vtlogroot, '%s-%d.stderr' % (binary, self.tablet_uid)), 'w')
     # increment count only the first time
     if not self.proc:
       Tablet.tablets_running += 1
