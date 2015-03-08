@@ -126,16 +126,23 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, query 
 
 // Begin is part of the VTGateService interface
 func (f *fakeVTGateService) Begin(ctx context.Context, outSession *proto.Session) error {
+	*outSession = *session1
 	return nil
 }
 
 // Commit is part of the VTGateService interface
 func (f *fakeVTGateService) Commit(ctx context.Context, inSession *proto.Session) error {
+	if !reflect.DeepEqual(inSession, session2) {
+		return errors.New("commit: session mismatch")
+	}
 	return nil
 }
 
 // Rollback is part of the VTGateService interface
 func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Session) error {
+	if !reflect.DeepEqual(inSession, session2) {
+		return errors.New("rollback: session mismatch")
+	}
 	return nil
 }
 
@@ -154,6 +161,8 @@ func TestSuite(t *testing.T, conn vtgateconn.VTGateConn) {
 	testExecute(t, conn)
 	testExecuteShard(t, conn)
 	testStreamExecute(t, conn)
+	testTxPass(t, conn)
+	testTxFail(t, conn)
 }
 
 func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
@@ -161,7 +170,7 @@ func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	execCase := execMap["request1"]
 	qr, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+		t.Error(err)
 	}
 	if !reflect.DeepEqual(qr, execCase.reply.Result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
@@ -173,10 +182,10 @@ func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	_, err = conn.Execute(ctx, "request2", nil, "")
+	_, err = conn.Execute(ctx, "errorRequst", nil, "")
 	want = "app error"
 	if err == nil || err.Error() != want {
-		t.Errorf("request2: %v, want %v", err, want)
+		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
@@ -185,7 +194,7 @@ func testExecuteShard(t *testing.T, conn vtgateconn.VTGateConn) {
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteShard(ctx, execCase.execQuery.Sql, "ks", []string{"1", "2"}, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+		t.Error(err)
 	}
 	if !reflect.DeepEqual(qr, execCase.reply.Result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
@@ -197,10 +206,10 @@ func testExecuteShard(t *testing.T, conn vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	_, err = conn.ExecuteShard(ctx, "request2", "", []string{}, nil, "")
+	_, err = conn.ExecuteShard(ctx, "errorRequst", "", []string{}, nil, "")
 	want = "app error"
 	if err == nil || err.Error() != want {
-		t.Errorf("request2: %v, want %v", err, want)
+		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
@@ -225,7 +234,7 @@ func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 	err := errFunc()
 	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+		t.Error(err)
 	}
 
 	packets, errFunc = conn.StreamExecute(ctx, "none", nil, "")
@@ -238,14 +247,92 @@ func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	packets, errFunc = conn.StreamExecute(ctx, "request2", nil, "")
+	packets, errFunc = conn.StreamExecute(ctx, "errorRequst", nil, "")
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
 	err = errFunc()
 	want = "app error"
 	if err == nil || err.Error() != want {
-		t.Errorf("request2: %v, want %v", err, want)
+		t.Errorf("errorRequst: %v, want %v", err, want)
+	}
+}
+
+func testTxPass(t *testing.T, conn vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	execCase := execMap["txRequest"]
+	_, err = tx.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tx, err = conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	execCase = execMap["txRequest"]
+	_, err = tx.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Rollback(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Commit(ctx)
+	want := "commit: session mismatch"
+	if err == nil || err.Error() != want {
+		t.Errorf("Commit: %v, want %v", err, want)
+	}
+
+	_, err = tx.Execute(ctx, "", nil, "")
+	want = "execute: not in transaction"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute: %v, want %v", err, want)
+	}
+
+	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, "")
+	want = "executeShard: not in transaction"
+	if err == nil || err.Error() != want {
+		t.Errorf("ExecuteShard: %v, want %v", err, want)
+	}
+
+	err = tx.Commit(ctx)
+	want = "commit: not in transaction"
+	if err == nil || err.Error() != want {
+		t.Errorf("Commit: %v, want %v", err, want)
+	}
+
+	err = tx.Rollback(ctx)
+	want = "rollback: not in transaction"
+	if err == nil || err.Error() != want {
+		t.Errorf("Rollback: %v, want %v", err, want)
+	}
+
+	tx, err = conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Rollback(ctx)
+	want = "rollback: session mismatch"
+	if err == nil || err.Error() != want {
+		t.Errorf("Rollback: %v, want %v", err, want)
 	}
 }
 
@@ -280,15 +367,15 @@ var execMap = map[string]struct {
 			Error:   "",
 		},
 	},
-	"request2": {
+	"errorRequst": {
 		execQuery: &proto.Query{
-			Sql:           "request2",
+			Sql:           "errorRequst",
 			BindVariables: map[string]interface{}{},
 			TabletType:    "",
 			Session:       nil,
 		},
 		shardQuery: &proto.QueryShard{
-			Sql:           "request2",
+			Sql:           "errorRequst",
 			BindVariables: map[string]interface{}{},
 			TabletType:    "",
 			Keyspace:      "",
@@ -299,6 +386,27 @@ var execMap = map[string]struct {
 			Result:  nil,
 			Session: nil,
 			Error:   "app error",
+		},
+	},
+	"txRequest": {
+		execQuery: &proto.Query{
+			Sql:           "txRequest",
+			BindVariables: map[string]interface{}{},
+			TabletType:    "",
+			Session:       session1,
+		},
+		shardQuery: &proto.QueryShard{
+			Sql:           "txRequest",
+			BindVariables: map[string]interface{}{},
+			TabletType:    "",
+			Keyspace:      "",
+			Shards:        []string{},
+			Session:       session1,
+		},
+		reply: &proto.QueryResult{
+			Result:  nil,
+			Session: session2,
+			Error:   "",
 		},
 	},
 }
@@ -324,6 +432,23 @@ var result1 = mproto.QueryResult{
 		[]sqltypes.Value{
 			sqltypes.MakeString([]byte("row2 value1")),
 			sqltypes.MakeString([]byte("row2 value2")),
+		},
+	},
+}
+
+var session1 = &proto.Session{
+	InTransaction: true,
+	ShardSessions: []*proto.ShardSession{},
+}
+
+var session2 = &proto.Session{
+	InTransaction: true,
+	ShardSessions: []*proto.ShardSession{
+		&proto.ShardSession{
+			Keyspace:      "ks",
+			Shard:         "1",
+			TabletType:    topo.TYPE_MASTER,
+			TransactionId: 1,
 		},
 	},
 }
