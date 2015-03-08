@@ -7,6 +7,7 @@
 package vtgateconntest
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -26,30 +27,41 @@ type fakeVTGateService struct {
 
 // Execute is part of the VTGateService interface
 func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	if query.Sql != executeQuery {
-		f.t.Fatalf("invalid Execute.Query.Sql: got %v expected %v", query.Sql, executeQuery)
+	execCase, ok := resultsMap[query.Sql]
+	if !ok {
+		return fmt.Errorf("no match for: %s", query.Sql)
 	}
-	if !reflect.DeepEqual(query.BindVariables, executeBindVars) {
-		f.t.Fatalf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
+	if !reflect.DeepEqual(query, execCase.query) {
+		f.t.Errorf("Execute: %+v, want %+v", query, execCase.query)
+		return nil
 	}
-	if query.TabletType != executeTabletType {
-		f.t.Fatalf("invalid Execute.Query.TabletType: got %v expected %v", query.TabletType, executeTabletType)
-	}
-	*reply = proto.QueryResult{
-		Result: &executeQueryResult,
-	}
+	*reply = *execCase.reply
 	return nil
 }
 
-const executeQuery = "executeQuery"
-
-var executeBindVars = map[string]interface{}{
-	"bind1": int64(0),
+var resultsMap = map[string]struct {
+	query *proto.Query
+	reply *proto.QueryResult
+	err   error
+}{
+	"request1": {
+		query: &proto.Query{
+			Sql: "request1",
+			BindVariables: map[string]interface{}{
+				"bind1": int64(0),
+			},
+			TabletType: topo.TYPE_RDONLY,
+			Session:    nil,
+		},
+		reply: &proto.QueryResult{
+			Result:  &result1,
+			Session: nil,
+			Error:   "",
+		},
+	},
 }
 
-const executeTabletType = topo.TYPE_RDONLY
-
-var executeQueryResult = mproto.QueryResult{
+var result1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
@@ -76,12 +88,14 @@ var executeQueryResult = mproto.QueryResult{
 
 func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	ctx := context.Background()
-	qr, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTabletType)
+	execCase := resultsMap["request1"]
+	qr, err := conn.Execute(ctx, execCase.query.Sql, execCase.query.BindVariables, execCase.query.TabletType)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	if !reflect.DeepEqual(*qr, executeQueryResult) {
-		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, executeQueryResult)
+	t.Logf("qr: %#v", qr)
+	if !reflect.DeepEqual(qr, execCase.reply.Result) {
+		t.Errorf("Unexpected result from Execute: got %+v wanted %+v", qr, execCase.reply.Result)
 	}
 }
 
