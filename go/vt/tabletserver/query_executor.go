@@ -130,8 +130,14 @@ func (qre *QueryExecutor) checkPermissions() {
 	}
 
 	// Blacklist
-	ci := callinfo.FromContext(qre.ctx)
-	action, desc := qre.plan.Rules.getAction(ci.RemoteAddr(), ci.Username(), qre.bindVars)
+	remoteAddr := ""
+	username := ""
+	ci, ok := callinfo.FromContext(qre.ctx)
+	if ok {
+		remoteAddr = ci.RemoteAddr
+		username = ci.Username
+	}
+	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QR_FAIL:
 		panic(NewTabletError(ErrFail, "Query disallowed due to rule: %s", desc))
@@ -140,8 +146,8 @@ func (qre *QueryExecutor) checkPermissions() {
 	}
 
 	// Perform table ACL check if it is enabled
-	if qre.plan.Authorized != nil && !qre.plan.Authorized.IsMember(ci.Username()) {
-		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", ci.Username(), qre.plan.PlanId, qre.plan.TableName)
+	if qre.plan.Authorized != nil && !qre.plan.Authorized.IsMember(username) {
+		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
 		// Raise error if in strictTableAcl mode, else just log an error
 		if qre.qe.strictTableAcl {
 			panic(NewTabletError(ErrFail, "%s", errStr))
