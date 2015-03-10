@@ -11,6 +11,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -35,6 +36,7 @@ type TabletManager struct {
 
 // Ping wraps RPCAgent.
 func (tm *TabletManager) Ping(ctx context.Context, args, reply *string) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_PING, args, reply, func() error {
 		*reply = tm.agent.Ping(ctx, *args)
 		return nil
@@ -43,6 +45,7 @@ func (tm *TabletManager) Ping(ctx context.Context, args, reply *string) error {
 
 // Sleep wraps RPCAgent.
 func (tm *TabletManager) Sleep(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SLEEP, args, reply, true, func() error {
 		tm.agent.Sleep(ctx, *args)
 		return nil
@@ -51,6 +54,7 @@ func (tm *TabletManager) Sleep(ctx context.Context, args *time.Duration, reply *
 
 // ExecuteHook wraps RPCAgent.
 func (tm *TabletManager) ExecuteHook(ctx context.Context, args *hook.Hook, reply *hook.HookResult) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_EXECUTE_HOOK, args, reply, true, func() error {
 		*reply = *tm.agent.ExecuteHook(ctx, args)
 		return nil
@@ -59,6 +63,7 @@ func (tm *TabletManager) ExecuteHook(ctx context.Context, args *hook.Hook, reply
 
 // GetSchema wraps RPCAgent.
 func (tm *TabletManager) GetSchema(ctx context.Context, args *gorpcproto.GetSchemaArgs, reply *myproto.SchemaDefinition) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		sd, err := tm.agent.GetSchema(ctx, args.Tables, args.ExcludeTables, args.IncludeViews)
 		if err == nil {
@@ -70,6 +75,7 @@ func (tm *TabletManager) GetSchema(ctx context.Context, args *gorpcproto.GetSche
 
 // GetPermissions wraps RPCAgent.
 func (tm *TabletManager) GetPermissions(ctx context.Context, args *rpc.Unused, reply *myproto.Permissions) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
 		p, err := tm.agent.GetPermissions(ctx)
 		if err == nil {
@@ -85,6 +91,7 @@ func (tm *TabletManager) GetPermissions(ctx context.Context, args *rpc.Unused, r
 
 // SetReadOnly wraps RPCAgent.
 func (tm *TabletManager) SetReadOnly(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SET_RDONLY, args, reply, true, func() error {
 		return tm.agent.SetReadOnly(ctx, true)
 	})
@@ -92,6 +99,7 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, args *rpc.Unused, repl
 
 // SetReadWrite wraps RPCAgent.
 func (tm *TabletManager) SetReadWrite(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SET_RDWR, args, reply, true, func() error {
 		return tm.agent.SetReadOnly(ctx, false)
 	})
@@ -99,6 +107,7 @@ func (tm *TabletManager) SetReadWrite(ctx context.Context, args *rpc.Unused, rep
 
 // ChangeType wraps RPCAgent.
 func (tm *TabletManager) ChangeType(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, true, func() error {
 		return tm.agent.ChangeType(ctx, *args)
 	})
@@ -106,6 +115,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, args *topo.TabletType, 
 
 // Scrap wraps RPCAgent.
 func (tm *TabletManager) Scrap(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SCRAP, args, reply, true, func() error {
 		return tm.agent.Scrap(ctx)
 	})
@@ -113,6 +123,7 @@ func (tm *TabletManager) Scrap(ctx context.Context, args *rpc.Unused, reply *rpc
 
 // RefreshState wraps RPCAgent.
 func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_REFRESH_STATE, args, reply, true, func() error {
 		tm.agent.RefreshState(ctx)
 		return nil
@@ -121,6 +132,7 @@ func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.Unused, rep
 
 // RunHealthCheck wraps RPCAgent.
 func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_RUN_HEALTH_CHECK, args, reply, func() error {
 		tm.agent.RunHealthCheck(ctx, *args)
 		return nil
@@ -129,6 +141,7 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletTy
 
 // HealthStream wraps RPCAgent.
 func (tm *TabletManager) HealthStream(ctx context.Context, args *rpc.Unused, sendReply func(interface{}) error) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_HEALTH_STREAM, args, nil, func() error {
 		c := make(chan *actionnode.HealthStreamReply, 10)
 		wg := sync.WaitGroup{}
@@ -156,6 +169,7 @@ func (tm *TabletManager) HealthStream(ctx context.Context, args *rpc.Unused, sen
 
 // ReloadSchema wraps RPCAgent.
 func (tm *TabletManager) ReloadSchema(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, true, func() error {
 		tm.agent.ReloadSchema(ctx)
 		return nil
@@ -164,6 +178,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, args *rpc.Unused, rep
 
 // PreflightSchema wraps RPCAgent.
 func (tm *TabletManager) PreflightSchema(ctx context.Context, args *string, reply *myproto.SchemaChangeResult) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, args, reply, true, func() error {
 		scr, err := tm.agent.PreflightSchema(ctx, *args)
 		if err == nil {
@@ -175,6 +190,7 @@ func (tm *TabletManager) PreflightSchema(ctx context.Context, args *string, repl
 
 // ApplySchema wraps RPCAgent.
 func (tm *TabletManager) ApplySchema(ctx context.Context, args *myproto.SchemaChange, reply *myproto.SchemaChangeResult) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_APPLY_SCHEMA, args, reply, true, func() error {
 		scr, err := tm.agent.ApplySchema(ctx, args)
 		if err == nil {
@@ -186,6 +202,7 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, args *myproto.SchemaCh
 
 // ExecuteFetch wraps RPCAgent.
 func (tm *TabletManager) ExecuteFetch(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_EXECUTE_FETCH, args, reply, func() error {
 		qr, err := tm.agent.ExecuteFetch(ctx, args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs, args.DBConfigName)
 		if err == nil {
@@ -201,6 +218,7 @@ func (tm *TabletManager) ExecuteFetch(ctx context.Context, args *gorpcproto.Exec
 
 // SlaveStatus wraps RPCAgent.
 func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationStatus) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_SLAVE_STATUS, args, reply, func() error {
 		status, err := tm.agent.SlaveStatus(ctx)
 		if err == nil {
@@ -212,6 +230,7 @@ func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, repl
 
 // WaitSlavePosition wraps RPCAgent.
 func (tm *TabletManager) WaitSlavePosition(ctx context.Context, args *gorpcproto.WaitSlavePositionArgs, reply *myproto.ReplicationStatus) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, true, func() error {
 		status, err := tm.agent.WaitSlavePosition(ctx, args.Position, args.WaitTimeout)
 		if err == nil {
@@ -223,6 +242,7 @@ func (tm *TabletManager) WaitSlavePosition(ctx context.Context, args *gorpcproto
 
 // MasterPosition wraps RPCAgent.
 func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
 		position, err := tm.agent.MasterPosition(ctx)
 		if err == nil {
@@ -234,6 +254,7 @@ func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.Unused, r
 
 // ReparentPosition wraps RPCAgent.
 func (tm *TabletManager) ReparentPosition(ctx context.Context, args *myproto.ReplicationPosition, reply *actionnode.RestartSlaveData) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_REPARENT_POSITION, args, reply, func() error {
 		rsd, err := tm.agent.ReparentPosition(ctx, args)
 		if err == nil {
@@ -245,6 +266,7 @@ func (tm *TabletManager) ReparentPosition(ctx context.Context, args *myproto.Rep
 
 // StopSlave wraps RPCAgent.
 func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, true, func() error {
 		return tm.agent.StopSlave(ctx)
 	})
@@ -252,6 +274,7 @@ func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.Unused, reply 
 
 // StopSlaveMinimum wraps RPCAgent.
 func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationStatus) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, true, func() error {
 		status, err := tm.agent.StopSlaveMinimum(ctx, args.Position, args.WaitTime)
 		if err == nil {
@@ -263,6 +286,7 @@ func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, args *gorpcproto.
 
 // StartSlave wraps RPCAgent.
 func (tm *TabletManager) StartSlave(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_START_SLAVE, args, reply, true, func() error {
 		return tm.agent.StartSlave(ctx)
 	})
@@ -270,6 +294,7 @@ func (tm *TabletManager) StartSlave(ctx context.Context, args *rpc.Unused, reply
 
 // TabletExternallyReparented wraps RPCAgent.
 func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *gorpcproto.TabletExternallyReparentedArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	// TODO(alainjobart) we should forward the RPC deadline from
 	// the original gorpc call. Until we support that, use a
 	// reasonable hard-coded value.
@@ -282,6 +307,7 @@ func (tm *TabletManager) TabletExternallyReparented(ctx context.Context, args *g
 
 // GetSlaves wraps RPCAgent.
 func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.Unused, reply *gorpcproto.GetSlavesReply) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
 		reply.Addrs, err = tm.agent.GetSlaves(ctx)
@@ -291,6 +317,7 @@ func (tm *TabletManager) GetSlaves(ctx context.Context, args *rpc.Unused, reply 
 
 // WaitBlpPosition wraps RPCAgent.
 func (tm *TabletManager) WaitBlpPosition(ctx context.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, true, func() error {
 		return tm.agent.WaitBlpPosition(ctx, &args.BlpPosition, args.WaitTimeout)
 	})
@@ -298,6 +325,7 @@ func (tm *TabletManager) WaitBlpPosition(ctx context.Context, args *gorpcproto.W
 
 // StopBlp wraps RPCAgent.
 func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.Unused, reply *blproto.BlpPositionList) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_STOP_BLP, args, reply, true, func() error {
 		positions, err := tm.agent.StopBlp(ctx)
 		if err == nil {
@@ -309,6 +337,7 @@ func (tm *TabletManager) StopBlp(ctx context.Context, args *rpc.Unused, reply *b
 
 // StartBlp wraps RPCAgent.
 func (tm *TabletManager) StartBlp(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_START_BLP, args, reply, true, func() error {
 		return tm.agent.StartBlp(ctx)
 	})
@@ -316,6 +345,7 @@ func (tm *TabletManager) StartBlp(ctx context.Context, args *rpc.Unused, reply *
 
 // RunBlpUntil wraps RPCAgent.
 func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBlpUntilArgs, reply *myproto.ReplicationPosition) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, args, reply, true, func() error {
 		position, err := tm.agent.RunBlpUntil(ctx, args.BlpPositionList, args.WaitTimeout)
 		if err == nil {
@@ -331,6 +361,7 @@ func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBl
 
 // DemoteMaster wraps RPCAgent.
 func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_DEMOTE_MASTER, args, reply, true, func() error {
 		return tm.agent.DemoteMaster(ctx)
 	})
@@ -338,6 +369,7 @@ func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, rep
 
 // PromoteSlave wraps RPCAgent.
 func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, reply *actionnode.RestartSlaveData) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_PROMOTE_SLAVE, args, reply, true, func() error {
 		rsd, err := tm.agent.PromoteSlave(ctx)
 		if err == nil {
@@ -349,6 +381,7 @@ func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, rep
 
 // SlaveWasPromoted wraps RPCAgent.
 func (tm *TabletManager) SlaveWasPromoted(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, true, func() error {
 		return tm.agent.SlaveWasPromoted(ctx)
 	})
@@ -356,6 +389,7 @@ func (tm *TabletManager) SlaveWasPromoted(ctx context.Context, args *rpc.Unused,
 
 // RestartSlave wraps RPCAgent.
 func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.RestartSlaveData, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_RESTART_SLAVE, args, reply, true, func() error {
 		return tm.agent.RestartSlave(ctx, args)
 	})
@@ -363,6 +397,7 @@ func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.Rest
 
 // SlaveWasRestarted wraps RPCAgent.
 func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, true, func() error {
 		return tm.agent.SlaveWasRestarted(ctx, args)
 	})
@@ -370,6 +405,7 @@ func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode
 
 // BreakSlaves wraps RPCAgent.
 func (tm *TabletManager) BreakSlaves(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_BREAK_SLAVES, args, reply, true, func() error {
 		return tm.agent.BreakSlaves(ctx)
 	})
@@ -379,6 +415,7 @@ func (tm *TabletManager) BreakSlaves(ctx context.Context, args *rpc.Unused, repl
 
 // Snapshot wraps RPCAgent.
 func (tm *TabletManager) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SNAPSHOT, args, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewChannelLogger(10)
@@ -414,6 +451,7 @@ func (tm *TabletManager) Snapshot(ctx context.Context, args *actionnode.Snapshot
 
 // SnapshotSourceEnd wraps RPCAgent.
 func (tm *TabletManager) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, args, reply, true, func() error {
 		return tm.agent.SnapshotSourceEnd(ctx, args)
 	})
@@ -421,6 +459,7 @@ func (tm *TabletManager) SnapshotSourceEnd(ctx context.Context, args *actionnode
 
 // ReserveForRestore wraps RPCAgent.
 func (tm *TabletManager) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, args, reply, true, func() error {
 		return tm.agent.ReserveForRestore(ctx, args)
 	})
@@ -428,6 +467,7 @@ func (tm *TabletManager) ReserveForRestore(ctx context.Context, args *actionnode
 
 // Restore wraps RPCAgent.
 func (tm *TabletManager) Restore(ctx context.Context, args *actionnode.RestoreArgs, sendReply func(interface{}) error) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_RESTORE, args, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewChannelLogger(10)

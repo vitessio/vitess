@@ -6,6 +6,7 @@ package gorpcqueryservice
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -25,39 +26,39 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 
 // Begin is exposing tabletserver.SqlQuery.Begin
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	return sq.server.Begin(ctx, session, txInfo)
+	return sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), session, txInfo)
 }
 
 // Commit is exposing tabletserver.SqlQuery.Commit
 func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Commit(ctx, session)
+	return sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
 // Rollback is exposing tabletserver.SqlQuery.Rollback
 func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *string) error {
-	return sq.server.Rollback(ctx, session)
+	return sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
 // Execute is exposing tabletserver.SqlQuery.Execute
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
-	return sq.server.Execute(ctx, query, reply)
+	return sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
 func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) error {
-	return sq.server.StreamExecute(ctx, query, func(reply *mproto.QueryResult) error {
+	return sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 }
 
 // ExecuteBatch is exposing tabletserver.SqlQuery.ExecuteBatch
 func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	return sq.server.ExecuteBatch(ctx, queryList, reply)
+	return sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), queryList, reply)
 }
 
 // SplitQuery is exposing tabletserver.SqlQuery.SplitQuery
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	return sq.server.SplitQuery(ctx, req, reply)
+	return sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), req, reply)
 }
 
 // New returns a new SqlQuery based on the QueryService implementation

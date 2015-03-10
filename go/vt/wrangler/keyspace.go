@@ -734,9 +734,14 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
 			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.Alias)
+			// Setting an upper bound timeout to fail faster in case of an error.
+			// Using 60 seconds because RefreshState should not take more than 30 seconds.
+			// (RefreshState will restart the tablet's QueryService and most time will be spent on the shutdown, i.e. waiting up to 30 seconds on transactions (see Config.TransactionTimeout)).
+			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
 				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
 			}
+			cancel()
 			wg.Done()
 		}(ti)
 	}

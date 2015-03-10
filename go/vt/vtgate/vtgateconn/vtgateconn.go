@@ -47,10 +47,8 @@ type DialerFunc func(ctx context.Context, address string, timeout time.Duration)
 type VTGateConn interface {
 	// Execute executes a non-streaming query on vtgate.
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-	// ExecuteShard executes a non-streaming query for multiple shards on vtgate
+	// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
 	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, tabletType topo.TabletType) (*tproto.QueryResultList, error)
 
 	// StreamExecute executes a streaming query on vtgate. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
@@ -58,10 +56,8 @@ type VTGateConn interface {
 	// to see if the stream ended normally or due to a failure.
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
 
-	// Transaction support
-	Begin(ctx context.Context) error
-	Commit(ctx context.Context) error
-	Rollback(ctx context.Context) error
+	// Begin starts a transaction and returns a VTGateTX.
+	Begin(ctx context.Context) (VTGateTx, error)
 
 	// Close must be called for releasing resources.
 	Close()
@@ -69,6 +65,19 @@ type VTGateConn interface {
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+}
+
+// VTGateTx defines the interface for the transaction object created by Begin.
+type VTGateTx interface {
+	// Execute executes a query on vtgate within the current transaction.
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
+	// ExecuteShard executes a query for multiple shards on vtgate within the current transaction.
+	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
+
+	// Commit commits the current transaction.
+	Commit(ctx context.Context) error
+	// Rollback rolls back the current transaction.
+	Rollback(ctx context.Context) error
 }
 
 // ErrFunc is used to check for streaming errors.

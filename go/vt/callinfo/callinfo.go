@@ -1,4 +1,5 @@
-// Package callinfo extracts RPC call information from context objects.
+// Package callinfo stores custom values into the Context
+// (related to the RPC source)
 package callinfo
 
 import (
@@ -7,41 +8,33 @@ import (
 	"golang.org/x/net/context"
 )
 
-type CallInfo interface {
-	// The remote address information for this rpc call.
-	RemoteAddr() string
+// CallInfo is the extra data stored in the Context
+type CallInfo struct {
+	// RemoteAddr is the remote address information for this rpc call.
+	RemoteAddr string
 
-	// The username associated with this rpc call, if any.
-	Username() string
+	// Username is associated with this rpc call, if any.
+	Username string
 
-	// A string identifying this rpc call connection as specifically as possible.
-	String() string
+	// Text is a text version of this connection, as specifically as possible.
+	Text string
 
-	// An HTML representation of this rpc call connection.
-	HTML() template.HTML
+	// HTML represents this rpc call connection in a web-friendly way.
+	HTML template.HTML
 }
 
-type Renderer func(context.Context) (info CallInfo, ok bool)
+// internal type and value
+type key int
 
-var renderers []Renderer
+var callInfoKey key = 0
 
-func RegisterRenderer(r Renderer) {
-	renderers = append(renderers, r)
+// NewContext adds the provided CallInfo to the context
+func NewContext(ctx context.Context, ci *CallInfo) context.Context {
+	return context.WithValue(ctx, callInfoKey, ci)
 }
 
-func FromContext(ctx context.Context) CallInfo {
-	for _, r := range renderers {
-		info, ok := r(ctx)
-		if ok {
-			return info
-		}
-	}
-	return dummyRenderer{}
+// FromContext returns the CallInfo value stored in ctx, if any.
+func FromContext(ctx context.Context) (*CallInfo, bool) {
+	ci, ok := ctx.Value(callInfoKey).(*CallInfo)
+	return ci, ok
 }
-
-type dummyRenderer struct{}
-
-func (dummyRenderer) RemoteAddr() string  { return "" }
-func (dummyRenderer) Username() string    { return "" }
-func (dummyRenderer) String() string      { return "" }
-func (dummyRenderer) HTML() template.HTML { return template.HTML("") }

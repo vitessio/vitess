@@ -29,7 +29,11 @@ const rpcTimeout = time.Second * 30
 
 // rpcWrapper handles all the logic for rpc calls.
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
-	from := callinfo.FromContext(ctx).String()
+	from := ""
+	ci, ok := callinfo.FromContext(ctx)
+	if ok {
+		from = ci.Text
+	}
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)

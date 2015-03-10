@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/url"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 )
 
+// SqlQueryLogger is the main stream logger object
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)
 
 const (
@@ -27,6 +27,7 @@ const (
 	QUERY_SOURCE_MYSQL
 )
 
+// SQLQueryStats records the stats for a single query
 type SQLQueryStats struct {
 	Method               string
 	PlanType             string
@@ -58,18 +59,21 @@ func newSqlQueryStats(methodName string, context context.Context) *SQLQueryStats
 	}
 }
 
+// Send finalizes a record and sends it
 func (stats *SQLQueryStats) Send() {
 	stats.EndTime = time.Now()
 	SqlQueryLogger.Send(stats)
 }
 
+// AddRewrittenSql adds a single sql statement to the rewritten list
 func (stats *SQLQueryStats) AddRewrittenSql(sql string, start time.Time) {
 	stats.QuerySources |= QUERY_SOURCE_MYSQL
-	stats.NumberOfQueries += 1
+	stats.NumberOfQueries++
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
 	stats.MysqlResponseTime += time.Now().Sub(start)
 }
 
+// TotalTime returns how long this query has been running
 func (stats *SQLQueryStats) TotalTime() time.Duration {
 	return stats.EndTime.Sub(stats.StartTime)
 }
@@ -150,50 +154,50 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 	return strings.Join(sources[:n], ",")
 }
 
-func (log *SQLQueryStats) RemoteAddr() string {
-	return callinfo.FromContext(log.context).RemoteAddr()
-}
-
-func (log *SQLQueryStats) Username() string {
-	return callinfo.FromContext(log.context).Username()
-}
-
-func (log *SQLQueryStats) ContextHTML() template.HTML {
-	return callinfo.FromContext(log.context).HTML()
-}
-
-func (log *SQLQueryStats) ErrorStr() string {
-	if log.Error != nil {
-		return log.Error.Error()
+// ErrorStr returns the error string or ""
+func (stats *SQLQueryStats) ErrorStr() string {
+	if stats.Error != nil {
+		return stats.Error.Error()
 	}
 	return ""
 }
 
-// String returns a tab separated list of logged fields.
-func (log *SQLQueryStats) Format(params url.Values) string {
+// RemoteAddrUsername returns some parts of CallInfo if set
+func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
+	ci, ok := callinfo.FromContext(stats.context)
+	if !ok {
+		return "", ""
+	}
+	return ci.RemoteAddr, ci.Username
+}
+
+// Format returns a tab separated list of logged fields.
+func (stats *SQLQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
+
+	remoteAddr, username := stats.RemoteAddrUsername()
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
-		log.Method,
-		log.RemoteAddr(),
-		log.Username(),
-		log.StartTime.Format(time.StampMicro),
-		log.EndTime.Format(time.StampMicro),
-		log.TotalTime().Seconds(),
-		log.PlanType,
-		log.OriginalSql,
-		log.FmtBindVariables(fullBindParams),
-		log.NumberOfQueries,
-		log.RewrittenSql(),
-		log.FmtQuerySources(),
-		log.MysqlResponseTime.Seconds(),
-		log.WaitingForConnection.Seconds(),
-		log.RowsAffected,
-		log.SizeOfResponse(),
-		log.CacheHits,
-		log.CacheMisses,
-		log.CacheAbsent,
-		log.CacheInvalidations,
-		log.ErrorStr(),
+		stats.Method,
+		remoteAddr,
+		username,
+		stats.StartTime.Format(time.StampMicro),
+		stats.EndTime.Format(time.StampMicro),
+		stats.TotalTime().Seconds(),
+		stats.PlanType,
+		stats.OriginalSql,
+		stats.FmtBindVariables(fullBindParams),
+		stats.NumberOfQueries,
+		stats.RewrittenSql(),
+		stats.FmtQuerySources(),
+		stats.MysqlResponseTime.Seconds(),
+		stats.WaitingForConnection.Seconds(),
+		stats.RowsAffected,
+		stats.SizeOfResponse(),
+		stats.CacheHits,
+		stats.CacheMisses,
+		stats.CacheAbsent,
+		stats.CacheInvalidations,
+		stats.ErrorStr(),
 	)
 }
