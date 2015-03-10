@@ -114,8 +114,17 @@ func (conn *vtgateConn) Begin(ctx context.Context) (vtgateconn.VTGateTx, error) 
 	return tx, nil
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error) {
-	return nil, errors.New("not implemented yet")
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
+	request := &proto.SplitQueryRequest{
+		Keyspace:   keyspace,
+		Query:      query,
+		SplitCount: splitCount,
+	}
+	result := &proto.SplitQueryResult{}
+	if err := conn.rpcConn.Call(ctx, "VTGate.SplitQuery", request, result); err != nil {
+		return nil, err
+	}
+	return result.Splits, nil
 }
 
 func (conn *vtgateConn) Close() {

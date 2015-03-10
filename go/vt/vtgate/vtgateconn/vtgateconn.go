@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 )
 
@@ -64,7 +65,7 @@ type VTGateConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
 }
 
 // VTGateTx defines the interface for the transaction object created by Begin.
