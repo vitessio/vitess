@@ -162,17 +162,20 @@ func (stats *SQLQueryStats) ErrorStr() string {
 	return ""
 }
 
+// RemoteAddrUsername returns some parts of CallInfo if set
+func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
+	ci, ok := callinfo.FromContext(stats.context)
+	if !ok {
+		return "", ""
+	}
+	return ci.RemoteAddr, ci.Username
+}
+
 // Format returns a tab separated list of logged fields.
 func (stats *SQLQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 
-	remoteAddr := ""
-	username := ""
-	ci, ok := callinfo.FromContext(stats.context)
-	if ok {
-		remoteAddr = ci.RemoteAddr
-		username = ci.Username
-	}
+	remoteAddr, username := stats.RemoteAddrUsername()
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%v\t%v\t%.6f\t%v\t%q\t%v\t%v\t%q\t%v\t%.6f\t%.6f\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t\n",
 		stats.Method,
