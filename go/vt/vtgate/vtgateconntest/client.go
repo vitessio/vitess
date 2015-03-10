@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -178,7 +179,7 @@ func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 
 	_, err = conn.Execute(ctx, "none", nil, "")
 	want := "no match for: none"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
@@ -202,7 +203,7 @@ func testExecuteShard(t *testing.T, conn vtgateconn.VTGateConn) {
 
 	_, err = conn.ExecuteShard(ctx, "none", "", []string{}, nil, "")
 	want := "no match for: none"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
@@ -243,7 +244,7 @@ func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 	err = errFunc()
 	want := "no match for: none"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
@@ -253,7 +254,7 @@ func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 	err = errFunc()
 	want = "app error"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
@@ -297,7 +298,7 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 	err = tx.Commit(ctx)
 	want := "commit: session mismatch"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %v", err, want)
 	}
 
@@ -331,7 +332,7 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 	err = tx.Rollback(ctx)
 	want = "rollback: session mismatch"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Rollback: %v, want %v", err, want)
 	}
 }
