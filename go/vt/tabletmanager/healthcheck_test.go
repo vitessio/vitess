@@ -133,7 +133,7 @@ func createTestAgent(t *testing.T) *ActionAgent {
 		Shard:    shard,
 		Type:     topo.TYPE_SPARE,
 	}
-	if err := topo.CreateTablet(ts, tablet); err != nil {
+	if err := topo.CreateTablet(context.Background(), ts, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 

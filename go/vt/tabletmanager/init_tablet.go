@@ -180,7 +180,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 	}
 
 	// now try to create the record
-	err := topo.CreateTablet(agent.TopoServer, tablet)
+	err := topo.CreateTablet(ctx, agent.TopoServer, tablet)
 	switch err {
 	case nil:
 		// it worked, we're good, can update the replication graph
