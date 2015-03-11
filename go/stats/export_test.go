@@ -190,11 +190,11 @@ func f() string {
 
 func TestPublishFunc(t *testing.T) {
 	var gotname string
-	var gotv JsonFunc
+	var gotv JSONFunc
 	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(JsonFunc)
+		gotv = v.(JSONFunc)
 	})
 	PublishJSONFunc("Myfunc", f)
 	if gotname != "Myfunc" {
