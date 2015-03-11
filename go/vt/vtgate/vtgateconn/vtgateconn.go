@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 )
 
@@ -42,8 +43,8 @@ func (e OperationalError) Error() string { return string(e) }
 // DialerFunc represents a function that will return a VTGateConn object that can communicate with a VTGate.
 type DialerFunc func(ctx context.Context, address string, timeout time.Duration) (VTGateConn, error)
 
-// VTGateConn defines the interface for a vtgate client. It should
-// not be concurrently used across goroutines.
+// VTGateConn defines the interface for a vtgate client.
+// It can be used concurrently across goroutines.
 type VTGateConn interface {
 	// Execute executes a non-streaming query on vtgate.
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
@@ -64,10 +65,11 @@ type VTGateConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
 }
 
 // VTGateTx defines the interface for the transaction object created by Begin.
+// It should not be concurrently used across goroutines.
 type VTGateTx interface {
 	// Execute executes a query on vtgate within the current transaction.
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)

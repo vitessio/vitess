@@ -114,8 +114,17 @@ func (conn *vtgateConn) Begin(ctx context.Context) (vtgateconn.VTGateTx, error) 
 	return tx, nil
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error) {
-	return nil, errors.New("not implemented yet")
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
+	request := &proto.SplitQueryRequest{
+		Keyspace:   keyspace,
+		Query:      query,
+		SplitCount: splitCount,
+	}
+	result := &proto.SplitQueryResult{}
+	if err := conn.rpcConn.Call(ctx, "VTGate.SplitQuery", request, result); err != nil {
+		return nil, err
+	}
+	return result.Splits, nil
 }
 
 func (conn *vtgateConn) Close() {
@@ -155,7 +164,7 @@ func (tx *vtgateTx) Commit(ctx context.Context) error {
 
 func (tx *vtgateTx) Rollback(ctx context.Context) error {
 	if tx.session == nil {
-		return errors.New("rollback: not in transaction")
+		return nil
 	}
 	defer func() { tx.session = nil }()
 	return tx.conn.rpcConn.Call(ctx, "VTGate.Rollback", tx.session, &rpc.Unused{})

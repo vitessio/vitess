@@ -120,7 +120,7 @@ div.highlight {
 /*** main layout ***/
 
 .app-bar {
-  background: #4E5A92 url(../images/bg-990x320.jpg) no-repeat top center;
+  background: #4E5A92 url(/images/bg-990x320.jpg) no-repeat top center;
   background-size: cover;
   box-shadow: none;
   z-index: 1;
@@ -156,7 +156,6 @@ div.highlight {
 .app-bar .logo {
   font-size: 23px;
   line-height: 60px;
-  background: url(../images/logo-white-48x48.png) no-repeat center left;
   color: #FFFFFF;
   flex: inherit;  /* reset the flex box to center */
 }
@@ -167,7 +166,7 @@ div.highlight {
   font-smoothing: antialiased;
 }
 #menu {
-  background-image: url(../images/hamburger-white.svg);
+  background-image: url(/images/hamburger-white.svg);
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 24px 24px;
@@ -198,10 +197,10 @@ div.highlight {
 }
 .scrolled .app-bar .logo {
   color: #000000;
-  background-image: url(../images/logo-black-48x48.png);
+  background-image: url(/images/logo-black-48x48.png);
 }
 .scrolled #menu {
-  background-image: url(../images/hamburger-black.svg);
+  background-image: url(/images/hamburger-black.svg);
 }
 .scrolled .app-bar-actions {
   visibility: visible;
@@ -361,27 +360,6 @@ footer {
 
 /*** home ***/
 
-.stage {
-  height: 320px;
-  color: #FFFFFF;
-  text-align: center;
-}
-.stage h1 {
-  position: relative;
-  top: 80px;
-  padding: 150px 0 0 0;
-  background: url(../images/logo-white-150x150.png) no-repeat top center;
-  font-family: 'Roboto', 'Roboto Condensed', 'Helvetica', 'Arial', sans-serif;
-  font-weight: 300;
-  text-transform: uppercase;
-}
-.stage h1 abbr {
-  font-weight: 700;
-}
-.stage h1 span {
-  display: none;
-}
-@media screen and (min-width: 990px) {
   .stage {
     height: 500px;
     color: #FFFFFF;
@@ -391,7 +369,6 @@ footer {
     position: relative;
     top: 100px;
     padding: 0 15px 100px 15px;
-    background: url(../images/logo-white-280x280.png) no-repeat center right;
     line-height: 1;
     font-size: 40px;
   }
@@ -410,7 +387,6 @@ footer {
   .home-page-buttons {
     padding-left: 15px;
   }
-}
 
 .btn-inverse, .btn-social {
   color: #414140;
@@ -452,7 +428,6 @@ footer {
 }
 
 .home main ol li::before {
-  background: url(../images/hex-73x84.gif) no-repeat center center;
   width: 84px;
   height: 84px;
   line-height: 84px;

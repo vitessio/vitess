@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/fakezk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -38,7 +39,7 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateShard("test_keyspace", "0", &topo.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(fromTS, &topo.Tablet{
+	if err := topo.CreateTablet(context.Background(), fromTS, &topo.Tablet{
 		Alias: topo.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
@@ -58,7 +59,7 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(fromTS, &topo.Tablet{
+	if err := topo.CreateTablet(context.Background(), fromTS, &topo.Tablet{
 		Alias: topo.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,

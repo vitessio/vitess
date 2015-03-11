@@ -15,6 +15,8 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -149,6 +151,10 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	if !reflect.DeepEqual(req, splitQueryRequest) {
+		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", req, splitQueryRequest)
+	}
+	*reply = *splitQueryResult
 	return nil
 }
 
@@ -164,6 +170,7 @@ func TestSuite(t *testing.T, conn vtgateconn.VTGateConn) {
 	testStreamExecute(t, conn)
 	testTxPass(t, conn)
 	testTxFail(t, conn)
+	testSplitQuery(t, conn)
 }
 
 func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
@@ -321,9 +328,8 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 
 	err = tx.Rollback(ctx)
-	want = "rollback: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("Rollback: %v, want %v", err, want)
+	if err != nil {
+		t.Error(err)
 	}
 
 	tx, err = conn.Begin(ctx)
@@ -334,6 +340,17 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	want = "rollback: session mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Rollback: %v, want %v", err, want)
+	}
+}
+
+func testSplitQuery(t *testing.T, conn vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
+	if err != nil {
+		t.Fatalf("SplitQuery failed: %v", err)
+	}
+	if !reflect.DeepEqual(qsl, splitQueryResult.Splits) {
+		t.Errorf("SplitQuery returned worng result: got %v wanted %v", qsl, splitQueryResult.Splits)
 	}
 }
 
@@ -450,6 +467,34 @@ var session2 = &proto.Session{
 			Shard:         "1",
 			TabletType:    topo.TYPE_MASTER,
 			TransactionId: 1,
+		},
+	},
+}
+
+var splitQueryRequest = &proto.SplitQueryRequest{
+	Keyspace: "ks",
+	Query: tproto.BoundQuery{
+		Sql: "in for SplitQuery",
+		BindVariables: map[string]interface{}{
+			"bind1": int64(43),
+		},
+	},
+	SplitCount: 13,
+}
+
+var splitQueryResult = &proto.SplitQueryResult{
+	Splits: []proto.SplitQueryPart{
+		proto.SplitQueryPart{
+			Query: &proto.KeyRangeQuery{
+				Sql: "out for SplitQuery",
+				BindVariables: map[string]interface{}{
+					"bind1": int64(1114444),
+				},
+				Keyspace:   "ksout",
+				KeyRanges:  []key.KeyRange{},
+				TabletType: topo.TYPE_RDONLY,
+			},
+			Size: 12344,
 		},
 	},
 }

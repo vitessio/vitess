@@ -1,0 +1,189 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package client
+
+import (
+	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+	"golang.org/x/net/context"
+)
+
+func init() {
+	sql.Register("vitess", drv{})
+}
+
+type drv struct {
+}
+
+// Open must be called with a JSON string that looks like this:
+// {"protocol": "gorpc", "address": "localhost:1111", "tablet_type": "master", "timeout": 1000000000}
+// protocol specifies the rpc protocol to use.
+// address specifies the address for the VTGate to connect to.
+// tablet_type represents the consistency level of your operations.
+// For example "replica" means eventually consistent reads, while
+// "master" supports transactions and gives you read-after-write consistency.
+// timeout is specified in nanoseconds. It applies for all operations.
+func (d drv) Open(name string) (driver.Conn, error) {
+	c := &conn{TabletType: "master"}
+	err := json.Unmarshal([]byte(name), c)
+	if err != nil {
+		return nil, err
+	}
+	err = c.dial()
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+type conn struct {
+	Protocol   string
+	Address    string
+	TabletType topo.TabletType `json:"tablet_type"`
+	Streaming  bool
+	Timeout    time.Duration
+	vtgateConn vtgateconn.VTGateConn
+	tx         vtgateconn.VTGateTx
+}
+
+func (c *conn) dial() error {
+	dialer := vtgateconn.GetDialerWithProtocol(c.Protocol)
+	if dialer == nil {
+		return fmt.Errorf("could not find dialer for protocol %s", c.Protocol)
+	}
+	var err error
+	c.vtgateConn, err = dialer(context.Background(), c.Address, c.Timeout)
+	return err
+}
+
+func (c *conn) Prepare(query string) (driver.Stmt, error) {
+	return &stmt{c: c, query: query}, nil
+}
+
+func (c *conn) Close() error {
+	c.vtgateConn.Close()
+	return nil
+}
+
+func (c *conn) Begin() (driver.Tx, error) {
+	if c.Streaming {
+		return nil, errors.New("transaction not allowed for streaming connection")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+	tx, err := c.vtgateConn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c.tx = tx
+	return c, nil
+}
+
+func (c *conn) Commit() error {
+	if c.tx == nil {
+		return errors.New("commit: not in transaction")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer func() {
+		cancel()
+		c.tx = nil
+	}()
+	return c.tx.Commit(ctx)
+}
+
+func (c *conn) Rollback() error {
+	if c.tx == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer func() {
+		cancel()
+		c.tx = nil
+	}()
+	return c.tx.Rollback(ctx)
+}
+
+type stmt struct {
+	c     *conn
+	query string
+}
+
+func (s *stmt) Close() error {
+	return nil
+}
+
+func (s *stmt) NumInput() int {
+	return -1
+}
+
+func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
+	defer cancel()
+	var qr *mproto.QueryResult
+	var err error
+	if s.c.Streaming {
+		return nil, errors.New("Exec not allowed for streaming connections")
+	}
+	if s.c.tx == nil {
+		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+	} else {
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return result{int64(qr.InsertId), int64(qr.RowsAffected)}, nil
+}
+
+func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
+	defer cancel()
+	if s.c.Streaming {
+		qrc, errFunc := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		return vtgateconn.NewStreamingRows(qrc, errFunc), nil
+	}
+	var qr *mproto.QueryResult
+	var err error
+	if s.c.tx == nil {
+		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+	} else {
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return vtgateconn.NewRows(qr), nil
+}
+
+func makeBindVars(args []driver.Value) map[string]interface{} {
+	if len(args) == 0 {
+		return map[string]interface{}{}
+	}
+	bv := make(map[string]interface{}, len(args))
+	for i, v := range args {
+		bv[fmt.Sprintf("v%d", i)] = v
+	}
+	return bv
+}
+
+type result struct {
+	insertid, rowsaffected int64
+}
+
+func (r result) LastInsertId() (int64, error) {
+	return r.insertid, nil
+}
+
+func (r result) RowsAffected() (int64, error) {
+	return r.rowsaffected, nil
+}

@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -70,7 +70,7 @@ type KeyspaceIdQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyspaceIds   []kproto.KeyspaceId
+	KeyspaceIds   []key.KeyspaceId
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -83,7 +83,7 @@ type KeyRangeQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	KeyRanges     []kproto.KeyRange
+	KeyRanges     []key.KeyRange
 	TabletType    topo.TabletType
 	Session       *Session
 }
@@ -93,7 +93,7 @@ type KeyRangeQuery struct {
 // EntityId represents a tuple of external_id and keyspace_id
 type EntityId struct {
 	ExternalID interface{}
-	KeyspaceID kproto.KeyspaceId
+	KeyspaceID key.KeyspaceId
 }
 
 //go:generate bsongen -file $GOFILE -type EntityId -o entity_id_bson.go
@@ -137,7 +137,7 @@ type BatchQueryShard struct {
 type KeyspaceIdBatchQuery struct {
 	Queries     []tproto.BoundQuery
 	Keyspace    string
-	KeyspaceIds []kproto.KeyspaceId
+	KeyspaceIds []key.KeyspaceId
 	TabletType  topo.TabletType
 	Session     *Session
 }
@@ -164,7 +164,7 @@ type SplitQueryPart struct {
 	Size  int64
 }
 
-// Result for SplitQueryRequest
+// SplitQueryResult is the result for SplitQueryRequest
 type SplitQueryResult struct {
 	Splits []SplitQueryPart
 }
