@@ -328,9 +328,8 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 
 	err = tx.Rollback(ctx)
-	want = "rollback: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("Rollback: %v, want %v", err, want)
+	if err != nil {
+		t.Error(err)
 	}
 
 	tx, err = conn.Begin(ctx)
