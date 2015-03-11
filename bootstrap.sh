@@ -55,9 +55,9 @@ else
   mkdir -p $protobuf_dist/lib/python2.7/site-packages
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
   (cd $protobuf_dist && \
-    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.zip && \
-    unzip v3.0.0-alpha-2.zip && \
-    cd protobuf-3.0.0-alpha-2 && \
+    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-1.zip && \
+    unzip v3.0.0-alpha-1.zip && \
+    cd protobuf-3.0.0-alpha-1 && \
     ./autogen.sh && \
     ./configure --prefix=$protobuf_dist && \
     make -j 4 && \
@@ -91,6 +91,16 @@ else
     exit 1
   fi
 fi
+
+# The python install lines should really be:
+# (and require python-pip and python-virtualenv)
+#
+# ./tools/run_tests/build_python.sh && \
+# pip install -r src/python/requirements.txt -t $grpc_dist/lib/python2.7/site-packages && \
+# CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/src -t $grpc_dist/lib/python2.7/site-packages
+#
+# but in the Docker image, this would have to run as root,
+# and we don't want to run bootstrap.sh as root.
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper

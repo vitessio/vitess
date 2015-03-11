@@ -18,7 +18,6 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctl.proto',
   package='vtctl',
-  syntax='proto3',
   serialized_pb=_b('\n\x0bvtctl.proto\x12\x05vtctl\"U\n\x17\x45xecuteVtctlCommandArgs\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\x12\x14\n\x0clock_timeout\x18\x03 \x01(\x03\",\n\x04Time\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\x13\n\x0bnanoseconds\x18\x02 \x01(\x03\"b\n\x0bLoggerEvent\x12\x19\n\x04time\x18\x01 \x01(\x0b\x32\x0b.vtctl.Time\x12\r\n\x05level\x18\x02 \x01(\x03\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t2V\n\x05Vtctl\x12M\n\x13\x45xecuteVtctlCommand\x12\x1e.vtctl.ExecuteVtctlCommandArgs\x1a\x12.vtctl.LoggerEvent\"\x00\x30\x01\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -62,7 +61,6 @@ _EXECUTEVTCTLCOMMANDARGS = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
-  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -100,7 +98,6 @@ _TIME = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
-  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -159,7 +156,6 @@ _LOGGEREVENT = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
-  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],

@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-dev \
     python-mysqldb \
     python-software-properties \
+    python-pip \
+    python-virtualenv \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
