@@ -556,28 +556,13 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 
 	// Some tablets have no information to generate valid replication paths.
 	// We have three cases to handle:
-	// - we are a master, in which case we may have an entry or not
-	// (we are in the process of adding entries to the graph for masters)
-	// - we are a slave in the replication graph, and should have
-	// replication data (second case below)
-	// - we are a master, or in scrap mode but used to be assigned
-	// in the graph somewhere (third case below)
+	// - we are a tablet in the replication graph, and should have
+	//   replication data (first case below)
+	// - we are in scrap mode but used to be assigned in the graph
+	//   somewhere (second case below)
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
-	if tablet.Type == TYPE_MASTER {
-		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			log.Warningf("master tablet %v with no ShardReplication object, assuming it's because of transition", tabletAlias)
-			return nil
-		}
-
-		_, err = si.GetReplicationLink(tabletAlias)
-		if err != nil {
-			log.Warningf("master tablet %v with no ReplicationLink entry, assuming it's because of transition", tabletAlias)
-			return nil
-		}
-
-	} else if tablet.IsInReplicationGraph() {
+	if tablet.IsInReplicationGraph() {
 		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
@@ -613,7 +598,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func CreateTablet(ts Server, tablet *Tablet) error {
+func CreateTablet(ctx context.Context, ts Server, tablet *Tablet) error {
 	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {
@@ -625,7 +610,7 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 		return nil
 	}
 
-	return UpdateTabletReplicationData(context.TODO(), ts, tablet)
+	return UpdateTabletReplicationData(ctx, ts, tablet)
 }
 
 // UpdateTabletReplicationData creates or updates the replication

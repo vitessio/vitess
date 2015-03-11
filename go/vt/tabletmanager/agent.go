@@ -295,12 +295,13 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	oldTablet := agent.Tablet().Tablet
 
 	// Actions should have side effects on the tablet, so reload the data.
-	if _, err := agent.readTablet(ctx); err != nil {
+	ti, err := agent.readTablet(ctx)
+	if err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", reason, err)
 		return fmt.Errorf("Failed rereading tablet after %v: %v", reason, err)
 	}
 
-	if updatedTablet := agent.checkTabletMysqlPort(ctx, agent.Tablet()); updatedTablet != nil {
+	if updatedTablet := agent.checkTabletMysqlPort(ctx, ti); updatedTablet != nil {
 		agent.mutex.Lock()
 		agent._tablet = updatedTablet
 		agent.mutex.Unlock()

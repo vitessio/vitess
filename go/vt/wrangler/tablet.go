@@ -58,7 +58,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 		}
 	}
 
-	err := topo.CreateTablet(wr.ts, tablet)
+	err := topo.CreateTablet(ctx, wr.ts, tablet)
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update || force {
@@ -95,7 +95,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 				// we ignore this
 				wr.Logger().Errorf("failed deleting tablet %v: %v", tablet.Alias, err)
 			}
-			return topo.CreateTablet(wr.ts, tablet)
+			return topo.CreateTablet(ctx, wr.ts, tablet)
 		}
 	}
 	return err
