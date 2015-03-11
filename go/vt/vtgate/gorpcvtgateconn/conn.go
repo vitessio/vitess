@@ -164,7 +164,7 @@ func (tx *vtgateTx) Commit(ctx context.Context) error {
 
 func (tx *vtgateTx) Rollback(ctx context.Context) error {
 	if tx.session == nil {
-		return errors.New("rollback: not in transaction")
+		return nil
 	}
 	defer func() { tx.session = nil }()
 	return tx.conn.rpcConn.Call(ctx, "VTGate.Rollback", tx.session, &rpc.Unused{})
