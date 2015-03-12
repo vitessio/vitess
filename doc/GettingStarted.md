@@ -1,5 +1,13 @@
 # Getting Started
 If you run into issues or have questions, you can use our mailing list: vitess@googlegroups.com.
+If you behind a firewall, you need to set up proxy to build and install vitess.
+In most linux distro, you can set proxy like this:
+
+```
+$ export http_proxy=http://10.0.14.244:8118/
+$ export https_proxy=$http_proxy
+$ export no_proxy="localhost,127.0.0.1"
+```
 
 ## Dependencies
 
