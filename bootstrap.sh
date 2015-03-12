@@ -4,6 +4,11 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+SKIP_ROOT_INSTALLS=False
+if [ "$1 " == "--skip_root_installs" ]; then
+  SKIP_ROOT_INSTALLS=True
+fi
+
 if [ ! -f bootstrap.sh ]; then
   echo "bootstrap.sh must be run from its current directory" 1>&2
   exit 1
@@ -29,9 +34,10 @@ mkdir -p $VTROOT/vthook
 
 # install zookeeper
 zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
-if [ -d $zk_dist ]; then
-  echo "skipping zookeeper build"
+if [ -f $zk_dist/.build_finished ]; then
+  echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
+  rm -rf $zk_dist
   (cd $VTTOP/third_party/zookeeper && \
     tar -xjf zookeeper-3.3.5.tbz && \
     mkdir -p $zk_dist/lib && \
@@ -42,54 +48,46 @@ else
   if [ $? -ne 0 ]; then
     echo "zookeeper build failed"
     exit 1
-   fi
+  fi
+  touch $zk_dist/.build_finished
 fi
 
 # install protoc and proto python libraries
 protobuf_dist=$VTROOT/dist/protobuf
-if [ -d $protobuf_dist ]; then
-  echo "skipping protobuf build"
+if [ $SKIP_ROOT_INSTALLS == "True" ]; then
+  echo "skipping protobuf build, as root version was already installed."
+elif [ -f $protobuf_dist/.build_finished ]; then
+  echo "skipping protobuf build. remove $protobuf_dist to force rebuild."
 else
-  # The directory doesn't exist, so it wasn't picked up by dev.env yet,
-  # but the install needs it to exist first, and be in PYTHONPATH.
+  rm -rf $protobuf_dist
   mkdir -p $protobuf_dist/lib/python2.7/site-packages
+  # The directory may not have existed yet, so it may not have been
+  # picked up by dev.env yet, but the install needs it to exist first,
+  # and be in PYTHONPATH.
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  (cd $protobuf_dist && \
-    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.zip && \
-    unzip v3.0.0-alpha-2.zip && \
-    cd protobuf-3.0.0-alpha-2 && \
-    ./autogen.sh && \
-    ./configure --prefix=$protobuf_dist && \
-    make -j 4 && \
-    make install && \
-    cd python && \
-    python setup.py build --cpp_implementation && \
-    python setup.py install --cpp_implementation --prefix=$protobuf_dist)
+  ./travis/install_protobuf.sh $protobuf_dist
   if [ $? -ne 0 ]; then
     echo "protobuf build failed"
     exit 1
   fi
+  touch $protobuf_dist/.build_finished
 fi
 
 # install gRPC C++ base, so we can install the python adapters
 grpc_dist=$VTROOT/dist/grpc
-if [ -d $grpc_dist ]; then
-  echo "skipping gRPC build"
+if [ $SKIP_ROOT_INSTALLS == "True" ]; then
+  echo "skipping grp build, as root version was already installed."
+elif [ -f $grpc_dist/.build_finished ]; then
+  echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
-  (mkdir -p $grpc_dist && \
-    cd $grpc_dist && \
-    git clone https://github.com/grpc/grpc.git && \
-    cd grpc && \
-    git submodule update --init && \
-    make && \
-    make install prefix=$grpc_dist && \
-    cd src/python/src && \
-    python setup.py build_ext --include-dirs $grpc_dist/include --library-dirs $grpc_dist/lib && \
-    python setup.py install --prefix $grpc_dist)
+  rm -rf $grpc_dist
+  mkdir -p $grpc_dist
+  ./travis/install_grpc.sh $grpc_dist
   if [ $? -ne 0 ]; then
     echo "gRPC build failed"
     exit 1
   fi
+  touch $grpc_dist/.build_finished
 fi
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src

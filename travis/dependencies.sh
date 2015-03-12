@@ -28,7 +28,7 @@ sudo apt-get purge mysql* mariadb*
 sudo apt-get -f install libmariadbclient18 libmariadbclient-dev mariadb-client mariadb-server
 
 # Other dependencies
-sudo apt-get install time automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison bc
+sudo apt-get install time automake libtool memcached python-dev python-mysqldb python-pip python-virtualenv libssl-dev g++ mercurial git pkg-config bison bc
 
 # Java dependencies
 wget https://dl.bintray.com/sbt/debian/sbt-0.13.6.deb

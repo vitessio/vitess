@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-dev \
     python-mysqldb \
     python-software-properties \
+    python-pip \
+    python-virtualenv \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,12 +34,16 @@ COPY . /vt/src/github.com/youtube/vitess
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     chown -R vitess:vitess /vt
-USER vitess
+
+# Compile and install required packages as root
+WORKDIR /vt/src/github.com/youtube/vitess
+RUN ./travis/install_protobuf.sh
+RUN ./travis/install_grpc.sh
 
 # Bootstrap Vitess
-WORKDIR /vt/src/github.com/youtube/vitess
 ENV MYSQL_FLAVOR MariaDB
-RUN ./bootstrap.sh
+USER vitess
+RUN ./bootstrap.sh --skip_root_installs
 
 # Set up environment (equivalent to '. dev.env')
 ENV VTTOP /vt/src/github.com/youtube/vitess
