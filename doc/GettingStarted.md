@@ -40,7 +40,7 @@ where mysql_config is found at /path/to/mariadb/**bin**/mysql_config.
 
 ``` sh
 cd $WORKSPACE
-sudo apt-get install make automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl
+sudo apt-get install make automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
 git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
 export MYSQL_FLAVOR=MariaDB
