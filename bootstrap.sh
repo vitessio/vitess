@@ -29,9 +29,10 @@ mkdir -p $VTROOT/vthook
 
 # install zookeeper
 zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
-if [ -d $zk_dist ]; then
-  echo "skipping zookeeper build"
+if [ -f $zk_dist/.build_finished ]; then
+  echo "skipping zookeeper build. remove $zk_dist to force rebuild."
 else
+  rm -rf $zk_dist
   (cd $VTTOP/third_party/zookeeper && \
     tar -xjf zookeeper-3.3.5.tbz && \
     mkdir -p $zk_dist/lib && \
@@ -42,14 +43,16 @@ else
   if [ $? -ne 0 ]; then
     echo "zookeeper build failed"
     exit 1
-   fi
+  fi
+  touch $zk_dist/.build_finished
 fi
 
 # install protoc and proto python libraries
 protobuf_dist=$VTROOT/dist/protobuf
-if [ -d $protobuf_dist ]; then
-  echo "skipping protobuf build"
+if [ -f $protobuf_dist/.build_finished ]; then
+  echo "skipping protobuf build. remove $protobuf_dist to force rebuild."
 else
+  rm -rf $protobuf_dist
   # The directory doesn't exist, so it wasn't picked up by dev.env yet,
   # but the install needs it to exist first, and be in PYTHONPATH.
   mkdir -p $protobuf_dist/lib/python2.7/site-packages
@@ -69,13 +72,15 @@ else
     echo "protobuf build failed"
     exit 1
   fi
+  touch $protobuf_dist/.build_finished
 fi
 
 # install gRPC C++ base, so we can install the python adapters
 grpc_dist=$VTROOT/dist/grpc
-if [ -d $grpc_dist ]; then
-  echo "skipping gRPC build"
+if [ -f $grpc_dist/.build_finished ]; then
+  echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
+  rm -rf $grpc_dist
   (mkdir -p $grpc_dist && \
     cd $grpc_dist && \
     git clone https://github.com/grpc/grpc.git && \
@@ -90,6 +95,7 @@ else
     echo "gRPC build failed"
     exit 1
   fi
+  touch $grpc_dist/.build_finished
 fi
 
 # The python install lines should really be:
