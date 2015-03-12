@@ -38,6 +38,10 @@ If the mysql_config command from libmariadbclient-dev is not on the PATH,
 you'll need to *export VT_MYSQL_ROOT=/path/to/mariadb* before running bootstrap.sh,
 where mysql_config is found at /path/to/mariadb/**bin**/mysql_config.
 
+Also note that the bootstrap script needs to download some dependencies,
+so if your machine requires a proxy to access the internet, you'll need to
+set the usual environment variables (e.g. http_proxy, https_proxy, no_proxy).
+
 ``` sh
 cd $WORKSPACE
 sudo apt-get install make automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
