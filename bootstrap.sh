@@ -4,6 +4,11 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+SKIP_ROOT_INSTALLS=False
+if [ "$1 " == "--skip_root_installs" ]; then
+  SKIP_ROOT_INSTALLS=True
+fi
+
 if [ ! -f bootstrap.sh ]; then
   echo "bootstrap.sh must be run from its current directory" 1>&2
   exit 1
@@ -49,25 +54,18 @@ fi
 
 # install protoc and proto python libraries
 protobuf_dist=$VTROOT/dist/protobuf
-if [ -f $protobuf_dist/.build_finished ]; then
+if [ $SKIP_ROOT_INSTALLS == "True" ]; then
+  echo "skipping protobuf build, as root version was already installed."
+elif [ -f $protobuf_dist/.build_finished ]; then
   echo "skipping protobuf build. remove $protobuf_dist to force rebuild."
 else
   rm -rf $protobuf_dist
-  # The directory doesn't exist, so it wasn't picked up by dev.env yet,
-  # but the install needs it to exist first, and be in PYTHONPATH.
   mkdir -p $protobuf_dist/lib/python2.7/site-packages
+  # The directory may not have existed yet, so it may not have been
+  # picked up by dev.env yet, but the install needs it to exist first,
+  # and be in PYTHONPATH.
   export PYTHONPATH=$(prepend_path $PYTHONPATH $protobuf_dist/lib/python2.7/site-packages)
-  (cd $protobuf_dist && \
-    wget https://github.com/google/protobuf/archive/v3.0.0-alpha-1.zip && \
-    unzip v3.0.0-alpha-1.zip && \
-    cd protobuf-3.0.0-alpha-1 && \
-    ./autogen.sh && \
-    ./configure --prefix=$protobuf_dist && \
-    make -j 4 && \
-    make install && \
-    cd python && \
-    python setup.py build --cpp_implementation && \
-    python setup.py install --cpp_implementation --prefix=$protobuf_dist)
+  ./travis/install_protobuf.sh $protobuf_dist
   if [ $? -ne 0 ]; then
     echo "protobuf build failed"
     exit 1
@@ -77,36 +75,20 @@ fi
 
 # install gRPC C++ base, so we can install the python adapters
 grpc_dist=$VTROOT/dist/grpc
-if [ -f $grpc_dist/.build_finished ]; then
+if [ $SKIP_ROOT_INSTALLS == "True" ]; then
+  echo "skipping grp build, as root version was already installed."
+elif [ -f $grpc_dist/.build_finished ]; then
   echo "skipping gRPC build. remove $grpc_dist to force rebuild."
 else
   rm -rf $grpc_dist
-  (mkdir -p $grpc_dist && \
-    cd $grpc_dist && \
-    git clone https://github.com/grpc/grpc.git && \
-    cd grpc && \
-    git submodule update --init && \
-    make && \
-    make install prefix=$grpc_dist && \
-    cd src/python/src && \
-    python setup.py build_ext --include-dirs $grpc_dist/include --library-dirs $grpc_dist/lib && \
-    python setup.py install --prefix $grpc_dist)
+  mkdir -p $grpc_dist
+  ./travis/install_grpc.sh $grpc_dist
   if [ $? -ne 0 ]; then
     echo "gRPC build failed"
     exit 1
   fi
   touch $grpc_dist/.build_finished
 fi
-
-# The python install lines should really be:
-# (and require python-pip and python-virtualenv)
-#
-# ./tools/run_tests/build_python.sh && \
-# pip install -r src/python/requirements.txt -t $grpc_dist/lib/python2.7/site-packages && \
-# CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/src -t $grpc_dist/lib/python2.7/site-packages
-#
-# but in the Docker image, this would have to run as root,
-# and we don't want to run bootstrap.sh as root.
 
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
