@@ -14,8 +14,10 @@ env:
     - MAKE_TARGET=unit_test
 before_install:
   - bash -v travis/dependencies.sh
+  - bash -v travis/install_protobuf.sh
+  - bash -v travis/install_grpc.sh
 install:
-  - bash -v bootstrap.sh
+  - bash -v bootstrap.sh --skip_root_installs
 script:
   - source dev.env
   - travis_retry make build $MAKE_TARGET
