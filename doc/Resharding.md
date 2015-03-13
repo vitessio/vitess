@@ -6,7 +6,9 @@ existing data can still be read).
 
 ## Process
 
-The process to achieve this goal is composed of the following steps:
+To follow a step-by-step guide for how to shard a keyspace, you can see [this page](HorizontalReshardingGuide.md).
+
+In general, the process to achieve this goal is composed of the following steps:
 - pick the original shard(s)
 - pick the destination shard(s) coverage
 - create the destination shard(s) tablets (in a mode where they are not used to serve traffic yet)
