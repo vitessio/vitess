@@ -14,7 +14,9 @@ SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 port=15002
 uid_base=100
+FORCE_NODE=${FORCE_NODE:-false}
 
+index=1
 for shard in $(echo $SHARDS | tr "," " "); do
   echo "Creating $keyspace.shard-$shard pods in cell $cell..."
   for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
@@ -30,10 +32,21 @@ for shard in $(echo $SHARDS | tr "," " "); do
       sed_script+="s/{{$var}}/${!var}/g;"
     done
 
+    # Add node selector to the end if a vttablet should be on a specific node.
+    # Note: this is a workaround until Kubernetes supports the ability to
+    # specify resource constraints.  This method requires nodes to be labeled
+    # with an ascending id.
+    if [ "$FORCE_NODE" = true ]
+    then
+      sed_script+="\$anodeSelector:\n  id: \"$index\""
+    fi
+
     # Instantiate template and send to kubectl.
     cat vttablet-pod-template.yaml | \
       sed -e "$sed_script" | \
       $KUBECTL create -f -
+
+    let index=index+1
   done
   let uid_base=uid_base+100
 done
