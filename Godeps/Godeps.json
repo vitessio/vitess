@@ -2,6 +2,7 @@
 	"ImportPath": "github.com/youtube/vitess",
 	"GoVersion": "go1.4.1",
 	"Packages": [
+		"./go/stats/influxdbbackend",
 		"./go/vt/etcdtopo"
 	],
 	"Deps": [
@@ -9,6 +10,11 @@
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
 			"Comment": "v0.2.0-rc1-127-g6fe04d5",
 			"Rev": "6fe04d580dfb71c9e34cbce2f4df9eefd1e1241e"
-		}
+		},
+		{
+			"ImportPath": "github.com/influxdb/influxdb/client",
+			"Comment": "v0.8.8",
+			"Rev": "afde71eb1740fd763ab9450e1f700ba0e53c36d0"
+		},
 	]
 }
