@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -63,16 +62,20 @@ var stateName = []string{
 
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
-	// mu is used to manage state transitions.
-	// Obtain a write lock to change state.
-	// Obtain a read lock to prevent state from changing.
-	// If you want to know the current value of state and
-	// don't care that it changes after you've read it,
-	// you can perform a lockless atomic read.
-	mu       sync.RWMutex
+	// mu is used to access state. It's also used to ensure
+	// that state does not change out of SERVING or SHUTTING_TX
+	// while we do requests.Add.
+	// At the time of shut down, once we change the state to
+	// SHUTTING_QUERIES, no new requests will be honored.
+	// At this time, it's safe to perform requests.Wait outside
+	// the lock. Once the wait completes, we can transition
+	// to NOT_SERVING.
+	mu       sync.Mutex
+	state    int64
 	requests sync.WaitGroup
-	state    sync2.AtomicInt64
 
+	// The following variables should only be accessed within
+	// the context of a startRequest-endRequest.
 	qe        *QueryEngine
 	sessionId int64
 	dbconfig  *dbconfigs.DBConfig
@@ -83,21 +86,29 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
+	stats.Publish("TabletState", stats.IntFunc(func() int64 {
+		sq.mu.Lock()
+		state := sq.state
+		sq.mu.Unlock()
+		return state
+	}))
 	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
 	return sq
 }
 
 // GetState returns the name of the current SqlQuery state.
 func (sq *SqlQuery) GetState() string {
-	return stateName[sq.state.Get()]
+	sq.mu.Lock()
+	name := stateName[sq.state]
+	sq.mu.Unlock()
+	return name
 }
 
 // setState changes the state and logs the event.
 // It requires the caller to hold a lock on mu.
 func (sq *SqlQuery) setState(state int64) {
-	log.Infof("SqlQuery state: %v -> %v", sq.GetState(), stateName[state])
-	sq.state.Set(state)
+	log.Infof("SqlQuery state: %v -> %v", stateName[sq.state], stateName[state])
+	sq.state = state
 }
 
 // allowQueries starts the query service.
@@ -109,36 +120,41 @@ func (sq *SqlQuery) setState(state int64) {
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
 func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) (err error) {
-	// Fast path
-	if sq.state.Get() == SERVING {
+	sq.mu.Lock()
+	if sq.state == SERVING {
+		sq.mu.Unlock()
 		return nil
 	}
-	sq.mu.Lock()
-	defer sq.mu.Unlock()
-	if sq.state.Get() != NOT_SERVING {
-		terr := NewTabletError(ErrFatal, "cannot start query service, current state: %s", sq.GetState())
-		return terr
+	if sq.state != NOT_SERVING {
+		state := sq.state
+		sq.mu.Unlock()
+		return NewTabletError(ErrFatal, "cannot start query service, current state: %s", state)
 	}
 	// state is NOT_SERVING
 	sq.setState(INITIALIZING)
+	sq.mu.Unlock()
 
 	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
 	if err != nil {
 		log.Infof("allowQueries failed: %v", err)
+		sq.mu.Lock()
 		sq.setState(NOT_SERVING)
+		sq.mu.Unlock()
 		return err
 	}
 	c.Close()
 
 	defer func() {
+		state := int64(SERVING)
 		if x := recover(); x != nil {
 			err = x.(*TabletError)
 			log.Errorf("Could not start query service: %v", err)
 			sq.qe.Close()
-			sq.setState(NOT_SERVING)
-			return
+			state = NOT_SERVING
 		}
-		sq.setState(SERVING)
+		sq.mu.Lock()
+		sq.setState(state)
+		sq.mu.Unlock()
 	}()
 
 	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
@@ -160,13 +176,12 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 func (sq *SqlQuery) disallowQueries() {
 	// SERVING -> SHUTTING_TX
 	sq.mu.Lock()
-	if sq.state.Get() != SERVING {
+	if sq.state != SERVING {
 		sq.mu.Unlock()
 		return
 	}
 	sq.setState(SHUTTING_TX)
 	sq.mu.Unlock()
-	// Don't hold lock while waiting.
 	sq.qe.WaitForTxEmpty()
 
 	// SHUTTING_TX -> SHUTTING_QUERIES
@@ -175,12 +190,12 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.mu.Unlock()
 	// Terminate all streaming queries
 	sq.qe.streamQList.TerminateAll()
-	// Don't hold lock while waiting.
+	// Wait for outstanding requests to finish.
 	sq.requests.Wait()
 
-	// SHUTTING_QUERIES -> NOT_SERVING
-	sq.mu.Lock()
 	defer func() {
+		// SHUTTING_QUERIES -> NOT_SERVING
+		sq.mu.Lock()
 		sq.setState(NOT_SERVING)
 		sq.mu.Unlock()
 	}()
@@ -194,7 +209,7 @@ func (sq *SqlQuery) disallowQueries() {
 // The function returns false only if the query service is running
 // and we're unable to make a connection.
 func (sq *SqlQuery) checkMySQL() bool {
-	if err := sq.startRequest(sq.sessionId, false); err != nil {
+	if err := sq.startRequest(0, true, false); err != nil {
 		return true
 	}
 	defer sq.endRequest()
@@ -208,12 +223,11 @@ func (sq *SqlQuery) checkMySQL() bool {
 
 // GetSessionId returns a sessionInfo response if the state is SERVING.
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	// We perform a lockless read of state because we don't care if it changes
-	// after we check its value.
-	if sq.state.Get() != SERVING {
-		return NewTabletError(ErrRetry, "Query server is in %s state", sq.GetState())
+	if err := sq.startRequest(0, true, false); err != nil {
+		return err
 	}
-	// state was SERVING
+	defer sq.endRequest()
+
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
 		return NewTabletError(ErrFatal, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
@@ -228,19 +242,18 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", ctx)
 	logStats.OriginalSql = "begin"
-	sq.mu.RLock()
-	defer sq.mu.RUnlock()
 	defer handleError(&err, logStats)
-	if sq.state.Get() != SERVING {
-		return NewTabletError(ErrRetry, "cannot begin transaction in state %s", sq.GetState())
+
+	if err = sq.startRequest(session.SessionId, false, false); err != nil {
+		return err
 	}
-	// state is SERVING
-	if session.SessionId == 0 || session.SessionId != sq.sessionId {
-		return NewTabletError(ErrRetry, "Invalid session Id %v", session.SessionId)
-	}
-	defer queryStats.Record("BEGIN", time.Now())
 	ctx, cancel := withTimeout(ctx, sq.qe.txPool.poolTimeout.Get())
-	defer cancel()
+	defer func() {
+		queryStats.Record("BEGIN", time.Now())
+		cancel()
+		sq.endRequest()
+	}()
+
 	txInfo.TransactionId = sq.qe.txPool.Begin(ctx)
 	logStats.TransactionID = txInfo.TransactionId
 	return nil
@@ -251,14 +264,18 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session) (err err
 	logStats := newSqlQueryStats("Commit", ctx)
 	logStats.OriginalSql = "commit"
 	logStats.TransactionID = session.TransactionId
-	if err = sq.startRequest(session.SessionId, true); err != nil {
-		return err
-	}
-	defer sq.endRequest()
 	defer handleError(&err, logStats)
 
+	if err = sq.startRequest(session.SessionId, false, true); err != nil {
+		return err
+	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer cancel()
+	defer func() {
+		queryStats.Record("COMMIT", time.Now())
+		cancel()
+		sq.endRequest()
+	}()
+
 	Commit(ctx, logStats, sq.qe, session.TransactionId)
 	return nil
 }
@@ -268,14 +285,18 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 	logStats := newSqlQueryStats("Rollback", ctx)
 	logStats.OriginalSql = "rollback"
 	logStats.TransactionID = session.TransactionId
-	if err = sq.startRequest(session.SessionId, true); err != nil {
+	defer handleError(&err, logStats)
+
+	if err = sq.startRequest(session.SessionId, false, true); err != nil {
 		return err
 	}
-	defer sq.endRequest()
-	defer handleError(&err, logStats)
-	defer queryStats.Record("ROLLBACK", time.Now())
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer cancel()
+	defer func() {
+		queryStats.Record("ROLLBACK", time.Now())
+		cancel()
+		sq.endRequest()
+	}()
+
 	sq.qe.txPool.Rollback(ctx, session.TransactionId)
 	return nil
 }
@@ -312,20 +333,22 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", ctx)
-	allowShutdown := (query.TransactionId != 0)
-	if err = sq.startRequest(query.SessionId, allowShutdown); err != nil {
-		return err
-	}
-	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	// TODO(sougou): Change usage such that we don't have to do this.
+	allowShutdown := (query.TransactionId != 0)
+	if err = sq.startRequest(query.SessionId, false, allowShutdown); err != nil {
+		return err
+	}
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer func() {
+		cancel()
+		sq.endRequest()
+	}()
+
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
 	}
 	stripTrailing(query)
-	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer cancel()
 	qre := &QueryExecutor{
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
@@ -351,19 +374,21 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 	}
 
 	logStats := newSqlQueryStats("StreamExecute", ctx)
-	if err = sq.startRequest(query.SessionId, false); err != nil {
-		return err
-	}
-	defer sq.endRequest()
 	defer handleExecError(query, &err, logStats)
 
-	// TODO(sougou): Change usage such that we don't have to do this.
+	if err = sq.startRequest(query.SessionId, false, false); err != nil {
+		return err
+	}
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer func() {
+		cancel()
+		sq.endRequest()
+	}()
+
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
 	}
 	stripTrailing(query)
-	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer cancel()
 	qre := &QueryExecutor{
 		query:         query.Sql,
 		bindVars:      query.BindVariables,
@@ -388,7 +413,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
-	if err = sq.startRequest(queryList.SessionId, allowShutdown); err != nil {
+	if err = sq.startRequest(queryList.SessionId, false, allowShutdown); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -449,11 +474,19 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 }
 
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
-func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
-	var err error
-	// TODO(sougou/anandhenry): Add session validation.
 	defer handleError(&err, logStats)
+
+	// TODO(anandhenry): Change this to use session id from req.
+	if err = sq.startRequest(0, true, false); err != nil {
+		return err
+	}
+	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
+	defer func() {
+		cancel()
+		sq.endRequest()
+	}()
 
 	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
 	err = splitter.validateQuery()
@@ -461,8 +494,6 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		return NewTabletError(ErrFail, "query validation error: %s", err)
 	}
 	// Partial initialization or QueryExecutor is enough to call execSQL
-	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer cancel()
 	requestContext := RequestContext{
 		ctx:      ctx,
 		logStats: logStats,
@@ -484,22 +515,27 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 // and only one corresponding endRequest. When the service shuts down,
 // disallowQueries will wait on this waitgroup to ensure that there are
 // no requests in flight.
-func (sq *SqlQuery) startRequest(sessionId int64, allowShutdown bool) (err error) {
-	sq.mu.RLock()
-	defer sq.mu.RUnlock()
-	st := sq.state.Get()
-	if st == SERVING {
+// ignoreSession is passed in as true for valid internal requests that don't have a session id.
+func (sq *SqlQuery) startRequest(sessionId int64, ignoreSession, allowShutdown bool) (err error) {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	if sq.state == SERVING {
 		goto verifySession
 	}
-	if allowShutdown && st == SHUTTING_TX {
+	if allowShutdown && sq.state == SHUTTING_TX {
 		goto verifySession
 	}
-	return NewTabletError(ErrRetry, "operation not allowed in state %s", sq.GetState())
+	return NewTabletError(ErrRetry, "operation not allowed in state %s", stateName[sq.state])
 
 verifySession:
+	if ignoreSession {
+		goto ok
+	}
 	if sessionId == 0 || sessionId != sq.sessionId {
 		return NewTabletError(ErrRetry, "Invalid session Id %v", sessionId)
 	}
+
+ok:
 	sq.requests.Add(1)
 	return nil
 }

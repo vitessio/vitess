@@ -90,6 +90,7 @@ type TransactionInfo struct {
 
 // SplitQueryRequest represents a request to split a Query into queries that
 // each return a subset of the original query.
+// TODO(anandhenry): Add SessionId to this struct.
 type SplitQueryRequest struct {
 	Query      BoundQuery
 	SplitCount int
