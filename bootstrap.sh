@@ -5,7 +5,7 @@
 # be found in the LICENSE file.
 
 SKIP_ROOT_INSTALLS=False
-if [ "$1 " == "--skip_root_installs" ]; then
+if [ "$1" = "--skip_root_installs" ]; then
   SKIP_ROOT_INSTALLS=True
 fi
 

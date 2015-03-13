@@ -37,7 +37,6 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
 
 # Compile and install required packages as root
 WORKDIR /vt/src/github.com/youtube/vitess
-RUN ./travis/install_protobuf.sh
 RUN ./travis/install_grpc.sh
 
 # Bootstrap Vitess
