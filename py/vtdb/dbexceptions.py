@@ -6,6 +6,9 @@ class Error(exceptions.StandardError):
 class DatabaseError(exceptions.StandardError):
   pass
 
+class DataError(DatabaseError):
+  pass
+
 class Warning(exceptions.StandardError):
   pass
 
