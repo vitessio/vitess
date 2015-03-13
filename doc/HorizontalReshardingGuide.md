@@ -1,8 +1,9 @@
 # Horizontal resharding guide
 
-This is a step-by-step "cookbook" style guide of instructions to follow in order to split a single-sharded keyspace into two.
+This is a step-by-step guide to splitting a single-sharded keyspace into two. The same general instructions can also be used for resharding an already sharded keyspace.
 
 ## Preparing the source shard
+###### Note: This step can be skipped if your keyspace already has multiple shards.
 
 Let’s assume that you’ve already got a keyspace up and running, with a single shard (the default case). For example, you might have the following keyspace/shard: `test_keyspace/0`. It’s also a requirement that you have at least one (but preferably two) rdonly tablets for the source shard.
 
@@ -61,7 +62,7 @@ The destination shards will also now be running [filtered replication](Reshardin
 
 ## Running a diff of the data to verify accuracy
 
-##### Note: This step is optional, but highly recommended.
+###### Note: This step is optional, but highly recommended.
 
 Now that the data has been copied (up to a certain point in time) to the destination shard, we will still want to do a couple of things before serving data from the destination shard:
 
