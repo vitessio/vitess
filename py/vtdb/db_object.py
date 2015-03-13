@@ -208,6 +208,7 @@ class DBObjectBase(object):
                                                 class_.columns_list,
                                                 **bind_vars)
     cursor.execute(query, bind_vars)
+    #logging.info("cursor.lastrowid %s" % cursor.lastrowid)
     return cursor.lastrowid
 
   @db_class_method
@@ -285,7 +286,7 @@ class DBObjectBase(object):
     return cursor.fetch_aggregate_function(sum)
 
   @db_class_method
-  def get_min(class_):
+  def get_min(class_, cursor):
     if class_.id_column_name is None:
       raise dbexceptions.ProgrammingError("id_column_name not set.")
 
@@ -301,6 +302,7 @@ class DBObjectBase(object):
       raise dbexceptions.ProgrammingError("id_column_name not set.")
 
     query = sql_builder.build_aggregate_query(class_.table_name,
-                                              class_.id_column_name)
+                                              class_.id_column_name,
+                                              sort_func='max')
     cursor.execute(query, EmptyBindVariables)
     return cursor.fetch_aggregate_function(max)

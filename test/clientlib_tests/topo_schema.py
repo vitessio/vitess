@@ -12,7 +12,7 @@ KS_LOOKUP = ("KS_LOOKUP", shard_constants.UNSHARDED)
 
 #KS_UNSHARDED tables
 create_vt_unsharded = '''create table vt_unsharded (
-id bigint,
+id bigint NOT NULL AUTO_INCREMENT,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''

@@ -9,7 +9,6 @@ This module also contains helper methods for cursor creation for accessing looku
 and methods for dml and select for the above mentioned base classes.
 """
 import functools
-import logging
 import struct
 
 from vtdb import db_object
@@ -95,11 +94,9 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     entity_id_map = None
 
     entity_id_map = kargs.get("entity_id_map", None)
-    logging.info("entity_id_map %s" % entity_id_map)
     if entity_id_map is None:
       kr = None
       key_range = kargs.get("keyrange", None)
-      logging.info("keyrange %s" % key_range)
       if isinstance(key_range, keyrange.KeyRange):
         kr = key_range
       else:
@@ -130,7 +127,6 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
       routing.entity_id_sharding_key_map = class_.lookup_sharding_key_from_entity_id(
           lookup_cursor_method, entity_id_col, entity_id)
 
-    logging.info("routing %s" % routing.__dict__)
     return routing
 
   @classmethod
@@ -345,7 +341,6 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     if not where_column_value_pairs:
       raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
 
-    logging.info("where_column_value_pairs %s cursor dict %s" % (where_column_value_pairs,cursor.__dict__))
     where_column_value_pairs = class_._add_keyspace_id(
         unpack_keyspace_id(cursor.keyspace_ids[0]), where_column_value_pairs)
 

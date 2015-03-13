@@ -7,7 +7,6 @@ library test.
 # coding: utf-8
 
 import hashlib
-import logging
 import random
 import struct
 import threading
@@ -57,7 +56,6 @@ pack_kid = struct.Struct('!Q').pack
 
 def setUpModule():
   global vtgate_server, vtgate_port
-  logging.debug("in setUpModule")
   try:
     environment.topo_server().setup()
     setup_topology()
@@ -78,10 +76,8 @@ def setUpModule():
 def tearDownModule():
   global vtgate_server
   global __tablets
-  logging.debug("in tearDownModule")
   if utils.options.skip_teardown:
     return
-  logging.debug("Tearing down the servers and setup")
   utils.vtgate_kill(vtgate_server)
   if __tablets is not None:
     tablet.kill_tablets(__tablets)
@@ -218,40 +214,45 @@ class TestUnshardedTable(unittest.TestCase):
     with database_context.WriteTransaction(self.dc) as context:
       for x in xrange(20):
         ret_id = db_class_unsharded.VtUnsharded.insert(context.get_cursor(),
-                                                       id=x, msg="test message")
+                                                       msg="test message")
         self.all_ids.append(ret_id)
 
   def tearDown(self):
     _delete_all("KS_UNSHARDED", "0", 'vt_unsharded')
 
   def test_read(self):
+    id_val = self.all_ids[0]
     with database_context.ReadFromMaster(self.dc) as context:
       rows = db_class_unsharded.VtUnsharded.select_by_id(
-          context.get_cursor(), 2)
-      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
-      self.assertEqual(rows[0].id, 2, "wrong row fetched")
+          context.get_cursor(), id_val)
+      expected = 1
+      self.assertEqual(len(rows), expected, "wrong number of rows fetched %d, expected %d" % (len(rows), expected))
+      self.assertEqual(rows[0].id, id_val, "wrong row fetched")
 
   def test_update_and_read(self):
-    where_column_value_pairs = [('id', 2)]
+    id_val = self.all_ids[0]
+    where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
       db_class_unsharded.VtUnsharded.update_columns(context.get_cursor(),
                                                     where_column_value_pairs,
                                                     msg="test update")
 
     with database_context.ReadFromMaster(self.dc) as context:
-      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), id_val)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
       self.assertEqual(rows[0].msg, "test update", "wrong row fetched")
 
   def test_delete_and_read(self):
-    where_column_value_pairs = [('id', 2)]
+    id_val = self.all_ids[-1]
+    where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
       db_class_unsharded.VtUnsharded.delete_by_columns(context.get_cursor(),
                                                     where_column_value_pairs)
 
     with database_context.ReadFromMaster(self.dc) as context:
-      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), id_val)
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+    self.all_ids = self.all_ids[:-1]
 
   def test_count(self):
     with database_context.ReadFromMaster(self.dc) as context:
@@ -269,8 +270,9 @@ class TestUnshardedTable(unittest.TestCase):
 
   def test_max_id(self):
     with database_context.ReadFromMaster(self.dc) as context:
-      max_id = db_class_sharded.VtUser.get_max(
+      max_id = db_class_unsharded.VtUnsharded.get_max(
           context.get_cursor())
+      self.all_ids.sort()
       expected = max(self.all_ids)
       self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
 
@@ -513,6 +515,7 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
       self.assertEqual(new_email, rows[0].email)
+    self.user_id_list.sort()
 
   def delete_columns(self):
     user_id = self.user_id_list[-1]
@@ -538,6 +541,7 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
     self.user_id_list = self.user_id_list[:-1]
+    self.user_id_list.sort()
 
   def test_count(self):
     with database_context.ReadFromMaster(self.dc) as context:
@@ -551,7 +555,11 @@ class TestRangeSharded(unittest.TestCase):
     with database_context.ReadFromMaster(self.dc) as context:
       min_id = db_class_sharded.VtUser.get_min(
           context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE))
+      self.user_id_list.sort()
       expected = min(self.user_id_list)
+      rows1 = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE), [])
+      id_list = [row.id for row in rows1]
       self.assertEqual(min_id, expected, "wrong min value fetched; expected %d got %d" % (expected, min_id))
 
   def test_max_id(self):

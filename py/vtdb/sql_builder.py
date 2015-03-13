@@ -300,9 +300,12 @@ def insert_query(table_name, columns_list, **bind_variables):
   return query, bind_variables
 
 
-def build_aggregate_query(table_name, id_column_name):
-  query = ('SELECT %(id_col)s FROM %(table_name)s ORDER BY %(id_col)s DESC '
-           'LIMIT 1') % {'id_col': id_column_name, 'table_name': table_name}
+def build_aggregate_query(table_name, id_column_name, sort_func='min'):
+  query_clause = 'SELECT %(id_col)s FROM %(table_name)s ORDER BY %(id_col)s'
+  if sort_func == 'max':
+    query_clause += ' DESC'
+  query_clause += ' LIMIT 1'
+  query = query_clause % {'id_col': id_column_name, 'table_name': table_name}
   return query
 
 
