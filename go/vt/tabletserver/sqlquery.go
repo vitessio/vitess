@@ -176,6 +176,23 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 // Once all queries are done, it shuts down the query engine
 // and marks the state as StateNotServing.
 func (sq *SqlQuery) disallowQueries() {
+	// Setup a time bomb at 10x query timeout. If this function
+	// takes too long, it's better to crash.
+	done := make(chan struct{})
+	go func() {
+		qt := sq.qe.queryTimeout.Get()
+		if qt == 0 {
+			return
+		}
+		tmr := time.NewTimer(10 * sq.qe.queryTimeout.Get())
+		defer tmr.Stop()
+		select {
+		case <-tmr.C:
+			log.Fatal("disallowQueries took too long. Crashing")
+		case <-done:
+		}
+	}()
+
 	// StateServing -> StateShuttingTx
 	sq.mu.Lock()
 	if sq.state != StateServing {
@@ -200,6 +217,7 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.mu.Lock()
 		sq.setState(StateNotServing)
 		sq.mu.Unlock()
+		close(done)
 	}()
 	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
 	sq.qe.Close()
