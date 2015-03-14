@@ -8,7 +8,6 @@ The module also has the db_class_method decorator and db_wrapper method which ar
 used for cursor creation and calling the database method.
 """
 import functools
-import logging
 import struct
 
 from vtdb import database_context
@@ -208,7 +207,6 @@ class DBObjectBase(object):
                                                 class_.columns_list,
                                                 **bind_vars)
     cursor.execute(query, bind_vars)
-    #logging.info("cursor.lastrowid %s" % cursor.lastrowid)
     return cursor.lastrowid
 
   @db_class_method
