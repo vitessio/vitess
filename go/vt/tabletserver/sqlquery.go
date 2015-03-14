@@ -184,7 +184,7 @@ func (sq *SqlQuery) disallowQueries() {
 		if qt == 0 {
 			return
 		}
-		tmr := time.NewTimer(10 * sq.qe.queryTimeout.Get())
+		tmr := time.NewTimer(10 * qt)
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
