@@ -29,7 +29,7 @@ RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db 
     apt-get update && apt-get install -y mariadb-server libmariadbclient-dev
 
 # Add VOLUME
-VOLUME /vt
+VOLUME /vt/vtdataroot
 
 # Load files from directory containing Dockerfile
 COPY . /vt/src/github.com/youtube/vitess
