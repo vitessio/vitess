@@ -23,31 +23,33 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Allowed state transitions:
+// StateNotServing -> StateInitializing -> StateServing/StateNotServing,
+// StateServing -> StateShuttingTx
+// StateShuttingTx -> StateShuttingQueries
+// StateShuttingQueries -> StateNotServing
 const (
-	// Allowed state transitions:
-	// NOT_SERVING -> INITIALIZING -> SERVING/NOT_SERVING,
-	// SERVING -> SHUTTING_TX
-	// SHUTTING_TX -> SHUTTING_QUERIES
-	// SHUTTING_QUERIES -> NOT_SERVING
-	//
-	// NOT_SERVING: The query service is not serving queries.
-	NOT_SERVING = iota
-	// INITIALIZING: The query service is tyring to get to the SERVING state.
+	// StateNotServing is the not serving state.
+	StateNotServing = iota
+	// StateInitializing is the initializing state.
 	// This is a transient state. It's only informational.
-	INITIALIZING
-	// SERVING: Query service is running. Everything is allowed.
-	SERVING
-	// SHUTTING_TX: Query service is shutting down and has disallowed
-	// new transactions. New queries are still allowed as long as they
+	StateInitializing
+	// StateServing is the serving state.
+	// All operations are allowed.
+	StateServing
+	// StateShuttingTx means that the query service is shutting
+	// down and has disallowed new transactions.
+	// New queries are still allowed as long as they
 	// are part of an existing transaction. We remain in this state
 	// until all existing transactions are completed.
-	SHUTTING_TX
-	// SHUTTING_QUERIES: Query service is shutting down and has disallowed
-	// new queries. This state follows SHUTTING_TX. We enter this state
-	// after all existing transactions have completed. We remain in this
-	// state until all existing queries are completed. The next state
-	// after this is NOT_SERVING.
-	SHUTTING_QUERIES
+	StateShuttingTx
+	// StateShuttingQueries comes after StateShuttingTx.
+	// It means that the query service has disallowed
+	// new queries. We enter this state after all existing
+	// transactions have completed. We remain in this
+	// state until all existing queries are completed.
+	// The next state after this is StateNotServing.
+	StateShuttingQueries
 )
 
 // stateName names every state. The number of elements must
@@ -63,13 +65,13 @@ var stateName = []string{
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
 	// mu is used to access state. It's also used to ensure
-	// that state does not change out of SERVING or SHUTTING_TX
+	// that state does not change out of StateServing or StateShuttingTx
 	// while we do requests.Add.
 	// At the time of shut down, once we change the state to
-	// SHUTTING_QUERIES, no new requests will be honored.
+	// StateShuttingQueries, no new requests will be honored.
 	// At this time, it's safe to perform requests.Wait outside
 	// the lock. Once the wait completes, we can transition
-	// to NOT_SERVING.
+	// to StateNotServing.
 	mu       sync.Mutex
 	state    int64
 	requests sync.WaitGroup
@@ -77,7 +79,7 @@ type SqlQuery struct {
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	qe        *QueryEngine
-	sessionId int64
+	sessionID int64
 	dbconfig  *dbconfigs.DBConfig
 }
 
@@ -112,45 +114,45 @@ func (sq *SqlQuery) setState(state int64) {
 }
 
 // allowQueries starts the query service.
-// If the state is other than SERVING or NOT_SERVING, it fails.
-// If allowQuery succeeds, the resulting state is SERVING.
-// Otherwise, it reverts back to NOT_SERVING.
-// While allowQuery is running, the state is set to INITIALIZING.
+// If the state is other than StateServing or StateNotServing, it fails.
+// If allowQuery succeeds, the resulting state is StateServing.
+// Otherwise, it reverts back to StateNotServing.
+// While allowQuery is running, the state is set to StateInitializing.
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
 func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) (err error) {
 	sq.mu.Lock()
-	if sq.state == SERVING {
+	if sq.state == StateServing {
 		sq.mu.Unlock()
 		return nil
 	}
-	if sq.state != NOT_SERVING {
+	if sq.state != StateNotServing {
 		state := sq.state
 		sq.mu.Unlock()
 		return NewTabletError(ErrFatal, "cannot start query service, current state: %s", state)
 	}
-	// state is NOT_SERVING
-	sq.setState(INITIALIZING)
+	// state is StateNotServing
+	sq.setState(StateInitializing)
 	sq.mu.Unlock()
 
 	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
 	if err != nil {
 		log.Infof("allowQueries failed: %v", err)
 		sq.mu.Lock()
-		sq.setState(NOT_SERVING)
+		sq.setState(StateNotServing)
 		sq.mu.Unlock()
 		return err
 	}
 	c.Close()
 
 	defer func() {
-		state := int64(SERVING)
+		state := int64(StateServing)
 		if x := recover(); x != nil {
 			err = x.(*TabletError)
 			log.Errorf("Could not start query service: %v", err)
 			sq.qe.Close()
-			state = NOT_SERVING
+			state = StateNotServing
 		}
 		sq.mu.Lock()
 		sq.setState(state)
@@ -159,34 +161,34 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 
 	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
 	sq.dbconfig = &dbconfigs.App
-	sq.sessionId = Rand()
-	log.Infof("Session id: %d", sq.sessionId)
+	sq.sessionID = Rand()
+	log.Infof("Session id: %d", sq.sessionID)
 	return nil
 }
 
-// disallowQueries shuts down the query service if it's SERVING.
-// It first transitions to SHUTTING_TX, then waits for existing
+// disallowQueries shuts down the query service if it's StateServing.
+// It first transitions to StateShuttingTx, then waits for existing
 // transactions to complete. During this state, no new
 // transactions or queries are allowed. However, existing
 // transactions can still receive queries.
-// Then, it transitions to SHUTTING_QUERIES to wait for existing
+// Then, it transitions to StateShuttingQueries to wait for existing
 // queries to complete. In this state no new requests are allowed.
 // Once all queries are done, it shuts down the query engine
-// and marks the state as NOT_SERVING.
+// and marks the state as StateNotServing.
 func (sq *SqlQuery) disallowQueries() {
-	// SERVING -> SHUTTING_TX
+	// StateServing -> StateShuttingTx
 	sq.mu.Lock()
-	if sq.state != SERVING {
+	if sq.state != StateServing {
 		sq.mu.Unlock()
 		return
 	}
-	sq.setState(SHUTTING_TX)
+	sq.setState(StateShuttingTx)
 	sq.mu.Unlock()
 	sq.qe.WaitForTxEmpty()
 
-	// SHUTTING_TX -> SHUTTING_QUERIES
+	// StateShuttingTx -> StateShuttingQueries
 	sq.mu.Lock()
-	sq.setState(SHUTTING_QUERIES)
+	sq.setState(StateShuttingQueries)
 	sq.mu.Unlock()
 	// Terminate all streaming queries
 	sq.qe.streamQList.TerminateAll()
@@ -194,14 +196,14 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.requests.Wait()
 
 	defer func() {
-		// SHUTTING_QUERIES -> NOT_SERVING
+		// StateShuttingQueries -> StateNotServing
 		sq.mu.Lock()
-		sq.setState(NOT_SERVING)
+		sq.setState(StateNotServing)
 		sq.mu.Unlock()
 	}()
-	log.Infof("Stopping query service. Session id: %d", sq.sessionId)
+	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
 	sq.qe.Close()
-	sq.sessionId = 0
+	sq.sessionID = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
 }
 
@@ -221,7 +223,7 @@ func (sq *SqlQuery) checkMySQL() bool {
 	return sq.qe.CheckMySQL()
 }
 
-// GetSessionId returns a sessionInfo response if the state is SERVING.
+// GetSessionId returns a sessionInfo response if the state is StateServing.
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if err := sq.startRequest(0, true, false); err != nil {
 		return err
@@ -234,11 +236,11 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfig.Shard) {
 		return NewTabletError(ErrFatal, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
-	sessionInfo.SessionId = sq.sessionId
+	sessionInfo.SessionId = sq.sessionID
 	return nil
 }
 
-// Begin starts a new transaction. This is allowed only if the state is SERVING.
+// Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", ctx)
 	logStats.OriginalSql = "begin"
@@ -510,19 +512,19 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	return nil
 }
 
-// startRequest validates the current state and sessionId and registers
+// startRequest validates the current state and sessionID and registers
 // the request (a waitgroup) as started. Every startRequest requires one
 // and only one corresponding endRequest. When the service shuts down,
 // disallowQueries will wait on this waitgroup to ensure that there are
 // no requests in flight.
 // ignoreSession is passed in as true for valid internal requests that don't have a session id.
-func (sq *SqlQuery) startRequest(sessionId int64, ignoreSession, allowShutdown bool) (err error) {
+func (sq *SqlQuery) startRequest(sessionID int64, ignoreSession, allowShutdown bool) (err error) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
-	if sq.state == SERVING {
+	if sq.state == StateServing {
 		goto verifySession
 	}
-	if allowShutdown && sq.state == SHUTTING_TX {
+	if allowShutdown && sq.state == StateShuttingTx {
 		goto verifySession
 	}
 	return NewTabletError(ErrRetry, "operation not allowed in state %s", stateName[sq.state])
@@ -531,8 +533,8 @@ verifySession:
 	if ignoreSession {
 		goto ok
 	}
-	if sessionId == 0 || sessionId != sq.sessionId {
-		return NewTabletError(ErrRetry, "Invalid session Id %v", sessionId)
+	if sessionID == 0 || sessionID != sq.sessionID {
+		return NewTabletError(ErrRetry, "Invalid session Id %v", sessionID)
 	}
 
 ok:

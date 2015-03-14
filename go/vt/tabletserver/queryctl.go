@@ -354,7 +354,7 @@ func (rqsc *realQueryServiceControl) IsHealthy() error {
 		context.Background(),
 		&proto.Query{
 			Sql:       "select 1 from dual",
-			SessionId: rqsc.sqlQueryRPCService.sessionId,
+			SessionId: rqsc.sqlQueryRPCService.sessionID,
 		},
 		new(mproto.QueryResult),
 	)
