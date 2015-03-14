@@ -28,6 +28,9 @@ RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db 
     add-apt-repository 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.0/debian wheezy main' && \
     apt-get update && apt-get install -y mariadb-server libmariadbclient-dev
 
+# Add VOLUME
+VOLUME /vt/vtdataroot
+
 # Load files from directory containing Dockerfile
 COPY . /vt/src/github.com/youtube/vitess
 
