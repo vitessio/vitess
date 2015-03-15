@@ -5,6 +5,7 @@
 package dbconnpool
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -62,7 +63,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.Q
 	// first call the callback with the fields
 	err = callback(&proto.QueryResult{Fields: dbc.Fields()})
 	if err != nil {
-		return err
+		return fmt.Errorf("stream send error: %v", err)
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size
