@@ -75,18 +75,15 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 	}
 	if verbose {
 		tabletTypes := make([]string, 0, len(reply.Partitions))
-		for t, _ := range reply.Partitions {
+		for t := range reply.Partitions {
 			tabletTypes = append(tabletTypes, string(t))
 		}
 		sort.Strings(tabletTypes)
 		for _, t := range tabletTypes {
 			println(fmt.Sprintf("Partitions[%v] =", t))
-			for i, s := range reply.Partitions[topo.TabletType(t)].Shards {
-				println(fmt.Sprintf("  Shards[%v]=%v", i, s.KeyRange.String()))
+			for i, s := range reply.Partitions[topo.TabletType(t)].ShardReferences {
+				println(fmt.Sprintf("  ShardReferences[%v]=%v", i, s.KeyRange.String()))
 			}
-		}
-		for i, t := range reply.TabletTypes {
-			println(fmt.Sprintf("TabletTypes[%v] = %v", i, t))
 		}
 	}
 }

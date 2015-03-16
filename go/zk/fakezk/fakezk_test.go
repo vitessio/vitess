@@ -255,7 +255,7 @@ func TestFromFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace): %v", err)
 	}
-	if !strings.Contains(data, "TabletTypes") {
+	if !strings.Contains(data, "ShardReferences") {
 		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace) returned bad value: %v", data)
 	}
 

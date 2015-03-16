@@ -76,12 +76,11 @@ class TopoOccTest(unittest.TestCase):
     # vtgate zk API test
     out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "Partitions[master] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
+                     "  ShardReferences[0]={Start: , End: }\n" +
                      "Partitions[rdonly] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
+                     "  ShardReferences[0]={Start: , End: }\n" +
                      "Partitions[replica] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "TabletTypes[0] = master\n",
+                     "  ShardReferences[0]={Start: , End: }\n",
                      "Got wrong content: %s" % err)
 
   def test_get_end_points(self):
@@ -148,10 +147,9 @@ class TestTopo(unittest.TestCase):
     self.assertEqual(keyspaces, ["test_keyspace"], "get_srv_keyspace_names doesn't work")
     keyspace = fkc.get_srv_keyspace('testing', 'test_keyspace')
     self.assertEqual({
-        'Shards': [{
-            'AddrsByType': None,
+        'ShardReferences': [{
             'KeyRange': {'End': '\xd0', 'Start': '\xc0'},
-            'ReadOnly': False}],
+            'Name': 'c0-d0'}],
         'TabletTypes': ['rdonly', 'replica', 'master']},
                      keyspace, "keyspace reading is wrong")
     end_points = fkc.get_end_points("testing", "test_keyspace", "0", "master")

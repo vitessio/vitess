@@ -99,7 +99,7 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 					errRecorder.RecordError(fmt.Errorf("%v.%v is not in SrvKeyspace.Partitions", keyspace, string(tabletType)))
 					continue
 				}
-				for _, shard := range ksPartition.Shards {
+				for _, shard := range ksPartition.ShardReferences {
 					wg.Add(1)
 					go func(shardName string, tabletType topo.TabletType) {
 						defer wg.Done()

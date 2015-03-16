@@ -160,8 +160,8 @@ def start_tablets():
     if ks_type == shard_constants.RANGE_SHARDED:
       utils.check_srv_keyspace('test_nj', ks_name,
                                'Partitions(master): -80 80-\n' +
-                               'Partitions(replica): -80 80-\n' +
-                               'TabletTypes: master,replica')
+                               'Partitions(rdonly): -80 80-\n' +
+                               'Partitions(replica): -80 80-\n')
 
 
 def get_connection(user=None, password=None):

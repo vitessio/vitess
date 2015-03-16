@@ -275,8 +275,8 @@ class FakeZkOccConnection(object):
       result = json.loads(data)
       # for convenience, we store the KeyRange as hex, but we need to
       # decode it here, as BSON RPC sends it as binary.
-      if 'Shards' in result:
-        for shard in result['Shards']:
+      if 'ShardReferences' in result:
+        for shard in result['ShardReferences']:
           shard['KeyRange']['Start'] = shard['KeyRange']['Start'].decode('hex')
           shard['KeyRange']['End'] = shard['KeyRange']['End'].decode('hex')
       return result

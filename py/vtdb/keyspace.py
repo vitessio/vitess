@@ -33,7 +33,7 @@ class Keyspace(object):
     if not db_type:
       raise ValueError('db_type is not set')
     try:
-      return self.partitions[db_type]['Shards']
+      return self.partitions[db_type]['ShardReferences']
     except KeyError:
       return []
 

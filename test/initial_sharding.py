@@ -342,8 +342,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -\n' +
-                             'Partitions(replica): -\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -\n',
                              keyspace_id_type=keyspace_id_type)
 
     # we need to create the schema, and the worker will do data copying
@@ -418,8 +417,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -\n',
                              keyspace_id_type=keyspace_id_type)
 
     # then serve replica from the split shards
@@ -431,8 +429,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 
     # move replica back and forth
@@ -444,8 +441,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -\n',
                              keyspace_id_type=keyspace_id_type)
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
@@ -456,8 +452,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 
 
@@ -467,8 +462,7 @@ index by_msg (msg)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 
     # check the binlog players are gone now

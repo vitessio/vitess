@@ -571,14 +571,13 @@ def wait_db_read_only(uid):
 def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
   result = ""
-  for tablet_type in sorted(ks['TabletTypes']):
+  for tablet_type in sorted(ks['Partitions'].keys()):
     result += "Partitions(%s):" % tablet_type
     partition = ks['Partitions'][tablet_type]
-    for shard in partition['Shards']:
+    for shard in partition['ShardReferences']:
       result = result + " %s-%s" % (shard['KeyRange']['Start'],
                                     shard['KeyRange']['End'])
     result += "\n"
-  result += "TabletTypes: " + ",".join(sorted(ks['TabletTypes']))
   logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
   if expected != result:
     raise Exception("Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (

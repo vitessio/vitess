@@ -163,8 +163,8 @@ def setup_tablets():
 
   utils.check_srv_keyspace('test_nj', KEYSPACE_NAME,
                            'Partitions(master): -80 80-\n' +
-                           'Partitions(replica): -80 80-\n' +
-                           'TabletTypes: master,replica')
+                           'Partitions(rdonly): -80 80-\n' +
+                           'Partitions(replica): -80 80-\n')
 
   vtgate_server, vtgate_port = utils.vtgate_start()
 

@@ -124,15 +124,15 @@ func (sc *ShardedConn) readKeyspace() error {
 		return fmt.Errorf("vt: GetSrvKeyspace failed %v", err)
 	}
 
-	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
-	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Partitions[sc.tabletType].Shards))
+	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Partitions[sc.tabletType].ShardReferences))
+	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Partitions[sc.tabletType].ShardReferences))
 
-	for i, srvShard := range sc.srvKeyspace.Partitions[sc.tabletType].Shards {
-		sc.shardMaxKeys[i] = srvShard.KeyRange.End
+	for i, shardReference := range sc.srvKeyspace.Partitions[sc.tabletType].ShardReferences {
+		sc.shardMaxKeys[i] = shardReference.KeyRange.End
 	}
 
 	// Disabled for now.
-	// sc.connByType = make([]map[string]*Conn, len(sc.srvKeyspace.Shards))
+	// sc.connByType = make([]map[string]*Conn, len(sc.srvKeyspace.ShardReferences))
 	// for i := 0; i < len(sc.connByType); i++ {
 	// 	sc.connByType[i] = make(map[string]*Conn, 8)
 	// }
@@ -526,13 +526,8 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 */
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
-	srvShard := &(sc.srvKeyspace.Partitions[sc.tabletType].Shards[shardIdx])
-	shard := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
-	// Hack to handle non-range based shards.
-	if !srvShard.KeyRange.IsPartial() {
-		shard = fmt.Sprintf("%v", shardIdx)
-	}
-	addrs, err := sc.ts.GetEndPoints(sc.cell, sc.keyspace, shard, sc.tabletType)
+	shardReference := &(sc.srvKeyspace.Partitions[sc.tabletType].ShardReferences[shardIdx])
+	addrs, err := sc.ts.GetEndPoints(sc.cell, sc.keyspace, shardReference.Name, sc.tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("vt: GetEndPoints failed %v", err)
 	}
@@ -544,7 +539,7 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 
 	// Try to connect to any address.
 	for _, srv := range srvs {
-		name := topo.SrvAddr(srv) + "/" + sc.keyspace + "/" + shard
+		name := topo.SrvAddr(srv) + "/" + sc.keyspace + "/" + shardReference.Name
 		conn, err = tablet.DialVtdb(name, sc.stream, tablet.DefaultTimeout)
 		if err == nil {
 			return conn, nil
