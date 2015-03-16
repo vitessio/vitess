@@ -5,11 +5,10 @@
 package tabletserver
 
 import (
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +34,7 @@ type CachePool struct {
 	cmd            *exec.Cmd
 	rowCacheConfig RowCacheConfig
 	capacity       int
-	port           string
+	socket         string
 	idleTimeout    time.Duration
 	memcacheStats  *MemcacheStats
 	mu             sync.Mutex
@@ -62,14 +61,6 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, idleTimeout time.D
 
 	// Start with memcached defaults
 	cp.capacity = 1024 - 50
-	cp.port = "11211"
-	if rowCacheConfig.Socket != "" {
-		cp.port = rowCacheConfig.Socket
-	}
-	if rowCacheConfig.TcpPort > 0 {
-		//address: ":11211"
-		cp.port = ":" + strconv.Itoa(rowCacheConfig.TcpPort)
-	}
 	if rowCacheConfig.Connections > 0 {
 		if rowCacheConfig.Connections <= 50 {
 			log.Fatalf("insufficient capacity: %d", rowCacheConfig.Connections)
@@ -89,10 +80,11 @@ func (cp *CachePool) Open() {
 	if cp.rowCacheConfig.Binary == "" {
 		panic(NewTabletError(ErrFatal, "rowcache binary not specified"))
 	}
+	cp.socket = generateFilename()
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
-		return memcache.Connect(cp.port, 10*time.Second)
+		return memcache.Connect(cp.socket, 10*time.Second)
 	}
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	if cp.memcacheStats != nil {
@@ -100,11 +92,29 @@ func (cp *CachePool) Open() {
 	}
 }
 
-func (cp *CachePool) startMemcache() {
-	if strings.Contains(cp.port, "/") {
-		_ = os.Remove(cp.port)
+// generateFilename generates a unique file name. It's convoluted.
+// There are race conditions when we have to come up with unique
+// names. So, this is a best effort.
+func generateFilename() string {
+	f, err := ioutil.TempFile("", "mc")
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error creating socket file: %v", err))
 	}
-	commandLine := cp.rowCacheConfig.GetSubprocessFlags()
+	name := f.Name()
+	err = f.Close()
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error closing socket file: %v", err))
+	}
+	err = os.Remove(name)
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error removing socket file: %v", err))
+	}
+	log.Infof("sock filename: %v", name)
+	return name
+}
+
+func (cp *CachePool) startMemcache() {
+	commandLine := cp.rowCacheConfig.GetSubprocessFlags(cp.socket)
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
 		panic(NewTabletError(ErrFatal, "can't start memcache: %v", err))
@@ -112,7 +122,7 @@ func (cp *CachePool) startMemcache() {
 	attempts := 0
 	for {
 		time.Sleep(100 * time.Millisecond)
-		c, err := memcache.Connect(cp.port, 30*time.Millisecond)
+		c, err := memcache.Connect(cp.socket, 30*time.Millisecond)
 		if err != nil {
 			attempts++
 			if attempts >= 50 {
@@ -158,9 +168,8 @@ func (cp *CachePool) Close() {
 	cp.cmd.Process.Kill()
 	// Avoid zombies
 	go cp.cmd.Wait()
-	if strings.Contains(cp.port, "/") {
-		_ = os.Remove(cp.port)
-	}
+	_ = os.Remove(cp.socket)
+	cp.socket = ""
 	cp.pool = nil
 }
 
