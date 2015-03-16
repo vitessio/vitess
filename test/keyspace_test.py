@@ -178,13 +178,13 @@ def setup_unsharded_keyspace():
                            'Partitions(replica): -\n')
 
 
-ALL_DB_TYPES = ['master', 'replica']
+ALL_DB_TYPES = ['master', 'rdonly', 'replica']
 
 class TestKeyspace(unittest.TestCase):
   def _read_keyspace(self, keyspace_name):
     global vtgate_port
     vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
-                                        "test_nj", 30.0)
+                                          "test_nj", 30.0)
     return keyspace.read_keyspace(vtgate_client, keyspace_name)
 
   def test_get_keyspace(self):
@@ -207,12 +207,6 @@ class TestKeyspace(unittest.TestCase):
     unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
-
-  def test_db_types(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
-    self.assertEqual(set(sharded_ks.db_types), set(ALL_DB_TYPES))
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
-    self.assertEqual(set(unsharded_ks.db_types), set(ALL_DB_TYPES))
 
   def test_keyspace_id_to_shard_name(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
