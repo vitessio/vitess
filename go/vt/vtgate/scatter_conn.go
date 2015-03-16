@@ -34,6 +34,7 @@ type ScatterConn struct {
 	connTimeoutTotal     time.Duration
 	connTimeoutPerConn   time.Duration
 	timings              *stats.MultiTimings
+	tabletCallErrorCount *stats.MultiCounters
 	tabletConnectTimings *stats.MultiTimings
 
 	mu         sync.Mutex
@@ -50,8 +51,10 @@ type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
 func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal time.Duration, connTimeoutPerConn time.Duration) *ScatterConn {
+	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
 	if statsName != "" {
+		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
 	return &ScatterConn{
@@ -62,6 +65,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		connTimeoutTotal:     connTimeoutTotal,
 		connTimeoutPerConn:   connTimeoutPerConn,
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletConnectTimings: stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"}),
 		shardConns:           make(map[string]*ShardConn),
 	}
@@ -519,19 +523,22 @@ func (stc *ScatterConn) multiGo(
 	for shard := range unique(shards) {
 		wg.Add(1)
 		go func(shard string) {
+			statsKey := []string{name, keyspace, shard, string(tabletType)}
 			defer wg.Done()
 			startTime := time.Now()
-			defer stc.timings.Record([]string{name, keyspace, shard, string(tabletType)}, startTime)
+			defer stc.timings.Record(statsKey, startTime)
 
 			sdc := stc.getConnection(context, keyspace, shard, tabletType)
 			transactionID, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
 			if err != nil {
 				allErrors.RecordError(err)
+				stc.tabletCallErrorCount.Add(statsKey, 1)
 				return
 			}
 			err = action(sdc, transactionID, results)
 			if err != nil {
 				allErrors.RecordError(err)
+				stc.tabletCallErrorCount.Add(statsKey, 1)
 				return
 			}
 		}(shard)
