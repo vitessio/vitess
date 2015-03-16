@@ -4,15 +4,10 @@
 
 package tabletserver
 
-import (
-	"time"
-
-	"golang.org/x/net/context"
-)
+import "golang.org/x/net/context"
 
 // Commit commits the specified transaction.
 func Commit(ctx context.Context, logStats *SQLQueryStats, qe *QueryEngine, transactionID int64) {
-	defer queryStats.Record("COMMIT", time.Now())
 	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)
