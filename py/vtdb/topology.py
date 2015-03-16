@@ -92,9 +92,7 @@ def read_keyspaces(zkocc_client):
   read_topology(zkocc_client, read_fqdb_keys=False)
 
 
-# ZK paths look like:
-# /zk/<cell>/vt/keyspaces/<keyspace>/shards/<shard>/<db_type>/<instance_id>
-# this function returns:
+# read_topology returns:
 # - a list of all the existing <keyspace>.<shard>.<db_type>
 # - optionally, a list of all existing endpoints:
 #   <keyspace>.<shard>.<db_type>.<instance_id>
@@ -110,9 +108,9 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
       __set_keyspace(ks)
-      for db_type in ks.db_types:
-        for shard_name in ks.get_shard_names(db_type):
-          db_key_parts = [ks.name, shard_name, db_type]
+      for db_type, partition in ks.partitions.iter_items():
+        for shard_reference in partition['ShardReferences']:
+          db_key_parts = [ks.name, shard_reference['Name'], db_type]
           db_key = '.'.join(db_key_parts)
           db_keys.append(db_key)
 
