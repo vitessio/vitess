@@ -24,6 +24,7 @@ import (
 
 const statsURL = "/debug/memcache/"
 
+// CreateCacheFunc defines the function signature to create a memcache connection.
 type CreateCacheFunc func() (*memcache.Connection, error)
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
@@ -36,12 +37,12 @@ type CachePool struct {
 	capacity       int
 	port           string
 	idleTimeout    time.Duration
-	DeleteExpiry   uint64
 	memcacheStats  *MemcacheStats
 	mu             sync.Mutex
 }
 
-func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
+// NewCachePool creates a new pool for rowcache connections.
+func NewCachePool(name string, rowCacheConfig RowCacheConfig, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp, true, false, false)
@@ -75,16 +76,10 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 		}
 		cp.capacity = rowCacheConfig.Connections - 50
 	}
-
-	seconds := uint64(queryTimeout / time.Second)
-	// Add an additional grace period for
-	// memcache expiry of deleted items
-	if seconds != 0 {
-		cp.DeleteExpiry = 2*seconds + 15
-	}
 	return cp
 }
 
+// Open opens the pool. It launches memcache and waits till it's up.
 func (cp *CachePool) Open() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -137,6 +132,8 @@ func (cp *CachePool) startMemcache() {
 	}
 }
 
+// Close closes the CachePool. It also shuts down memcache.
+// You can call Open again after Close.
 func (cp *CachePool) Close() {
 	// Close the underlying pool first.
 	// You cannot close the pool while holding the
@@ -167,6 +164,7 @@ func (cp *CachePool) Close() {
 	cp.pool = nil
 }
 
+// IsClosed returns true if CachePool is closed.
 func (cp *CachePool) IsClosed() bool {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -179,6 +177,7 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 	return cp.pool
 }
 
+// Get returns a memcache connection from the pool.
 // You must call Put after Get.
 func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	pool := cp.getPool()
@@ -192,6 +191,7 @@ func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	return r.(*memcache.Connection)
 }
 
+// Put returns the connection to the pool.
 func (cp *CachePool) Put(conn *memcache.Connection) {
 	pool := cp.getPool()
 	if pool == nil {
@@ -204,6 +204,7 @@ func (cp *CachePool) Put(conn *memcache.Connection) {
 	}
 }
 
+// StatsJSON returns a JSON version of the CachePool stats.
 func (cp *CachePool) StatsJSON() string {
 	pool := cp.getPool()
 	if pool == nil {
@@ -212,6 +213,7 @@ func (cp *CachePool) StatsJSON() string {
 	return pool.StatsJSON()
 }
 
+// Capacity returns the current capacity of the pool.
 func (cp *CachePool) Capacity() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -220,6 +222,7 @@ func (cp *CachePool) Capacity() int64 {
 	return pool.Capacity()
 }
 
+// Available returns the number of available connections in the pool.
 func (cp *CachePool) Available() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -228,6 +231,7 @@ func (cp *CachePool) Available() int64 {
 	return pool.Available()
 }
 
+// MaxCap returns the extent to which the pool capacity can be increased.
 func (cp *CachePool) MaxCap() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -236,6 +240,8 @@ func (cp *CachePool) MaxCap() int64 {
 	return pool.MaxCap()
 }
 
+// WaitCount returns the number of times we had to wait to get a connection
+// from the pool.
 func (cp *CachePool) WaitCount() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -244,6 +250,7 @@ func (cp *CachePool) WaitCount() int64 {
 	return pool.WaitCount()
 }
 
+// WaitTime returns the total amount of time spent waiting for a connection.
 func (cp *CachePool) WaitTime() time.Duration {
 	pool := cp.getPool()
 	if pool == nil {
@@ -252,6 +259,7 @@ func (cp *CachePool) WaitTime() time.Duration {
 	return pool.WaitTime()
 }
 
+// IdleTimeout returns the connection idle timeout.
 func (cp *CachePool) IdleTimeout() time.Duration {
 	pool := cp.getPool()
 	if pool == nil {
@@ -260,6 +268,7 @@ func (cp *CachePool) IdleTimeout() time.Duration {
 	return pool.IdleTimeout()
 }
 
+// ServeHTTP serves memcache stats as HTTP.
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.MONITORING); err != nil {
 		acl.SendError(response, err)
