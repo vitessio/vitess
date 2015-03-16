@@ -109,7 +109,7 @@ func (rqc *RequestContext) execSQLNoPanic(conn PoolConn, sql string, wantfields 
 
 func (rqc *RequestContext) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) {
 	start := time.Now()
-	err := conn.Stream(sql, callback, int(rqc.qe.streamBufferSize.Get()))
+	err := conn.Stream(rqc.ctx, sql, callback, int(rqc.qe.streamBufferSize.Get()))
 	rqc.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		panic(NewTabletErrorSql(ErrFail, err))
