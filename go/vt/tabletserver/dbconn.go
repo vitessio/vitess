@@ -81,10 +81,23 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 	return dbc.conn.ExecuteFetch(query, maxrows, wantfields)
 }
 
+// ExecOnce executes the specified query, but does not retry on connection errors.
+func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
+	return dbc.execOnce(ctx, query, maxrows, wantfields)
+}
+
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*mproto.QueryResult) error, streamBufferSize int) error {
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
+
+	done, err := dbc.setDeadline(ctx)
+	if err != nil {
+		return err
+	}
+	if done != nil {
+		defer close(done)
+	}
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 

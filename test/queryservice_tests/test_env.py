@@ -143,8 +143,7 @@ class TestEnv(object):
         "Name": "vtocc_view",
         "PKColumns": ["key2"],
         "Cache": {
-          "Type": "RW",
-          "Prefix": "view1"
+          "Type": "RW"
         }
       }, {
         "Name": "vtocc_part1",

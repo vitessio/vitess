@@ -34,6 +34,10 @@ const (
 	ErrNotInTx
 )
 
+const (
+	maxErrLen = 5000
+)
+
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 // TabletError is the erro type we use in this library
@@ -52,7 +56,7 @@ type hasNumber interface {
 func NewTabletError(errorType int, format string, args ...interface{}) *TabletError {
 	return &TabletError{
 		ErrorType: errorType,
-		Message:   fmt.Sprintf(format, args...),
+		Message:   printable(fmt.Sprintf(format, args...)),
 	}
 }
 
@@ -70,9 +74,17 @@ func NewTabletErrorSql(errorType int, err error) *TabletError {
 	}
 	return &TabletError{
 		ErrorType: errorType,
-		Message:   errstr,
+		Message:   printable(errstr),
 		SqlError:  errnum,
 	}
+}
+
+func printable(in string) string {
+	if len(in) > maxErrLen {
+		in = in[:maxErrLen]
+	}
+	in = fmt.Sprintf("%q", in)
+	return in[1 : len(in)-1]
 }
 
 var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\).*`)
@@ -107,18 +119,18 @@ func IsConnErr(err error) bool {
 }
 
 func (te *TabletError) Error() string {
-	format := "error: %s"
+	prefix := "error: "
 	switch te.ErrorType {
 	case ErrRetry:
-		format = "retry: %s"
+		prefix = "retry: "
 	case ErrFatal:
-		format = "fatal: %s"
+		prefix = "fatal: "
 	case ErrTxPoolFull:
-		format = "tx_pool_full: %s"
+		prefix = "tx_pool_full: "
 	case ErrNotInTx:
-		format = "not_in_tx: %s"
+		prefix = "not_in_tx: "
 	}
-	return fmt.Sprintf(format, te.Message)
+	return prefix + te.Message
 }
 
 // RecordStats will record the error in the proper stat bucket

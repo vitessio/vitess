@@ -5,6 +5,7 @@
 package dbconnpool
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,24 +37,21 @@ func (dbc *DBConnection) handleError(err error) {
 
 // ExecuteFetch is part of PoolConnection interface.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
-	start := time.Now()
+	defer dbc.mysqlStats.Record("Exec", time.Now())
 	mqr, err := dbc.Connection.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
-		dbc.mysqlStats.Record("Exec", start)
 		dbc.handleError(err)
 		return nil, err
 	}
-	dbc.mysqlStats.Record("Exec", start)
 	return mqr, nil
 }
 
 // ExecuteStreamFetch is part of PoolConnection interface.
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
-	start := time.Now()
+	defer dbc.mysqlStats.Record("ExecStream", time.Now())
 
 	err := dbc.Connection.ExecuteStreamFetch(query)
 	if err != nil {
-		dbc.mysqlStats.Record("ExecStream", start)
 		dbc.handleError(err)
 		return err
 	}
@@ -62,7 +60,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.Q
 	// first call the callback with the fields
 	err = callback(&proto.QueryResult{Fields: dbc.Fields()})
 	if err != nil {
-		return err
+		return fmt.Errorf("stream send error: %v", err)
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size

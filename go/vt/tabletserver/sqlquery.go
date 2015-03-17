@@ -184,7 +184,7 @@ func (sq *SqlQuery) disallowQueries() {
 		if qt == 0 {
 			return
 		}
-		tmr := time.NewTimer(10 * sq.qe.queryTimeout.Get())
+		tmr := time.NewTimer(10 * qt)
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
@@ -399,11 +399,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 	if err = sq.startRequest(query.SessionId, false, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
-	defer func() {
-		cancel()
-		sq.endRequest()
-	}()
+	defer sq.endRequest()
 
 	if query.BindVariables == nil {
 		query.BindVariables = make(map[string]interface{})
