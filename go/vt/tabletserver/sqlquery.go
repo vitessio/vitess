@@ -492,12 +492,8 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
-	// TODO(anandhenry): Remove ignoreError once all tests are fixed.
-	var ignoreError error
-	defer handleError(&ignoreError, logStats)
-
-	// TODO(anandhenry): Change this to use session id from req.
-	if err = sq.startRequest(0, true, false); err != nil {
+	defer handleError(&err, logStats)
+	if err = sq.startRequest(req.SessionId, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -509,7 +505,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(ErrFail, "query validation error: %s", err)
+		return NewTabletError(ErrFail, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
 	// Partial initialization or QueryExecutor is enough to call execSQL
 	requestContext := RequestContext{
@@ -524,7 +520,10 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	// range of PKs to work with.
 	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
 	pkMinMax := requestContext.execSQL(conn, minMaxSql, true)
-	reply.Queries = splitter.split(pkMinMax)
+	reply.Queries, err = splitter.split(pkMinMax)
+	if err != nil {
+		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
+	}
 	return nil
 }
 
