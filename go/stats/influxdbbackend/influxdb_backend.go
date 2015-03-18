@@ -19,6 +19,7 @@ import (
 	log "github.com/golang/glog"
 	influxClient "github.com/influxdb/influxdb/client"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 var influxDBHost = flag.String("influxdb_host", "localhost:8086", "the influxdb host (with port)")
@@ -34,20 +35,23 @@ type InfluxDBBackend struct {
 // init attempts to create a singleton InfluxDBBackend and register it as a PushBackend.
 // If it fails to create one, this is a noop.
 func init() {
-	config := &influxClient.ClientConfig{
-		Host:     *influxDBHost,
-		Username: *influxDBUsername,
-		Password: *influxDBPassword,
-		Database: *influxDBDatabase,
-	}
-	client, err := influxClient.NewClient(config)
-	if err != nil {
-		log.Errorf("Unable to create an InfluxDB client: %v", err)
-		return
-	}
+	// Needs to happen in servenv.OnRun() instead of init because it requires flag parsing and logging
+	servenv.OnRun(func() {
+		config := &influxClient.ClientConfig{
+			Host:     *influxDBHost,
+			Username: *influxDBUsername,
+			Password: *influxDBPassword,
+			Database: *influxDBDatabase,
+		}
+		client, err := influxClient.NewClient(config)
+		if err != nil {
+			log.Errorf("Unable to create an InfluxDB client: %v", err)
+			return
+		}
 
-	stats.RegisterPushBackend("influxdb", &InfluxDBBackend{
-		client: client,
+		stats.RegisterPushBackend("influxdb", &InfluxDBBackend{
+			client: client,
+		})
 	})
 }
 
