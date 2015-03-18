@@ -15,7 +15,7 @@ import (
 // original query. Only a limited set of queries are supported, see
 // QuerySplitter.validateQuery() for details. Also, the table must have at least
 // one primary key and the leading primary key must be numeric, see
-// QuerySplitter.getSplitBoundaries()
+// QuerySplitter.splitBoundaries()
 type QuerySplitter struct {
 	query      *proto.BoundQuery
 	splitCount int
@@ -81,12 +81,11 @@ func (qs *QuerySplitter) validateQuery() error {
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
 func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
-	var err error
-	splits := []proto.QuerySplit{}
-	boundaries, err := qs.getSplitBoundaries(pkMinMax)
+	boundaries, err := qs.splitBoundaries(pkMinMax)
 	if err != nil {
-		return splits, err
+		return nil, err
 	}
+	splits := []proto.QuerySplit{}
 	// No splits, return the original query as a single split
 	if len(boundaries) == 0 {
 		split := &proto.QuerySplit{
@@ -174,7 +173,7 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 	}
 }
 
-func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
+func (qs *QuerySplitter) splitBoundaries(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	var err error
 	// If no min or max values were found, return empty list of boundaries

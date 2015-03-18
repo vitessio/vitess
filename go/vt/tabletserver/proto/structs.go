@@ -94,7 +94,7 @@ type TransactionInfo struct {
 type SplitQueryRequest struct {
 	Query      BoundQuery
 	SplitCount int
-	SessionId  int64
+	SessionID  int64
 }
 
 // QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only
