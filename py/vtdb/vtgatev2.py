@@ -39,9 +39,21 @@ def handle_app_error(exc_args):
 
 
 def convert_exception(exc, *args, **kwargs):
+  """This parses the protocol exceptions to the api interface exceptions.
+  This also logs the exception and increments the appropriate error counters.
+
+  Args:
+    exc: raw protocol exception.
+    args: additional args from the raising site.
+    kwargs: additional keyword args from the raising site.
+
+  Returns:
+    Api interface exceptions - dbexceptions with new args.
+  """
+
   new_args = exc.args + args
   if kwargs:
-    new_args += tuple(kwargs.values())
+    new_args += tuple(kwargs.itervalues())
   new_exc = exc
 
   if isinstance(exc, gorpc.TimeoutError):
@@ -53,13 +65,8 @@ def convert_exception(exc, *args, **kwargs):
   elif isinstance(exc, gorpc.GoRpcError):
     new_exc = dbexceptions.FatalError(new_args)
 
-  keyspace = None
-  tablet_type = None
-  try:
-    keyspace = kwargs["keyspace"]
-    tablet_type = kwargs["tablet_type"]
-  except KeyError:
-    pass
+  keyspace = kwargs.get("keyspace", None)
+  tablet_type = kwargs.get("tablet_type", None)
 
   vtgate_utils.log_exception(new_exc, keyspace=keyspace,
                              tablet_type=tablet_type)

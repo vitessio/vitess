@@ -15,8 +15,9 @@ def log_exception(exc, keyspace=None, tablet_type=None):
 
   Args:
     exc: exception raised by calling code
-    args: additional args for the exception.
-    kwargs: keyword args for the exception.
+    keyspace: keyspace for the exception
+    tablet_type: tablet_type for the exception
+
 
   """
   logger_object = vtdb_logger.get_logger()
