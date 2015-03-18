@@ -177,11 +177,11 @@ func TestGetSplitBoundaries(t *testing.T) {
 
 	splitter := &QuerySplitter{}
 	splitter.splitCount = 5
-	boundaries := splitter.getSplitBoundaries(pkMinMax)
+	boundaries, _ := splitter.getSplitBoundaries(pkMinMax)
 	if len(boundaries) != splitter.splitCount-1 {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
-	got := splitter.getSplitBoundaries(pkMinMax)
+	got, _ := splitter.getSplitBoundaries(pkMinMax)
 	want := []sqltypes.Value{buildVal(20), buildVal(30), buildVal(40), buildVal(50)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
@@ -193,7 +193,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	got = splitter.getSplitBoundaries(pkMinMax)
+	got, _ = splitter.getSplitBoundaries(pkMinMax)
 	want = []sqltypes.Value{buildVal(-60), buildVal(-20), buildVal(20), buildVal(60)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
@@ -209,7 +209,7 @@ func TestGetSplitBoundaries(t *testing.T) {
 	fields = []mproto.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
-	got = splitter.getSplitBoundaries(pkMinMax)
+	got, _ = splitter.getSplitBoundaries(pkMinMax)
 	want = []sqltypes.Value{buildVal(20.5), buildVal(30.5), buildVal(40.5), buildVal(50.5)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect boundaries, got: %v, want: %v", got, want)
@@ -239,13 +239,18 @@ func TestSplitQuery(t *testing.T) {
 		Type: mproto.VT_LONGLONG,
 	}
 	fields := []mproto.Field{minField, maxField}
-	row := []sqltypes.Value{min, max}
-	rows := [][]sqltypes.Value{row}
 	pkMinMax := &mproto.QueryResult{
-		Rows:   rows,
 		Fields: fields,
 	}
-	splits := splitter.split(pkMinMax)
+
+	// Ensure that empty min max does not cause panic or return any error
+	splits, err := splitter.split(pkMinMax)
+	if err != nil {
+		t.Errorf("unexpected error while splitting on empty pkMinMax, %s", err)
+	}
+
+	pkMinMax.Rows = [][]sqltypes.Value{[]sqltypes.Value{min, max}}
+	splits, _ = splitter.split(pkMinMax)
 	got := []string{}
 	for _, split := range splits {
 		if split.RowCount != 100 {

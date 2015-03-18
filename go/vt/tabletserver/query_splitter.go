@@ -80,9 +80,13 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) []proto.QuerySplit {
-	boundaries := qs.getSplitBoundaries(pkMinMax)
+func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
+	var err error
 	splits := []proto.QuerySplit{}
+	boundaries, err := qs.getSplitBoundaries(pkMinMax)
+	if err != nil {
+		return splits, err
+	}
 	// No splits, return the original query as a single split
 	if len(boundaries) == 0 {
 		split := &proto.QuerySplit{
@@ -113,7 +117,7 @@ func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) []proto.QuerySplit 
 			splits = append(splits, *split)
 		}
 	}
-	return splits
+	return splits, err
 }
 
 // getWhereClause returns a whereClause based on desired upper and lower
@@ -170,11 +174,12 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 	}
 }
 
-func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqltypes.Value {
+func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	var err error
+	// If no min or max values were found, return empty list of boundaries
 	if len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
-		panic(fmt.Errorf("no min or max primary key"))
+		return boundaries, err
 	}
 	switch pkMinMax.Fields[0].Type {
 	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
@@ -182,10 +187,7 @@ func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqlt
 	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
 		boundaries, err = qs.parseFloat(pkMinMax)
 	}
-	if err != nil {
-		panic(err)
-	}
-	return boundaries
+	return boundaries, err
 }
 
 func (qs *QuerySplitter) parseInt(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {

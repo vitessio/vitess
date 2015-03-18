@@ -236,6 +236,7 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	req := &tproto.SplitQueryRequest{
 		Query:      query,
 		SplitCount: splitCount,
+		SessionId:  conn.sessionID,
 	}
 	reply := new(tproto.SplitQueryResult)
 	action := func() error {
