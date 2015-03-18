@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -202,7 +203,7 @@ func main() {
 		log.Errorf("%v", err)
 		exit.Return(1)
 	}
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl, mysql.Connect)
 	defer mysqld.Close()
 
 	action := flag.Arg(0)

@@ -10,14 +10,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
-
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"golang.org/x/net/context"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -66,6 +66,8 @@ type QueryEngine struct {
 
 	// loggers
 	accessCheckerLogger *logutil.ThrottledLogger
+
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc
 }
 
 type compiledPlan struct {
@@ -114,10 +116,11 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(config Config) *QueryEngine {
-	qe := &QueryEngine{}
+func NewQueryEngine(config Config, newSqlDBConn sqldbconn.NewSqlDBConnFunc) *QueryEngine {
+	qe := &QueryEngine{newSqlDBConn: newSqlDBConn}
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,
+		qe.newSqlDBConn,
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
@@ -132,11 +135,13 @@ func NewQueryEngine(config Config) *QueryEngine {
 	)
 	qe.connPool = NewConnPool(
 		"ConnPool",
+		qe.newSqlDBConn,
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
 	qe.streamConnPool = NewConnPool(
 		"StreamConnPool",
+		qe.newSqlDBConn,
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
@@ -144,6 +149,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Services
 	qe.txPool = NewTxPool(
 		"TransactionPool",
+		qe.newSqlDBConn,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),
@@ -256,7 +262,8 @@ func (qe *QueryEngine) Launch(f func()) {
 
 // CheckMySQL returns true if we can connect to MySQL.
 func (qe *QueryEngine) CheckMySQL() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnectionParams, mysqlStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnectionParams,
+		qe.newSqlDBConn, mysqlStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false

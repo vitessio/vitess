@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -84,12 +85,12 @@ func main() {
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewQueryServiceControl()
+	qsc := tabletserver.NewQueryServiceControl(mysql.Connect)
 	tabletserver.InitQueryService(qsc)
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(qsc, context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(qsc, context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout, mysql.Connect)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

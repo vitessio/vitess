@@ -35,6 +35,7 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -128,11 +129,12 @@ func NewActionAgent(
 	port, securePort int,
 	overridesFile string,
 	lockTimeout time.Duration,
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc,
 ) (agent *ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl, newSqlDBConn)
 
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,

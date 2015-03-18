@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -78,16 +79,18 @@ type SqlQuery struct {
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	qe        *QueryEngine
-	sessionID int64
-	dbconfig  *dbconfigs.DBConfig
+	qe           *QueryEngine
+	sessionID    int64
+	dbconfig     *dbconfigs.DBConfig
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
 // of SqlQuery can be created per process.
-func NewSqlQuery(config Config) *SqlQuery {
+func NewSqlQuery(config Config, newSqlDBConn sqldbconn.NewSqlDBConnFunc) *SqlQuery {
 	sq := &SqlQuery{}
-	sq.qe = NewQueryEngine(config)
+	sq.newSqlDBConn = newSqlDBConn
+	sq.qe = NewQueryEngine(config, sq.newSqlDBConn)
 	stats.Publish("TabletState", stats.IntFunc(func() int64 {
 		sq.mu.Lock()
 		state := sq.state
@@ -136,7 +139,8 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 	sq.setState(StateInitializing)
 	sq.mu.Unlock()
 
-	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
+	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams,
+		sq.newSqlDBConn, mysqlStats)
 	if err != nil {
 		log.Infof("allowQueries failed: %v", err)
 		sq.mu.Lock()

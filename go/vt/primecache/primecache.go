@@ -20,7 +20,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
@@ -37,18 +37,23 @@ type PrimeCache struct {
 	SleepDuration time.Duration
 
 	// reset for every run
-	dbConn        *mysql.Connection
+	dbConn        sqldbconn.SqlDBConn
 	workerChannel chan string
+
+	// create a new SqlDBConn
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc
 }
 
 // NewPrimeCache creates a PrimeCache object with default parameters.
 // The user can modify the public values before running the loop.
-func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs, relayLogsPath string) *PrimeCache {
+func NewPrimeCache(dbcfgs *dbconfigs.DBConfigs,
+	relayLogsPath string, newSqlDBConn sqldbconn.NewSqlDBConnFunc) *PrimeCache {
 	return &PrimeCache{
 		dbcfgs:        dbcfgs,
 		relayLogsPath: relayLogsPath,
 		WorkerCount:   4,
 		SleepDuration: 1 * time.Second,
+		newSqlDBConn:  newSqlDBConn,
 	}
 }
 
@@ -110,7 +115,7 @@ func (pc *PrimeCache) getSlaveStatus() (*slaveStatus, error) {
 }
 
 // applyLoop is the function run by the workers to empty the work queue.
-func applyLoop(dbConn *mysql.Connection, c chan string) {
+func applyLoop(dbConn sqldbconn.SqlDBConn, c chan string) {
 	for sql := range c {
 		_, err := dbConn.ExecuteFetch(sql, 10000, false)
 		if err != nil {
@@ -134,9 +139,9 @@ func (pc *PrimeCache) setupPrimerConnections() error {
 			return fmt.Errorf("cannot get parameters to connect to MySQL: %v", err)
 		}
 
-		dbConn, err := mysql.Connect(params)
+		dbConn, err := pc.newSqlDBConn(params)
 		if err != nil {
-			return fmt.Errorf("mysql.Connect failed: %v", err)
+			return fmt.Errorf("failed to connect db server: %v", err)
 		}
 
 		// and launch the go routine that applies the statements
@@ -254,9 +259,9 @@ func (pc *PrimeCache) OneRun() {
 		return
 	}
 
-	pc.dbConn, err = mysql.Connect(params)
+	pc.dbConn, err = pc.newSqlDBConn(params)
 	if err != nil {
-		log.Errorf("mysql.Connect failed: %v", err)
+		log.Errorf("failed to connect db server: %v", err)
 		return
 	}
 

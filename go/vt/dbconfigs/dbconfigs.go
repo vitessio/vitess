@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldbconn"
 )
 
 // Offer a default config.
@@ -50,7 +51,7 @@ const FilteredConfigName DbConfigName = "filtered"
 const ReplConfigName DbConfigName = "repl"
 
 // The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnectionParams, cnfName DbConfigName, defaultParams mysql.ConnectionParams) {
+func registerConnFlags(connParams *sqldbconn.ConnectionParams, cnfName DbConfigName, defaultParams sqldbconn.ConnectionParams) {
 	name := string(cnfName)
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", defaultParams.Port, "db "+name+" connection port")
@@ -97,7 +98,7 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 
 // initConnectionParams may overwrite the socket file,
 // and refresh the password to check that works.
-func initConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
+func initConnectionParams(cp *sqldbconn.ConnectionParams, socketFile string) error {
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
 	}
@@ -107,7 +108,7 @@ func initConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
 
 // MysqlParams returns a copy of our ConnectionParams that we can use
 // to connect, after going through the CredentialsServer.
-func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
+func MysqlParams(cp *sqldbconn.ConnectionParams) (sqldbconn.ConnectionParams, error) {
 	result := *cp
 	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {
@@ -124,7 +125,7 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 // DBConfig encapsulates a ConnectionParams object and adds a keyspace and a
 // shard.
 type DBConfig struct {
-	mysql.ConnectionParams
+	sqldbconn.ConnectionParams
 	Keyspace          string
 	Shard             string
 	EnableRowcache    bool
@@ -146,9 +147,9 @@ func (d *DBConfig) String() string {
 // - Replication access to change master
 type DBConfigs struct {
 	App      DBConfig
-	Dba      mysql.ConnectionParams
-	Filtered mysql.ConnectionParams
-	Repl     mysql.ConnectionParams
+	Dba      sqldbconn.ConnectionParams
+	Filtered sqldbconn.ConnectionParams
+	Repl     sqldbconn.ConnectionParams
 }
 
 func (dbcfgs *DBConfigs) String() string {
@@ -164,10 +165,10 @@ func (dbcfgs *DBConfigs) String() string {
 
 // Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
-	dbcfgs.App.ConnectionParams.Redact()
-	dbcfgs.Dba.Redact()
-	dbcfgs.Filtered.Redact()
-	dbcfgs.Repl.Redact()
+	dbcfgs.App.ConnectionParams.Pass = mysql.RedactedPassword
+	dbcfgs.Dba.Pass = mysql.RedactedPassword
+	dbcfgs.Filtered.Pass = mysql.RedactedPassword
+	dbcfgs.Repl.Pass = mysql.RedactedPassword
 }
 
 // Init will initialize app, dba, filterec and repl configs

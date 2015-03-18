@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/sync2"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -23,7 +24,7 @@ import (
 // mysqld with a server ID that is unique both among other SlaveConnections and
 // among actual slaves in the topology.
 type SlaveConnection struct {
-	*mysql.Connection
+	sqldbconn.SqlDBConn
 	mysqld  *Mysqld
 	slaveID uint32
 	svm     sync2.ServiceManager
@@ -42,15 +43,15 @@ func NewSlaveConnection(mysqld *Mysqld) (*SlaveConnection, error) {
 		return nil, err
 	}
 
-	conn, err := mysql.Connect(params)
+	conn, err := mysqld.NewSqlDBConn(params)
 	if err != nil {
 		return nil, err
 	}
 
 	sc := &SlaveConnection{
-		Connection: conn,
-		mysqld:     mysqld,
-		slaveID:    slaveIDPool.Get(),
+		SqlDBConn: conn,
+		mysqld:    mysqld,
+		slaveID:   slaveIDPool.Get(),
 	}
 	log.Infof("new slave connection: slaveID=%d", sc.slaveID)
 	return sc, nil
@@ -77,7 +78,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 	}
 
 	// Read the first packet to see if it's an error response to our dump command.
-	buf, err := sc.Connection.ReadPacket()
+	buf, err := sc.SqlDBConn.ReadPacket()
 	if err != nil {
 		log.Errorf("couldn't start binlog dump: %v", err)
 		return nil, err
@@ -103,7 +104,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 				return nil
 			}
 
-			buf, err = sc.Connection.ReadPacket()
+			buf, err = sc.SqlDBConn.ReadPacket()
 			if err != nil {
 				if sqlErr, ok := err.(*mysql.SqlError); ok && sqlErr.Number() == 2013 {
 					// errno 2013 = Lost connection to MySQL server during query
@@ -126,16 +127,16 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 // started with StartBinlogDump() to stop and close its BinlogEvent channel.
 // The ID for the slave connection is recycled back into the pool.
 func (sc *SlaveConnection) Close() {
-	if sc.Connection != nil {
+	if sc.SqlDBConn != nil {
 		log.Infof("shutting down slave socket to unblock reads")
-		sc.Connection.Shutdown()
+		sc.SqlDBConn.Shutdown()
 
 		log.Infof("waiting for slave dump thread to end")
 		sc.svm.Stop()
 
 		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
-		sc.Connection.Close()
-		sc.Connection = nil
+		sc.SqlDBConn.Close()
+		sc.SqlDBConn = nil
 		slaveIDPool.Put(sc.slaveID)
 	}
 }

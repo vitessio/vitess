@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -61,7 +62,7 @@ func main() {
 		}
 	}
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbConfigs.Dba, &dbConfigs.App.ConnectionParams, &dbConfigs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbConfigs.Dba, &dbConfigs.App.ConnectionParams, &dbConfigs.Repl, mysql.Connect)
 
 	if err := unmarshalFile(*overridesFile, &schemaOverrides); err != nil {
 		log.Error(err)
@@ -73,7 +74,7 @@ func main() {
 	if *tableAclConfig != "" {
 		tableacl.Init(*tableAclConfig)
 	}
-	qsc := tabletserver.NewQueryServiceControl()
+	qsc := tabletserver.NewQueryServiceControl(mysql.Connect)
 	tabletserver.InitQueryService(qsc)
 
 	// Query service can go into NOT_SERVING state if mysql goes down.

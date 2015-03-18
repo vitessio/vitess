@@ -16,8 +16,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -36,7 +36,7 @@ func init() {
 type BinlogPlayerController struct {
 	// Configuration parameters (set at construction, immutable)
 	ts       topo.Server
-	dbConfig *mysql.ConnectionParams
+	dbConfig *sqldbconn.ConnectionParams
 	mysqld   *mysqlctl.Mysqld
 
 	// Information about us (set at construction, immutable)
@@ -72,7 +72,7 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *sqldbconn.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		dbConfig:          dbConfig,
@@ -218,7 +218,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// create the db connection, connect it
-	vtClient := binlogplayer.NewDbClient(bpc.dbConfig)
+	vtClient := binlogplayer.NewDbClient(bpc.dbConfig, bpc.mysqld.NewSqlDBConn)
 	if err := vtClient.Connect(); err != nil {
 		return fmt.Errorf("can't connect to database: %v", err)
 	}
@@ -290,7 +290,7 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) 
 type BinlogPlayerMap struct {
 	// Immutable, set at construction time
 	ts       topo.Server
-	dbConfig *mysql.ConnectionParams
+	dbConfig *sqldbconn.ConnectionParams
 	mysqld   *mysqlctl.Mysqld
 
 	// This mutex protects the map and the state
@@ -305,7 +305,7 @@ const (
 )
 
 // NewBinlogPlayerMap creates a new map of players
-func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldbconn.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
@@ -487,7 +487,7 @@ func (blm *BinlogPlayerMap) Start() {
 // BlpPositionList returns the current position of all the players
 func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) {
 	// create a db connection for this purpose
-	vtClient := binlogplayer.NewDbClient(blm.dbConfig)
+	vtClient := binlogplayer.NewDbClient(blm.dbConfig, blm.mysqld.NewSqlDBConn)
 	if err := vtClient.Connect(); err != nil {
 		return nil, fmt.Errorf("can't connect to database: %v", err)
 	}
