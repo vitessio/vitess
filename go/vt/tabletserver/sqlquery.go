@@ -493,7 +493,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
 	defer handleError(&err, logStats)
-	if err = sq.startRequest(req.SessionId, false, false); err != nil {
+	if err = sq.startRequest(req.SessionID, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
