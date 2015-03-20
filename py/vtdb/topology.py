@@ -108,7 +108,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
       __set_keyspace(ks)
-      for db_type, partition in ks.partitions.iter_items():
+      for db_type, partition in ks.partitions.iteritems():
         for shard_reference in partition['ShardReferences']:
           db_key_parts = [ks.name, shard_reference['Name'], db_type]
           db_key = '.'.join(db_key_parts)
