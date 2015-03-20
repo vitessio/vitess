@@ -171,26 +171,24 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 		return nil, err
 	}
 	allTabletTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
-	shards := make([]topo.SrvShard, 0, len(shardKrArray))
+	shards := make([]topo.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
-		shard := topo.SrvShard{
-			Name:        getKeyRangeName(shardKrArray[i]),
-			KeyRange:    shardKrArray[i],
-			ServedTypes: allTabletTypes,
-			TabletTypes: allTabletTypes,
+		shard := topo.ShardReference{
+			Name:     getKeyRangeName(shardKrArray[i]),
+			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)
 	}
 	shardedSrvKeyspace := &topo.SrvKeyspace{
 		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				Shards: shards,
+				ShardReferences: shards,
 			},
 			topo.TYPE_REPLICA: &topo.KeyspacePartition{
-				Shards: shards,
+				ShardReferences: shards,
 			},
 			topo.TYPE_RDONLY: &topo.KeyspacePartition{
-				Shards: shards,
+				ShardReferences: shards,
 			},
 		},
 		TabletTypes: allTabletTypes,
@@ -205,24 +203,21 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 }
 
 func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
-	allTabletTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
-	shard := topo.SrvShard{
-		Name:        "0",
-		KeyRange:    key.KeyRange{Start: "", End: ""},
-		ServedTypes: allTabletTypes,
-		TabletTypes: allTabletTypes,
+	shard := topo.ShardReference{
+		Name:     "0",
+		KeyRange: key.KeyRange{Start: "", End: ""},
 	}
 
 	unshardedSrvKeyspace := &topo.SrvKeyspace{
 		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				Shards: []topo.SrvShard{shard},
+				ShardReferences: []topo.ShardReference{shard},
 			},
 			topo.TYPE_REPLICA: &topo.KeyspacePartition{
-				Shards: []topo.SrvShard{shard},
+				ShardReferences: []topo.ShardReference{shard},
 			},
 			topo.TYPE_RDONLY: &topo.KeyspacePartition{
-				Shards: []topo.SrvShard{shard},
+				ShardReferences: []topo.ShardReference{shard},
 			},
 		},
 		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},

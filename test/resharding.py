@@ -515,8 +515,7 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 
     # the worker will do everything. We test with source_reader_count=10
@@ -633,12 +632,12 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
+                             'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
-                             'TabletTypes: rdonly',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, True, False)
@@ -650,12 +649,12 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_srv_keyspace('test_ny', 'test_keyspace',
+                             'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'TabletTypes: rdonly',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_tablet_query_service(self, shard_0_ny_rdonly, True, False)
     utils.check_tablet_query_service(self, shard_1_ny_rdonly, False, True)
@@ -670,8 +669,7 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-c0 c0-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-c0 c0-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
 
@@ -686,8 +684,7 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -700,8 +697,7 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-c0 c0-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-c0 c0-\n',
                              keyspace_id_type=keyspace_id_type)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
@@ -751,8 +747,7 @@ primary key (name)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-c0 c0-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
-                             'Partitions(replica): -80 80-c0 c0-\n' +
-                             'TabletTypes: master,rdonly,replica',
+                             'Partitions(replica): -80 80-c0 c0-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_tablet_query_service(self, shard_1_master, False, True)
 

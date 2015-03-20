@@ -33,7 +33,7 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, k
 	return keyspace, res, nil
 }
 
-func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.SrvShard, error) {
+func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
@@ -52,17 +52,17 @@ func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspa
 	if !ok {
 		return "", nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
 	}
-	return keyspace, partition.Shards, nil
+	return keyspace, partition.ShardReferences, nil
 }
 
-func getShardForKeyspaceId(allShards []topo.SrvShard, keyspaceId key.KeyspaceId) (string, error) {
+func getShardForKeyspaceId(allShards []topo.ShardReference, keyspaceId key.KeyspaceId) (string, error) {
 	if len(allShards) == 0 {
 		return "", fmt.Errorf("No shards found for this tabletType")
 	}
 
-	for _, srvShard := range allShards {
-		if srvShard.KeyRange.Contains(keyspaceId) {
-			return srvShard.Name, nil
+	for _, shardReference := range allShards {
+		if shardReference.KeyRange.Contains(keyspaceId) {
+			return shardReference.Name, nil
 		}
 	}
 	return "", fmt.Errorf("KeyspaceId %v didn't match any shards %+v", keyspaceId, allShards)
@@ -110,7 +110,7 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(allShards []topo.SrvShard, kr key.KeyRange) ([]string, error) {
+func resolveKeyRangeToShards(allShards []topo.ShardReference, kr key.KeyRange) ([]string, error) {
 	shards := make([]string, 0, 1)
 
 	if !kr.IsPartial() {
