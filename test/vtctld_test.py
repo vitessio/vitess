@@ -201,7 +201,6 @@ class TestVtctld(unittest.TestCase):
                           ["redirected_keyspace", "test_keyspace"])
     s0 = self.serving_data["test_keyspace"]['ShardNodes'][0]
     self.assertItemsEqual(s0['Name'], "-80")
-    self.assertItemsEqual(s0['ServedTypes'], ['master', 'replica', 'rdonly'])
     s1 = self.serving_data["test_keyspace"]['ShardNodes'][1]
     self.assertItemsEqual(s1['Name'], "80-")
     self.assertItemsEqual(sorted(s0['TabletNodes'].keys()),
