@@ -7,7 +7,7 @@ library test.
 # coding: utf-8
 
 import hashlib
-import logging
+import random
 import struct
 import threading
 import time
@@ -56,7 +56,6 @@ pack_kid = struct.Struct('!Q').pack
 
 def setUpModule():
   global vtgate_server, vtgate_port
-  logging.debug("in setUpModule")
   try:
     environment.topo_server().setup()
     setup_topology()
@@ -77,10 +76,8 @@ def setUpModule():
 def tearDownModule():
   global vtgate_server
   global __tablets
-  logging.debug("in tearDownModule")
   if utils.options.skip_teardown:
     return
-  logging.debug("Tearing down the servers and setup")
   utils.vtgate_kill(vtgate_server)
   if __tablets is not None:
     tablet.kill_tablets(__tablets)
@@ -213,57 +210,89 @@ class TestUnshardedTable(unittest.TestCase):
   def setUp(self):
     self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
+    self.all_ids = []
     with database_context.WriteTransaction(self.dc) as context:
-      for x in xrange(10):
-        db_class_unsharded.VtUnsharded.insert(context.get_cursor(),
-                                              id=x, msg=str(x))
+      for x in xrange(20):
+        ret_id = db_class_unsharded.VtUnsharded.insert(context.get_cursor(),
+                                                       msg="test message")
+        self.all_ids.append(ret_id)
 
   def tearDown(self):
     _delete_all("KS_UNSHARDED", "0", 'vt_unsharded')
 
   def test_read(self):
+    id_val = self.all_ids[0]
     with database_context.ReadFromMaster(self.dc) as context:
       rows = db_class_unsharded.VtUnsharded.select_by_id(
-          context.get_cursor(), 2)
-      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
-      self.assertEqual(rows[0].id, 2, "wrong row fetched")
+          context.get_cursor(), id_val)
+      expected = 1
+      self.assertEqual(len(rows), expected, "wrong number of rows fetched %d, expected %d" % (len(rows), expected))
+      self.assertEqual(rows[0].id, id_val, "wrong row fetched")
 
   def test_update_and_read(self):
-    where_column_value_pairs = [('id', 2)]
+    id_val = self.all_ids[0]
+    where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
       db_class_unsharded.VtUnsharded.update_columns(context.get_cursor(),
                                                     where_column_value_pairs,
                                                     msg="test update")
 
     with database_context.ReadFromMaster(self.dc) as context:
-      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), id_val)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
       self.assertEqual(rows[0].msg, "test update", "wrong row fetched")
 
   def test_delete_and_read(self):
-    where_column_value_pairs = [('id', 2)]
+    id_val = self.all_ids[-1]
+    where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
       db_class_unsharded.VtUnsharded.delete_by_columns(context.get_cursor(),
                                                     where_column_value_pairs)
 
     with database_context.ReadFromMaster(self.dc) as context:
-      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), 2)
+      rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), id_val)
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
+    self.all_ids = self.all_ids[:-1]
+
+  def test_count(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      count = db_class_unsharded.VtUnsharded.get_count(
+          context.get_cursor(), msg="test message")
+      expected = len(self.all_ids)
+      self.assertEqual(count, expected, "wrong count fetched; expected %d got %d" % (expected, count))
+
+  def test_min_id(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      min_id = db_class_unsharded.VtUnsharded.get_min(
+          context.get_cursor())
+      expected = min(self.all_ids)
+      self.assertEqual(min_id, expected, "wrong min value fetched; expected %d got %d" % (expected, min_id))
+
+  def test_max_id(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      max_id = db_class_unsharded.VtUnsharded.get_max(
+          context.get_cursor())
+      self.all_ids.sort()
+      expected = max(self.all_ids)
+      self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
+
 
 
 class TestRangeSharded(unittest.TestCase):
   def populate_tables(self):
-    # vt_user
-    user_id_list = []
+    self.user_id_list = []
+    self.song_id_list = []
+    self.user_song_map = {}
+    r = random.Random()
     # This should create the lookup entries and sharding key.
     with database_context.WriteTransaction(self.dc) as context:
       for x in xrange(20):
-        # vt_user - EntityRangeSharded
+        # vt_user - EntityRangeSharded; creates username:user_id lookup
         user_id = db_class_sharded.VtUser.insert(context.get_cursor(),
-                                       username="user%s" % x, msg=str(x))
-        user_id_list.append(user_id)
+                                       username="user%s" % x, msg="test message")
+        self.user_id_list.append(user_id)
 
-        # vt_user_email - RangeSharded
+        # vt_user_email - RangeSharded; references user_id:keyspace_id hash
         email = 'user%s@google.com' % x
         m = hashlib.md5()
         m.update(email)
@@ -273,14 +302,27 @@ class TestRangeSharded(unittest.TestCase):
             context.get_cursor(entity_id_map=entity_id_map),
             user_id=user_id, email=email,
             email_hash=email_hash)
-    # vt_song
-    # vt_song_detail
-    return user_id_list
+
+        # vt_song - EntityRangeSharded; creates song_id:user_id lookup
+        num_songs_for_user = r.randint(1, 5)
+        for i in xrange(num_songs_for_user):
+          song_id = db_class_sharded.VtSong.insert(context.get_cursor(),
+                                                   user_id=user_id, title="Test Song")
+          self.song_id_list.append(song_id)
+          self.user_song_map.setdefault(user_id, []).append(song_id)
+
+          # vt_song_detail - RangeSharded; references song_id:user_id lookup
+          entity_id_map = {'song_id':song_id}
+          db_class_sharded.VtSongDetail.insert(context.get_cursor(entity_id_map=entity_id_map),
+                                               song_id=song_id, album_name="Test album",
+                                               artist="Test artist")
+
+
 
   def setUp(self):
     self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
-    self.user_id_list = self.populate_tables()
+    self.populate_tables()
 
   def tearDown(self):
     with database_context.WriteTransaction(self.dc) as context:
@@ -290,30 +332,61 @@ class TestRangeSharded(unittest.TestCase):
                                                     [('id', uid),])
           db_class_sharded.VtUserEmail.delete_by_columns(context.get_cursor(entity_id_map={'user_id':uid}),
                                                          [('user_id', uid),])
+          db_class_sharded.VtSong.delete_by_columns(context.get_cursor(entity_id_map={'user_id':uid}),
+                                                         [('user_id', uid),])
+          song_id_list = self.user_song_map[uid]
+          for sid in song_id_list:
+            db_class_sharded.VtSongDetail.delete_by_columns(context.get_cursor(entity_id_map={'song_id':sid}),
+                                                            [('song_id', sid),])
         except dbexceptions.DatabaseError as e:
           if str(e) == "DB Row not found":
             pass
 
   def test_sharding_key_read(self):
+    user_id = self.user_id_list[0]
     with database_context.ReadFromMaster(self.dc) as context:
-      where_column_value_pairs = [('id', self.user_id_list[0]),]
+      where_column_value_pairs = [('id', user_id),]
+      entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtUser.select_by_columns(
-          context.get_cursor(entity_id_map={'id':self.user_id_list[0]}),
+          context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
 
-      where_column_value_pairs = [('user_id', self.user_id_list[0]),]
+      where_column_value_pairs = [('user_id', user_id),]
+      entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtUserEmail.select_by_columns(
-          context.get_cursor(entity_id_map={'user_id':self.user_id_list[0]}),
+          context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+
+      where_column_value_pairs = [('user_id', user_id),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtSong.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), len(self.user_song_map[user_id]), "wrong number of rows fetched")
 
   def test_entity_id_read(self):
+    user_id = self.user_id_list[0]
     with database_context.ReadFromMaster(self.dc) as context:
       entity_id_map = {'username': 'user0'}
       rows = db_class_sharded.VtUser.select_by_columns(
           context.get_cursor(entity_id_map=entity_id_map),
-          [('id', self.user_id_list[0]),])
+          [('id', user_id),])
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+
+      where_column_value_pairs = [('id', self.user_song_map[user_id][0]),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtSong.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      self.assertEqual(len(rows), 1, "wrong number of rows fetched")
+
+      where_column_value_pairs = [('song_id', self.user_song_map[user_id][0]),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtSongDetail.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
 
   def test_in_clause_read(self):
@@ -326,16 +399,21 @@ class TestRangeSharded(unittest.TestCase):
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 2, "wrong number of rows fetched")
-      self.assertEqual(user_id_list, [row.id for row in rows], "wrong rows fetched")
+      got = [row.id for row in rows]
+      got.sort()
+      self.assertEqual(user_id_list, got, "wrong rows fetched; expected %s got %s" % (user_id_list, got))
 
       username_list = [row.username for row in rows]
+      username_list.sort()
       where_column_value_pairs = (('username', username_list),)
       entity_id_map = dict(where_column_value_pairs)
       rows = db_class_sharded.VtUser.select_by_ids(
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 2, "wrong number of rows fetched")
-      self.assertEqual(username_list, [row.username for row in rows], "wrong rows fetched")
+      got = [row.username for row in rows]
+      got.sort()
+      self.assertEqual(username_list, got, "wrong rows fetched; expected %s got %s" % (username_list, got))
 
       where_column_value_pairs = (('user_id', user_id_list),)
       entity_id_map = dict(where_column_value_pairs)
@@ -343,7 +421,32 @@ class TestRangeSharded(unittest.TestCase):
           context.get_cursor(entity_id_map=entity_id_map),
           where_column_value_pairs)
       self.assertEqual(len(rows), 2, "wrong number of rows fetched")
-      self.assertEqual(user_id_list, [row.user_id for row in rows], "wrong rows fetched")
+      got = [row.user_id for row in rows]
+      got.sort()
+      self.assertEqual(user_id_list, got, "wrong rows fetched; expected %s got %s" % (user_id_list, got))
+
+      song_id_list = []
+      for user_id in user_id_list:
+        song_id_list.extend(self.user_song_map[user_id])
+      song_id_list.sort()
+      where_column_value_pairs = [('id', song_id_list),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtSong.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      got = [row.id for row in rows]
+      got.sort()
+      self.assertEqual(song_id_list, got, "wrong rows fetched %s got %s" % (song_id_list, got))
+
+      where_column_value_pairs = [('song_id', song_id_list),]
+      entity_id_map = dict(where_column_value_pairs)
+      rows = db_class_sharded.VtSongDetail.select_by_columns(
+          context.get_cursor(entity_id_map=entity_id_map),
+          where_column_value_pairs)
+      got = [row.song_id for row in rows]
+      got.sort()
+      self.assertEqual(song_id_list, got, "wrong rows fetched %s got %s" % (song_id_list, got))
+
 
   def test_keyrange_read(self):
     where_column_value_pairs = []
@@ -412,6 +515,7 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), 1, "wrong number of rows fetched")
       self.assertEqual(new_email, rows[0].email)
+    self.user_id_list.sort()
 
   def delete_columns(self):
     user_id = self.user_id_list[-1]
@@ -437,6 +541,33 @@ class TestRangeSharded(unittest.TestCase):
           where_column_value_pairs)
       self.assertEqual(len(rows), 0, "wrong number of rows fetched")
     self.user_id_list = self.user_id_list[:-1]
+    self.user_id_list.sort()
+
+  def test_count(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      count = db_class_sharded.VtUser.get_count(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE),
+          msg="test message")
+      expected = len(self.user_id_list)
+      self.assertEqual(count, expected, "wrong count fetched; expected %d got %d" % (expected, count))
+
+  def test_min_id(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      min_id = db_class_sharded.VtUser.get_min(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE))
+      self.user_id_list.sort()
+      expected = min(self.user_id_list)
+      rows1 = db_class_sharded.VtUser.select_by_columns(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE), [])
+      id_list = [row.id for row in rows1]
+      self.assertEqual(min_id, expected, "wrong min value fetched; expected %d got %d" % (expected, min_id))
+
+  def test_max_id(self):
+    with database_context.ReadFromMaster(self.dc) as context:
+      max_id = db_class_sharded.VtUser.get_max(
+          context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE))
+      expected = max(self.user_id_list)
+      self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
 
 
 if __name__ == '__main__':

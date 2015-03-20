@@ -8,7 +8,6 @@ import re
 from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import keyrange_constants
-from vtdb import topology
 
 
 write_sql_pattern = re.compile('\s*(insert|update|delete)', re.IGNORECASE)

@@ -657,7 +657,7 @@ class TestNocache(framework.TestCase):
   #  self.env.execute("select * from vtocc_test limit :l", {"l": 1})
   #  self.env.tablet.shutdown_mysql()
   #  time.sleep(5)
-  #  with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*NOT_SERVING state.*'):
+  #  with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*state NOT_SERVING.*'):
   #    self.env.execute("select * from vtocc_test limit :l", {"l": 1})
   #  self.env.tablet.start_mysql()
   #  time.sleep(5)

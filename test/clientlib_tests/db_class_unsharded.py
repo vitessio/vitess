@@ -12,6 +12,7 @@ class VtUnsharded(db_object_unsharded.DBObjectUnsharded):
   keyspace = topo_schema.KS_UNSHARDED[0]
   table_name = "vt_unsharded"
   columns_list = ['id', 'msg']
+  id_column_name = 'id'
 
   @classmethod
   def select_by_id(class_, cursor, id_val):

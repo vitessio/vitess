@@ -122,7 +122,7 @@ class TestTopo(unittest.TestCase):
     qpser = utils.run_bg(environment.binary_args('zkclient2') + [
         '-server', 'localhost:%u' % vtgate_port,
         '-mode', 'qps',
-        '-cpu_profile', os.path.join(environment.tmproot, 'zkclient2.pprof'),
+        '-zkclient_cpu_profile', os.path.join(environment.tmproot, 'zkclient2.pprof'),
         'test_nj', 'test_keyspace'])
     qpser.wait()
 

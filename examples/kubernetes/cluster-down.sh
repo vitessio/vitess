@@ -1,22 +1,20 @@
 #!/bin/bash
 
 # Tears down the container engine cluster, removes rules/pools
+
 GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
-GKE_NUM_NODES=${GKE_NUM_NODES:-3}
-GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
 
 # Get the region from the zone (everything up to last dash)
 gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
+base_ssd_name="$GKE_CLUSTER_NAME-vt-ssd-"
 
 gcloud preview container clusters delete $GKE_CLUSTER_NAME
 
-if [ $GKE_SSD_SIZE_GB -gt 0 ]
-then
-  for i in `seq 1 $GKE_NUM_NODES`; do
-    gcutil deletedisk -f $GKE_CLUSTER_NAME-vt-ssd-$i
-  done
-fi
+num_ssds=`gcloud compute disks list | awk -v name="$base_ssd_name" -v zone=$GKE_ZONE '$1~name && $2==zone' | wc -l`
+for i in `seq 1 $num_ssds`; do
+  gcloud compute disks delete $base_ssd_name$i --zone $GKE_ZONE -q
+done
 
 gcloud compute forwarding-rules delete vtctld -q --region=$gke_region
 gcloud compute forwarding-rules delete vtgate -q --region=$gke_region

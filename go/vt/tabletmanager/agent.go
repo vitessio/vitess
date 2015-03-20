@@ -156,6 +156,10 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	// Publish and set the TargetTabletType. Not a global var since it should never be changed.
+	statsTabletType := stats.NewString("TargetTabletType")
+	statsTabletType.Set(*targetTabletType)
+
 	// Start the binlog player services, not playing at start.
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Filtered, mysqld)
 	RegisterBinlogPlayerMap(agent.BinlogPlayerMap)

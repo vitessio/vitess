@@ -30,6 +30,7 @@ import (
 
 var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
 var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
+var statsBackend = flag.String("stats_backend", "influxdb", "The name of the registered push-based monitoring/stats backend to use")
 
 // NewVarHook is the type of a hook to export variables in a different way
 type NewVarHook func(name string, v expvar.Var)
@@ -99,27 +100,32 @@ var once sync.Once
 // Should be called on init().
 func RegisterPushBackend(name string, backend PushBackend) {
 	if _, ok := pushBackends[name]; ok {
-		log.Fatalf("RegisterPushBackend %s already exists", name)
+		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
 	pushBackends[name] = backend
 	if *emitStats {
 		// Start a single goroutine to emit stats periodically
 		once.Do(func() {
-			go emitToBackends(statsEmitPeriod)
+			go emitToBackend(statsEmitPeriod)
 		})
 	}
 }
 
-// emitToBackends does a periodic emit to all registered PushBackends. If a push
-// fails, it will be logged as a warning (but things will otherwise proceed as normal).
-func emitToBackends(emitPeriod *time.Duration) {
-	for _ = range time.Tick(*emitPeriod) {
-		for name, backend := range pushBackends {
-			err := backend.PushAll()
-			if err != nil {
-				// TODO(aaijazi): This might cause log spam...
-				log.Warningf("Pushing stats to backend %v failed: %v", name, err)
-			}
+// emitToBackend does a periodic emit to the selected PushBackend. If a push fails,
+// it will be logged as a warning (but things will otherwise proceed as normal).
+func emitToBackend(emitPeriod *time.Duration) {
+	ticker := time.NewTicker(*emitPeriod)
+	defer ticker.Stop()
+	for _ = range ticker.C {
+		backend, ok := pushBackends[*statsBackend]
+		if !ok {
+			log.Errorf("No PushBackend registered with name %s", *statsBackend)
+			return
+		}
+		err := backend.PushAll()
+		if err != nil {
+			// TODO(aaijazi): This might cause log spam...
+			log.Warningf("Pushing stats to backend %v failed: %v", *statsBackend, err)
 		}
 	}
 }

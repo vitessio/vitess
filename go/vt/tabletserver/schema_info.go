@@ -26,10 +26,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
+const baseShowTables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
 
 const maxTableCount = 10000
 
+// ExecPlan wraps the planbuilder's exec plan to enforce additional rules
+// and track stats.
 type ExecPlan struct {
 	*planbuilder.ExecPlan
 	TableInfo  *TableInfo
@@ -44,10 +46,12 @@ type ExecPlan struct {
 	ErrorCount int64
 }
 
+// Size allows ExecPlan to be in cache.LRUCache.
 func (*ExecPlan) Size() int {
 	return 1
 }
 
+// AddStats updates the stats for the current ExecPlan.
 func (ep *ExecPlan) AddStats(queryCount int64, duration time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	ep.QueryCount += queryCount
@@ -57,6 +61,7 @@ func (ep *ExecPlan) AddStats(queryCount int64, duration time.Duration, rowCount,
 	ep.mu.Unlock()
 }
 
+// Stats returns the current stats of ExecPlan.
 func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	queryCount = ep.QueryCount
@@ -67,16 +72,24 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount,
 	return
 }
 
+// SchemaOverride is a way to specify how the schema loaded by SchemaInfo
+// must be overridden. Name is the name of the table, PKColumns specifies
+// the new prmiary keys. Cache.Type specifies the rowcache operation for
+// the table. It can be "R", which is read-only, or "RW" for read-write, and
+// Table specifies the rowcache table to operate on.
+// The purpose of this override is mainly to allow views to benefit from
+// the rowcache. It has its downsides. Use carefully.
 type SchemaOverride struct {
 	Name      string
 	PKColumns []string
 	Cache     *struct {
-		Type   string
-		Prefix string
-		Table  string
+		Type  string
+		Table string
 	}
 }
 
+// SchemaInfo stores the schema info and performs operations that
+// keep itself and the rowcache up-to-date.
 type SchemaInfo struct {
 	mu         sync.Mutex
 	tables     map[string]*TableInfo
@@ -88,6 +101,7 @@ type SchemaInfo struct {
 	ticks      *timer.Timer
 }
 
+// NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:  cache.NewLRUCache(int64(queryCacheSize)),
@@ -101,8 +115,8 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		return fmt.Sprintf("%v", si.queries.Oldest())
 	}))
 	stats.Publish("SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-	_ = stats.NewMultiCountersFunc("TableStats", []string{"Table", "Stats"}, si.getTableStats)
-	_ = stats.NewMultiCountersFunc("TableInvalidations", []string{"Table"}, si.getTableInvalidations)
+	_ = stats.NewMultiCountersFunc("RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
+	_ = stats.NewMultiCountersFunc("RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
 	_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
 	_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 	_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
@@ -114,6 +128,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
+// Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
 func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
 	ctx := context.Background()
 	si.connPool.Open(appParams, dbaParams)
@@ -128,7 +143,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaO
 	}
 
 	si.cachePool = cachePool
-	tables, err := conn.Exec(ctx, base_show_tables, maxTableCount, false)
+	tables, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
 		panic(NewTabletError(ErrFatal, "Could not get table list: %v", err))
 	}
@@ -204,6 +219,7 @@ func (si *SchemaInfo) override() {
 	}
 }
 
+// Close shuts down SchemaInfo. It can be re-opened after Close.
 func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
 	si.connPool.Close()
@@ -212,6 +228,8 @@ func (si *SchemaInfo) Close() {
 	si.queries.Clear()
 }
 
+// Reload reloads the schema info from the db. Any tables that have changed
+// since the last load are updated.
 func (si *SchemaInfo) Reload() {
 	defer logError()
 	ctx := context.Background()
@@ -223,7 +241,7 @@ func (si *SchemaInfo) Reload() {
 	func() {
 		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.Exec(ctx, fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
+		tables, err = conn.Exec(ctx, fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", baseShowTables, si.lastChange.Unix()), maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
@@ -268,13 +286,14 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 	si.queries.Clear()
 }
 
+// CreateOrUpdateTable must be called if a DDL was applied to that table.
 func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
-	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
+	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
 	if err != nil {
 		panic(NewTabletError(ErrFail, "Error fetching table %s: %v", tableName, err))
 	}
@@ -318,6 +337,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	}
 }
 
+// DropTable must be called if a table was dropped.
 func (si *SchemaInfo) DropTable(tableName string) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -327,6 +347,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	log.Infof("Table %s forgotten", tableName)
 }
 
+// GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
 func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql string) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
@@ -400,12 +421,14 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	return plan
 }
 
+// GetTable returns the TableInfo for a table.
 func (si *SchemaInfo) GetTable(tableName string) *TableInfo {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	return si.tables[tableName]
 }
 
+// GetSchema returns a copy of the schema.
 func (si *SchemaInfo) GetSchema() []*schema.Table {
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -423,6 +446,7 @@ func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 	return nil
 }
 
+// SetQueryCacheSize sets the query cache size.
 func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
 		panic(NewTabletError(ErrFail, "cache size %v out of range", size))
@@ -430,12 +454,14 @@ func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	si.queries.SetCapacity(int64(size))
 }
 
+// SetReloadTime changes how often the schema is reloaded. This
+// call also triggers an immediate reload.
 func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
 	si.ticks.Trigger()
 	si.ticks.SetInterval(reloadTime)
 }
 
-func (si *SchemaInfo) getTableStats() map[string]int64 {
+func (si *SchemaInfo) getRowcacheStats() map[string]int64 {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -450,7 +476,7 @@ func (si *SchemaInfo) getTableStats() map[string]int64 {
 	return tstats
 }
 
-func (si *SchemaInfo) getTableInvalidations() map[string]int64 {
+func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)

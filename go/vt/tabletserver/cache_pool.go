@@ -5,11 +5,10 @@
 package tabletserver
 
 import (
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 
 const statsURL = "/debug/memcache/"
 
+// CreateCacheFunc defines the function signature to create a memcache connection.
 type CreateCacheFunc func() (*memcache.Connection, error)
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
@@ -34,14 +34,14 @@ type CachePool struct {
 	cmd            *exec.Cmd
 	rowCacheConfig RowCacheConfig
 	capacity       int
-	port           string
+	socket         string
 	idleTimeout    time.Duration
-	DeleteExpiry   uint64
 	memcacheStats  *MemcacheStats
 	mu             sync.Mutex
 }
 
-func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
+// NewCachePool creates a new pool for rowcache connections.
+func NewCachePool(name string, rowCacheConfig RowCacheConfig, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp, true, false, false)
@@ -61,30 +61,16 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 
 	// Start with memcached defaults
 	cp.capacity = 1024 - 50
-	cp.port = "11211"
-	if rowCacheConfig.Socket != "" {
-		cp.port = rowCacheConfig.Socket
-	}
-	if rowCacheConfig.TcpPort > 0 {
-		//address: ":11211"
-		cp.port = ":" + strconv.Itoa(rowCacheConfig.TcpPort)
-	}
 	if rowCacheConfig.Connections > 0 {
 		if rowCacheConfig.Connections <= 50 {
 			log.Fatalf("insufficient capacity: %d", rowCacheConfig.Connections)
 		}
 		cp.capacity = rowCacheConfig.Connections - 50
 	}
-
-	seconds := uint64(queryTimeout / time.Second)
-	// Add an additional grace period for
-	// memcache expiry of deleted items
-	if seconds != 0 {
-		cp.DeleteExpiry = 2*seconds + 15
-	}
 	return cp
 }
 
+// Open opens the pool. It launches memcache and waits till it's up.
 func (cp *CachePool) Open() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -94,10 +80,11 @@ func (cp *CachePool) Open() {
 	if cp.rowCacheConfig.Binary == "" {
 		panic(NewTabletError(ErrFatal, "rowcache binary not specified"))
 	}
+	cp.socket = generateFilename()
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
-		return memcache.Connect(cp.port, 10*time.Second)
+		return memcache.Connect(cp.socket, 10*time.Second)
 	}
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	if cp.memcacheStats != nil {
@@ -105,11 +92,29 @@ func (cp *CachePool) Open() {
 	}
 }
 
-func (cp *CachePool) startMemcache() {
-	if strings.Contains(cp.port, "/") {
-		_ = os.Remove(cp.port)
+// generateFilename generates a unique file name. It's convoluted.
+// There are race conditions when we have to come up with unique
+// names. So, this is a best effort.
+func generateFilename() string {
+	f, err := ioutil.TempFile("", "mc")
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error creating socket file: %v", err))
 	}
-	commandLine := cp.rowCacheConfig.GetSubprocessFlags()
+	name := f.Name()
+	err = f.Close()
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error closing socket file: %v", err))
+	}
+	err = os.Remove(name)
+	if err != nil {
+		panic(NewTabletError(ErrFatal, "error removing socket file: %v", err))
+	}
+	log.Infof("sock filename: %v", name)
+	return name
+}
+
+func (cp *CachePool) startMemcache() {
+	commandLine := cp.rowCacheConfig.GetSubprocessFlags(cp.socket)
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
 		panic(NewTabletError(ErrFatal, "can't start memcache: %v", err))
@@ -117,7 +122,7 @@ func (cp *CachePool) startMemcache() {
 	attempts := 0
 	for {
 		time.Sleep(100 * time.Millisecond)
-		c, err := memcache.Connect(cp.port, 30*time.Millisecond)
+		c, err := memcache.Connect(cp.socket, 30*time.Millisecond)
 		if err != nil {
 			attempts++
 			if attempts >= 50 {
@@ -137,6 +142,8 @@ func (cp *CachePool) startMemcache() {
 	}
 }
 
+// Close closes the CachePool. It also shuts down memcache.
+// You can call Open again after Close.
 func (cp *CachePool) Close() {
 	// Close the underlying pool first.
 	// You cannot close the pool while holding the
@@ -161,12 +168,12 @@ func (cp *CachePool) Close() {
 	cp.cmd.Process.Kill()
 	// Avoid zombies
 	go cp.cmd.Wait()
-	if strings.Contains(cp.port, "/") {
-		_ = os.Remove(cp.port)
-	}
+	_ = os.Remove(cp.socket)
+	cp.socket = ""
 	cp.pool = nil
 }
 
+// IsClosed returns true if CachePool is closed.
 func (cp *CachePool) IsClosed() bool {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
@@ -179,6 +186,7 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 	return cp.pool
 }
 
+// Get returns a memcache connection from the pool.
 // You must call Put after Get.
 func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	pool := cp.getPool()
@@ -192,6 +200,7 @@ func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	return r.(*memcache.Connection)
 }
 
+// Put returns the connection to the pool.
 func (cp *CachePool) Put(conn *memcache.Connection) {
 	pool := cp.getPool()
 	if pool == nil {
@@ -204,6 +213,7 @@ func (cp *CachePool) Put(conn *memcache.Connection) {
 	}
 }
 
+// StatsJSON returns a JSON version of the CachePool stats.
 func (cp *CachePool) StatsJSON() string {
 	pool := cp.getPool()
 	if pool == nil {
@@ -212,6 +222,7 @@ func (cp *CachePool) StatsJSON() string {
 	return pool.StatsJSON()
 }
 
+// Capacity returns the current capacity of the pool.
 func (cp *CachePool) Capacity() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -220,6 +231,7 @@ func (cp *CachePool) Capacity() int64 {
 	return pool.Capacity()
 }
 
+// Available returns the number of available connections in the pool.
 func (cp *CachePool) Available() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -228,6 +240,7 @@ func (cp *CachePool) Available() int64 {
 	return pool.Available()
 }
 
+// MaxCap returns the extent to which the pool capacity can be increased.
 func (cp *CachePool) MaxCap() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -236,6 +249,8 @@ func (cp *CachePool) MaxCap() int64 {
 	return pool.MaxCap()
 }
 
+// WaitCount returns the number of times we had to wait to get a connection
+// from the pool.
 func (cp *CachePool) WaitCount() int64 {
 	pool := cp.getPool()
 	if pool == nil {
@@ -244,6 +259,7 @@ func (cp *CachePool) WaitCount() int64 {
 	return pool.WaitCount()
 }
 
+// WaitTime returns the total amount of time spent waiting for a connection.
 func (cp *CachePool) WaitTime() time.Duration {
 	pool := cp.getPool()
 	if pool == nil {
@@ -252,6 +268,7 @@ func (cp *CachePool) WaitTime() time.Duration {
 	return pool.WaitTime()
 }
 
+// IdleTimeout returns the connection idle timeout.
 func (cp *CachePool) IdleTimeout() time.Duration {
 	pool := cp.getPool()
 	if pool == nil {
@@ -260,6 +277,7 @@ func (cp *CachePool) IdleTimeout() time.Duration {
 	return pool.IdleTimeout()
 }
 
+// ServeHTTP serves memcache stats as HTTP.
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.MONITORING); err != nil {
 		acl.SendError(response, err)

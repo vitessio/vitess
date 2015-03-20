@@ -8,14 +8,13 @@
 # 4. Forward vtctld port
 # 5. Create vttablet clusters
 # 6. Perform vtctl initialization:
-#      Rebuild Keyspace, Reparent Shard, Apply Schema
+#      SetKeyspaceShardingInfo, Rebuild Keyspace, Reparent Shard, Apply Schema
 # 7. Create vtgate clusters
 # 8. Forward vtgate port
 
 # Customizable parameters
 GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
 GKE_MACHINE_TYPE=${GKE_MACHINE_TYPE:-'n1-standard-1'}
-GKE_NUM_NODES=${GKE_NUM_NODES:-3}
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
 SHARDS=${SHARDS:-'-80,80-'}
@@ -36,8 +35,9 @@ function run_script () {
   # Parameters:
   # 1. script: Name of the script to execute
   script=$1
+  params="${@:2}"
   echo "Running ${script}..."
-  ./$script
+  eval $params ./$script
 }
 
 function wait_for_running_tasks () {
@@ -82,27 +82,34 @@ export KUBECTL='gcloud preview container kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
+num_shards=`echo $SHARDS | tr "," " " | wc -w`
+total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD))
 
 echo "****************************"
 echo "*Creating cluster:"
 echo "*  Zone: $GKE_ZONE"
 echo "*  Machine type: $GKE_MACHINE_TYPE"
-echo "*  Num nodes: $GKE_NUM_NODES"
+echo "*  Num nodes: $total_tablet_count"
 echo "*  SSD Size: $GKE_SSD_SIZE_GB"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $GKE_NUM_NODES
+gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $total_tablet_count
+
+# We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
+for i in `seq 1 $total_tablet_count`; do
+  $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i}.c.${project_id}.internal id=$i
+done
 
 if [ $GKE_SSD_SIZE_GB -gt 0 ]
 then
   echo Creating SSDs and attaching to container engine nodes
-  for i in `seq 1 $GKE_NUM_NODES`; do
+  for i in `seq 1 $total_tablet_count`; do
     diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
-    gcutil adddisk --zone $GKE_ZONE --disk_type=pd-ssd --size_gb $GKE_SSD_SIZE_GB $diskname
-    gcutil attachdisk --disk $diskname k8s-$GKE_CLUSTER_NAME-node-$i
+    gcloud compute disks create $diskname --type=pd-ssd --size=${GKE_SSD_SIZE_GB}GB
+    gcloud compute instances attach-disk k8s-$GKE_CLUSTER_NAME-node-$i --disk $diskname
   done
 fi
 
@@ -110,14 +117,11 @@ run_script etcd-up.sh
 wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
-run_script vttablet-up.sh
+run_script vttablet-up.sh FORCE_NODE=true
 run_script vtgate-up.sh
 
-num_shards=`echo $SHARDS | tr "," " " | wc -w`
-total_tablets=$(($num_shards*$TABLETS_PER_SHARD))
-
 wait_for_running_tasks vtctld 1
-wait_for_running_tasks vttablet $total_tablets
+wait_for_running_tasks vttablet $total_tablet_count
 wait_for_running_tasks vtgate 3
 
 echo Creating firewall rule for vtctld...
@@ -131,8 +135,8 @@ echo Waiting for tablets to be visible in the topology
 counter=0
 while [ $counter -lt $MAX_VTTABLET_TOPO_WAIT_RETRIES ]; do
   num_tablets=`$kvtctl ListAllTablets test | wc -l`
-  echo -en "\r$num_tablets out of $total_tablets in topology..."
-  if [ $num_tablets -eq $total_tablets ]
+  echo -en "\r$num_tablets out of $total_tablet_count in topology..."
+  if [ $num_tablets -eq $total_tablet_count ]
   then
     echo Complete
     break
