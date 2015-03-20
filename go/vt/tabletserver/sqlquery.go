@@ -179,6 +179,7 @@ func (sq *SqlQuery) disallowQueries() {
 	// Setup a time bomb at 10x query timeout. If this function
 	// takes too long, it's better to crash.
 	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		qt := sq.qe.queryTimeout.Get()
 		if qt == 0 {
@@ -217,7 +218,6 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.mu.Lock()
 		sq.setState(StateNotServing)
 		sq.mu.Unlock()
-		close(done)
 	}()
 	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
 	sq.qe.Close()
