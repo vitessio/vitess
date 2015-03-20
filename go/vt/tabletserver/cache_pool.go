@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"sync"
 	"time"
 
@@ -80,7 +81,7 @@ func (cp *CachePool) Open() {
 	if cp.rowCacheConfig.Binary == "" {
 		panic(NewTabletError(ErrFatal, "rowcache binary not specified"))
 	}
-	cp.socket = generateFilename()
+	cp.socket = generateFilename(cp.rowCacheConfig.Socket)
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
@@ -95,8 +96,9 @@ func (cp *CachePool) Open() {
 // generateFilename generates a unique file name. It's convoluted.
 // There are race conditions when we have to come up with unique
 // names. So, this is a best effort.
-func generateFilename() string {
-	f, err := ioutil.TempFile("", "mc")
+func generateFilename(hint string) string {
+	dir, base := path.Split(hint)
+	f, err := ioutil.TempFile(dir, base)
 	if err != nil {
 		panic(NewTabletError(ErrFatal, "error creating socket file: %v", err))
 	}
@@ -130,7 +132,7 @@ func (cp *CachePool) startMemcache() {
 				// Avoid zombies
 				go cp.cmd.Wait()
 				// FIXME(sougou): Throw proper error if we can recover
-				log.Fatal("Can't connect to memcache")
+				log.Fatalf("Can't connect to memcache: %s", cp.socket)
 			}
 			continue
 		}
