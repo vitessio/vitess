@@ -61,6 +61,15 @@ func (c *Counters) Counts() map[string]int64 {
 	return counts
 }
 
+// GetCount returns a count for given name
+func (c *Counters) GetCount(name string) (int64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	count, ok := c.counts[name]
+	return count, ok
+}
+
 // CountersFunc converts a function that returns
 // a map of int64 as an expvar.
 type CountersFunc func() map[string]int64
@@ -115,6 +124,8 @@ func NewMultiCounters(name string, labels []string) *MultiCounters {
 	}
 	return t
 }
+
+// Labels returns a list of labels associated with the MultiCounters.
 func (mc *MultiCounters) Labels() []string {
 	return mc.labels
 }
@@ -148,6 +159,7 @@ type MultiCountersFunc struct {
 	labels []string
 }
 
+// Labels returns a list of labels associated with the MultiCountersFunc.
 func (mcf *MultiCountersFunc) Labels() []string {
 	return mcf.labels
 }
