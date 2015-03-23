@@ -28,10 +28,12 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 	if permErr := os.Chmod(f.Name(), perm); err == nil {
 		err = permErr
 	}
+	if err == nil {
+		err = os.Rename(f.Name(), filename)
+	}
 	// Any err should result in full cleanup.
 	if err != nil {
 		os.Remove(f.Name())
-		return err
 	}
-	return os.Rename(f.Name(), filename)
+	return err
 }
