@@ -94,7 +94,7 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 			}
 			// work on all shards of all serving tablet types
 			for tabletType, ksPartition := range ks.Partitions {
-				for _, shard := range ksPartition.Shards {
+				for _, shard := range ksPartition.ShardReferences {
 					wg.Add(1)
 					go func(shardName string, tabletType topo.TabletType) {
 						defer wg.Done()
