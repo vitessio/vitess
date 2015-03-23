@@ -20,11 +20,16 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	n, err := f.Write(data)
+	if err == nil {
+		f.Sync()
+	}
 	f.Close()
-	if err == nil && n < len(data) {
-		err = io.ErrShortWrite
-	} else {
-		err = os.Chmod(f.Name(), perm)
+	if err == nil {
+		if n < len(data) {
+			err = io.ErrShortWrite
+		} else {
+			err = os.Chmod(f.Name(), perm)
+		}
 	}
 	if err != nil {
 		os.Remove(f.Name())

@@ -49,8 +49,8 @@ func init() {
 	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
-	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
-	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-port", DefaultQsConfig.RowCache.TcpPort, "rowcache tcp port to listen on")
+	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
+	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-port", DefaultQsConfig.RowCache.TcpPort, "DEPRECATED")
 	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
 	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
@@ -68,21 +68,16 @@ type RowCacheConfig struct {
 }
 
 // GetSubprocessFlags returns the flags to use to call memcached
-func (c *RowCacheConfig) GetSubprocessFlags() []string {
+func (c *RowCacheConfig) GetSubprocessFlags(socket string) []string {
 	cmd := []string{}
 	if c.Binary == "" {
 		return cmd
 	}
 	cmd = append(cmd, c.Binary)
+	cmd = append(cmd, "-s", socket)
 	if c.Memory > 0 {
 		// memory is given in bytes and rowcache expects in MBs
 		cmd = append(cmd, "-m", strconv.Itoa(c.Memory/1000000))
-	}
-	if c.Socket != "" {
-		cmd = append(cmd, "-s", c.Socket)
-	}
-	if c.TcpPort > 0 {
-		cmd = append(cmd, "-p", strconv.Itoa(c.TcpPort))
 	}
 	if c.Connections > 0 {
 		cmd = append(cmd, "-c", strconv.Itoa(c.Connections))
@@ -354,7 +349,7 @@ func (rqsc *realQueryServiceControl) IsHealthy() error {
 		context.Background(),
 		&proto.Query{
 			Sql:       "select 1 from dual",
-			SessionId: rqsc.sqlQueryRPCService.sessionId,
+			SessionId: rqsc.sqlQueryRPCService.sessionID,
 		},
 		new(mproto.QueryResult),
 	)

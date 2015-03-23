@@ -109,7 +109,7 @@ The Vitess platform consists of a number of server processes, command-line utili
 
 Depending on the current state of your application, you could arrive at a full Vitess implementation through a number of different process flows. For example, if you're building a service from scratch, your first step with Vitess would be to define your database topology. However, if you need to scale your existing database, you'd likely start by deploying a connection proxy.
 
-The diagram below illustrates Vitess' components: 
+The diagram below illustrates Vitess' components:
 
 ![Diagram showing Vitess implementation](https://raw.githubusercontent.com/youtube/vitess/master/doc/VitessOverview.png)
 
@@ -121,7 +121,7 @@ In Kubernetes, the data store is [etcd](https://github.com/coreos/etcd).  Vitess
 
 ### vttablet
 
-**vttablet** is a server that sits in front of a MySQL database. It is a newer version of and provides all of the same benefits as vtocc, including connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates. It also provides streaming services that are used for [filtered replication] and data export.
+**vttablet** is a server that sits in front of a MySQL database. It is a newer version of and provides all of the same benefits as vtocc, including connection pooling, query rewriting, and query de-duping. In addition, vttablet executes management tasks that vtctl initiates. It also provides streaming services that are used for [filtered replication](Resharding.md#filtered-replication) and data export.
 
 A Vitess implementation has one vttablet for each MySQL instance.
 

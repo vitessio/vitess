@@ -1,19 +1,13 @@
 {
   "/zk/testing/vt/ns/test_keyspace": {
-    "Shards": [
+    "ShardReferences": [
       {
         "KeyRange": {
           "Start": "",
           "End": ""
         },
-        "AddrsByType": null,
-        "ReadOnly": false
+        "Name": "0"
       }
-    ],
-    "TabletTypes": [
-      "rdonly",
-      "replica",
-      "master"
     ]
   },
   "/zk/testing": {

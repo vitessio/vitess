@@ -1,5 +1,13 @@
 # Getting Started
-If you run into issues or have questions, you can use our mailing list: vitess@googlegroups.com.
+
+This guide describes how to build Vitess manually.
+If you prefer, you can instead build with our
+[Dockerfile](https://github.com/youtube/vitess/blob/master/Dockerfile),
+or use an
+[Automated Build](https://registry.hub.docker.com/repos/vitess/).
+
+If you run into issues or have questions, please post on our
+[forum](https://groups.google.com/forum/#!forum/vitess).
 
 ## Dependencies
 

@@ -18,13 +18,19 @@ package stats
 import (
 	"bytes"
 	"expvar"
+	"flag"
 	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
 )
+
+var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
+var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
+var statsBackend = flag.String("stats_backend", "influxdb", "The name of the registered push-based monitoring/stats backend to use")
 
 // NewVarHook is the type of a hook to export variables in a different way
 type NewVarHook func(name string, v expvar.Var)
@@ -77,6 +83,51 @@ func Register(nvh NewVarHook) {
 // Publish is expvar.Publish+hook
 func Publish(name string, v expvar.Var) {
 	defaultVarGroup.publish(name, v)
+}
+
+// PushBackend is an interface for any stats/metrics backend that requires data
+// to be pushed to it. It's used to support push-based metrics backends, as expvar
+// by default only supports pull-based ones.
+type PushBackend interface {
+	// PushAll pushes all stats from expvar to the backend
+	PushAll() error
+}
+
+var pushBackends = make(map[string]PushBackend)
+var once sync.Once
+
+// RegisterPushBackend allows modules to register PushBackend implementations.
+// Should be called on init().
+func RegisterPushBackend(name string, backend PushBackend) {
+	if _, ok := pushBackends[name]; ok {
+		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
+	}
+	pushBackends[name] = backend
+	if *emitStats {
+		// Start a single goroutine to emit stats periodically
+		once.Do(func() {
+			go emitToBackend(statsEmitPeriod)
+		})
+	}
+}
+
+// emitToBackend does a periodic emit to the selected PushBackend. If a push fails,
+// it will be logged as a warning (but things will otherwise proceed as normal).
+func emitToBackend(emitPeriod *time.Duration) {
+	ticker := time.NewTicker(*emitPeriod)
+	defer ticker.Stop()
+	for _ = range ticker.C {
+		backend, ok := pushBackends[*statsBackend]
+		if !ok {
+			log.Errorf("No PushBackend registered with name %s", *statsBackend)
+			return
+		}
+		err := backend.PushAll()
+		if err != nil {
+			// TODO(aaijazi): This might cause log spam...
+			log.Warningf("Pushing stats to backend %v failed: %v", *statsBackend, err)
+		}
+	}
 }
 
 // Float is expvar.Float+Get+hook
@@ -252,11 +303,11 @@ func (f StringFunc) String() string {
 	return strconv.Quote(f())
 }
 
-// JsonFunc is the public type for a single function that returns json directly.
-type JsonFunc func() string
+// JSONFunc is the public type for a single function that returns json directly.
+type JSONFunc func() string
 
 // String is the implementation of expvar.var
-func (f JsonFunc) String() string {
+func (f JSONFunc) String() string {
 	return f()
 }
 
@@ -264,7 +315,7 @@ func (f JsonFunc) String() string {
 // a JSON string as a variable. The string is sent to
 // expvar as is.
 func PublishJSONFunc(name string, f func() string) {
-	Publish(name, JsonFunc(f))
+	Publish(name, JSONFunc(f))
 }
 
 // StringMap is a map of string -> string

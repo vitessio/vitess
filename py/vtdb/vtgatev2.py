@@ -21,33 +21,6 @@ from vtdb import vtgate_utils
 _errno_pattern = re.compile('\(errno (\d+)\)')
 
 
-def log_exception(method):
-  """Decorator for logging the exception from vtgatev2.
-
-  The convert_exception method interprets and recasts the exceptions
-  raised by lower-layer. The inner function calls the appropriate vtdb_logger
-  method based on the exception raised.
-
-  Args:
-    exc: exception raised by calling code
-    args: additional args for the exception.
-
-  Returns:
-    Decorated method.
-  """
-  def _log_exception(exc, *args):
-    logger_object = vtdb_logger.get_logger()
-
-    new_exception = method(exc, *args)
-
-    if isinstance(new_exception, dbexceptions.IntegrityError):
-      logger_object.integrity_error(new_exception)
-    else:
-      logger_object.vtgatev2_exception(new_exception)
-    return new_exception
-  return _log_exception
-
-
 def handle_app_error(exc_args):
   msg = str(exc_args[0]).lower()
   if msg.startswith('request_backlog'):
@@ -65,18 +38,39 @@ def handle_app_error(exc_args):
   return dbexceptions.DatabaseError(exc_args)
 
 
-@log_exception
-def convert_exception(exc, *args):
+def convert_exception(exc, *args, **kwargs):
+  """This parses the protocol exceptions to the api interface exceptions.
+  This also logs the exception and increments the appropriate error counters.
+
+  Args:
+    exc: raw protocol exception.
+    args: additional args from the raising site.
+    kwargs: additional keyword args from the raising site.
+
+  Returns:
+    Api interface exceptions - dbexceptions with new args.
+  """
+
   new_args = exc.args + args
+  if kwargs:
+    new_args += tuple(kwargs.itervalues())
+  new_exc = exc
+
   if isinstance(exc, gorpc.TimeoutError):
-    return dbexceptions.TimeoutError(new_args)
+    new_exc = dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
-    return handle_app_error(new_args)
+    new_exc = handle_app_error(new_args)
   elif isinstance(exc, gorpc.ProgrammingError):
-    return dbexceptions.ProgrammingError(new_args)
+    new_exc = dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
-    return dbexceptions.FatalError(new_args)
-  return exc
+    new_exc = dbexceptions.FatalError(new_args)
+
+  keyspace = kwargs.get("keyspace", None)
+  tablet_type = kwargs.get("tablet_type", None)
+
+  vtgate_utils.log_exception(new_exc, keyspace=keyspace,
+                             tablet_type=tablet_type)
+  return new_exc
 
 
 def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids):
@@ -225,7 +219,8 @@ class VTGateConnection(object):
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
+      raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
+                              keyspace=keyspace, tablet_type=tablet_type)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -271,7 +266,8 @@ class VTGateConnection(object):
         lastrowid = res['InsertId']
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
+      raise convert_exception(e, str(self), sql, entity_keyspace_id_map,
+                              keyspace=keyspace, tablet_type=tablet_type)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -320,7 +316,8 @@ class VTGateConnection(object):
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables_list)
-      raise convert_exception(e, str(self), sql_list)
+      raise convert_exception(e, str(self), sql_list, keyspace_ids,
+                              keyspace=keyspace, tablet_type=tablet_type)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -358,7 +355,8 @@ class VTGateConnection(object):
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
+      raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
+                              keyspace=keyspace, tablet_type=tablet_type)
     except:
       logging.exception('gorpc low-level error')
       raise

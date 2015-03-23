@@ -27,10 +27,11 @@ var (
 	usage = `
 Queries the topo server, for test purposes.
 `
-	mode       = flag.String("mode", "get", "which operation to run on the node (getSrvKeyspaceNames, getSrvKeyspace, getEndPoints, qps)")
-	server     = flag.String("server", "localhost:3801", "topo server to dial")
-	timeout    = flag.Duration("timeout", 5*time.Second, "connection timeout")
-	cpuProfile = flag.String("cpu_profile", "", "write cpu profile to file")
+	mode    = flag.String("mode", "get", "which operation to run on the node (getSrvKeyspaceNames, getSrvKeyspace, getEndPoints, qps)")
+	server  = flag.String("server", "localhost:3801", "topo server to dial")
+	timeout = flag.Duration("timeout", 5*time.Second, "connection timeout")
+	// flag can't overlap with servenv's cpu_profile
+	cpuProfile = flag.String("zkclient_cpu_profile", "", "write cpu profile to file")
 )
 
 func init() {
@@ -81,8 +82,8 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 		sort.Strings(tabletTypes)
 		for _, t := range tabletTypes {
 			println(fmt.Sprintf("Partitions[%v] =", t))
-			for i, s := range reply.Partitions[topo.TabletType(t)].Shards {
-				println(fmt.Sprintf("  Shards[%v]=%v", i, s.KeyRange.String()))
+			for i, s := range reply.Partitions[topo.TabletType(t)].ShardReferences {
+				println(fmt.Sprintf("  ShardReferences[%v]=%v", i, s.KeyRange.String()))
 			}
 		}
 	}

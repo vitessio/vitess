@@ -1,7 +1,7 @@
 FROM golang:1.4-wheezy
 
 # Install Vitess build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     automake \
     bison \
     bzip2 \
@@ -26,7 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install MariaDB 10.0.x
 RUN apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0xcbcb082a1bb943db && \
     add-apt-repository 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.0/debian wheezy main' && \
-    apt-get update && apt-get install -y mariadb-server libmariadbclient-dev
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server libmariadbclient-dev
+
+# Add VOLUME
+VOLUME /vt/vtdataroot
 
 # Load files from directory containing Dockerfile
 COPY . /vt/src/github.com/youtube/vitess
@@ -37,7 +40,6 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
 
 # Compile and install required packages as root
 WORKDIR /vt/src/github.com/youtube/vitess
-RUN ./travis/install_protobuf.sh
 RUN ./travis/install_grpc.sh
 
 # Bootstrap Vitess

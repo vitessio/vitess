@@ -12,7 +12,7 @@ KS_LOOKUP = ("KS_LOOKUP", shard_constants.UNSHARDED)
 
 #KS_UNSHARDED tables
 create_vt_unsharded = '''create table vt_unsharded (
-id bigint,
+id bigint NOT NULL AUTO_INCREMENT,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
@@ -65,7 +65,7 @@ unique key idx_username (username)
 
 create_vt_song_user_lookup = '''create table vt_song_user_lookup (
 song_id bigint(20) NOT NULL AUTO_INCREMENT,
-user_id varchar(20) NOT NULL,
+user_id bigint(20) NOT NULL,
 primary key (song_id)
 ) ENGINE=InnoDB'''
 

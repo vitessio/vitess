@@ -8,7 +8,6 @@ The module also has the db_class_method decorator and db_wrapper method which ar
 used for cursor creation and calling the database method.
 """
 import functools
-import logging
 import struct
 
 from vtdb import database_context
@@ -18,6 +17,10 @@ from vtdb import keyrange_constants
 from vtdb import shard_constants
 from vtdb import sql_builder
 from vtdb import vtgate_cursor
+
+class __EmptyBindVariables(frozenset):
+    pass
+EmptyBindVariables = __EmptyBindVariables()
 
 
 class ShardRouting(object):
@@ -146,6 +149,7 @@ class DBObjectBase(object):
   keyspace = None
   sharding = None
   table_name = None
+  id_column_name = None
 
 
   @classmethod
@@ -268,3 +272,35 @@ class DBObjectBase(object):
       if i == 0:
         break
     stream_cursor.close()
+
+  @db_class_method
+  def get_count(class_, cursor, column_value_pairs=None, **columns):
+    if not column_value_pairs:
+      column_value_pairs = columns.items()
+      column_value_pairs.sort()
+    query, bind_vars = sql_builder.build_count_query(class_.table_name,
+                                                     column_value_pairs)
+    cursor.execute(query, bind_vars)
+    return cursor.fetch_aggregate_function(sum)
+
+  @db_class_method
+  def get_min(class_, cursor):
+    if class_.id_column_name is None:
+      raise dbexceptions.ProgrammingError("id_column_name not set.")
+
+    query = sql_builder.build_aggregate_query(class_.table_name,
+                                              class_.id_column_name)
+
+    cursor.execute(query, EmptyBindVariables)
+    return cursor.fetch_aggregate_function(min)
+
+  @db_class_method
+  def get_max(class_, cursor):
+    if class_.id_column_name is None:
+      raise dbexceptions.ProgrammingError("id_column_name not set.")
+
+    query = sql_builder.build_aggregate_query(class_.table_name,
+                                              class_.id_column_name,
+                                              sort_func='max')
+    cursor.execute(query, EmptyBindVariables)
+    return cursor.fetch_aggregate_function(max)

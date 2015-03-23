@@ -15,7 +15,7 @@ import (
 // original query. Only a limited set of queries are supported, see
 // QuerySplitter.validateQuery() for details. Also, the table must have at least
 // one primary key and the leading primary key must be numeric, see
-// QuerySplitter.getSplitBoundaries()
+// QuerySplitter.splitBoundaries()
 type QuerySplitter struct {
 	query      *proto.BoundQuery
 	splitCount int
@@ -80,8 +80,11 @@ func (qs *QuerySplitter) validateQuery() error {
 
 // split splits the query into multiple queries. validateQuery() must return
 // nil error before split() is called.
-func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) []proto.QuerySplit {
-	boundaries := qs.getSplitBoundaries(pkMinMax)
+func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) ([]proto.QuerySplit, error) {
+	boundaries, err := qs.splitBoundaries(pkMinMax)
+	if err != nil {
+		return nil, err
+	}
 	splits := []proto.QuerySplit{}
 	// No splits, return the original query as a single split
 	if len(boundaries) == 0 {
@@ -113,7 +116,7 @@ func (qs *QuerySplitter) split(pkMinMax *mproto.QueryResult) []proto.QuerySplit 
 			splits = append(splits, *split)
 		}
 	}
-	return splits
+	return splits, err
 }
 
 // getWhereClause returns a whereClause based on desired upper and lower
@@ -170,11 +173,12 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 	}
 }
 
-func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqltypes.Value {
+func (qs *QuerySplitter) splitBoundaries(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {
 	boundaries := []sqltypes.Value{}
 	var err error
+	// If no min or max values were found, return empty list of boundaries
 	if len(pkMinMax.Rows) != 1 || pkMinMax.Rows[0][0].IsNull() || pkMinMax.Rows[0][1].IsNull() {
-		panic(fmt.Errorf("no min or max primary key"))
+		return boundaries, err
 	}
 	switch pkMinMax.Fields[0].Type {
 	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
@@ -182,10 +186,7 @@ func (qs *QuerySplitter) getSplitBoundaries(pkMinMax *mproto.QueryResult) []sqlt
 	case mproto.VT_FLOAT, mproto.VT_DOUBLE:
 		boundaries, err = qs.parseFloat(pkMinMax)
 	}
-	if err != nil {
-		panic(err)
-	}
-	return boundaries
+	return boundaries, err
 }
 
 func (qs *QuerySplitter) parseInt(pkMinMax *mproto.QueryResult) ([]sqltypes.Value, error) {

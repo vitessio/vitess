@@ -268,7 +268,7 @@ func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 				if !ok {
 					continue
 				}
-				for _, srvShard := range kp.Shards {
+				for _, srvShard := range kp.ShardReferences {
 					shard := srvShard.Name
 					if displayedShards[shard] {
 						continue
@@ -278,7 +278,6 @@ func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 					sn := &ShardNodes{
 						Name:        shard,
 						TabletNodes: make(TabletNodesByType),
-						ServedTypes: srvShard.ServedTypes,
 					}
 					kn.ShardNodes = append(kn.ShardNodes, sn)
 					wg.Add(1)

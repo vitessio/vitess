@@ -22,7 +22,8 @@ def create_keyspace_id(sharding_key):
   data = pack_kid(sharding_key)
   crypter = DES3.new(encryption_key, DES3.MODE_ECB)
   encrypted = crypter.encrypt(data)
-  return unpack_kid(encrypted)[0]
+  kid = unpack_kid(encrypted)[0]
+  return kid
 
 
 class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
@@ -54,6 +55,7 @@ class VtUser(VtEntityRangeBase):
   sharding_key_column_name = "id"
   entity_id_lookup_map = {"username": db_class_lookup.VtUsernameLookup}
   column_lookup_name_map = {"id":"user_id"}
+  id_column_name = "id"
 
 
 class VtSong(VtEntityRangeBase):
@@ -63,6 +65,7 @@ class VtSong(VtEntityRangeBase):
   sharding_key_column_name = "user_id"
   entity_id_lookup_map = {"id": db_class_lookup.VtSongUserLookup}
   column_lookup_name_map = {"id":"song_id"}
+  id_column_name = "id"
 
 
 class VtUserEmail(VtRangeBase):
@@ -71,6 +74,7 @@ class VtUserEmail(VtRangeBase):
   columns_list = ["user_id", "email", "email_hash", "keyspace_id"]
   sharding_key_column_name = "user_id"
   entity_id_lookup_map = None
+  id_column_name = "user_id"
 
 
 class VtSongDetail(VtRangeBase):
@@ -79,3 +83,4 @@ class VtSongDetail(VtRangeBase):
   columns_list = ["song_id", "album_name", "artist", "keyspace_id"]
   sharding_key_column_name = None
   entity_id_lookup_map = {"song_id": db_class_lookup.VtSongUserLookup}
+  id_column_name = "song_id"
