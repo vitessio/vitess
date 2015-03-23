@@ -1,0 +1,29 @@
+<div class="container">
+  <div class="row-fluid">
+    <div class="col-xs-2">
+      <label>Keyspaces</label>
+      <div class="list-group">
+        <a href="" class="list-group-item"
+           ng-class="{active:selected == keyspace}"
+           ng-click="$parent.selected = keyspace; selectKeyspace(keyspace)"
+           ng-repeat="keyspace in keyspaces">
+          {{keyspace}}
+        </a>
+      </div>
+    </div>
+    <div>
+      <textarea class="col-xs-8" rows="20" data-ng-model="schemaChanges"></textarea>
+    </div>
+    <div class="col-xs-2">
+      <button type="button" class="btn btn-success" data-ng-click="submitSchema()" >Submit</button>
+      <div ng-if="shouldShowSchemaChangeStatus">
+        <label>Schema Change Status</label>
+        <label>{{schemaStatus}}</label>
+        <div class="progress">
+          <div class="progress-bar progress-bar-success progress-bar-striped" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" style="width: 40%">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

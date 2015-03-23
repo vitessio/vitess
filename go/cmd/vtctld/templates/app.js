@@ -13,6 +13,7 @@ angular.module('app', ['ngRoute'])
 .controller('ClassController', ClassController)
 .controller('LoadController', LoadController)
 .controller('SubmitController', SubmitController)
+.controller('SchemaManagerController', SchemaManagerController)
 .config(['$routeProvider', function($routeProvider) {
   $routeProvider
   .when('/editor',{
@@ -34,6 +35,10 @@ angular.module('app', ['ngRoute'])
   .when('/submit',{
     templateUrl: "/content/submit/submit.html",
     controller: "SubmitController"
+  })
+  .when('/schema-manager',{
+    templateUrl: "/content/schema_manager/index.html",
+    controller: "SchemaManagerController"
   })
   .otherwise({redirectTo: '/'});
 }]);
