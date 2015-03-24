@@ -9,23 +9,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
-// DBConnection re-exposes mysql.Connection with some wrapping to implement
+// DBConnection re-exposes sqldb.Conn with some wrapping to implement
 // most of PoolConnection interface, except Recycle. That way it can be used
 // by itself. (Recycle needs to know about the Pool).
 type DBConnection struct {
-	*mysql.Connection
+	sqldb.Conn
 	mysqlStats *stats.Timings
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if sqlErr, ok := err.(*mysql.SqlError); ok {
+	if sqlErr, ok := err.(*sqldb.SqlError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dbc.Close()
 		}
@@ -38,7 +38,7 @@ func (dbc *DBConnection) handleError(err error) {
 // ExecuteFetch is part of PoolConnection interface.
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	defer dbc.mysqlStats.Record("Exec", time.Now())
-	mqr, err := dbc.Connection.ExecuteFetch(query, maxrows, wantfields)
+	mqr, err := dbc.Conn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		dbc.handleError(err)
 		return nil, err
@@ -50,7 +50,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
 	defer dbc.mysqlStats.Record("ExecStream", time.Now())
 
-	err := dbc.Connection.ExecuteStreamFetch(query)
+	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
 		dbc.handleError(err)
 		return err
@@ -117,13 +117,13 @@ func (dbc *DBConnection) VerifyStrict() bool {
 	return strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES")
 }
 
-// NewDBConnection returns a new DBConnection based on the ConnectionParams
+// NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info *mysql.ConnectionParams, mysqlStats *stats.Timings) (*DBConnection, error) {
+func NewDBConnection(info *sqldb.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
 	params, err := dbconfigs.MysqlParams(info)
 	if err != nil {
 		return nil, err
 	}
-	c, err := mysql.Connect(params)
+	c, err := sqldb.Connect(params)
 	return &DBConnection{c, mysqlStats}, err
 }

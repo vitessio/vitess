@@ -520,7 +520,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
 		if vscw.strategy.DontStartBinlogPlayer {
-			flags = binlogplayer.BLP_FLAG_DONT_START
+			flags = binlogplayer.BlpFlagDontStart
 		}
 		queries = append(queries, binlogplayer.PopulateBlpCheckpoint(0, status.Position, time.Now().Unix(), flags))
 		destinationWaitGroup.Add(1)

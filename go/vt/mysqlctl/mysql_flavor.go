@@ -10,7 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -37,7 +37,7 @@ type MysqlFlavor interface {
 
 	// StartReplicationCommands returns the commands to start replicating from
 	// a given master and position as specified in a ReplicationStatus.
-	StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error)
+	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
 
 	// ParseGTID parses a GTID in the canonical format of this MySQL flavor into
 	// a proto.GTID interface value.
@@ -68,7 +68,7 @@ type MysqlFlavor interface {
 	DisableBinlogPlayback(mysqld *Mysqld) error
 }
 
-var mysqlFlavors map[string]MysqlFlavor = make(map[string]MysqlFlavor)
+var mysqlFlavors = make(map[string]MysqlFlavor)
 
 // registerFlavorBuiltin adds a flavor to the map only if the name is unused.
 // The flavor implementation passed to this function will only be used if there

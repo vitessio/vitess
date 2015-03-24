@@ -17,6 +17,9 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (
@@ -60,7 +63,7 @@ func main() {
 		log.Errorf("%v", err)
 		exit.Return(255)
 	}
-	mysqld = mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
+	mysqld = mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 
 	// Register OnTerm handler before mysqld starts, so we get notified if mysqld
 	// dies on its own without us (or our RPC client) telling it to.

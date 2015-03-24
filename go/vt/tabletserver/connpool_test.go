@@ -5,20 +5,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"golang.org/x/net/context"
 )
 
 var (
-	appParams = &mysql.ConnectionParams{
+	appParams = &sqldb.ConnParams{
 		Uname:      "vt_app",
 		DbName:     "sougou",
 		UnixSocket: os.Getenv("VTDATAROOT") + "/vt_0000062347/mysql.sock",
 		Charset:    "utf8",
 	}
-	dbaParams = &mysql.ConnectionParams{
+	dbaParams = &sqldb.ConnParams{
 		Uname:      "vt_dba",
 		DbName:     "sougou",
 		UnixSocket: os.Getenv("VTDATAROOT") + "/vt_0000062347/mysql.sock",

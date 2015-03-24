@@ -20,7 +20,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
@@ -37,7 +37,7 @@ type PrimeCache struct {
 	SleepDuration time.Duration
 
 	// reset for every run
-	dbConn        *mysql.Connection
+	dbConn        sqldb.Conn
 	workerChannel chan string
 }
 
@@ -110,7 +110,7 @@ func (pc *PrimeCache) getSlaveStatus() (*slaveStatus, error) {
 }
 
 // applyLoop is the function run by the workers to empty the work queue.
-func applyLoop(dbConn *mysql.Connection, c chan string) {
+func applyLoop(dbConn sqldb.Conn, c chan string) {
 	for sql := range c {
 		_, err := dbConn.ExecuteFetch(sql, 10000, false)
 		if err != nil {
@@ -129,14 +129,14 @@ func (pc *PrimeCache) setupPrimerConnections() error {
 	pc.workerChannel = make(chan string, 1000)
 	for i := 0; i < pc.WorkerCount; i++ {
 		// connect to the database using client for a replay connection
-		params, err := dbconfigs.MysqlParams(&pc.dbcfgs.App.ConnectionParams)
+		params, err := dbconfigs.MysqlParams(&pc.dbcfgs.App.ConnParams)
 		if err != nil {
 			return fmt.Errorf("cannot get parameters to connect to MySQL: %v", err)
 		}
 
-		dbConn, err := mysql.Connect(params)
+		dbConn, err := sqldb.Connect(params)
 		if err != nil {
-			return fmt.Errorf("mysql.Connect failed: %v", err)
+			return fmt.Errorf("failed to connect db server: %v", err)
 		}
 
 		// and launch the go routine that applies the statements
@@ -254,9 +254,9 @@ func (pc *PrimeCache) OneRun() {
 		return
 	}
 
-	pc.dbConn, err = mysql.Connect(params)
+	pc.dbConn, err = sqldb.Connect(params)
 	if err != nil {
-		log.Errorf("mysql.Connect failed: %v", err)
+		log.Errorf("failed to connect db server: %v", err)
 		return
 	}
 

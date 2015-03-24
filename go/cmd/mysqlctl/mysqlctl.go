@@ -16,6 +16,9 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (
@@ -202,7 +205,7 @@ func main() {
 		log.Errorf("%v", err)
 		exit.Return(1)
 	}
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnectionParams, &dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
 	defer mysqld.Close()
 
 	action := flag.Arg(0)

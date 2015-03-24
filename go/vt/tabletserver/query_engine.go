@@ -192,10 +192,10 @@ func NewQueryEngine(config Config) *QueryEngine {
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) {
 	qe.dbconfigs = dbconfigs
-	appParams := dbconfigs.App.ConnectionParams
+	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params
 	// and Dba credentials.
-	dbaParams := dbconfigs.App.ConnectionParams
+	dbaParams := dbconfigs.App.ConnParams
 	if dbconfigs.Dba.Uname != "" {
 		dbaParams.Uname = dbconfigs.Dba.Uname
 		dbaParams.Pass = dbconfigs.Dba.Pass
@@ -256,7 +256,7 @@ func (qe *QueryEngine) Launch(f func()) {
 
 // CheckMySQL returns true if we can connect to MySQL.
 func (qe *QueryEngine) CheckMySQL() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnectionParams, mysqlStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, mysqlStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false

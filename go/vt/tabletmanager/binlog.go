@@ -16,8 +16,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -32,47 +32,47 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// BinlogPlayerController controls one player
+// BinlogPlayerController controls one player.
 type BinlogPlayerController struct {
-	// Configuration parameters (set at construction, immutable)
+	// Configuration parameters (set at construction, immutable).
 	ts       topo.Server
-	dbConfig *mysql.ConnectionParams
+	dbConfig *sqldb.ConnParams
 	mysqld   *mysqlctl.Mysqld
 
-	// Information about us (set at construction, immutable)
+	// Information about us (set at construction, immutable).
 	cell           string
 	keyspaceIdType key.KeyspaceIdType
 	keyRange       key.KeyRange
 	dbName         string
 
-	// Information about the source (set at construction, immutable)
+	// Information about the source (set at construction, immutable).
 	sourceShard topo.SourceShard
 
 	// BinlogPlayerStats has the stats for the players we're going to use
-	// (pointer is set at construction, immutable, values are thread-safe)
+	// (pointer is set at construction, immutable, values are thread-safe).
 	binlogPlayerStats *binlogplayer.BinlogPlayerStats
 
 	// playerMutex is used to protect the next fields in this structure.
 	// They will change depending on our state.
 	playerMutex sync.Mutex
 
-	// interrupted is the channel to close to stop the playback
+	// interrupted is the channel to close to stop the playback.
 	interrupted chan struct{}
 
-	// done is the channel to wait for to be sure the player is done
+	// done is the channel to wait for to be sure the player is done.
 	done chan struct{}
 
-	// stopPosition contains the stopping point for this player, if any
+	// stopPosition contains the stopping point for this player, if any.
 	stopPosition myproto.ReplicationPosition
 
-	// information about the individual tablet we're replicating from
+	// information about the individual tablet we're replicating from.
 	sourceTablet topo.TabletAlias
 
-	// last error we've seen by the player
+	// last error we've seen by the player.
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		dbConfig:          dbConfig,
@@ -91,7 +91,7 @@ func (bpc *BinlogPlayerController) String() string {
 	return "BinlogPlayerController(" + bpc.sourceShard.String() + ")"
 }
 
-// Start will start the player in the background and run forever
+// Start will start the player in the background and run forever.
 func (bpc *BinlogPlayerController) Start() {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
@@ -121,7 +121,7 @@ func (bpc *BinlogPlayerController) StartUntil(stopPos myproto.ReplicationPositio
 	return nil
 }
 
-// reset will clear the internal data structures
+// reset will clear the internal data structures.
 func (bpc *BinlogPlayerController) reset() {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
@@ -133,7 +133,7 @@ func (bpc *BinlogPlayerController) reset() {
 
 // WaitForStop will wait until the player is stopped. Use this after StartUntil.
 func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error {
-	// take the lock, check the data, get what we need, release the lock
+	// take the lock, check the data, get what we need, release the lock.
 	bpc.playerMutex.Lock()
 	if bpc.interrupted == nil {
 		bpc.playerMutex.Unlock()
@@ -231,8 +231,8 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// if we shouldn't start, we just error out and try again later
-	if strings.Index(flags, binlogplayer.BLP_FLAG_DONT_START) != -1 {
-		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BLP_FLAG_DONT_START)
+	if strings.Index(flags, binlogplayer.BlpFlagDontStart) != -1 {
+		return fmt.Errorf("not starting because flag '%v' is set", binlogplayer.BlpFlagDontStart)
 	}
 
 	// Find the server list for the source shard in our cell
@@ -279,8 +279,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 
-// BlpPosition returns the current position for a controller, as read from
-// the database.
+// BlpPosition returns the current position for a controller, as read from the database.
 func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*blproto.BlpPosition, string, error) {
 	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
@@ -288,34 +287,36 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) 
 // BinlogPlayerMap controls all the players.
 // It can be stopped and restarted.
 type BinlogPlayerMap struct {
-	// Immutable, set at construction time
+	// Immutable, set at construction time.
 	ts       topo.Server
-	dbConfig *mysql.ConnectionParams
+	dbConfig *sqldb.ConnParams
 	mysqld   *mysqlctl.Mysqld
 
-	// This mutex protects the map and the state
+	// This mutex protects the map and the state.
 	mu      sync.Mutex
 	players map[uint32]*BinlogPlayerController
 	state   int64
 }
 
 const (
-	BPM_STATE_RUNNING int64 = iota
-	BPM_STATE_STOPPED
+	// BpmStateRunning indicates BinlogPlayerMap is running.
+	BpmStateRunning int64 = iota
+	// BpmStateStopped indicates BinlogPlayerMap has stopped.
+	BpmStateStopped
 )
 
-// NewBinlogPlayerMap creates a new map of players
-func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
+// NewBinlogPlayerMap creates a new map of players.
+func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
 		mysqld:   mysqld,
 		players:  make(map[uint32]*BinlogPlayerController),
-		state:    BPM_STATE_RUNNING,
+		state:    BpmStateRunning,
 	}
 }
 
-// RegisterBinlogPlayerMap registers the varz for the players
+// RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
 	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
@@ -380,18 +381,17 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceId
 
 	bpc = newBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyspaceIdType, keyRange, sourceShard, dbName)
 	blm.players[sourceShard.Uid] = bpc
-	if blm.state == BPM_STATE_RUNNING {
+	if blm.state == BpmStateRunning {
 		bpc.Start()
 	}
 }
 
-// StopAllPlayersAndReset stops all the binlog players, and reset the map of
-// players.
+// StopAllPlayersAndReset stops all the binlog players, and reset the map of players.
 func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 	hadPlayers := false
 	blm.mu.Lock()
 	for _, bpc := range blm.players {
-		if blm.state == BPM_STATE_RUNNING {
+		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
 		hadPlayers = true
@@ -458,7 +458,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.K
 func (blm *BinlogPlayerMap) Stop() {
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
-	if blm.state == BPM_STATE_STOPPED {
+	if blm.state == BpmStateStopped {
 		log.Warningf("BinlogPlayerMap already stopped")
 		return
 	}
@@ -466,14 +466,14 @@ func (blm *BinlogPlayerMap) Stop() {
 	for _, bpc := range blm.players {
 		bpc.Stop()
 	}
-	blm.state = BPM_STATE_STOPPED
+	blm.state = BpmStateStopped
 }
 
-// Start restarts the current players
+// Start restarts the current players.
 func (blm *BinlogPlayerMap) Start() {
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
-	if blm.state == BPM_STATE_RUNNING {
+	if blm.state == BpmStateRunning {
 		log.Warningf("BinlogPlayerMap already started")
 		return
 	}
@@ -481,10 +481,10 @@ func (blm *BinlogPlayerMap) Start() {
 	for _, bpc := range blm.players {
 		bpc.Start()
 	}
-	blm.state = BPM_STATE_RUNNING
+	blm.state = BpmStateRunning
 }
 
-// BlpPositionList returns the current position of all the players
+// BlpPositionList returns the current position of all the players.
 func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) {
 	// create a db connection for this purpose
 	vtClient := binlogplayer.NewDbClient(blm.dbConfig)
@@ -513,7 +513,7 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 	// lock and check state
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
-	if blm.state != BPM_STATE_STOPPED {
+	if blm.state != BpmStateStopped {
 		return fmt.Errorf("RunUntil: player not stopped: %v", blm.state)
 	}
 	log.Infof("Starting map of binlog players until position")
@@ -555,7 +555,7 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 
 // The following structures are used for status display
 
-// BinlogPlayerControllerStatus is the status of an individual controller
+// BinlogPlayerControllerStatus is the status of an individual controller.
 type BinlogPlayerControllerStatus struct {
 	// configuration values
 	Index        uint32
@@ -572,31 +572,31 @@ type BinlogPlayerControllerStatus struct {
 	LastError           string
 }
 
-// BinlogPlayerControllerStatusList is the list of statuses
+// BinlogPlayerControllerStatusList is the list of statuses.
 type BinlogPlayerControllerStatusList []*BinlogPlayerControllerStatus
 
-// Len is part of sort.Interface
+// Len is part of sort.Interface.
 func (bpcsl BinlogPlayerControllerStatusList) Len() int {
 	return len(bpcsl)
 }
 
-// Less is part of sort.Interface
+// Less is part of sort.Interface.
 func (bpcsl BinlogPlayerControllerStatusList) Less(i, j int) bool {
 	return bpcsl[i].Index < bpcsl[j].Index
 }
 
-// Swap is part of sort.Interface
+// Swap is part of sort.Interface.
 func (bpcsl BinlogPlayerControllerStatusList) Swap(i, j int) {
 	bpcsl[i], bpcsl[j] = bpcsl[j], bpcsl[i]
 }
 
-// BinlogPlayerMapStatus is the complete player status
+// BinlogPlayerMapStatus is the complete player status.
 type BinlogPlayerMapStatus struct {
 	State       string
 	Controllers BinlogPlayerControllerStatusList
 }
 
-// Status returns the BinlogPlayerMapStatus for the BinlogPlayerMap
+// Status returns the BinlogPlayerMapStatus for the BinlogPlayerMap.
 func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	// Create the result, take care of the stopped state.
 	result := &BinlogPlayerMapStatus{}
@@ -604,7 +604,7 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	defer blm.mu.Unlock()
 
 	// fill in state
-	if blm.state == BPM_STATE_STOPPED {
+	if blm.state == BpmStateStopped {
 		result.State = "Stopped"
 	} else {
 		result.State = "Running"

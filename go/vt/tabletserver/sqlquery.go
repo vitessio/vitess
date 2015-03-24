@@ -136,7 +136,7 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 	sq.setState(StateInitializing)
 	sq.mu.Unlock()
 
-	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnectionParams, mysqlStats)
+	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnParams, mysqlStats)
 	if err != nil {
 		log.Infof("allowQueries failed: %v", err)
 		sq.mu.Lock()

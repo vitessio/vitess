@@ -26,8 +26,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -55,11 +55,11 @@ var (
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
 	config      *Mycnf
-	dba         *mysql.ConnectionParams
-	dbApp       *mysql.ConnectionParams
+	dba         *sqldb.ConnParams
+	dbApp       *sqldb.ConnParams
 	dbaPool     *dbconnpool.ConnectionPool
 	appPool     *dbconnpool.ConnectionPool
-	replParams  *mysql.ConnectionParams
+	replParams  *sqldb.ConnParams
 	TabletDir   string
 	SnapshotDir string
 
@@ -73,7 +73,7 @@ type Mysqld struct {
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
 // dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
-func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *mysql.ConnectionParams) *Mysqld {
+func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.ConnParams) *Mysqld {
 	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
 	}

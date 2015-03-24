@@ -585,7 +585,7 @@ func (scw *SplitCloneWorker) copy() error {
 		queries = append(queries, binlogplayer.CreateBlpCheckpoint()...)
 		flags := ""
 		if scw.strategy.DontStartBinlogPlayer {
-			flags = binlogplayer.BLP_FLAG_DONT_START
+			flags = binlogplayer.BlpFlagDontStart
 		}
 
 		// get the current position from the sources

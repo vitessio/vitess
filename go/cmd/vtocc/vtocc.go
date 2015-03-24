@@ -18,6 +18,9 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (
@@ -61,7 +64,7 @@ func main() {
 		}
 	}
 	mycnf := &mysqlctl.Mycnf{BinLogPath: *binlogPath}
-	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbConfigs.Dba, &dbConfigs.App.ConnectionParams, &dbConfigs.Repl)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbConfigs.Dba, &dbConfigs.App.ConnParams, &dbConfigs.Repl)
 
 	if err := unmarshalFile(*overridesFile, &schemaOverrides); err != nil {
 		log.Error(err)
