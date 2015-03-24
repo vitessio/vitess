@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -248,9 +249,9 @@ type realQueryServiceControl struct {
 }
 
 // NewQueryServiceControl returns a real implementation of QueryServiceControl
-func NewQueryServiceControl() QueryServiceControl {
+func NewQueryServiceControl(newSqlDBConn sqldbconn.NewSqlDBConnFunc) QueryServiceControl {
 	return &realQueryServiceControl{
-		sqlQueryRPCService: NewSqlQuery(qsConfig),
+		sqlQueryRPCService: NewSqlQuery(qsConfig, newSqlDBConn),
 	}
 }
 

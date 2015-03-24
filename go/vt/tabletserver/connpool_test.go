@@ -5,20 +5,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"golang.org/x/net/context"
 )
 
 var (
-	appParams = &mysql.ConnectionParams{
+	appParams = &sqldbconn.ConnectionParams{
 		Uname:      "vt_app",
 		DbName:     "sougou",
 		UnixSocket: os.Getenv("VTDATAROOT") + "/vt_0000062347/mysql.sock",
 		Charset:    "utf8",
 	}
-	dbaParams = &mysql.ConnectionParams{
+	dbaParams = &sqldbconn.ConnectionParams{
 		Uname:      "vt_dba",
 		DbName:     "sougou",
 		UnixSocket: os.Getenv("VTDATAROOT") + "/vt_0000062347/mysql.sock",
@@ -42,7 +42,7 @@ func TestConnectivity(t *testing.T) {
 	killStats = stats.NewCounters("TestKills")
 	internalErrors = stats.NewCounters("TestInternalErrors")
 	mysqlStats = stats.NewTimings("TestMySQLStats")
-	pool := NewConnPool("p1", 1, 30*time.Second)
+	pool := NewConnPool("p1", nil, 1, 30*time.Second)
 	pool.Open(appParams, dbaParams)
 
 	conn, err := pool.Get(ctx)

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"golang.org/x/net/context"
@@ -29,20 +29,26 @@ var (
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type ConnPool struct {
-	mu          sync.Mutex
-	connections *pools.ResourcePool
-	capacity    int
-	idleTimeout time.Duration
-	dbaPool     *dbconnpool.ConnectionPool
+	mu           sync.Mutex
+	connections  *pools.ResourcePool
+	capacity     int
+	idleTimeout  time.Duration
+	dbaPool      *dbconnpool.ConnectionPool
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc
 }
 
 // NewConnPool creates a new ConnPool. The name is used
 // to publish stats only.
-func NewConnPool(name string, capacity int, idleTimeout time.Duration) *ConnPool {
+func NewConnPool(
+	name string,
+	newSqlDBConn sqldbconn.NewSqlDBConnFunc,
+	capacity int,
+	idleTimeout time.Duration) *ConnPool {
 	cp := &ConnPool{
-		capacity:    capacity,
-		idleTimeout: idleTimeout,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		capacity:     capacity,
+		idleTimeout:  idleTimeout,
+		dbaPool:      dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		newSqlDBConn: newSqlDBConn,
 	}
 	if name == "" {
 		return cp
@@ -64,7 +70,7 @@ func (cp *ConnPool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *ConnPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
+func (cp *ConnPool) Open(appParams, dbaParams *sqldbconn.ConnectionParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -72,7 +78,7 @@ func (cp *ConnPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
 		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, mysqlStats))
+	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, cp.newSqlDBConn, mysqlStats))
 }
 
 // Close will close the pool and wait for connections to be returned before

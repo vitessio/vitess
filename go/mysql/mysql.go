@@ -21,6 +21,7 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -85,43 +86,14 @@ func handleError(err *error) {
 	}
 }
 
-// ConnectionParams contains all the parameters to use to connect to mysql
-type ConnectionParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Flags      uint64 `json:"flags"`
-
-	// the following flags are only used for 'Change Master' command
-	// for now (along with flags |= 2048 for CLIENT_SSL)
-	SslCa     string `json:"ssl_ca"`
-	SslCaPath string `json:"ssl_ca_path"`
-	SslCert   string `json:"ssl_cert"`
-	SslKey    string `json:"ssl_key"`
-}
-
-// EnableMultiStatements will set the right flag on the parameters
-func (c *ConnectionParams) EnableMultiStatements() {
-	c.Flags |= C.CLIENT_MULTI_STATEMENTS
-}
-
 // EnableSSL will set the right flag on the parameters
-func (c *ConnectionParams) EnableSSL() {
-	c.Flags |= C.CLIENT_SSL
+func EnableSSL(connParams *sqldbconn.ConnectionParams) {
+	connParams.Flags |= C.CLIENT_SSL
 }
 
 // SslEnabled returns if SSL is enabled
-func (c *ConnectionParams) SslEnabled() bool {
-	return (c.Flags & C.CLIENT_SSL) != 0
-}
-
-// Redact will alter the ConnectionParams so they can be displayed
-func (c *ConnectionParams) Redact() {
-	c.Pass = RedactedPassword
+func SslEnabled(connParams *sqldbconn.ConnectionParams) bool {
+	return (connParams.Flags & C.CLIENT_SSL) != 0
 }
 
 // Connection encapsulates a C mysql library connection
@@ -130,7 +102,8 @@ type Connection struct {
 }
 
 // Connect uses the connection parameters to connect and returns the connection
-func Connect(params ConnectionParams) (conn *Connection, err error) {
+func Connect(params sqldbconn.ConnectionParams) (sqldbconn.SqlDBConn, error) {
+	var err error
 	defer handleError(&err)
 
 	host := C.CString(params.Host)
@@ -148,7 +121,7 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(charset)
 	flags := C.ulong(params.Flags)
 
-	conn = &Connection{}
+	conn := &Connection{}
 	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unixSocket, charset, flags) != 0 {
 		defer conn.Close()
 		return nil, conn.lastError("")
@@ -424,3 +397,6 @@ func cfree(str *C.char) {
 		C.free(unsafe.Pointer(str))
 	}
 }
+
+// Make sure mysql.Connection implements sqldbconn.SqlDBConn
+var _ (sqldbconn.SqlDBConn) = (*Connection)(nil)

@@ -10,6 +10,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 )
@@ -21,7 +22,7 @@ func TestMycnf(t *testing.T) {
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
 	appConfig := dbconfigs.DefaultDBConfigs.App.ConnectionParams
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
-	tablet0 := NewMysqld("Dba", "App", NewMycnf(0, 6802), &dbaConfig, &appConfig, &replConfig)
+	tablet0 := NewMysqld("Dba", "App", NewMycnf(0, 6802), &dbaConfig, &appConfig, &replConfig, mysql.Connect)
 	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {

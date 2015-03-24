@@ -26,8 +26,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldbconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -54,14 +54,15 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config      *Mycnf
-	dba         *mysql.ConnectionParams
-	dbApp       *mysql.ConnectionParams
-	dbaPool     *dbconnpool.ConnectionPool
-	appPool     *dbconnpool.ConnectionPool
-	replParams  *mysql.ConnectionParams
-	TabletDir   string
-	SnapshotDir string
+	config       *Mycnf
+	dba          *sqldbconn.ConnectionParams
+	dbApp        *sqldbconn.ConnectionParams
+	dbaPool      *dbconnpool.ConnectionPool
+	appPool      *dbconnpool.ConnectionPool
+	replParams   *sqldbconn.ConnectionParams
+	TabletDir    string
+	SnapshotDir  string
+	NewSqlDBConn sqldbconn.NewSqlDBConnFunc
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -73,7 +74,7 @@ type Mysqld struct {
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
 // dbaName and appName are the base for stats exports, use 'Dba' and 'App', except in tests
-func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *mysql.ConnectionParams) *Mysqld {
+func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldbconn.ConnectionParams, newSqlDBConn sqldbconn.NewSqlDBConnFunc) *Mysqld {
 	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
 	}
@@ -81,22 +82,23 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *mysql.Con
 	// create and open the connection pool for dba access
 	dbaMysqlStats := stats.NewTimings("Mysql" + dbaName)
 	dbaPool := dbconnpool.NewConnectionPool(dbaName+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
-	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, dbaMysqlStats))
+	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, newSqlDBConn, dbaMysqlStats))
 
 	// create and open the connection pool for app access
 	appMysqlStats := stats.NewTimings("Mysql" + appName)
 	appPool := dbconnpool.NewConnectionPool(appName+"ConnPool", *appPoolSize, *appIdleTimeout)
-	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
+	appPool.Open(dbconnpool.DBConnectionCreator(app, newSqlDBConn, appMysqlStats))
 
 	return &Mysqld{
-		config:      config,
-		dba:         dba,
-		dbApp:       app,
-		dbaPool:     dbaPool,
-		appPool:     appPool,
-		replParams:  repl,
-		TabletDir:   TabletDir(config.ServerId),
-		SnapshotDir: SnapshotDir(config.ServerId),
+		config:       config,
+		dba:          dba,
+		dbApp:        app,
+		dbaPool:      dbaPool,
+		appPool:      appPool,
+		replParams:   repl,
+		TabletDir:    TabletDir(config.ServerId),
+		SnapshotDir:  SnapshotDir(config.ServerId),
+		NewSqlDBConn: newSqlDBConn,
 	}
 }
 

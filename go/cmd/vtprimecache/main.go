@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/primecache"
@@ -37,7 +38,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	pc := primecache.NewPrimeCache(dbcfgs, *relayLogsPath)
+	pc := primecache.NewPrimeCache(dbcfgs, *relayLogsPath, mysql.Connect)
 	pc.WorkerCount = *workerCount
 	pc.SleepDuration = *sleepDuration
 
