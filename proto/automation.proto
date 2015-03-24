@@ -1,0 +1,71 @@
+// This file defines the data structures and API for the Automation framework
+// whose goal is to automate cluster operations e.g. resharding.
+
+// Currently, messages include both the specification (e.g. of a task) and runtime data (e.g. what was the output of the task).
+// Messages are both used internally (e.g. to persist the data) and externally (e.g. for an API).
+// TODO(mberlin): Decide if we should split this into different messages.
+
+syntax = "proto3";
+
+package automation;
+
+// Data type for task input and output e.g., to store a list of shards.
+// More primitive types can be mapped to this e.g. use a list with a single element for passing exactly one string.
+message Value {
+  // TODO(mberlin): Come up with a better name for the field.
+  repeated string value = 1;
+}
+
+enum TaskContainerSpecType {
+  UNKNOWN_TASK_CONTAINER_SPEC_TYPE = 0;
+  SINGLE_TASK = 1;
+  SERIAL_TASKS = 2;
+  PARALLEL_TASKS = 3;
+  FOREACH_TASKS = 4;
+}
+
+message TaskContainerSpec {
+  TaskContainerSpecType type = 1;
+  TaskSpec single_task = 2;
+  repeated TaskContainerSpec serial_task = 3;
+  repeated TaskContainerSpec parallel_task = 4;
+  ForEachTaskSpec foreach_task = 5;
+}
+
+message ForEachTaskSpec {
+  TaskSpec task = 1;
+  // List of strings the task will be iterated over e.g. list of shards.
+  // Use ${i} in your command to reference the loop variable.
+  Value collection = 2;
+  int32 parallelism = 3;
+}
+
+message TaskSpec {
+  string name = 1;
+  repeated TaskParameter parameter = 2;
+  // Name under which the output Value will be registered globally. May be omitted.
+  // Use ${key} to reference the value e.g. in the input of a subsequent task.
+  string output_key = 3;
+
+  // Runtime-specific data.
+  // (Expanded) parameters which were used to execute the task.
+  map <string, Value> input = 4;
+  Value output_value = 5;
+}
+
+message TaskParameter {
+  string name = 1;
+  Value value = 2;
+}
+
+message EnqueueClusterOperationRequest {
+  string name = 1;
+}
+
+message EnqueueClusterOperationResponse {
+  string id = 1;
+}
+
+service Automation {
+  rpc EnqueueClusterOperation(EnqueueClusterOperationRequest) returns (EnqueueClusterOperationResponse) {};
+}
