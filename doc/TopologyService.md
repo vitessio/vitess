@@ -144,13 +144,23 @@ For locking, we use an auto-incrementing file name in the `/action` subdirectory
 
 Note the paths used to store global and per-cell data do not overlap, so a single ZK can be used for both global and local ZKs. This is however not recommended, for reliability reasons.
 
-- Keyspace: `/zk/global/vt/<keyspace>`
-- Shard: `/zk/global/vt/<keyspace>/<shard>`
+- Keyspace: `/zk/global/vt/keyspaces/<keyspace>`
+- Shard: `/zk/global/vt/keyspaces/<keyspace>/shards/<shard>`
 - Tablet: `/zk/<cell>/vt/tablets/<uid>`
 - Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
 - SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
 - SrvShard: `/zk/<cell>/vt/ns/<keyspace>/<shard>`
 - EndPoints: `/zk/<cell>/vt/ns/<keyspace>/<shard>/<tablet type>`
+
+We provide the 'zk' utility for easy access to the topology data in ZooKeeper. For instance:
+```
+# NOTE: You need to source zookeeper client config file, like so:
+#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
+$ zk ls /zk/global/vt/keyspaces/user
+action
+actionlog
+shards
+```
 
 ### Etcd
 
