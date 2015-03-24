@@ -85,21 +85,21 @@ and a hashed version of that UserId as a keyspace_id. All data related to one us
 the same shard, as all rows will share that keyspace_id.
 
 ### Replication graph
-The [Replication Graph](ReplicationGraph.md) represents the relationships between the master
+The Replication Graph represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
-repointed to the new master so that replication can resume.
+be repointed to the new master so that replication can resume.
 
 ### Serving graph
-The [Serving Graph](ServingGraph.md) is derived from the shard and replication graph.
+The Serving Graph is derived from the shard and replication graph.
 It represents the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
 they are allowed to send queries to.
 
-### Topology Server
-The Topology Server is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper. Each Zookeeper process is run on a single server, but may share that server with other processes.
+### Topology Service
+The [Topology Service](TopologyService.md) is the backend service used to store the Topology data, and provide a locking service. It is backed by a Topology Server, and we support both ZooKeeper and etcd for that.
 
 There is a global instance of that service. It contains data that doesn't change often, and references other local instances. It may be replicated locally in each Data Center as read-only copies. (a Zookeeper instance with two master instances per cell and one or two replicas per cell is a good configuration).
 
@@ -113,7 +113,7 @@ The data is partitioned as follows:
 - Serving Graph: local instances
 - Replication Graph: the master alias is in the global instance, the master-slave map is in the local cells.
 
-Clients usually just read the local Serving Graph, therefore they only need the local instance to be up. Also, we provide a caching layer for Zookeeper, to survive local Zookeeper failures and scale read-only access dramatically.
+Clients are designed to just read the local Serving Graph, therefore they only need the local instance to be up.
 
 ### Cell (Data Center)
 
