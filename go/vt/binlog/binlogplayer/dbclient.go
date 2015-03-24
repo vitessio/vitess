@@ -8,18 +8,19 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
 // DBClient is a real VtClient backed by a mysql connection
 type DBClient struct {
-	dbConfig *mysql.ConnectionParams
-	dbConn   *mysql.Connection
+	dbConfig *sqldb.ConnParams
+	dbConn   sqldb.Conn
 }
 
-func NewDbClient(params *mysql.ConnectionParams) *DBClient {
+// NewDbClient creates a DBClient instance
+func NewDbClient(params *sqldb.ConnParams) *DBClient {
 	return &DBClient{
 		dbConfig: params,
 	}
@@ -27,7 +28,7 @@ func NewDbClient(params *mysql.ConnectionParams) *DBClient {
 
 func (dc *DBClient) handleError(err error) {
 	// log.Errorf("in DBClient handleError %v", err.(error))
-	if sqlErr, ok := err.(*mysql.SqlError); ok {
+	if sqlErr, ok := err.(*sqldb.SqlError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
 		}
@@ -37,18 +38,20 @@ func (dc *DBClient) handleError(err error) {
 	}
 }
 
+// Connect connects to a db server
 func (dc *DBClient) Connect() error {
 	params, err := dbconfigs.MysqlParams(dc.dbConfig)
 	if err != nil {
 		return err
 	}
-	dc.dbConn, err = mysql.Connect(params)
+	dc.dbConn, err = sqldb.Connect(params)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db, err %v", err)
 	}
 	return nil
 }
 
+// Begin starts a transaction
 func (dc *DBClient) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
@@ -58,6 +61,7 @@ func (dc *DBClient) Begin() error {
 	return err
 }
 
+// Commit commits the current transaction
 func (dc *DBClient) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
@@ -67,6 +71,7 @@ func (dc *DBClient) Commit() error {
 	return err
 }
 
+// Rollback rollbacks the current transaction
 func (dc *DBClient) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
@@ -76,6 +81,7 @@ func (dc *DBClient) Rollback() error {
 	return err
 }
 
+// Close closes connection to the db server
 func (dc *DBClient) Close() {
 	if dc.dbConn != nil {
 		dc.dbConn.Close()
@@ -83,6 +89,7 @@ func (dc *DBClient) Close() {
 	}
 }
 
+// ExecuteFetch sends query to the db server and fetch the result
 func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {

@@ -20,6 +20,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (

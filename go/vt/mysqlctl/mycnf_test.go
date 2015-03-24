@@ -19,7 +19,7 @@ var MycnfPath = "/tmp/my.cnf"
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "GoogleMysql")
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
-	appConfig := dbconfigs.DefaultDBConfigs.App.ConnectionParams
+	appConfig := dbconfigs.DefaultDBConfigs.App.ConnParams
 	replConfig := dbconfigs.DefaultDBConfigs.Repl
 	tablet0 := NewMysqld("Dba", "App", NewMycnf(0, 6802), &dbaConfig, &appConfig, &replConfig)
 	defer tablet0.Close()

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	proto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -196,7 +197,7 @@ func TestGoogleBinlogEventStripChecksum(t *testing.T) {
 }
 
 func TestGoogleStartReplicationCommands(t *testing.T) {
-	params := &mysql.ConnectionParams{
+	params := &sqldb.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -231,7 +232,7 @@ func TestGoogleStartReplicationCommands(t *testing.T) {
 }
 
 func TestGoogleStartReplicationCommandsSSL(t *testing.T) {
-	params := &mysql.ConnectionParams{
+	params := &sqldb.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",
@@ -239,7 +240,7 @@ func TestGoogleStartReplicationCommandsSSL(t *testing.T) {
 		SslCert:   "ssl-cert",
 		SslKey:    "ssl-key",
 	}
-	params.EnableSSL()
+	mysql.EnableSSL(params)
 	status := &proto.ReplicationStatus{
 		Position:           proto.ReplicationPosition{GTIDSet: proto.GoogleGTID{ServerID: 41983, GroupID: 12345}},
 		MasterHost:         "localhost",

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"golang.org/x/net/context"
@@ -23,14 +23,14 @@ import (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn *dbconnpool.DBConnection
-	info *mysql.ConnectionParams
+	info *sqldb.ConnParams
 	pool *ConnPool
 
 	current sync2.AtomicString
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
-func NewDBConn(cp *ConnPool, appParams, dbaParams *mysql.ConnectionParams) (*DBConn, error) {
+func NewDBConn(cp *ConnPool, appParams, dbaParams *sqldb.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, mysqlStats)
 	if err != nil {
 		go checkMySQL()

@@ -22,6 +22,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -30,6 +31,7 @@ import (
 )
 
 const (
+	// SlaveStartDeadline is the deadline for starting a slave
 	SlaveStartDeadline = 30
 )
 
@@ -45,7 +47,7 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-func changeMasterArgs(params *mysql.ConnectionParams, status *proto.ReplicationStatus) []string {
+func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus) []string {
 	var args []string
 	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", status.MasterHost))
 	args = append(args, fmt.Sprintf("MASTER_PORT = %d", status.MasterPort))
@@ -53,7 +55,7 @@ func changeMasterArgs(params *mysql.ConnectionParams, status *proto.ReplicationS
 	args = append(args, fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass))
 	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", status.MasterConnectRetry))
 
-	if params.SslEnabled() {
+	if mysql.SslEnabled(params) {
 		args = append(args, "MASTER_SSL = 1")
 	}
 	if params.SslCa != "" {
@@ -87,6 +89,7 @@ func parseSlaveStatus(fields map[string]string) *proto.ReplicationStatus {
 	return status
 }
 
+// WaitForSlaveStart waits a slave until given deadline passed
 func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	var rowMap map[string]string
 	for slaveWait := 0; slaveWait < slaveStartDeadline; slaveWait++ {
@@ -114,6 +117,7 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	return nil
 }
 
+// StartSlave starts a slave
 func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	if err := mysqld.ExecuteSuperQuery("START SLAVE"); err != nil {
 		return err
@@ -124,6 +128,7 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
+// StopSlave stops a slave
 func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
@@ -134,6 +139,7 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	return mysqld.ExecuteSuperQuery("STOP SLAVE")
 }
 
+// GetMasterAddr returns master address
 func (mysqld *Mysqld) GetMasterAddr() (string, error) {
 	slaveStatus, err := mysqld.SlaveStatus()
 	if err != nil {
@@ -142,6 +148,7 @@ func (mysqld *Mysqld) GetMasterAddr() (string, error) {
 	return slaveStatus.MasterAddr(), nil
 }
 
+// GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'port'")
 	if err != nil {
@@ -157,6 +164,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 	return int(utemp), nil
 }
 
+// IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
@@ -171,6 +179,7 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	return false, nil
 }
 
+// SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	query := "SET GLOBAL read_only = "
 	if on {
@@ -182,11 +191,13 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 var (
-	ErrNotSlave  = errors.New("no slave status")
+	// ErrNotSlave means there is no slave status
+	ErrNotSlave = errors.New("no slave status")
+	// ErrNotMaster means there is no master status
 	ErrNotMaster = errors.New("no master status")
 )
 
-// Return a replication state that will reparent a slave to the
+// ReparentPosition returns a replication state that will reparent a slave to the
 // correct master for a specified position.
 func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) (rs *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, reparentTime int64, err error) {
 	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition))
@@ -225,6 +236,7 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) 
 	return
 }
 
+// WaitMasterPos lets slaves wait to given replication position
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
 	flavor, err := mysqld.flavor()
 	if err != nil {
@@ -233,6 +245,7 @@ func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTim
 	return flavor.WaitMasterPos(mysqld, targetPos, waitTimeout)
 }
 
+// SlaveStatus returns the slave replication statuses
 func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
@@ -241,6 +254,7 @@ func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
 	return flavor.SlaveStatus(mysqld)
 }
 
+// MasterPosition returns master replication position
 func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
@@ -249,6 +263,7 @@ func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error)
 	return flavor.MasterPosition(mysqld)
 }
 
+// StartReplicationCommands starts a replication
 func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
@@ -268,6 +283,7 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	Pos: 1194
 	Server_ID: 41983
 */
+
 // BinlogInfo returns the filename and position for a Google MySQL group_id.
 // This command only exists in Google MySQL.
 func (mysqld *Mysqld) BinlogInfo(pos proto.ReplicationPosition) (fileName string, filePos uint, err error) {
@@ -293,6 +309,7 @@ func (mysqld *Mysqld) BinlogInfo(pos proto.ReplicationPosition) (fileName string
 	return fileName, filePos, err
 }
 
+// WaitForSlave waits for a slave if its lag is larger than given maxLag
 func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	// FIXME(msolomon) verify that slave started based on show slave status;
 	var rowMap map[string]string
@@ -329,8 +346,8 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	return errors.New("replication stopped, it will never catch up")
 }
 
-// Force all slaves to error and stop. This is extreme, but helpful for emergencies
-// and tests.
+// BreakSlaves forces all slaves to error and stop.
+// This is extreme, but helpful for emergencies and tests.
 // Insert a row, block the propagation of its subsequent delete and reinsert it. This
 // forces a failure on slaves only.
 func (mysqld *Mysqld) BreakSlaves() error {
@@ -360,7 +377,7 @@ func (mysqld *Mysqld) BreakSlaves() error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	colConnectionId = iota
+	colConnectionID = iota
 	colUsername
 	colClientAddr
 	colDbName
@@ -372,7 +389,7 @@ const (
 	binlogDumpCommand = "Binlog Dump"
 )
 
-// Get IP addresses for all currently connected slaves.
+// FindSlaves gets IP addresses for all currently connected slaves.
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
@@ -392,8 +409,7 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	return addrs, nil
 }
 
-// Helper function to make sure we can write to the local snapshot area,
-// before we actually do any action
+// ValidateSnapshotPath is a helper function to make sure we can write to the local snapshot area, before we actually do any action
 // (can be used for both partial and full snapshots)
 func (mysqld *Mysqld) ValidateSnapshotPath() error {
 	_path := path.Join(mysqld.SnapshotDir, "validate_test")

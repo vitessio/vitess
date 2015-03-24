@@ -12,7 +12,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -128,7 +128,7 @@ func (*googleMysql51) PromoteSlaveCommands() []string {
 }
 
 // StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
-func (*googleMysql51) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
+func (*googleMysql51) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
 	// Make SET binlog_group_id command. We have to cast to the Google-specific
 	// struct to access the fields because there is no canonical printed format to
 	// represent both a group_id and server_id in Google MySQL.
@@ -191,18 +191,18 @@ func (*googleMysql51) DisableBinlogPlayback(mysqld *Mysqld) error {
 
 // makeBinlogDump2Command builds a buffer containing the data for a Google MySQL
 // COM_BINLOG_DUMP2 command.
-func makeBinlogDump2Command(flags uint16, slave_id uint32, group_id uint64, source_server_id uint32) []byte {
+func makeBinlogDump2Command(flags uint16, slaveID uint32, groupID uint64, sourceServerID uint32) []byte {
 	var buf bytes.Buffer
 	buf.Grow(2 + 4 + 8 + 4)
 
 	// binlog_flags (2 bytes)
 	binary.Write(&buf, binary.LittleEndian, flags)
 	// server_id of slave (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, slave_id)
+	binary.Write(&buf, binary.LittleEndian, slaveID)
 	// group_id (8 bytes)
-	binary.Write(&buf, binary.LittleEndian, group_id)
+	binary.Write(&buf, binary.LittleEndian, groupID)
 	// server_id of the server that generated the group_id (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, source_server_id)
+	binary.Write(&buf, binary.LittleEndian, sourceServerID)
 
 	return buf.Bytes()
 }
@@ -210,8 +210,8 @@ func makeBinlogDump2Command(flags uint16, slave_id uint32, group_id uint64, sour
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
 func (flavor *googleMysql51) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const (
-		COM_BINLOG_DUMP2    = 0x27
-		BINLOG_USE_GROUP_ID = 0x04
+		ComBinlogDump2   = 0x27
+		BinlogUseGroupID = 0x04
 	)
 
 	gtid, ok := startPos.GTIDSet.(proto.GoogleGTID)
@@ -220,8 +220,8 @@ func (flavor *googleMysql51) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveCo
 	}
 
 	// Build the command.
-	buf := makeBinlogDump2Command(BINLOG_USE_GROUP_ID, conn.slaveID, gtid.GroupID, gtid.ServerID)
-	return conn.SendCommand(COM_BINLOG_DUMP2, buf)
+	buf := makeBinlogDump2Command(BinlogUseGroupID, conn.slaveID, gtid.GroupID, gtid.ServerID)
+	return conn.SendCommand(ComBinlogDump2, buf)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
@@ -236,6 +236,7 @@ type googleBinlogEvent struct {
 	binlogEvent
 }
 
+// NewGoogleBinlogEvent creates a BinlogEvent from given byte array
 func NewGoogleBinlogEvent(buf []byte) blproto.BinlogEvent {
 	return googleBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
@@ -283,11 +284,11 @@ func (ev googleBinlogEvent) groupID() uint64 {
 
 // GTID implements BinlogEvent.GTID().
 func (ev googleBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
-	group_id := ev.groupID()
-	if group_id == 0 {
+	groupID := ev.groupID()
+	if groupID == 0 {
 		return nil, fmt.Errorf("invalid group_id 0")
 	}
-	return proto.GoogleGTID{ServerID: ev.ServerID(), GroupID: group_id}, nil
+	return proto.GoogleGTID{ServerID: ev.ServerID(), GroupID: groupID}, nil
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().

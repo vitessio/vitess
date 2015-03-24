@@ -11,7 +11,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -91,7 +91,7 @@ func (*mariaDB10) PromoteSlaveCommands() []string {
 }
 
 // StartReplicationCommands implements MysqlFlavor.StartReplicationCommands().
-func (*mariaDB10) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
+func (*mariaDB10) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
 	// Make SET gtid_slave_pos command.
 	setSlavePos := fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", status.Position)
 
@@ -121,7 +121,7 @@ func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition,
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
 func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
-	const COM_BINLOG_DUMP = 0x12
+	const ComBinlogDump = 0x12
 
 	// Tell the server that we understand GTIDs by setting our slave capability
 	// to MARIA_SLAVE_CAPABILITY_GTID = 4 (MariaDB >= 10.0.1).
@@ -151,7 +151,7 @@ func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, s
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
 	buf := makeBinlogDumpCommand(0, 0, conn.slaveID, "")
-	return conn.SendCommand(COM_BINLOG_DUMP, buf)
+	return conn.SendCommand(ComBinlogDump, buf)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
@@ -176,6 +176,7 @@ type mariadbBinlogEvent struct {
 	binlogEvent
 }
 
+// NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
 func NewMariadbBinlogEvent(buf []byte) blproto.BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
@@ -199,11 +200,11 @@ func (ev mariadbBinlogEvent) IsGTID() bool {
 //   4         domain ID
 //   1         flags2
 func (ev mariadbBinlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
-	const FL_STANDALONE = 1
+	const FLStandalone = 1
 
 	data := ev.Bytes()[f.HeaderLength:]
 	flags2 := data[8+4]
-	return flags2&FL_STANDALONE == 0
+	return flags2&FLStandalone == 0
 }
 
 // GTID implements BinlogEvent.GTID().
@@ -243,7 +244,7 @@ func (ev mariadbBinlogEvent) Format() (f blproto.BinlogFormat, err error) {
 // StripChecksum implements BinlogEvent.StripChecksum().
 func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte) {
 	switch f.ChecksumAlgorithm {
-	case BINLOG_CHECKSUM_ALG_OFF, BINLOG_CHECKSUM_ALG_UNDEF:
+	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.
 		return ev, nil
 	default:
@@ -257,10 +258,10 @@ func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.Binl
 }
 
 const (
-	// BINLOG_CHECKSUM_ALG_OFF indicates that checksums are supported but off.
-	BINLOG_CHECKSUM_ALG_OFF = 0
-	// BINLOG_CHECKSUM_ALG_UNDEF indicates that checksums are not supported.
-	BINLOG_CHECKSUM_ALG_UNDEF = 255
+	// BinlogChecksumAlgOff indicates that checksums are supported but off.
+	BinlogChecksumAlgOff = 0
+	// BinlogChecksumAlgUndef indicates that checksums are not supported.
+	BinlogChecksumAlgUndef = 255
 )
 
 func init() {

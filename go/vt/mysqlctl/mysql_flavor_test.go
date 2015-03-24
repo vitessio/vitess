@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -33,7 +33,7 @@ func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition
 	return proto.ReplicationPosition{}, nil
 }
 func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) { return nil, nil }
-func (fakeMysqlFlavor) StartReplicationCommands(params *mysql.ConnectionParams, status *proto.ReplicationStatus) ([]string, error) {
+func (fakeMysqlFlavor) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
 	return nil, nil
 }
 func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }

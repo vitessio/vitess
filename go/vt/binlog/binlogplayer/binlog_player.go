@@ -14,8 +14,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -24,23 +24,28 @@ import (
 )
 
 var (
-	// we will log anything that's higher than that
-	SLOW_QUERY_THRESHOLD = time.Duration(100 * time.Millisecond)
+	// SlowQueryThreshold will cause we logging anything that's higher than it.
+	SlowQueryThreshold = time.Duration(100 * time.Millisecond)
 
 	// keys for the stats map
-	BLPL_QUERY       = "Query"
-	BLPL_TRANSACTION = "Transaction"
+
+	// BlplQuery is the key for the stats map.
+	BlplQuery = "Query"
+	// BlplTransaction is the key for the stats map.
+	BlplTransaction = "Transaction"
 
 	// flags for the blp_checkpoint table. The database entry is just
 	// a join(",") of these flags.
-	BLP_FLAG_DONT_START = "DontStart"
+
+	// BlpFlagDontStart means don't start a BinlogPlayer
+	BlpFlagDontStart = "DontStart"
 )
 
 // BinlogPlayerStats is the internal stats of a player. It is a different
 // structure that is passed in so stats can be collected over the life
 // of multiple individual players.
 type BinlogPlayerStats struct {
-	// Stats about the player, keys used are BLPL_QUERY and BLPL_TRANSACTION
+	// Stats about the player, keys used are BlplQuery and BlplTransaction
 	Timings *stats.Timings
 	Rates   *stats.Rates
 
@@ -50,12 +55,14 @@ type BinlogPlayerStats struct {
 	SecondsBehindMaster sync2.AtomicInt64
 }
 
+// SetLastPosition sets the last replication position.
 func (bps *BinlogPlayerStats) SetLastPosition(pos myproto.ReplicationPosition) {
 	bps.lastPositionMutex.Lock()
 	defer bps.lastPositionMutex.Unlock()
 	bps.lastPosition = pos
 }
 
+// GetLastPosition gets the last replication position.
 func (bps *BinlogPlayerStats) GetLastPosition() myproto.ReplicationPosition {
 	bps.lastPositionMutex.RLock()
 	defer bps.lastPositionMutex.RUnlock()
@@ -206,7 +213,7 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*mysql.SqlError); ok && sqlErr.Number() == 1213 {
+		if sqlErr, ok := err.(*sqldb.SqlError); ok && sqlErr.Number() == 1213 {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {
@@ -219,15 +226,15 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 	if err = blp.dbClient.Commit(); err != nil {
 		return false, fmt.Errorf("failed query COMMIT, err: %s", err)
 	}
-	blp.blplStats.Timings.Record(BLPL_TRANSACTION, txnStartTime)
+	blp.blplStats.Timings.Record(BlplTransaction, txnStartTime)
 	return true, nil
 }
 
 func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
-	blp.blplStats.Timings.Record(BLPL_QUERY, queryStartTime)
-	if time.Now().Sub(queryStartTime) > SLOW_QUERY_THRESHOLD {
+	blp.blplStats.Timings.Record(BlplQuery, queryStartTime)
+	if time.Now().Sub(queryStartTime) > SlowQueryThreshold {
 		log.Infof("SLOW QUERY '%s'", sql)
 	}
 	return qr, err
@@ -384,13 +391,13 @@ func UpdateBlpCheckpoint(uid uint32, pos myproto.ReplicationPosition, timeUpdate
 				"SET pos='%v', time_updated=%v, transaction_timestamp=%v "+
 				"WHERE source_shard_uid=%v",
 			myproto.EncodeReplicationPosition(pos), timeUpdated, txTimestamp, uid)
-	} else {
-		return fmt.Sprintf(
-			"UPDATE _vt.blp_checkpoint "+
-				"SET pos='%v', time_updated=%v "+
-				"WHERE source_shard_uid=%v",
-			myproto.EncodeReplicationPosition(pos), timeUpdated, uid)
 	}
+
+	return fmt.Sprintf(
+		"UPDATE _vt.blp_checkpoint "+
+			"SET pos='%v', time_updated=%v "+
+			"WHERE source_shard_uid=%v",
+		myproto.EncodeReplicationPosition(pos), timeUpdated, uid)
 }
 
 // QueryBlpCheckpoint returns a statement to query the gtid and flags for a
