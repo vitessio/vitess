@@ -6,7 +6,6 @@
 package ioutil2
 
 import (
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -19,21 +18,22 @@ func WriteFileAtomic(filename string, data []byte, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	n, err := f.Write(data)
+	_, err = f.Write(data)
 	if err == nil {
-		f.Sync()
+		err = f.Sync()
 	}
-	f.Close()
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if permErr := os.Chmod(f.Name(), perm); err == nil {
+		err = permErr
+	}
 	if err == nil {
-		if n < len(data) {
-			err = io.ErrShortWrite
-		} else {
-			err = os.Chmod(f.Name(), perm)
-		}
+		err = os.Rename(f.Name(), filename)
 	}
+	// Any err should result in full cleanup.
 	if err != nil {
 		os.Remove(f.Name())
-		return err
 	}
-	return os.Rename(f.Name(), filename)
+	return err
 }

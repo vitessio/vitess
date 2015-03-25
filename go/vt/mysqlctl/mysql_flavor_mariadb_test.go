@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -175,7 +176,7 @@ func TestMariadbMakeBinlogEvent(t *testing.T) {
 }
 
 func TestMariadbStartReplicationCommands(t *testing.T) {
-	params := &mysql.ConnectionParams{
+	params := &sqldb.ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
@@ -210,7 +211,7 @@ func TestMariadbStartReplicationCommands(t *testing.T) {
 }
 
 func TestMariadbStartReplicationCommandsSSL(t *testing.T) {
-	params := &mysql.ConnectionParams{
+	params := &sqldb.ConnParams{
 		Uname:     "username",
 		Pass:      "password",
 		SslCa:     "ssl-ca",
@@ -218,7 +219,7 @@ func TestMariadbStartReplicationCommandsSSL(t *testing.T) {
 		SslCert:   "ssl-cert",
 		SslKey:    "ssl-key",
 	}
-	params.EnableSSL()
+	mysql.EnableSSL(params)
 	status := &proto.ReplicationStatus{
 		Position:           proto.ReplicationPosition{GTIDSet: proto.MariadbGTID{Domain: 1, Server: 41983, Sequence: 12345}},
 		MasterHost:         "localhost",

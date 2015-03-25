@@ -88,9 +88,7 @@ guide.
 ### Reference
 
  * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.md)
- * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.md)
- * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.md)
- * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.md)
+ * [Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md)
  * [V3 design](https://github.com/youtube/vitess/blob/master/doc/VTGateV3.md)
 
 ## License

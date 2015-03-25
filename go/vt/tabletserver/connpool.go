@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"golang.org/x/net/context"
@@ -38,7 +38,10 @@ type ConnPool struct {
 
 // NewConnPool creates a new ConnPool. The name is used
 // to publish stats only.
-func NewConnPool(name string, capacity int, idleTimeout time.Duration) *ConnPool {
+func NewConnPool(
+	name string,
+	capacity int,
+	idleTimeout time.Duration) *ConnPool {
 	cp := &ConnPool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
@@ -64,7 +67,7 @@ func (cp *ConnPool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *ConnPool) Open(appParams, dbaParams *mysql.ConnectionParams) {
+func (cp *ConnPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 

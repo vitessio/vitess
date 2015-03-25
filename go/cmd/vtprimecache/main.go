@@ -14,6 +14,9 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/primecache"
+
+	// import mysql to register mysql connection function
+	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (

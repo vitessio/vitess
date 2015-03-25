@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 )
 
 // Offer a default config.
@@ -50,7 +51,7 @@ const FilteredConfigName DbConfigName = "filtered"
 const ReplConfigName DbConfigName = "repl"
 
 // The flags will change the global singleton
-func registerConnFlags(connParams *mysql.ConnectionParams, cnfName DbConfigName, defaultParams mysql.ConnectionParams) {
+func registerConnFlags(connParams *sqldb.ConnParams, cnfName DbConfigName, defaultParams sqldb.ConnParams) {
 	name := string(cnfName)
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", defaultParams.Port, "db "+name+" connection port")
@@ -75,7 +76,7 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	}
 	registeredFlags := EmptyConfig
 	if AppConfig&flags != 0 {
-		registerConnFlags(&dbConfigs.App.ConnectionParams, AppConfigName, DefaultDBConfigs.App.ConnectionParams)
+		registerConnFlags(&dbConfigs.App.ConnParams, AppConfigName, DefaultDBConfigs.App.ConnParams)
 		registeredFlags |= AppConfig
 	}
 	if DbaConfig&flags != 0 {
@@ -95,9 +96,9 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 	return registeredFlags
 }
 
-// initConnectionParams may overwrite the socket file,
+// initConnParams may overwrite the socket file,
 // and refresh the password to check that works.
-func initConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
+func initConnParams(cp *sqldb.ConnParams, socketFile string) error {
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
 	}
@@ -105,9 +106,9 @@ func initConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
 	return err
 }
 
-// MysqlParams returns a copy of our ConnectionParams that we can use
+// MysqlParams returns a copy of our ConnParams that we can use
 // to connect, after going through the CredentialsServer.
-func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
+func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
 	result := *cp
 	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {
@@ -121,10 +122,10 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 	return result, err
 }
 
-// DBConfig encapsulates a ConnectionParams object and adds a keyspace and a
+// DBConfig encapsulates a ConnParams object and adds a keyspace and a
 // shard.
 type DBConfig struct {
-	mysql.ConnectionParams
+	sqldb.ConnParams
 	Keyspace          string
 	Shard             string
 	EnableRowcache    bool
@@ -146,13 +147,13 @@ func (d *DBConfig) String() string {
 // - Replication access to change master
 type DBConfigs struct {
 	App      DBConfig
-	Dba      mysql.ConnectionParams
-	Filtered mysql.ConnectionParams
-	Repl     mysql.ConnectionParams
+	Dba      sqldb.ConnParams
+	Filtered sqldb.ConnParams
+	Repl     sqldb.ConnParams
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.ConnectionParams.Pass != mysql.RedactedPassword {
+	if dbcfgs.App.ConnParams.Pass != mysql.RedactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
@@ -164,10 +165,10 @@ func (dbcfgs *DBConfigs) String() string {
 
 // Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
-	dbcfgs.App.ConnectionParams.Redact()
-	dbcfgs.Dba.Redact()
-	dbcfgs.Filtered.Redact()
-	dbcfgs.Repl.Redact()
+	dbcfgs.App.ConnParams.Pass = mysql.RedactedPassword
+	dbcfgs.Dba.Pass = mysql.RedactedPassword
+	dbcfgs.Filtered.Pass = mysql.RedactedPassword
+	dbcfgs.Repl.Pass = mysql.RedactedPassword
 }
 
 // Init will initialize app, dba, filterec and repl configs
@@ -176,22 +177,22 @@ func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
-		if err := initConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
+		if err := initConnParams(&dbConfigs.App.ConnParams, socketFile); err != nil {
 			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
-		if err := initConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
+		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
 			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
-		if err := initConnectionParams(&dbConfigs.Filtered, socketFile); err != nil {
+		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
 			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
-		if err := initConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
+		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
 			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}
 	}

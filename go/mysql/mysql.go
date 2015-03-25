@@ -21,6 +21,7 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -33,6 +34,7 @@ const (
 func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
+	sqldb.Register("mysql", Connect)
 }
 
 const (
@@ -52,76 +54,21 @@ const (
 	RedactedPassword = "****"
 )
 
-// SqlError is the error structure returned from calling a mysql
-// library function
-type SqlError struct {
-	Num     int
-	Message string
-	Query   string
-}
-
-// NewSqlError returns a new SqlError
-func NewSqlError(number int, format string, args ...interface{}) *SqlError {
-	return &SqlError{Num: number, Message: fmt.Sprintf(format, args...)}
-}
-
-// Error implements the error interface
-func (se *SqlError) Error() string {
-	if se.Query == "" {
-		return fmt.Sprintf("%v (errno %v)", se.Message, se.Num)
-	}
-	return fmt.Sprintf("%v (errno %v) during query: %s", se.Message, se.Num, se.Query)
-}
-
-// Number returns the internal mysql error code
-func (se *SqlError) Number() int {
-	return se.Num
-}
-
 func handleError(err *error) {
 	if x := recover(); x != nil {
-		terr := x.(*SqlError)
+		terr := x.(*sqldb.SqlError)
 		*err = terr
 	}
 }
 
-// ConnectionParams contains all the parameters to use to connect to mysql
-type ConnectionParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Flags      uint64 `json:"flags"`
-
-	// the following flags are only used for 'Change Master' command
-	// for now (along with flags |= 2048 for CLIENT_SSL)
-	SslCa     string `json:"ssl_ca"`
-	SslCaPath string `json:"ssl_ca_path"`
-	SslCert   string `json:"ssl_cert"`
-	SslKey    string `json:"ssl_key"`
-}
-
-// EnableMultiStatements will set the right flag on the parameters
-func (c *ConnectionParams) EnableMultiStatements() {
-	c.Flags |= C.CLIENT_MULTI_STATEMENTS
-}
-
 // EnableSSL will set the right flag on the parameters
-func (c *ConnectionParams) EnableSSL() {
-	c.Flags |= C.CLIENT_SSL
+func EnableSSL(connParams *sqldb.ConnParams) {
+	connParams.Flags |= C.CLIENT_SSL
 }
 
 // SslEnabled returns if SSL is enabled
-func (c *ConnectionParams) SslEnabled() bool {
-	return (c.Flags & C.CLIENT_SSL) != 0
-}
-
-// Redact will alter the ConnectionParams so they can be displayed
-func (c *ConnectionParams) Redact() {
-	c.Pass = RedactedPassword
+func SslEnabled(connParams *sqldb.ConnParams) bool {
+	return (connParams.Flags & C.CLIENT_SSL) != 0
 }
 
 // Connection encapsulates a C mysql library connection
@@ -130,7 +77,8 @@ type Connection struct {
 }
 
 // Connect uses the connection parameters to connect and returns the connection
-func Connect(params ConnectionParams) (conn *Connection, err error) {
+func Connect(params sqldb.ConnParams) (sqldb.Conn, error) {
+	var err error
 	defer handleError(&err)
 
 	host := C.CString(params.Host)
@@ -148,7 +96,7 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(charset)
 	flags := C.ulong(params.Flags)
 
-	conn = &Connection{}
+	conn := &Connection{}
 	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unixSocket, charset, flags) != 0 {
 		defer conn.Close()
 		return nil, conn.lastError("")
@@ -169,7 +117,7 @@ func (conn *Connection) IsClosed() bool {
 // ExecuteFetch executes the query on the connection
 func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	if conn.IsClosed() {
-		return nil, NewSqlError(2006, "Connection is closed")
+		return nil, sqldb.NewSqlError(2006, "Connection is closed")
 	}
 
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 0) != 0 {
@@ -185,7 +133,11 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 
 	if qr.RowsAffected > uint64(maxrows) {
-		return nil, &SqlError{0, fmt.Sprintf("Row count exceeded %d", maxrows), string(query)}
+		return nil, &sqldb.SqlError{
+			Num:     0,
+			Message: fmt.Sprintf("Row count exceeded %d", maxrows),
+			Query:   string(query),
+		}
 	}
 	if wantfields {
 		qr.Fields = conn.Fields()
@@ -219,7 +171,7 @@ func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error)
 // on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
-		return NewSqlError(2006, "Connection is closed")
+		return sqldb.NewSqlError(2006, "Connection is closed")
 	}
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 1) != 0 {
 		return conn.lastError(query)
@@ -310,9 +262,17 @@ func (conn *Connection) ID() int64 {
 
 func (conn *Connection) lastError(query string) error {
 	if err := C.vt_error(&conn.c); *err != 0 {
-		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: query}
+		return &sqldb.SqlError{
+			Num:     int(C.vt_errno(&conn.c)),
+			Message: C.GoString(err),
+			Query:   query,
+		}
 	}
-	return &SqlError{0, "Dummy", string(query)}
+	return &sqldb.SqlError{
+		Num:     0,
+		Message: "Dummy",
+		Query:   string(query),
+	}
 }
 
 // ReadPacket reads a raw packet from the MySQL connection.
@@ -424,3 +384,6 @@ func cfree(str *C.char) {
 		C.free(unsafe.Pointer(str))
 	}
 }
+
+// Make sure mysql.Connection implements sqldb.Conn
+var _ (sqldb.Conn) = (*Connection)(nil)

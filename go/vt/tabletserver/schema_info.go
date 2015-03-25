@@ -16,8 +16,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -102,7 +102,10 @@ type SchemaInfo struct {
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
-func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
+func NewSchemaInfo(
+	queryCacheSize int,
+	reloadTime time.Duration,
+	idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:  cache.NewLRUCache(int64(queryCacheSize)),
 		connPool: NewConnPool("", 2, idleTimeout),
@@ -129,7 +132,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 }
 
 // Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
-func (si *SchemaInfo) Open(appParams, dbaParams *mysql.ConnectionParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
+func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
 	ctx := context.Background()
 	si.connPool.Open(appParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
