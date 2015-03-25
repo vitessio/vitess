@@ -444,11 +444,11 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet.start_vttablet()
     replica_conn._execute("select 1 from vt_insert_test", {})
 
-  def test_retry_txn_pool_full(self):
+  def test_noretry_txn_pool_full(self):
     master_conn = get_connection(db_type='master')
     master_conn._execute("set vt_transaction_cap=1", {})
     master_conn.begin()
-    with self.assertRaises(dbexceptions.OperationalError):
+    with self.assertRaises(dbexceptions.TxPoolFull):
       master_conn2 = get_connection(db_type='master')
       master_conn2.begin()
     master_conn.commit()
