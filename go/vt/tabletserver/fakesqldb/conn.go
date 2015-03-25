@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -49,7 +50,8 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 
 	result, ok := conn.queryMap[query]
 	if !ok {
-		return nil, fmt.Errorf("unsupported query: %s", query)
+		log.Warningf("unexpected query: %s, will return an empty result", query)
+		return &proto.QueryResult{}, nil
 	}
 	qr := &proto.QueryResult{}
 	qr.RowsAffected = result.RowsAffected
@@ -101,7 +103,8 @@ func (conn *Conn) ExecuteStreamFetch(query string) error {
 	}
 	result, ok := conn.queryMap[query]
 	if !ok {
-		return fmt.Errorf("unsupported query: %s", query)
+		log.Warningf("unexpected query: %s, will return an empty result", query)
+		result = &proto.QueryResult{}
 	}
 	conn.curQueryResult = result
 	conn.curQueryRow = 0
@@ -171,9 +174,16 @@ func (conn *Conn) SetCharset(cs proto.Charset) error {
 }
 
 // Register registers a fake implementation of sqldb.Conn and returns its registered name
-func Register(queryMap map[string]*proto.QueryResult) string {
+func Register(queryMap map[string]*proto.QueryResult, connFail bool) string {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	sqldb.Register(name, func(sqldb.ConnParams) (sqldb.Conn, error) {
+		if connFail {
+			return nil, &sqldb.SqlError{
+				Num:     2012,
+				Message: "connection fail",
+				Query:   "",
+			}
+		}
 		return NewFakeSqlDBConn(queryMap), nil
 	})
 	sqldb.DefaultDB = name
