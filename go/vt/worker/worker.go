@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"time"
 
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -51,3 +52,10 @@ type Resolver interface {
 // Resolvers should attempt to keep the previous topo resolution cached for at
 // least this long.
 const resolveTTL = 15 * time.Second
+
+var (
+	// the stats exported by this package
+	statsState               = stats.NewString("WorkerState")
+	statsDestinationResolves = stats.NewInt("WorkerDestinationResolves")
+	statsRetryCounters       = stats.NewCounters("WorkerRetryCount")
+)

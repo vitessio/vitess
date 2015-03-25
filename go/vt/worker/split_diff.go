@@ -86,12 +86,14 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, exc
 func (sdw *SplitDiffWorker) setState(state string) {
 	sdw.mu.Lock()
 	sdw.state = state
+	statsState.Set(state)
 	sdw.mu.Unlock()
 }
 
 func (sdw *SplitDiffWorker) recordError(err error) {
 	sdw.mu.Lock()
 	sdw.state = stateSDError
+	statsState.Set(stateSDError)
 	sdw.err = err
 	sdw.mu.Unlock()
 }

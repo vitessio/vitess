@@ -124,6 +124,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 func (scw *SplitCloneWorker) setState(state string) {
 	scw.mu.Lock()
 	scw.state = state
+	statsState.Set(state)
 	scw.mu.Unlock()
 
 	event.DispatchUpdate(scw.ev, state)
@@ -132,6 +133,7 @@ func (scw *SplitCloneWorker) setState(state string) {
 func (scw *SplitCloneWorker) recordError(err error) {
 	scw.mu.Lock()
 	scw.state = stateSCError
+	statsState.Set(stateSCError)
 	scw.err = err
 	scw.mu.Unlock()
 
@@ -394,6 +396,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	scw.destinationShardsToTablets = destinationShardsToTablets
 	// save the time of the last successful resolution
 	scw.resolveTime = time.Now()
+	statsDestinationResolves.Add(1)
 	return nil
 }
 

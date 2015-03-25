@@ -119,6 +119,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 func (vscw *VerticalSplitCloneWorker) setState(state string) {
 	vscw.mu.Lock()
 	vscw.state = state
+	statsState.Set(state)
 	vscw.mu.Unlock()
 
 	event.DispatchUpdate(vscw.ev, state)
@@ -127,6 +128,7 @@ func (vscw *VerticalSplitCloneWorker) setState(state string) {
 func (vscw *VerticalSplitCloneWorker) recordError(err error) {
 	vscw.mu.Lock()
 	vscw.state = stateVSCError
+	statsState.Set(stateVSCError)
 	vscw.err = err
 	vscw.mu.Unlock()
 
@@ -353,6 +355,7 @@ func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
 	vscw.destinationShardsToTablets = map[string]*topo.TabletInfo{vscw.destinationShard: ti}
 	// save the time of the last successful resolution
 	vscw.resolveTime = time.Now()
+	statsDestinationResolves.Add(1)
 	return nil
 }
 
