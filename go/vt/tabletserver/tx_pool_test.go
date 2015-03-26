@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -16,8 +17,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-var testTxPool *TxPool
-
 func TestExecuteCommit(t *testing.T) {
 	tableName := "test_table"
 	sql := fmt.Sprintf("ALTER TABLE %s ADD test_column INT", tableName)
@@ -25,7 +24,7 @@ func TestExecuteCommit(t *testing.T) {
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
 	})
-	txPool := getTxPool()
+	txPool := newTxPool()
 	txPool.SetTimeout(1 * time.Second)
 	txPool.SetPoolTimeout(1 * time.Second)
 	appParams := sqldb.ConnParams{}
@@ -58,7 +57,7 @@ func TestExecuteRollback(t *testing.T) {
 		sql:        &proto.QueryResult{},
 		"rollback": &proto.QueryResult{},
 	})
-	txPool := getTxPool()
+	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
 	txPool.Open(&appParams, &dbaParams)
@@ -81,7 +80,7 @@ func TestTransactionKiller(t *testing.T) {
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
 	})
-	txPool := getTxPool()
+	txPool := newTxPool()
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(time.Duration(10))
 	appParams := sqldb.ConnParams{}
@@ -108,7 +107,7 @@ func TestBeginAfterConnPoolClosed(t *testing.T) {
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
 	})
-	txPool := getTxPool()
+	txPool := newTxPool()
 	txPool.SetTimeout(time.Duration(10))
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -134,7 +133,7 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
 	})
-	txPool := getTxPool()
+	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
 	txPool.Open(&appParams, &dbaParams)
@@ -161,39 +160,35 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func getTxPool() *TxPool {
-	poolName := "TestTransactionPool"
+func newTxPool() *TxPool {
+	randID := rand.Int63()
+	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
+	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
 	txPoolTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
-
-	if testTxPool != nil {
-		testTxPool.SetTimeout(transactionTimeout)
-		testTxPool.SetPoolTimeout(txPoolTimeout)
-		// make sure txPool has been closed
-		testTxPool.Close()
-	} else {
-		testTxPool = NewTxPool(
-			poolName,
-			transactionCap,
-			transactionTimeout,
-			txPoolTimeout,
-			idleTimeout,
-		)
-	}
-	return testTxPool
+	return NewTxPool(
+		poolName,
+		txStatsPrefix,
+		transactionCap,
+		transactionTimeout,
+		txPoolTimeout,
+		idleTimeout,
+	)
 }
 
 func init() {
-	mysqlStats = stats.NewTimings("Mysql")
-	queryStats = stats.NewTimings("Queries")
-	waitStats = stats.NewTimings("Waits")
-	killStats = stats.NewCounters("Kills")
-	infoErrors = stats.NewCounters("InfoErrors")
-	errorStats = stats.NewCounters("Errors")
-	internalErrors = stats.NewCounters("InternalErrors")
-	resultStats = stats.NewHistogram("Results", resultBuckets)
-	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
-	qpsRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
+	rand.Seed(time.Now().UnixNano())
+	name := "TestTxPool"
+	mysqlStats = stats.NewTimings(name + "Mysql")
+	queryStats = stats.NewTimings(name + "Queries")
+	waitStats = stats.NewTimings(name + "Waits")
+	killStats = stats.NewCounters(name + "Kills")
+	infoErrors = stats.NewCounters(name + "InfoErrors")
+	errorStats = stats.NewCounters(name + "Errors")
+	internalErrors = stats.NewCounters(name + "InternalErrors")
+	resultStats = stats.NewHistogram(name+"Results", resultBuckets)
+	spotCheckCount = stats.NewInt(name + "RowcacheSpotCheckCount")
+	qpsRates = stats.NewRates(name+"QPS", queryStats, 15, 60*time.Second)
 }
