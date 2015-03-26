@@ -86,12 +86,14 @@ func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard str
 func (vsdw *VerticalSplitDiffWorker) setState(state string) {
 	vsdw.mu.Lock()
 	vsdw.state = state
+	statsState.Set(state)
 	vsdw.mu.Unlock()
 }
 
 func (vsdw *VerticalSplitDiffWorker) recordError(err error) {
 	vsdw.mu.Lock()
 	vsdw.state = stateVSDError
+	statsState.Set(stateVSDError)
 	vsdw.err = err
 	vsdw.mu.Unlock()
 }
@@ -151,6 +153,7 @@ func (vsdw *VerticalSplitDiffWorker) checkInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (vsdw *VerticalSplitDiffWorker) Run() {
+	resetVars()
 	err := vsdw.run()
 
 	vsdw.setState(stateVSDCleanUp)

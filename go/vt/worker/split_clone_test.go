@@ -335,4 +335,14 @@ func testSplitClone(t *testing.T, strategy string) {
 	if wrk.err != nil || wrk.state != stateSCDone {
 		t.Errorf("Worker run failed")
 	}
+
+	if statsDestinationAttemptedResolves.String() != "3" {
+		t.Errorf("Wrong statsDestinationAttemptedResolves: wanted %v, got %v", "3", statsDestinationAttemptedResolves.String())
+	}
+	if statsDestinationActualResolves.String() != "1" {
+		t.Errorf("Wrong statsDestinationActualResolves: wanted %v, got %v", "1", statsDestinationActualResolves.String())
+	}
+	if statsRetryCounters.String() != "{\"ReadOnly\": 2}" {
+		t.Errorf("Wrong statsRetryCounters: wanted %v, got %v", "{\"ReadOnly\": 2}", statsRetryCounters.String())
+	}
 }
