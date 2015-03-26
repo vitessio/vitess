@@ -33,7 +33,7 @@ import org.junit.runners.JUnit4;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -403,11 +403,11 @@ public class VtGateIT {
    * Create env with two shards each having a master and replica
    */
   static TestEnv getTestEnv() {
-    Map<String, List<String>> shardKidMap = new HashMap<>();
-    shardKidMap.put("-80",
-        Lists.newArrayList("527875958493693904", "626750931627689502", "345387386794260318"));
+    Map<String, List<String>> shardKidMap = new LinkedHashMap<>();
     shardKidMap.put("80-",
         Lists.newArrayList("9767889778372766922", "9742070682920810358", "10296850775085416642"));
+    shardKidMap.put("-80",
+        Lists.newArrayList("527875958493693904", "626750931627689502", "345387386794260318"));
     TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
     env.addTablet("rdonly", 1);
     return env;
