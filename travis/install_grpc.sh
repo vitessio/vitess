@@ -13,7 +13,6 @@ fi
 
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout release-0_5_0
 git submodule update --init
 make
 if [ "$grpc_dist" != "" ]; then
@@ -21,7 +20,7 @@ if [ "$grpc_dist" != "" ]; then
 else
   make install
 fi
-./tools/run_tests/build_python.sh
+CONFIG=opt ./tools/run_tests/build_python.sh
 if [ "$grpc_dist" != "" ]; then
   pip install -r src/python/requirements.txt -t $grpc_dist/lib/python2.7/site-packages
   CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/src
