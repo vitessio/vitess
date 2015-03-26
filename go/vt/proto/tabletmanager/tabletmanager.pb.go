@@ -62,7 +62,7 @@ func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, op
 		return nil, err
 	}
 	x := &tabletManagerSnapshotClient{stream}
-	if err := x.ClientStream.SendProto(in); err != nil {
+	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
@@ -82,7 +82,7 @@ type tabletManagerSnapshotClient struct {
 
 func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
 	m := new(vtctl.LoggerEvent)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -101,7 +101,7 @@ func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
 
 func _TabletManager_Snapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(SnapshotArgs)
-	if err := stream.RecvProto(m); err != nil {
+	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
 	return srv.(TabletManagerServer).Snapshot(m, &tabletManagerSnapshotServer{stream})
@@ -117,7 +117,7 @@ type tabletManagerSnapshotServer struct {
 }
 
 func (x *tabletManagerSnapshotServer) Send(m *vtctl.LoggerEvent) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 var _TabletManager_serviceDesc = grpc.ServiceDesc{
