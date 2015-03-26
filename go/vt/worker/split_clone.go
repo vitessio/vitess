@@ -215,6 +215,7 @@ func (scw *SplitCloneWorker) checkInterrupted() bool {
 
 // Run implements the Worker interface
 func (scw *SplitCloneWorker) Run() {
+	resetVars()
 	err := scw.run()
 
 	scw.setState(stateSCCleanUp)
@@ -374,6 +375,7 @@ func (scw *SplitCloneWorker) findTargets() error {
 // It will attempt to resolve all shards and update scw.destinationShardsToTablets;
 // if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
 func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+	statsDestinationAttemptedResolves.Add(1)
 	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
 
 	// Allow at most one resolution request at a time; if there are concurrent requests, only
@@ -396,7 +398,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	scw.destinationShardsToTablets = destinationShardsToTablets
 	// save the time of the last successful resolution
 	scw.resolveTime = time.Now()
-	statsDestinationResolves.Add(1)
+	statsDestinationActualResolves.Add(1)
 	return nil
 }
 

@@ -159,6 +159,7 @@ func (worker *SQLDiffWorker) checkInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (worker *SQLDiffWorker) Run() {
+	resetVars()
 	err := worker.run()
 
 	worker.setState(sqlDiffCleanUp)

@@ -153,6 +153,7 @@ func (vsdw *VerticalSplitDiffWorker) checkInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (vsdw *VerticalSplitDiffWorker) Run() {
+	resetVars()
 	err := vsdw.run()
 
 	vsdw.setState(stateVSDCleanUp)

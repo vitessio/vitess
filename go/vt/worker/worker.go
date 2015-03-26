@@ -54,8 +54,20 @@ type Resolver interface {
 const resolveTTL = 15 * time.Second
 
 var (
-	// the stats exported by this package
-	statsState               = stats.NewString("WorkerState")
-	statsDestinationResolves = stats.NewInt("WorkerDestinationResolves")
-	statsRetryCounters       = stats.NewCounters("WorkerRetryCount")
+	statsState = stats.NewString("WorkerState")
+	// the number of times that the worker attempst to reresolve the masters
+	statsDestinationAttemptedResolves = stats.NewInt("WorkerDestinationAttemptedResolves")
+	// the number of times that the worker actually hits the topo server, i.e., they don't
+	// use a cached topology
+	statsDestinationActualResolves = stats.NewInt("WorkerDestinationActualResolves")
+	statsRetryCounters             = stats.NewCounters("WorkerRetryCount")
 )
+
+// resetVars resets the debug variables that are meant to provide information on a
+// per-run basis. This should be called at the beginning of each worker run.
+func resetVars() {
+	statsState.Set("")
+	statsDestinationAttemptedResolves.Set(0)
+	statsDestinationActualResolves.Set(0)
+	statsRetryCounters.Reset()
+}

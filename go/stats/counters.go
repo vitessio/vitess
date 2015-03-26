@@ -49,6 +49,13 @@ func (c *Counters) Set(name string, value int64) {
 	c.counts[name] = value
 }
 
+// Reset resets all counter values
+func (c *Counters) Reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.counts = make(map[string]int64)
+}
+
 // Counts returns a copy of the Counters' map.
 func (c *Counters) Counts() map[string]int64 {
 	c.mu.Lock()

@@ -153,6 +153,7 @@ func (sdw *SplitDiffWorker) checkInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (sdw *SplitDiffWorker) Run() {
+	resetVars()
 	err := sdw.run()
 
 	sdw.setState(stateSDCleanUp)

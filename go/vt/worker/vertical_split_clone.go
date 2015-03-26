@@ -202,6 +202,7 @@ func (vscw *VerticalSplitCloneWorker) checkInterrupted() bool {
 
 // Run implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) Run() {
+	resetVars()
 	err := vscw.run()
 
 	vscw.setState(stateVSCCleanUp)
@@ -338,6 +339,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets() error {
 // It will attempt to resolve all shards and update vscw.destinationShardsToTablets;
 // if it is unable to do so, it will not modify vscw.destinationShardsToTablets at all.
 func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
+	statsDestinationAttemptedResolves.Add(1)
 	// Allow at most one resolution request at a time; if there are concurrent requests, only
 	// one of them will actualy hit the topo server.
 	vscw.resolveMu.Lock()
@@ -355,7 +357,7 @@ func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
 	vscw.destinationShardsToTablets = map[string]*topo.TabletInfo{vscw.destinationShard: ti}
 	// save the time of the last successful resolution
 	vscw.resolveTime = time.Now()
-	statsDestinationResolves.Add(1)
+	statsDestinationActualResolves.Add(1)
 	return nil
 }
 
