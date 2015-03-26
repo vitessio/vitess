@@ -144,6 +144,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Services
 	qe.txPool = NewTxPool(
 		"TransactionPool",
+		"",
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),

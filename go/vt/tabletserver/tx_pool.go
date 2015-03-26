@@ -61,6 +61,7 @@ type TxPool struct {
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(
 	name string,
+	txStatsPrefix string,
 	capacity int,
 	timeout time.Duration,
 	poolTimeout time.Duration,
@@ -72,7 +73,7 @@ func NewTxPool(
 		timeout:     sync2.AtomicDuration(timeout),
 		poolTimeout: sync2.AtomicDuration(poolTimeout),
 		ticks:       timer.NewTimer(timeout / 10),
-		txStats:     stats.NewTimings("Transactions"),
+		txStats:     stats.NewTimings(txStatsPrefix + "Transactions"),
 	}
 	// Careful: pool also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
