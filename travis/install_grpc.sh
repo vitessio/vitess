@@ -12,8 +12,8 @@ if [ "$grpc_dist" != "" ]; then
 fi
 
 git clone https://github.com/grpc/grpc.git
-git checkout release-0_5_0
 cd grpc
+git checkout release-0_5_0
 git submodule update --init
 make
 if [ "$grpc_dist" != "" ]; then
