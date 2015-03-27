@@ -23,6 +23,8 @@ import (
 
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
+	// import memcache to register memcache connection function
+	_ "github.com/youtube/vitess/go/memcache"
 )
 
 var (

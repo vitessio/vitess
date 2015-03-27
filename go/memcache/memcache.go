@@ -13,21 +13,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/youtube/vitess/go/cacheservice"
 )
 
+// Connection is the connection to a memcache.
 type Connection struct {
 	conn     net.Conn
 	buffered bufio.ReadWriter
 	timeout  time.Duration
 }
 
-type Result struct {
-	Key   string
-	Value []byte
-	Flags uint16
-	Cas   uint64
-}
-
+// Connect connects a memcache process.
 func Connect(address string, timeout time.Duration) (conn *Connection, err error) {
 	var network string
 	if strings.Contains(address, "/") {
@@ -50,52 +47,65 @@ func Connect(address string, timeout time.Duration) (conn *Connection, err error
 	}, nil
 }
 
+// Close closes the memcache connection.
 func (mc *Connection) Close() {
 	mc.conn.Close()
 }
 
-func (mc *Connection) Get(keys ...string) (results []Result, err error) {
+// Get returns cached data for given keys.
+func (mc *Connection) Get(keys ...string) (results []cacheservice.Result, err error) {
 	defer handleError(&err)
 	results = mc.get("get", keys)
 	return
 }
 
-func (mc *Connection) Gets(keys ...string) (results []Result, err error) {
+// Gets returns cached data for given keys, it is an alternative Get api
+// for using with CAS. Gets returns a CAS identifier with the item. If
+// the item's CAS value has changed since you Gets'ed it, it will not be stored.
+func (mc *Connection) Gets(keys ...string) (results []cacheservice.Result, err error) {
 	defer handleError(&err)
 	results = mc.get("gets", keys)
 	return
 }
 
+// Set set the value with specified cache key.
 func (mc *Connection) Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("set", key, flags, timeout, value, 0), nil
 }
 
+// Add store the value only if it does not already exist.
 func (mc *Connection) Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("add", key, flags, timeout, value, 0), nil
 }
 
+// Replace replaces the value, only if the value already exists,
+// for the specified cache key.
 func (mc *Connection) Replace(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("replace", key, flags, timeout, value, 0), nil
 }
 
+// Append appends the value after the last bytes in an existing item.
 func (mc *Connection) Append(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("append", key, flags, timeout, value, 0), nil
 }
 
+// Prepend prepends the value before existing value.
 func (mc *Connection) Prepend(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("prepend", key, flags, timeout, value, 0), nil
 }
 
+// Cas stores the value only if no one else has updated the data since you read it last.
 func (mc *Connection) Cas(key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("cas", key, flags, timeout, value, cas), nil
 }
 
+// Delete delete the value for the specified cache key.
 func (mc *Connection) Delete(key string) (deleted bool, err error) {
 	defer handleError(&err)
 	mc.setDeadline()
@@ -103,12 +113,12 @@ func (mc *Connection) Delete(key string) (deleted bool, err error) {
 	mc.writestrings("delete ", key, "\r\n")
 	reply := mc.readline()
 	if strings.Contains(reply, "ERROR") {
-		panic(NewMemcacheError("Server error"))
+		panic(NewError("Server error"))
 	}
 	return strings.HasPrefix(reply, "DELETED"), nil
 }
 
-//This purges the entire cache.
+// FlushAll purges the entire cache.
 func (mc *Connection) FlushAll() (err error) {
 	defer handleError(&err)
 	mc.setDeadline()
@@ -116,11 +126,12 @@ func (mc *Connection) FlushAll() (err error) {
 	mc.writestrings("flush_all\r\n")
 	response := mc.readline()
 	if !strings.Contains(response, "OK") {
-		panic(NewMemcacheError(fmt.Sprintf("Error in FlushAll %v", response)))
+		panic(NewError(fmt.Sprintf("Error in FlushAll %v", response)))
 	}
 	return nil
 }
 
+// Stats returns a list of basic stats.
 func (mc *Connection) Stats(argument string) (result []byte, err error) {
 	defer handleError(&err)
 	mc.setDeadline()
@@ -136,7 +147,7 @@ func (mc *Connection) Stats(argument string) (result []byte, err error) {
 			break
 		}
 		if strings.Contains(l, "ERROR") {
-			return nil, NewMemcacheError(l)
+			return nil, NewError(l)
 		}
 		result = append(result, l...)
 		result = append(result, '\n')
@@ -144,9 +155,9 @@ func (mc *Connection) Stats(argument string) (result []byte, err error) {
 	return result, err
 }
 
-func (mc *Connection) get(command string, keys []string) (results []Result) {
+func (mc *Connection) get(command string, keys []string) (results []cacheservice.Result) {
 	mc.setDeadline()
-	results = make([]Result, 0, len(keys))
+	results = make([]cacheservice.Result, 0, len(keys))
 	if len(keys) == 0 {
 		return
 	}
@@ -157,27 +168,27 @@ func (mc *Connection) get(command string, keys []string) (results []Result) {
 	}
 	mc.writestrings("\r\n")
 	header := mc.readline()
-	var result Result
+	var result cacheservice.Result
 	for strings.HasPrefix(header, "VALUE") {
 		// VALUE <key> <flags> <bytes> [<cas unique>]\r\n
 		chunks := strings.Split(header, " ")
 		if len(chunks) < 4 {
-			panic(NewMemcacheError("Malformed response: %s", string(header)))
+			panic(NewError("Malformed response: %s", string(header)))
 		}
 		result.Key = chunks[1]
 		flags64, err := strconv.ParseUint(chunks[2], 10, 16)
 		if err != nil {
-			panic(NewMemcacheError("%v", err))
+			panic(NewError("%v", err))
 		}
 		result.Flags = uint16(flags64)
 		size, err := strconv.ParseUint(chunks[3], 10, 64)
 		if err != nil {
-			panic(NewMemcacheError("%v", err))
+			panic(NewError("%v", err))
 		}
 		if len(chunks) == 5 {
 			result.Cas, err = strconv.ParseUint(chunks[4], 10, 64)
 			if err != nil {
-				panic(NewMemcacheError("%v", err))
+				panic(NewError("%v", err))
 			}
 		}
 		// <data block>\r\n
@@ -186,7 +197,7 @@ func (mc *Connection) get(command string, keys []string) (results []Result) {
 		header = mc.readline()
 	}
 	if !strings.HasPrefix(header, "END") {
-		panic(NewMemcacheError("Malformed response: %s", string(header)))
+		panic(NewError("Malformed response: %s", string(header)))
 	}
 	return
 }
@@ -214,7 +225,7 @@ func (mc *Connection) store(command, key string, flags uint16, timeout uint64, v
 	mc.writestring("\r\n")
 	reply := mc.readline()
 	if strings.Contains(reply, "ERROR") {
-		panic(NewMemcacheError("Server error"))
+		panic(NewError("Server error"))
 	}
 	return strings.HasPrefix(reply, "STORED")
 }
@@ -227,19 +238,19 @@ func (mc *Connection) writestrings(strs ...string) {
 
 func (mc *Connection) writestring(s string) {
 	if _, err := mc.buffered.WriteString(s); err != nil {
-		panic(NewMemcacheError("%s", err))
+		panic(NewError("%s", err))
 	}
 }
 
 func (mc *Connection) write(b []byte) {
 	if _, err := mc.buffered.Write(b); err != nil {
-		panic(NewMemcacheError("%s", err))
+		panic(NewError("%s", err))
 	}
 }
 
 func (mc *Connection) flush() {
 	if err := mc.buffered.Flush(); err != nil {
-		panic(NewMemcacheError("%s", err))
+		panic(NewError("%s", err))
 	}
 }
 
@@ -247,7 +258,7 @@ func (mc *Connection) readline() string {
 	mc.flush()
 	l, isPrefix, err := mc.buffered.ReadLine()
 	if isPrefix || err != nil {
-		panic(NewMemcacheError("Prefix: %v, %s", isPrefix, err))
+		panic(NewError("Prefix: %v, %s", isPrefix, err))
 	}
 	return string(l)
 }
@@ -256,31 +267,42 @@ func (mc *Connection) read(count int) []byte {
 	mc.flush()
 	b := make([]byte, count)
 	if _, err := io.ReadFull(mc.buffered, b); err != nil {
-		panic(NewMemcacheError("%s", err))
+		panic(NewError("%s", err))
 	}
 	return b
 }
 
 func (mc *Connection) setDeadline() {
 	if err := mc.conn.SetDeadline(time.Now().Add(mc.timeout)); err != nil {
-		panic(NewMemcacheError("%s", err))
+		panic(NewError("%s", err))
 	}
 }
 
-type MemcacheError struct {
+// Error is the error from CacheService.
+type Error struct {
 	Message string
 }
 
-func NewMemcacheError(format string, args ...interface{}) MemcacheError {
-	return MemcacheError{fmt.Sprintf(format, args...)}
+// NewError creates a new Error.
+func NewError(format string, args ...interface{}) Error {
+	return Error{fmt.Sprintf(format, args...)}
 }
 
-func (merr MemcacheError) Error() string {
+func (merr Error) Error() string {
 	return merr.Message
 }
 
 func handleError(err *error) {
 	if x := recover(); x != nil {
-		*err = x.(MemcacheError)
+		*err = x.(Error)
 	}
+}
+
+func init() {
+	cacheservice.Register(
+		"memcache",
+		func(config cacheservice.Config) (cacheservice.CacheService, error) {
+			return Connect(config.Address, config.Timeout)
+		},
+	)
 }
