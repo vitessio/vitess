@@ -129,6 +129,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		"Rowcache",
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
+		"/debug/memcache/",
 	)
 	qe.connPool = NewConnPool(
 		"ConnPool",
