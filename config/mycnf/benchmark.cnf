@@ -1,0 +1,9 @@
+# enable strict mode so it's safe to compare sequence numbers across different server IDs.
+gtid_strict_mode = 1
+innodb_stats_persistent = 0
+
+innodb_doublewrite=0
+innodb_flush_log_at_trx_commit=0
+max_connections=500
+innodb_log_file_size=128M
+innodb_buffer_pool_size=2G
