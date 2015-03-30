@@ -21,6 +21,12 @@ SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
+BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
+
+vttablet_template='vttablet-pod-template.yaml'
+if $BENCHMARK_CLUSTER; then
+  vttablet_template='vttablet-pod-benchmarking-template.yaml'
+fi
 
 # export for vttablet scripts
 export SHARDS=$SHARDS
@@ -105,11 +111,14 @@ done
 
 if [ $GKE_SSD_SIZE_GB -gt 0 ]
 then
+  export VTDATAROOT_VOLUME='/ssd'
   echo Creating SSDs and attaching to container engine nodes
   for i in `seq 1 $total_tablet_count`; do
     diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
+    nodename=k8s-$GKE_CLUSTER_NAME-node-$i
     gcloud compute disks create $diskname --type=pd-ssd --size=${GKE_SSD_SIZE_GB}GB
-    gcloud compute instances attach-disk k8s-$GKE_CLUSTER_NAME-node-$i --disk $diskname
+    gcloud compute instances attach-disk $nodename --disk $diskname
+    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME}"
   done
 fi
 
@@ -117,7 +126,7 @@ run_script etcd-up.sh
 wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
-run_script vttablet-up.sh FORCE_NODE=true
+run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
 run_script vtgate-up.sh
 
 wait_for_running_tasks vtctld 1
@@ -127,7 +136,7 @@ wait_for_running_tasks vtgate 3
 echo Creating firewall rule for vtctld...
 vtctl_port=15000
 gcloud compute firewall-rules create vtctld --allow tcp:$vtctl_port
-vtctl_ip=`gcloud compute forwarding-rules list | awk '$1=="vtctld" {print $3}'`
+vtctl_ip=`gcloud compute forwarding-rules list | awk '$1~"vtctld" {print $3}'`
 vtctl_server="$vtctl_ip:$vtctl_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 
@@ -177,7 +186,7 @@ echo Done
 echo Creating firewall rule for vtgate
 vtgate_port=15001
 gcloud compute firewall-rules create vtgate --allow tcp:$vtgate_port
-vtgate_ip=`gcloud compute forwarding-rules list | awk '$1=="vtgate" {print $3}'`
+vtgate_ip=`gcloud compute forwarding-rules list | awk '$1~"vtgate" {print $3}'`
 if [ -z "$vtgate_ip" ]
 then
   vtgate_server="No firewall rules created for vtgate. Add createExternalLoadBalancer: true if access to vtgate is desired"

@@ -57,6 +57,7 @@ desiredState:
             -db-config-filtered-uname vt_filtered
             -db-config-filtered-dbname vt_{{keyspace}}
             -db-config-filtered-charset utf8
+            -queryserver-config-transaction-cap 300
             -enable-rowcache
             -rowcache-bin /usr/bin/memcached
             -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
@@ -94,7 +95,7 @@ desiredState:
             -bootstrap_archive mysql-db-dir_10.0.13-MariaDB.tbz" vitess
         env:
           - name: EXTRA_MY_CNF
-            value: /vt/config/mycnf/master_mariadb.cnf
+            value: /vt/config/mycnf/benchmark.cnf
     volumes:
       - name: syslog
         source: {hostDir: {path: /dev/log}}
