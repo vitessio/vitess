@@ -81,4 +81,18 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v'", err, expected)
 	}
+
+	// run a command that's gonna panic
+	logs, errFunc = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second, 10*time.Second)
+	if err := errFunc(); err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	if e, ok := <-logs; ok {
+		t.Errorf("Got unexpected line for logs: %v", e.String())
+	}
+	expected1 := "this command panics on purpose"
+	expected2 := "uncaught vtctl panic"
+	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected1) || !strings.Contains(err.Error(), expected2) {
+		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v' and '%v'", err, expected1, expected2)
+	}
 }

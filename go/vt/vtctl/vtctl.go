@@ -221,6 +221,9 @@ var commands = []commandGroup{
 			command{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"List specified tablets in an awk-friendly way."},
+			command{"Panic", commandPanic,
+				"",
+				"HIDDEN Triggers a panic on the server side, to test the handling."},
 		},
 	},
 	commandGroup{
@@ -2166,6 +2169,10 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	return nil
 }
 
+func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	panic(fmt.Errorf("this command panics on purpose"))
+}
+
 type rTablet struct {
 	*topo.TabletInfo
 	*myproto.ReplicationStatus
@@ -2257,5 +2264,13 @@ func PrintAllCommands(logger logutil.Logger) {
 			logger.Printf("  %s %s\n", cmd.name, cmd.params)
 		}
 		logger.Printf("\n")
+	}
+}
+
+// HandlePanic should be called using 'defer' in the RPC code that executes
+// the command
+func HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		*err = fmt.Errorf("uncaught vtctl panic: %v", x)
 	}
 }
