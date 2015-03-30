@@ -15,6 +15,7 @@ TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 port=15002
 uid_base=100
 FORCE_NODE=${FORCE_NODE:-false}
+VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 
 vtdataroot_volume='{emptyDir: {}}'
@@ -48,9 +49,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
     fi
 
     # Instantiate template and send to kubectl.
-    cat vttablet-pod-template.yaml | \
-      sed -e "$sed_script" | \
-      $KUBECTL create -f -
+    cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -
 
     let index=index+1
   done

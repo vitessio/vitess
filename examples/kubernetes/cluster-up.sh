@@ -21,6 +21,15 @@ SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
+BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
+
+vttablet_template='vttablet-pod-template.yaml'
+if $BENCHMARK_CLUSTER; then
+  vttablet_template='vttablet-pod-benchmarking-template.yaml'
+fi
+
+echo $vttablet_template
+exit 0
 
 # export for vttablet scripts
 export SHARDS=$SHARDS
@@ -120,7 +129,7 @@ run_script etcd-up.sh
 wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
-run_script vttablet-up.sh FORCE_NODE=true
+run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
 run_script vtgate-up.sh
 
 wait_for_running_tasks vtctld 1
