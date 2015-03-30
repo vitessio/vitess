@@ -58,6 +58,7 @@ desiredState:
             -db-config-filtered-dbname vt_{{keyspace}}
             -db-config-filtered-charset utf8
             -queryserver-config-transaction-cap 300
+            -queryserver-config-pool-size 100
             -enable-rowcache
             -rowcache-bin /usr/bin/memcached
             -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
