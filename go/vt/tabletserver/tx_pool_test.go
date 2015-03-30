@@ -23,7 +23,7 @@ func TestExecuteCommit(t *testing.T) {
 	fakesqldb.Register(map[string]*proto.QueryResult{
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
-	})
+	}, false)
 	txPool := newTxPool()
 	txPool.SetTimeout(1 * time.Second)
 	txPool.SetPoolTimeout(1 * time.Second)
@@ -56,7 +56,7 @@ func TestExecuteRollback(t *testing.T) {
 		"begin":    &proto.QueryResult{},
 		sql:        &proto.QueryResult{},
 		"rollback": &proto.QueryResult{},
-	})
+	}, false)
 	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -79,7 +79,7 @@ func TestTransactionKiller(t *testing.T) {
 	fakesqldb.Register(map[string]*proto.QueryResult{
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
-	})
+	}, false)
 	txPool := newTxPool()
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(time.Duration(10))
@@ -106,7 +106,7 @@ func TestBeginAfterConnPoolClosed(t *testing.T) {
 	fakesqldb.Register(map[string]*proto.QueryResult{
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
-	})
+	}, false)
 	txPool := newTxPool()
 	txPool.SetTimeout(time.Duration(10))
 	appParams := sqldb.ConnParams{}
@@ -132,7 +132,7 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 	fakesqldb.Register(map[string]*proto.QueryResult{
 		"begin": &proto.QueryResult{},
 		sql:     &proto.QueryResult{},
-	})
+	}, false)
 	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
