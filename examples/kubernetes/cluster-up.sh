@@ -28,9 +28,6 @@ if $BENCHMARK_CLUSTER; then
   vttablet_template='vttablet-pod-benchmarking-template.yaml'
 fi
 
-echo $vttablet_template
-exit 0
-
 # export for vttablet scripts
 export SHARDS=$SHARDS
 export TABLETS_PER_SHARD=$TABLETS_PER_SHARD
