@@ -31,21 +31,150 @@ type Scheduler struct {
 // NewScheduler creates a new instance.
 func NewScheduler() (*Scheduler, error) {
 	defaultClusterOperations := map[string]pb.TaskContainerSpec{
+		// Required input:
+		// - source_shard_list
+		// - shard_count
 		"reshard": pb.TaskContainerSpec{
 			Type: pb.TaskContainerSpecType_SERIAL_TASKS,
 			SerialTask: []*pb.TaskContainerSpec{
+				// Generate intermediate variables.
 				&pb.TaskContainerSpec{
-					// TODO(mberlin): Replace this with the actual operations.
 					Type: pb.TaskContainerSpecType_SINGLE_TASK,
 					SingleTask: &pb.TaskSpec{
-						Name: "Shell",
+						Name: "ShardCountToShardList",
 						Parameter: []*pb.TaskParameter{
 							&pb.TaskParameter{
-								Name:  "command",
-								Value: &pb.Value{Value: []string{"uptime"}},
+								Name:  "shard_count",
+								Value: &pb.Value{Value: []string{"${shard_count}"}},
 							},
 						},
-						OutputKey: "uptime",
+						OutputKey: "dest_shard_list",
+					},
+				},
+
+				// Actual operation.
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "ForceReparentToAnyMaster",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+							},
+						},
+						CollectionReference: "dest_shard_list",
+						Parallelism:         -1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "CopySchemaShardFromAnyRdonlyTablet",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "dest_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+							},
+						},
+						CollectionReference: "dest_shard_list",
+						Parallelism:         -1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "SplitClone",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "source_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+							},
+						},
+						CollectionReference: "source_shard_list",
+						Parallelism:         1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "SplitDiff",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "dest_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+							},
+						},
+						CollectionReference: "dest_shard_list",
+						Parallelism:         -1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "MigrateServedTypes",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "source_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+								&pb.TaskParameter{
+									Name:  "served_type",
+									Value: &pb.Value{Value: []string{"rdonly"}},
+								},
+							},
+						},
+						CollectionReference: "source_shard_list",
+						Parallelism:         -1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "MigrateServedTypes",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "source_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+								&pb.TaskParameter{
+									Name:  "served_type",
+									Value: &pb.Value{Value: []string{"replica"}},
+								},
+							},
+						},
+						CollectionReference: "source_shard_list",
+						Parallelism:         -1,
+					},
+				},
+				&pb.TaskContainerSpec{
+					Type: pb.TaskContainerSpecType_FOREACH_TASKS,
+					ForeachTask: &pb.ForEachTaskSpec{
+						Task: &pb.TaskSpec{
+							Name: "MigrateServedTypes",
+							Parameter: []*pb.TaskParameter{
+								&pb.TaskParameter{
+									Name:  "source_shard",
+									Value: &pb.Value{Value: []string{"${i}"}},
+								},
+								&pb.TaskParameter{
+									Name:  "served_type",
+									Value: &pb.Value{Value: []string{"master"}},
+								},
+							},
+						},
+						CollectionReference: "source_shard_list",
+						Parallelism:         -1,
 					},
 				},
 			},

@@ -37,7 +37,8 @@ message ForEachTaskSpec {
   // List of strings the task will be iterated over e.g. list of shards.
   // Use ${i} in your command to reference the loop variable.
   Value collection = 2;
-  int32 parallelism = 3;
+  string collection_reference = 3;
+  int32 parallelism = 4;
 }
 
 message TaskSpec {
