@@ -22,8 +22,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-const statsURL = "/debug/memcache/"
-
 // CreateCacheFunc defines the function signature to create a memcache connection.
 type CreateCacheFunc func() (cacheservice.CacheService, error)
 
@@ -39,11 +37,16 @@ type CachePool struct {
 	idleTimeout    time.Duration
 	memcacheStats  *MemcacheStats
 	mu             sync.Mutex
+	statsURL       string
 }
 
 // NewCachePool creates a new pool for rowcache connections.
-func NewCachePool(name string, rowCacheConfig RowCacheConfig, idleTimeout time.Duration) *CachePool {
-	cp := &CachePool{name: name, idleTimeout: idleTimeout}
+func NewCachePool(
+	name string,
+	rowCacheConfig RowCacheConfig,
+	idleTimeout time.Duration,
+	statsURL string) *CachePool {
+	cp := &CachePool{name: name, idleTimeout: idleTimeout, statsURL: statsURL}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp, true, false, false)
 		stats.Publish(name+"ConnPoolCapacity", stats.IntFunc(cp.Capacity))
@@ -302,7 +305,7 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		response.Write(([]byte)("closed"))
 		return
 	}
-	command := request.URL.Path[len(statsURL):]
+	command := request.URL.Path[len(cp.statsURL):]
 	if command == "stats" {
 		command = ""
 	}
