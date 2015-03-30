@@ -15,6 +15,12 @@ TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 port=15002
 uid_base=100
 FORCE_NODE=${FORCE_NODE:-false}
+VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
+
+vtdataroot_volume='{emptyDir: {}}'
+if [ -n "$VTDATAROOT_VOLUME" ]; then
+  vtdataroot_volume="{hostDir: {path: ${VTDATAROOT_VOLUME}}}"
+fi
 
 index=1
 for shard in $(echo $SHARDS | tr "," " "); do
@@ -28,8 +34,8 @@ for shard in $(echo $SHARDS | tr "," " "); do
 
     # Expand template variables
     sed_script=""
-    for var in alias cell uid keyspace shard port tablet_subdir; do
-      sed_script+="s/{{$var}}/${!var}/g;"
+    for var in alias cell uid keyspace shard port tablet_subdir vtdataroot_volume; do
+      sed_script+="s,{{$var}},${!var},g;"
     done
 
     # Add node selector to the end if a vttablet should be on a specific node.
