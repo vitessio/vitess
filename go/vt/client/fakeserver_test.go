@@ -131,6 +131,13 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQuer
 	return nil
 }
 
+// HandlePanic is part of the VTGateService interface
+func (f *fakeVTGateService) HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		*err = fmt.Errorf("uncaught panic: %v", x)
+	}
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer() vtgateservice.VTGateService {
 	return &fakeVTGateService{}
