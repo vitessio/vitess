@@ -30,6 +30,13 @@ const baseShowTables = "select table_name, table_type, unix_timestamp(create_tim
 
 const maxTableCount = 10000
 
+const (
+	debugQueryPlansKey = "query_plans"
+	debugQueryStatsKey = "query_stats"
+	debugTableStatsKey = "table_stats"
+	debugSchemaKey     = "schema"
+)
+
 // ExecPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
 type ExecPlan struct {
@@ -99,35 +106,38 @@ type SchemaInfo struct {
 	cachePool  *CachePool
 	lastChange time.Time
 	ticks      *timer.Timer
+	endpoints  map[string]string
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(
 	queryCacheSize int,
+	statsPrefix string,
+	endpoints map[string]string,
 	reloadTime time.Duration,
 	idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:  cache.NewLRUCache(int64(queryCacheSize)),
-		connPool: NewConnPool("", 2, idleTimeout),
-		ticks:    timer.NewTimer(reloadTime),
+		queries:   cache.NewLRUCache(int64(queryCacheSize)),
+		connPool:  NewConnPool("", 2, idleTimeout),
+		ticks:     timer.NewTimer(reloadTime),
+		endpoints: endpoints,
 	}
-	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
-	stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
-	stats.Publish("QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
-	stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
+	stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
+	stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
+	stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+	stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
 		return fmt.Sprintf("%v", si.queries.Oldest())
 	}))
-	stats.Publish("SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-	_ = stats.NewMultiCountersFunc("RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
-	_ = stats.NewMultiCountersFunc("RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
-	_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-	_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-	_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-	_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
-	http.Handle("/debug/query_plans", si)
-	http.Handle("/debug/query_stats", si)
-	http.Handle("/debug/table_stats", si)
-	http.Handle("/debug/schema", si)
+	stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
+	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
+	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
+	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	for _, ep := range endpoints {
+		http.Handle(ep, si)
+	}
 	return si
 }
 
@@ -558,78 +568,94 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		acl.SendError(response, err)
 		return
 	}
-	if request.URL.Path == "/debug/query_plans" {
-		keys := si.queries.Keys()
-		response.Header().Set("Content-Type", "text/plain")
-		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
-		for _, v := range keys {
-			response.Write([]byte(fmt.Sprintf("%#v\n", v)))
-			if plan := si.getQuery(v); plan != nil {
-				if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
-					response.Write([]byte(err.Error()))
-				} else {
-					response.Write(b)
-				}
-				response.Write(([]byte)("\n\n"))
-			}
-		}
-	} else if request.URL.Path == "/debug/query_stats" {
-		keys := si.queries.Keys()
-		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		qstats := make([]perQueryStats, 0, len(keys))
-		for _, v := range keys {
-			if plan := si.getQuery(v); plan != nil {
-				var pqstats perQueryStats
-				pqstats.Query = unicoded(v)
-				pqstats.Table = plan.TableName
-				pqstats.Plan = plan.PlanId
-				pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
-				qstats = append(qstats, pqstats)
-			}
-		}
-		if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
-			response.Write([]byte(err.Error()))
-		} else {
-			response.Write(b)
-		}
-	} else if request.URL.Path == "/debug/table_stats" {
-		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
-		var temp, totals struct{ hits, absent, misses, invalidations int64 }
-		func() {
-			si.mu.Lock()
-			defer si.mu.Unlock()
-			for k, v := range si.tables {
-				if v.CacheType != schema.CACHE_NONE {
-					temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
-					tstats[k] = temp
-					totals.hits += temp.hits
-					totals.absent += temp.absent
-					totals.misses += temp.misses
-					totals.invalidations += temp.invalidations
-				}
-			}
-		}()
-		response.Write([]byte("{\n"))
-		for k, v := range tstats {
-			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v},\n", k, v.hits, v.absent, v.misses, v.invalidations)
-		}
-		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}\n", totals.hits, totals.absent, totals.misses, totals.invalidations)
-		response.Write([]byte("}\n"))
-	} else if request.URL.Path == "/debug/schema" {
-		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		tables := si.GetSchema()
-		b, err := json.MarshalIndent(tables, "", " ")
-		if err != nil {
-			response.Write([]byte(err.Error()))
-			return
-		}
-		buf := bytes.NewBuffer(nil)
-		json.HTMLEscape(buf, b)
-		response.Write(buf.Bytes())
+	if ep, ok := si.endpoints[debugQueryPlansKey]; ok && request.URL.Path == ep {
+		si.handleHTTPQueryPlans(response, request)
+	} else if ep, ok := si.endpoints[debugQueryStatsKey]; ok && request.URL.Path == ep {
+		si.handleHTTPQueryStats(response, request)
+	} else if ep, ok := si.endpoints[debugTableStatsKey]; ok && request.URL.Path == ep {
+		si.handleHTTPTableStats(response, request)
+	} else if ep, ok := si.endpoints[debugSchemaKey]; ok && request.URL.Path == ep {
+		si.handleHTTPSchema(response, request)
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (si *SchemaInfo) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
+	keys := si.queries.Keys()
+	response.Header().Set("Content-Type", "text/plain")
+	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
+	for _, v := range keys {
+		response.Write([]byte(fmt.Sprintf("%#v\n", v)))
+		if plan := si.getQuery(v); plan != nil {
+			if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
+				response.Write([]byte(err.Error()))
+			} else {
+				response.Write(b)
+			}
+			response.Write(([]byte)("\n\n"))
+		}
+	}
+}
+
+func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
+	keys := si.queries.Keys()
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	qstats := make([]perQueryStats, 0, len(keys))
+	for _, v := range keys {
+		if plan := si.getQuery(v); plan != nil {
+			var pqstats perQueryStats
+			pqstats.Query = unicoded(v)
+			pqstats.Table = plan.TableName
+			pqstats.Plan = plan.PlanId
+			pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+			qstats = append(qstats, pqstats)
+		}
+	}
+	if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
+		response.Write([]byte(err.Error()))
+	} else {
+		response.Write(b)
+	}
+}
+
+func (si *SchemaInfo) handleHTTPTableStats(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
+	var temp, totals struct{ hits, absent, misses, invalidations int64 }
+	func() {
+		si.mu.Lock()
+		defer si.mu.Unlock()
+		for k, v := range si.tables {
+			if v.CacheType != schema.CACHE_NONE {
+				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
+				tstats[k] = temp
+				totals.hits += temp.hits
+				totals.absent += temp.absent
+				totals.misses += temp.misses
+				totals.invalidations += temp.invalidations
+			}
+		}
+	}()
+	response.Write([]byte("{\n"))
+	for k, v := range tstats {
+		fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v},\n", k, v.hits, v.absent, v.misses, v.invalidations)
+	}
+	fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}\n", totals.hits, totals.absent, totals.misses, totals.invalidations)
+	response.Write([]byte("}\n"))
+}
+
+func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	tables := si.GetSchema()
+	b, err := json.MarshalIndent(tables, "", " ")
+	if err != nil {
+		response.Write([]byte(err.Error()))
+		return
+	}
+	buf := bytes.NewBuffer(nil)
+	json.HTMLEscape(buf, b)
+	response.Write(buf.Bytes())
 }
 
 func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mproto.Field) {
