@@ -131,7 +131,7 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
 func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
-	defer handlePanic(&err)
+	defer vtg.HandlePanic(&err)
 
 	log.Infof("Initialize VTTablet connections")
 	err = vtg.resolver.InitializeConnections(ctx)
@@ -144,9 +144,7 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"Execute", "Any", string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -169,9 +167,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 }
 
 // ExecuteShard executes a non-streaming query on the specified shards.
-func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -204,9 +200,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -229,9 +223,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -254,9 +246,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -279,9 +269,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -317,9 +305,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -348,9 +334,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecute", "Any", string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -362,7 +346,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	}
 
 	var rowCount int64
-	err = vtg.router.StreamExecute(
+	err := vtg.router.StreamExecute(
 		ctx,
 		query,
 		func(mreply *mproto.QueryResult) error {
@@ -392,9 +376,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -406,7 +388,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	}
 
 	var rowCount int64
-	err = vtg.resolver.StreamExecuteKeyspaceIds(
+	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		ctx,
 		query,
 		func(mreply *mproto.QueryResult) error {
@@ -436,9 +418,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -450,7 +430,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 	}
 
 	var rowCount int64
-	err = vtg.resolver.StreamExecuteKeyRanges(
+	err := vtg.resolver.StreamExecuteKeyRanges(
 		ctx,
 		query,
 		func(mreply *mproto.QueryResult) error {
@@ -475,9 +455,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) (err error) {
-	defer handlePanic(&err)
-
+func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -489,7 +467,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 	}
 
 	var rowCount int64
-	err = vtg.resolver.StreamExecute(
+	err := vtg.resolver.StreamExecute(
 		ctx,
 		query.Sql,
 		query.BindVariables,
@@ -521,21 +499,18 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(ctx context.Context, outSession *proto.Session) (err error) {
-	defer handlePanic(&err)
+func (vtg *VTGate) Begin(ctx context.Context, outSession *proto.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session) (err error) {
-	defer handlePanic(&err)
+func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session) error {
 	return formatError(vtg.resolver.Commit(ctx, inSession))
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) (err error) {
-	defer handlePanic(&err)
+func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error {
 	return formatError(vtg.resolver.Rollback(ctx, inSession))
 }
 
@@ -545,8 +520,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) (err 
 // original query. Number of sub queries will be a multiple of N that is
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
-	defer handlePanic(&err)
+func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	sc := vtg.resolver.scatterConn
 	keyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, req.Keyspace, topo.TYPE_RDONLY)
 	if err != nil {
@@ -585,7 +559,8 @@ func formatError(err error) error {
 	return fmt.Errorf("%v, vtgate: %v", err, servenv.ListeningURL.String())
 }
 
-func handlePanic(err *error) {
+// HandlePanic recovers from panics, and logs / increment counters
+func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())

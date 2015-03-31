@@ -36,4 +36,8 @@ type VTGateService interface {
 
 	// Map Reduce support
 	SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+
+	// HandlePanic should be called with defer at the beginning of each
+	// RPC implementation method, before calling any of the previous methods
+	HandlePanic(err *error)
 }
