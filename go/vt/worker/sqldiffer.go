@@ -89,6 +89,7 @@ func NewSQLDiffWorker(wr *wrangler.Wrangler, cell string, superset, subset Sourc
 func (worker *SQLDiffWorker) setState(state sqlDiffWorkerState) {
 	worker.mu.Lock()
 	worker.state = state
+	statsState.Set(string(state))
 	worker.mu.Unlock()
 }
 
@@ -97,6 +98,7 @@ func (worker *SQLDiffWorker) recordError(err error) {
 	defer worker.mu.Unlock()
 
 	worker.state = sqlDiffError
+	statsState.Set(string(sqlDiffError))
 	worker.err = err
 }
 
@@ -157,6 +159,7 @@ func (worker *SQLDiffWorker) checkInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (worker *SQLDiffWorker) Run() {
+	resetVars()
 	err := worker.run()
 
 	worker.setState(sqlDiffCleanUp)

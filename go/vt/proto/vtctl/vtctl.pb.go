@@ -95,7 +95,7 @@ func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *ExecuteVtctlC
 		return nil, err
 	}
 	x := &vtctlExecuteVtctlCommandClient{stream}
-	if err := x.ClientStream.SendProto(in); err != nil {
+	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
@@ -115,7 +115,7 @@ type vtctlExecuteVtctlCommandClient struct {
 
 func (x *vtctlExecuteVtctlCommandClient) Recv() (*LoggerEvent, error) {
 	m := new(LoggerEvent)
-	if err := x.ClientStream.RecvProto(m); err != nil {
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -133,7 +133,7 @@ func RegisterVtctlServer(s *grpc.Server, srv VtctlServer) {
 
 func _Vtctl_ExecuteVtctlCommand_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ExecuteVtctlCommandArgs)
-	if err := stream.RecvProto(m); err != nil {
+	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
 	return srv.(VtctlServer).ExecuteVtctlCommand(m, &vtctlExecuteVtctlCommandServer{stream})
@@ -149,7 +149,7 @@ type vtctlExecuteVtctlCommandServer struct {
 }
 
 func (x *vtctlExecuteVtctlCommandServer) Send(m *LoggerEvent) error {
-	return x.ServerStream.SendProto(m)
+	return x.ServerStream.SendMsg(m)
 }
 
 var _Vtctl_serviceDesc = grpc.ServiceDesc{

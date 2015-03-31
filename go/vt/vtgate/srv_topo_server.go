@@ -624,16 +624,43 @@ func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	if st.Value != nil {
 		vl = len(st.Value.Entries)
 	}
+	// Assemble links to individual endpoints
+	epLinks := "{ "
+	if ovl > 0 {
+		for _, ove := range st.OriginalValue.Entries {
+			healthColor := "red"
+			vtPort := 0
+			if vl > 0 {
+				for _, ve := range st.Value.Entries {
+					if ove.Uid == ve.Uid {
+						if _, ok := ve.NamedPortMap["vt"]; ok {
+							vtPort = ve.NamedPortMap["vt"]
+							// EndPoint is healthy
+							healthColor = "green"
+							if len(ve.Health) > 0 {
+								// EndPoint is half healthy
+								healthColor = "orange"
+							}
+						}
+					}
+				}
+			}
+			epLinks += fmt.Sprintf(
+				"<a href=\"http://%v:%d\" style=\"color:%v\">%v:%d</a> ",
+				ove.Host, vtPort, healthColor, ove.Host, vtPort)
+		}
+	}
+	epLinks += "}"
 	if ovl == vl {
 		if vl == 0 {
-			return template.HTML("<b>No endpoints</b>")
+			return template.HTML(fmt.Sprintf("<b>No healthy endpoints</b>, %v", epLinks))
 		}
 		if len(st.OriginalValue.Entries[0].Health) > 0 {
-			return template.HTML(fmt.Sprintf("<b>Serving from %v degraded endpoints</b>", vl))
+			return template.HTML(fmt.Sprintf("<b>Serving from %v degraded endpoints</b>, %v", vl, epLinks))
 		}
-		return template.HTML(fmt.Sprintf("All %v endpoints are healthy", vl))
+		return template.HTML(fmt.Sprintf("All %v endpoints are healthy, %v", vl, epLinks))
 	}
-	return template.HTML(fmt.Sprintf("Serving from %v healthy endpoints out of %v", vl, ovl))
+	return template.HTML(fmt.Sprintf("Serving from %v healthy endpoints out of %v, %v", vl, ovl, epLinks))
 }
 
 // EndPointsCacheStatusList is used for sorting

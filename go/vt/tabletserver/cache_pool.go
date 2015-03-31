@@ -15,17 +15,15 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/memcache"
+	"github.com/youtube/vitess/go/cacheservice"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"golang.org/x/net/context"
 )
 
-const statsURL = "/debug/memcache/"
-
 // CreateCacheFunc defines the function signature to create a memcache connection.
-type CreateCacheFunc func() (*memcache.Connection, error)
+type CreateCacheFunc func() (cacheservice.CacheService, error)
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
 type CachePool struct {
@@ -39,11 +37,16 @@ type CachePool struct {
 	idleTimeout    time.Duration
 	memcacheStats  *MemcacheStats
 	mu             sync.Mutex
+	statsURL       string
 }
 
 // NewCachePool creates a new pool for rowcache connections.
-func NewCachePool(name string, rowCacheConfig RowCacheConfig, idleTimeout time.Duration) *CachePool {
-	cp := &CachePool{name: name, idleTimeout: idleTimeout}
+func NewCachePool(
+	name string,
+	rowCacheConfig RowCacheConfig,
+	idleTimeout time.Duration,
+	statsURL string) *CachePool {
+	cp := &CachePool{name: name, idleTimeout: idleTimeout, statsURL: statsURL}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp, true, false, false)
 		stats.Publish(name+"ConnPoolCapacity", stats.IntFunc(cp.Capacity))
@@ -82,10 +85,13 @@ func (cp *CachePool) Open() {
 		panic(NewTabletError(ErrFatal, "rowcache binary not specified"))
 	}
 	cp.socket = generateFilename(cp.rowCacheConfig.Socket)
-	cp.startMemcache()
+	cp.startCacheService()
 	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
-		return memcache.Connect(cp.socket, 10*time.Second)
+		return cacheservice.Connect(cacheservice.Config{
+			Address: cp.socket,
+			Timeout: 10 * time.Second,
+		})
 	}
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	if cp.memcacheStats != nil {
@@ -115,7 +121,7 @@ func generateFilename(hint string) string {
 	return name
 }
 
-func (cp *CachePool) startMemcache() {
+func (cp *CachePool) startCacheService() {
 	commandLine := cp.rowCacheConfig.GetSubprocessFlags(cp.socket)
 	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
@@ -124,7 +130,10 @@ func (cp *CachePool) startMemcache() {
 	attempts := 0
 	for {
 		time.Sleep(100 * time.Millisecond)
-		c, err := memcache.Connect(cp.socket, 30*time.Millisecond)
+		c, err := cacheservice.Connect(cacheservice.Config{
+			Address: cp.socket,
+			Timeout: 30 * time.Millisecond,
+		})
 		if err != nil {
 			attempts++
 			if attempts >= 50 {
@@ -132,12 +141,12 @@ func (cp *CachePool) startMemcache() {
 				// Avoid zombies
 				go cp.cmd.Wait()
 				// FIXME(sougou): Throw proper error if we can recover
-				log.Fatalf("Can't connect to memcache: %s", cp.socket)
+				log.Fatalf("Can't connect to cache service: %s", cp.socket)
 			}
 			continue
 		}
 		if _, err = c.Set("health", 0, 0, []byte("ok")); err != nil {
-			panic(NewTabletError(ErrFatal, "can't communicate with memcache: %v", err))
+			panic(NewTabletError(ErrFatal, "can't communicate with cache service: %v", err))
 		}
 		c.Close()
 		break
@@ -190,7 +199,7 @@ func (cp *CachePool) getPool() *pools.ResourcePool {
 
 // Get returns a memcache connection from the pool.
 // You must call Put after Get.
-func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
+func (cp *CachePool) Get(ctx context.Context) cacheservice.CacheService {
 	pool := cp.getPool()
 	if pool == nil {
 		panic(NewTabletError(ErrFatal, "cache pool is not open"))
@@ -199,11 +208,11 @@ func (cp *CachePool) Get(ctx context.Context) *memcache.Connection {
 	if err != nil {
 		panic(NewTabletErrorSql(ErrFatal, err))
 	}
-	return r.(*memcache.Connection)
+	return r.(cacheservice.CacheService)
 }
 
 // Put returns the connection to the pool.
-func (cp *CachePool) Put(conn *memcache.Connection) {
+func (cp *CachePool) Put(conn cacheservice.CacheService) {
 	pool := cp.getPool()
 	if pool == nil {
 		return
@@ -296,7 +305,7 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		response.Write(([]byte)("closed"))
 		return
 	}
-	command := request.URL.Path[len(statsURL):]
+	command := request.URL.Path[len(cp.statsURL):]
 	if command == "stats" {
 		command = ""
 	}

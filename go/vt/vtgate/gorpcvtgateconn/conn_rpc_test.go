@@ -48,7 +48,7 @@ func TestGoRPCVTGateConn(t *testing.T) {
 	}
 
 	// run the test suite
-	vtgateconntest.TestSuite(t, client)
+	vtgateconntest.TestSuite(t, client, service)
 
 	// and clean up
 	client.Close()

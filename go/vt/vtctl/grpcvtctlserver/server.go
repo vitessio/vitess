@@ -36,7 +36,9 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 }
 
 // ExecuteVtctlCommand is part of the pb.VtctlServer interface
-func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stream pb.Vtctl_ExecuteVtctlCommandServer) error {
+func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stream pb.Vtctl_ExecuteVtctlCommandServer) (err error) {
+	defer vtctl.HandlePanic(&err)
+
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
 	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
@@ -68,7 +70,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stre
 	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), time.Duration(args.LockTimeout))
 
 	// execute the command
-	err := vtctl.RunCommand(stream.Context(), wr, args.Args)
+	err = vtctl.RunCommand(stream.Context(), wr, args.Args)
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)

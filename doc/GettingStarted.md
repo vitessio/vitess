@@ -52,7 +52,7 @@ set the usual environment variables (e.g. http_proxy, https_proxy, no_proxy).
 
 ``` sh
 cd $WORKSPACE
-sudo apt-get install make automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
+sudo apt-get install make automake libtool memcached python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
 git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
 export MYSQL_FLAVOR=MariaDB

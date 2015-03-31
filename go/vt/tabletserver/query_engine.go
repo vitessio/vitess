@@ -118,6 +118,13 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,
+		"",
+		map[string]string{
+			debugQueryPlansKey: "/debug/query_plans",
+			debugQueryStatsKey: "/debug/query_stats",
+			debugTableStatsKey: "/debug/table_stats",
+			debugSchemaKey:     "/debug/schema",
+		},
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
@@ -129,6 +136,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		"Rowcache",
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
+		"/debug/memcache/",
 	)
 	qe.connPool = NewConnPool(
 		"ConnPool",
@@ -144,6 +152,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Services
 	qe.txPool = NewTxPool(
 		"TransactionPool",
+		"",
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),

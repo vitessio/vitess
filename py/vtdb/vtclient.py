@@ -31,11 +31,10 @@ def reconnect(method):
     while True:
       try:
         return method(self, *args, **kargs)
-      except (dbexceptions.RetryError, dbexceptions.FatalError, dbexceptions.TxPoolFull) as e:
+      except (dbexceptions.RetryError, dbexceptions.FatalError) as e:
         attempt += 1
         # Execution attempt failed with OperationalError, re-read the keyspace.
-        if not isinstance(e, dbexceptions.TxPoolFull):
-          self.resolve_topology()
+        self.resolve_topology()
 
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
@@ -45,13 +44,10 @@ def reconnect(method):
           time.sleep(BEGIN_RECONNECT_DELAY)
         else:
           time.sleep(RECONNECT_DELAY)
-        if not isinstance(e, dbexceptions.TxPoolFull):
-          logging.info("Attempting to reconnect, %d", attempt)
-          self.close()
-          self.connect()
-          logging.info("Successfully reconnected to %s", str(self.conn))
-        else:
-          logging.info("Waiting to retry for dbexceptions.TxPoolFull to %s, attempt %d", str(self.conn), attempt)
+        logging.info("Attempting to reconnect, %d", attempt)
+        self.close()
+        self.connect()
+        logging.info("Successfully reconnected to %s", str(self.conn))
   return _run_with_reconnect
 
 
