@@ -5,75 +5,28 @@
 package wrangler
 
 /*
-Assume a graph of mysql nodes.
+This file handles the reparenting operations.
 
-Replace node N with X.
-
-Connect to N and record file/position from "show master status"
-
-On N: (Demote Master)
-  SET GLOBAL READ_ONLY = 1;
-  FLUSH TABLES WITH READ LOCK;
-  UNLOCK TABLES;
-
-While this is read-only, all the replicas should sync to the same point.
-
-For all slaves of N:
-  show slave status
-    relay_master_log_file
-    exec_master_log_pos
-
- Map file:pos to list of slaves that are in sync
-
-There should be only one group (ideally).  If not, manually resolve, or pick
-the largest group.
-
-Select X from N - X is the new root node. Might not be a "master" in terms of
-voltron, but it will be the data source for the rest of the nodes.
-
-On X: (Promote Slave)
-  STOP SLAVE;
-  RESET MASTER;
-  RESET SLAVE;
-  SHOW MASTER STATUS;
-    replication file,position
-  INSERT INTO _vt.replication_log (time_created_ns, 'reparent check') VALUES (<time>);
-  INSERT INTO _vt.reparent_log (time_created_ns, 'last post', 'new pos') VALUES ... ;
-  SHOW MASTER STATUS;
-    wait file,position
-
-  SET GLOBAL READ_ONLY=0;
-
-Disabling READ_ONLY mode here is a matter of opinion.
-Realistically it is probably safer to do this later on and minimize
-the potential of replaying rows. It expands the write unavailable window
-slightly - probably by about 1 second.
-
-For all slaves in majority N:
- if slave != X (Restart Slave)
-    STOP SLAVE;
-    RESET SLAVE;
-    CHANGE MASTER TO X;
-    START SLAVE;
-    SELECT MASTER_POS_WAIT(file, pos, deadline)
-    SELECT time_created FROM _vt.replication_log WHERE time_created_ns = <time>;
-
-if no connection to N is available, ???
-
-On X: (promoted slave)
-  SET GLOBAL READ_ONLY=0;
+FIXME(alainjobart) a lot of this code is being replaced now.
+The new code starts at InitShardMaster.
 */
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
+)
+
+const (
+	initShardMasterOperation = "InitShardMaster"
 )
 
 // ReparentShard creates the reparenting action and launches a goroutine
@@ -86,7 +39,7 @@ import (
 //   cause data loss.
 func (wr *Wrangler) ReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool, waitSlaveTimeout time.Duration) error {
 	// lock the shard
-	actionNode := actionnode.ReparentShard(masterElectTabletAlias)
+	actionNode := actionnode.ReparentShard("", masterElectTabletAlias)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return err
@@ -225,4 +178,87 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletA
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
 	return wr.tmc.RestartSlave(ctx, ti, rsd)
+}
+
+// InitShardMaster will make the provided tablet the master for the shard.
+func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+	// lock the shard
+	actionNode := actionnode.ReparentShard(initShardMasterOperation, masterElectTabletAlias)
+	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	// do the work
+	err = wr.initShardMasterLocked(ctx, keyspace, shard, masterElectTabletAlias, force, waitSlaveTimeout)
+
+	// and unlock
+	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// Check the master elect is in tabletMap
+	masterElectTabletInfo, ok := tabletMap[masterElectTabletAlias]
+	if !ok {
+		return fmt.Errorf("master-elect tablet %v is not the shard", masterElectTabletAlias)
+	}
+
+	// Check the master is the only master is the shard, or -force was used.
+	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
+	if shardInfo.MasterAlias != masterElectTabletAlias {
+		if !force {
+			return fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", masterElectTabletAlias)
+		}
+		wr.logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", masterElectTabletAlias)
+	}
+	if _, ok := masterTabletMap[masterElectTabletAlias]; !ok || len(masterTabletMap) != 1 {
+		if !force {
+			return fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", masterElectTabletAlias)
+		}
+		wr.logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", masterElectTabletAlias)
+	}
+
+	// TODO(alainjobart): if the master elect is not a master, but
+	// a replica / slave / ..., ChangeType it to master, and
+	// refresh it.
+
+	// Tell the new master to break its slaves, return its replication
+	// position, and add a row to the reparent_journal table.
+	rp, err := wr.TabletManagerClient().InitMaster(ctx, masterElectTabletInfo)
+	if err != nil {
+		return err
+	}
+
+	// Now tell everybody else to become a slave of the new master,
+	// and wait for the row in the reparent_journal table.
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for alias, tabletInfo := range tabletMap {
+		if alias == masterElectTabletAlias {
+			continue
+		}
+
+		wg.Add(1)
+		go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
+			defer wg.Done()
+
+			err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
+			}
+		}(alias, tabletInfo)
+	}
+
+	wg.Wait()
+	return rec.Error()
 }

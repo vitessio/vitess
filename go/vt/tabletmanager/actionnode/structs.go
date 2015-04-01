@@ -140,11 +140,20 @@ type MigrateServedFromArgs struct {
 
 // methods to build the shard action nodes
 
+// ReparentShardArgs is the payload for ReparentShard
+type ReparentShardArgs struct {
+	Operation        string
+	MasterElectAlias topo.TabletAlias
+}
+
 // ReparentShard returns an ActionNode
-func ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {
+func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: SHARD_ACTION_REPARENT,
-		Args:   &tabletAlias,
+		Args: &ReparentShardArgs{
+			Operation:        operation,
+			MasterElectAlias: masterElectAlias,
+		},
 	}).SetGuid()
 }
 

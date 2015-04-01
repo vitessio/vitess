@@ -359,6 +359,31 @@ func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBl
 // Reparenting related functions
 //
 
+// InitMaster wraps RPCAgent.InitMaster
+func (tm *TabletManager) InitMaster(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_INIT_MASTER, args, reply, true, func() error {
+		rp, err := tm.agent.InitMaster(ctx)
+		if err == nil {
+			*reply = rp
+		}
+		return err
+	})
+}
+
+// InitSlave wraps RPCAgent.InitSlave
+func (tm *TabletManager) InitSlave(ctx context.Context, args *gorpcproto.InitSlaveArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_INIT_SLAVE, args, reply, true, func() error {
+		if args.WaitTimeout != 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
+			defer cancel()
+		}
+		return tm.agent.InitSlave(ctx, args.Parent, args.ReplicationPosition)
+	})
+}
+
 // DemoteMaster wraps RPCAgent.
 func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

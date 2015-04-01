@@ -101,6 +101,10 @@ type RPCAgent interface {
 
 	// Reparenting related functions
 
+	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
+
+	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error
+
 	DemoteMaster(ctx context.Context) error
 
 	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
@@ -403,6 +407,54 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 //
 // Reparenting related functions
 //
+
+// InitMaster breaks slaves replication, get the current MySQL replication
+// position, insert a row in the reparent_journal table, and returns
+// the replication position
+func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	// first break the slaves
+	if err := agent.Mysqld.BreakSlaves(); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// get the current replication position
+	rp, err := agent.Mysqld.MasterPosition()
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// TODO(alainjobart) insert a new row in master reparent log
+
+	return rp, nil
+}
+
+// InitSlave sets replication master and position, and waits for the
+// reparent_journal table entry up to context timeout
+func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+	ti, err := agent.TopoServer.GetTablet(parent)
+	if err != nil {
+		return err
+	}
+
+	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
+	status := &myproto.ReplicationStatus{
+		Position:           replicationPosition,
+		MasterHost:         ti.Hostname,
+		MasterPort:         ti.Portmap["mysql"],
+		MasterConnectRetry: 10,
+	}
+	cmds, err := agent.Mysqld.StartReplicationCommands(status)
+	if err != nil {
+		return err
+	}
+
+	if err := agent.Mysqld.ExecuteSuperQueryList(cmds); err != nil {
+		return err
+	}
+
+	// TODO(alainjobart) wait for the new row in master reparent log
+	return nil
+}
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.
 // Should be called under RPCWrapLockAction.

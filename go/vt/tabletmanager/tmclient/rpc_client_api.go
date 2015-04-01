@@ -147,6 +147,16 @@ type TabletManagerClient interface {
 	// Reparenting related functions
 	//
 
+	// InitMaster tells a tablet to make itself the new master,
+	// and return the replication position the slaves should use to
+	// reparent to it.
+	InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+
+	// InitSlave tells a tablet to make itself a slave to the
+	// passed in master tablet alias, and wait for the row in the
+	// reparent_journal table.
+	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error
+
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error
 

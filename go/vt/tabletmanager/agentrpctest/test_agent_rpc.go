@@ -932,6 +932,16 @@ func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmcl
 // Reparenting related functions
 //
 
+// TODO(alainjobart) add unit tests for these two
+
+func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	return myproto.ReplicationPosition{}, nil
+}
+
+func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+	return nil
+}
+
 var testDemoteMasterCalled = false
 
 func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) error {
