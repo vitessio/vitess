@@ -346,7 +346,7 @@ func (vscw *VerticalSplitCloneWorker) ResolveDestinationMasters() error {
 	defer vscw.resolveMu.Unlock()
 
 	// If the last resolution was fresh enough, return it.
-	if time.Now().Sub(vscw.resolveTime) < resolveTTL {
+	if time.Now().Sub(vscw.resolveTime) < *resolveTTL {
 		return nil
 	}
 

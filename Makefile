@@ -100,7 +100,8 @@ medium_integration_test_files = \
 	reparent.py \
 	vtdb_test.py \
 	vtgate_utils_test.py \
-	rowcache_invalidator.py
+	rowcache_invalidator.py \
+	worker.py
 
 large_integration_test_files = \
 	vtgatev2_test.py \
@@ -122,7 +123,8 @@ worker_integration_test_files = \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	initial_sharding.py \
-	initial_sharding_bytes.py
+	initial_sharding_bytes.py \
+	worker.py
 
 .ONESHELL:
 SHELL = /bin/bash
