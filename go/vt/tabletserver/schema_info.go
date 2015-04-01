@@ -657,13 +657,3 @@ func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *ht
 	json.HTMLEscape(buf, b)
 	response.Write(buf.Bytes())
 }
-
-func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mproto.Field) {
-	output = make([]mproto.Field, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-	}
-	return output
-}
