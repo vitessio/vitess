@@ -238,6 +238,9 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// Now tell the new master to insert the reparent_journal row,
 	// and tell everybody else to become a slave of the new master,
 	// and wait for the row in the reparent_journal table.
+	// We start all these in parallel, to handle the semi-sync
+	// case: for the master to be able to commit its row in the
+	// reparent_journal table, it needs connected slaves.
 	now := time.Now().UnixNano()
 	wgMaster := sync.WaitGroup{}
 	wgSlaves := sync.WaitGroup{}
@@ -261,7 +264,8 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		}
 	}
 
-	// after the master is done, we can update the shard record
+	// After the master is done, we can update the shard record
+	// (note with semi-sync, it also needs at least one slave is done)
 	wgMaster.Wait()
 	if masterErr != nil {
 		wgSlaves.Wait()
@@ -275,7 +279,10 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		}
 	}
 
-	// wait for the slaves to complete
+	// Wait for the slaves to complete. If some of them fail, we
+	// don't want to rebuild the shard serving graph (the failure
+	// will most likely be a timeout, and our context will be
+	// expired, so the rebuild will fail anyway)
 	wgSlaves.Wait()
 	if err := rec.Error(); err != nil {
 		return err
