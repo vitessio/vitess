@@ -171,7 +171,7 @@ func makeBindVars(args []driver.Value) map[string]interface{} {
 	}
 	bv := make(map[string]interface{}, len(args))
 	for i, v := range args {
-		bv[fmt.Sprintf("v%d", i)] = v
+		bv[fmt.Sprintf("v%d", i+1)] = v
 	}
 	return bv
 }

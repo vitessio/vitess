@@ -23,6 +23,7 @@ var (
 	retryCount         = flag.Int("retry-count", 2, "retry count")
 	connTimeoutTotal   = flag.Duration("conn-timeout-total", 3*time.Second, "vttablet connection timeout (total)")
 	connTimeoutPerConn = flag.Duration("conn-timeout-per-conn", 1500*time.Millisecond, "vttablet connection timeout (per connection)")
+	connLife           = flag.Duration("conn-life", 365*24*time.Hour, "average life of vttablet connections")
 	maxInFlight        = flag.Int("max-in-flight", 0, "maximum number of calls to allow simultaneously")
 )
 
@@ -83,6 +84,6 @@ startServer:
 	topoReader = NewTopoReader(resilientSrvTopoServer)
 	servenv.Register("toporeader", topoReader)
 
-	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *maxInFlight)
+	vtgate.Init(resilientSrvTopoServer, schema, *cell, *retryDelay, *retryCount, *connTimeoutTotal, *connTimeoutPerConn, *connLife, *maxInFlight)
 	servenv.RunDefault()
 }

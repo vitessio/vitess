@@ -50,7 +50,6 @@ func init() {
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
-	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-port", DefaultQsConfig.RowCache.TcpPort, "DEPRECATED")
 	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
 	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
@@ -61,7 +60,6 @@ type RowCacheConfig struct {
 	Binary      string
 	Memory      int
 	Socket      string
-	TcpPort     int
 	Connections int
 	Threads     int
 	LockPaged   bool
@@ -132,7 +130,7 @@ var DefaultQsConfig = Config{
 	TxPoolTimeout:      1,
 	IdleTimeout:        30 * 60,
 	StreamBufferSize:   32 * 1024,
-	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
+	RowCache:           RowCacheConfig{Memory: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
 	StrictMode:         true,
 	StrictTableAcl:     false,
