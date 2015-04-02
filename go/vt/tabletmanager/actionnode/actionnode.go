@@ -51,6 +51,10 @@ const (
 	// master for the shard it's currently in.
 	TABLET_ACTION_INIT_MASTER = "InitMaster"
 
+	// PopulateReparentJournal inserts an entry in the
+	// _vt.reparent_journal table
+	TABLET_ACTION_POPULATE_REPARENT_JOURNAL = "PopulateReparentJournal"
+
 	// InitSlave tells the tablet it should make itself a slave to
 	// the provided master at the given position.
 	TABLET_ACTION_INIT_SLAVE = "InitSlave"

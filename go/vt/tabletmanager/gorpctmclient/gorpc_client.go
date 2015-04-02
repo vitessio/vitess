@@ -378,11 +378,23 @@ func (client *GoRPCTabletManagerClient) InitMaster(ctx context.Context, tablet *
 	return rp, nil
 }
 
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	args := &gorpcproto.PopulateReparentJournalArgs{
+		TimeCreatedNS:       timeCreatedNS,
+		ActionName:          actionName,
+		MasterAlias:         masterAlias,
+		ReplicationPosition: pos,
+	}
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_POPULATE_REPARENT_JOURNAL, args, &rpc.Unused{})
+}
+
 // InitSlave is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	args := &gorpcproto.InitSlaveArgs{
 		Parent:              parent,
 		ReplicationPosition: replicationPosition,
+		TimeCreatedNS:       timeCreatedNS,
 	}
 	deadline, ok := ctx.Deadline()
 	if ok {

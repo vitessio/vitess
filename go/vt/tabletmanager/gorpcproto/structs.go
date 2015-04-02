@@ -31,10 +31,19 @@ gorpc_server.go to only use the '2' structures. Everything worked the same.
 
 */
 
+// PopulateReparentJournalArgs has arguments for PopulateReparentJournal
+type PopulateReparentJournalArgs struct {
+	TimeCreatedNS       int64
+	ActionName          string
+	MasterAlias         topo.TabletAlias
+	ReplicationPosition myproto.ReplicationPosition
+}
+
 // InitSlaveArgs has arguments for InitSlave
 type InitSlaveArgs struct {
 	Parent              topo.TabletAlias
 	ReplicationPosition myproto.ReplicationPosition
+	TimeCreatedNS       int64
 	WaitTimeout         time.Duration // pass in zero to wait indefinitely
 }
 

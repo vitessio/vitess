@@ -239,22 +239,25 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		return err
 	}
 
-	// Now tell everybody else to become a slave of the new master,
+	// Now tell the new master to insert the reparent_journal row,
+	// and tell everybody else to become a slave of the new master,
 	// and wait for the row in the reparent_journal table.
+	now := time.Now().UnixNano()
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for alias, tabletInfo := range tabletMap {
-		if alias == masterElectTabletAlias {
-			continue
-		}
-
 		wg.Add(1)
 		go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
-			err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
+			if alias == masterElectTabletAlias {
+				if err := wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, masterElectTabletAlias, rp); err != nil {
+					rec.RecordError(fmt.Errorf("Master Tablet %v PopulateReparentJournal failed: %v", alias, err))
+				}
+			} else {
+				if err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp, now); err != nil {
+					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
+				}
 			}
 		}(alias, tabletInfo)
 	}

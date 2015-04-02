@@ -371,6 +371,14 @@ func (tm *TabletManager) InitMaster(ctx context.Context, args *rpc.Unused, reply
 	})
 }
 
+// PopulateReparentJournal wraps RPCAgent.PopulateReparentJournal
+func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, args *gorpcproto.PopulateReparentJournalArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_POPULATE_REPARENT_JOURNAL, args, reply, true, func() error {
+		return tm.agent.PopulateReparentJournal(ctx, args.TimeCreatedNS, args.ActionName, args.MasterAlias, args.ReplicationPosition)
+	})
+}
+
 // InitSlave wraps RPCAgent.InitSlave
 func (tm *TabletManager) InitSlave(ctx context.Context, args *gorpcproto.InitSlaveArgs, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
@@ -380,7 +388,7 @@ func (tm *TabletManager) InitSlave(ctx context.Context, args *gorpcproto.InitSla
 			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
 			defer cancel()
 		}
-		return tm.agent.InitSlave(ctx, args.Parent, args.ReplicationPosition)
+		return tm.agent.InitSlave(ctx, args.Parent, args.ReplicationPosition, args.TimeCreatedNS)
 	})
 }
 

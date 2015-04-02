@@ -248,8 +248,13 @@ func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *t
 	return myproto.ReplicationPosition{}, nil
 }
 
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	return nil
+}
+
 // InitSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	return nil
 }
 

@@ -103,7 +103,9 @@ type RPCAgent interface {
 
 	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
+
+	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
 	DemoteMaster(ctx context.Context) error
 
@@ -412,7 +414,8 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 // position, insert a row in the reparent_journal table, and returns
 // the replication position
 func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
-	// first break the slaves
+	// first break the slaves, so anyone who may have been replicating
+	// before will stop. This is meant to catch misconfigured hosts.
 	if err := agent.Mysqld.BreakSlaves(); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -423,14 +426,28 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 		return myproto.ReplicationPosition{}, err
 	}
 
-	// TODO(alainjobart) insert a new row in master reparent log
+	// Set the server read-write, from now on we can accept real
+	// client writes. Note that if semi-sync replication is enabled,
+	// we'll still need some slaves to be able to commit
+	// transactions.
+	if err := agent.Mysqld.SetReadOnly(false); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
 
 	return rp, nil
 }
 
+// PopulateReparentJournal adds an entry into the reparent_journal table.
+func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	cmds := mysqlctl.CreateReparentJournal()
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, masterAlias.String(), pos))
+
+	return agent.Mysqld.ExecuteSuperQueryList(cmds)
+}
+
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	ti, err := agent.TopoServer.GetTablet(parent)
 	if err != nil {
 		return err
@@ -452,8 +469,8 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 		return err
 	}
 
-	// TODO(alainjobart) wait for the new row in master reparent log
-	return nil
+	// wait until we get the replicated row, or our context times out
+	return mysqlctl.WaitForReparentJournal(ctx, agent.Mysqld, timeCreatedNS)
 }
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.

@@ -938,7 +938,11 @@ func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPos
 	return myproto.ReplicationPosition{}, nil
 }
 
-func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition) error {
+func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	return nil
+}
+
+func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	return nil
 }
 
