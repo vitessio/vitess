@@ -10,8 +10,12 @@ class BindVarsProxy(object):
     self.accessed_keys = set()
 
   def __getitem__(self, name):
+    var = self.bind_vars[name]
     self.bind_vars[name]
     self.accessed_keys.add(name)
+    if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, set):
+      return '::%s' % name
+
     return ':%s' % name
 
   def export_bind_vars(self):
