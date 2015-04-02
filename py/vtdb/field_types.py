@@ -93,7 +93,9 @@ def convert_bind_vars(bind_variables):
       new_vars[key] = times.DateTimeToString(val)
     elif isinstance(val, datetime.date):
       new_vars[key] = times.DateToString(val)
-    elif isinstance(val, (int, long, float, str, List, NoneType)):
+    elif isinstance(val, (set, tuple)):
+      new_vars[key] = list(val)
+    elif isinstance(val, (int, long, float, str, list, NoneType)):
       new_vars[key] = val
     else:
       # NOTE(msolomon) begrudgingly I allow this - we just have too much code
