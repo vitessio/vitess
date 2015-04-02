@@ -56,7 +56,7 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		return endpoints, nil
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
-	ticker := timer.NewRandTicker(connLife, connLife/10)
+	ticker := timer.NewRandTicker(connLife, connLife/2)
 	sdc := &ShardConn{
 		keyspace:           keyspace,
 		shard:              shard,
