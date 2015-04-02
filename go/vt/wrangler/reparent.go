@@ -228,10 +228,6 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		wr.logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", masterElectTabletAlias)
 	}
 
-	// TODO(alainjobart): if the master elect is not a master, but
-	// a replica / slave / ..., ChangeType it to master, and
-	// refresh it.
-
 	// Tell the new master to break its slaves, return its replication
 	// position, and add a row to the reparent_journal table.
 	rp, err := wr.TabletManagerClient().InitMaster(ctx, masterElectTabletInfo)
@@ -243,25 +239,50 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// and tell everybody else to become a slave of the new master,
 	// and wait for the row in the reparent_journal table.
 	now := time.Now().UnixNano()
-	wg := sync.WaitGroup{}
+	wgMaster := sync.WaitGroup{}
+	wgSlaves := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
+	var masterErr error
 	for alias, tabletInfo := range tabletMap {
-		wg.Add(1)
-		go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
-			defer wg.Done()
-
-			if alias == masterElectTabletAlias {
-				if err := wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, masterElectTabletAlias, rp); err != nil {
-					rec.RecordError(fmt.Errorf("Master Tablet %v PopulateReparentJournal failed: %v", alias, err))
-				}
-			} else {
+		if alias == masterElectTabletAlias {
+			wgMaster.Add(1)
+			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
+				defer wgMaster.Done()
+				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, alias, rp)
+			}(alias, tabletInfo)
+		} else {
+			wgSlaves.Add(1)
+			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
+				defer wgSlaves.Done()
 				if err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp, now); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
 				}
-			}
-		}(alias, tabletInfo)
+			}(alias, tabletInfo)
+		}
 	}
 
-	wg.Wait()
-	return rec.Error()
+	// after the master is done, we can update the shard record
+	wgMaster.Wait()
+	if masterErr != nil {
+		wgSlaves.Wait()
+		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+	}
+	if shardInfo.MasterAlias != masterElectTabletAlias {
+		shardInfo.MasterAlias = masterElectTabletAlias
+		if err := topo.UpdateShard(ctx, wr.ts, shardInfo); err != nil {
+			wgSlaves.Wait()
+			return fmt.Errorf("failed to update shard master record: %v", err)
+		}
+	}
+
+	// wait for the slaves to complete
+	wgSlaves.Wait()
+	if err := rec.Error(); err != nil {
+		return err
+	}
+
+	// Then we rebuild the entire serving graph for the shard,
+	// to account for all changes.
+	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
+	return err
 }
