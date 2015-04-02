@@ -63,7 +63,7 @@ def setUpModule():
     master_tablet.wait_for_vttablet_state('SERVING')
     replica_tablet.wait_for_vttablet_state('SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)
     utils.validate_topology()
 

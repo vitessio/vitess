@@ -47,7 +47,8 @@ class TestEnv(object):
       t.wait_for_vttablet_state('SERVING')
     for t in self.tablets:
       if t.tablet_type == "master":
-        utils.run_vtctl(['ReparentShard', '-force', keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
+        utils.run_vtctl(['InitShardMaster', keyspace+'/'+t.shard,
+                         t.tablet_alias], auto_log=True)
         # Force read-write even if there are no replicas.
         utils.run_vtctl(['SetReadWrite', t.tablet_alias], auto_log=True)
 

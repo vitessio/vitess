@@ -66,7 +66,7 @@ def setUpModule():
     for t in [src_master, src_replica, src_rdonly1, src_rdonly2]:
       t.wait_for_vttablet_state('SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      src_master.tablet_alias], auto_log=True)
 
     # Create schema

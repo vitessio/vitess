@@ -136,9 +136,12 @@ class TestSchema(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
               shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1, shard_2_master, shard_2_replica1]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0', shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/1', shard_1_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/2', shard_2_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/1',
+                     shard_1_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/2',
+                     shard_2_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', 'test_keyspace'])
 
     # check after all tablets are here and replication is fixed

@@ -303,7 +303,7 @@ index by_msg (msg)
     shard_rdonly1.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      shard_master.tablet_alias], auto_log=True)
 
     # create the tables and add startup values

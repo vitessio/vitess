@@ -135,9 +135,9 @@ def setup_sharded_keyspace():
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.wait_for_vttablet_state('SERVING')
 
-  utils.run_vtctl(['ReparentShard', '-force', '%s/-80' % SHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '%s/-80' % SHARDED_KEYSPACE,
                    shard_0_master.tablet_alias], auto_log=True)
-  utils.run_vtctl(['ReparentShard', '-force', '%s/80-' % SHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '%s/80-' % SHARDED_KEYSPACE,
                    shard_1_master.tablet_alias], auto_log=True)
 
   utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE],
@@ -166,7 +166,7 @@ def setup_unsharded_keyspace():
   for t in [unsharded_master, unsharded_replica]:
     t.wait_for_vttablet_state('SERVING')
 
-  utils.run_vtctl(['ReparentShard', '-force', '%s/0' % UNSHARDED_KEYSPACE,
+  utils.run_vtctl(['InitShardMaster', '%s/0' % UNSHARDED_KEYSPACE,
                    unsharded_master.tablet_alias], auto_log=True)
 
   utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE],
