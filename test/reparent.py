@@ -137,7 +137,7 @@ class TestReparent(unittest.TestCase):
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology()
 
@@ -310,7 +310,7 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
     utils.pause('force ReparentShard?')
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
@@ -404,7 +404,7 @@ class TestReparent(unittest.TestCase):
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 
@@ -471,7 +471,7 @@ class TestReparent(unittest.TestCase):
     # Reparent as a starting point
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
 
     # now manually reparent 1 out of 2 tablets
@@ -586,7 +586,7 @@ class TestReparent(unittest.TestCase):
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
 

@@ -332,9 +332,9 @@ index by_msg (msg)
               shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],

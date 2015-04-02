@@ -90,7 +90,7 @@ def setUpModule():
     dst_master.start_vttablet(wait_for_state='NOT_SERVING')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/1',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/1',
                      dst_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 

@@ -400,7 +400,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
     self.check_healthz(tablet_62044, False)
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_62344.tablet_alias])
 
     # make sure the 'spare' slave goes to 'replica'
