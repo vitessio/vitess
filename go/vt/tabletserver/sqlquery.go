@@ -374,11 +374,9 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          sq.qe.schemaInfo.GetPlan(ctx, logStats, query.Sql),
-		RequestContext: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       sq.qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            sq.qe,
 	}
 	*reply = *qre.Execute()
 	return nil
@@ -410,11 +408,9 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
-		RequestContext: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       sq.qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            sq.qe,
 	}
 	qre.Stream(sendReply)
 	return nil
@@ -507,19 +503,19 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
-	// Partial initialization or QueryExecutor is enough to call execSQL
-	requestContext := RequestContext{
+
+	qre := &QueryExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       sq.qe,
 	}
-	conn := requestContext.getConn(sq.qe.connPool)
+	conn := qre.getConn(sq.qe.connPool)
 	defer conn.Recycle()
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.
 	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
-	pkMinMax := requestContext.execSQL(conn, minMaxSql, true)
+	pkMinMax := qre.execSQL(conn, minMaxSql, true)
 	reply.Queries, err = splitter.split(pkMinMax)
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
