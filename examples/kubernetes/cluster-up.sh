@@ -84,7 +84,7 @@ if [ -z "$GOPATH" ]; then
   exit -1
 fi
 
-export KUBECTL='gcloud preview container kubectl'
+export KUBECTL='gcloud alpha container kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
@@ -102,7 +102,7 @@ echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $total_tablet_count
+gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $total_tablet_count
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
 for i in `seq 1 $total_tablet_count`; do
