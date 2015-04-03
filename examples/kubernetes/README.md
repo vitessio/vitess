@@ -37,7 +37,7 @@ If you're running Kubernetes manually, set the `KUBECTL` environment variable
 to point to the location of `kubectl.sh`. For example:
 
 ```
- $export KUBECTL=$HOME/kubernetes/cluster/kubectl.sh
+$ export KUBECTL=$HOME/kubernetes/cluster/kubectl.sh
 ```
 
 ### Create a Container Engine cluster
