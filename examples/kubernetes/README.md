@@ -21,7 +21,7 @@ You'll need [Go 1.3+](http://golang.org/doc/install) in order to build the
 ### Build and install vtctlclient
 
 ```
-vitess/examples/kubernetes$ go build ../../go/cmd/vtctlclient
+$ go get github.com/youtube/vitess/go/cmd/vtctlclient
 ```
 
 ### Set the path to kubectl
