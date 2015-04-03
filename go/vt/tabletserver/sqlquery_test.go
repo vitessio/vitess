@@ -23,7 +23,7 @@ import (
 var testSqlQuery *SqlQuery
 
 func TestSqlQueryAllowQueries(t *testing.T) {
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	sqlQuery := getSqlQuery()
 	if sqlQuery.GetState() != "NOT_SERVING" {
 		t.Fatalf("sqlquery should in state: NOT_SERVING, but get state: %s", sqlQuery.GetState())
@@ -42,7 +42,9 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 		t.Fatalf("SqlQuery.allowQueries should fail")
 	}
 	sqlQuery.setState(StateNotServing)
-	fakesqldb.Register(nil, true)
+	db := fakesqldb.Register()
+	// cause db connection to fail
+	db.EnableConnFail()
 	err = sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail because of failed to create a new connection")
@@ -50,7 +52,10 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 }
 
 func TestCheckMysql(t *testing.T) {
-	fakesqldb.Register(getSupportedQueries(), true)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -65,7 +70,10 @@ func TestCheckMysql(t *testing.T) {
 }
 
 func TestGetSessionId(t *testing.T) {
-	fakesqldb.Register(getSupportedQueries(), false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
 	sqlQuery := getSqlQuery()
 	if err := sqlQuery.GetSessionId(nil, nil); err == nil {
 		t.Fatalf("call GetSessionId should get an error")
@@ -116,9 +124,11 @@ func TestTransactionCommit(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -162,9 +172,12 @@ func TestTransactionRollback(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -208,9 +221,12 @@ func TestStreamExecute(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -255,9 +271,12 @@ func TestExecuteBatch(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -304,9 +323,11 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -363,9 +384,11 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
