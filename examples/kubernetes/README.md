@@ -30,7 +30,7 @@ If you're running in Container Engine, set the `KUBECTL` environment variable
 to point to the `gcloud` command:
 
 ```
-$ export KUBECTL='gcloud preview container kubectl'
+$ export KUBECTL='gcloud alpha container kubectl'
 ```
 
 If you're running Kubernetes manually, set the `KUBECTL` environment variable
@@ -54,8 +54,10 @@ $ gcloud config set compute/zone us-central1-b
 Then create a cluster:
 
 ```
-$ gcloud preview container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud alpha container clusters create example --machine-type n1-standard-1 --num-nodes 3
 ```
+
+If prompted, install the alpha commands.
 
 ## Start an etcd cluster for Vitess
 
@@ -242,15 +244,18 @@ for more details on how the app server interacts with Vitess.
 Tear down the Container Engine cluster:
 
 ```
-$ gcloud preview container clusters delete example
+$ gcloud alpha container clusters delete example
 ```
 
 Clean up other entities created for this example:
 
 ```
-$ gcloud compute forwarding-rules delete vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-guestbook
 $ gcloud compute firewall-rules delete vtctld
-$ gcloud compute target-pools delete vtctld
+$ gcloud compute firewall-rules delete guestbook
+$ gcloud compute target-pools delete k8s-example-default-vtctld
+$ gcloud compute target-pools delete k8s-example-default-guestbook
 ```
 
 ## Troubleshooting
