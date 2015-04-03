@@ -13,7 +13,7 @@ class BindVarsProxy(object):
     var = self.bind_vars[name]
     self.bind_vars[name]
     self.accessed_keys.add(name)
-    if isinstance(var, list) or isinstance(var, tuple) or isinstance(var, set):
+    if isinstance(var, (list, set, tuple)):
       return '::%s' % name
 
     return ':%s' % name
