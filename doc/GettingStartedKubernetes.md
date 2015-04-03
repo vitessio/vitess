@@ -29,7 +29,7 @@ workspace can be found at
 The <code>vtctlclient</code> tool issues commands to Vitess.
 
 ``` sh
-$ go get git￼￼hub.com/youtube/vitess/go/cmd/vtctlclient
+$ go get github.com/youtube/vitess/go/cmd/vtctlclient
 ```
 
 This command downloads and builds the Vitess source code at:
@@ -86,13 +86,13 @@ account with a project in the Google Developers Console.
     <code>gcloud</code> command:
 
     ``` sh
-$ export KUBECTL='gcloud preview container kubectl'
+$ export KUBECTL='gcloud alpha container kubectl'
 ```
 
-1.  Enable preview features in the <code>gcloud</code> tool:
+1.  Enable alpha features in the <code>gcloud</code> tool:
 
     ``` sh
-$ gcloud components update preview
+$ gcloud components update alpha
 ```
 
 1.  If you did not complete the [GCE quickstart guide]
@@ -119,7 +119,7 @@ $ gcloud config set compute/zone us-central1-b
 1.  Create a Kubernetes cluster:
 
     ``` sh
-$ gcloud preview container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud alpha container clusters create example --machine-type n1-standard-1 --num-nodes 3
 ```
 
 1.  While the cluster is starting, you will be prompted several
@@ -453,7 +453,7 @@ The following command tears down the Container Engine cluster. It is
 necessary to stop the virtual machines running on the Cloud platform.
 
 ``` sh
-$ gcloud preview container clusters delete example
+$ gcloud alpha container clusters delete example
 ```
 
 And these commands clean up other entities created for this example.
@@ -461,9 +461,12 @@ They are suggested to prevent conflicts that might occur if you
 don't run them and then rerun this example in a different mode.
 
 ``` sh
-$ gcloud compute forwarding-rules delete vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-guestbook
 $ gcloud compute firewall-rules delete vtctld
-$ gcloud compute target-pools delete vtctld
+$ gcloud compute firewall-rules delete guestbook
+$ gcloud compute target-pools delete k8s-example-default-vtctld
+$ gcloud compute target-pools delete k8s-example-default-guestbook
 ```
 
 ## Troubleshooting
