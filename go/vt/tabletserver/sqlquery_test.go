@@ -460,7 +460,7 @@ func TestHandleExecTabletError(t *testing.T) {
 func getSqlQuery() *SqlQuery {
 	if testSqlQuery == nil {
 		config := DefaultQsConfig
-		config.StrictMode = false
+		config.StrictMode = true
 		testSqlQuery = NewSqlQuery(config)
 	}
 	// make sure SqlQuery is in StateNotServing state
@@ -513,6 +513,12 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
 				},
+			},
+		},
+		"select @@global.sql_mode": &mproto.QueryResult{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
 		"describe `test_table`": &mproto.QueryResult{
