@@ -91,13 +91,13 @@ func NewSqlQuery(config Config) *SqlQuery {
 		config: config,
 	}
 	sq.qe = NewQueryEngine(config)
-	stats.Publish("TabletState", stats.IntFunc(func() int64 {
+	stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 		sq.mu.Lock()
 		state := sq.state
 		sq.mu.Unlock()
 		return state
 	}))
-	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
+	stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
 	return sq
 }
 

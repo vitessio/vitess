@@ -48,7 +48,8 @@ func NewCachePool(
 	statsURL string) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout, statsURL: statsURL}
 	if name != "" {
-		cp.memcacheStats = NewMemcacheStats(cp, true, false, false)
+		cp.memcacheStats = NewMemcacheStats(
+			cp, rowCacheConfig.StatsPrefix, true, false, false)
 		stats.Publish(name+"ConnPoolCapacity", stats.IntFunc(cp.Capacity))
 		stats.Publish(name+"ConnPoolAvailable", stats.IntFunc(cp.Available))
 		stats.Publish(name+"ConnPoolMaxCap", stats.IntFunc(cp.MaxCap))
