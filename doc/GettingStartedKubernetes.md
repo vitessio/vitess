@@ -174,7 +174,7 @@ vitess/examples/kubernetes$ ./etcd-up.sh
     in the cluster by running:
 
     ``` sh
-$KUBECTL get pods
+$ $KUBECTL get pods
 ```
 
     <br>It may take a while for each Kubernetes minion to download the
@@ -244,10 +244,10 @@ vtctld us-central1 104.154.64.12 TCP         us-central1/targetPools/vtctld
     When you call <code>vtctlclient</code>, the command includes
     the IP address and port for your <code>vtctld</code> service.
     To avoid having to enter that for each command, create an alias
-    called <codekvtctl</code>:
+    called <code>kvtctl</code> that points to the address from above:
 
     ``` sh
-$ alias kvtctl='vtctlclient -server VTCTLD_IP_ADDRESS:15000'
+$ alias kvtctl='vtctlclient -server 104.154.64.12:15000'
 ```
 
     <br>Now, running <code>kvtctl</code> will test your connection to
