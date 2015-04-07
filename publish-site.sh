@@ -58,4 +58,8 @@ rm -rf vitess.io
 git add -u
 
 git commit -m "publish site `date`"
-git push origin gh-pages
+
+echo
+echo "Please sanity-check the output: git diff HEAD~"
+echo
+echo "When you're ready to publish: git push origin gh-pages"
