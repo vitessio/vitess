@@ -809,7 +809,7 @@ func handleAndVerifySchemaInfoError(t *testing.T, msg string, tabletErrType int)
 	}
 	tabletError, ok := err.(*TabletError)
 	if !ok {
-		t.Fatalf("should return a TabletError")
+		t.Fatalf("should return a TabletError, but got err: %v", err)
 	}
 	if tabletError.ErrorType != tabletErrType {
 		t.Fatalf("should return a TabletError with error type: %s", getTabletErrorString(tabletErrType))
