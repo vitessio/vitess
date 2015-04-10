@@ -64,6 +64,7 @@ var stateName = []string{
 
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
+	config Config
 	// mu is used to access state. It's also used to ensure
 	// that state does not change out of StateServing or StateShuttingTx
 	// while we do requests.Add.
@@ -86,7 +87,9 @@ type SqlQuery struct {
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
 // of SqlQuery can be created per process.
 func NewSqlQuery(config Config) *SqlQuery {
-	sq := &SqlQuery{}
+	sq := &SqlQuery{
+		config: config,
+	}
 	sq.qe = NewQueryEngine(config)
 	stats.Publish("TabletState", stats.IntFunc(func() int64 {
 		sq.mu.Lock()
@@ -323,7 +326,7 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
+func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -332,7 +335,15 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		*err = terr
+		if sq.config.TerseErrors {
+			if terr.SqlError == 0 {
+				*err = terr
+			} else {
+				*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+			}
+		} else {
+			*err = terr
+		}
 		terr.RecordStats()
 		// suppress these errors in logs
 		if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
@@ -353,7 +364,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", ctx)
-	defer handleExecError(query, &err, logStats)
+	defer sq.handleExecError(query, &err, logStats)
 
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, false, allowShutdown); err != nil {
@@ -392,7 +403,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 	}
 
 	logStats := newSqlQueryStats("StreamExecute", ctx)
-	defer handleExecError(query, &err, logStats)
+	defer sq.handleExecError(query, &err, logStats)
 
 	if err = sq.startRequest(query.SessionId, false, false); err != nil {
 		return err
