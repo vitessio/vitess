@@ -122,6 +122,7 @@ func (te *TabletError) Error() string {
 	return te.Prefix() + te.Message
 }
 
+// Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
 	switch te.ErrorType {

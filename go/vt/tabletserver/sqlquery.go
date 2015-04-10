@@ -335,12 +335,8 @@ func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQ
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		if sq.config.TerseErrors {
-			if terr.SqlError == 0 {
-				*err = terr
-			} else {
-				*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
-			}
+		if sq.config.TerseErrors && terr.SqlError != 0 {
+			*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
 		} else {
 			*err = terr
 		}

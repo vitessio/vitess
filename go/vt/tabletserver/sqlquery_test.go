@@ -410,7 +410,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 		BindVariables: nil,
 	}
 	var err error
-	sq := &SqlQuery{}
+	sq := getSqlQuery()
 	defer sq.handleExecError(&query, &err, logStats)
 	panic("unknown exec error")
 }
@@ -429,7 +429,7 @@ func TestHandleExecTabletError(t *testing.T) {
 			t.Errorf("Error: %v, want '%s'", err, want)
 		}
 	}()
-	sq := &SqlQuery{}
+	sq := getSqlQuery()
 	defer sq.handleExecError(&query, &err, logStats)
 	panic(NewTabletError(ErrFatal, "tablet error"))
 }
