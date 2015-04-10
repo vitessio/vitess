@@ -161,7 +161,10 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 
 	// Process input form.
 	excludeTables := r.FormValue("excludeTables")
-	excludeTableArray := strings.Split(excludeTables, ",")
+	var excludeTableArray []string
+	if excludeTables != "" {
+		excludeTableArray = strings.Split(excludeTables, ",")
+	}
 
 	// start the diff job
 	wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray)
