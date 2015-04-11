@@ -23,20 +23,20 @@ func Init(configFile string) {
 	if err != nil {
 		log.Fatalf("unable to read tableACL config file: %v", err)
 	}
-	tableAcl, err = load(config)
+	tableAcl, err = Load(config)
 	if err != nil {
 		log.Fatalf("tableACL initialization error: %v", err)
 	}
 }
 
-// load loads configurations from a JSON byte array
+// Load loads configurations from a JSON byte array
 //
 // Sample configuration
 // []byte (`{
 //	<tableRegexPattern1>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
 //	<tableRegexPattern2>: {"ADMIN": "<u5>"}
 //}`)
-func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
+func Load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 	var contents map[string]map[string]string
 	err := json.Unmarshal(config, &contents)
 	if err != nil {
