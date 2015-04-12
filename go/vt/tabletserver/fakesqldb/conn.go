@@ -29,9 +29,10 @@ type Conn struct {
 
 // DB is a fake database and all its methods are thread safe.
 type DB struct {
-	isConnFail bool
-	data       map[string]*proto.QueryResult
-	mu         sync.Mutex
+	isConnFail   bool
+	data         map[string]*proto.QueryResult
+	rejectedData map[string]*proto.QueryResult
+	mu           sync.Mutex
 }
 
 // AddQuery adds a query and its exptected result.
@@ -56,6 +57,28 @@ func (db *DB) DeleteQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	delete(db.data, query)
+}
+
+// AddRejectedQuery adds a query which will be rejected at execution time.
+func (db *DB) AddRejectedQuery(query string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.rejectedData[query] = &proto.QueryResult{}
+}
+
+// HasRejectedQuery returns true if this query will be rejected.
+func (db *DB) HasRejectedQuery(query string) bool {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	_, ok := db.rejectedData[query]
+	return ok
+}
+
+// DeleteRejectedQuery deletes query from the fake DB.
+func (db *DB) DeleteRejectedQuery(query string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	delete(db.rejectedData, query)
 }
 
 // EnableConnFail makes connection to this fake DB fail.
@@ -91,9 +114,11 @@ func NewFakeSqlDBConn(db *DB) *Conn {
 // ExecuteFetch executes the query on the connection
 func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	if conn.IsClosed() {
-		return nil, fmt.Errorf("Connection is closed")
+		return nil, fmt.Errorf("connection is closed")
 	}
-
+	if conn.db.HasRejectedQuery(query) {
+		return nil, fmt.Errorf("unsupported query, reject query: %s", query)
+	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
 		log.Warningf("unexpected query: %s, will return an empty result", query)
@@ -104,7 +129,7 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	qr.InsertId = result.InsertId
 
 	if qr.RowsAffected > uint64(maxrows) {
-		return nil, fmt.Errorf("Row count exceeded %d", maxrows)
+		return nil, fmt.Errorf("row count exceeded %d", maxrows)
 	}
 
 	if wantfields {
@@ -148,7 +173,10 @@ func (conn *Conn) ExecuteFetchMap(query string) (map[string]string, error) {
 // on the Connection until it returns nil or error
 func (conn *Conn) ExecuteStreamFetch(query string) error {
 	if conn.IsClosed() {
-		return fmt.Errorf("Connection is closed")
+		return fmt.Errorf("connection is closed")
+	}
+	if conn.db.HasRejectedQuery(query) {
+		return fmt.Errorf("unsupported query, reject query: %s", query)
 	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
@@ -225,7 +253,10 @@ func (conn *Conn) SetCharset(cs proto.Charset) error {
 // Register registers a fake implementation of sqldb.Conn and returns its registered name
 func Register() *DB {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
-	db := &DB{data: make(map[string]*proto.QueryResult)}
+	db := &DB{
+		data:         make(map[string]*proto.QueryResult),
+		rejectedData: make(map[string]*proto.QueryResult),
+	}
 	sqldb.Register(name, func(sqldb.ConnParams) (sqldb.Conn, error) {
 		if db.IsConnFail() {
 			return nil, &sqldb.SqlError{
