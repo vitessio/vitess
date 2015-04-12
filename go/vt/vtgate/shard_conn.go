@@ -329,8 +329,6 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
-		case tabletconn.ERR_TX_POOL_FULL:
-			return true
 		case tabletconn.ERR_FATAL:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
@@ -347,7 +345,7 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 			sdc.markDown(conn, err.Error())
 			return !inTransaction
 		default:
-			// Should not retry for normal server errors.
+			// Not retry for TX_POOL_FULL and normal server errors.
 			return false
 		}
 	}
