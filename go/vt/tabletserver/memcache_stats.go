@@ -15,10 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
-	"golang.org/x/net/context"
 )
-
-var interval = 5 * time.Second
 
 var mainStringMetrics = map[string]bool{
 	"accepting_conns":       false,
@@ -105,88 +102,113 @@ var itemsMetrics = []string{
 	"tailrepairs",
 }
 
+// RetrieveCacheStats returns current memcache stats.
+type RetrieveCacheStats func(key string) string
+
 // MemcacheStats exports the Memcache internal stats through stats package.
 type MemcacheStats struct {
-	cachePool   *CachePool
 	ticks       *timer.Timer
 	mu          sync.Mutex
 	main        map[string]string
 	slabs       map[string]map[string]int64
 	items       map[string]map[string]int64
 	statsPrefix string
+	statsFunc   RetrieveCacheStats
+	flags       int64
 }
 
-// NewMemcacheStats creates a new MemcacheStats based on given CachePool.
+const (
+	enableMain = 1 << iota
+	enableSlabs
+	enableItems
+)
+
+// NewMemcacheStats creates a new MemcacheStats.
 // main, slabs and items specify the categories of stats that need to be exported.
-func NewMemcacheStats(cachePool *CachePool, statsPrefix string, main, slabs, items bool) *MemcacheStats {
-	s := &MemcacheStats{
-		cachePool:   cachePool,
-		ticks:       timer.NewTimer(10 * time.Second),
+func NewMemcacheStats(
+	statsPrefix string,
+	refreshFreq time.Duration,
+	flags int64,
+	statsFunc RetrieveCacheStats) *MemcacheStats {
+	memstats := &MemcacheStats{
+		ticks:       timer.NewTimer(refreshFreq),
 		statsPrefix: statsPrefix,
+		statsFunc:   statsFunc,
+		main:        make(map[string]string),
+		slabs:       make(map[string]map[string]int64),
+		items:       make(map[string]map[string]int64),
+		flags:       flags,
 	}
-	if main {
-		s.publishMainStats()
+	if flags&enableMain > 0 {
+		memstats.publishMainStats()
 	}
-	if slabs {
-		s.publishSlabsStats()
+	if flags&enableSlabs > 0 {
+		memstats.publishSlabsStats()
 	}
-	if items {
-		s.publishItemsStats()
+	if flags*enableItems > 0 {
+		memstats.publishItemsStats()
 	}
-	return s
+	return memstats
 }
 
 // Open starts exporting the stats.
-func (s *MemcacheStats) Open() {
-	s.ticks.Start(func() {
-		s.updateMainStats()
-		s.updateSlabsStats()
-		s.updateItemsStats()
-	})
+func (memstats *MemcacheStats) Open() {
+	memstats.ticks.Start(func() { memstats.update() })
 }
 
 // Close clears the variable values and stops exporting the stats.
-func (s *MemcacheStats) Close() {
-	s.ticks.Stop()
+func (memstats *MemcacheStats) Close() {
+	memstats.ticks.Stop()
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for key := range s.main {
+	memstats.mu.Lock()
+	defer memstats.mu.Unlock()
+	for key := range memstats.main {
 		if mainStringMetrics[key] {
-			s.main[key] = ""
+			memstats.main[key] = ""
 		} else {
-			s.main[key] = "0"
+			memstats.main[key] = "0"
 		}
 	}
-	for key := range s.slabs {
-		s.slabs[key] = make(map[string]int64)
+	for key := range memstats.slabs {
+		memstats.slabs[key] = make(map[string]int64)
 	}
-	for key := range s.items {
-		s.items[key] = make(map[string]int64)
+	for key := range memstats.items {
+		memstats.items[key] = make(map[string]int64)
 	}
 }
 
-func (s *MemcacheStats) publishMainStats() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.main = make(map[string]string)
-	for key, isstr := range mainStringMetrics {
-		key := key
+func (memstats *MemcacheStats) update() {
+	if memstats.flags&enableMain > 0 {
+		memstats.updateMainStats()
+	}
+	if memstats.flags&enableSlabs > 0 {
+		memstats.updateSlabsStats()
+	}
+	if memstats.flags&enableItems > 0 {
+		memstats.updateItemsStats()
+	}
+}
+
+func (memstats *MemcacheStats) publishMainStats() {
+	memstats.mu.Lock()
+	defer memstats.mu.Unlock()
+	for k, isstr := range mainStringMetrics {
+		key := k
 		if isstr {
-			s.main[key] = ""
-			stats.Publish(s.statsPrefix+s.cachePool.name+"Memcache"+formatKey(key), stats.StringFunc(func() string {
-				s.mu.Lock()
-				defer s.mu.Unlock()
-				return s.main[key]
+			memstats.main[key] = ""
+			stats.Publish(memstats.statsPrefix+"Memcache"+formatKey(key), stats.StringFunc(func() string {
+				memstats.mu.Lock()
+				defer memstats.mu.Unlock()
+				return memstats.main[key]
 			}))
 		} else {
-			s.main[key] = "0"
-			stats.Publish(s.statsPrefix+s.cachePool.name+"Memcache"+formatKey(key), stats.IntFunc(func() int64 {
-				s.mu.Lock()
-				defer s.mu.Unlock()
-				ival, err := strconv.ParseInt(s.main[key], 10, 64)
+			memstats.main[key] = "0"
+			stats.Publish(memstats.statsPrefix+"Memcache"+formatKey(key), stats.IntFunc(func() int64 {
+				memstats.mu.Lock()
+				defer memstats.mu.Unlock()
+				ival, err := strconv.ParseInt(memstats.main[key], 10, 64)
 				if err != nil {
-					log.Errorf("value '%v' for key %v is not an int", s.main[key], key)
+					log.Errorf("value '%v' for key %v is not an int", memstats.main[key], key)
 					internalErrors.Add("MemcacheStats", 1)
 					return -1
 				}
@@ -196,43 +218,36 @@ func (s *MemcacheStats) publishMainStats() {
 	}
 }
 
-func (s *MemcacheStats) updateMainStats() {
-	if s.main == nil {
-		return
-	}
-	s.readStats("", func(sKey, sValue string) {
-		s.main[sKey] = sValue
+func (memstats *MemcacheStats) updateMainStats() {
+	memstats.readStats("", func(sKey, sValue string) {
+		memstats.main[sKey] = sValue
 	})
 }
 
-func (s *MemcacheStats) publishSlabsStats() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.slabs = make(map[string]map[string]int64)
+func (memstats *MemcacheStats) publishSlabsStats() {
+	memstats.mu.Lock()
+	defer memstats.mu.Unlock()
 	for key, isSingle := range slabsSingleMetrics {
 		key := key
-		s.slabs[key] = make(map[string]int64)
+		memstats.slabs[key] = make(map[string]int64)
 		if isSingle {
-			stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.IntFunc(func() int64 {
-				s.mu.Lock()
-				defer s.mu.Unlock()
-				return s.slabs[key][""]
+			stats.Publish(memstats.statsPrefix+"MemcacheSlabs"+formatKey(key), stats.IntFunc(func() int64 {
+				memstats.mu.Lock()
+				defer memstats.mu.Unlock()
+				return memstats.slabs[key][""]
 			}))
 		} else {
-			stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
-				s.mu.Lock()
-				defer s.mu.Unlock()
-				return copyMap(s.slabs[key])
+			stats.Publish(memstats.statsPrefix+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+				memstats.mu.Lock()
+				defer memstats.mu.Unlock()
+				return copyMap(memstats.slabs[key])
 			}))
 		}
 	}
 }
 
-func (s *MemcacheStats) updateSlabsStats() {
-	if s.slabs == nil {
-		return
-	}
-	s.readStats("slabs", func(sKey, sValue string) {
+func (memstats *MemcacheStats) updateSlabsStats() {
+	memstats.readStats("slabs", func(sKey, sValue string) {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
@@ -240,7 +255,7 @@ func (s *MemcacheStats) updateSlabsStats() {
 			return
 		}
 		if slabsSingleMetrics[sKey] {
-			m, ok := s.slabs[sKey]
+			m, ok := memstats.slabs[sKey]
 			if !ok {
 				log.Errorf("Unknown memcache slabs stats %v: %v", sKey, ival)
 				internalErrors.Add("MemcacheStats", 1)
@@ -255,7 +270,7 @@ func (s *MemcacheStats) updateSlabsStats() {
 			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
-		m, ok := s.slabs[subkey]
+		m, ok := memstats.slabs[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache slabs stats %v %v: %v", subkey, slabid, ival)
 			internalErrors.Add("MemcacheStats", 1)
@@ -265,26 +280,22 @@ func (s *MemcacheStats) updateSlabsStats() {
 	})
 }
 
-func (s *MemcacheStats) publishItemsStats() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.items = make(map[string]map[string]int64)
+func (memstats *MemcacheStats) publishItemsStats() {
+	memstats.mu.Lock()
+	defer memstats.mu.Unlock()
 	for _, key := range itemsMetrics {
 		key := key // create local var to keep current key
-		s.items[key] = make(map[string]int64)
-		stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheItems"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			return copyMap(s.items[key])
+		memstats.items[key] = make(map[string]int64)
+		stats.Publish(memstats.statsPrefix+"MemcacheItems"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+			memstats.mu.Lock()
+			defer memstats.mu.Unlock()
+			return copyMap(memstats.items[key])
 		}))
 	}
 }
 
-func (s *MemcacheStats) updateItemsStats() {
-	if s.items == nil {
-		return
-	}
-	s.readStats("items", func(sKey, sValue string) {
+func (memstats *MemcacheStats) updateItemsStats() {
+	memstats.readStats("items", func(sKey, sValue string) {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
@@ -297,7 +308,7 @@ func (s *MemcacheStats) updateItemsStats() {
 			internalErrors.Add("MemcacheStats", 1)
 			return
 		}
-		m, ok := s.items[subkey]
+		m, ok := memstats.items[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache items stats %v %v: %v", subkey, slabid, ival)
 			internalErrors.Add("MemcacheStats", 1)
@@ -307,7 +318,7 @@ func (s *MemcacheStats) updateItemsStats() {
 	})
 }
 
-func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
+func (memstats *MemcacheStats) readStats(k string, proc func(key, value string)) {
 	defer func() {
 		if x := recover(); x != nil {
 			_, ok := x.(*TabletError)
@@ -319,23 +330,15 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 			internalErrors.Add("MemcacheStats", 1)
 		}
 	}()
-	conn := s.cachePool.Get(context.Background())
-	// This is not the same as defer rc.cachePool.Put(conn)
-	defer func() { s.cachePool.Put(conn) }()
 
-	stats, err := conn.Stats(k)
-	if err != nil {
-		conn.Close()
-		conn = nil
-		log.Errorf("Cannot export memcache %v stats: %v", k, err)
-		internalErrors.Add("MemcacheStats", 1)
+	stats := memstats.statsFunc(k)
+	if stats == "" {
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	st := string(stats)
-	lines := strings.Split(st, "\n")
+	memstats.mu.Lock()
+	defer memstats.mu.Unlock()
+	lines := strings.Split(stats, "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -383,9 +386,6 @@ func parseItemKey(key string) (subkey string, slabid string, err error) {
 }
 
 func copyMap(src map[string]int64) map[string]int64 {
-	if src == nil {
-		return nil
-	}
 	dst := make(map[string]int64, len(src))
 	for k, v := range src {
 		dst[k] = v

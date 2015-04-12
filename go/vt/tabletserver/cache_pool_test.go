@@ -109,6 +109,7 @@ func TestCachePoolState(t *testing.T) {
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
+	cachePool.memcacheStats.update()
 	defer cachePool.Close()
 	if cachePool.Available() <= 0 {
 		t.Fatalf("cache pool should have connections available")
