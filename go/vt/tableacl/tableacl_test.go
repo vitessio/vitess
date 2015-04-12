@@ -76,7 +76,7 @@ func TestDisabled(t *testing.T) {
 
 func checkLoad(configData []byte, valid bool, t *testing.T) {
 	var err error
-	tableAcl, err = load(configData)
+	tableAcl, err = Load(configData)
 	if !valid && err == nil {
 		t.Errorf("expecting parse error none returned")
 	}
