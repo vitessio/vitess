@@ -27,10 +27,10 @@ func NewFakeCacheService() *FakeCacheService {
 
 // Get returns cached data for given keys.
 func (service *FakeCacheService) Get(keys ...string) ([]cs.Result, error) {
-	results := make([]cs.Result, len(keys))
-	for i, key := range keys {
+	results := make([]cs.Result, 0, len(keys))
+	for _, key := range keys {
 		if val, ok := service.cacheMap[key]; ok {
-			results[i] = *val
+			results = append(results, *val)
 		}
 	}
 	return results, nil
@@ -40,11 +40,11 @@ func (service *FakeCacheService) Get(keys ...string) ([]cs.Result, error) {
 // for using with CAS. Gets returns a CAS identifier with the item. If
 // the item's CAS value has changed since you Gets'ed it, it will not be stored.
 func (service *FakeCacheService) Gets(keys ...string) ([]cs.Result, error) {
-	results := make([]cs.Result, len(keys))
-	for i, key := range keys {
+	results := make([]cs.Result, 0, len(keys))
+	for _, key := range keys {
 		if val, ok := service.cacheMap[key]; ok {
 			val.Cas = uint64(rand.Int63())
-			results[i] = *val
+			results = append(results, *val)
 		}
 	}
 	return results, nil

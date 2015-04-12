@@ -31,7 +31,7 @@ func TestFakeCacheService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get error: %v", err)
 	}
-	if !reflect.DeepEqual(results, []cs.Result{cs.Result{}, cs.Result{}}) {
+	if !reflect.DeepEqual(results, []cs.Result{}) {
 		t.Fatalf("get should return empty results, but get: %v", results)
 	}
 	// test Set then Get
@@ -105,8 +105,8 @@ func TestFakeCacheService(t *testing.T) {
 		t.Fatalf("delete should succeed")
 	}
 	results, err = service.Get(key2)
-	if !reflect.DeepEqual(results[0], cs.Result{}) {
-		t.Fatalf("key does not exists, should get empty result")
+	if !reflect.DeepEqual(results, []cs.Result{}) {
+		t.Fatalf("key does not exists, should get empty result, but got: %v", results)
 	}
 	// test FlushAll
 	service.Set(key1, 0, 0, []byte("aaa"))
@@ -116,7 +116,7 @@ func TestFakeCacheService(t *testing.T) {
 		t.Fatalf("FlushAll failed")
 	}
 	results, err = service.Get(key1, key2)
-	if !reflect.DeepEqual(results, []cs.Result{cs.Result{}, cs.Result{}}) {
+	if !reflect.DeepEqual(results, []cs.Result{}) {
 		t.Fatalf("cache has been flushed, should only get empty results")
 	}
 	service.Stats("")
