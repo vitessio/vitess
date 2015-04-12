@@ -133,6 +133,7 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	}
 
 	if wantfields {
+		qr.Fields = make([]proto.Field, len(result.Fields))
 		copy(qr.Fields, result.Fields)
 	}
 
@@ -144,7 +145,6 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 		}
 	}
 	qr.Rows = rows
-
 	return qr, nil
 }
 

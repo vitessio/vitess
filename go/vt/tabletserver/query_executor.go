@@ -216,7 +216,6 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 		keys[i] = buildKey(pk)
 	}
 	rcresults := tableInfo.Cache.Get(qre.ctx, keys)
-
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	missingRows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64

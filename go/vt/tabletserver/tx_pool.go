@@ -213,6 +213,11 @@ func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
 	axp.poolTimeout.Set(timeout)
 }
 
+// PoolTimeout returns the wait time for the tx pool.
+func (axp *TxPool) PoolTimeout() time.Duration {
+	return axp.poolTimeout.Get()
+}
+
 // TxConnection is meant for executing transactions. It keeps track
 // of dirty keys for rowcache invalidation. It can return itself to
 // the tx pool correctly. It also does not retry statements if there
