@@ -106,17 +106,20 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	if qr.RowsAffected > uint64(maxrows) {
 		return nil, fmt.Errorf("Row count exceeded %d", maxrows)
 	}
+
 	if wantfields {
 		copy(qr.Fields, result.Fields)
 	}
+
 	rowCount := int(qr.RowsAffected)
+	rows := make([][]sqltypes.Value, rowCount)
 	if rowCount > 0 {
-		rows := make([][]sqltypes.Value, rowCount)
 		for i := 0; i < rowCount; i++ {
 			rows[i] = result.Rows[i]
 		}
-		qr.Rows = rows
 	}
+	qr.Rows = rows
+
 	return qr, nil
 }
 
