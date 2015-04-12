@@ -502,14 +502,14 @@ func TestTerseErrors2(t *testing.T) {
 }
 
 func getSqlQuery() *SqlQuery {
-	if testSqlQuery == nil {
-		config := DefaultQsConfig
-		config.StrictMode = true
-		testSqlQuery = NewSqlQuery(config)
-	}
-	// make sure SqlQuery is in StateNotServing state
-	testSqlQuery.disallowQueries()
-	return testSqlQuery
+	randID := rand.Int63()
+	config := DefaultQsConfig
+	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
+	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
+	config.StrictMode = true
+	return NewSqlQuery(config)
 }
 
 func newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {

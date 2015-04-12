@@ -107,20 +107,22 @@ var itemsMetrics = []string{
 
 // MemcacheStats exports the Memcache internal stats through stats package.
 type MemcacheStats struct {
-	cachePool *CachePool
-	ticks     *timer.Timer
-	mu        sync.Mutex
-	main      map[string]string
-	slabs     map[string]map[string]int64
-	items     map[string]map[string]int64
+	cachePool   *CachePool
+	ticks       *timer.Timer
+	mu          sync.Mutex
+	main        map[string]string
+	slabs       map[string]map[string]int64
+	items       map[string]map[string]int64
+	statsPrefix string
 }
 
 // NewMemcacheStats creates a new MemcacheStats based on given CachePool.
 // main, slabs and items specify the categories of stats that need to be exported.
-func NewMemcacheStats(cachePool *CachePool, main, slabs, items bool) *MemcacheStats {
+func NewMemcacheStats(cachePool *CachePool, statsPrefix string, main, slabs, items bool) *MemcacheStats {
 	s := &MemcacheStats{
-		cachePool: cachePool,
-		ticks:     timer.NewTimer(10 * time.Second),
+		cachePool:   cachePool,
+		ticks:       timer.NewTimer(10 * time.Second),
+		statsPrefix: statsPrefix,
 	}
 	if main {
 		s.publishMainStats()
@@ -172,14 +174,14 @@ func (s *MemcacheStats) publishMainStats() {
 		key := key
 		if isstr {
 			s.main[key] = ""
-			stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.StringFunc(func() string {
+			stats.Publish(s.statsPrefix+s.cachePool.name+"Memcache"+formatKey(key), stats.StringFunc(func() string {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				return s.main[key]
 			}))
 		} else {
 			s.main[key] = "0"
-			stats.Publish(s.cachePool.name+"Memcache"+formatKey(key), stats.IntFunc(func() int64 {
+			stats.Publish(s.statsPrefix+s.cachePool.name+"Memcache"+formatKey(key), stats.IntFunc(func() int64 {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				ival, err := strconv.ParseInt(s.main[key], 10, 64)
@@ -211,13 +213,13 @@ func (s *MemcacheStats) publishSlabsStats() {
 		key := key
 		s.slabs[key] = make(map[string]int64)
 		if isSingle {
-			stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.IntFunc(func() int64 {
+			stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.IntFunc(func() int64 {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				return s.slabs[key][""]
 			}))
 		} else {
-			stats.Publish(s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+			stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheSlabs"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
 				s.mu.Lock()
 				defer s.mu.Unlock()
 				return copyMap(s.slabs[key])
@@ -270,7 +272,7 @@ func (s *MemcacheStats) publishItemsStats() {
 	for _, key := range itemsMetrics {
 		key := key // create local var to keep current key
 		s.items[key] = make(map[string]int64)
-		stats.Publish(s.cachePool.name+"MemcacheItems"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
+		stats.Publish(s.statsPrefix+s.cachePool.name+"MemcacheItems"+formatKey(key), stats.CountersFunc(func() map[string]int64 {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			return copyMap(s.items[key])

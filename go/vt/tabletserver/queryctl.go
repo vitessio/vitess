@@ -54,6 +54,10 @@ func init() {
 	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
 	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
+	flag.StringVar(&qsConfig.RowCache.StatsPrefix, "rowcache-stats-prefix", DefaultQsConfig.RowCache.StatsPrefix, "rowcache stats prefix")
+	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
+	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix")
+	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix")
 }
 
 // RowCacheConfig encapsulates the configuration for RowCache
@@ -64,6 +68,7 @@ type RowCacheConfig struct {
 	Connections int
 	Threads     int
 	LockPaged   bool
+	StatsPrefix string
 }
 
 // GetSubprocessFlags returns the flags to use to call memcached
@@ -109,6 +114,9 @@ type Config struct {
 	StrictMode         bool
 	StrictTableAcl     bool
 	TerseErrors        bool
+	StatsPrefix        string
+	DebugURLPrefix     string
+	PoolNamePrefix     string
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -137,6 +145,9 @@ var DefaultQsConfig = Config{
 	StrictMode:         true,
 	StrictTableAcl:     false,
 	TerseErrors:        false,
+	StatsPrefix:        "",
+	DebugURLPrefix:     "/debug",
+	PoolNamePrefix:     "",
 }
 
 var qsConfig Config
