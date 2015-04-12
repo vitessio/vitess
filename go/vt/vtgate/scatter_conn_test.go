@@ -235,7 +235,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	s := createSandbox("TestScatterConnCommitSuccess")
 	sbc0 := &sandboxConn{}
 	s.MapTestConn("0", sbc0)
-	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 
@@ -293,7 +293,7 @@ func TestScatterConnRollback(t *testing.T) {
 	s := createSandbox("TestScatterConnRollback")
 	sbc0 := &sandboxConn{}
 	s.MapTestConn("0", sbc0)
-	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 
