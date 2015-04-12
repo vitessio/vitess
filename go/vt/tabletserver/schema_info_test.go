@@ -35,7 +35,7 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of underlying "+
 			"connection cannot verify strict mode",
@@ -60,7 +60,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of it could not get MySQL time",
 		ErrFail,
@@ -84,7 +84,7 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of incorrect MySQL row number",
 		ErrFail,
@@ -108,7 +108,7 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because it could not get MySQL time",
 		ErrFail,
@@ -132,7 +132,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because conn.Exec failed",
 		ErrFatal,
@@ -162,7 +162,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because NewTableInfo failed",
 		ErrFatal,
@@ -295,7 +295,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	cachePool := newTestSchemaInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"CreateOrUpdateTable should fail because it could not tables from MySQL",
 		ErrFail,
@@ -378,7 +378,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := newSqlQueryStats("GetPlanStats", ctx)
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info GetPlan should fail because of empty query",
 		ErrFail,
@@ -402,7 +402,7 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 	// test cache type RW
 	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
 	defer schemaInfo.Close()
-	defer handleAndVerifySchemaInfoError(
+	defer handleAndVerifyTabletError(
 		t,
 		"schema info SetQueryCacheSize should use a positive size",
 		ErrFail,
@@ -802,7 +802,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 	}
 }
 
-func handleAndVerifySchemaInfoError(t *testing.T, msg string, tabletErrType int) {
+func handleAndVerifyTabletError(t *testing.T, msg string, tabletErrType int) {
 	err := recover()
 	if err == nil {
 		t.Fatalf(msg)
