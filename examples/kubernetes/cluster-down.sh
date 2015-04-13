@@ -21,7 +21,7 @@ vtgate="k8s-${GKE_CLUSTER_NAME}-default-vtgate"
 
 gcloud compute forwarding-rules delete $vtctld -q --region=$gke_region
 gcloud compute forwarding-rules delete $vtgate -q --region=$gke_region
-gcloud compute firewall-rules delete vtctld -q
-gcloud compute firewall-rules delete vtgate -q
+gcloud compute firewall-rules delete ${GKE_CLUSTER_NAME}-vtctld -q
+gcloud compute firewall-rules delete ${GKE_CLUSTER_NAME}-vtgate -q
 gcloud compute target-pools delete $vtctld -q --region=$gke_region
 gcloud compute target-pools delete $vtgate -q --region=$gke_region
