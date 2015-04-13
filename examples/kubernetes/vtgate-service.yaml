@@ -7,3 +7,4 @@ selector:
   name: vtgate
 labels:
   name: vtgate
+createExternalLoadBalancer: true
