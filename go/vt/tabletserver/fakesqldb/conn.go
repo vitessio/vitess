@@ -128,6 +128,10 @@ func NewFakeSqlDBConn(db *DB) *Conn {
 
 // ExecuteFetch executes the query on the connection
 func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+	if conn.db.IsConnFail() {
+		return nil, newConnError()
+	}
+
 	if conn.IsClosed() {
 		return nil, fmt.Errorf("connection is closed")
 	}
@@ -166,6 +170,10 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 // ExecuteFetchMap returns a map from column names to cell data for a query
 // that should return exactly 1 row.
 func (conn *Conn) ExecuteFetchMap(query string) (map[string]string, error) {
+	if conn.db.IsConnFail() {
+		return nil, newConnError()
+	}
+
 	qr, err := conn.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
@@ -187,6 +195,10 @@ func (conn *Conn) ExecuteFetchMap(query string) (map[string]string, error) {
 // ExecuteStreamFetch starts a streaming query to db server. Use FetchNext
 // on the Connection until it returns nil or error
 func (conn *Conn) ExecuteStreamFetch(query string) error {
+	if conn.db.IsConnFail() {
+		return newConnError()
+	}
+
 	if conn.IsClosed() {
 		return fmt.Errorf("connection is closed")
 	}
@@ -275,16 +287,20 @@ func Register() *DB {
 	}
 	sqldb.Register(name, func(sqldb.ConnParams) (sqldb.Conn, error) {
 		if db.IsConnFail() {
-			return nil, &sqldb.SqlError{
-				Num:     2012,
-				Message: "connection fail",
-				Query:   "",
-			}
+			return nil, newConnError()
 		}
 		return NewFakeSqlDBConn(db), nil
 	})
 	sqldb.DefaultDB = name
 	return db
+}
+
+func newConnError() error {
+	return &sqldb.SqlError{
+		Num:     2012,
+		Message: "connection fail",
+		Query:   "",
+	}
 }
 
 var _ (sqldb.Conn) = (*Conn)(nil)

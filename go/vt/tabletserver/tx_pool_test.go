@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
@@ -31,15 +32,16 @@ func TestExecuteCommit(t *testing.T) {
 	transactionID := txPool.Begin(ctx)
 	txConn := txPool.Get(transactionID)
 	defer txPool.SafeCommit(ctx, transactionID)
-	txConn.Recycle()
 	txConn.RecordQuery(sql)
 	_, err := txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
 	txConn.DirtyKeys(tableName)
 	dk := txConn.DirtyKeys(tableName)
 	dk.Delete(tableName)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
+	txPool.LogActive()
 	txPool.LogActive()
 	// start another transaction which should be killed
 	// in txPool.Close()
@@ -58,9 +60,9 @@ func TestExecuteRollback(t *testing.T) {
 	transactionID := txPool.Begin(ctx)
 	txConn := txPool.Get(transactionID)
 	defer txPool.Rollback(ctx, transactionID)
-	txConn.Recycle()
 	txConn.RecordQuery(sql)
 	_, err := txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -80,8 +82,8 @@ func TestTransactionKiller(t *testing.T) {
 	killCount := killStats.Counts()["Transactions"]
 	transactionID := txPool.Begin(ctx)
 	txConn := txPool.Get(transactionID)
-	txConn.Recycle()
 	txConn.RecordQuery(sql)
+	txConn.Recycle()
 	// transaction killer should kill the query
 	txPool.WaitForEmpty()
 	killCountDiff := killStats.Counts()["Transactions"] - killCount
@@ -122,23 +124,117 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 	txPool.pool.SetCapacity(1)
 	defer txPool.Close()
 	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(-10*time.Second))
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("expect to get an error")
-		}
-		if r != nil {
-			err, ok := r.(*TabletError)
-			if !ok || err.ErrorType != ErrTxPoolFull {
-				t.Fatalf("get error: %v, but expect error type: %v", err, ErrTxPoolFull)
-			}
-		}
-	}()
+	defer handleAndVerifyTabletError(t, "expect to get an error", ErrTxPoolFull)
 	// start the first transaction
 	txPool.Begin(ctx)
 	// start the second transaction, which should fail due to
 	// ErrTxPoolFull error
 	txPool.Begin(ctx)
+}
+
+func TestBeginWithPoolConnectionError(t *testing.T) {
+	db := fakesqldb.Register()
+	db.EnableConnFail()
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	defer handleAndVerifyTabletError(t, "expect to get an error", ErrFatal)
+	ctx := context.Background()
+	txPool.Begin(ctx)
+}
+
+func TestBeginWithExecError(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddRejectedQuery("begin")
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	defer handleAndVerifyTabletError(t, "expect to get an error", ErrFail)
+	ctx := context.Background()
+	txPool.Begin(ctx)
+}
+
+func TestTxPoolSafeCommitFail(t *testing.T) {
+	db := fakesqldb.Register()
+	sql := fmt.Sprintf("alter table test_table add test_column int")
+	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddRejectedQuery("commit")
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	ctx := context.Background()
+	transactionID := txPool.Begin(ctx)
+	txConn := txPool.Get(transactionID)
+	_, err := txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
+	if err != nil {
+		t.Fatalf("got exec error: %v", err)
+	}
+	_, err = txPool.SafeCommit(ctx, transactionID)
+	if err == nil {
+		t.Fatalf("comit should get exec failure")
+	}
+}
+
+func TestTxPoolRollbackFail(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddRejectedQuery("rollback")
+	sql := "ALTER TABLE test_table ADD test_column INT"
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	ctx := context.Background()
+	transactionID := txPool.Begin(ctx)
+	txConn := txPool.Get(transactionID)
+	txConn.RecordQuery(sql)
+	_, err := txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+	defer handleAndVerifyTabletError(t, "rollback should get exec failure", ErrFail)
+	txPool.Rollback(ctx, transactionID)
+}
+
+func TestTxPoolGetConnFail(t *testing.T) {
+	fakesqldb.Register()
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	defer handleAndVerifyTabletError(t, "txpool.Get should fail", ErrNotInTx)
+	txPool.Get(12345)
+}
+
+func TestTxPoolExecFailDueToConnFail(t *testing.T) {
+	db := fakesqldb.Register()
+	txPool := newTxPool()
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	txPool.Open(&appParams, &dbaParams)
+	defer txPool.Close()
+	ctx := context.Background()
+	txPool.Begin(ctx)
+	sql := "alter table test_table add test_column int"
+
+	transactionID := txPool.Begin(ctx)
+	txConn := txPool.Get(transactionID)
+	db.EnableConnFail()
+	_, err := txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
+	if err == nil {
+		t.Fatalf("exec should fail because of a conn error")
+	}
 }
 
 func newTxPool() *TxPool {
