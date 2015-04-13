@@ -103,5 +103,5 @@ desiredState:
 labels:
   name: vttablet
   keyspace: "{{keyspace}}"
-  shard: "0{{shard}}0"
+  shard: "{{shard}}"
   tablet: "{{alias}}"
