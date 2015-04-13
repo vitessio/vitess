@@ -559,7 +559,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 
-	username := "x"
+	username := "u2"
 	callInfo := &callinfo.CallInfo{
 		RemoteAddr: "1.2.3.4",
 		Username:   username,
@@ -609,7 +609,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	})
 
 	bannedAddr := "127.0.0.1"
-	bannedUser := "x"
+	bannedUser := "u2"
 
 	alterRule := NewQueryRule("disable update", "disable update", QR_FAIL)
 	alterRule.SetIPCond(bannedAddr)
