@@ -33,7 +33,6 @@ func TestValidConfigs(t *testing.T) {
 		"table[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3"},
 		"tbl[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3", "ADMIN":"u4"}
 	}`), true, t)
-
 }
 
 func TestDenyReaderInsert(t *testing.T) {
@@ -75,8 +74,7 @@ func TestDisabled(t *testing.T) {
 }
 
 func checkLoad(configData []byte, valid bool, t *testing.T) {
-	var err error
-	tableAcl, err = load(configData)
+	err := InitFromBytes(configData)
 	if !valid && err == nil {
 		t.Errorf("expecting parse error none returned")
 	}

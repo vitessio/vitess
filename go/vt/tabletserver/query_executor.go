@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
@@ -24,7 +25,14 @@ type QueryExecutor struct {
 	bindVars      map[string]interface{}
 	transactionID int64
 	plan          *ExecPlan
-	RequestContext
+	ctx           context.Context
+	logStats      *SQLQueryStats
+	qe            *QueryEngine
+}
+
+// poolConn is the interface implemented by users of this specialized pool.
+type poolConn interface {
+	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error)
 }
 
 // Execute performs a non-streaming query execution.
@@ -208,7 +216,6 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 		keys[i] = buildKey(pk)
 	}
 	rcresults := tableInfo.Cache.Get(qre.ctx, keys)
-
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	missingRows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
@@ -297,7 +304,7 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 }
 
 // execDirect always sends the query to mysql
-func (qre *QueryExecutor) execDirect(conn PoolConn) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDirect(conn poolConn) (result *mproto.QueryResult) {
 	if qre.plan.Fields != nil {
 		result = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		result.Fields = qre.plan.Fields
@@ -320,7 +327,7 @@ func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
 	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
-func (qre *QueryExecutor) execInsertPK(conn PoolConn) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPK(conn poolConn) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -328,7 +335,7 @@ func (qre *QueryExecutor) execInsertPK(conn PoolConn) (result *mproto.QueryResul
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertSubquery(conn PoolConn) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (result *mproto.QueryResult) {
 	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -350,7 +357,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn PoolConn) (result *mproto.Quer
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertPKRows(conn PoolConn, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPKRows(conn poolConn, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -360,7 +367,7 @@ func (qre *QueryExecutor) execInsertPKRows(conn PoolConn, pkRows [][]sqltypes.Va
 	return result
 }
 
-func (qre *QueryExecutor) execDMLPK(conn PoolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		panic(err)
@@ -368,12 +375,12 @@ func (qre *QueryExecutor) execDMLPK(conn PoolConn, invalidator CacheInvalidator)
 	return qre.execDMLPKRows(conn, pkRows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLSubquery(conn PoolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLSubquery(conn poolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
 	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLPKRows(conn PoolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
@@ -501,4 +508,95 @@ func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
 		}
 	}
 	return true
+}
+
+func (qre *QueryExecutor) getConn(pool *ConnPool) *DBConn {
+	start := time.Now()
+	conn, err := pool.Get(qre.ctx)
+	switch err {
+	case nil:
+		qre.logStats.WaitingForConnection += time.Now().Sub(start)
+		return conn
+	case ErrConnPoolClosed:
+		panic(connPoolClosedErr)
+	}
+	panic(NewTabletErrorSql(ErrFatal, err))
+}
+
+func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (result *mproto.QueryResult) {
+	sql := qre.generateFinalSql(parsedQuery, bindVars, nil)
+	q, ok := qre.qe.consolidator.Create(string(sql))
+	if ok {
+		defer q.Broadcast()
+		waitingForConnectionStart := time.Now()
+		conn, err := qre.qe.connPool.Get(qre.ctx)
+		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+		if err != nil {
+			q.Err = NewTabletErrorSql(ErrFatal, err)
+		} else {
+			defer conn.Recycle()
+			q.Result, q.Err = qre.execSQLNoPanic(conn, sql, false)
+		}
+	} else {
+		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
+		startTime := time.Now()
+		q.Wait()
+		waitStats.Record("Consolidations", startTime)
+	}
+	if q.Err != nil {
+		panic(q.Err)
+	}
+	return q.Result.(*mproto.QueryResult)
+}
+
+func (qre *QueryExecutor) directFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
+	return qre.execSQL(conn, sql, false)
+}
+
+// fullFetch also fetches field info
+func (qre *QueryExecutor) fullFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
+	return qre.execSQL(conn, sql, true)
+}
+
+func (qre *QueryExecutor) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
+	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
+	qre.execStreamSQL(conn, sql, callback)
+}
+
+func (qre *QueryExecutor) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) string {
+	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
+	sql, err := parsedQuery.GenerateQuery(bindVars)
+	if err != nil {
+		panic(NewTabletError(ErrFail, "%s", err))
+	}
+	if buildStreamComment != nil {
+		sql = append(sql, buildStreamComment...)
+	}
+	// undo hack done by stripTrailing
+	sql = restoreTrailing(sql, bindVars)
+	return hack.String(sql)
+}
+
+func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) *mproto.QueryResult {
+	result, err := qre.execSQLNoPanic(conn, sql, true)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+func (qre *QueryExecutor) execSQLNoPanic(conn poolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
+	defer qre.logStats.AddRewrittenSql(sql, time.Now())
+	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
+}
+
+func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) {
+	start := time.Now()
+	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()))
+	qre.logStats.AddRewrittenSql(sql, start)
+	if err != nil {
+		panic(NewTabletErrorSql(ErrFail, err))
+	}
 }

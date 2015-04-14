@@ -9,13 +9,18 @@ import (
 	"time"
 )
 
+const (
+	testDuration = 20 * time.Millisecond
+	testVariance = 5 * time.Millisecond
+)
+
 func TestTick(t *testing.T) {
-	tkr := NewRandTicker(10*time.Millisecond, 1*time.Millisecond)
-	for i := 0; i < 5; i++ {
+	tkr := NewRandTicker(testDuration, testVariance)
+	for i := 0; i < 10; i++ {
 		start := time.Now()
 		end := <-tkr.C
-		diff := start.Add(10 * time.Millisecond).Sub(end)
-		tolerance := 2 * time.Millisecond
+		diff := start.Add(testDuration).Sub(end)
+		tolerance := testVariance + 3*time.Millisecond
 		if diff < -tolerance || diff > tolerance {
 			t.Errorf("start: %v, end: %v, diff %v. Want <%v tolerenace", start, end, diff, tolerance)
 		}

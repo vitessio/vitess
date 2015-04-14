@@ -119,6 +119,10 @@ func IsConnErr(err error) bool {
 }
 
 func (te *TabletError) Error() string {
+	return te.Prefix() + te.Message
+}
+
+func (te *TabletError) Prefix() string {
 	prefix := "error: "
 	switch te.ErrorType {
 	case ErrRetry:
@@ -130,7 +134,7 @@ func (te *TabletError) Error() string {
 	case ErrNotInTx:
 		prefix = "not_in_tx: "
 	}
-	return prefix + te.Message
+	return prefix
 }
 
 // RecordStats will record the error in the proper stat bucket

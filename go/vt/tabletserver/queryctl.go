@@ -47,12 +47,17 @@ func init() {
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
+	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
 	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
 	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
 	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
+	flag.StringVar(&qsConfig.RowCache.StatsPrefix, "rowcache-stats-prefix", DefaultQsConfig.RowCache.StatsPrefix, "rowcache stats prefix")
+	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
+	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix")
+	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix")
 }
 
 // RowCacheConfig encapsulates the configuration for RowCache
@@ -63,6 +68,7 @@ type RowCacheConfig struct {
 	Connections int
 	Threads     int
 	LockPaged   bool
+	StatsPrefix string
 }
 
 // GetSubprocessFlags returns the flags to use to call memcached
@@ -107,6 +113,10 @@ type Config struct {
 	SpotCheckRatio     float64
 	StrictMode         bool
 	StrictTableAcl     bool
+	TerseErrors        bool
+	StatsPrefix        string
+	DebugURLPrefix     string
+	PoolNamePrefix     string
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -134,6 +144,10 @@ var DefaultQsConfig = Config{
 	SpotCheckRatio:     0,
 	StrictMode:         true,
 	StrictTableAcl:     false,
+	TerseErrors:        false,
+	StatsPrefix:        "",
+	DebugURLPrefix:     "/debug",
+	PoolNamePrefix:     "",
 }
 
 var qsConfig Config

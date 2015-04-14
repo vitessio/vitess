@@ -259,18 +259,19 @@ func TestShardConnBeginOther(t *testing.T) {
 	s := createSandbox("TestShardConnBeginOther")
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	s.MapTestConn("0", sbc)
+	want := fmt.Sprintf("shard, host: TestShardConnBeginOther.0., {Uid:0 Host:0 NamedPortMap:map[vt:1] Health:map[]}, tx_pool_full: err")
 	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, 24*time.Hour, connectTimings)
 	_, err := sdc.Begin(context.Background())
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
+	if err == nil || err.Error() != want {
+		t.Errorf("want %v, got %v", want, err)
 	}
 	// There should have been no redial.
 	if s.DialCounter != 1 {
 		t.Errorf("want 1, got %v", s.DialCounter)
 	}
-	// Account for 2 calls to Begin.
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 2, got %v", sbc.ExecCount)
+	// Account for 1 call to Begin.
+	if sbc.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 }
 

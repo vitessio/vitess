@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// ACL is an interface for Access Control List
+// ACL is an interface for Access Control List.
 type ACL interface {
 	// IsMember checks the membership of a principal in this ACL
 	IsMember(principal string) bool
@@ -17,7 +17,7 @@ type ACL interface {
 
 var tableAcl map[*regexp.Regexp]map[Role]ACL
 
-// Init initiates table ACLs
+// Init initiates table ACLs.
 func Init(configFile string) {
 	config, err := ioutil.ReadFile(configFile)
 	if err != nil {
@@ -27,6 +27,12 @@ func Init(configFile string) {
 	if err != nil {
 		log.Fatalf("tableACL initialization error: %v", err)
 	}
+}
+
+// InitFromBytes inits table ACLs from a byte array.
+func InitFromBytes(config []byte) (err error) {
+	tableAcl, err = load(config)
+	return
 }
 
 // load loads configurations from a JSON byte array
@@ -77,7 +83,7 @@ func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 }
 
 // Authorized returns the list of entities who have at least the
-// minimum specified Role on a table
+// minimum specified Role on a table.
 func Authorized(table string, minRole Role) ACL {
 	// If table ACL is disabled, return nil
 	if tableAcl == nil {

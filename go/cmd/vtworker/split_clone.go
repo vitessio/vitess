@@ -187,7 +187,10 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 	// get other parameters
 	destinationPackCountStr := r.FormValue("destinationPackCount")
 	excludeTables := r.FormValue("excludeTables")
-	excludeTableArray := strings.Split(excludeTables, ",")
+	var excludeTableArray []string
+	if excludeTables != "" {
+		excludeTableArray = strings.Split(excludeTables, ",")
+	}
 	strategy := r.FormValue("strategy")
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {

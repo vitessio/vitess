@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
@@ -20,10 +19,7 @@ import (
 func TestExecuteCommit(t *testing.T) {
 	tableName := "test_table"
 	sql := fmt.Sprintf("ALTER TABLE %s ADD test_column INT", tableName)
-	fakesqldb.Register(map[string]*proto.QueryResult{
-		"begin": &proto.QueryResult{},
-		sql:     &proto.QueryResult{},
-	}, false)
+	fakesqldb.Register()
 	txPool := newTxPool()
 	txPool.SetTimeout(1 * time.Second)
 	txPool.SetPoolTimeout(1 * time.Second)
@@ -52,11 +48,7 @@ func TestExecuteCommit(t *testing.T) {
 
 func TestExecuteRollback(t *testing.T) {
 	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register(map[string]*proto.QueryResult{
-		"begin":    &proto.QueryResult{},
-		sql:        &proto.QueryResult{},
-		"rollback": &proto.QueryResult{},
-	}, false)
+	fakesqldb.Register()
 	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -76,10 +68,7 @@ func TestExecuteRollback(t *testing.T) {
 
 func TestTransactionKiller(t *testing.T) {
 	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register(map[string]*proto.QueryResult{
-		"begin": &proto.QueryResult{},
-		sql:     &proto.QueryResult{},
-	}, false)
+	fakesqldb.Register()
 	txPool := newTxPool()
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(time.Duration(10))
@@ -102,11 +91,7 @@ func TestTransactionKiller(t *testing.T) {
 }
 
 func TestBeginAfterConnPoolClosed(t *testing.T) {
-	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register(map[string]*proto.QueryResult{
-		"begin": &proto.QueryResult{},
-		sql:     &proto.QueryResult{},
-	}, false)
+	fakesqldb.Register()
 	txPool := newTxPool()
 	txPool.SetTimeout(time.Duration(10))
 	appParams := sqldb.ConnParams{}
@@ -128,11 +113,7 @@ func TestBeginAfterConnPoolClosed(t *testing.T) {
 }
 
 func TestBeginWithPoolTimeout(t *testing.T) {
-	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register(map[string]*proto.QueryResult{
-		"begin": &proto.QueryResult{},
-		sql:     &proto.QueryResult{},
-	}, false)
+	fakesqldb.Register()
 	txPool := newTxPool()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
