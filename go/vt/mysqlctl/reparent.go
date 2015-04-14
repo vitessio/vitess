@@ -51,7 +51,7 @@ func queryReparentJournal(timeCreatedNS int64) string {
 
 // WaitForReparentJournal will wait until the context is done for
 // the row in the reparent_journal table.
-func WaitForReparentJournal(ctx context.Context, mysqld *Mysqld, timeCreatedNS int64) error {
+func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	for {
 		qr, err := mysqld.fetchSuperQuery(queryReparentJournal(timeCreatedNS))
 		if err == nil && len(qr.Rows) == 1 {

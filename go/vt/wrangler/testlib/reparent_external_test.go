@@ -24,7 +24,7 @@ import (
 )
 
 func TestTabletExternallyReparented(t *testing.T) {
-	testTabletExternallyReparented(t, false /* falst */)
+	testTabletExternallyReparented(t, false /* fast */)
 }
 
 func TestTabletExternallyReparentedFast(t *testing.T) {

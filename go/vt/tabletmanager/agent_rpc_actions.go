@@ -416,12 +416,12 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
 	// first break the slaves, so anyone who may have been replicating
 	// before will stop. This is meant to catch misconfigured hosts.
-	if err := agent.Mysqld.BreakSlaves(); err != nil {
+	if err := agent.MysqlDaemon.BreakSlaves(); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
 	// get the current replication position
-	rp, err := agent.Mysqld.MasterPosition()
+	rp, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -430,7 +430,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some slaves to be able to commit
 	// transactions.
-	if err := agent.Mysqld.SetReadOnly(false); err != nil {
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
@@ -452,7 +452,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 	cmds := mysqlctl.CreateReparentJournal()
 	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, masterAlias.String(), pos))
 
-	return agent.Mysqld.ExecuteSuperQueryList(cmds)
+	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
 }
 
 // InitSlave sets replication master and position, and waits for the
@@ -470,17 +470,17 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 		MasterPort:         ti.Portmap["mysql"],
 		MasterConnectRetry: 10,
 	}
-	cmds, err := agent.Mysqld.StartReplicationCommands(status)
+	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 	if err != nil {
 		return err
 	}
 
-	if err := agent.Mysqld.ExecuteSuperQueryList(cmds); err != nil {
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
 
 	// wait until we get the replicated row, or our context times out
-	return mysqlctl.WaitForReparentJournal(ctx, agent.Mysqld, timeCreatedNS)
+	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.

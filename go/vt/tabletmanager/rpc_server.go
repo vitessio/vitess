@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"golang.org/x/net/context"
 )
@@ -31,7 +32,7 @@ const rpcTimeout = time.Second * 30
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
+			log.Errorf("TabletManager.%v(%v) panic: %v\n%s", name, args, x, tb.Stack(4))
 			err = fmt.Errorf("caught panic during %v: %v", name, x)
 		}
 	}()
