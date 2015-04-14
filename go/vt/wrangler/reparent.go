@@ -210,7 +210,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// Check the master elect is in tabletMap
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not the shard", masterElectTabletAlias)
+		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAlias)
 	}
 
 	// Check the master is the only master is the shard, or -force was used.
