@@ -35,11 +35,11 @@ for shard in $(echo $SHARDS | tr "," " "); do
 
     # Add xx to beginning or end if there is a dash.  K8s does not allow for
     # leading or trailing dashes for labels
-    shard=`echo $shard | sed s'/[-]$/-xx/' | sed s'/^-/xx-/'`
+    shard_label=`echo $shard | sed s'/[-]$/-xx/' | sed s'/^-/xx-/'`
 
     # Expand template variables
     sed_script=""
-    for var in alias cell uid keyspace shard port tablet_subdir vtdataroot_volume; do
+    for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume; do
       sed_script+="s,{{$var}},${!var},g;"
     done
 
