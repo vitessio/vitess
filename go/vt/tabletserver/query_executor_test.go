@@ -15,6 +15,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -567,53 +569,57 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	checkEqual(t, expected, qre.Execute())
 }
 
-//func TestQueryExecutorTableAcl(t *testing.T) {
-//	db := setUpQueryExecutorTest()
-//	query := "select * from test_table limit 1000"
-//	expected := &mproto.QueryResult{
-//		Fields:       getTestTableFields(),
-//		RowsAffected: 0,
-//		Rows:         [][]sqltypes.Value{},
-//	}
-//	db.AddQuery(query, expected)
-//	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
-//		Fields: getTestTableFields(),
-//	})
-//
-//	username := "u2"
-//	callInfo := &fakeCallInfo{
-//		remoteAddr: "1.2.3.4",
-//		username:   username,
-//	}
-//	ctx := callinfo.NewContext(context.Background(), callInfo)
-//	if err := tableacl.InitFromBytes(
-//		[]byte(fmt.Sprintf(`{"test_table":{"READER":"%s"}}`, username))); err != nil {
-//		t.Fatalf("unable to load tableacl config, error: %v", err)
-//	}
-//
-//	qre, sqlQuery := newTestQueryExecutor(
-//		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict)
-//	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-//	checkEqual(t, expected, qre.Execute())
-//	sqlQuery.disallowQueries()
-//
-//	if err := tableacl.InitFromBytes([]byte(`{"test_table":{"READER":"superuser"}}`)); err != nil {
-//		t.Fatalf("unable to load tableacl config, error: %v", err)
-//	}
-//	// without enabling Config.StrictTableAcl
-//	qre, sqlQuery = newTestQueryExecutor(
-//		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict)
-//	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-//	qre.Execute()
-//	sqlQuery.disallowQueries()
-//	// enable Config.StrictTableAcl
-//	qre, sqlQuery = newTestQueryExecutor(
-//		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict|enableStrictTableAcl)
-//	defer sqlQuery.disallowQueries()
-//	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-//	defer handleAndVerifyTabletError(t, "query should fail because current user do not have read permissions", ErrFail)
-//	qre.Execute()
-//}
+func TestQueryExecutorTableAcl(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.DefaultACL = aclName
+
+	db := setUpQueryExecutorTest()
+	query := "select * from test_table limit 1000"
+	expected := &mproto.QueryResult{
+		Fields:       getTestTableFields(),
+		RowsAffected: 0,
+		Rows:         [][]sqltypes.Value{},
+	}
+	db.AddQuery(query, expected)
+	db.AddQuery("select * from test_table where 1 != 1", &mproto.QueryResult{
+		Fields: getTestTableFields(),
+	})
+
+	username := "u2"
+	callInfo := &fakeCallInfo{
+		remoteAddr: "1.2.3.4",
+		username:   username,
+	}
+	ctx := callinfo.NewContext(context.Background(), callInfo)
+	if err := tableacl.InitFromBytes(
+		[]byte(fmt.Sprintf(`{"test_table":{"READER":"%s"}}`, username))); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	qre, sqlQuery := newTestQueryExecutor(
+		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict)
+	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
+	checkEqual(t, expected, qre.Execute())
+	sqlQuery.disallowQueries()
+
+	if err := tableacl.InitFromBytes([]byte(`{"test_table":{"READER":"superuser"}}`)); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+	// without enabling Config.StrictTableAcl
+	qre, sqlQuery = newTestQueryExecutor(
+		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict)
+	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
+	qre.Execute()
+	sqlQuery.disallowQueries()
+	// enable Config.StrictTableAcl
+	qre, sqlQuery = newTestQueryExecutor(
+		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict|enableStrictTableAcl)
+	defer sqlQuery.disallowQueries()
+	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
+	defer handleAndVerifyTabletError(t, "query should fail because current user do not have read permissions", ErrFail)
+	qre.Execute()
+}
 
 func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	db := setUpQueryExecutorTest()
