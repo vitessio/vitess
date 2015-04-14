@@ -101,7 +101,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 		var h template.HTML
 		ci, ok := callinfo.FromContext(qd.context)
 		if ok {
-			h = ci.HTML
+			h = ci.HTML()
 		}
 		row := QueryDetailzRow{
 			Query:       qd.conn.Current(),
