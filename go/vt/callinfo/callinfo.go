@@ -9,32 +9,32 @@ import (
 )
 
 // CallInfo is the extra data stored in the Context
-type CallInfo struct {
+type CallInfo interface {
 	// RemoteAddr is the remote address information for this rpc call.
-	RemoteAddr string
+	RemoteAddr() string
 
 	// Username is associated with this rpc call, if any.
-	Username string
+	Username() string
 
 	// Text is a text version of this connection, as specifically as possible.
-	Text string
+	Text() string
 
 	// HTML represents this rpc call connection in a web-friendly way.
-	HTML template.HTML
+	HTML() template.HTML
 }
 
 // internal type and value
-type key int
+type key string
 
-var callInfoKey key = 0
+var callInfoKey key = "vt.CallInfo"
 
 // NewContext adds the provided CallInfo to the context
-func NewContext(ctx context.Context, ci *CallInfo) context.Context {
+func NewContext(ctx context.Context, ci CallInfo) context.Context {
 	return context.WithValue(ctx, callInfoKey, ci)
 }
 
 // FromContext returns the CallInfo value stored in ctx, if any.
-func FromContext(ctx context.Context) (*CallInfo, bool) {
-	ci, ok := ctx.Value(callInfoKey).(*CallInfo)
+func FromContext(ctx context.Context) (CallInfo, bool) {
+	ci, ok := ctx.Value(callInfoKey).(CallInfo)
 	return ci, ok
 }
