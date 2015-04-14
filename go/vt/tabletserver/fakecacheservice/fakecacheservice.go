@@ -182,7 +182,7 @@ func (service *FakeCacheService) FlushAll() error {
 }
 
 // Stats returns a list of basic stats.
-func (service *FakeCacheService) Stats(argument string) ([]byte, error) {
+func (service *FakeCacheService) Stats(key string) ([]byte, error) {
 	return []byte{}, nil
 }
 
@@ -191,14 +191,14 @@ func (service *FakeCacheService) Close() {
 }
 
 // Register registers a fake implementation of cacheservice.CacaheService and returns its registered name
-func Register() string {
+func Register() *Cache {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	cache := &Cache{data: make(map[string]*cs.Result)}
 	cs.Register(name, func(cs.Config) (cs.CacheService, error) {
 		return NewFakeCacheService(cache), nil
 	})
 	cs.DefaultCacheService = name
-	return name
+	return cache
 }
 
 func init() {
