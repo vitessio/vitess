@@ -118,49 +118,49 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,
-		"",
+		config.StatsPrefix,
 		map[string]string{
-			debugQueryPlansKey: "/debug/query_plans",
-			debugQueryStatsKey: "/debug/query_stats",
-			debugTableStatsKey: "/debug/table_stats",
-			debugSchemaKey:     "/debug/schema",
+			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
+			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
+			debugSchemaKey:     config.DebugURLPrefix + "/schema",
 		},
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
 
-	mysqlStats = stats.NewTimings("Mysql")
+	mysqlStats = stats.NewTimings(config.StatsPrefix + "Mysql")
 
 	// Pools
 	qe.cachePool = NewCachePool(
-		"Rowcache",
+		config.PoolNamePrefix+"Rowcache",
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
-		"/debug/memcache/",
+		config.DebugURLPrefix+"/memcache/",
 	)
 	qe.connPool = NewConnPool(
-		"ConnPool",
+		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
 	qe.streamConnPool = NewConnPool(
-		"StreamConnPool",
+		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
 
 	// Services
 	qe.txPool = NewTxPool(
-		"TransactionPool",
-		"",
+		config.PoolNamePrefix+"TransactionPool",
+		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 	)
 	qe.consolidator = sync2.NewConsolidator()
-	http.Handle("/debug/consolidations", qe.consolidator)
-	qe.invalidator = NewRowcacheInvalidator(qe)
+	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
+	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe)
 	qe.streamQList = NewQueryList()
 
 	// Vars
@@ -178,22 +178,22 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
-	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-	stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
-	queryStats = stats.NewTimings("Queries")
-	qpsRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
-	waitStats = stats.NewTimings("Waits")
-	killStats = stats.NewCounters("Kills")
-	infoErrors = stats.NewCounters("InfoErrors")
-	errorStats = stats.NewCounters("Errors")
-	internalErrors = stats.NewCounters("InternalErrors")
-	resultStats = stats.NewHistogram("Results", resultBuckets)
-	stats.Publish("RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
+	stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+	stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
+	stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+	stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
+	queryStats = stats.NewTimings(config.StatsPrefix + "Queries")
+	qpsRates = stats.NewRates(config.StatsPrefix+"QPS", queryStats, 15, 60*time.Second)
+	waitStats = stats.NewTimings(config.StatsPrefix + "Waits")
+	killStats = stats.NewCounters(config.StatsPrefix + "Kills")
+	infoErrors = stats.NewCounters(config.StatsPrefix + "InfoErrors")
+	errorStats = stats.NewCounters(config.StatsPrefix + "Errors")
+	internalErrors = stats.NewCounters(config.StatsPrefix + "InternalErrors")
+	resultStats = stats.NewHistogram(config.StatsPrefix+"Results", resultBuckets)
+	stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 		return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 	}))
-	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
+	spotCheckCount = stats.NewInt(config.StatsPrefix + "RowcacheSpotCheckCount")
 
 	return qe
 }

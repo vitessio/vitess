@@ -23,7 +23,7 @@ import (
 var testSqlQuery *SqlQuery
 
 func TestSqlQueryAllowQueries(t *testing.T) {
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	sqlQuery := getSqlQuery()
 	if sqlQuery.GetState() != "NOT_SERVING" {
 		t.Fatalf("sqlquery should in state: NOT_SERVING, but get state: %s", sqlQuery.GetState())
@@ -42,7 +42,9 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 		t.Fatalf("SqlQuery.allowQueries should fail")
 	}
 	sqlQuery.setState(StateNotServing)
-	fakesqldb.Register(nil, true)
+	db := fakesqldb.Register()
+	// cause db connection to fail
+	db.EnableConnFail()
 	err = sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail because of failed to create a new connection")
@@ -50,7 +52,10 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 }
 
 func TestCheckMysql(t *testing.T) {
-	fakesqldb.Register(getSupportedQueries(), true)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -65,7 +70,10 @@ func TestCheckMysql(t *testing.T) {
 }
 
 func TestGetSessionId(t *testing.T) {
-	fakesqldb.Register(getSupportedQueries(), false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
 	sqlQuery := getSqlQuery()
 	if err := sqlQuery.GetSessionId(nil, nil); err == nil {
 		t.Fatalf("call GetSessionId should get an error")
@@ -116,9 +124,11 @@ func TestTransactionCommit(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -162,9 +172,12 @@ func TestTransactionRollback(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -208,9 +221,12 @@ func TestStreamExecute(t *testing.T) {
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[executeSql] = executeSqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(executeSql, executeSqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -255,9 +271,12 @@ func TestExecuteBatch(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
+
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -304,9 +323,11 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -363,9 +384,11 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 	sqlResult := &mproto.QueryResult{
 		RowsAffected: 1,
 	}
-	supportedQueries := getSupportedQueries()
-	supportedQueries[sql] = sqlResult
-	fakesqldb.Register(supportedQueries, false)
+	db := fakesqldb.Register()
+	for query, result := range getSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(sql, sqlResult)
 	sqlQuery := getSqlQuery()
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -410,7 +433,8 @@ func TestHandleExecUnknownError(t *testing.T) {
 		BindVariables: nil,
 	}
 	var err error
-	defer handleExecError(&query, &err, logStats)
+	sq := &SqlQuery{}
+	defer sq.handleExecError(&query, &err, logStats)
 	panic("unknown exec error")
 }
 
@@ -423,26 +447,69 @@ func TestHandleExecTabletError(t *testing.T) {
 	}
 	var err error
 	defer func() {
-		if err == nil {
-			t.Fatalf("error should not be nil")
-		}
-		if _, ok := err.(*TabletError); !ok {
-			t.Fatalf("error should be a TabletError but get: %v ", err)
+		want := "fatal: tablet error"
+		if err == nil || err.Error() != want {
+			t.Errorf("Error: %v, want '%s'", err, want)
 		}
 	}()
-	defer handleExecError(&query, &err, logStats)
+	sq := &SqlQuery{}
+	defer sq.handleExecError(&query, &err, logStats)
 	panic(NewTabletError(ErrFatal, "tablet error"))
 }
 
-func getSqlQuery() *SqlQuery {
-	if testSqlQuery == nil {
-		config := DefaultQsConfig
-		config.StrictMode = false
-		testSqlQuery = NewSqlQuery(config)
+func TestTerseErrors1(t *testing.T) {
+	ctx := context.Background()
+	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	query := proto.Query{
+		Sql:           "select * from test_table",
+		BindVariables: nil,
 	}
-	// make sure SqlQuery is in StateNotServing state
-	testSqlQuery.disallowQueries()
-	return testSqlQuery
+	var err error
+	defer func() {
+		want := "fatal: tablet error"
+		if err == nil || err.Error() != want {
+			t.Errorf("Error: %v, want '%s'", err, want)
+		}
+	}()
+	sq := &SqlQuery{}
+	sq.config.TerseErrors = true
+	defer sq.handleExecError(&query, &err, logStats)
+	panic(NewTabletError(ErrFatal, "tablet error"))
+}
+
+func TestTerseErrors2(t *testing.T) {
+	ctx := context.Background()
+	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	query := proto.Query{
+		Sql:           "select * from test_table",
+		BindVariables: nil,
+	}
+	var err error
+	defer func() {
+		want := "error: (errno 10) during query: select * from test_table"
+		if err == nil || err.Error() != want {
+			t.Errorf("Error: %v, want '%s'", err, want)
+		}
+	}()
+	sq := &SqlQuery{}
+	sq.config.TerseErrors = true
+	defer sq.handleExecError(&query, &err, logStats)
+	panic(&TabletError{
+		ErrorType: ErrFail,
+		Message:   "msg",
+		SqlError:  10,
+	})
+}
+
+func getSqlQuery() *SqlQuery {
+	randID := rand.Int63()
+	config := DefaultQsConfig
+	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
+	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
+	config.StrictMode = true
+	return NewSqlQuery(config)
 }
 
 func newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
@@ -490,6 +557,12 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
 				},
+			},
+		},
+		"select @@global.sql_mode": &mproto.QueryResult{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
 		"describe `test_table`": &mproto.QueryResult{

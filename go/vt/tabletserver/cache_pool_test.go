@@ -19,14 +19,14 @@ import (
 
 func TestCachePoolWithEmptyBinary(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	cachePool := newTestCachePool(RowCacheConfig{})
 	cachePool.Close()
 }
 
 func TestCachePool(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -47,7 +47,7 @@ func TestCachePool(t *testing.T) {
 
 func TestCachePoolOpenTwice(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -65,7 +65,7 @@ func TestCachePoolOpenTwice(t *testing.T) {
 
 func TestCachePoolOpenWithEmptyBinary(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -83,7 +83,7 @@ func TestCachePoolOpenWithEmptyBinary(t *testing.T) {
 
 func TestCachePoolOpenWithInvalidBinary(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "invalid_binary",
 		Connections: 100,
@@ -100,7 +100,7 @@ func TestCachePoolOpenWithInvalidBinary(t *testing.T) {
 
 func TestCachePoolState(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -109,6 +109,7 @@ func TestCachePoolState(t *testing.T) {
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
+	cachePool.memcacheStats.update()
 	defer cachePool.Close()
 	if cachePool.Available() <= 0 {
 		t.Fatalf("cache pool should have connections available")
@@ -135,7 +136,7 @@ func TestCachePoolState(t *testing.T) {
 
 func TestCachePoolStateWithoutOpen(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -169,7 +170,7 @@ func TestCachePoolStateWithoutOpen(t *testing.T) {
 
 func TestCachePoolGetFailedBecauseCachePoolIsClosed(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -188,7 +189,7 @@ func TestCachePoolGetFailedBecauseCachePoolIsClosed(t *testing.T) {
 
 func TestCachePoolStatsURL(t *testing.T) {
 	fakecacheservice.Register()
-	fakesqldb.Register(nil, false)
+	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,

@@ -153,7 +153,7 @@ var execMap = map[string]struct {
 		execQuery: &proto.Query{
 			Sql: "request1",
 			BindVariables: map[string]interface{}{
-				"v0": int64(0),
+				"v1": int64(0),
 			},
 			TabletType: topo.TYPE_RDONLY,
 			Session:    nil,

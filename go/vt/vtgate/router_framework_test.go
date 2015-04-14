@@ -227,7 +227,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 	createSandbox("TestBadSharding")
 
 	serv := new(sandboxTopo)
-	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond)
+	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	router = NewRouter(serv, "aa", routerSchema, "", scatterConn)
 	return router, sbc1, sbc2, sbclookup
 }

@@ -13,10 +13,28 @@ import (
 func RPCWrapCallInfo(ctx context.Context) context.Context {
 	remoteAddr, _ := proto.RemoteAddr(ctx)
 	username, _ := proto.Username(ctx)
-	return NewContext(ctx, &CallInfo{
-		RemoteAddr: remoteAddr,
-		Username:   username,
-		Text:       fmt.Sprintf("%s@%s", username, remoteAddr),
-		HTML:       template.HTML("<b>RemoteAddr:</b> " + remoteAddr + "</br>\n" + "<b>Username:</b> " + username + "</br>\n"),
+	return NewContext(ctx, &rpcWrapCallInfoImpl{
+		remoteAddr: remoteAddr,
+		username:   username,
 	})
+}
+
+type rpcWrapCallInfoImpl struct {
+	remoteAddr, username string
+}
+
+func (rwci *rpcWrapCallInfoImpl) RemoteAddr() string {
+	return rwci.remoteAddr
+}
+
+func (rwci *rpcWrapCallInfoImpl) Username() string {
+	return rwci.username
+}
+
+func (rwci *rpcWrapCallInfoImpl) Text() string {
+	return fmt.Sprintf("%s@%s", rwci.username, rwci.remoteAddr)
+}
+
+func (rwci *rpcWrapCallInfoImpl) HTML() template.HTML {
+	return template.HTML("<b>RemoteAddr:</b> " + rwci.remoteAddr + "</br>\n" + "<b>Username:</b> " + rwci.username + "</br>\n")
 }

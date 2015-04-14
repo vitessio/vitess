@@ -64,6 +64,7 @@ var stateName = []string{
 
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
+	config Config
 	// mu is used to access state. It's also used to ensure
 	// that state does not change out of StateServing or StateShuttingTx
 	// while we do requests.Add.
@@ -86,15 +87,17 @@ type SqlQuery struct {
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
 // of SqlQuery can be created per process.
 func NewSqlQuery(config Config) *SqlQuery {
-	sq := &SqlQuery{}
+	sq := &SqlQuery{
+		config: config,
+	}
 	sq.qe = NewQueryEngine(config)
-	stats.Publish("TabletState", stats.IntFunc(func() int64 {
+	stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 		sq.mu.Lock()
 		state := sq.state
 		sq.mu.Unlock()
 		return state
 	}))
-	stats.Publish("TabletStateName", stats.StringFunc(sq.GetState))
+	stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
 	return sq
 }
 
@@ -323,7 +326,7 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 
 // handleExecError handles panics during query execution and sets
 // the supplied error return value.
-func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
+func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -332,7 +335,15 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		*err = terr
+		if sq.config.TerseErrors {
+			if terr.SqlError == 0 {
+				*err = terr
+			} else {
+				*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+			}
+		} else {
+			*err = terr
+		}
 		terr.RecordStats()
 		// suppress these errors in logs
 		if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
@@ -353,7 +364,7 @@ func handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 // Execute executes the query and returns the result as response.
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", ctx)
-	defer handleExecError(query, &err, logStats)
+	defer sq.handleExecError(query, &err, logStats)
 
 	allowShutdown := (query.TransactionId != 0)
 	if err = sq.startRequest(query.SessionId, false, allowShutdown); err != nil {
@@ -374,11 +385,9 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          sq.qe.schemaInfo.GetPlan(ctx, logStats, query.Sql),
-		RequestContext: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       sq.qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            sq.qe,
 	}
 	*reply = *qre.Execute()
 	return nil
@@ -394,7 +403,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 	}
 
 	logStats := newSqlQueryStats("StreamExecute", ctx)
-	defer handleExecError(query, &err, logStats)
+	defer sq.handleExecError(query, &err, logStats)
 
 	if err = sq.startRequest(query.SessionId, false, false); err != nil {
 		return err
@@ -410,11 +419,9 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 		bindVars:      query.BindVariables,
 		transactionID: query.TransactionId,
 		plan:          sq.qe.schemaInfo.GetStreamPlan(query.Sql),
-		RequestContext: RequestContext{
-			ctx:      ctx,
-			logStats: logStats,
-			qe:       sq.qe,
-		},
+		ctx:           ctx,
+		logStats:      logStats,
+		qe:            sq.qe,
 	}
 	qre.Stream(sendReply)
 	return nil
@@ -507,19 +514,19 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
-	// Partial initialization or QueryExecutor is enough to call execSQL
-	requestContext := RequestContext{
+
+	qre := &QueryExecutor{
 		ctx:      ctx,
 		logStats: logStats,
 		qe:       sq.qe,
 	}
-	conn := requestContext.getConn(sq.qe.connPool)
+	conn := qre.getConn(sq.qe.connPool)
 	defer conn.Recycle()
 	// TODO: For fetching pkMinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of PKs to work with.
 	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
-	pkMinMax := requestContext.execSQL(conn, minMaxSql, true)
+	pkMinMax := qre.execSQL(conn, minMaxSql, true)
 	reply.Queries, err = splitter.split(pkMinMax)
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)

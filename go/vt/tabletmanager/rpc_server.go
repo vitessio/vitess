@@ -39,7 +39,7 @@ func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, rep
 	from := ""
 	ci, ok := callinfo.FromContext(ctx)
 	if ok {
-		from = ci.Text
+		from = ci.Text()
 	}
 
 	if lock {

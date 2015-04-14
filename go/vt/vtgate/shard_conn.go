@@ -9,9 +9,11 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -31,8 +33,10 @@ type ShardConn struct {
 	retryCount         int
 	connTimeoutTotal   time.Duration
 	connTimeoutPerConn time.Duration
+	connLife           time.Duration
 	balancer           *Balancer
 	consolidator       *sync2.Consolidator
+	ticker             *timer.RandTicker
 
 	connectTimings *stats.MultiTimings
 
@@ -44,7 +48,7 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal time.Duration, connTimeoutPerConn time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
+func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
@@ -53,7 +57,8 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		return endpoints, nil
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
-	return &ShardConn{
+	ticker := timer.NewRandTicker(connLife, connLife/2)
+	sdc := &ShardConn{
 		keyspace:           keyspace,
 		shard:              shard,
 		tabletType:         tabletType,
@@ -61,10 +66,18 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		retryCount:         retryCount,
 		connTimeoutTotal:   connTimeoutTotal,
 		connTimeoutPerConn: connTimeoutPerConn,
+		connLife:           connLife,
 		balancer:           blc,
+		ticker:             ticker,
 		consolidator:       sync2.NewConsolidator(),
 		connectTimings:     tabletConnectTimings,
 	}
+	go func() {
+		for range ticker.C {
+			sdc.closeCurrent()
+		}
+	}()
+	return sdc
 }
 
 // ShardConnError is the shard conn specific error.
@@ -165,9 +178,13 @@ func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, s
 	return
 }
 
-// Close closes the underlying TabletConn. ShardConn can be
-// reused after this because it opens connections on demand.
+// Close closes the underlying TabletConn.
 func (sdc *ShardConn) Close() {
+	sdc.ticker.Stop()
+	sdc.closeCurrent()
+}
+
+func (sdc *ShardConn) closeCurrent() {
 	sdc.mu.Lock()
 	defer sdc.mu.Unlock()
 	if sdc.conn == nil {
@@ -232,6 +249,7 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	if ok {
 		defer q.Broadcast()
 		conn, endPoint, isTimeout, err := sdc.getNewConn(ctx)
+		log.Infof("Connecting to end point: %v", endPoint)
 		q.Result = &connectResult{Conn: conn, EndPoint: endPoint, IsTimeout: isTimeout}
 		q.Err = err
 	} else {
@@ -311,8 +329,6 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
-		case tabletconn.ERR_TX_POOL_FULL:
-			return true
 		case tabletconn.ERR_FATAL:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
@@ -329,7 +345,7 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 			sdc.markDown(conn, err.Error())
 			return !inTransaction
 		default:
-			// Should not retry for normal server errors.
+			// Not retry for TX_POOL_FULL and normal server errors.
 			return false
 		}
 	}

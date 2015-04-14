@@ -106,6 +106,7 @@ type SchemaInfo struct {
 	cachePool  *CachePool
 	lastChange time.Time
 	ticks      *timer.Timer
+	reloadTime time.Duration
 	endpoints  map[string]string
 }
 
@@ -117,10 +118,11 @@ func NewSchemaInfo(
 	reloadTime time.Duration,
 	idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:   cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:  NewConnPool("", 2, idleTimeout),
-		ticks:     timer.NewTimer(reloadTime),
-		endpoints: endpoints,
+		queries:    cache.NewLRUCache(int64(queryCacheSize)),
+		connPool:   NewConnPool("", 2, idleTimeout),
+		ticks:      timer.NewTimer(reloadTime),
+		endpoints:  endpoints,
+		reloadTime: reloadTime,
 	}
 	stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
 	stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
@@ -472,6 +474,16 @@ func (si *SchemaInfo) SetQueryCacheSize(size int) {
 func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
 	si.ticks.Trigger()
 	si.ticks.SetInterval(reloadTime)
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.reloadTime = reloadTime
+}
+
+// ReloadTime returns schema info reload time.
+func (si *SchemaInfo) ReloadTime() time.Duration {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	return si.reloadTime
 }
 
 func (si *SchemaInfo) getRowcacheStats() map[string]int64 {
@@ -656,14 +668,4 @@ func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *ht
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
 	response.Write(buf.Bytes())
-}
-
-func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mproto.Field) {
-	output = make([]mproto.Field, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-	}
-	return output
 }
