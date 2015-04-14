@@ -24,9 +24,9 @@ type CallInfo interface {
 }
 
 // internal type and value
-type key string
+type key int
 
-var callInfoKey key = "vt.CallInfo"
+var callInfoKey key = 0
 
 // NewContext adds the provided CallInfo to the context
 func NewContext(ctx context.Context, ci CallInfo) context.Context {
