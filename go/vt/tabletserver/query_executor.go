@@ -142,8 +142,8 @@ func (qre *QueryExecutor) checkPermissions() {
 	username := ""
 	ci, ok := callinfo.FromContext(qre.ctx)
 	if ok {
-		remoteAddr = ci.RemoteAddr
-		username = ci.Username
+		remoteAddr = ci.RemoteAddr()
+		username = ci.Username()
 	}
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {

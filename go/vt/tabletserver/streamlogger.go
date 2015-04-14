@@ -168,7 +168,7 @@ func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
 	if !ok {
 		return "", ""
 	}
-	return ci.RemoteAddr, ci.Username
+	return ci.RemoteAddr(), ci.Username()
 }
 
 // Format returns a tab separated list of logged fields.
