@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -85,6 +86,7 @@ func main() {
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
 	if *tableAclConfig != "" {
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		tableacl.Init(*tableAclConfig)
 	}
 

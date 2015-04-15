@@ -1,3 +1,7 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tableacl
 
 import (
@@ -7,15 +11,17 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
+
+	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
-// ACL is an interface for Access Control List.
-type ACL interface {
-	// IsMember checks the membership of a principal in this ACL
-	IsMember(principal string) bool
-}
+var mu sync.Mutex
+var tableAcl map[*regexp.Regexp]map[Role]acl.ACL
+var acls = make(map[string]acl.Factory)
 
-var tableAcl map[*regexp.Regexp]map[Role]ACL
+// DefaultACL tells the default ACL implementation to use.
+var DefaultACL string
 
 // Init initiates table ACLs.
 func Init(configFile string) {
@@ -42,19 +48,19 @@ func InitFromBytes(config []byte) (err error) {
 //	<tableRegexPattern1>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
 //	<tableRegexPattern2>: {"ADMIN": "<u5>"}
 //}`)
-func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
+func load(config []byte) (map[*regexp.Regexp]map[Role]acl.ACL, error) {
 	var contents map[string]map[string]string
 	err := json.Unmarshal(config, &contents)
 	if err != nil {
 		return nil, err
 	}
-	tableAcl := make(map[*regexp.Regexp]map[Role]ACL)
+	tableAcl := make(map[*regexp.Regexp]map[Role]acl.ACL)
 	for tblPattern, accessMap := range contents {
 		re, err := regexp.Compile(tblPattern)
 		if err != nil {
 			return nil, fmt.Errorf("regexp compile error %v: %v", tblPattern, err)
 		}
-		tableAcl[re] = make(map[Role]ACL)
+		tableAcl[re] = make(map[Role]acl.ACL)
 
 		entriesByRole := make(map[Role][]string)
 		for i := READER; i < NumRoles; i++ {
@@ -71,7 +77,7 @@ func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 			}
 		}
 		for r, entries := range entriesByRole {
-			a, err := NewACL(entries)
+			a, err := newACL(entries)
 			if err != nil {
 				return nil, err
 			}
@@ -83,8 +89,8 @@ func load(config []byte) (map[*regexp.Regexp]map[Role]ACL, error) {
 }
 
 // Authorized returns the list of entities who have at least the
-// minimum specified Role on a table.
-func Authorized(table string, minRole Role) ACL {
+// minimum specified Role on a tablel.
+func Authorized(table string, minRole Role) acl.ACL {
 	// If table ACL is disabled, return nil
 	if tableAcl == nil {
 		return nil
@@ -97,4 +103,45 @@ func Authorized(table string, minRole Role) ACL {
 	}
 	// No matching patterns for table, allow all access
 	return all()
+}
+
+// Register registers a AclFactory.
+func Register(name string, factory acl.Factory) {
+	mu.Lock()
+	defer mu.Unlock()
+	if _, ok := acls[name]; ok {
+		panic(fmt.Sprintf("register a registered key: %s", name))
+	}
+	acls[name] = factory
+}
+
+func newACL(entries []string) (acl.ACL, error) {
+	return getCurrentAclFactory().New(entries)
+}
+
+func all() acl.ACL {
+	return getCurrentAclFactory().All()
+}
+
+func allString() string {
+	return getCurrentAclFactory().AllString()
+}
+
+func getCurrentAclFactory() acl.Factory {
+	mu.Lock()
+	defer mu.Unlock()
+	if DefaultACL == "" {
+		if len(acls) == 1 {
+			for _, aclFactory := range acls {
+				return aclFactory
+			}
+		}
+		panic("there are more than one AclFactory " +
+			"registered but no default has been given.")
+	}
+	aclFactory, ok := acls[DefaultACL]
+	if !ok {
+		panic(fmt.Sprintf("aclFactory for given default: %s is not found.", DefaultACL))
+	}
+	return aclFactory
 }
