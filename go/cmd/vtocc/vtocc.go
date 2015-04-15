@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 
 	// import mysql to register mysql connection function
@@ -76,6 +77,7 @@ func main() {
 	log.Infof("schemaOverrides: %s\n", data)
 
 	if *tableAclConfig != "" {
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		tableacl.Init(*tableAclConfig)
 	}
 	qsc := tabletserver.NewQueryServiceControl()

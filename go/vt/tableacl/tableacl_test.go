@@ -4,10 +4,21 @@
 
 package tableacl
 
-import "testing"
+import (
+	"os"
+	"testing"
+
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+)
 
 func currentUser() string {
 	return "DummyUser"
+}
+
+func TestMain(m *testing.M) {
+	name := "simpleacl-tableacl-test"
+	Register(name, &simpleacl.Factory{})
+	os.Exit(m.Run())
 }
 
 func TestParseInvalidJSON(t *testing.T) {
@@ -28,10 +39,10 @@ func TestValidConfigs(t *testing.T) {
 	checkLoad([]byte(`{"table1":{"READER":"u1"}}`), true, t)
 	checkLoad([]byte(`{"table1":{"READER":"u1,u2", "WRITER":"u3"}}`), true, t)
 	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,u2", "WRITER":"u3"}}`), true, t)
-	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3"}}`), true, t)
+	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3"}}`), true, t)
 	checkLoad([]byte(`{
-		"table[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3"},
-		"tbl[0-9]+":{"Reader":"u1,`+ALL+`", "WRITER":"u3", "ADMIN":"u4"}
+		"table[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3"},
+		"tbl[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3", "ADMIN":"u4"}
 	}`), true, t)
 }
 
@@ -56,12 +67,12 @@ func TestAllowUnmatchedTable(t *testing.T) {
 }
 
 func TestAllUserReadAccess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + ALL + `", "WRITER":"u3"}}`)
+	configData := []byte(`{"table[0-9]+":{"Reader":"` + allString() + `", "WRITER":"u3"}}`)
 	checkAccess(configData, "table1", READER, t, true)
 }
 
 func TestAllUserWriteAccess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"` + ALL + `"}}`)
+	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"` + allString() + `"}}`)
 	checkAccess(configData, "table1", WRITER, t, true)
 }
 
