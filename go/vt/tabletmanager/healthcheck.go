@@ -228,6 +228,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// remember our health status
 	agent.mutex.Lock()
 	agent._healthy = err
+	agent._healthyTime = time.Now()
 	agent._replicationDelay = replicationDelay
 	agent.mutex.Unlock()
 
