@@ -56,7 +56,9 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...interface{}) {
 			time.Sleep(d)
 			tl.mu.Lock()
 			defer tl.mu.Unlock()
-			logF(1, fmt.Sprintf("%v: skipped %v log messages", tl.name, tl.skippedCount))
+			// Because of the go func(), we lose the stack trace,
+			// so we just use the current line for this.
+			logF(0, fmt.Sprintf("%v: skipped %v log messages", tl.name, tl.skippedCount))
 			tl.skippedCount = 0
 		}(logWaitTime)
 	}
