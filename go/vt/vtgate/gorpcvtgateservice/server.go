@@ -9,6 +9,7 @@ import (
 	"flag"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -31,7 +32,7 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.Execute(ctx, query, reply)
+	return vtg.server.Execute(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // ExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -39,7 +40,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteShard(ctx, query, reply)
+	return vtg.server.ExecuteShard(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
@@ -47,7 +48,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
+	return vtg.server.ExecuteKeyspaceIds(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
@@ -55,7 +56,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteKeyRanges(ctx, query, reply)
+	return vtg.server.ExecuteKeyRanges(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
@@ -63,7 +64,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteEntityIds(ctx, query, reply)
+	return vtg.server.ExecuteEntityIds(callinfo.RPCWrapCallInfo(ctx), query, reply)
 }
 
 // ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method
@@ -71,7 +72,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteBatchShard(ctx, batchQuery, reply)
+	return vtg.server.ExecuteBatchShard(callinfo.RPCWrapCallInfo(ctx), batchQuery, reply)
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
@@ -80,13 +81,13 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *prot
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+	return vtg.server.ExecuteBatchKeyspaceIds(callinfo.RPCWrapCallInfo(ctx), batchQuery, reply)
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	return vtg.server.StreamExecute(ctx, query, func(value *proto.QueryResult) error {
+	return vtg.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
@@ -94,7 +95,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	return vtg.server.StreamExecuteShard(ctx, query, func(value *proto.QueryResult) error {
+	return vtg.server.StreamExecuteShard(callinfo.RPCWrapCallInfo(ctx), query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
@@ -103,7 +104,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	return vtg.server.StreamExecuteKeyRanges(ctx, query, func(value *proto.QueryResult) error {
+	return vtg.server.StreamExecuteKeyRanges(callinfo.RPCWrapCallInfo(ctx), query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
@@ -112,7 +113,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	return vtg.server.StreamExecuteKeyspaceIds(ctx, query, func(value *proto.QueryResult) error {
+	return vtg.server.StreamExecuteKeyspaceIds(callinfo.RPCWrapCallInfo(ctx), query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }
@@ -122,7 +123,7 @@ func (vtg *VTGate) Begin(ctx context.Context, noInput *rpc.Unused, outSession *p
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.Begin(ctx, outSession)
+	return vtg.server.Begin(callinfo.RPCWrapCallInfo(ctx), outSession)
 }
 
 // Commit is the RPC version of vtgateservice.VTGateService method
@@ -130,7 +131,7 @@ func (vtg *VTGate) Commit(ctx context.Context, inSession *proto.Session, noOutpu
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.Commit(ctx, inSession)
+	return vtg.server.Commit(callinfo.RPCWrapCallInfo(ctx), inSession)
 }
 
 // Rollback is the RPC version of vtgateservice.VTGateService method
@@ -138,7 +139,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session, noOut
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.Rollback(ctx, inSession)
+	return vtg.server.Rollback(callinfo.RPCWrapCallInfo(ctx), inSession)
 }
 
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
@@ -146,7 +147,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.SplitQuery(ctx, req, reply)
+	return vtg.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), req, reply)
 }
 
 // New returns a new VTGate service
