@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/schema"
 )
@@ -77,7 +78,9 @@ func (rqsc *realQueryServiceControl) registerSchemazHandler() {
 		}
 		for _, Value := range sorter.rows {
 			envelope.Table = Value
-			schemazTmpl.Execute(w, envelope)
+			if err := schemazTmpl.Execute(w, envelope); err != nil {
+				log.Errorf("schemaz: couldn't execute template: %v", err)
+			}
 		}
 	})
 }
