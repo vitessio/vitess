@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -468,10 +469,10 @@ func (server *ResilientSrvTopoServer) GetEndPoints(context context.Context, cell
 
 // SrvKeyspaceNamesCacheStatus is the current value for SrvKeyspaceNames
 type SrvKeyspaceNamesCacheStatus struct {
-	Cell             string
-	Value            []string
-	LastError        error
-	LastErrorContext context.Context
+	Cell          string
+	Value         []string
+	LastError     error
+	LastErrorHTML template.HTML
 }
 
 // SrvKeyspaceNamesCacheStatusList is used for sorting
@@ -494,11 +495,11 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 
 // SrvKeyspaceCacheStatus is the current value for a SrvKeyspace object
 type SrvKeyspaceCacheStatus struct {
-	Cell             string
-	Keyspace         string
-	Value            *topo.SrvKeyspace
-	LastError        error
-	LastErrorContext context.Context
+	Cell          string
+	Keyspace      string
+	Value         *topo.SrvKeyspace
+	LastError     error
+	LastErrorHTML template.HTML
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -553,12 +554,12 @@ func (skcsl SrvKeyspaceCacheStatusList) Swap(i, j int) {
 
 // SrvShardCacheStatus is the current value for a SrvShard object
 type SrvShardCacheStatus struct {
-	Cell             string
-	Keyspace         string
-	Shard            string
-	Value            *topo.SrvShard
-	LastError        error
-	LastErrorContext context.Context
+	Cell          string
+	Keyspace      string
+	Shard         string
+	Value         *topo.SrvShard
+	LastError     error
+	LastErrorHTML template.HTML
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -603,14 +604,14 @@ func (sscsl SrvShardCacheStatusList) Swap(i, j int) {
 
 // EndPointsCacheStatus is the current value for an EndPoints object
 type EndPointsCacheStatus struct {
-	Cell             string
-	Keyspace         string
-	Shard            string
-	TabletType       topo.TabletType
-	Value            *topo.EndPoints
-	OriginalValue    *topo.EndPoints
-	LastError        error
-	LastErrorContext context.Context
+	Cell          string
+	Keyspace      string
+	Shard         string
+	TabletType    topo.TabletType
+	Value         *topo.EndPoints
+	OriginalValue *topo.EndPoints
+	LastError     error
+	LastErrorHTML template.HTML
 }
 
 // StatusAsHTML returns an HTML version of our status.
@@ -698,10 +699,10 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.srvKeyspaceNamesCache {
 		entry.mutex.Lock()
 		result.SrvKeyspaceNames = append(result.SrvKeyspaceNames, &SrvKeyspaceNamesCacheStatus{
-			Cell:             entry.cell,
-			Value:            entry.value,
-			LastError:        entry.lastError,
-			LastErrorContext: entry.lastErrorContext,
+			Cell:          entry.cell,
+			Value:         entry.value,
+			LastError:     entry.lastError,
+			LastErrorHTML: callinfo.HTMLFromContext(entry.lastErrorContext),
 		})
 		entry.mutex.Unlock()
 	}
@@ -709,11 +710,11 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.srvKeyspaceCache {
 		entry.mutex.Lock()
 		result.SrvKeyspaces = append(result.SrvKeyspaces, &SrvKeyspaceCacheStatus{
-			Cell:             entry.cell,
-			Keyspace:         entry.keyspace,
-			Value:            entry.value,
-			LastError:        entry.lastError,
-			LastErrorContext: entry.lastErrorContext,
+			Cell:          entry.cell,
+			Keyspace:      entry.keyspace,
+			Value:         entry.value,
+			LastError:     entry.lastError,
+			LastErrorHTML: callinfo.HTMLFromContext(entry.lastErrorContext),
 		})
 		entry.mutex.Unlock()
 	}
@@ -721,12 +722,12 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.srvShardCache {
 		entry.mutex.Lock()
 		result.SrvShards = append(result.SrvShards, &SrvShardCacheStatus{
-			Cell:             entry.cell,
-			Keyspace:         entry.keyspace,
-			Shard:            entry.shard,
-			Value:            entry.value,
-			LastError:        entry.lastError,
-			LastErrorContext: entry.lastErrorContext,
+			Cell:          entry.cell,
+			Keyspace:      entry.keyspace,
+			Shard:         entry.shard,
+			Value:         entry.value,
+			LastError:     entry.lastError,
+			LastErrorHTML: callinfo.HTMLFromContext(entry.lastErrorContext),
 		})
 		entry.mutex.Unlock()
 	}
@@ -734,14 +735,14 @@ func (server *ResilientSrvTopoServer) CacheStatus() *ResilientSrvTopoServerCache
 	for _, entry := range server.endPointsCache {
 		entry.mutex.Lock()
 		result.EndPoints = append(result.EndPoints, &EndPointsCacheStatus{
-			Cell:             entry.cell,
-			Keyspace:         entry.keyspace,
-			Shard:            entry.shard,
-			TabletType:       entry.tabletType,
-			Value:            entry.value,
-			OriginalValue:    entry.originalValue,
-			LastError:        entry.lastError,
-			LastErrorContext: entry.lastErrorContext,
+			Cell:          entry.cell,
+			Keyspace:      entry.keyspace,
+			Shard:         entry.shard,
+			TabletType:    entry.tabletType,
+			Value:         entry.value,
+			OriginalValue: entry.originalValue,
+			LastError:     entry.lastError,
+			LastErrorHTML: callinfo.HTMLFromContext(entry.lastErrorContext),
 		})
 		entry.mutex.Unlock()
 	}

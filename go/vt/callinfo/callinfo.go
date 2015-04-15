@@ -38,3 +38,14 @@ func FromContext(ctx context.Context) (CallInfo, bool) {
 	ci, ok := ctx.Value(callInfoKey).(CallInfo)
 	return ci, ok
 }
+
+// HTMLFromContext returns that value of HTML() from the context, or "" if we're
+// not able to recover one
+func HTMLFromContext(ctx context.Context) template.HTML {
+	var h template.HTML
+	ci, ok := FromContext(ctx)
+	if ok {
+		return ci.HTML()
+	}
+	return h
+}
