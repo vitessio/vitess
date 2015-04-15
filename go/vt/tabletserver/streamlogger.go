@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/url"
 	"strings"
 	"time"
@@ -152,6 +153,13 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 		n++
 	}
 	return strings.Join(sources[:n], ",")
+}
+
+// ContextHTML returns the HTML version of the context that was used, or "".
+// This is a method on SQLQueryStats instead of a field so that it doesn't need
+// to be passed by value everywhere.
+func (stats *SQLQueryStats) ContextHTML() template.HTML {
+	return callinfo.HTMLFromContext(stats.context)
 }
 
 // ErrorStr returns the error string or ""
