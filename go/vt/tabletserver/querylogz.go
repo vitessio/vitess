@@ -113,7 +113,9 @@ func querylogzHandler(w http.ResponseWriter, r *http.Request) {
 				*SQLQueryStats
 				ColorLevel string
 			}{stats, level}
-			querylogzTmpl.Execute(w, tmplData)
+			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
+				log.Errorf("querylogz: couldn't execute template: %v", err)
+			}
 		case <-tmr.C:
 			return
 		}

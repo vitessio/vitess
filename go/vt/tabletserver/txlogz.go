@@ -122,7 +122,9 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 				Duration   float64
 				ColorLevel string
 			}{txc, duration, level}
-			txlogzTmpl.Execute(w, tmplData)
+			if err := txlogzTmpl.Execute(w, tmplData); err != nil {
+				log.Errorf("txlogz: couldn't execute template: %v", err)
+			}
 		case <-tmr.C:
 			return
 		}
