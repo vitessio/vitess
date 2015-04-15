@@ -20,8 +20,8 @@ var mu sync.Mutex
 var tableAcl map[*regexp.Regexp]map[Role]acl.ACL
 var acls = make(map[string]acl.Factory)
 
-// DefaultACL tells the default ACL implementation to use.
-var DefaultACL string
+// defaultACL tells the default ACL implementation to use.
+var defaultACL string
 
 // Init initiates table ACLs.
 func Init(configFile string) {
@@ -115,22 +115,18 @@ func Register(name string, factory acl.Factory) {
 	acls[name] = factory
 }
 
-func newACL(entries []string) (acl.ACL, error) {
-	return getCurrentAclFactory().New(entries)
-}
-
-func all() acl.ACL {
-	return getCurrentAclFactory().All()
-}
-
-func allString() string {
-	return getCurrentAclFactory().AllString()
-}
-
-func getCurrentAclFactory() acl.Factory {
+// SetDefaultACL sets the default ACL implementation.
+func SetDefaultACL(name string) {
 	mu.Lock()
 	defer mu.Unlock()
-	if DefaultACL == "" {
+	defaultACL = name
+}
+
+// GetCurrentAclFactory returns current table acl implementation.
+func GetCurrentAclFactory() acl.Factory {
+	mu.Lock()
+	defer mu.Unlock()
+	if defaultACL == "" {
 		if len(acls) == 1 {
 			for _, aclFactory := range acls {
 				return aclFactory
@@ -139,9 +135,17 @@ func getCurrentAclFactory() acl.Factory {
 		panic("there are more than one AclFactory " +
 			"registered but no default has been given.")
 	}
-	aclFactory, ok := acls[DefaultACL]
+	aclFactory, ok := acls[defaultACL]
 	if !ok {
-		panic(fmt.Sprintf("aclFactory for given default: %s is not found.", DefaultACL))
+		panic(fmt.Sprintf("aclFactory for given default: %s is not found.", defaultACL))
 	}
 	return aclFactory
+}
+
+func newACL(entries []string) (acl.ACL, error) {
+	return GetCurrentAclFactory().New(entries)
+}
+
+func all() acl.ACL {
+	return GetCurrentAclFactory().All()
 }
