@@ -17,8 +17,6 @@ import (
 // cell/shard.
 // FIXME(alainjobart) remove ServedTypes as it violates the first rule, and
 // is unused by clients anyway.
-// FIXME(alainjobart) remove TabletTypes as it violates the second rule, and
-// is also unused by clients.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	// Copied / inferred from Shard

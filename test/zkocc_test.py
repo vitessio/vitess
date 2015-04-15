@@ -149,8 +149,7 @@ class TestTopo(unittest.TestCase):
     self.assertEqual({
         'ShardReferences': [{
             'KeyRange': {'End': '\xd0', 'Start': '\xc0'},
-            'Name': 'c0-d0'}],
-        'TabletTypes': ['rdonly', 'replica', 'master']},
+            'Name': 'c0-d0'}]},
                      keyspace, "keyspace reading is wrong")
     end_points = fkc.get_end_points("testing", "test_keyspace", "0", "master")
     self.assertEqual({
