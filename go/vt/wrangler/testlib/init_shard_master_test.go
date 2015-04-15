@@ -183,8 +183,25 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	badSlave.StartActionLoop(t, wr)
 	defer badSlave.StopActionLoop(t)
 
+	// also change the master alias in the Shard object, to make sure it
+	// is set back.
+	si, err := ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.MasterAlias.Uid++
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+
+	// run InitShardMaster without force, it fails because master is
+	// changing.
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is not the shard master") {
+		t.Errorf("InitShardMaster with mismatched new master returned wrong error: %v", err)
+	}
+
 	// run InitShardMaster
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "wrong status for StartReplicationCommands") {
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "wrong status for StartReplicationCommands") {
 		t.Errorf("InitShardMaster with one failed slave returned wrong error: %v", err)
 	}
 
@@ -192,7 +209,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if master.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("master was not turned read-write")
 	}
-	si, err := ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
+	si, err = ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
