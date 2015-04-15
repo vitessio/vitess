@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
@@ -44,7 +45,7 @@ type ExecPlan struct {
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
-	Authorized tableacl.ACL
+	Authorized tacl.ACL
 
 	mu         sync.Mutex
 	QueryCount int64
