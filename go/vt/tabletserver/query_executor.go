@@ -252,7 +252,7 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 	qre.logStats.CacheAbsent = absent
 	qre.logStats.CacheMisses = misses
 
-	qre.logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
+	qre.logStats.QuerySources |= QuerySourceRowcache
 
 	tableInfo.hits.Add(hits)
 	tableInfo.absent.Add(absent)
@@ -538,7 +538,7 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 			q.Result, q.Err = qre.execSQLNoPanic(conn, sql, false)
 		}
 	} else {
-		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
+		logStats.QuerySources |= QuerySourceConsolidator
 		startTime := time.Now()
 		q.Wait()
 		waitStats.Record("Consolidations", startTime)

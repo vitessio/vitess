@@ -23,9 +23,12 @@ import (
 var SqlQueryLogger = streamlog.New("SqlQuery", 50)
 
 const (
-	QUERY_SOURCE_ROWCACHE = 1 << iota
-	QUERY_SOURCE_CONSOLIDATOR
-	QUERY_SOURCE_MYSQL
+	// QuerySourceRowcache means query result is found in rowcache.
+	QuerySourceRowcache = 1 << iota
+	// QuerySourceConsolidator means query result is found in consolidator.
+	QuerySourceConsolidator
+	// QuerySourceMySQL means query result is returned from MySQL.
+	QuerySourceMySQL
 )
 
 // SQLQueryStats records the stats for a single query
@@ -68,7 +71,7 @@ func (stats *SQLQueryStats) Send() {
 
 // AddRewrittenSql adds a single sql statement to the rewritten list
 func (stats *SQLQueryStats) AddRewrittenSql(sql string, start time.Time) {
-	stats.QuerySources |= QUERY_SOURCE_MYSQL
+	stats.QuerySources |= QuerySourceMySQL
 	stats.NumberOfQueries++
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
 	stats.MysqlResponseTime += time.Now().Sub(start)
@@ -140,15 +143,15 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 	}
 	sources := make([]string, 3)
 	n := 0
-	if stats.QuerySources&QUERY_SOURCE_MYSQL != 0 {
+	if stats.QuerySources&QuerySourceMySQL != 0 {
 		sources[n] = "mysql"
 		n++
 	}
-	if stats.QuerySources&QUERY_SOURCE_ROWCACHE != 0 {
+	if stats.QuerySources&QuerySourceRowcache != 0 {
 		sources[n] = "rowcache"
 		n++
 	}
-	if stats.QuerySources&QUERY_SOURCE_CONSOLIDATOR != 0 {
+	if stats.QuerySources&QuerySourceConsolidator != 0 {
 		sources[n] = "consolidator"
 		n++
 	}
