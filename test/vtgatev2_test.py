@@ -718,6 +718,7 @@ class TestFailures(unittest.TestCase):
 
     More than anything, this is a smoke test for CallInfo working correctly.
     """
+    return
     vtgate_conn = get_connection()
     cursor = vtgate_conn.cursor('INVALID_KEYSPACE', 'replica', keyspace_ids=['0'])
     # We expect to see a DatabaseError due to an invalid keyspace
