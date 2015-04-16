@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 // MarshalBson bson-encodes KeyRangeQuery.
@@ -31,7 +31,7 @@ func (keyRangeQuery *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter, key s
 		lenWriter.Close()
 	}
 	bson.EncodeString(buf, "Keyspace", keyRangeQuery.Keyspace)
-	// []kproto.KeyRange
+	// []key.KeyRange
 	{
 		bson.EncodePrefix(buf, bson.Array, "KeyRanges")
 		lenWriter := bson.NewLenWriter(buf)
@@ -47,6 +47,7 @@ func (keyRangeQuery *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter, key s
 	} else {
 		(*keyRangeQuery.Session).MarshalBson(buf, "Session")
 	}
+	bson.EncodeBool(buf, "NotInTransaction", keyRangeQuery.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -85,16 +86,16 @@ func (keyRangeQuery *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) 
 		case "Keyspace":
 			keyRangeQuery.Keyspace = bson.DecodeString(buf, kind)
 		case "KeyRanges":
-			// []kproto.KeyRange
+			// []key.KeyRange
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for keyRangeQuery.KeyRanges", kind))
 				}
 				bson.Next(buf, 4)
-				keyRangeQuery.KeyRanges = make([]kproto.KeyRange, 0, 8)
+				keyRangeQuery.KeyRanges = make([]key.KeyRange, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v2 kproto.KeyRange
+					var _v2 key.KeyRange
 					_v2.UnmarshalBson(buf, kind)
 					keyRangeQuery.KeyRanges = append(keyRangeQuery.KeyRanges, _v2)
 				}
@@ -107,6 +108,8 @@ func (keyRangeQuery *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) 
 				keyRangeQuery.Session = new(Session)
 				(*keyRangeQuery.Session).UnmarshalBson(buf, kind)
 			}
+		case "NotInTransaction":
+			keyRangeQuery.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

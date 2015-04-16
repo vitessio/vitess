@@ -85,7 +85,8 @@ class VTGateCursor(object):
         self.keyspace,
         self.tablet_type,
         keyspace_ids=self.keyspace_ids,
-        keyranges=self.keyranges)
+        keyranges=self.keyranges,
+        not_in_transaction=(not self.is_writable()))
     self.index = 0
     return self.rowcount
 
@@ -106,7 +107,8 @@ class VTGateCursor(object):
         self.keyspace,
         self.tablet_type,
         entity_keyspace_id_map,
-        entity_column_name)
+        entity_column_name,
+        not_in_transaction=(not self.is_writable()))
     self.index = 0
     return self.rowcount
 
@@ -207,7 +209,8 @@ class BatchVTGateCursor(VTGateCursor):
                                               self.bind_vars_list,
                                               self.keyspace,
                                               self.tablet_type,
-                                              self.keyspace_ids)
+                                              self.keyspace_ids,
+                                              not_in_transaction=(not self.is_writable()))
     self.query_list = []
     self.bind_vars_list = []
 
@@ -236,7 +239,8 @@ class StreamVTGateCursor(VTGateCursor):
         self.keyspace,
         self.tablet_type,
         keyspace_ids=self.keyspace_ids,
-        keyranges=self.keyranges)
+        keyranges=self.keyranges,
+        not_in_transaction=(not self.is_writable()))
     self.index = 0
     return 0
 

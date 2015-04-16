@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -31,7 +31,7 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 		lenWriter.Close()
 	}
 	bson.EncodeString(buf, "Keyspace", keyspaceIdBatchQuery.Keyspace)
-	// []kproto.KeyspaceId
+	// []key.KeyspaceId
 	{
 		bson.EncodePrefix(buf, bson.Array, "KeyspaceIds")
 		lenWriter := bson.NewLenWriter(buf)
@@ -47,6 +47,7 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 	} else {
 		(*keyspaceIdBatchQuery.Session).MarshalBson(buf, "Session")
 	}
+	bson.EncodeBool(buf, "NotInTransaction", keyspaceIdBatchQuery.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -83,16 +84,16 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 		case "Keyspace":
 			keyspaceIdBatchQuery.Keyspace = bson.DecodeString(buf, kind)
 		case "KeyspaceIds":
-			// []kproto.KeyspaceId
+			// []key.KeyspaceId
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for keyspaceIdBatchQuery.KeyspaceIds", kind))
 				}
 				bson.Next(buf, 4)
-				keyspaceIdBatchQuery.KeyspaceIds = make([]kproto.KeyspaceId, 0, 8)
+				keyspaceIdBatchQuery.KeyspaceIds = make([]key.KeyspaceId, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v2 kproto.KeyspaceId
+					var _v2 key.KeyspaceId
 					_v2.UnmarshalBson(buf, kind)
 					keyspaceIdBatchQuery.KeyspaceIds = append(keyspaceIdBatchQuery.KeyspaceIds, _v2)
 				}
@@ -105,6 +106,8 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 				keyspaceIdBatchQuery.Session = new(Session)
 				(*keyspaceIdBatchQuery.Session).UnmarshalBson(buf, kind)
 			}
+		case "NotInTransaction":
+			keyspaceIdBatchQuery.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

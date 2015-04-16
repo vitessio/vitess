@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
 
@@ -27,11 +27,13 @@ var defaultACL string
 func Init(configFile string) {
 	config, err := ioutil.ReadFile(configFile)
 	if err != nil {
-		log.Fatalf("unable to read tableACL config file: %v", err)
+		log.Errorf("unable to read tableACL config file: %v", err)
+		panic(fmt.Errorf("unable to read tableACL config file: %v", err))
 	}
 	tableAcl, err = load(config)
 	if err != nil {
-		log.Fatalf("tableACL initialization error: %v", err)
+		log.Errorf("tableACL initialization error: %v", err)
+		panic(fmt.Errorf("tableACL initialization error: %v", err))
 	}
 }
 
