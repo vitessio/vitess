@@ -27,7 +27,6 @@ from vtdb import vtgatev2
 
 #TODO: verify that these values make sense.
 DEFAULT_CONNECTION_TIMEOUT = 5.0
-DEFAULT_QUERY_TIMEOUT = 15.0
 
 __app_read_only_mode_method = lambda:False
 __vtgate_connect_method = vtgatev2.connect
@@ -64,9 +63,8 @@ class DatabaseContext(object):
     self.vtgate_connection = None
     self.change_master_read_to_replica = False
     self._transaction_stack_depth = 0
-    self.connection_timeout = DEFAULT_CONNECTION_TIMEOUT
-    self.query_timeout = DEFAULT_QUERY_TIMEOUT
     self.event_logger = vtdb_logger.get_logger()
+    self.connection_timeout = DEFAULT_CONNECTION_TIMEOUT
     self._tablet_type = None
 
   @property

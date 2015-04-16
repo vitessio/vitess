@@ -50,6 +50,19 @@ def _is_iterable_container(x):
   return hasattr(x, '__iter__')
 
 
+INSERT_KW = "insert"
+UPDATE_KW = "update"
+DELETE_KW = "delete"
+
+
+def is_dml(sql):
+  first_kw = sql.split(' ')[0]
+  first_kw = first_kw.lower()
+  if first_kw == INSERT_KW or first_kw == UPDATE_KW or first_kw == DELETE_KW:
+    return True
+  return False
+
+
 def create_cursor_from_params(vtgate_conn, tablet_type, is_dml, table_class):
   """This method creates the cursor from the required params.
 
@@ -110,6 +123,27 @@ def create_stream_cursor_from_cursor(original_cursor):
   return stream_cursor
 
 
+def create_batch_cursor_from_cursor(original_cursor, writable=False):
+  """
+  This method creates a batch cursor from a regular cursor.
+
+  Args:
+    original_cursor: Cursor of VTGateCursor type
+
+  Returns:
+    Returns BatchVTGateCursor that has same attributes as original_cursor.
+  """
+  if not isinstance(original_cursor, vtgate_cursor.VTGateCursor):
+    raise dbexceptions.ProgrammingError(
+        "Original cursor should be of VTGateCursor type.")
+  batch_cursor = vtgate_cursor.BatchVTGateCursor(
+      original_cursor._conn, original_cursor.keyspace,
+      original_cursor.tablet_type,
+      keyspace_ids=original_cursor.keyspace_ids,
+      writable=writable)
+  return batch_cursor
+
+
 def db_wrapper(method):
   """Decorator that is used to create the appropriate cursor
   for the table and call the database method with it.
@@ -138,6 +172,80 @@ def db_wrapper(method):
 def db_class_method(*pargs, **kargs):
   """This function calls db_wrapper to create the appropriate cursor."""
   return classmethod(db_wrapper(*pargs, **kargs))
+
+
+def execute_batch_read(cursor, query_list, bind_vars_list):
+  """Method for executing select queries in batch.
+
+  Args:
+    cursor: original cursor - that is converted to read-only BatchVTGateCursor.
+    query_list: query_list.
+    bind_vars_list: bind variables list.
+
+  Returns:
+    Result of the form [[q1row1, q1row2,...], [q2row1, ...],..]
+
+  Raises:
+   dbexceptions.ProgrammingError when dmls are issued to read batch cursor.
+  """
+  if not isinstance(cursor, vtgate_cursor.VTGateCursor):
+    raise dbexceptions.ProgrammingError(
+        "cursor is not of the type VTGateCursor.")
+  batch_cursor = create_batch_cursor_from_cursor(cursor)
+  for q, bv in zip(query_list, bind_vars_list):
+    if is_dml(q):
+      raise dbexceptions.ProgrammingError("Dml %s for read batch cursor." % q)
+    batch_cursor.execute(q, bv)
+
+  batch_cursor.flush()
+  rowsets = batch_cursor.rowsets
+  result = []
+  # rowset is of the type [(results, rowcount, lastrowid, fields),..]
+  for rowset in rowsets:
+    rowset_results = rowset[0]
+    fields = [f[0] for f in rowset[3]]
+    rows = []
+    for row in rowset_results:
+      rows.append(sql_builder.DBRow(fields, row))
+    result.append(rows)
+  return result
+
+
+def execute_batch_write(cursor, query_list, bind_vars_list):
+  """Method for executing dml queries in batch.
+
+  Args:
+    cursor: original cursor - that is converted to read-only BatchVTGateCursor.
+    query_list: query_list.
+    bind_vars_list: bind variables list.
+
+  Returns:
+    Result of the form [{'rowcount':rowcount, 'lastrowid':lastrowid}, ...]
+    since for dmls those two values are valuable.
+
+  Raises:
+    dbexceptions.ProgrammingError when non-dmls are issued to writable batch cursor.
+  """
+  if not isinstance(cursor, vtgate_cursor.VTGateCursor):
+    raise dbexceptions.ProgrammingError(
+        "cursor is not of the type VTGateCursor.")
+  batch_cursor = create_batch_cursor_from_cursor(cursor, writable=True)
+  if batch_cursor.writable and len(batch_cursor.keyspace_ids) != 1:
+    raise dbexceptions.ProgrammingError(
+        "writable batch execute can also execute on one keyspace_id.")
+  for q, bv in izip(query_list, bind_vars_list):
+    if not is_dml(q):
+      raise dbexceptions.ProgrammingError("query %s is not a dml" % q)
+    batch_cursor.execute(q, bv)
+
+  batch_cursor.flush()
+
+  rowsets = batch_cursor.rowsets()
+  result = []
+  # rowset is of the type [(results, rowcount, lastrowid, fields),..]
+  for rowset in rowsets:
+    result.append({'rowcount':rowset[1], 'lastrowid':rowset[2]})
+  return result
 
 
 class DBObjectBase(object):
@@ -179,58 +287,81 @@ class DBObjectBase(object):
 
   @db_class_method
   def select_by_columns(class_, cursor, where_column_value_pairs,
-                        columns_list = None,order_by=None, group_by=None,
-                        limit=None, **kwargs):
+                        columns_list=None, order_by=None, group_by=None,
+                        limit=None):
+    if columns_list is None:
+      columns_list = class_.columns_list
+    query, bind_vars = class_.create_select_query(where_column_value_pairs,
+                                                  columns_list=columns_list,
+                                                  order_by=order_by,
+                                                  group_by=group_by,
+                                                  limit=limit)
+
+    rowcount = cursor.execute(query, bind_vars)
+    rows = cursor.fetchall()
+    return [sql_builder.DBRow(columns_list, row) for row in rows]
+
+  @classmethod
+  def create_insert_query(class_, **bind_vars):
+    return sql_builder.insert_query(class_.table_name,
+                                    class_.columns_list,
+                                    **bind_vars)
+
+  @classmethod
+  def create_update_query(class_, where_column_value_pairs,
+                          update_column_value_pairs):
+    return sql_builder.update_columns_query(
+        class_.table_name, where_column_value_pairs,
+        update_column_value_pairs=update_column_value_pairs)
+
+  @classmethod
+  def create_delete_query(class_, where_column_value_pairs, limit=None):
+    return sql_builder.delete_by_columns_query(class_.table_name,
+                                               where_column_value_pairs,
+                                               limit=limit)
+
+  @classmethod
+  def create_select_query(class_, where_column_value_pairs, columns_list=None,
+                          order_by=None, group_by=None, limit=None):
     if class_.columns_list is None:
       raise dbexceptions.ProgrammingError("DB class should define columns_list")
 
     if columns_list is None:
       columns_list = class_.columns_list
+
     query, bind_vars = sql_builder.select_by_columns_query(columns_list,
                                                            class_.table_name,
                                                            where_column_value_pairs,
                                                            order_by=order_by,
                                                            group_by=group_by,
-                                                           limit=limit,
-                                                           **kwargs)
-
-    rowcount = cursor.execute(query, bind_vars)
-    rows = cursor.fetchall()
-    return [sql_builder.DBRow(columns_list, row) for row in rows]
+                                                           limit=limit)
+    return query, bind_vars
 
   @db_class_method
   def insert(class_, cursor, **bind_vars):
     if class_.columns_list is None:
       raise dbexceptions.ProgrammingError("DB class should define columns_list")
 
-    query, bind_vars = sql_builder.insert_query(class_.table_name,
-                                                class_.columns_list,
-                                                **bind_vars)
+    query, bind_vars = class_.create_insert_query(**bind_vars)
     cursor.execute(query, bind_vars)
     return cursor.lastrowid
 
   @db_class_method
   def update_columns(class_, cursor, where_column_value_pairs,
-                     **update_columns):
-
-    query, bind_vars = sql_builder.update_columns_query(
-        class_.table_name, where_column_value_pairs, **update_columns)
+                     update_column_value_pairs):
+    query, bind_vars = class_.create_update_query(
+        where_column_value_pairs,
+        update_column_value_pairs=update_column_value_pairs)
 
     return cursor.execute(query, bind_vars)
 
   @db_class_method
-  def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None,
-                        **columns):
-    if not where_column_value_pairs:
-      where_column_value_pairs = columns.items()
-      where_column_value_pairs.sort()
-
+  def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None):
     if not where_column_value_pairs:
       raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
 
-    query, bind_vars = sql_builder.delete_by_columns_query(class_.table_name,
-                                                              where_column_value_pairs,
-                                                              limit=limit)
+    query, bind_vars = class_.create_delete_query(where_column_value_pairs,
+                                                  limit=limit)
     cursor.execute(query, bind_vars)
     if cursor.rowcount == 0:
       raise dbexceptions.DatabaseError("DB Row not found")
@@ -238,20 +369,13 @@ class DBObjectBase(object):
 
   @db_class_method
   def select_by_columns_streaming(class_, cursor, where_column_value_pairs,
-                        columns_list = None,order_by=None, group_by=None,
-                        limit=None, fetch_size=100, **kwargs):
-    if class_.columns_list is None:
-      raise dbexceptions.ProgrammingError("DB class should define columns_list")
-
-    if columns_list is None:
-      columns_list = class_.columns_list
-    query, bind_vars = sql_builder.select_by_columns_query(columns_list,
-                                                           class_.table_name,
-                                                           where_column_value_pairs,
-                                                           order_by=order_by,
-                                                           group_by=group_by,
-                                                           limit=limit,
-                                                           **kwargs)
+                        columns_list=None, order_by=None, group_by=None,
+                        limit=None, fetch_size=100):
+    query, bind_vars = class_.create_select_query(where_column_value_pairs,
+                                                  columns_list=columns_list,
+                                                  order_by=order_by,
+                                                  group_by=group_by,
+                                                  limit=limit)
 
     return class_._stream_fetch(cursor, query, bind_vars, fetch_size)
 
@@ -273,6 +397,8 @@ class DBObjectBase(object):
         break
     stream_cursor.close()
 
+
+  
   @db_class_method
   def get_count(class_, cursor, column_value_pairs=None, **columns):
     if not column_value_pairs:

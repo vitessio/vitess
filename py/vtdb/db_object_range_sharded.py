@@ -214,7 +214,7 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
 
   @db_object.db_class_method
   def select_by_ids(class_, cursor, where_column_value_pairs,
-                        columns_list = None,order_by=None, group_by=None,
+                        columns_list=None, order_by=None, group_by=None,
                         limit=None, **kwargs):
     """This method is used to perform in-clause queries.
 
@@ -223,19 +223,15 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     column and the associated entity_keyspace_id_map is computed based
     on the routing used - sharding_key or entity_id_map.
     """
-
-    if class_.columns_list is None:
-      raise dbexceptions.ProgrammingError("DB class should define columns_list")
-
     if columns_list is None:
       columns_list = class_.columns_list
-    query, bind_vars = sql_builder.select_by_columns_query(columns_list,
-                                                           class_.table_name,
-                                                           where_column_value_pairs,
-                                                           order_by=order_by,
-                                                           group_by=group_by,
-                                                           limit=limit,
-                                                           **kwargs)
+
+    query, bind_vars = class_.create_select_query(where_column_value_pairs,
+                                                  columns_list=columns_list,
+                                                  order_by=order_by,
+                                                  group_by=group_by,
+                                                  limit=limit,
+                                                  **kwargs)
 
     entity_col_name = None
     entity_id_keyspace_id_map = {}
