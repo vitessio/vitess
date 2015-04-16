@@ -714,11 +714,7 @@ class TestFailures(unittest.TestCase):
     #                             target_tablet_type=tablet_type)
 
   def test_status_with_error(self):
-    """Tests that the status page loads correctly after a VTGate error.
-
-    More than anything, this is a smoke test for CallInfo working correctly.
-    """
-    return
+    """Tests that the status page loads correctly after a VTGate error."""
     vtgate_conn = get_connection()
     cursor = vtgate_conn.cursor('INVALID_KEYSPACE', 'replica', keyspace_ids=['0'])
     # We expect to see a DatabaseError due to an invalid keyspace
@@ -726,8 +722,6 @@ class TestFailures(unittest.TestCase):
       cursor.execute('select * from vt_insert_test', {})
     # Page should have loaded successfully
     self.assertIn('</html>', utils.get_status(vtgate_port))
-    # Verify that the ContextHTML is loaded (i.e., verify that CallInfo works)
-    self.assertIn('RemoteAddr', utils.get_status(vtgate_port))
 
   def test_tablet_restart_read(self):
     try:
