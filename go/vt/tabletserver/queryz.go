@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
@@ -150,7 +151,9 @@ func (rqsc *realQueryServiceControl) registerQueryzHandler() {
 		}
 		sort.Sort(&sorter)
 		for _, Value := range sorter.rows {
-			queryzTmpl.Execute(w, Value)
+			if err := queryzTmpl.Execute(w, Value); err != nil {
+				log.Errorf("queryz: couldn't execute template: %v", err)
+			}
 		}
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"text/template"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 )
 
@@ -23,7 +24,7 @@ var (
         </thead>
 	`)
 	streamqueryzTmpl = template.Must(template.New("example").Parse(`
-		<tr> 
+		<tr>
 			<td>{{.Query}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
@@ -60,7 +61,9 @@ func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
 		defer endHTMLTable(w)
 		w.Write(streamqueryzHeader)
 		for i := range rows {
-			streamqueryzTmpl.Execute(w, rows[i])
+			if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {
+				log.Errorf("streamlogz: couldn't execute template: %v", err)
+			}
 		}
 	}
 
