@@ -23,6 +23,7 @@ from clientlib_tests import db_class_sharded
 from clientlib_tests import db_class_lookup
 
 from vtdb import database_context
+from vtdb import db_object
 from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import keyspace
@@ -233,9 +234,10 @@ class TestUnshardedTable(unittest.TestCase):
     id_val = self.all_ids[0]
     where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
+      update_cols = [('msg', "test update"),]
       db_class_unsharded.VtUnsharded.update_columns(context.get_cursor(),
                                                     where_column_value_pairs,
-                                                    msg="test update")
+                                                    update_column_value_pairs=update_cols)
 
     with database_context.ReadFromMaster(self.dc) as context:
       rows = db_class_unsharded.VtUnsharded.select_by_id(context.get_cursor(), id_val)
@@ -484,9 +486,10 @@ class TestRangeSharded(unittest.TestCase):
       where_column_value_pairs = [('id', user_id),]
       entity_id_map = {'id': user_id}
       new_username = 'new_user%s' % user_id
+      update_cols = [('username', new_username),]
       db_class_sharded.VtUser.update_columns(context.get_cursor(entity_id_map=entity_id_map),
                                              where_column_value_pairs,
-                                             username=new_username)
+                                             update_column_value_pairs=update_cols)
       # verify the updated value.
       where_column_value_pairs = [('id', user_id),]
       rows = db_class_sharded.VtUser.select_by_columns(
@@ -501,10 +504,10 @@ class TestRangeSharded(unittest.TestCase):
       m = hashlib.md5()
       m.update(new_email)
       email_hash = m.digest()
+      update_cols = [('email', new_email), ('email_hash', email_hash)]
       db_class_sharded.VtUserEmail.update_columns(context.get_cursor(entity_id_map={'user_id':user_id}),
                                                   where_column_value_pairs,
-                                                  email=new_email,
-                                                  email_hash=email_hash)
+                                                  update_column_value_pairs=update_cols)
 
     # verify the updated value.
     with database_context.ReadFromMaster(self.dc) as context:
@@ -568,6 +571,29 @@ class TestRangeSharded(unittest.TestCase):
           context.get_cursor(keyrange=keyrange_constants.NON_PARTIAL_KEYRANGE))
       expected = max(self.user_id_list)
       self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
+
+  def test_batch_read(self):
+    query_list = []
+    bv_list = []
+    user_id_list = [self.user_id_list[0], self.user_id_list[1]]
+    where_column_value_pairs = (('id', user_id_list),)
+    entity_id_map = dict(where_column_value_pairs)
+    q, bv = db_class_sharded.VtUser.create_select_query(where_column_value_pairs)
+    query_list.append(q)
+    bv_list.append(bv)
+    where_column_value_pairs = (('user_id', user_id_list),)
+    q, bv = db_class_sharded.VtUserEmail.create_select_query(where_column_value_pairs)
+    query_list.append(q)
+    bv_list.append(bv)
+    with database_context.ReadFromMaster(self.dc) as context:
+      cursor = context.get_cursor(entity_id_map=entity_id_map)(db_class_sharded.VtUser)
+      results = db_object.execute_batch_read(
+          cursor, query_list, bv_list)
+      self.assertEqual(len(results), len(query_list))
+      res_ids = [row.id for row in results[0]]
+      res_user_ids = [row.user_id for row in results[1]]
+      self.assertEqual(res_ids, user_id_list)
+      self.assertEqual(res_user_ids, user_id_list)
 
 
 if __name__ == '__main__':

@@ -191,8 +191,16 @@ class VTGateCursor(object):
 
 
 class BatchVTGateCursor(VTGateCursor):
+  """Batch Cursor for VTGate.
+
+  This cursor allows 'n' queries to be executed against
+  'm' keyspace_ids. For writes though, it maybe prefereable
+  to only execute against one keyspace_id.
+  This only supports keyspace_ids right now since that is what
+  the underlying vtgate server supports.
+  """
   def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None,
-               keyranges=None, writable=False):
+               writable=False):
     # rowset is [(results, rowcount, lastrowid, fields),]
     self.rowsets = None
     self.query_list = []
