@@ -12,7 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 // MarshalBson bson-encodes KeyspaceIdQuery.
@@ -31,7 +31,7 @@ func (keyspaceIdQuery *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter, k
 		lenWriter.Close()
 	}
 	bson.EncodeString(buf, "Keyspace", keyspaceIdQuery.Keyspace)
-	// []kproto.KeyspaceId
+	// []key.KeyspaceId
 	{
 		bson.EncodePrefix(buf, bson.Array, "KeyspaceIds")
 		lenWriter := bson.NewLenWriter(buf)
@@ -47,6 +47,7 @@ func (keyspaceIdQuery *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter, k
 	} else {
 		(*keyspaceIdQuery.Session).MarshalBson(buf, "Session")
 	}
+	bson.EncodeBool(buf, "NotInTransaction", keyspaceIdQuery.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -85,16 +86,16 @@ func (keyspaceIdQuery *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer, kind by
 		case "Keyspace":
 			keyspaceIdQuery.Keyspace = bson.DecodeString(buf, kind)
 		case "KeyspaceIds":
-			// []kproto.KeyspaceId
+			// []key.KeyspaceId
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for keyspaceIdQuery.KeyspaceIds", kind))
 				}
 				bson.Next(buf, 4)
-				keyspaceIdQuery.KeyspaceIds = make([]kproto.KeyspaceId, 0, 8)
+				keyspaceIdQuery.KeyspaceIds = make([]key.KeyspaceId, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v2 kproto.KeyspaceId
+					var _v2 key.KeyspaceId
 					_v2.UnmarshalBson(buf, kind)
 					keyspaceIdQuery.KeyspaceIds = append(keyspaceIdQuery.KeyspaceIds, _v2)
 				}
@@ -107,6 +108,8 @@ func (keyspaceIdQuery *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer, kind by
 				keyspaceIdQuery.Session = new(Session)
 				(*keyspaceIdQuery.Session).UnmarshalBson(buf, kind)
 			}
+		case "NotInTransaction":
+			keyspaceIdQuery.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

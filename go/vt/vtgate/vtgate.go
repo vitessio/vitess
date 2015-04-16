@@ -188,6 +188,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 		func(keyspace string) (string, []string, error) {
 			return query.Keyspace, query.Shards, nil
 		},
+		query.NotInTransaction,
 	)
 	if err == nil {
 		reply.Result = qr
@@ -289,6 +290,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		func(keyspace string) (string, []string, error) {
 			return batchQuery.Keyspace, batchQuery.Shards, nil
 		},
+		batchQuery.NotInTransaction,
 	)
 	if err == nil {
 		reply.List = qrs.List
@@ -484,7 +486,8 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
-		})
+		},
+		query.NotInTransaction)
 	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {

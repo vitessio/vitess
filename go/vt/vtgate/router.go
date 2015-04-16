@@ -102,6 +102,7 @@ func (rtr *Router) Execute(ctx context.Context, query *proto.Query) (*mproto.Que
 		params.shardVars,
 		query.TabletType,
 		NewSafeSession(vcursor.query.Session),
+		query.NotInTransaction,
 	)
 }
 
@@ -140,6 +141,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 		query.TabletType,
 		NewSafeSession(vcursor.query.Session),
 		sendReply,
+		query.NotInTransaction,
 	)
 }
 
@@ -250,7 +252,8 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, plan *planbuilder.Pl
 		ks,
 		[]string{shard},
 		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+		NewSafeSession(vcursor.query.Session),
+		vcursor.query.NotInTransaction)
 }
 
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
@@ -280,7 +283,8 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, plan *planbuilder.Pl
 		ks,
 		[]string{shard},
 		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+		NewSafeSession(vcursor.query.Session),
+		vcursor.query.NotInTransaction)
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.Plan) (*mproto.QueryResult, error) {
@@ -318,7 +322,8 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, plan *planbuilder.
 		ks,
 		[]string{shard},
 		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+		NewSafeSession(vcursor.query.Session),
+		vcursor.query.NotInTransaction)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -421,7 +426,8 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 		ks,
 		[]string{shard},
 		vcursor.query.TabletType,
-		NewSafeSession(vcursor.query.Session))
+		NewSafeSession(vcursor.query.Session),
+		vcursor.query.NotInTransaction)
 	if err != nil {
 		return err
 	}
