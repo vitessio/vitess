@@ -1,3 +1,7 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -35,58 +39,55 @@ var (
 	`))
 )
 
-func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
-	streamqueryzHandler := func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
-			acl.SendError(w, err)
+func streamQueryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	rows := queryList.GetQueryzRows()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
+		return
+	}
+	format := r.FormValue("format")
+	if format == "json" {
+		js, err := json.Marshal(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		rows := rqsc.sqlQueryRPCService.qe.streamQList.GetQueryzRows()
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
-			return
-		}
-		format := r.FormValue("format")
-		if format == "json" {
-			js, err := json.Marshal(rows)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(js)
-			return
-		}
-		startHTMLTable(w)
-		defer endHTMLTable(w)
-		w.Write(streamqueryzHeader)
-		for i := range rows {
-			if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {
-				log.Errorf("streamlogz: couldn't execute template: %v", err)
-			}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
+		return
+	}
+	startHTMLTable(w)
+	defer endHTMLTable(w)
+	w.Write(streamqueryzHeader)
+	for i := range rows {
+		if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {
+			log.Errorf("streamlogz: couldn't execute template: %v", err)
 		}
 	}
+}
 
-	http.HandleFunc("/streamqueryz", streamqueryzHandler)
-	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
-			return
-		}
-		connID := r.FormValue("connID")
-		c, err := strconv.Atoi(connID)
-		if err != nil {
-			http.Error(w, "invalid connID", http.StatusInternalServerError)
-			return
-		}
-		if err = rqsc.sqlQueryRPCService.qe.streamQList.Terminate(int64(c)); err != nil {
-			http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
-			return
-		}
-		streamqueryzHandler(w, r)
-	})
+func streamQueryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
+		return
+	}
+	connID := r.FormValue("connID")
+	c, err := strconv.Atoi(connID)
+	if err != nil {
+		http.Error(w, "invalid connID", http.StatusInternalServerError)
+		return
+	}
+	if err = queryList.Terminate(int64(c)); err != nil {
+		http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
+		return
+	}
+	streamQueryzHandler(queryList, w, r)
 }
