@@ -754,9 +754,11 @@ func TestShardConnLife(t *testing.T) {
 	retryDelay := 10 * time.Millisecond
 	retryCount := 5
 	s := createSandbox("TestShardConnReconnect")
+
+	// auto-reconnect for non-master
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", "", retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
+	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topo.TYPE_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
 	sdc.Execute(context.Background(), "query", nil, 0)
 	if s.DialCounter != 1 {
 		t.Errorf("DialCounter: %d, want 1", s.DialCounter)
@@ -766,4 +768,21 @@ func TestShardConnLife(t *testing.T) {
 	if s.DialCounter != 2 {
 		t.Errorf("DialCounter: %d, want 2", s.DialCounter)
 	}
+	sdc.Close()
+
+	// Do not auto-reconnect for master
+	s.Reset()
+	sbc = &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnReconnect", "0", topo.TYPE_MASTER, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, 10*time.Millisecond, connectTimings)
+	sdc.Execute(context.Background(), "query", nil, 0)
+	if s.DialCounter != 1 {
+		t.Errorf("DialCounter: %d, want 1", s.DialCounter)
+	}
+	time.Sleep(20 * time.Millisecond)
+	sdc.Execute(context.Background(), "query", nil, 0)
+	if s.DialCounter != 1 {
+		t.Errorf("DialCounter: %d, want 1", s.DialCounter)
+	}
+	sdc.Close()
 }
