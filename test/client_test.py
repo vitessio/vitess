@@ -595,7 +595,6 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(res_ids, user_id_list)
       self.assertEqual(res_user_ids, user_id_list)
 
-<<<<<<< HEAD
   def test_batch_write(self):
     # 1. Create DMLs using DB Classes.
     query_list = []
