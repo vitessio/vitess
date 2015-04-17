@@ -397,6 +397,8 @@ class DBObjectBase(object):
         break
     stream_cursor.close()
 
+
+  
   @db_class_method
   def get_count(class_, cursor, column_value_pairs=None, **columns):
     if not column_value_pairs:
