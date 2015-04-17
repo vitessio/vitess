@@ -230,17 +230,17 @@ def execute_batch_write(cursor, query_list, bind_vars_list):
     raise dbexceptions.ProgrammingError(
         "cursor is not of the type VTGateCursor.")
   batch_cursor = create_batch_cursor_from_cursor(cursor, writable=True)
-  if batch_cursor.writable and len(batch_cursor.keyspace_ids) != 1:
+  if batch_cursor.is_writable() and len(batch_cursor.keyspace_ids) != 1:
     raise dbexceptions.ProgrammingError(
         "writable batch execute can also execute on one keyspace_id.")
-  for q, bv in izip(query_list, bind_vars_list):
+  for q, bv in zip(query_list, bind_vars_list):
     if not is_dml(q):
       raise dbexceptions.ProgrammingError("query %s is not a dml" % q)
     batch_cursor.execute(q, bv)
 
   batch_cursor.flush()
 
-  rowsets = batch_cursor.rowsets()
+  rowsets = batch_cursor.rowsets
   result = []
   # rowset is of the type [(results, rowcount, lastrowid, fields),..]
   for rowset in rowsets:
@@ -397,8 +397,6 @@ class DBObjectBase(object):
         break
     stream_cursor.close()
 
-
-  
   @db_class_method
   def get_count(class_, cursor, column_value_pairs=None, **columns):
     if not column_value_pairs:
