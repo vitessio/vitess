@@ -6,7 +6,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"html/template"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -23,27 +22,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
 )
-
-type fakeCallInfo struct {
-	remoteAddr string
-	username   string
-}
-
-func (fci *fakeCallInfo) RemoteAddr() string {
-	return fci.remoteAddr
-}
-
-func (fci *fakeCallInfo) Username() string {
-	return fci.username
-}
-
-func (fci *fakeCallInfo) Text() string {
-	return ""
-}
-
-func (fci *fakeCallInfo) HTML() template.HTML {
-	return template.HTML("")
-}
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
 	db := setUpQueryExecutorTest()
@@ -572,7 +550,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 func TestQueryExecutorTableAcl(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
-	tableacl.DefaultACL = aclName
+	tableacl.SetDefaultACL(aclName)
 
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table limit 1000"

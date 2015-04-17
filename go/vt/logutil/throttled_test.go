@@ -9,8 +9,8 @@ import (
 func TestThrottledLogger(t *testing.T) {
 	// Install a fake log func for testing.
 	log := make(chan string)
-	infof = func(format string, args ...interface{}) {
-		log <- fmt.Sprintf(format, args...)
+	infoDepth = func(depth int, args ...interface{}) {
+		log <- fmt.Sprint(args...)
 	}
 	interval := 100 * time.Millisecond
 	tl := NewThrottledLogger("name", interval)

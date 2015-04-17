@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import pprint
 import struct
 import threading
 import time
@@ -69,8 +70,28 @@ keyspace_id bigint(20) unsigned NOT NULL,
 primary key(eid, id)
 ) Engine=InnoDB'''
 
-create_tables = [create_vt_insert_test, create_vt_a]
+create_vt_field_types = '''create table vt_field_types (
+id bigint(20) auto_increment,
+uint_val bigint(20) unsigned,
+str_val varchar(64),
+unicode_val varchar(64),
+float_val float(5, 1),
+keyspace_id bigint(20) unsigned NOT NULL,
+primary key(id)
+) Engine=InnoDB'''
+
+
+create_tables = [create_vt_insert_test, create_vt_a, create_vt_field_types]
 pack_kid = struct.Struct('!Q').pack
+
+
+class DBRow(object):
+
+  def __init__(self, column_names, row_tuple):
+    self.__dict__ = dict(zip(column_names, row_tuple))
+
+  def __repr__(self):
+    return pprint.pformat(self.__dict__, 4)
 
 
 def setUpModule():
@@ -571,6 +592,91 @@ class TestVTGateFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
+  def test_field_types(self):
+    try:
+      vtgate_conn = get_connection()
+      _delete_all(self.shard_index, 'vt_field_types')
+      count = 10
+      base_uint = int('8'+'0'*15, base=16)
+      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      for x in xrange(1, count):
+        keyspace_id = kid_list[count%len(kid_list)]
+        cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
+                                    keyspace_ids=[pack_kid(keyspace_id)],
+                                    writable=True)
+        cursor.begin()
+        cursor.execute(
+            "insert into vt_field_types "
+            "(uint_val, str_val, unicode_val, float_val, keyspace_id) "
+            "values (%(uint_val)s, %(str_val)s, %(unicode_val)s, "
+            "%(float_val)s, %(keyspace_id)s)",
+            {'uint_val': base_uint + x, 'str_val': 'str_%d' % x,
+             'unicode_val': unicode('str_%d' % x), 'float_val': x*1.2,
+             'keyspace_id': keyspace_id})
+        cursor.commit()
+      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
+                                  keyranges=[self.keyrange])
+      rowcount = cursor.execute("select * from vt_field_types", {})
+      field_names = [f[0] for f in cursor.description]
+      self.assertEqual(rowcount, count -1, "rowcount doesn't match")
+      id_list = []
+      uint_val_list = []
+      str_val_list = []
+      unicode_val_list = []
+      float_val_list = []
+      for r in cursor.results:
+        row = DBRow(field_names, r)
+        id_list.append(row.id)
+        uint_val_list.append(row.uint_val)
+        str_val_list.append(row.str_val)
+        unicode_val_list.append(row.unicode_val)
+        float_val_list.append(row.float_val)
+
+      # iterable type checks - list, tuple, set are supported.
+      query = "select * from vt_field_types where id in %(id_1)s"
+      rowcount = cursor.execute(query,  {'id_1': id_list})
+      self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
+      rowcount = cursor.execute(query,  {'id_1': tuple(id_list)})
+      self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
+      rowcount = cursor.execute(query,  {'id_1': set(id_list)})
+      self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
+      for i, r in enumerate(cursor.results):
+        row = DBRow(field_names, r)
+        self.assertIsInstance(row.id, (int, long))
+
+      # received field types same as input.
+      # uint
+      query = "select * from vt_field_types where uint_val in %(uint_val_1)s"
+      rowcount = cursor.execute(query,  {'uint_val_1': uint_val_list})
+      self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
+      for i, r in enumerate(cursor.results):
+        row = DBRow(field_names, r)
+        self.assertIsInstance(row.uint_val, long)
+        self.assertGreaterEqual(row.uint_val, base_uint, "uint value not in correct range")
+
+      # str
+      query = "select * from vt_field_types where str_val in %(str_val_1)s"
+      rowcount = cursor.execute(query,  {'str_val_1': str_val_list})
+      self.assertEqual(rowcount, len(str_val_list), "rowcount doesn't match")
+      for i, r in enumerate(cursor.results):
+        row = DBRow(field_names, r)
+        self.assertIsInstance(row.str_val, str)
+
+      # unicode str
+      query = "select * from vt_field_types where unicode_val in %(unicode_val_1)s"
+      rowcount = cursor.execute(query,  {'unicode_val_1': unicode_val_list})
+      self.assertEqual(rowcount, len(unicode_val_list), "rowcount doesn't match")
+      for i, r in enumerate(cursor.results):
+        row = DBRow(field_names, r)
+        self.assertIsInstance(row.unicode_val, (str,unicode))
+
+      # deliberately eliminating the float test since it is flaky due
+      # to mysql float precision handling.
+    except Exception, e:
+      logging.debug("Write failed with error %s" % str(e))
+      raise
+
+
   def _query_lots(self,
                   conn,
                   query,
@@ -606,6 +712,16 @@ class TestFailures(unittest.TestCase):
   def tablet_start(self, tablet, tablet_type, lameduck_period='0.5s'):
     return tablet.start_vttablet(lameduck_period=lameduck_period)
     #                             target_tablet_type=tablet_type)
+
+  def test_status_with_error(self):
+    """Tests that the status page loads correctly after a VTGate error."""
+    vtgate_conn = get_connection()
+    cursor = vtgate_conn.cursor('INVALID_KEYSPACE', 'replica', keyspace_ids=['0'])
+    # We expect to see a DatabaseError due to an invalid keyspace
+    with self.assertRaises(dbexceptions.DatabaseError):
+      cursor.execute('select * from vt_insert_test', {})
+    # Page should have loaded successfully
+    self.assertIn('</html>', utils.get_status(vtgate_port))
 
   def test_tablet_restart_read(self):
     try:
