@@ -807,6 +807,10 @@ func handleAndVerifyTabletError(t *testing.T, msg string, tabletErrType int) {
 	if err == nil {
 		t.Fatalf(msg)
 	}
+	verifyTabletError(t, err, tabletErrType)
+}
+
+func verifyTabletError(t *testing.T, err interface{}, tabletErrType int) {
 	tabletError, ok := err.(*TabletError)
 	if !ok {
 		t.Fatalf("should return a TabletError, but got err: %v", err)
