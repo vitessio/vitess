@@ -382,6 +382,15 @@ func (rqsc *realQueryServiceControl) registerDebugHealthHandler() {
 	})
 }
 
+func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
+	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
+		streamQueryzHandler(rqsc.sqlQueryRPCService.qe.streamQList, w, r)
+	})
+	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		streamQueryzTerminateHandler(rqsc.sqlQueryRPCService.qe.streamQList, w, r)
+	})
+}
+
 func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
 	type formatter interface {
 		Format(url.Values) string
