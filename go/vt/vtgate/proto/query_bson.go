@@ -36,6 +36,7 @@ func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	} else {
 		(*query.Session).MarshalBson(buf, "Session")
 	}
+	bson.EncodeBool(buf, "NotInTransaction", query.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -79,6 +80,8 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 				query.Session = new(Session)
 				(*query.Session).UnmarshalBson(buf, kind)
 			}
+		case "NotInTransaction":
+			query.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

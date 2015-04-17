@@ -73,7 +73,7 @@ def convert_exception(exc, *args, **kwargs):
   return new_exc
 
 
-def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids):
+def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspace_ids, not_in_transaction):
   # keyspace_ids are Keyspace Ids packed to byte[]
   sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
@@ -83,11 +83,12 @@ def _create_req_with_keyspace_ids(sql, new_binds, keyspace, tablet_type, keyspac
         'Keyspace': keyspace,
         'TabletType': tablet_type,
         'KeyspaceIds': keyspace_ids,
+        'NotInTransaction': not_in_transaction,
         }
   return req
 
 
-def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges):
+def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges, not_in_transaction):
   # keyranges are keyspace.KeyRange objects with start/end packed to byte[]
   sql, new_binds = dbapi.prepare_query_bind_vars(sql, new_binds)
   new_binds = field_types.convert_bind_vars(new_binds)
@@ -97,6 +98,7 @@ def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
         'Keyspace': keyspace,
         'TabletType': tablet_type,
         'KeyRanges': keyranges,
+        'NotInTransaction': not_in_transaction,
         }
   return req
 
@@ -180,14 +182,14 @@ class VTGateConnection(object):
       self.session = response.reply['Session']
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
+  def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids)
+      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids, not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyspaceIds'
     elif keyranges is not None:
-      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges)
+      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges, not_in_transaction)
       exec_method = 'VTGate.ExecuteKeyRanges'
     else:
       raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
@@ -227,7 +229,7 @@ class VTGateConnection(object):
     return results, rowcount, lastrowid, fields
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name):
+  def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name, not_in_transaction=False):
     sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
     new_binds = field_types.convert_bind_vars(new_binds)
     req = {
@@ -239,6 +241,7 @@ class VTGateConnection(object):
             {'ExternalID': xid, 'KeyspaceID': kid}
             for xid, kid in entity_keyspace_id_map.iteritems()],
         'EntityColumnName': entity_column_name,
+        'NotInTransaction': not_in_transaction,
         }
 
     self._add_session(req)
@@ -275,7 +278,7 @@ class VTGateConnection(object):
 
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids):
+  def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids, not_in_transaction=False):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
@@ -292,6 +295,7 @@ class VTGateConnection(object):
           'Keyspace': keyspace,
           'TabletType': tablet_type,
           'KeyspaceIds': keyspace_ids,
+          'NotInTransaction': not_in_transaction,
       }
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
@@ -327,14 +331,14 @@ class VTGateConnection(object):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
+  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
     exec_method = None
     req = None
     if keyspace_ids is not None:
-      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids)
+      req = _create_req_with_keyspace_ids(sql, bind_variables, keyspace, tablet_type, keyspace_ids, not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyspaceIds'
     elif keyranges is not None:
-      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges)
+      req = _create_req_with_keyranges(sql, bind_variables, keyspace, tablet_type, keyranges, not_in_transaction)
       exec_method = 'VTGate.StreamExecuteKeyRanges'
     else:
       raise dbexceptions.ProgrammingError('_stream_execute called without specifying keyspace_ids or keyranges')

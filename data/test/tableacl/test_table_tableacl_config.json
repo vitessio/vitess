@@ -1,0 +1,6 @@
+{
+  "test_table": {
+    "READER": "vt",
+    "WRITER": "vt"
+  }
+}

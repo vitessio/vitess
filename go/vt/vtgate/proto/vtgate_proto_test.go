@@ -92,22 +92,24 @@ func TestSession(t *testing.T) {
 }
 
 type reflectQueryShard struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	Shards        []string
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 type extraQueryShard struct {
-	Extra         int
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	Shards        []string
-	TabletType    topo.TabletType
-	Session       *Session
+	Extra            int
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestQueryShard(t *testing.T) {
@@ -231,20 +233,22 @@ type reflectBoundQuery struct {
 }
 
 type reflectBatchQueryShard struct {
-	Queries    []reflectBoundQuery
-	Keyspace   string
-	Shards     []string
-	TabletType topo.TabletType
-	Session    *Session
+	Queries          []reflectBoundQuery
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 type extraBatchQueryShard struct {
-	Extra      int
-	Queries    []reflectBoundQuery
-	Keyspace   string
-	Shards     []string
-	TabletType topo.TabletType
-	Session    *Session
+	Extra            int
+	Queries          []reflectBoundQuery
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestBatchQueryShard(t *testing.T) {
@@ -312,11 +316,12 @@ func TestBatchQueryShard(t *testing.T) {
 }
 
 type badTypeBatchQueryShard struct {
-	Queries    string
-	Keyspace   string
-	Shards     []string
-	TabletType topo.TabletType
-	Session    *Session
+	Queries          string
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestBatchQueryShardBadType(t *testing.T) {
@@ -404,22 +409,24 @@ func TestQueryResultList(t *testing.T) {
 }
 
 type reflectKeyspaceIdQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyspaceIds   kproto.KeyspaceIdArray
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyspaceIds      kproto.KeyspaceIdArray
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 type extraKeyspaceIdQuery struct {
-	Extra         int
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyspaceIds   []kproto.KeyspaceId
-	TabletType    topo.TabletType
-	Session       *Session
+	Extra            int
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyspaceIds      []kproto.KeyspaceId
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestKeyspaceIdQuery(t *testing.T) {
@@ -474,22 +481,24 @@ func TestKeyspaceIdQuery(t *testing.T) {
 }
 
 type reflectKeyRangeQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyRanges     kproto.KeyRangeArray
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyRanges        kproto.KeyRangeArray
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 type extraKeyRangeQuery struct {
-	Extra         int
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyRanges     []kproto.KeyRange
-	TabletType    topo.TabletType
-	Session       *Session
+	Extra            int
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyRanges        []kproto.KeyRange
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestKeyRangeQuery(t *testing.T) {
@@ -544,20 +553,22 @@ func TestKeyRangeQuery(t *testing.T) {
 }
 
 type reflectKeyspaceIdBatchQuery struct {
-	Queries     []reflectBoundQuery
-	Keyspace    string
-	KeyspaceIds []kproto.KeyspaceId
-	TabletType  topo.TabletType
-	Session     *Session
+	Queries          []reflectBoundQuery
+	Keyspace         string
+	KeyspaceIds      []kproto.KeyspaceId
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 type extraKeyspaceIdBatchQuery struct {
-	Extra       int
-	Queries     []reflectBoundQuery
-	Keyspace    string
-	KeyspaceIds []kproto.KeyspaceId
-	TabletType  topo.TabletType
-	Session     *Session
+	Extra            int
+	Queries          []reflectBoundQuery
+	Keyspace         string
+	KeyspaceIds      []kproto.KeyspaceId
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestKeyspaceIdBatchQuery(t *testing.T) {
@@ -625,11 +636,12 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 }
 
 type badTypeKeyspaceIdsBatchQuery struct {
-	Queries     string
-	Keyspace    string
-	KeyspaceIds []string
-	TabletType  topo.TabletType
-	Session     *Session
+	Queries          string
+	Keyspace         string
+	KeyspaceIds      []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 func TestKeyspaceIdsBatchQueryBadType(t *testing.T) {

@@ -6,9 +6,7 @@ import (
 	log "github.com/golang/glog"
 )
 
-// ConsoleLogger is a Logger that uses glog directly to log.
-// We can't specify the depth of the stack trace,
-// So we just find it and add it to the message.
+// ConsoleLogger is a Logger that uses glog directly to log, at the right level.
 type ConsoleLogger struct{}
 
 // NewConsoleLogger returns a simple ConsoleLogger
@@ -18,26 +16,17 @@ func NewConsoleLogger() ConsoleLogger {
 
 // Infof is part of the Logger interface
 func (cl ConsoleLogger) Infof(format string, v ...interface{}) {
-	file, line := fileAndLine(3)
-	vals := []interface{}{file, line}
-	vals = append(vals, v...)
-	log.Infof("%v:%v] "+format, vals...)
+	log.InfoDepth(2, fmt.Sprintf(format, v...))
 }
 
 // Warningf is part of the Logger interface
 func (cl ConsoleLogger) Warningf(format string, v ...interface{}) {
-	file, line := fileAndLine(3)
-	vals := []interface{}{file, line}
-	vals = append(vals, v...)
-	log.Warningf("%v:%v] "+format, vals...)
+	log.WarningDepth(2, fmt.Sprintf(format, v...))
 }
 
 // Errorf is part of the Logger interface
 func (cl ConsoleLogger) Errorf(format string, v ...interface{}) {
-	file, line := fileAndLine(3)
-	vals := []interface{}{file, line}
-	vals = append(vals, v...)
-	log.Errorf("%v:%v] "+format, vals...)
+	log.ErrorDepth(2, fmt.Sprintf(format, v...))
 }
 
 // Printf is part of the Logger interface
