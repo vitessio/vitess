@@ -7,6 +7,8 @@ package tabletserver
 import (
 	"bytes"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 func startHTMLTable(w http.ResponseWriter) {
@@ -127,4 +129,29 @@ func wrappable(in string) string {
 		}
 	}
 	return buf.String()
+}
+
+func adjustValue(val int, lower int, upper int) int {
+	if val < lower {
+		return lower
+	} else if val > upper {
+		return upper
+	}
+	return val
+}
+
+func parseTimeoutLimitParams(req *http.Request) (time.Duration, int) {
+	timeout := 10
+	limit := 300
+	if ts, ok := req.URL.Query()["timeout"]; ok {
+		if t, err := strconv.Atoi(ts[0]); err == nil {
+			timeout = adjustValue(t, 0, 60)
+		}
+	}
+	if l, ok := req.URL.Query()["limit"]; ok {
+		if lim, err := strconv.Atoi(l[0]); err == nil {
+			limit = adjustValue(lim, 1, 200000)
+		}
+	}
+	return time.Duration(timeout) * time.Second, limit
 }

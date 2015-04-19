@@ -104,6 +104,6 @@ func TestQueryzHandler(t *testing.T) {
 func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *ExecPlan, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(planPattern, `\s*`))
 	if !matcher.Match(page) {
-		t.Fatalf("schemaz page does not contain plan: %v, page: %s", plan, string(page))
+		t.Fatalf("queryz page does not contain plan: %v, page: %s", plan, string(page))
 	}
 }
