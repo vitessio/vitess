@@ -382,6 +382,12 @@ func (rqsc *realQueryServiceControl) registerDebugHealthHandler() {
 	})
 }
 
+func (rqsc *realQueryServiceControl) registerQueryzHandler() {
+	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
+		queryzHandler(rqsc.sqlQueryRPCService.qe.schemaInfo, w, r)
+	})
+}
+
 func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
 	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
 		streamQueryzHandler(rqsc.sqlQueryRPCService.qe.streamQList, w, r)
