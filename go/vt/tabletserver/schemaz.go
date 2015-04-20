@@ -50,37 +50,34 @@ func (sorter *schemazSorter) Less(i, j int) bool {
 	return sorter.less(sorter.rows[i], sorter.rows[j])
 }
 
-func (rqsc *realQueryServiceControl) registerSchemazHandler() {
-	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		startHTMLTable(w)
-		defer endHTMLTable(w)
-		w.Write(schemazHeader)
+func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	startHTMLTable(w)
+	defer endHTMLTable(w)
+	w.Write(schemazHeader)
 
-		tables := rqsc.sqlQueryRPCService.qe.schemaInfo.GetSchema()
-		sorter := schemazSorter{
-			rows: tables,
-			less: func(row1, row2 *schema.Table) bool {
-				return row1.Name > row2.Name
-			},
+	sorter := schemazSorter{
+		rows: tables,
+		less: func(row1, row2 *schema.Table) bool {
+			return row1.Name > row2.Name
+		},
+	}
+	sort.Sort(&sorter)
+	envelope := struct {
+		ColumnCategory []string
+		CacheType      []string
+		Table          *schema.Table
+	}{
+		ColumnCategory: []string{"other", "number", "varbinary"},
+		CacheType:      []string{"none", "read-write", "write-only"},
+	}
+	for _, Value := range sorter.rows {
+		envelope.Table = Value
+		if err := schemazTmpl.Execute(w, envelope); err != nil {
+			log.Errorf("schemaz: couldn't execute template: %v", err)
 		}
-		sort.Sort(&sorter)
-		envelope := struct {
-			ColumnCategory []string
-			CacheType      []string
-			Table          *schema.Table
-		}{
-			ColumnCategory: []string{"other", "number", "varbinary"},
-			CacheType:      []string{"none", "read-write", "write-only"},
-		}
-		for _, Value := range sorter.rows {
-			envelope.Table = Value
-			if err := schemazTmpl.Execute(w, envelope); err != nil {
-				log.Errorf("schemaz: couldn't execute template: %v", err)
-			}
-		}
-	})
+	}
 }
