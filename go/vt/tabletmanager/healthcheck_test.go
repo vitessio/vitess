@@ -300,7 +300,7 @@ func TestTabletControl(t *testing.T) {
 
 	// now refresh the tablet state, as the resharding process would do
 	ctx := context.Background()
-	agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_REFRESH_STATE, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})

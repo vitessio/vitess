@@ -351,7 +351,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 func fmtAction(action *actionnode.ActionNode) string {
 	state := string(action.State)
 	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == actionnode.ACTION_STATE_QUEUED {
+	if action.State == actionnode.ActionStateQueued {
 		state = "queued"
 	}
 	return fmt.Sprintf("%v %v %v %v %v", action.Path, action.Action, state, action.ActionGuid, action.Error)

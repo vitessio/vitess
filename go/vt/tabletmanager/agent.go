@@ -123,8 +123,8 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // batchCtx is the context that the agent will use for any background tasks
 // it spawns.
 func NewActionAgent(
-	queryServiceControl tabletserver.QueryServiceControl,
 	batchCtx context.Context,
+	queryServiceControl tabletserver.QueryServiceControl,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
