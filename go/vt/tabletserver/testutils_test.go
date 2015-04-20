@@ -5,9 +5,12 @@
 package tabletserver
 
 import (
+	"fmt"
 	"html/template"
+	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type fakeCallInfo struct {
@@ -39,4 +42,22 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf("expect to get: %v, but got: %v", expected, result)
 	}
+}
+
+func newTestSchemaInfo(
+	queryCacheSize int,
+	reloadTime time.Duration,
+	idleTimeout time.Duration) *SchemaInfo {
+	randID := rand.Int63()
+	return NewSchemaInfo(
+		queryCacheSize,
+		fmt.Sprintf("TestSchemaInfo-%d-", randID),
+		map[string]string{
+			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
+			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
+			debugTableStatsKey: fmt.Sprintf("/debug/table_stats_%d", randID),
+			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
+		},
+		reloadTime,
+		idleTimeout)
 }
