@@ -465,7 +465,7 @@ func (tablet *Tablet) String() string {
 
 // JSON returns a json verison of the tablet.
 func (tablet *Tablet) JSON() string {
-	return jscfg.ToJson(tablet)
+	return jscfg.ToJSON(tablet)
 }
 
 // TabletInfo is the container for a Tablet, read from the topology server.

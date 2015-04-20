@@ -13,7 +13,8 @@ import (
 	"github.com/youtube/vitess/go/ioutil2"
 )
 
-func ToJson(val interface{}) string {
+// ToJSON converts a structure to JSON, or panics
+func ToJSON(val interface{}) string {
 	data, err := json.MarshalIndent(val, "", "  ")
 	// This is not strictly the spirit of panic. This is meant to be used
 	// where it would be a programming error to have json encoding fail.
@@ -23,22 +24,23 @@ func ToJson(val interface{}) string {
 	return string(data)
 }
 
-// Atomically write a marshaled structure to disk.
-func WriteJson(filename string, val interface{}) error {
+// WriteJSON atomically write a marshaled structure to disk.
+func WriteJSON(filename string, val interface{}) error {
 	data, err := json.MarshalIndent(val, "  ", "  ")
 	if err != nil {
-		return fmt.Errorf("WriteJson failed: %v %v", filename, err)
+		return fmt.Errorf("WriteJSON failed: %v %v", filename, err)
 	}
 	return ioutil2.WriteFileAtomic(filename, data, 0660)
 }
 
-func ReadJson(filename string, val interface{}) error {
+// ReadJSON reads and unmarshals a JSON file
+func ReadJSON(filename string, val interface{}) error {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("ReadJson failed: %T %v", val, err)
+		return fmt.Errorf("ReadJSON failed: %T %v", val, err)
 	}
 	if err = json.Unmarshal(data, val); err != nil {
-		return fmt.Errorf("ReadJson failed: %T %v %v", val, filename, err)
+		return fmt.Errorf("ReadJSON failed: %T %v %v", val, filename, err)
 	}
 	return nil
 }

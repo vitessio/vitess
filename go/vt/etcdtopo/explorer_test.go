@@ -76,7 +76,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topo.Keyspace{}
 	shard := &topo.Shard{}
-	want := jscfg.ToJson(keyspace)
+	want := jscfg.ToJSON(keyspace)
 
 	ts := newTestServer(t, cells)
 	if err := ts.CreateKeyspace("test_keyspace", keyspace); err != nil {
@@ -112,7 +112,7 @@ func TestHandlePathShard(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topo.Keyspace{}
 	shard := &topo.Shard{}
-	want := jscfg.ToJson(shard)
+	want := jscfg.ToJSON(shard)
 
 	ts := newTestServer(t, cells)
 	if err := ts.CreateKeyspace("test_keyspace", keyspace); err != nil {
@@ -148,7 +148,7 @@ func TestHandlePathTablet(t *testing.T) {
 		Hostname: "example.com",
 		Portmap:  map[string]int{"vt": 4321},
 	}
-	want := jscfg.ToJson(tablet)
+	want := jscfg.ToJSON(tablet)
 
 	ts := newTestServer(t, cells)
 	if err := ts.CreateTablet(tablet); err != nil {

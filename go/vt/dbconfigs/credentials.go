@@ -74,7 +74,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 	// read the json file only once
 	if fcs.dbCredentials == nil {
 		fcs.dbCredentials = make(map[string][]string)
-		if err := jscfg.ReadJson(*dbCredentialsFile, &fcs.dbCredentials); err != nil {
+		if err := jscfg.ReadJSON(*dbCredentialsFile, &fcs.dbCredentials); err != nil {
 			log.Warningf("Failed to read dbCredentials file: %v", *dbCredentialsFile)
 			return "", "", err
 		}

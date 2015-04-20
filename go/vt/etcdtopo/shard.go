@@ -16,7 +16,7 @@ import (
 
 // CreateShard implements topo.Server.
 func (s *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
-	data := jscfg.ToJson(value)
+	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
 	resp, err := global.Create(shardFilePath(keyspace, shard), data, 0 /* ttl */)
@@ -43,7 +43,7 @@ func (s *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 
 // UpdateShard implements topo.Server.
 func (s *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	data := jscfg.ToJson(si.Shard)
+	data := jscfg.ToJSON(si.Shard)
 
 	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(si.Keyspace(), si.ShardName()),
 		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))

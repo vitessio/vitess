@@ -49,7 +49,7 @@ func (s *Server) updateShardReplication(sri *topo.ShardReplicationInfo, existing
 		return -1, err
 	}
 
-	data := jscfg.ToJson(sri.ShardReplication)
+	data := jscfg.ToJSON(sri.ShardReplication)
 	resp, err := cell.CompareAndSwap(shardReplicationFilePath(sri.Keyspace(), sri.Shard()),
 		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
@@ -68,7 +68,7 @@ func (s *Server) createShardReplication(sri *topo.ShardReplicationInfo) (int64, 
 		return -1, err
 	}
 
-	data := jscfg.ToJson(sri.ShardReplication)
+	data := jscfg.ToJSON(sri.ShardReplication)
 	resp, err := cell.Create(shardReplicationFilePath(sri.Keyspace(), sri.Shard()),
 		data, 0 /* ttl */)
 	if err != nil {

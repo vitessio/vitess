@@ -18,7 +18,7 @@ import (
 
 // CreateKeyspace implements topo.Server.
 func (s *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
-	data := jscfg.ToJson(value)
+	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
 	resp, err := global.Create(keyspaceFilePath(keyspace), data, 0 /* ttl */)
@@ -45,7 +45,7 @@ func (s *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 
 // UpdateKeyspace implements topo.Server.
 func (s *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	data := jscfg.ToJson(ki.Keyspace)
+	data := jscfg.ToJSON(ki.Keyspace)
 
 	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(ki.KeyspaceName()),
 		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))

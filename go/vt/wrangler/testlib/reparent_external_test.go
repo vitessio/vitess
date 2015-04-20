@@ -96,19 +96,19 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 	}
 
 	// On the elected master, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_PROMOTED
+	// TabletActionSlaveWasPromoted
 	newMaster.FakeMysqlDaemon.MasterAddr = ""
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	// TabletActionSlaveWasRestarted.
 	oldMaster.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	// TabletActionSlaveWasRestarted.
 	goodSlave1.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
@@ -118,7 +118,7 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// On the bad slave, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED with bad data.
+	// TabletActionSlaveWasRestarted with bad data.
 	badSlave.FakeMysqlDaemon.MasterAddr = "234.0.0.1:3301"
 	badSlave.StartActionLoop(t, wr)
 	defer badSlave.StopActionLoop(t)
@@ -200,7 +200,7 @@ func testTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T, fast boo
 	// but without updating the Tablet record in topology.
 
 	// On the elected master, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
+	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
 	newMaster.FakeMysqlDaemon.MasterAddr = ""
 	newMaster.FakeMysqlDaemon.MysqlPort = 3303
@@ -208,13 +208,13 @@ func testTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T, fast boo
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
+	// TabletActionSlaveWasRestarted and point to the new mysql port
 	oldMaster.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3303"
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good slaves, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
+	// TabletActionSlaveWasRestarted and point to the new mysql port
 	goodSlave.FakeMysqlDaemon.MasterAddr = "101.0.0.1:3303"
 	goodSlave.StartActionLoop(t, wr)
 	defer goodSlave.StopActionLoop(t)
@@ -255,20 +255,20 @@ func testTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T, fast
 		TabletParent(oldMaster.Tablet.Alias))
 
 	// On the elected master, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
+	// TabletActionSlaveWasPromoted, so we need a MysqlDaemon
 	// that returns no master, and the new port (as returned by mysql)
 	newMaster.FakeMysqlDaemon.MasterAddr = ""
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
+	// TabletActionSlaveWasRestarted and point to a bad host
 	oldMaster.FakeMysqlDaemon.MasterAddr = "1.2.3.4:6666"
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// On the good slave, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
+	// TabletActionSlaveWasRestarted and point to a bad host
 	goodSlave.FakeMysqlDaemon.MasterAddr = "1.2.3.4:6666"
 	goodSlave.StartActionLoop(t, wr)
 	defer goodSlave.StopActionLoop(t)
@@ -309,17 +309,17 @@ func testTabletExternallyReparentedFailedOldMaster(t *testing.T, fast bool) {
 	// Reparent to a replica, and pretend the old master is not responding.
 
 	// On the elected master, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_PROMOTED
+	// TabletActionSlaveWasPromoted
 	newMaster.FakeMysqlDaemon.MasterAddr = ""
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
 
 	// On the old master, we will only get a
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED call, let's just not
+	// TabletActionSlaveWasRestarted call, let's just not
 	// respond to it at all
 
 	// On the good slave, we will respond to
-	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	// TabletActionSlaveWasRestarted.
 	goodSlave.FakeMysqlDaemon.MasterAddr = newMaster.Tablet.MysqlIPAddr()
 	goodSlave.StartActionLoop(t, wr)
 	defer goodSlave.StopActionLoop(t)
