@@ -64,7 +64,7 @@ type SchemaDefinition struct {
 }
 
 func (sd *SchemaDefinition) String() string {
-	return jscfg.ToJson(sd)
+	return jscfg.ToJSON(sd)
 }
 
 func (sd *SchemaDefinition) SortByReverseDataLength() {
@@ -266,5 +266,5 @@ type SchemaChangeResult struct {
 }
 
 func (scr *SchemaChangeResult) String() string {
-	return jscfg.ToJson(scr)
+	return jscfg.ToJSON(scr)
 }

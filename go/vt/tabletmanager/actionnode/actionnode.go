@@ -269,16 +269,16 @@ type ActionNode struct {
 
 // ToJSON returns a JSON representation of the object.
 func (n *ActionNode) ToJSON() string {
-	result := jscfg.ToJson(n) + "\n"
+	result := jscfg.ToJSON(n) + "\n"
 	if n.Args == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJson(n.Args) + "\n"
+		result += jscfg.ToJSON(n.Args) + "\n"
 	}
 	if n.Reply == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJson(n.Reply) + "\n"
+		result += jscfg.ToJSON(n.Reply) + "\n"
 	}
 	return result
 }

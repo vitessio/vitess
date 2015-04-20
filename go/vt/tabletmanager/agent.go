@@ -108,7 +108,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 	if overridesFile == "" {
 		return schemaOverrides
 	}
-	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
+	if err := jscfg.ReadJSON(overridesFile, &schemaOverrides); err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {
 		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")

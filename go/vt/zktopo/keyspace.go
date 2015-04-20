@@ -26,6 +26,7 @@ const (
 	globalKeyspacesPath = "/zk/global/vt/keyspaces"
 )
 
+// CreateKeyspace is part of the topo.Server interface
 func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
@@ -39,7 +40,7 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = jscfg.ToJson(value)
+			c = jscfg.ToJSON(value)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -61,9 +62,10 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 	return nil
 }
 
+// UpdateKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
-	data := jscfg.ToJson(ki.Keyspace)
+	data := jscfg.ToJSON(ki.Keyspace)
 	stat, err := zkts.zconn.Set(keyspacePath, data, int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -79,6 +81,7 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64)
 	return int64(stat.Version()), nil
 }
 
+// GetKeyspace is part of the topo.Server interface
 func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
@@ -97,6 +100,7 @@ func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 	return topo.NewKeyspaceInfo(keyspace, k, int64(stat.Version())), nil
 }
 
+// GetKeyspaces is part of the topo.Server interface
 func (zkts *Server) GetKeyspaces() ([]string, error) {
 	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
 	if err != nil {
@@ -110,6 +114,7 @@ func (zkts *Server) GetKeyspaces() ([]string, error) {
 	return children, nil
 }
 
+// DeleteKeyspaceShards is part of the topo.Server interface
 func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
