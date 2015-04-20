@@ -732,6 +732,7 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	config.PoolSize = 100
 	config.TransactionCap = 100
 	config.SpotCheckRatio = 1.0
+	config.EnablePublishStats = false
 	if flags&enableStrict > 0 {
 		config.StrictMode = true
 	} else {

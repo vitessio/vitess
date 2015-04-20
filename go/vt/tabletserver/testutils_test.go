@@ -47,7 +47,8 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 func newTestSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaInfo {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *SchemaInfo {
 	randID := rand.Int63()
 	return NewSchemaInfo(
 		queryCacheSize,
@@ -59,5 +60,7 @@ func newTestSchemaInfo(
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
 		reloadTime,
-		idleTimeout)
+		idleTimeout,
+		enablePublishStats,
+	)
 }

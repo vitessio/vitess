@@ -20,7 +20,7 @@ import (
 func TestCachePoolWithEmptyBinary(t *testing.T) {
 	fakecacheservice.Register()
 	fakesqldb.Register()
-	cachePool := newTestCachePool(RowCacheConfig{})
+	cachePool := newTestCachePool(RowCacheConfig{}, false)
 	cachePool.Close()
 }
 
@@ -31,7 +31,7 @@ func TestCachePool(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	if !cachePool.IsClosed() {
 		t.Fatalf("cache pool is not closed")
 	}
@@ -52,7 +52,7 @@ func TestCachePoolOpenTwice(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer func() {
@@ -70,7 +70,7 @@ func TestCachePoolOpenWithEmptyBinary(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	defer func() {
 		if e := recover(); e == nil {
 			t.Fatalf("open a cache pool with empty rowCacheConfig.Binary should panic")
@@ -88,7 +88,7 @@ func TestCachePoolOpenWithInvalidBinary(t *testing.T) {
 		Binary:      "invalid_binary",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	defer func() {
 		if e := recover(); e == nil {
 			t.Fatalf("open a cache pool with an invalid rowCacheConfig.Binary should panic")
@@ -105,7 +105,7 @@ func TestCachePoolState(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, true)
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
@@ -141,7 +141,7 @@ func TestCachePoolStateWithoutOpen(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	if cachePool.StatsJSON() != "{}" {
@@ -175,7 +175,7 @@ func TestCachePoolGetFailedBecauseCachePoolIsClosed(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	ctx := context.Background()
@@ -194,7 +194,7 @@ func TestCachePoolStatsURL(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePool(rowCacheConfig, false)
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
@@ -204,9 +204,9 @@ func TestCachePoolStatsURL(t *testing.T) {
 	cachePool.ServeHTTP(response, request)
 }
 
-func newTestCachePool(rowcacheConfig RowCacheConfig) *CachePool {
+func newTestCachePool(rowcacheConfig RowCacheConfig, enablePublishStats bool) *CachePool {
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
-	return NewCachePool(name, rowcacheConfig, 1*time.Second, statsURL)
+	return NewCachePool(name, rowcacheConfig, 1*time.Second, statsURL, enablePublishStats)
 }

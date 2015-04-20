@@ -5,8 +5,10 @@
 package tabletserver
 
 import (
+	"expvar"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -124,12 +126,24 @@ func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
 	setUpSqlQueryTest()
 	config := newTestSqlQueryConfig()
+	config.EnablePublishStats = true
 	sqlQuery := NewSqlQuery(config)
 	// sqlquery start request fail because we are in StateNotServing;
 	// however, checkMySQL should return true. Here, we always assume
 	// MySQL is healthy unless we've verified it is not.
 	if !sqlQuery.checkMySQL() {
 		t.Fatalf("checkMySQL should return true")
+	}
+	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
+	if tabletState == nil {
+		t.Fatalf("%sTabletState should be exposed", config.StatsPrefix)
+	}
+	varzState, err := strconv.Atoi(tabletState.String())
+	if err != nil {
+		t.Fatalf("invalid state reported by expvar, should be a valid state code, but got: %s", tabletState.String())
+	}
+	if varzState != StateNotServing {
+		t.Fatalf("queryservice should be in NOT_SERVING state, but exposed varz reports: %s", stateName[varzState])
 	}
 }
 
@@ -1027,6 +1041,7 @@ func newTestSqlQueryConfig() Config {
 	config.StrictMode = true
 	config.RowCache.Binary = "ls"
 	config.RowCache.Connections = 100
+	config.EnablePublishStats = false
 	return config
 }
 
