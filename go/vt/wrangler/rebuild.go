@@ -123,7 +123,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for shard, si := range shardCache {
 			servedTypes := si.GetServedTypesPerCell(cell)
@@ -133,18 +132,14 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 			case nil:
 				// we keep going
 			case topo.ErrNoNode:
-				wr.logger.Infof("Cell %v for %v/%v has no SvrShard, using Shard data with no TabletTypes instead", cell, keyspace, shard)
+				wr.logger.Infof("Cell %v for %v/%v has no SvrShard, using temporary SrvShard instead", cell, keyspace, shard)
 				srvShard = &topo.SrvShard{
-					Name:        si.ShardName(),
-					KeyRange:    si.KeyRange,
-					ServedTypes: servedTypes,
-					MasterCell:  si.MasterAlias.Cell,
+					Name:       si.ShardName(),
+					KeyRange:   si.KeyRange,
+					MasterCell: si.MasterAlias.Cell,
 				}
 			default:
 				return err
-			}
-			for _, tabletType := range srvShard.TabletTypes {
-				keyspaceDbTypes[tabletType] = true
 			}
 
 			// for each type this shard is supposed to serve,
@@ -162,11 +157,6 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 					KeyRange: si.KeyRange,
 				})
 			}
-		}
-
-		srvKeyspace.TabletTypes = make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType := range keyspaceDbTypes {
-			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
 		if err := wr.orderAndCheckPartitions(cell, srvKeyspace); err != nil {

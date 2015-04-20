@@ -570,13 +570,6 @@ func (st *SrvShardCacheStatus) StatusAsHTML() template.HTML {
 
 	result := "<b>Name:</b>&nbsp;" + st.Value.Name + "<br>"
 	result += "<b>KeyRange:</b>&nbsp;" + st.Value.KeyRange.String() + "<br>"
-
-	result += "<b>ServedTypes:</b>"
-	for _, servedType := range st.Value.ServedTypes {
-		result += "&nbsp;" + string(servedType)
-	}
-	result += "<br>"
-
 	result += "<b>MasterCell:</b>&nbsp;" + st.Value.MasterCell + "<br>"
 
 	return template.HTML(result)

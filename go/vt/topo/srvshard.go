@@ -15,23 +15,14 @@ import (
 // but just internal details to the shard. It should also not contain
 // details that would change when tablets are added / removed in this
 // cell/shard.
-// FIXME(alainjobart) remove ServedTypes as it violates the first rule, and
-// is unused by clients anyway.
-// FIXME(alainjobart) remove TabletTypes as it violates the second rule, and
-// is also unused by clients.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	// Copied / inferred from Shard
-	Name        string
-	KeyRange    key.KeyRange
-	ServedTypes []TabletType
+	Name     string
+	KeyRange key.KeyRange
 
 	// MasterCell indicates the cell that master tablet resides
 	MasterCell string
-
-	// TabletTypes represents the list of types we have serving tablets
-	// for, in this cell only.
-	TabletTypes []TabletType
 
 	// For atomic updates
 	version int64
@@ -55,7 +46,7 @@ func (sa SrvShardArray) Swap(i, j int) {
 	sa[i], sa[j] = sa[j], sa[i]
 }
 
-// Sort will sort the list according to KeyRange.Start
+// Sort will sort the SrvShardArray on keyrange.
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
 // NewSrvShard returns an empty SrvShard with the given version.
@@ -122,17 +113,12 @@ func (kp *KeyspacePartition) HasShard(name string) bool {
 // keyspace, shards and local details.
 // By design, it should not contain details about the Shards themselves,
 // but just which shards to use for serving.
-// FIXME(alainjobart) remove TabletTypes
 // FIXME(alainjobart) KeyspacePartition has SrvShard, to be replaced by
 // ShardReference.
 // In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
 	Partitions map[TabletType]*KeyspacePartition
-
-	// List of available tablet types for this keyspace in this cell.
-	// May not have a server for every shard, but we have some.
-	TabletTypes []TabletType
 
 	// Copied from Keyspace
 	ShardingColumnName string
