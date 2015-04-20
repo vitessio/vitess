@@ -245,10 +245,11 @@ class TestSecure(unittest.TestCase):
         'ssl-key': cert_dir + "/client-key.pem",
         })
 
-    # Reparent using SSL
+    # Reparent using SSL (this will also check replication works)
     for t in [shard_0_master, shard_0_slave]:
       t.reset_replication()
-    utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+                     shard_0_master.tablet_alias], auto_log=True)
 
     # then get the topology and check it
     topo_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,

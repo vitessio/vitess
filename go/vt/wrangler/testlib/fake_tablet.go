@@ -69,6 +69,14 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
+// ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
+func ForceInitTablet() TabletOption {
+	return func(tablet *topo.Tablet) {
+		// set the force_init field into the portmap as a hack
+		tablet.Portmap["force_init"] = 1
+	}
+}
+
 // NewFakeTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
@@ -95,7 +103,9 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 	puid, ok := tablet.Portmap["parent_uid"]
 	delete(tablet.Portmap, "parent_uid")
-	if err := wr.InitTablet(context.Background(), tablet, false, true, false); err != nil {
+	_, force := tablet.Portmap["force_init"]
+	delete(tablet.Portmap, "force_init")
+	if err := wr.InitTablet(context.Background(), tablet, force, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 

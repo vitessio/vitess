@@ -174,9 +174,9 @@ def setup_tablets():
             shard_1_master, shard_1_replica1, shard_1_replica2]:
     t.wait_for_vttablet_state('SERVING')
 
-  utils.run_vtctl(['ReparentShard', '-force', KEYSPACE_NAME+'/-80',
+  utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/-80',
                    shard_0_master.tablet_alias], auto_log=True)
-  utils.run_vtctl(['ReparentShard', '-force', KEYSPACE_NAME+'/80-',
+  utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/80-',
                    shard_1_master.tablet_alias], auto_log=True)
 
   utils.run_vtctl(['RebuildKeyspaceGraph', KEYSPACE_NAME],

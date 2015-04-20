@@ -147,6 +147,20 @@ type TabletManagerClient interface {
 	// Reparenting related functions
 	//
 
+	// InitMaster tells a tablet to make itself the new master,
+	// and return the replication position the slaves should use to
+	// reparent to it.
+	InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+
+	// PopulateReparentJournal asks the master to insert a row in
+	// its reparent_journal table.
+	PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
+
+	// InitSlave tells a tablet to make itself a slave to the
+	// passed in master tablet alias, and wait for the row in the
+	// reparent_journal table.
+	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error
 

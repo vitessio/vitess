@@ -143,10 +143,10 @@ def start_tablets():
   for t in __tablets:
     t.wait_for_vttablet_state('SERVING')
 
-  # ReparentShard for master tablets
+  # InitShardMaster for master tablets
   for t in __tablets:
     if t.tablet_type == 'master':
-      utils.run_vtctl(['ReparentShard', '-force', t.keyspace+'/'+t.shard,
+      utils.run_vtctl(['InitShardMaster', t.keyspace+'/'+t.shard,
                        t.tablet_alias], auto_log=True)
 
   for ks in topo_schema.keyspaces:

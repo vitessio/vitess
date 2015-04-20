@@ -168,11 +168,12 @@ When we pick a master vttablet, Vitess will also take care of connecting the
 other replicas' mysqld instances to start replicating from the master mysqld.
 
 Since this is the first time we're starting up the shards, there is no existing
-replication happening, so we use the -force flag on ReparentShard to skip the
-usual validation of each tablet's replication state.
+replication happening, and all tablets are of the same base replica or spare
+type. So we use the -force flag on InitShardMaster to allow the transition
+of the first tablet from its type to master.
 
 ```
-$ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
+$ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
 Once this is done, you should see one master and two replicas in vtctld's

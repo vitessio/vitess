@@ -6,10 +6,13 @@ package mysqlctl
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"golang.org/x/net/context"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
@@ -26,12 +29,22 @@ type MysqlDaemon interface {
 	StopSlave(hookExtraEnv map[string]string) error
 	SlaveStatus() (*proto.ReplicationStatus, error)
 
+	// reparenting related methods
+	BreakSlaves() error
+	MasterPosition() (proto.ReplicationPosition, error)
+	SetReadOnly(on bool) error
+	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
+	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
+
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
 
 	// GetDbConnection returns a connection to be able to talk to the database.
 	// It accepts a dbconfig name to determine which db user it the connection should have.
 	GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error)
+
+	// query execution methods
+	ExecuteSuperQueryList(queryList []string) error
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
@@ -51,6 +64,24 @@ type FakeMysqlDaemon struct {
 	// CurrentSlaveStatus is returned by SlaveStatus
 	CurrentSlaveStatus *proto.ReplicationStatus
 
+	// BreakSlavesError is returned by BreakSlaves
+	BreakSlavesError error
+
+	// CurrentMasterPosition is returned by MasterPosition
+	CurrentMasterPosition proto.ReplicationPosition
+
+	// ReadOnly is the current value of the flag
+	ReadOnly bool
+
+	// StartReplicationCommandsStatus is matched against the input
+	// of StartReplicationCommands. If it doesn't match,
+	// StartReplicationCommands will return an error.
+	StartReplicationCommandsStatus *proto.ReplicationStatus
+
+	// StartReplicationCommandsResult is what
+	// StartReplicationCommands will return
+	StartReplicationCommandsResult []string
+
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
@@ -60,6 +91,12 @@ type FakeMysqlDaemon struct {
 
 	// DbAppConnectionFactory is the factory for making fake db app connections
 	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
+
+	// ExpectedExecuteSuperQueryList is what we expect
+	// ExecuteSuperQueryList to be called with. If it doesn't
+	// match, ExecuteSuperQueryList will return an error.
+	// Note each string is just a substring if it begins with SUB
+	ExpectedExecuteSuperQueryList []string
 }
 
 // GetMasterAddr is part of the MysqlDaemon interface
@@ -99,6 +136,54 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
 		return nil, fmt.Errorf("no slave status defined")
 	}
 	return fmd.CurrentSlaveStatus, nil
+}
+
+// BreakSlaves is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) BreakSlaves() error {
+	return fmd.BreakSlavesError
+}
+
+// MasterPosition is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) MasterPosition() (proto.ReplicationPosition, error) {
+	return fmd.CurrentMasterPosition, nil
+}
+
+// SetReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
+	fmd.ReadOnly = on
+	return nil
+}
+
+// StartReplicationCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
+	if !reflect.DeepEqual(fmd.StartReplicationCommandsStatus, status) {
+		return nil, fmt.Errorf("wrong status for StartReplicationCommands: expected %v got %v", fmd.StartReplicationCommandsStatus, status)
+	}
+	return fmd.StartReplicationCommandsResult, nil
+}
+
+// WaitForReparentJournal is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
+	return nil
+}
+
+// ExecuteSuperQueryList is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
+	if len(queryList) != len(fmd.ExpectedExecuteSuperQueryList) {
+		return fmt.Errorf("wrong query list size for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
+	}
+	compExpected := make([]string, len(fmd.ExpectedExecuteSuperQueryList))
+	compGot := make([]string, len(queryList))
+	for i, expected := range fmd.ExpectedExecuteSuperQueryList {
+		if strings.HasPrefix(expected, "SUB") {
+			compExpected[i] = expected[3:]
+			compGot[i] = queryList[i][:len(compExpected[i])]
+		}
+	}
+	if !reflect.DeepEqual(compExpected, compGot) {
+		return fmt.Errorf("wrong query list for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
+	}
+	return nil
 }
 
 // GetSchema is part of the MysqlDaemon interface

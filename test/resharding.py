@@ -476,9 +476,9 @@ primary key (name)
     shard_1_rdonly1.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
     # create the tables
@@ -505,9 +505,9 @@ primary key (name)
               shard_3_master, shard_3_replica, shard_3_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-c0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-c0',
                      shard_2_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/c0-',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/c0-',
                      shard_3_master.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],

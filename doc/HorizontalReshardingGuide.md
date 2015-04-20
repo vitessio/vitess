@@ -21,11 +21,11 @@ Once we have a column that we can use as the sharding key, we need to tell Vites
 
 Create destination shards and tablets just like the source shard was created. For example, you might have `test_keyspace/-80` and `test_keyspace/80-`, if you were splitting the original shard into two shards.
 
-You will need to make sure that each destination shard has a master tablet, and at least one (but preferably two) rdonly tablets. It is necessary to reparent each destination shard, after creating the master tablet, to choose a master. This can be done by, for example:
+You will need to make sure that each destination shard has a master tablet, and at least one (but preferably two) rdonly tablets. It is necessary to initialize the MySQL replication in each destination shard, after creating the master tablet, to choose a master. This can be done by, for example:
 
 ```
-vtctl ReparentShard -force test_keyspace/-80 <master tablet alias>
-vtctl ReparentShard -force test_keyspace/80- <master tablet alias>
+vtctl InitShardMaster -force test_keyspace/-80 <master tablet alias>
+vtctl InitShardMaster -force test_keyspace/80- <master tablet alias>
 ```
 
 At this point, the destination shards should be created, but do not have any data, and will not be serving any traffic.
