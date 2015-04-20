@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test
 
 all: build test
 
@@ -185,3 +185,9 @@ proto:
 # Example: $ make docker_bootstrap flavor=mariadb
 docker_bootstrap:
 	docker/bootstrap/build.sh $(flavor)
+
+# This rule loads the working copy of the code into a bootstrap image,
+# and then runs the tests inside Docker.
+# Example: $ make docker_test flavor=mariadb
+docker_test:
+	docker/test/run.sh $(flavor)
