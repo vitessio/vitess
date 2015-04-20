@@ -34,8 +34,6 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 }
 
 // fetchSuperQuery returns the results of executing a query as a super user.
-// FIXME(msolomon) should there be a query lock so we only
-// run one admin action at a time?
 func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
 	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {

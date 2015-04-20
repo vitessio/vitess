@@ -197,7 +197,7 @@ echo Done
 echo -n Reparenting...
 shard_num=1
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl ReparentShard -force test_keyspace/$shard test-0000000${shard_num}00
+  $kvtctl InitShardMaster -force test_keyspace/$shard test-0000000${shard_num}00
   let shard_num=shard_num+1
 done
 echo Done

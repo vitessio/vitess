@@ -258,7 +258,7 @@ func (agent *ActionAgent) Healthy() (time.Duration, error) {
 
 	healthy := agent._healthy
 	if healthy == nil {
-		timeSinceLastCheck := time.Now().Sub(agent._healthyTime)
+		timeSinceLastCheck := time.Since(agent._healthyTime)
 		if timeSinceLastCheck > *healthCheckInterval*3 {
 			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
 		}

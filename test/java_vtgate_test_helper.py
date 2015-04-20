@@ -71,7 +71,7 @@ class TestEnv(object):
         t.wait_for_vttablet_state('SERVING')
       for t in self.tablets:
         if t.type == "master":
-          utils.run_vtctl(['ReparentShard', '-force', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
+          utils.run_vtctl(['InitShardMaster', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       if self.schema:
         utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql', self.schema, self.keyspace])
@@ -129,4 +129,3 @@ def main():
 if __name__ == '__main__':
   parse_args()
   main()
-

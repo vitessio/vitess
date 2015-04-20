@@ -369,6 +369,44 @@ func (client *GoRPCTabletManagerClient) RunBlpUntil(ctx context.Context, tablet 
 // Reparenting related functions
 //
 
+// InitMaster is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_INIT_MASTER, &rpc.Unused{}, &rp); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return rp, nil
+}
+
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	args := &gorpcproto.PopulateReparentJournalArgs{
+		TimeCreatedNS:       timeCreatedNS,
+		ActionName:          actionName,
+		MasterAlias:         masterAlias,
+		ReplicationPosition: pos,
+	}
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_POPULATE_REPARENT_JOURNAL, args, &rpc.Unused{})
+}
+
+// InitSlave is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+	args := &gorpcproto.InitSlaveArgs{
+		Parent:              parent,
+		ReplicationPosition: replicationPosition,
+		TimeCreatedNS:       timeCreatedNS,
+	}
+	deadline, ok := ctx.Deadline()
+	if ok {
+		args.WaitTimeout = deadline.Sub(time.Now())
+		if args.WaitTimeout < 0 {
+			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.InitSlave on %v", tablet.Alias)}
+		}
+	}
+
+	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_INIT_SLAVE, args, &rpc.Unused{})
+}
+
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TABLET_ACTION_DEMOTE_MASTER, &rpc.Unused{}, &rpc.Unused{})

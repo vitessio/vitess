@@ -243,6 +243,21 @@ func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *
 // Reparenting related functions
 //
 
+// InitMaster is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	return myproto.ReplicationPosition{}, nil
+}
+
+// PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	return nil
+}
+
+// InitSlave is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+	return nil
+}
+
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil

@@ -101,7 +101,7 @@ def setUpModule():
 
     for t in [master_tablet, replica_tablet]:
       t.reset_replication()
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)
 
     # reset counter so tests don't assert

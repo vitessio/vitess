@@ -335,19 +335,21 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
     so that they start replicating from the master's mysqld.<br><br>
 
     Since this is the first time the shard has been started,
-    the vttablets are not already doing any replication. As a
+    the vttablets are not already doing any replication, and the
+    tablet types are all replica or spare. As a
     result, the following command uses the <code>-force</code>
-    flag when calling the <code>ReparentShard</code> command
-    to skip the usual validation of each tablet's replication state.
+    flag when calling the <code>InitShardMaster</code> command
+    to be able to promote one instance to master.
 
 
     ``` sh
-$ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
+$ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
     <br>**Note:** If you do not include the <code>-force</code> flag 
-    here, the command will first check to ensure that slave databases
-    are replicating correctly. However, since the slaves aren't
+    here, the command will first check to ensure the provided
+    tablet is the only tablet of type master in the shard.
+    However, since none of the slaves are masters, and we're not
     replicating at all, that check would fail and the command
     would fail as well.<br><br>
 

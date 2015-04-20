@@ -47,6 +47,18 @@ const (
 	// Scrap scraps the live running tablet
 	TABLET_ACTION_SCRAP = "Scrap"
 
+	// InitMaster tells the tablet it should make itself the new
+	// master for the shard it's currently in.
+	TABLET_ACTION_INIT_MASTER = "InitMaster"
+
+	// PopulateReparentJournal inserts an entry in the
+	// _vt.reparent_journal table
+	TABLET_ACTION_POPULATE_REPARENT_JOURNAL = "PopulateReparentJournal"
+
+	// InitSlave tells the tablet it should make itself a slave to
+	// the provided master at the given position.
+	TABLET_ACTION_INIT_SLAVE = "InitSlave"
+
 	// DemoteMaster tells the current master it's about to not be a master
 	// any more, and should go read-only.
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
