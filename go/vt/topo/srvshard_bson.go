@@ -21,15 +21,6 @@ func (srvShard *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	bson.EncodeString(buf, "Name", srvShard.Name)
 	srvShard.KeyRange.MarshalBson(buf, "KeyRange")
-	// []TabletType
-	{
-		bson.EncodePrefix(buf, bson.Array, "ServedTypes")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v1 := range srvShard.ServedTypes {
-			_v1.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
 	bson.EncodeString(buf, "MasterCell", srvShard.MasterCell)
 
 	lenWriter.Close()
@@ -53,21 +44,6 @@ func (srvShard *SrvShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			srvShard.Name = bson.DecodeString(buf, kind)
 		case "KeyRange":
 			srvShard.KeyRange.UnmarshalBson(buf, kind)
-		case "ServedTypes":
-			// []TabletType
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for srvShard.ServedTypes", kind))
-				}
-				bson.Next(buf, 4)
-				srvShard.ServedTypes = make([]TabletType, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v1 TabletType
-					_v1.UnmarshalBson(buf, kind)
-					srvShard.ServedTypes = append(srvShard.ServedTypes, _v1)
-				}
-			}
 		case "MasterCell":
 			srvShard.MasterCell = bson.DecodeString(buf, kind)
 		default:

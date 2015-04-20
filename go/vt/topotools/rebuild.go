@@ -212,10 +212,9 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 	go func() {
 		log.Infof("updating shard serving graph in cell %v for %v/%v", cell, shardInfo.Keyspace(), shardInfo.ShardName())
 		srvShard := &topo.SrvShard{
-			Name:        shardInfo.ShardName(),
-			KeyRange:    shardInfo.KeyRange,
-			ServedTypes: shardInfo.GetServedTypesPerCell(cell),
-			MasterCell:  shardInfo.MasterAlias.Cell,
+			Name:       shardInfo.ShardName(),
+			KeyRange:   shardInfo.KeyRange,
+			MasterCell: shardInfo.MasterAlias.Cell,
 		}
 
 		span := trace.NewSpanFromContext(ctx)

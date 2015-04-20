@@ -15,14 +15,11 @@ import (
 // but just internal details to the shard. It should also not contain
 // details that would change when tablets are added / removed in this
 // cell/shard.
-// FIXME(alainjobart) remove ServedTypes as it violates the first rule, and
-// is unused by clients anyway.
 // In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	// Copied / inferred from Shard
-	Name        string
-	KeyRange    key.KeyRange
-	ServedTypes []TabletType
+	Name     string
+	KeyRange key.KeyRange
 
 	// MasterCell indicates the cell that master tablet resides
 	MasterCell string

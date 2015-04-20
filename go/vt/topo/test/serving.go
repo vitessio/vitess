@@ -94,7 +94,9 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 
 	// test cell/keyspace/shard entries (SrvShard)
 	srvShard := topo.SrvShard{
-		ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+		Name:       "-10",
+		KeyRange:   newKeyRange("-10"),
+		MasterCell: "test",
 	}
 	if err := ts.UpdateSrvShard(cell, "test_keyspace", "-10", &srvShard); err != nil {
 		t.Fatalf("UpdateSrvShard(1): %v", err)
@@ -103,8 +105,9 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvShard(invalid): %v", err)
 	}
 	if s, err := ts.GetSrvShard(cell, "test_keyspace", "-10"); err != nil ||
-		len(s.ServedTypes) != 1 ||
-		s.ServedTypes[0] != topo.TYPE_MASTER {
+		s.Name != "-10" ||
+		s.KeyRange != newKeyRange("-10") ||
+		s.MasterCell != "test" {
 		t.Errorf("GetSrvShard(valid): %v", err)
 	}
 
@@ -114,7 +117,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
 				Shards: []topo.SrvShard{
 					topo.SrvShard{
-						ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+						Name: "-80",
 					},
 				},
 				ShardReferences: []topo.ShardReference{
@@ -140,8 +143,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	if k, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
 		len(k.Partitions) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		k.Partitions[topo.TYPE_MASTER].Shards[0].Name != "-80" ||
 		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
@@ -161,8 +163,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	if k, err := ts.GetSrvKeyspace(cell, "unknown_keyspace_so_far"); err != nil ||
 		len(k.Partitions) != 1 ||
 		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		k.Partitions[topo.TYPE_MASTER].Shards[0].Name != "-80" ||
 		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||

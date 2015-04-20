@@ -134,10 +134,9 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 			case topo.ErrNoNode:
 				wr.logger.Infof("Cell %v for %v/%v has no SvrShard, using temporary SrvShard instead", cell, keyspace, shard)
 				srvShard = &topo.SrvShard{
-					Name:        si.ShardName(),
-					KeyRange:    si.KeyRange,
-					ServedTypes: servedTypes,
-					MasterCell:  si.MasterAlias.Cell,
+					Name:       si.ShardName(),
+					KeyRange:   si.KeyRange,
+					MasterCell: si.MasterAlias.Cell,
 				}
 			default:
 				return err
