@@ -4,7 +4,11 @@
 
 package tabletserver
 
-import "html/template"
+import (
+	"html/template"
+	"reflect"
+	"testing"
+)
 
 type fakeCallInfo struct {
 	remoteAddr string
@@ -27,4 +31,12 @@ func (fci *fakeCallInfo) Text() string {
 
 func (fci *fakeCallInfo) HTML() template.HTML {
 	return template.HTML(fci.html)
+}
+
+type testUtils struct{}
+
+func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
+	if !reflect.DeepEqual(expected, result) {
+		t.Fatalf("expect to get: %v, but got: %v", expected, result)
+	}
 }
