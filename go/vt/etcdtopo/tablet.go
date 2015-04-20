@@ -21,7 +21,7 @@ func (s *Server) CreateTablet(tablet *topo.Tablet) error {
 		return err
 	}
 
-	data := jscfg.ToJson(tablet)
+	data := jscfg.ToJSON(tablet)
 	_, err = cell.Create(tabletFilePath(tablet.Alias.String()), data, 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
@@ -41,7 +41,7 @@ func (s *Server) UpdateTablet(ti *topo.TabletInfo, existingVersion int64) (int64
 		return -1, err
 	}
 
-	data := jscfg.ToJson(ti.Tablet)
+	data := jscfg.ToJSON(ti.Tablet)
 	resp, err := cell.CompareAndSwap(tabletFilePath(ti.Alias.String()),
 		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {

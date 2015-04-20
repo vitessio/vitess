@@ -50,7 +50,7 @@ func (s *Server) UpdateEndPoints(cellName, keyspace, shard string, tabletType to
 		return err
 	}
 
-	data := jscfg.ToJson(addrs)
+	data := jscfg.ToJSON(addrs)
 
 	_, err = cell.Set(endPointsFilePath(keyspace, shard, string(tabletType)), data, 0 /* ttl */)
 	return convertError(err)
@@ -63,7 +63,7 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType to
 		return err
 	}
 
-	data := jscfg.ToJson(addrs)
+	data := jscfg.ToJSON(addrs)
 
 	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, string(tabletType)), data, 0, /* ttl */
 		"" /* prevValue */, uint64(version))
@@ -117,7 +117,7 @@ func (s *Server) UpdateSrvShard(cellName, keyspace, shard string, srvShard *topo
 		return err
 	}
 
-	data := jscfg.ToJson(srvShard)
+	data := jscfg.ToJSON(srvShard)
 
 	_, err = cell.Set(srvShardFilePath(keyspace, shard), data, 0 /* ttl */)
 	return convertError(err)
@@ -163,7 +163,7 @@ func (s *Server) UpdateSrvKeyspace(cellName, keyspace string, srvKeyspace *topo.
 		return err
 	}
 
-	data := jscfg.ToJson(srvKeyspace)
+	data := jscfg.ToJSON(srvKeyspace)
 
 	_, err = cell.Set(srvKeyspaceFilePath(keyspace), data, 0 /* ttl */)
 	return convertError(err)

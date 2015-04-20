@@ -268,7 +268,7 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 			goto Error
 		}
 	case key.KeyRange:
-		if op < QR_IN && op > QR_NOTIN {
+		if op < QR_IN || op > QR_NOTIN {
 			goto Error
 		}
 		converted = bvcKeyRange(v)
@@ -904,7 +904,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	}
 	onMismatch, ok = v.(bool)
 	if !ok {
-		err = NewTabletError(ErrFail, "want bool for OnAbsent")
+		err = NewTabletError(ErrFail, "want bool for OnMismatch")
 		return
 	}
 	return

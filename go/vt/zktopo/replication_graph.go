@@ -23,6 +23,7 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt", "replication", keyspace, shard)
 }
 
+// UpdateShardReplicationFields is part of the topo.Server interface
 func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
@@ -43,7 +44,7 @@ func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, u
 		if err := update(sr); err != nil {
 			return "", err
 		}
-		return jscfg.ToJson(sr), nil
+		return jscfg.ToJSON(sr), nil
 	}
 	err := zkts.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {
@@ -55,6 +56,7 @@ func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, u
 	return nil
 }
 
+// GetShardReplication is part of the topo.Server interface
 func (zkts *Server) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	data, _, err := zkts.zconn.Get(zkPath)
@@ -73,6 +75,7 @@ func (zkts *Server) GetShardReplication(cell, keyspace, shard string) (*topo.Sha
 	return topo.NewShardReplicationInfo(sr, cell, keyspace, shard), nil
 }
 
+// DeleteShardReplication is part of the topo.Server interface
 func (zkts *Server) DeleteShardReplication(cell, keyspace, shard string) error {
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	err := zkts.zconn.Delete(zkPath, -1)

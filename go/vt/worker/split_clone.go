@@ -297,7 +297,7 @@ func (scw *SplitCloneWorker) init() error {
 	if os == nil {
 		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
 	}
-	scw.wr.Logger().Infof("Found overlapping shards: %v\n", jscfg.ToJson(os))
+	scw.wr.Logger().Infof("Found overlapping shards: %v\n", jscfg.ToJSON(os))
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all

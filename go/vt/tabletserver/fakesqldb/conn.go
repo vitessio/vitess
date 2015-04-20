@@ -32,6 +32,7 @@ type DB struct {
 	isConnFail   bool
 	data         map[string]*proto.QueryResult
 	rejectedData map[string]*proto.QueryResult
+	queryCalled  map[string]int
 	mu           sync.Mutex
 }
 
@@ -42,6 +43,7 @@ func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.data[query] = result
+	db.queryCalled[query] = 0
 }
 
 // GetQuery gets a query from the fake DB.
@@ -49,6 +51,7 @@ func (db *DB) GetQuery(query string) (*proto.QueryResult, bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	result, ok := db.data[query]
+	db.queryCalled[query]++
 	return result, ok
 }
 
@@ -57,6 +60,7 @@ func (db *DB) DeleteQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	delete(db.data, query)
+	delete(db.queryCalled, query)
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
@@ -79,6 +83,17 @@ func (db *DB) DeleteRejectedQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	delete(db.rejectedData, query)
+}
+
+// GetQueryCalledNum returns how many times db executes a certain query.
+func (db *DB) GetQueryCalledNum(query string) int {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	num, ok := db.queryCalled[query]
+	if !ok {
+		return 0
+	}
+	return num
 }
 
 // EnableConnFail makes connection to this fake DB fail.
@@ -256,6 +271,7 @@ func Register() *DB {
 	db := &DB{
 		data:         make(map[string]*proto.QueryResult),
 		rejectedData: make(map[string]*proto.QueryResult),
+		queryCalled:  make(map[string]int),
 	}
 	sqldb.Register(name, func(sqldb.ConnParams) (sqldb.Conn, error) {
 		if db.IsConnFail() {

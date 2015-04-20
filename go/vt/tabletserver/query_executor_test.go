@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "alter table test_table add zipcode int"
 	expected := &mproto.QueryResult{
 		Fields: getTestTableFields(),
@@ -35,11 +35,12 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 		query, context.Background(), enableRowCache|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_DDL, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "update test_table set pk = foo()"
 	expected := &mproto.QueryResult{
 		Fields: []mproto.Field{},
@@ -49,7 +50,7 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	// non strict mode
 	qre, sqlQuery := newTestQueryExecutor(query, context.Background(), enableTx)
 	checkPlanID(t, planbuilder.PLAN_PASS_DML, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	testCommitHelper(t, sqlQuery, qre)
 	sqlQuery.disallowQueries()
 
@@ -85,6 +86,7 @@ func TestQueryExecutorPlanInsertPkOutsideATransaction(t *testing.T) {
 
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	fields := []mproto.Field{
 		mproto.Field{Name: "pk", Type: mproto.VT_LONG},
 	}
@@ -114,11 +116,12 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
 	checkPlanID(t, planbuilder.PLAN_INSERT_SUBQUERY, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
 	// expected.Rows is always nil, intended
 	expected := &mproto.QueryResult{}
@@ -129,11 +132,12 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
 	checkPlanID(t, planbuilder.PLAN_DML_PK, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "update test_table set addr = 3 where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
 	// expected.Rows is always nil, intended
@@ -145,11 +149,12 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
 	checkPlanID(t, planbuilder.PLAN_DML_SUBQUERY, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "show test_table"
 	expected := &mproto.QueryResult{
 		Fields:       getTestTableFields(),
@@ -162,11 +167,12 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
 	checkPlanID(t, planbuilder.PLAN_OTHER, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	fields := []mproto.Field{
 		mproto.Field{Name: "addr", Type: mproto.VT_LONG},
 	}
@@ -189,7 +195,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
 	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
@@ -214,6 +220,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 
 func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "select * from test_table limit 1000"
 	expected := &mproto.QueryResult{
 		Fields: getTestTableFields(),
@@ -228,11 +235,12 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 		query, context.Background(), enableRowCache|enableSchemaOverrides|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanPKIn(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "select * from test_table where pk in (1, 2, 3) limit 1000"
 	expandedQuery := "select pk, name, addr from test_table where pk in (1, 2, 3)"
 
@@ -258,7 +266,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 		query, context.Background(), enableRowCache|enableStrict|enableSchemaOverrides)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_PK_IN, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 
 	cachedQuery := "select pk, name, addr from test_table where pk in (1)"
 	db.AddQuery(cachedQuery, &mproto.QueryResult{
@@ -279,11 +287,12 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 	db.AddQuery(cachedQuery, expected)
 
 	// run again, this time pk=1 should hit the rowcache
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (INDEX) where name = 1 limit 1000"
 
@@ -301,18 +310,19 @@ func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
 		query, context.Background(), enableRowCache|enableSchemaOverrides|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_SELECT_SUBQUERY, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanSet(t *testing.T) {
 	setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	expected := &mproto.QueryResult{}
 
 	setQuery := "set unknown_key = 1"
 	qre, sqlQuery := newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	sqlQuery.disallowQueries()
 
 	// set vt_pool_size
@@ -321,7 +331,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.connPool.Capacity() != vtPoolSize {
 		t.Fatalf("set query failed, expected to have vt_pool_size: %d, but got: %d",
 			vtPoolSize, qre.qe.connPool.Capacity())
@@ -334,7 +344,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.streamConnPool.Capacity() != vtStreamPoolSize {
 		t.Fatalf("set query failed, expected to have vt_stream_pool_size: %d, but got: %d", vtStreamPoolSize, qre.qe.streamConnPool.Capacity())
 	}
@@ -346,7 +356,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.txPool.pool.Capacity() != vtTransactionCap {
 		t.Fatalf("set query failed, expected to have vt_transaction_cap: %d, but got: %d", vtTransactionCap, qre.qe.txPool.pool.Capacity())
 	}
@@ -358,7 +368,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtTransactionTimeoutInMillis := time.Duration(vtTransactionTimeout) * time.Second
 	if qre.qe.txPool.Timeout() != vtTransactionTimeoutInMillis {
 		t.Fatalf("set query failed, expected to have vt_transaction_timeout: %d, but got: %d", vtTransactionTimeoutInMillis, qre.qe.txPool.Timeout())
@@ -371,7 +381,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtSchemaReloadTimeInMills := time.Duration(vtSchemaReloadTime) * time.Second
 	if qre.qe.schemaInfo.ReloadTime() != vtSchemaReloadTimeInMills {
 		t.Fatalf("set query failed, expected to have vt_schema_reload_time: %d, but got: %d", vtSchemaReloadTimeInMills, qre.qe.schemaInfo.ReloadTime())
@@ -384,7 +394,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if int64(qre.qe.schemaInfo.queries.Capacity()) != vtQueryCacheSize {
 		t.Fatalf("set query failed, expected to have vt_query_cache_size: %d, but got: %d", vtQueryCacheSize, qre.qe.schemaInfo.queries.Capacity())
 	}
@@ -396,7 +406,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtQueryTimeoutInMillis := time.Duration(vtQueryTimeout) * time.Second
 	if qre.qe.queryTimeout.Get() != vtQueryTimeoutInMillis {
 		t.Fatalf("set query failed, expected to have vt_query_timeout: %d, but got: %d", vtQueryTimeoutInMillis, qre.qe.queryTimeout.Get())
@@ -409,7 +419,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtIdleTimeoutInMillis := time.Duration(vtIdleTimeout) * time.Second
 	if qre.qe.connPool.IdleTimeout() != vtIdleTimeoutInMillis {
 		t.Fatalf("set query failed, expected to have vt_idle_timeout: %d, but got: %d in conn pool", vtIdleTimeoutInMillis, qre.qe.connPool.IdleTimeout())
@@ -428,7 +438,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtSpotCheckFreq := int64(vtSpotCheckRatio * spotCheckMultiplier)
 	if qre.qe.spotCheckFreq.Get() != vtSpotCheckFreq {
 		t.Fatalf("set query failed, expected to have vt_spot_check_freq: %d, but got: %d", vtSpotCheckFreq, qre.qe.spotCheckFreq.Get())
@@ -441,7 +451,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.strictMode.Get() != vtStrictMode {
 		t.Fatalf("set query failed, expected to have vt_strict_mode: %d, but got: %d", vtStrictMode, qre.qe.strictMode.Get())
 	}
@@ -453,7 +463,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	qre, sqlQuery = newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	vtTxPoolTimeoutInMillis := time.Duration(vtTxPoolTimeout) * time.Second
 	if qre.qe.txPool.PoolTimeout() != vtTxPoolTimeoutInMillis {
 		t.Fatalf("set query failed, expected to have vt_txpool_timeout: %d, but got: %d", vtTxPoolTimeoutInMillis, qre.qe.txPool.PoolTimeout())
@@ -463,6 +473,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 
 func TestQueryExecutorPlanSetMaxResultSize(t *testing.T) {
 	setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	expected := &mproto.QueryResult{}
 	vtMaxResultSize := int64(128)
 	setQuery := fmt.Sprintf("set vt_max_result_size = %d", vtMaxResultSize)
@@ -470,7 +481,7 @@ func TestQueryExecutorPlanSetMaxResultSize(t *testing.T) {
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.maxResultSize.Get() != vtMaxResultSize {
 		t.Fatalf("set query failed, expected to have vt_max_result_size: %d, but got: %d", vtMaxResultSize, qre.qe.maxResultSize.Get())
 	}
@@ -486,6 +497,7 @@ func TestQueryExecutorPlanSetMaxResultSize(t *testing.T) {
 
 func TestQueryExecutorPlanSetMaxDmlRows(t *testing.T) {
 	setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	expected := &mproto.QueryResult{}
 	vtMaxDmlRows := int64(256)
 	setQuery := fmt.Sprintf("set vt_max_dml_rows = %d", vtMaxDmlRows)
@@ -493,7 +505,7 @@ func TestQueryExecutorPlanSetMaxDmlRows(t *testing.T) {
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.maxDMLRows.Get() != vtMaxDmlRows {
 		t.Fatalf("set query failed, expected to have vt_max_dml_rows: %d, but got: %d", vtMaxDmlRows, qre.qe.maxDMLRows.Get())
 	}
@@ -509,15 +521,15 @@ func TestQueryExecutorPlanSetMaxDmlRows(t *testing.T) {
 
 func TestQueryExecutorPlanSetStreamBufferSize(t *testing.T) {
 	setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	expected := &mproto.QueryResult{}
-
 	vtStreamBufferSize := int64(2048)
 	setQuery := fmt.Sprintf("set vt_stream_buffer_size = %d", vtStreamBufferSize)
 	qre, sqlQuery := newTestQueryExecutor(
 		setQuery, context.Background(), enableRowCache|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_SET, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	if qre.qe.streamBufferSize.Get() != vtStreamBufferSize {
 		t.Fatalf("set query failed, expected to have vt_stream_buffer_size: %d, but got: %d", vtStreamBufferSize, qre.qe.streamBufferSize.Get())
 	}
@@ -533,6 +545,7 @@ func TestQueryExecutorPlanSetStreamBufferSize(t *testing.T) {
 
 func TestQueryExecutorPlanOther(t *testing.T) {
 	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
 	query := "show test_table"
 	expected := &mproto.QueryResult{
 		Fields:       getTestTableFields(),
@@ -544,10 +557,11 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 		query, context.Background(), enableRowCache|enableSchemaOverrides|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_OTHER, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorTableAcl(t *testing.T) {
+	testUtils := &testUtils{}
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
@@ -578,7 +592,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	qre, sqlQuery := newTestQueryExecutor(
 		query, ctx, enableRowCache|enableSchemaOverrides|enableStrict)
 	checkPlanID(t, planbuilder.PLAN_PASS_SELECT, qre.plan.PlanId)
-	checkEqual(t, expected, qre.Execute())
+	testUtils.checkEqual(t, expected, qre.Execute())
 	sqlQuery.disallowQueries()
 
 	if err := tableacl.InitFromBytes([]byte(`{"test_table":{"READER":"superuser"}}`)); err != nil {
@@ -734,9 +748,7 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	}
 	sqlQuery := NewSqlQuery(config)
 	txID := int64(0)
-	keyspace := "test_keyspace"
-	shard := "0"
-	dbconfigs := getTestDBConfigs(keyspace, shard)
+	dbconfigs := newTestDBConfigs()
 	if flags&enableRowCache > 0 {
 		dbconfigs.App.EnableRowcache = true
 	} else {
@@ -809,12 +821,6 @@ func checkPlanID(
 	if expectedPlanID != actualPlanID {
 		t.Fatalf("expect to get PlanId: %s, but got %s",
 			expectedPlanID.String(), actualPlanID.String())
-	}
-}
-
-func checkEqual(t *testing.T, expected interface{}, result interface{}) {
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf("expect to get: %v, but got: %v", expected, result)
 	}
 }
 

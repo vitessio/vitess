@@ -108,7 +108,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 	if overridesFile == "" {
 		return schemaOverrides
 	}
-	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
+	if err := jscfg.ReadJSON(overridesFile, &schemaOverrides); err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {
 		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -123,8 +123,8 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // batchCtx is the context that the agent will use for any background tasks
 // it spawns.
 func NewActionAgent(
-	queryServiceControl tabletserver.QueryServiceControl,
 	batchCtx context.Context,
+	queryServiceControl tabletserver.QueryServiceControl,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,

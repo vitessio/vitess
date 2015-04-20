@@ -391,6 +391,12 @@ func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
 	})
 }
 
+func (rqsc *realQueryServiceControl) registerSchemazHandler() {
+	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
+		schemazHandler(rqsc.sqlQueryRPCService.qe.schemaInfo.GetSchema(), w, r)
+	})
+}
+
 func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
 	type formatter interface {
 		Format(url.Values) string

@@ -67,7 +67,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]t
 // UpdateEndPoints is part of the topo.Server interface
 func (zkts *Server) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data := jscfg.ToJson(addrs)
+	data := jscfg.ToJSON(addrs)
 	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -117,7 +117,7 @@ func (zkts *Server) DeleteEndPoints(cell, keyspace, shard string, tabletType top
 // UpdateSrvShard is part of the topo.Server interface
 func (zkts *Server) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
-	data := jscfg.ToJson(srvShard)
+	data := jscfg.ToJSON(srvShard)
 	_, err := zkts.zconn.Set(path, data, -1)
 	return err
 }
@@ -157,7 +157,7 @@ func (zkts *Server) DeleteSrvShard(cell, keyspace, shard string) error {
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
-	data := jscfg.ToJson(srvKeyspace)
+	data := jscfg.ToJSON(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
 		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -235,7 +235,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		addrs = topo.NewEndPoints()
 		addrs.Entries = append(addrs.Entries, *addr)
 	}
-	return jscfg.ToJson(addrs), nil
+	return jscfg.ToJSON(addrs), nil
 }
 
 // UpdateTabletEndpoint is part of the topo.Server interface
