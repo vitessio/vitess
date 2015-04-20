@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -30,6 +31,11 @@ func TestQueryRules(t *testing.T) {
 		t.Errorf("want:\n%#v\ngot:\n%#v", qr2, qrf)
 	}
 
+	qrf = qrs.Find("unknown_rule")
+	if qrf != nil {
+		t.Fatalf("rule: unknown_rule does not exist, should get nil")
+	}
+
 	if qrs.rules[0] != qr1 {
 		t.Errorf("want:\n%#v\ngot:\n%#v", qr1, qrs.rules[0])
 	}
@@ -45,6 +51,11 @@ func TestQueryRules(t *testing.T) {
 
 	if qrs.rules[0] != qr2 {
 		t.Errorf("want:\n%#v\ngot:\n%#v", qr2, qrf)
+	}
+
+	qrf = qrs.Delete("unknown_rule")
+	if qrf != nil {
+		t.Fatalf("delete an unknown_rule, should return nil")
 	}
 }
 
@@ -425,6 +436,10 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0), false},
 	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0x5000000000000000), true},
 	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0x7000000000000000), false},
+	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int(-1), false},
+	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int16(-1), false},
+	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int32(-1), false},
+	{BindVarCond{"a", true, true, QR_IN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int64(-1), false},
 	{BindVarCond{"a", true, true, QR_IN, strKeyRange("b", "d")}, "a", false},
 	{BindVarCond{"a", true, true, QR_IN, strKeyRange("b", "d")}, "c", true},
 	{BindVarCond{"a", true, true, QR_IN, strKeyRange("b", "d")}, "e", false},
@@ -433,6 +448,10 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0), true},
 	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0x5000000000000000), false},
 	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, uint64(0x7000000000000000), true},
+	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int(-1), true},
+	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int16(-1), true},
+	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int32(-1), true},
+	{BindVarCond{"a", true, true, QR_NOTIN, numKeyRange(0x4000000000000000, 0x6000000000000000)}, int64(-1), true},
 	{BindVarCond{"a", true, true, QR_NOTIN, strKeyRange("b", "d")}, "a", true},
 	{BindVarCond{"a", true, true, QR_NOTIN, strKeyRange("b", "d")}, "c", false},
 	{BindVarCond{"a", true, true, QR_NOTIN, strKeyRange("b", "d")}, "e", true},
@@ -762,12 +781,11 @@ var invalidjsons = []InvalidJSONCase{
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGE", "Value": 1}]}]`, "want string: 1"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGT", "Value": 1}]}]`, "want string: 1"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SLE", "Value": 1}]}]`, "want string: 1"},
-
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "MATCH", "Value": 1}]}]`, "want string: 1"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "NOMATCH", "Value": 1}]}]`, "want string: 1"},
-
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": 123, "Value": "1"}]}]`, "want string for Operator"},
+	{`[{"Unknown": [{"Name": "a"}]}]`, "unrecognized tag Unknown"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
-
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
 	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "processing [: error parsing regexp: missing closing ]: `[$`"},
 	{`[{"Action": 1 }]`, "want string for Action"},
@@ -784,7 +802,129 @@ func TestInvalidJSON(t *testing.T) {
 		}
 		recvd := strings.Replace(err.Error(), "error: ", "", 1)
 		if recvd != tcase.err {
-			t.Errorf("want '%v', got '%v'", tcase.err, recvd)
+			t.Errorf("invalid json: %s, want '%v', got '%v'", tcase.input, tcase.err, recvd)
 		}
+	}
+	qrs := NewQueryRules()
+	err := qrs.UnmarshalJSON([]byte(`{`))
+	terr, ok := err.(*TabletError)
+	if !ok {
+		t.Fatalf("invalid json, should get a tablet error")
+	}
+	if terr.ErrorType != ErrFail {
+		t.Fatalf("should get ErrFail")
+	}
+}
+
+func TestBuildQueryRuleActionFail(t *testing.T) {
+	var ruleInfo map[string]interface{}
+	err := json.Unmarshal([]byte(`{"Action": "FAIL" }`), &ruleInfo)
+	if err != nil {
+		t.Fatalf("failed to unmarshal json, got error: %v", err)
+	}
+	qr, err := BuildQueryRule(ruleInfo)
+	if err != nil {
+		t.Fatalf("build query rule should succeed")
+	}
+	if qr.act != QR_FAIL {
+		t.Fatalf("action should fail")
+	}
+}
+
+func TestBuildQueryRuleFailureModes(t *testing.T) {
+	var err error
+	var errStr string
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": QR_IN, "Value": key.KeyRange{}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "want string for Operator" {
+		t.Fatalf("expect to get error: want string for Operator, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": "IN", "Value": 1}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "want keyrange for Value" {
+		t.Fatalf("expect to get error: want keyrange for Value, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": "IN", "Value": map[string]interface{}{}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "Start missing in KeyRange" {
+		t.Fatalf("expect to get error: Start missing in KeyRange, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": "IN", "Value": map[string]interface{}{"Start": 1}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "want string for Start" {
+		t.Fatalf("expect to get error: want string for Start, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": "IN", "Value": map[string]interface{}{"Start": "1"}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "End missing in KeyRange" {
+		t.Fatalf("expect to get error: End missing in KeyRange, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": "IN", "Value": map[string]interface{}{"Start": "1", "End": 2}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "want string for End" {
+		t.Fatalf("expect to get error: want string for End, but got: %v", err)
+	}
+
+	_, err = BuildQueryRule(map[string]interface{}{
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "OnMismatch": "invalid", "Operator": "IN", "Value": map[string]interface{}{"Start": "1", "End": "2"}}},
+	})
+	if err == nil {
+		t.Fatalf("should get an error")
+	}
+	errStr = strings.Replace(err.Error(), "error: ", "", 1)
+	if errStr != "want bool for OnMismatch" {
+		t.Fatalf("expect to get error: want bool for OnMismatch, but got: %v", err)
+	}
+}
+
+func TestBadAddBindVarCond(t *testing.T) {
+	qr1 := NewQueryRule("rule 1", "r1", QR_FAIL)
+	err := qr1.AddBindVarCond("a", true, false, QR_MATCH, uint64(1))
+	if err == nil {
+		t.Fatalf("invalid op: QR_MATCH for value type: uint64")
+	}
+	err = qr1.AddBindVarCond("a", true, false, QR_NOTIN, "test")
+	if err == nil {
+		t.Fatalf("invalid op: QR_NOTIN for value type: string")
+	}
+	err = qr1.AddBindVarCond("a", true, false, QR_LT, key.KeyRange{})
+	if err == nil {
+		t.Fatalf("invalid op: QR_LT for value type: key.KeyRange")
 	}
 }
