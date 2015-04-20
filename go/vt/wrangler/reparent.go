@@ -221,7 +221,19 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		}
 		wr.logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", masterElectTabletAlias)
 	}
-	if _, ok := masterTabletMap[masterElectTabletAlias]; !ok || len(masterTabletMap) != 1 {
+	if _, ok := masterTabletMap[masterElectTabletAlias]; !ok {
+		if !force {
+			return fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", masterElectTabletAlias)
+		}
+		wr.logger.Warningf("master-elect tablet %v is not a master in the shard, proceeding anyway as -force was used", masterElectTabletAlias)
+	}
+	haveOtherMaster := false
+	for alias, ti := range masterTabletMap {
+		if alias != masterElectTabletAlias && ti.Type != topo.TYPE_SCRAP {
+			haveOtherMaster = true
+		}
+	}
+	if haveOtherMaster {
 		if !force {
 			return fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", masterElectTabletAlias)
 		}

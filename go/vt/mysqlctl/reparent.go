@@ -59,14 +59,13 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 			return nil
 		}
 
-		// check for context being done
+		// wait a little bit, interrupt if context is done
+		t := time.After(100 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-t:
 		}
-
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 

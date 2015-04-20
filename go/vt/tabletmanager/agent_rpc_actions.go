@@ -435,12 +435,11 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	}
 
 	// Change our type to master if not already
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return myproto.ReplicationPosition{}, err
-	}
-	tablet.Tablet.Type = topo.TYPE_MASTER
-	if err = topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *topo.Tablet) error {
+		tablet.Type = topo.TYPE_MASTER
+		tablet.Health = nil
+		return nil
+	}); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
