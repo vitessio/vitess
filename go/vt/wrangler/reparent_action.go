@@ -250,10 +250,7 @@ func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*to
 
 func (wr *Wrangler) demoteMaster(ctx context.Context, ti *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	wr.logger.Infof("demote master %v", ti.Alias)
-	if err := wr.tmc.DemoteMaster(ctx, ti); err != nil {
-		return myproto.ReplicationPosition{}, err
-	}
-	return wr.tmc.MasterPosition(ctx, ti)
+	return wr.tmc.DemoteMaster(ctx, ti)
 }
 
 func (wr *Wrangler) promoteSlave(ctx context.Context, ti *topo.TabletInfo) (rsd *actionnode.RestartSlaveData, err error) {

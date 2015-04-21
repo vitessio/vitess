@@ -107,9 +107,11 @@ type RPCAgent interface {
 
 	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
-	DemoteMaster(ctx context.Context) error
+	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
+
+	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	SlaveWasPromoted(ctx context.Context) error
 
@@ -482,11 +484,11 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
-// DemoteMaster demotes the current master, and marks it read-only in the topo.
+// DemoteMaster marks the server read-only, wait until it is done with
+// its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) DemoteMaster(ctx context.Context) error {
-	_, err := agent.Mysqld.DemoteMaster()
-	return err
+func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	return agent.Mysqld.DemoteMaster()
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
@@ -514,6 +516,28 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.Restart
 	log.Infof("PromoteSlave response: %v", *rsd)
 
 	return rsd, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+}
+
+// PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
+// replication up to the provided point, and then makes the slave the
+// shard master.
+func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	// TODO(alainjobart) change the flavor API to take the context directly
+	// For now, extract the timeout from the context, or wait forever
+	var waitTimeout time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		waitTimeout = deadline.Sub(time.Now())
+		if waitTimeout <= 0 {
+			waitTimeout = time.Millisecond
+		}
+	}
+	if err := agent.Mysqld.WaitMasterPos(pos, waitTimeout); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// TODO(alainjobart) implement a mysqld.PromoteSlave2
+
+	return myproto.ReplicationPosition{}, nil
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.

@@ -408,8 +408,12 @@ func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *t
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionDemoteMaster, &rpc.Unused{}, &rpc.Unused{})
+func (client *GoRPCTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionDemoteMaster, &rpc.Unused{}, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
 }
 
 // PromoteSlave is part of the tmclient.TabletManagerClient interface
@@ -419,6 +423,15 @@ func (client *GoRPCTabletManagerClient) PromoteSlave(ctx context.Context, tablet
 		return nil, err
 	}
 	return &rsd, nil
+}
+
+// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionPromoteSlaveWhenCaughtUp, &pos, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
 }
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface

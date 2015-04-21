@@ -1002,23 +1002,20 @@ func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testDemoteMasterCalled = false
-
-func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) error {
+func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	testDemoteMasterCalled = true
-	return nil
+	return testReplicationPosition, nil
 }
 
 func agentRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.DemoteMaster(ctx, ti)
-	compareError(t, "DemoteMaster", err, true, testDemoteMasterCalled)
+	rp, err := client.DemoteMaster(ctx, ti)
+	compareError(t, "DemoteMaster", err, rp, testReplicationPosition)
 }
 
 func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.DemoteMaster(ctx, ti)
+	_, err := client.DemoteMaster(ctx, ti)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1037,6 +1034,14 @@ func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient
 func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	_, err := client.PromoteSlave(ctx, ti)
 	expectRPCWrapLockActionPanic(t, err)
+}
+
+// TODO(alainjobart) tests for PromoteSlaveWhenCaughtUp
+func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return myproto.ReplicationPosition{}, nil
 }
 
 var testSlaveWasPromotedCalled = false

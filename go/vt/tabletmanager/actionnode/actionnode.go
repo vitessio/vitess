@@ -67,6 +67,11 @@ const (
 	// the master.
 	TabletActionPromoteSlave = "PromoteSlave"
 
+	// TabletActionPromoteSlaveWhenCaughtUp tells the tablet to wait
+	// for a given replication point, and when it reaches it
+	// switch to be a master.
+	TabletActionPromoteSlaveWhenCaughtUp = "PromoteSlaveWhenCaughtUp"
+
 	// TabletActionSlaveWasPromoted tells a tablet this previously slave
 	// tablet is now the master. The tablet will update its
 	// own topology record.

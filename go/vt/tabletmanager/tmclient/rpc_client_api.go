@@ -161,11 +161,15 @@ type TabletManagerClient interface {
 	// reparent_journal table.
 	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
-	// DemoteMaster tells the soon-to-be-former master it's gonna change
-	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error
+	// DemoteMaster tells the soon-to-be-former master it's gonna change,
+	// and it should go read-only and return its current position.
+	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
 	// PromoteSlave transforms the tablet from a slave to a master.
 	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error)
+
+	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
+	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error

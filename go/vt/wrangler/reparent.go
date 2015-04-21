@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	initShardMasterOperation = "InitShardMaster"
+	initShardMasterOperation            = "InitShardMaster"
+	plannedReparentShardMasterOperation = "PlannedReparentShardMaster"
 )
 
 // ReparentShard creates the reparenting action and launches a goroutine
@@ -304,4 +305,58 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// to account for all changes.
 	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
 	return err
+}
+
+// PlannedReparentShard will make the provided tablet the master for the shard,
+// when both the current and new master are reachable and in good shape.
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+	// lock the shard
+	actionNode := actionnode.ReparentShard(plannedReparentShardMasterOperation, masterElectTabletAlias)
+	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	// do the work
+	err = wr.plannedReparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, force, waitSlaveTimeout)
+
+	// and unlock
+	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// Check corner cases we're going to depend on
+	masterElectTabletInfo, ok := tabletMap[masterElectTabletAlias]
+	if !ok {
+		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAlias)
+	}
+	if shardInfo.MasterAlias == masterElectTabletAlias {
+		return fmt.Errorf("master-elect tablet %v is already the master", masterElectTabletAlias)
+	}
+	oldMasterTabletInfo, ok := tabletMap[shardInfo.MasterAlias]
+	if !ok {
+		return fmt.Errorf("old master tablet %v is not in the shard", shardInfo.MasterAlias)
+	}
+
+	// Demote the current master, get its replication position
+	rp, err := wr.tmc.DemoteMaster(ctx, oldMasterTabletInfo)
+	if err != nil {
+		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", shardInfo.MasterAlias, err)
+	}
+
+	// Wait on the master-elect tablet until it reaches that position
+	if _, err := wr.tmc.WaitSlavePosition(ctx, masterElectTabletInfo, rp, waitSlaveTimeout); err != nil {
+		return fmt.Errorf("master-elect tablet %v failed to catch up with replication: %v", masterElectTabletAlias, err)
+	}
+	return nil
 }
