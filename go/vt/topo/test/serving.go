@@ -115,11 +115,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	srvKeyspace := topo.SrvKeyspace{
 		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				Shards: []topo.SrvShard{
-					topo.SrvShard{
-						Name: "-80",
-					},
-				},
 				ShardReferences: []topo.ShardReference{
 					topo.ShardReference{
 						Name:     "-80",
@@ -142,8 +137,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 	if k, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
 		len(k.Partitions) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].Shards[0].Name != "-80" ||
 		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||
@@ -162,8 +155,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 	if k, err := ts.GetSrvKeyspace(cell, "unknown_keyspace_so_far"); err != nil ||
 		len(k.Partitions) != 1 ||
-		len(k.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
-		k.Partitions[topo.TYPE_MASTER].Shards[0].Name != "-80" ||
 		len(k.Partitions[topo.TYPE_MASTER].ShardReferences) != 1 ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].Name != "-80" ||
 		k.Partitions[topo.TYPE_MASTER].ShardReferences[0].KeyRange != newKeyRange("-80") ||

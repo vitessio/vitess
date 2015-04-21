@@ -184,7 +184,7 @@ func TestSplitDiff(t *testing.T) {
 	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {
 		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

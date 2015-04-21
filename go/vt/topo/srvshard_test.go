@@ -34,12 +34,6 @@ func TestSrvKeySpace(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectSrvKeyspace{
 		Partitions: map[string]*KeyspacePartition{
 			string(TYPE_MASTER): &KeyspacePartition{
-				Shards: []SrvShard{
-					SrvShard{
-						Name:       "test_shard",
-						MasterCell: "test_cell",
-					},
-				},
 				ShardReferences: []ShardReference{
 					ShardReference{
 						Name: "test_shard",
@@ -62,12 +56,6 @@ func TestSrvKeySpace(t *testing.T) {
 	custom := SrvKeyspace{
 		Partitions: map[TabletType]*KeyspacePartition{
 			TYPE_MASTER: &KeyspacePartition{
-				Shards: []SrvShard{
-					SrvShard{
-						Name:       "test_shard",
-						MasterCell: "test_cell",
-					},
-				},
 				ShardReferences: []ShardReference{
 					ShardReference{
 						Name: "test_shard",

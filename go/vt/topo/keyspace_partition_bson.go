@@ -19,21 +19,12 @@ func (keyspacePartition *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWrite
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	// []SrvShard
-	{
-		bson.EncodePrefix(buf, bson.Array, "Shards")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v1 := range keyspacePartition.Shards {
-			_v1.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
 	// []ShardReference
 	{
 		bson.EncodePrefix(buf, bson.Array, "ShardReferences")
 		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range keyspacePartition.ShardReferences {
-			_v2.MarshalBson(buf, bson.Itoa(_i))
+		for _i, _v1 := range keyspacePartition.ShardReferences {
+			_v1.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
 	}
@@ -55,21 +46,6 @@ func (keyspacePartition *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kin
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
-		case "Shards":
-			// []SrvShard
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for keyspacePartition.Shards", kind))
-				}
-				bson.Next(buf, 4)
-				keyspacePartition.Shards = make([]SrvShard, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v1 SrvShard
-					_v1.UnmarshalBson(buf, kind)
-					keyspacePartition.Shards = append(keyspacePartition.Shards, _v1)
-				}
-			}
 		case "ShardReferences":
 			// []ShardReference
 			if kind != bson.Null {
@@ -80,9 +56,9 @@ func (keyspacePartition *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer, kin
 				keyspacePartition.ShardReferences = make([]ShardReference, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v2 ShardReference
-					_v2.UnmarshalBson(buf, kind)
-					keyspacePartition.ShardReferences = append(keyspacePartition.ShardReferences, _v2)
+					var _v1 ShardReference
+					_v1.UnmarshalBson(buf, kind)
+					keyspacePartition.ShardReferences = append(keyspacePartition.ShardReferences, _v1)
 				}
 			}
 		default:
