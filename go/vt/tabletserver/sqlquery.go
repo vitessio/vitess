@@ -299,7 +299,7 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session) (err err
 		sq.endRequest()
 	}()
 
-	Commit(ctx, logStats, sq.qe, session.TransactionId)
+	sq.qe.Commit(ctx, logStats, session.TransactionId)
 	return nil
 }
 
