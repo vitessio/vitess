@@ -44,12 +44,32 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 	}
 }
 
+func newTestSchemaInfoWithStats(
+	queryCacheSize int,
+	reloadTime time.Duration,
+	idleTimeout time.Duration) *SchemaInfo {
+	randID := rand.Int63()
+	return NewSchemaInfo(
+		fmt.Sprintf("SchemaInfo-%d-", randID),
+		queryCacheSize,
+		fmt.Sprintf("TestSchemaInfo-%d-", randID),
+		map[string]string{
+			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
+			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
+			debugTableStatsKey: fmt.Sprintf("/debug/table_stats_%d", randID),
+			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
+		},
+		reloadTime,
+		idleTimeout)
+}
+
 func newTestSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration) *SchemaInfo {
 	randID := rand.Int63()
 	return NewSchemaInfo(
+		"",
 		queryCacheSize,
 		fmt.Sprintf("TestSchemaInfo-%d-", randID),
 		map[string]string{

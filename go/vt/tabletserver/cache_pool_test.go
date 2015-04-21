@@ -105,7 +105,7 @@ func TestCachePoolState(t *testing.T) {
 		Binary:      "ls",
 		Connections: 100,
 	}
-	cachePool := newTestCachePool(rowCacheConfig)
+	cachePool := newTestCachePoolWithStats(rowCacheConfig)
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
@@ -204,9 +204,15 @@ func TestCachePoolStatsURL(t *testing.T) {
 	cachePool.ServeHTTP(response, request)
 }
 
-func newTestCachePool(rowcacheConfig RowCacheConfig) *CachePool {
+func newTestCachePoolWithStats(rowcacheConfig RowCacheConfig) *CachePool {
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
 	return NewCachePool(name, rowcacheConfig, 1*time.Second, statsURL)
+}
+
+func newTestCachePool(rowcacheConfig RowCacheConfig) *CachePool {
+	randID := rand.Int63()
+	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
+	return NewCachePool("", rowcacheConfig, 1*time.Second, statsURL)
 }

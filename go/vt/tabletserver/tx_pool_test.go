@@ -21,7 +21,7 @@ func TestExecuteCommit(t *testing.T) {
 	tableName := "test_table"
 	sql := fmt.Sprintf("ALTER TABLE %s ADD test_column INT", tableName)
 	fakesqldb.Register()
-	txPool := newTxPool()
+	txPool := newTxPoolWithStats()
 	txPool.SetTimeout(1 * time.Second)
 	txPool.SetPoolTimeout(1 * time.Second)
 	appParams := sqldb.ConnParams{}
@@ -238,6 +238,23 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 }
 
 func newTxPool() *TxPool {
+	randID := rand.Int63()
+	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)
+	transactionCap := 300
+	transactionTimeout := time.Duration(30 * time.Second)
+	txPoolTimeout := time.Duration(30 * time.Second)
+	idleTimeout := time.Duration(30 * time.Second)
+	return NewTxPool(
+		"",
+		txStatsPrefix,
+		transactionCap,
+		transactionTimeout,
+		txPoolTimeout,
+		idleTimeout,
+	)
+}
+
+func newTxPoolWithStats() *TxPool {
 	randID := rand.Int63()
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
 	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)

@@ -75,10 +75,12 @@ func NewTxPool(
 		ticks:       timer.NewTimer(timeout / 10),
 		txStats:     stats.NewTimings(txStatsPrefix + "Transactions"),
 	}
-	// Careful: pool also exports name+"xxx" vars,
-	// but we know it doesn't export Timeout.
-	stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
-	stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
+	if name != "" {
+		// Careful: pool also exports name+"xxx" vars,
+		// but we know it doesn't export Timeout.
+		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
+		stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
+	}
 	return axp
 }
 
