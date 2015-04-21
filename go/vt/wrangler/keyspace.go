@@ -168,7 +168,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 
 	// rebuild the keyspace serving graph if there was no error
 	if !rec.HasErrors() {
-		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells))
+		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells, false))
 	}
 
 	// Send a refresh to the tablets we just disabled, iff:
@@ -523,7 +523,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells))
+		rec.RecordError(wr.RebuildKeyspaceGraph(ctx, keyspace, cells, false))
 	}
 
 	return rec.Error()

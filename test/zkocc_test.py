@@ -48,7 +48,7 @@ class TopoOccTest(unittest.TestCase):
     utils.vtgate_kill(self.vtgate_zk)
 
   def rebuild(self):
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', '-rebuild_srv_shards', 'test_keyspace'], auto_log=True)
 
   def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
