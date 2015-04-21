@@ -262,10 +262,10 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 
 	// add the topo and schema data we'll need
 	ctx := context.Background()
-	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

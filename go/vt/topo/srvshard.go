@@ -30,25 +30,6 @@ type SrvShard struct {
 
 //go:generate bsongen -file $GOFILE -type SrvShard -o srvshard_bson.go
 
-// SrvShardArray is used for sorting SrvShard arrays
-type SrvShardArray []SrvShard
-
-// Len implements sort.Interface
-func (sa SrvShardArray) Len() int { return len(sa) }
-
-// Len implements sort.Interface
-func (sa SrvShardArray) Less(i, j int) bool {
-	return sa[i].KeyRange.Start < sa[j].KeyRange.Start
-}
-
-// Len implements sort.Interface
-func (sa SrvShardArray) Swap(i, j int) {
-	sa[i], sa[j] = sa[j], sa[i]
-}
-
-// Sort will sort the SrvShardArray on keyrange.
-func (sa SrvShardArray) Sort() { sort.Sort(sa) }
-
 // NewSrvShard returns an empty SrvShard with the given version.
 func NewSrvShard(version int64) *SrvShard {
 	return &SrvShard{
@@ -87,9 +68,6 @@ func (sra ShardReferenceArray) Sort() { sort.Sort(sra) }
 // KeyspacePartition represents a continuous set of shards to
 // serve an entire data set.
 type KeyspacePartition struct {
-	// List of non-overlapping continuous shards sorted by range.
-	Shards []SrvShard
-
 	// List of non-overlapping continuous shard references sorted by range.
 	ShardReferences []ShardReference
 }
@@ -97,11 +75,10 @@ type KeyspacePartition struct {
 //go:generate bsongen -file $GOFILE -type KeyspacePartition -o keyspace_partition_bson.go
 
 // HasShard returns true if this KeyspacePartition has the shard with
-// the given name in it. It uses Shards for now, we will switch to
-// using ShardReferences when it is populated.
+// the given name in it.
 func (kp *KeyspacePartition) HasShard(name string) bool {
-	for _, srvShard := range kp.Shards {
-		if srvShard.Name == name {
+	for _, shardReference := range kp.ShardReferences {
+		if shardReference.Name == name {
 			return true
 		}
 	}

@@ -188,8 +188,8 @@ var commands = []commandGroup{
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				"Manually change the ServedFromMap. Only use this for an emergency fix. MigrateServedFrom will set this field appropriately already. Does not rebuild the serving graph."},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <keyspace> ...",
-				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
+				"[-cells=a,b] [-rebuild_srv_shards] <keyspace> ...",
+				"Rebuild the serving data for the keyspace, and optionnally all the shards in the keyspace too. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
 				"Validate all nodes reachable from this keyspace are consistent."},
@@ -1482,6 +1482,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "comma separated list of cells to update")
+	rebuildSrvShards := subFlags.Bool("rebuild_srv_shards", false, "also rebuild all the SrvShard objects")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1499,7 +1500,7 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray, *rebuildSrvShards); err != nil {
 			return err
 		}
 	}

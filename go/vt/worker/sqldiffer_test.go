@@ -102,10 +102,10 @@ func TestSqlDiffer(t *testing.T) {
 	wr.SetSourceShards(ctx, "destination_ks", "0", []topo.TabletAlias{supersetRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
 
 	// add the topo and schema data we'll need
-	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil); err != nil {
+	if err := wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
