@@ -298,3 +298,26 @@ func (qe *QueryEngine) Close() {
 	qe.cachePool.Close()
 	qe.dbconfigs = nil
 }
+
+// Commit commits the specified transaction.
+func (qe *QueryEngine) Commit(ctx context.Context, logStats *SQLQueryStats, transactionID int64) {
+	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
+	for tableName, invalidList := range dirtyTables {
+		tableInfo := qe.schemaInfo.GetTable(tableName)
+		if tableInfo == nil {
+			continue
+		}
+		invalidations := int64(0)
+		for key := range invalidList {
+			// Use context.Background, becaause we don't want to fail
+			// these deletes.
+			tableInfo.Cache.Delete(context.Background(), key)
+			invalidations++
+		}
+		logStats.CacheInvalidations += invalidations
+		tableInfo.invalidations.Add(invalidations)
+	}
+	if err != nil {
+		panic(err)
+	}
+}

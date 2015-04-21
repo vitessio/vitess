@@ -1,0 +1,63 @@
+FROM golang:1.4-wheezy
+
+# Install Vitess build dependencies
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    automake \
+    bison \
+    bzip2 \
+    curl \
+    g++ \
+    git \
+    libssl-dev \
+    libtool \
+    make \
+    memcached \
+    mercurial \
+    openjdk-7-jre-headless \
+    pkg-config \
+    python-dev \
+    python-mysqldb \
+    python-software-properties \
+    python-pip \
+    python-virtualenv \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install gRPC as root
+RUN cd /tmp && \
+    git clone https://github.com/grpc/grpc.git && cd grpc && \
+    git submodule update --init && \
+    make install && \
+    CONFIG=opt tools/run_tests/build_python.sh && \
+    pip install -r src/python/requirements.txt && \
+    pip install src/python/src
+
+# Set up Vitess environment (equivalent to '. dev.env')
+ENV VTTOP /vt/src/github.com/youtube/vitess
+ENV VTROOT /vt
+ENV GOTOP $VTTOP/go
+ENV PYTOP $VTTOP/py
+ENV VTDATAROOT $VTROOT/vtdataroot
+ENV VTPORTSTART 15000
+ENV PYTHONPATH $VTROOT/dist/py-cbson/lib/python2.7/site-packages:$VTROOT/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages:$VTROOT/py-vtdb
+ENV GOBIN $VTROOT/bin
+ENV GOPATH $VTROOT
+ENV PATH $VTROOT/bin:$PATH
+ENV VT_MYSQL_ROOT /usr
+ENV PKG_CONFIG_PATH $VTROOT/lib
+ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.3.5/include/c-client-src
+ENV CGO_LDFLAGS -L$VTROOT/dist/vt-zookeeper-3.3.5/lib
+ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.3.5/lib
+
+# Copy files needed for bootstrap
+COPY . /vt/src/github.com/youtube/vitess
+
+# Create vitess user
+RUN groupadd -r vitess && useradd -r -g vitess vitess && \
+    mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
+
+# If the user doesn't specify a command, load a shell.
+CMD ["/bin/bash"]
