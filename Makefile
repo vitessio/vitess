@@ -190,4 +190,4 @@ docker_bootstrap:
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
 docker_test:
-	docker/test/run.sh $(flavor)
+	docker/test/run.sh $(flavor) 'make test'

@@ -32,9 +32,6 @@ RUN cd /tmp && \
     pip install -r src/python/requirements.txt && \
     pip install src/python/src
 
-# Create mount point for actual data (e.g. MySQL data dir)
-VOLUME /vt/vtdataroot
-
 # Set up Vitess environment (equivalent to '. dev.env')
 ENV VTTOP /vt/src/github.com/youtube/vitess
 ENV VTROOT /vt
@@ -57,7 +54,10 @@ COPY . /vt/src/github.com/youtube/vitess
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
-    chown -R vitess:vitess /vt
+    mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
