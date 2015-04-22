@@ -12,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 type fakeCallInfo struct {
@@ -38,6 +42,10 @@ func (fci *fakeCallInfo) HTML() template.HTML {
 }
 
 type testUtils struct{}
+
+func newTestUtils() *testUtils {
+	return &testUtils{}
+}
 
 func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
 	if !reflect.DeepEqual(expected, result) {
@@ -80,6 +88,44 @@ func (util *testUtils) getTabletErrorString(tabletErrorType int) string {
 		return "ErrNotInTx"
 	}
 	return ""
+}
+
+func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
+	randID := rand.Int63()
+	return mysqlctl.NewMysqld(
+		fmt.Sprintf("Dba_%d", randID),
+		fmt.Sprintf("App_%d", randID),
+		mysqlctl.NewMycnf(0, 6802),
+		&dbconfigs.Dba,
+		&dbconfigs.App.ConnParams,
+		&dbconfigs.Repl,
+	)
+}
+
+func (util *testUtils) newDBConfigs() dbconfigs.DBConfigs {
+	appDBConfig := dbconfigs.DBConfig{
+		ConnParams:        sqldb.ConnParams{},
+		Keyspace:          "test_keyspace",
+		Shard:             "0",
+		EnableRowcache:    false,
+		EnableInvalidator: false,
+	}
+	return dbconfigs.DBConfigs{
+		App: appDBConfig,
+	}
+}
+
+func (util *testUtils) newQueryServiceConfig() Config {
+	randID := rand.Int63()
+	config := DefaultQsConfig
+	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
+	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
+	config.StrictMode = true
+	config.RowCache.Binary = "ls"
+	config.RowCache.Connections = 100
+	return config
 }
 
 func newTestSchemaInfo(
