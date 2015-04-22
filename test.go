@@ -165,4 +165,8 @@ func main() {
 
 	// Print stats.
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED", passed, flaky, failed)
+
+	if failed > 0 {
+		os.Exit(1)
+	}
 }
