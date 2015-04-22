@@ -119,6 +119,13 @@ class MariaDB(MysqlFlavor):
   def disable_binlog_checksum(self, tablet):
     tablet.mquery('', 'SET @@global.binlog_checksum=0')
 
+
+class MySQL56(MysqlFlavor):
+  """Overrides specific to MySQL 5.6"""
+
+  def bootstrap_archive(self):
+    return "mysql-db-dir_5.6.24.tbz"
+
 __mysql_flavor = None
 
 
@@ -147,8 +154,7 @@ def set_mysql_flavor(flavor):
   if flavor == "MariaDB":
     __mysql_flavor = MariaDB()
   elif flavor == "MySQL56":
-    logging.error("MySQL 5.6 support is currently under development, and not supported yet")
-    exit(1)
+    __mysql_flavor = MySQL56()
   else:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)
