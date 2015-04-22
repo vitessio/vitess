@@ -140,8 +140,12 @@ if [ -z "$MYSQL_FLAVOR" ]; then
 fi
 case "$MYSQL_FLAVOR" in
   "MySQL56")
-    echo "MySQL 5.6 support is under development and not supported yet."
-    exit 1
+    myversion=`$VT_MYSQL_ROOT/bin/mysql --version | grep 'Distrib 5\.6'`
+    if [ "$myversion" == "" ]; then
+      echo "Couldn't find MySQL 5.6 in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
+      exit 1
+    fi
+    echo "Found MySQL 5.6 installation in $VT_MYSQL_ROOT."
     ;;
 
   "MariaDB")
