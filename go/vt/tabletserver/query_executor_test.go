@@ -748,8 +748,10 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 		config.StrictTableAcl = false
 	}
 	sqlQuery := NewSqlQuery(config)
+	testUtils := newTestUtils()
+
 	txID := int64(0)
-	dbconfigs := newTestDBConfigs()
+	dbconfigs := testUtils.newDBConfigs()
 	if flags&enableRowCache > 0 {
 		dbconfigs.App.EnableRowcache = true
 	} else {
@@ -759,7 +761,7 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()
 	}
-	sqlQuery.allowQueries(&dbconfigs, schemaOverrides, newMysqld(&dbconfigs))
+	sqlQuery.allowQueries(&dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
 	if flags&enableTx > 0 {
 		session := proto.Session{
 			SessionId:     sqlQuery.sessionID,
