@@ -100,6 +100,7 @@ type SchemaOverride struct {
 // keep itself and the rowcache up-to-date.
 type SchemaInfo struct {
 	mu         sync.Mutex
+	name       string
 	tables     map[string]*TableInfo
 	overrides  []SchemaOverride
 	queries    *cache.LRUCache
@@ -113,12 +114,14 @@ type SchemaInfo struct {
 
 // NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(
+	name string,
 	queryCacheSize int,
 	statsPrefix string,
 	endpoints map[string]string,
 	reloadTime time.Duration,
 	idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
+		name:       name,
 		queries:    cache.NewLRUCache(int64(queryCacheSize)),
 		connPool:   NewConnPool("", 2, idleTimeout),
 		ticks:      timer.NewTimer(reloadTime),
@@ -131,16 +134,21 @@ func NewSchemaInfo(
 	stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
 		return fmt.Sprintf("%v", si.queries.Oldest())
 	}))
-	stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
 	}
+
+	if name != "" {
+		stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	}
+
 	return si
 }
 

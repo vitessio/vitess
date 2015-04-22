@@ -262,7 +262,7 @@ type realQueryServiceControl struct {
 // NewQueryServiceControl returns a real implementation of QueryServiceControl
 func NewQueryServiceControl() QueryServiceControl {
 	return &realQueryServiceControl{
-		sqlQueryRPCService: NewSqlQuery(qsConfig),
+		sqlQueryRPCService: NewSqlQuery(qsConfig, "SqlQuery"),
 	}
 }
 

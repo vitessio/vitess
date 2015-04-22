@@ -416,10 +416,10 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second)
+	schemaInfo := newTestSchemaInfoWithStats(10, 10*time.Second, 10*time.Second)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool()
+	cachePool := newTestSchemaInfoCachePoolWithStats()
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
@@ -452,10 +452,10 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
+	schemaInfo := newTestSchemaInfoWithStats(10, 1*time.Second, 1*time.Second)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool()
+	cachePool := newTestSchemaInfoCachePoolWithStats()
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
@@ -507,6 +507,16 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 }
 
 func newTestSchemaInfoCachePool() *CachePool {
+	rowCacheConfig := RowCacheConfig{
+		Binary:      "ls",
+		Connections: 100,
+	}
+	randID := rand.Int63()
+	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
+	return NewCachePool("", rowCacheConfig, 1*time.Second, statsURL)
+}
+
+func newTestSchemaInfoCachePoolWithStats() *CachePool {
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,

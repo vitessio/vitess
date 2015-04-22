@@ -293,9 +293,8 @@ func newTestTableInfoCachePool() *CachePool {
 		Connections: 100,
 	}
 	randID := rand.Int63()
-	name := fmt.Sprintf("TestCachePool-TableInfo-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/tableinfo-cache-%d", randID)
-	return NewCachePool(name, rowCacheConfig, 1*time.Second, statsURL)
+	return NewCachePool("", rowCacheConfig, 1*time.Second, statsURL)
 }
 
 func getTestTableInfoQueries() map[string]*mproto.QueryResult {

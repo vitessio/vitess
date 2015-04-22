@@ -40,6 +40,7 @@ const spotCheckMultiplier = 1e6
 // panic with NewTabletError as the error type.
 // TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
+	name       string
 	schemaInfo *SchemaInfo
 	dbconfigs  *dbconfigs.DBConfigs
 
@@ -114,9 +115,25 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(config Config) *QueryEngine {
-	qe := &QueryEngine{}
+func NewQueryEngine(config Config, name string) *QueryEngine {
+	qe := &QueryEngine{name: name}
+
+	var schemaInfoName string
+	var cachePoolName string
+	var connPoolName string
+	var streamConnPoolName string
+	var txPoolName string
+
+	if name != "" {
+		schemaInfoName = config.PoolNamePrefix + "SchemaInfo"
+		cachePoolName = config.PoolNamePrefix + "Rowcache"
+		connPoolName = config.PoolNamePrefix + "ConnPool"
+		streamConnPoolName = config.PoolNamePrefix + "StreamConnPool"
+		txPoolName = config.PoolNamePrefix + "TransactionPool"
+	}
+
 	qe.schemaInfo = NewSchemaInfo(
+		schemaInfoName,
 		config.QueryCacheSize,
 		config.StatsPrefix,
 		map[string]string{
@@ -133,25 +150,25 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// Pools
 	qe.cachePool = NewCachePool(
-		config.PoolNamePrefix+"Rowcache",
+		cachePoolName,
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
 		config.DebugURLPrefix+"/memcache/",
 	)
 	qe.connPool = NewConnPool(
-		config.PoolNamePrefix+"ConnPool",
+		connPoolName,
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
 	qe.streamConnPool = NewConnPool(
-		config.PoolNamePrefix+"StreamConnPool",
+		streamConnPoolName,
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 	)
 
 	// Services
 	qe.txPool = NewTxPool(
-		config.PoolNamePrefix+"TransactionPool",
+		txPoolName,
 		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
@@ -177,11 +194,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	// Stats
-	stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-	stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-	stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-	stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings(config.StatsPrefix + "Queries")
 	qpsRates = stats.NewRates(config.StatsPrefix+"QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings(config.StatsPrefix + "Waits")
@@ -190,10 +202,18 @@ func NewQueryEngine(config Config) *QueryEngine {
 	errorStats = stats.NewCounters(config.StatsPrefix + "Errors")
 	internalErrors = stats.NewCounters(config.StatsPrefix + "InternalErrors")
 	resultStats = stats.NewHistogram(config.StatsPrefix+"Results", resultBuckets)
-	stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
-		return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
-	}))
 	spotCheckCount = stats.NewInt(config.StatsPrefix + "RowcacheSpotCheckCount")
+
+	// Stats
+	if name != "" {
+		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
+		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
+		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
+			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
+		}))
+	}
 
 	return qe
 }

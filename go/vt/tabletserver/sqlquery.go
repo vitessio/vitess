@@ -64,6 +64,7 @@ var stateName = []string{
 
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
+	name   string
 	config Config
 	// mu is used to access state. It's also used to ensure
 	// that state does not change out of StateServing or StateShuttingTx
@@ -86,18 +87,25 @@ type SqlQuery struct {
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
 // of SqlQuery can be created per process.
-func NewSqlQuery(config Config) *SqlQuery {
+func NewSqlQuery(config Config, name string) *SqlQuery {
 	sq := &SqlQuery{
 		config: config,
+		name:   name,
 	}
-	sq.qe = NewQueryEngine(config)
-	stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
-		sq.mu.Lock()
-		state := sq.state
-		sq.mu.Unlock()
-		return state
-	}))
-	stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
+	var queryEngineName string
+	if name != "" {
+		queryEngineName = name + "QueryEngine"
+	}
+	sq.qe = NewQueryEngine(config, queryEngineName)
+	if name != "" {
+		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
+			sq.mu.Lock()
+			state := sq.state
+			sq.mu.Unlock()
+			return state
+		}))
+		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
+	}
 	return sq
 }
 

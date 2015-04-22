@@ -746,7 +746,7 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	} else {
 		config.StrictTableAcl = false
 	}
-	sqlQuery := NewSqlQuery(config)
+	sqlQuery := NewSqlQuery(config, "")
 	txID := int64(0)
 	dbconfigs := newTestDBConfigs()
 	if flags&enableRowCache > 0 {
