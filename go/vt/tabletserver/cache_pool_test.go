@@ -6,9 +6,11 @@ package tabletserver
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
 
@@ -188,7 +190,7 @@ func TestCachePoolGetFailedBecauseCachePoolIsClosed(t *testing.T) {
 }
 
 func TestCachePoolStatsURL(t *testing.T) {
-	fakecacheservice.Register()
+	cache := fakecacheservice.Register()
 	fakesqldb.Register()
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
@@ -198,15 +200,66 @@ func TestCachePoolStatsURL(t *testing.T) {
 	idleTimeout := 1 * time.Second
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
-	defer cachePool.Close()
-	request, _ := http.NewRequest("GET", cachePool.statsURL, nil)
+	request, _ := http.NewRequest("GET", fmt.Sprintf("%sstats", cachePool.statsURL), nil)
 	response := httptest.NewRecorder()
 	cachePool.ServeHTTP(response, request)
+	// any memcache calls should fail
+	cache.EnableCacheServiceError()
+	response = httptest.NewRecorder()
+	cachePool.ServeHTTP(response, request)
+	cache.DisableCacheServiceError()
+	cachePool.Close()
+	response = httptest.NewRecorder()
+	cachePool.ServeHTTP(response, request)
+	body, _ := ioutil.ReadAll(response.Body)
+	matcher := regexp.MustCompile("closed")
+	if !matcher.Match(body) {
+		t.Fatalf("stats page should contain 'closed', but got %s", string(body))
+	}
+}
+
+func TestCachePoolMemcacheStatsFail(t *testing.T) {
+	cache := fakecacheservice.Register()
+	fakesqldb.Register()
+	rowCacheConfig := RowCacheConfig{
+		Binary:      "ls",
+		Connections: 100,
+	}
+	cachePool := newTestCachePool(rowCacheConfig, true)
+	idleTimeout := 1 * time.Second
+	cachePool.idleTimeout = idleTimeout
+	cachePool.Open()
+	defer cachePool.Close()
+	memcacheStatsBefore := internalErrors.Counts()["MemcacheStats"]
+	// any memcache calls should fail
+	cache.EnableCacheServiceError()
+	cachePool.memcacheStats.update()
+	memcacheStatsAfter := internalErrors.Counts()["MemcacheStats"]
+	if memcacheStatsAfter <= memcacheStatsBefore {
+		t.Fatalf("memcache stats should cause an internal error")
+	}
+}
+
+func TestCachePoolFailToStartBecauseCacheServiceWasDown(t *testing.T) {
+	cache := fakecacheservice.Register()
+	fakesqldb.Register()
+	testUtils := &testUtils{}
+	rowCacheConfig := RowCacheConfig{
+		Binary:      "ls",
+		Connections: 100,
+	}
+	cachePool := newTestCachePool(rowCacheConfig, false)
+	idleTimeout := 1 * time.Second
+	cachePool.idleTimeout = idleTimeout
+	// any memcache calls should fail
+	cache.EnableCacheServiceError()
+	defer testUtils.checkTabletErrorWithRecover(t, ErrFatal, "can't communicate with cache service")
+	cachePool.Open()
 }
 
 func newTestCachePool(rowcacheConfig RowCacheConfig, enablePublishStats bool) *CachePool {
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-%d-", randID)
-	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
+	statsURL := fmt.Sprintf("/debug/cache-%d/", randID)
 	return NewCachePool(name, rowcacheConfig, 1*time.Second, statsURL, enablePublishStats)
 }
