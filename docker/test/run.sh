@@ -56,6 +56,8 @@ fi
 
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
+  # Use Docker user to clean up first, to avoid permission errors.
+  docker run $args vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
   rm -rf $hostdir
 fi
 
