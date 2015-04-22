@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test
 
 all: build test
 
@@ -191,3 +191,6 @@ docker_bootstrap:
 # Example: $ make docker_test flavor=mariadb
 docker_test:
 	docker/test/run.sh $(flavor) 'make test'
+
+docker_unit_test:
+	docker/test/run.sh $(flavor) 'make unit_test'
