@@ -122,3 +122,50 @@ func TestFakeCacheService(t *testing.T) {
 	service.Stats("")
 	service.Close()
 }
+
+func TestFakeCacheServiceError(t *testing.T) {
+	service := NewFakeCacheService(&Cache{data: make(map[string]*cs.Result)})
+	service.cache.EnableCacheServiceError()
+	key1 := "key1"
+	_, err := service.Set(key1, 0, 0, []byte("test"))
+	checkCacheServiceError(t, err)
+	_, err = service.Get(key1)
+	checkCacheServiceError(t, err)
+	_, err = service.Gets(key1)
+	checkCacheServiceError(t, err)
+	_, err = service.Cas(key1, 0, 0, []byte("test2"), 0)
+	checkCacheServiceError(t, err)
+	_, err = service.Add(key1, 0, 0, []byte("test3"))
+	checkCacheServiceError(t, err)
+	_, err = service.Replace("unknownKey", 0, 0, []byte("test4"))
+	checkCacheServiceError(t, err)
+	_, err = service.Append("unknownKey", 0, 0, []byte("test5"))
+	checkCacheServiceError(t, err)
+	_, err = service.Prepend("unknownKey", 0, 0, []byte("test5"))
+	checkCacheServiceError(t, err)
+	_, err = service.Prepend(key1, 0, 0, []byte("test5"))
+	checkCacheServiceError(t, err)
+	_, err = service.Delete(key1)
+	checkCacheServiceError(t, err)
+	err = service.FlushAll()
+	checkCacheServiceError(t, err)
+	_, err = service.Stats("")
+	checkCacheServiceError(t, err)
+
+	service.cache.DisableCacheServiceError()
+	ok, err := service.Set(key1, 0, 0, []byte("test"))
+	if !ok || err != nil {
+		t.Fatalf("set should succeed")
+	}
+	results, err := service.Get(key1)
+	if !reflect.DeepEqual(results[0].Value, []byte("test")) {
+		t.Fatalf("expect to get value: test, but get: %s", string(results[0].Value))
+	}
+	service.Close()
+}
+
+func checkCacheServiceError(t *testing.T, err error) {
+	if err.Error() != errCacheService {
+		t.Fatalf("should get cacheservice error")
+	}
+}
