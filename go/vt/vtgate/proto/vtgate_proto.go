@@ -43,10 +43,11 @@ func (shardSession *ShardSession) String() string {
 
 // Query represents a keyspace agnostic query request.
 type Query struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type Query -o query_bson.go
@@ -54,12 +55,13 @@ type Query struct {
 // QueryShard represents a query request for the
 // specified list of shards.
 type QueryShard struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	Shards        []string
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type QueryShard -o query_shard_bson.go
@@ -67,12 +69,13 @@ type QueryShard struct {
 // KeyspaceIdQuery represents a query request for the
 // specified list of keyspace IDs.
 type KeyspaceIdQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyspaceIds   []key.KeyspaceId
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyspaceIds      []key.KeyspaceId
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspaceIdQuery -o keyspace_id_query_bson.go
@@ -80,12 +83,13 @@ type KeyspaceIdQuery struct {
 // KeyRangeQuery represents a query request for the
 // specified list of keyranges.
 type KeyRangeQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-	Keyspace      string
-	KeyRanges     []key.KeyRange
-	TabletType    topo.TabletType
-	Session       *Session
+	Sql              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyRanges        []key.KeyRange
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type KeyRangeQuery -o key_range_query_bson.go
@@ -107,6 +111,7 @@ type EntityIdsQuery struct {
 	EntityKeyspaceIDs []EntityId
 	TabletType        topo.TabletType
 	Session           *Session
+	NotInTransaction  bool
 }
 
 //go:generate bsongen -file $GOFILE -type EntityIdsQuery -o entity_ids_query_bson.go
@@ -123,11 +128,12 @@ type QueryResult struct {
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
-	Queries    []tproto.BoundQuery
-	Keyspace   string
-	Shards     []string
-	TabletType topo.TabletType
-	Session    *Session
+	Queries          []tproto.BoundQuery
+	Keyspace         string
+	Shards           []string
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type BatchQueryShard -o batch_query_shard_bson.go
@@ -135,11 +141,12 @@ type BatchQueryShard struct {
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
-	Queries     []tproto.BoundQuery
-	Keyspace    string
-	KeyspaceIds []key.KeyspaceId
-	TabletType  topo.TabletType
-	Session     *Session
+	Queries          []tproto.BoundQuery
+	Keyspace         string
+	KeyspaceIds      []key.KeyspaceId
+	TabletType       topo.TabletType
+	Session          *Session
+	NotInTransaction bool
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspaceIdBatchQuery -o keyspace_id_batch_query_bson.go

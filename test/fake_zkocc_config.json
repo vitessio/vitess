@@ -8,11 +8,6 @@
         },
 	"Name": "c0-d0"
       }
-    ],
-    "TabletTypes": [
-      "rdonly",
-      "replica",
-      "master"
     ]
   },
   "/zk/testing/vt/ns/test_keyspace/0/master": {

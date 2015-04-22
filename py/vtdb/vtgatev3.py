@@ -76,12 +76,13 @@ def convert_exception(exc, *args):
   return exc
 
 
-def _create_req(sql, new_binds, tablet_type):
+def _create_req(sql, new_binds, tablet_type, not_in_transaction):
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
         'Sql': sql,
         'BindVariables': new_binds,
         'TabletType': tablet_type,
+        'NotInTransaction': not_in_transaction,
         }
   return req
 
@@ -160,8 +161,8 @@ class VTGateConnection(object):
     if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
-  def _execute(self, sql, bind_variables, tablet_type):
-    req = _create_req(sql, bind_variables, tablet_type)
+  def _execute(self, sql, bind_variables, tablet_type, not_in_transaction=False):
+    req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
     fields = []
@@ -196,7 +197,7 @@ class VTGateConnection(object):
     return results, rowcount, lastrowid, fields
 
 
-  def _execute_batch(self, sql_list, bind_variables_list, tablet_type):
+  def _execute_batch(self, sql_list, bind_variables_list, tablet_type, not_in_transaction=False):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -210,6 +211,7 @@ class VTGateConnection(object):
       req = {
           'Queries': query_list,
           'TabletType': tablet_type,
+          'NotInTransaction': not_in_transaction,
       }
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatch', req)
@@ -243,8 +245,8 @@ class VTGateConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute(self, sql, bind_variables, tablet_type):
-    req = _create_req(sql, bind_variables, tablet_type)
+  def _stream_execute(self, sql, bind_variables, tablet_type, not_in_transaction=False):
+    req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
     self._stream_fields = []

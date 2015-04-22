@@ -91,6 +91,9 @@ type ActionAgent struct {
 	// the reason we're not healthy.
 	_healthy error
 
+	// this is the last time health check ran
+	_healthyTime time.Time
+
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
@@ -105,7 +108,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 	if overridesFile == "" {
 		return schemaOverrides
 	}
-	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
+	if err := jscfg.ReadJSON(overridesFile, &schemaOverrides); err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {
 		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -120,8 +123,8 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // batchCtx is the context that the agent will use for any background tasks
 // it spawns.
 func NewActionAgent(
-	queryServiceControl tabletserver.QueryServiceControl,
 	batchCtx context.Context,
+	queryServiceControl tabletserver.QueryServiceControl,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
@@ -247,10 +250,21 @@ func (agent *ActionAgent) Tablet() *topo.TabletInfo {
 }
 
 // Healthy reads the result of the latest healthcheck, protected by mutex.
+// If that status is too old, it means healthcheck hasn't run for a while,
+// and is probably stuck, this is not good, we're not healthy.
 func (agent *ActionAgent) Healthy() (time.Duration, error) {
 	agent.mutex.Lock()
 	defer agent.mutex.Unlock()
-	return agent._replicationDelay, agent._healthy
+
+	healthy := agent._healthy
+	if healthy == nil {
+		timeSinceLastCheck := time.Since(agent._healthyTime)
+		if timeSinceLastCheck > *healthCheckInterval*3 {
+			healthy = fmt.Errorf("last health check is too old: %s > %s", timeSinceLastCheck, *healthCheckInterval*3)
+		}
+	}
+
+	return agent._replicationDelay, healthy
 }
 
 // BlacklistedTables reads the list of blacklisted tables from the TabletControl

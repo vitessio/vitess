@@ -65,9 +65,10 @@ func NewTxPool(
 	capacity int,
 	timeout time.Duration,
 	poolTimeout time.Duration,
-	idleTimeout time.Duration) *TxPool {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *TxPool {
 	axp := &TxPool{
-		pool:        NewConnPool(name, capacity, idleTimeout),
+		pool:        NewConnPool(name, capacity, idleTimeout, enablePublishStats),
 		activePool:  pools.NewNumbered(),
 		lastID:      sync2.AtomicInt64(time.Now().UnixNano()),
 		timeout:     sync2.AtomicDuration(timeout),
@@ -77,8 +78,10 @@ func NewTxPool(
 	}
 	// Careful: pool also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
-	stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
-	stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
+	if enablePublishStats {
+		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
+		stats.Publish(name+"PoolTimeout", stats.DurationFunc(axp.poolTimeout.Get))
+	}
 	return axp
 }
 
@@ -211,6 +214,11 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 // TODO(sougou): move this to SqlQuery.
 func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
 	axp.poolTimeout.Set(timeout)
+}
+
+// PoolTimeout returns the wait time for the tx pool.
+func (axp *TxPool) PoolTimeout() time.Duration {
+	return axp.poolTimeout.Get()
 }
 
 // TxConnection is meant for executing transactions. It keeps track

@@ -98,14 +98,9 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	ql.mu.Lock()
 	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
-		var h template.HTML
-		ci, ok := callinfo.FromContext(qd.context)
-		if ok {
-			h = ci.HTML
-		}
 		row := QueryDetailzRow{
 			Query:       qd.conn.Current(),
-			ContextHTML: h,
+			ContextHTML: callinfo.HTMLFromContext(qd.context),
 			Start:       qd.start,
 			Duration:    time.Now().Sub(qd.start),
 			ConnID:      qd.connID,

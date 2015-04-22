@@ -140,18 +140,27 @@ type MigrateServedFromArgs struct {
 
 // methods to build the shard action nodes
 
+// ReparentShardArgs is the payload for ReparentShard
+type ReparentShardArgs struct {
+	Operation        string
+	MasterElectAlias topo.TabletAlias
+}
+
 // ReparentShard returns an ActionNode
-func ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {
+func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_REPARENT,
-		Args:   &tabletAlias,
+		Action: ShardActionReparent,
+		Args: &ReparentShardArgs{
+			Operation:        operation,
+			MasterElectAlias: masterElectAlias,
+		},
 	}).SetGuid()
 }
 
 // ShardExternallyReparented returns an ActionNode
 func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_EXTERNALLY_REPARENTED,
+		Action: ShardActionExternallyReparented,
 		Args:   &tabletAlias,
 	}).SetGuid()
 }
@@ -159,21 +168,21 @@ func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
 // RebuildShard returns an ActionNode
 func RebuildShard() *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_REBUILD,
+		Action: ShardActionRebuild,
 	}).SetGuid()
 }
 
 // CheckShard returns an ActionNode
 func CheckShard() *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_CHECK,
+		Action: ShardActionCheck,
 	}).SetGuid()
 }
 
 // ApplySchemaShard returns an ActionNode
 func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_APPLY_SCHEMA,
+		Action: ShardActionApplySchema,
 		Args: &ApplySchemaShardArgs{
 			MasterTabletAlias: masterTabletAlias,
 			Change:            change,
@@ -185,7 +194,7 @@ func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple 
 // SetShardServedTypes returns an ActionNode
 func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_SET_SERVED_TYPES,
+		Action: ShardActionSetServedTypes,
 		Args: &SetShardServedTypesArgs{
 			Cells:      cells,
 			ServedType: servedType,
@@ -196,7 +205,7 @@ func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode
 // MigrateServedTypes returns an ActionNode
 func MigrateServedTypes(servedType topo.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		Action: ShardActionMigrateServedTypes,
 		Args: &MigrateServedTypesArgs{
 			ServedType: servedType,
 		},
@@ -206,7 +215,7 @@ func MigrateServedTypes(servedType topo.TabletType) *ActionNode {
 // UpdateShard returns an ActionNode
 func UpdateShard() *ActionNode {
 	return (&ActionNode{
-		Action: SHARD_ACTION_UPDATE_SHARD,
+		Action: ShardActionUpdateShard,
 	}).SetGuid()
 }
 
@@ -215,28 +224,28 @@ func UpdateShard() *ActionNode {
 // RebuildKeyspace returns an ActionNode
 func RebuildKeyspace() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_REBUILD,
+		Action: KeyspaceActionRebuild,
 	}).SetGuid()
 }
 
 // SetKeyspaceShardingInfo returns an ActionNode
 func SetKeyspaceShardingInfo() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_SET_SHARDING_INFO,
+		Action: KeyspaceActionSetShardingInfo,
 	}).SetGuid()
 }
 
 // SetKeyspaceServedFrom returns an ActionNode
 func SetKeyspaceServedFrom() *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_SET_SERVED_FROM,
+		Action: KeyspaceActionSetServedFrom,
 	}).SetGuid()
 }
 
 // ApplySchemaKeyspace returns an ActionNode
 func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_APPLY_SCHEMA,
+		Action: KeyspaceActionApplySchema,
 		Args: &ApplySchemaKeyspaceArgs{
 			Change: change,
 			Simple: simple,
@@ -247,7 +256,7 @@ func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
 // MigrateServedFrom returns an ActionNode
 func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
 	return (&ActionNode{
-		Action: KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
+		Action: KeyspaceActionMigrateServedFrom,
 		Args: &MigrateServedFromArgs{
 			ServedType: servedType,
 		},
@@ -259,6 +268,6 @@ func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
 // RebuildSrvShard returns an ActionNode
 func RebuildSrvShard() *ActionNode {
 	return (&ActionNode{
-		Action: SRV_SHARD_ACTION_REBUILD,
+		Action: SrvShardActionRebuild,
 	}).SetGuid()
 }

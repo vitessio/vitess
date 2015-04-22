@@ -127,6 +127,7 @@ func (stc *ScatterConn) Execute(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		context,
@@ -135,6 +136,7 @@ func (stc *ScatterConn) Execute(
 		shards,
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			innerqr, err := sdc.Execute(context, query, bindVars, transactionId)
 			if err != nil {
@@ -165,6 +167,7 @@ func (stc *ScatterConn) ExecuteMulti(
 	shardVars map[string]map[string]interface{},
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		context,
@@ -173,6 +176,7 @@ func (stc *ScatterConn) ExecuteMulti(
 		getShards(shardVars),
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			innerqr, err := sdc.Execute(context, query, shardVars[sdc.shard], transactionId)
 			if err != nil {
@@ -202,6 +206,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	keyspace string,
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		context,
@@ -210,6 +215,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		shards,
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			shard := sdc.shard
 			sql := sqls[shard]
@@ -241,6 +247,7 @@ func (stc *ScatterConn) ExecuteBatch(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 ) (qrs *tproto.QueryResultList, err error) {
 	results, allErrors := stc.multiGo(
 		context,
@@ -249,6 +256,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		shards,
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			innerqrs, err := sdc.ExecuteBatch(context, queries, transactionId)
 			if err != nil {
@@ -282,6 +290,7 @@ func (stc *ScatterConn) StreamExecute(
 	tabletType topo.TabletType,
 	session *SafeSession,
 	sendReply func(reply *mproto.QueryResult) error,
+	notInTransaction bool,
 ) error {
 	results, allErrors := stc.multiGo(
 		context,
@@ -290,6 +299,7 @@ func (stc *ScatterConn) StreamExecute(
 		shards,
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(context, query, bindVars, transactionId)
 			if sr != nil {
@@ -333,6 +343,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	tabletType topo.TabletType,
 	session *SafeSession,
 	sendReply func(reply *mproto.QueryResult) error,
+	notInTransaction bool,
 ) error {
 	results, allErrors := stc.multiGo(
 		context,
@@ -341,6 +352,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		getShards(shardVars),
 		tabletType,
 		session,
+		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(context, query, shardVars[sdc.shard], transactionId)
 			if sr != nil {
@@ -446,7 +458,7 @@ func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	for shard := range keyRangeByShard {
 		shards = append(shards, shard)
 	}
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), actionFunc)
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), false, actionFunc)
 	splits := []proto.SplitQueryPart{}
 	for s := range allSplits {
 		splits = append(splits, s.([]proto.SplitQueryPart)...)
@@ -512,6 +524,7 @@ func (stc *ScatterConn) multiGo(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 	action shardActionFunc,
 ) (rResults <-chan interface{}, allErrors *concurrency.AllErrorRecorder) {
 	allErrors = new(concurrency.AllErrorRecorder)
@@ -526,7 +539,7 @@ func (stc *ScatterConn) multiGo(
 			defer stc.timings.Record(statsKey, startTime)
 
 			sdc := stc.getConnection(context, keyspace, shard, tabletType)
-			transactionID, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+			transactionID, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session, notInTransaction)
 			if err != nil {
 				allErrors.RecordError(err)
 				stc.tabletCallErrorCount.Add(statsKey, 1)
@@ -577,6 +590,7 @@ func (stc *ScatterConn) updateSession(
 	keyspace, shard string,
 	tabletType topo.TabletType,
 	session *SafeSession,
+	notInTransaction bool,
 ) (transactionID int64, err error) {
 	if !session.InTransaction() {
 		return 0, nil
@@ -588,6 +602,12 @@ func (stc *ScatterConn) updateSession(
 	transactionID = session.Find(keyspace, shard, tabletType)
 	if transactionID != 0 {
 		return transactionID, nil
+	}
+	// We are in a transaction at higher level,
+	// but client requires not to start a transaction for this query.
+	// If a transaction was started on this conn, we will use it (as above).
+	if notInTransaction {
+		return 0, nil
 	}
 	transactionID, err = sdc.Begin(context)
 	if err != nil {

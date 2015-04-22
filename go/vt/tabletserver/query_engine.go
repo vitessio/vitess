@@ -118,49 +118,54 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,
-		"",
+		config.StatsPrefix,
 		map[string]string{
-			debugQueryPlansKey: "/debug/query_plans",
-			debugQueryStatsKey: "/debug/query_stats",
-			debugTableStatsKey: "/debug/table_stats",
-			debugSchemaKey:     "/debug/schema",
+			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
+			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
+			debugSchemaKey:     config.DebugURLPrefix + "/schema",
 		},
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 
-	mysqlStats = stats.NewTimings("Mysql")
+	mysqlStats = stats.NewTimings(config.StatsPrefix + "Mysql")
 
 	// Pools
 	qe.cachePool = NewCachePool(
-		"Rowcache",
+		config.PoolNamePrefix+"Rowcache",
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
-		"/debug/memcache/",
+		config.DebugURLPrefix+"/memcache/",
+		config.EnablePublishStats,
 	)
 	qe.connPool = NewConnPool(
-		"ConnPool",
+		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 	qe.streamConnPool = NewConnPool(
-		"StreamConnPool",
+		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 
 	// Services
 	qe.txPool = NewTxPool(
-		"TransactionPool",
-		"",
+		config.PoolNamePrefix+"TransactionPool",
+		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 	qe.consolidator = sync2.NewConsolidator()
-	http.Handle("/debug/consolidations", qe.consolidator)
-	qe.invalidator = NewRowcacheInvalidator(qe)
+	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
+	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe)
 	qe.streamQList = NewQueryList()
 
 	// Vars
@@ -178,23 +183,25 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
-	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-	stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-	stats.Publish("QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
-	queryStats = stats.NewTimings("Queries")
-	qpsRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
-	waitStats = stats.NewTimings("Waits")
-	killStats = stats.NewCounters("Kills")
-	infoErrors = stats.NewCounters("InfoErrors")
-	errorStats = stats.NewCounters("Errors")
-	internalErrors = stats.NewCounters("InternalErrors")
-	resultStats = stats.NewHistogram("Results", resultBuckets)
-	stats.Publish("RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
-		return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
-	}))
-	spotCheckCount = stats.NewInt("RowcacheSpotCheckCount")
+	queryStats = stats.NewTimings(config.StatsPrefix + "Queries")
+	qpsRates = stats.NewRates(config.StatsPrefix+"QPS", queryStats, 15, 60*time.Second)
+	waitStats = stats.NewTimings(config.StatsPrefix + "Waits")
+	killStats = stats.NewCounters(config.StatsPrefix + "Kills")
+	infoErrors = stats.NewCounters(config.StatsPrefix + "InfoErrors")
+	errorStats = stats.NewCounters(config.StatsPrefix + "Errors")
+	internalErrors = stats.NewCounters(config.StatsPrefix + "InternalErrors")
+	resultStats = stats.NewHistogram(config.StatsPrefix+"Results", resultBuckets)
+	spotCheckCount = stats.NewInt(config.StatsPrefix + "RowcacheSpotCheckCount")
 
+	if config.EnablePublishStats {
+		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
+		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
+		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
+			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
+		}))
+	}
 	return qe
 }
 
@@ -297,4 +304,27 @@ func (qe *QueryEngine) Close() {
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 	qe.dbconfigs = nil
+}
+
+// Commit commits the specified transaction.
+func (qe *QueryEngine) Commit(ctx context.Context, logStats *SQLQueryStats, transactionID int64) {
+	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
+	for tableName, invalidList := range dirtyTables {
+		tableInfo := qe.schemaInfo.GetTable(tableName)
+		if tableInfo == nil {
+			continue
+		}
+		invalidations := int64(0)
+		for key := range invalidList {
+			// Use context.Background, becaause we don't want to fail
+			// these deletes.
+			tableInfo.Cache.Delete(context.Background(), key)
+			invalidations++
+		}
+		logStats.CacheInvalidations += invalidations
+		tableInfo.invalidations.Add(invalidations)
+	}
+	if err != nil {
+		panic(err)
+	}
 }

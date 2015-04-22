@@ -932,6 +932,76 @@ func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmcl
 // Reparenting related functions
 //
 
+func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+func agentRPCTestInitMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.InitMaster(ctx, ti)
+	compareError(t, "InitMaster", err, rp, testReplicationPosition)
+}
+
+func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.InitMaster(ctx, ti)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
+var testPopulateReparentJournalCalled = false
+var testTimeCreatedNS int64 = 4569900
+var testActionName = "TestActionName"
+var testMasterAlias = topo.TabletAlias{
+	Cell: "ce",
+	Uid:  372,
+}
+
+func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "PopulateReparentJournal timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	compare(fra.t, "PopulateReparentJournal actionName", actionName, testActionName)
+	compare(fra.t, "PopulateReparentJournal masterAlias", masterAlias, testMasterAlias)
+	compare(fra.t, "PopulateReparentJournal pos", pos, testReplicationPosition)
+	testPopulateReparentJournalCalled = true
+	return nil
+}
+
+func agentRPCTestPopulateReparentJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.PopulateReparentJournal(ctx, ti, testTimeCreatedNS, testActionName, testMasterAlias, testReplicationPosition)
+	compareError(t, "PopulateReparentJournal", err, true, testPopulateReparentJournalCalled)
+}
+
+func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.PopulateReparentJournal(ctx, ti, testTimeCreatedNS, testActionName, testMasterAlias, testReplicationPosition)
+	expectRPCWrapPanic(t, err)
+}
+
+var testInitSlaveCalled = false
+
+func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, pos myproto.ReplicationPosition, timeCreatedNS int64) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "InitSlave parent", parent, testMasterAlias)
+	compare(fra.t, "InitSlave pos", pos, testReplicationPosition)
+	compare(fra.t, "InitSlave timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	testInitSlaveCalled = true
+	return nil
+}
+
+func agentRPCTestInitSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.InitSlave(ctx, ti, testMasterAlias, testReplicationPosition, testTimeCreatedNS)
+	compareError(t, "InitSlave", err, true, testInitSlaveCalled)
+}
+
+func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.InitSlave(ctx, ti, testMasterAlias, testReplicationPosition, testTimeCreatedNS)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
 var testDemoteMasterCalled = false
 
 func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) error {
@@ -1287,6 +1357,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRunBlpUntil(ctx, t, client, ti)
 
 	// Reparenting related functions
+	agentRPCTestInitMaster(ctx, t, client, ti)
+	agentRPCTestPopulateReparentJournal(ctx, t, client, ti)
+	agentRPCTestInitSlave(ctx, t, client, ti)
 	agentRPCTestDemoteMaster(ctx, t, client, ti)
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromoted(ctx, t, client, ti)
@@ -1340,6 +1413,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRunBlpUntilPanic(ctx, t, client, ti)
 
 	// Reparenting related functions
+	agentRPCTestInitMasterPanic(ctx, t, client, ti)
+	agentRPCTestPopulateReparentJournalPanic(ctx, t, client, ti)
+	agentRPCTestInitSlavePanic(ctx, t, client, ti)
 	agentRPCTestDemoteMasterPanic(ctx, t, client, ti)
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, ti)

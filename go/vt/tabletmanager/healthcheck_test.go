@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,6 +154,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 
 	// first health check, should change us to replica, and update the
 	// mysql port to 3306
+	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -167,9 +169,13 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 
 	// now make the tablet unhealthy
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -181,6 +187,9 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 }
 
 // TestQueryServiceNotStarting verifies that if a tablet cannot start the
@@ -190,6 +199,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	targetTabletType := topo.TYPE_REPLICA
 	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
 
+	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -201,6 +211,9 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 }
 
 // TestQueryServiceStopped verifies that if a healthy tablet's query
@@ -210,6 +223,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica
+	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -221,12 +235,16 @@ func TestQueryServiceStopped(t *testing.T) {
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 
 	// shut down query service and prevent it from starting again
 	agent.QueryServiceControl.DisallowQueries()
 	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
 
 	// health check should now fail
+	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -238,6 +256,9 @@ func TestQueryServiceStopped(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 }
 
 // TestTabletControl verifies the shard's TabletControl record can disable
@@ -247,6 +268,7 @@ func TestTabletControl(t *testing.T) {
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica
+	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err := agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -257,6 +279,9 @@ func TestTabletControl(t *testing.T) {
 	}
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
+	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
 	}
 
 	// now update the shard
@@ -275,7 +300,7 @@ func TestTabletControl(t *testing.T) {
 
 	// now refresh the tablet state, as the resharding process would do
 	ctx := context.Background()
-	agent.RPCWrapLockAction(ctx, actionnode.TABLET_ACTION_REFRESH_STATE, "", "", true, func() error {
+	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
 	})
@@ -286,6 +311,7 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// check running a health check will not start it again
+	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -297,9 +323,13 @@ func TestTabletControl(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 
 	// go unhealthy, check we go to spare and QS is not running
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
+	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -311,9 +341,13 @@ func TestTabletControl(t *testing.T) {
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
 	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
 
 	// go back healthy, check QS is still not running
 	agent.HealthReporter.(*fakeHealthCheck).reportError = nil
+	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
 	ti, err = agent.TopoServer.GetTablet(tabletAlias)
 	if err != nil {
@@ -324,5 +358,34 @@ func TestTabletControl(t *testing.T) {
 	}
 	if agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should not be running")
+	}
+	if agent._healthyTime.Sub(before) < 0 {
+		t.Errorf("runHealthCheck did not update agent._healthyTime")
+	}
+}
+
+// TestOldHealthCheck verifies that a healthcheck that is too old will
+// return an error
+func TestOldHealthCheck(t *testing.T) {
+	agent := createTestAgent(t)
+	*healthCheckInterval = 20 * time.Second
+	agent._healthy = nil
+
+	// last health check time is now, we're good
+	agent._healthyTime = time.Now()
+	if _, healthy := agent.Healthy(); healthy != nil {
+		t.Errorf("Healthy returned unexpected error: %v", healthy)
+	}
+
+	// last health check time is 2x interval ago, we're good
+	agent._healthyTime = time.Now().Add(-2 * *healthCheckInterval)
+	if _, healthy := agent.Healthy(); healthy != nil {
+		t.Errorf("Healthy returned unexpected error: %v", healthy)
+	}
+
+	// last health check time is 4x interval ago, we're not good
+	agent._healthyTime = time.Now().Add(-4 * *healthCheckInterval)
+	if _, healthy := agent.Healthy(); healthy == nil || !strings.Contains(healthy.Error(), "last health check is too old") {
+		t.Errorf("Healthy returned wrong error: %v", healthy)
 	}
 }

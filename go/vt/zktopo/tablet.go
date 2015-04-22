@@ -107,7 +107,7 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 			return "", err
 		}
 		lastTablet = tablet
-		return jscfg.ToJson(tablet), nil
+		return jscfg.ToJSON(tablet), nil
 	}
 	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {

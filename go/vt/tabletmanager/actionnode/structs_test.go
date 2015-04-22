@@ -17,7 +17,7 @@ import (
 type slaveWasRestartedTestArgs struct {
 	Parent               topo.TabletAlias
 	ExpectedMasterAddr   string
-	ExpectedMasterIpAddr string
+	ExpectedMasterIPAddr string
 	ScrapStragglers      bool
 }
 
@@ -28,10 +28,10 @@ func TestMissingFieldsJson(t *testing.T) {
 			Cell: "aa",
 		},
 		ExpectedMasterAddr:   "a1",
-		ExpectedMasterIpAddr: "i1",
+		ExpectedMasterIPAddr: "i1",
 		ScrapStragglers:      true,
 	}
-	data := jscfg.ToJson(swra)
+	data := jscfg.ToJSON(swra)
 
 	output := &SlaveWasRestartedArgs{}
 	decoder := json.NewDecoder(strings.NewReader(data))
@@ -48,7 +48,7 @@ func TestExtraFieldsJson(t *testing.T) {
 			Cell: "aa",
 		},
 	}
-	data := jscfg.ToJson(swra)
+	data := jscfg.ToJSON(swra)
 
 	output := &slaveWasRestartedTestArgs{}
 	decoder := json.NewDecoder(strings.NewReader(data))
@@ -65,7 +65,7 @@ func TestMissingFieldsBson(t *testing.T) {
 			Cell: "aa",
 		},
 		ExpectedMasterAddr:   "a1",
-		ExpectedMasterIpAddr: "i1",
+		ExpectedMasterIPAddr: "i1",
 		ScrapStragglers:      true,
 	}
 	data, err := bson.Marshal(swra)

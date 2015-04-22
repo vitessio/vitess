@@ -73,7 +73,7 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspa
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
@@ -88,7 +88,7 @@ func (res *Resolver) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRange
 			query.TabletType,
 			query.KeyRanges)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
@@ -101,6 +101,7 @@ func (res *Resolver) Execute(
 	tabletType topo.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
+	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
@@ -114,7 +115,8 @@ func (res *Resolver) Execute(
 			keyspace,
 			shards,
 			tabletType,
-			NewSafeSession(session))
+			NewSafeSession(session),
+			notInTransaction)
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
@@ -169,7 +171,8 @@ func (res *Resolver) ExecuteEntityIds(
 			bindVars,
 			query.Keyspace,
 			query.TabletType,
-			NewSafeSession(query.Session))
+			NewSafeSession(query.Session),
+			query.NotInTransaction)
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
@@ -219,7 +222,7 @@ func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.K
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.ExecuteBatch(ctx, query.Queries, query.Keyspace, query.TabletType, query.Session, mapToShards)
+	return res.ExecuteBatch(ctx, query.Queries, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
 }
 
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
@@ -231,6 +234,7 @@ func (res *Resolver) ExecuteBatch(
 	tabletType topo.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
+	notInTransaction bool,
 ) (*tproto.QueryResultList, error) {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
@@ -243,7 +247,8 @@ func (res *Resolver) ExecuteBatch(
 			keyspace,
 			shards,
 			tabletType,
-			NewSafeSession(session))
+			NewSafeSession(session),
+			notInTransaction)
 		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
@@ -288,7 +293,7 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.
 			query.TabletType,
 			query.KeyspaceIds)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -307,7 +312,7 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.Ke
 			query.TabletType,
 			query.KeyRanges)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
 }
 
 // StreamExecute executes a streaming query on shards resolved by given func.
@@ -323,6 +328,7 @@ func (res *Resolver) StreamExecute(
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
 	sendReply func(*mproto.QueryResult) error,
+	notInTransaction bool,
 ) error {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
@@ -336,7 +342,8 @@ func (res *Resolver) StreamExecute(
 		shards,
 		tabletType,
 		NewSafeSession(session),
-		sendReply)
+		sendReply,
+		notInTransaction)
 	return err
 }
 

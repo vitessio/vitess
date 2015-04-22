@@ -33,7 +33,7 @@ func setupQueryRules() {
 	var qr *QueryRule
 	// mock keyrange rules
 	keyrangeRules = NewQueryRules()
-	dml_plans := []struct {
+	dmlPlans := []struct {
 		planID   planbuilder.PlanType
 		onAbsent bool
 	}{
@@ -43,7 +43,7 @@ func setupQueryRules() {
 		{planbuilder.PLAN_DML_PK, false},
 		{planbuilder.PLAN_DML_SUBQUERY, false},
 	}
-	for _, plan := range dml_plans {
+	for _, plan := range dmlPlans {
 		qr = NewQueryRule(
 			fmt.Sprintf("enforce keyspace_id range for %v", plan.planID),
 			fmt.Sprintf("keyspace_id_not_in_range_%v", plan.planID),
@@ -69,6 +69,47 @@ func setupQueryRules() {
 	qr.AddTableCond("t_customer")
 	qr.AddBindVarCond("bindvar1", true, false, QR_NOOP, nil)
 	otherRules.Add(qr)
+}
+
+func TestQueryRuleInfoRegisterARegisteredSource(t *testing.T) {
+	setupQueryRules()
+	qri := NewQueryRuleInfo()
+	qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Fatalf("should get an error for registering a registered query rule source ")
+		}
+	}()
+	qri.RegisterQueryRuleSource(keyrangeQueryRules)
+}
+
+func TestQueryRuleInfoSetRulesWithNil(t *testing.T) {
+	setupQueryRules()
+	qri := NewQueryRuleInfo()
+
+	qri.RegisterQueryRuleSource(keyrangeQueryRules)
+	err := qri.SetRules(keyrangeQueryRules, keyrangeRules)
+	if err != nil {
+		t.Errorf("Failed to set keyrange QueryRules : %s", err)
+	}
+	qrs, err := qri.GetRules(keyrangeQueryRules)
+	if err != nil {
+		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
+	}
+	if !reflect.DeepEqual(qrs, keyrangeRules) {
+		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+	}
+
+	qri.SetRules(keyrangeQueryRules, nil)
+
+	qrs, err = qri.GetRules(keyrangeQueryRules)
+	if err != nil {
+		t.Errorf("GetRules failed to retrieve keyrangeQueryRules that has been set: %s", err)
+	}
+	if !reflect.DeepEqual(qrs, NewQueryRules()) {
+		t.Errorf("keyrangeQueryRules retrived is %v, but the expected value should be %v", qrs, keyrangeRules)
+	}
 }
 
 func TestQueryRuleInfoGetSetQueryRules(t *testing.T) {

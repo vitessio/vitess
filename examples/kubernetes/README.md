@@ -30,7 +30,7 @@ If you're running in Container Engine, set the `KUBECTL` environment variable
 to point to the `gcloud` command:
 
 ```
-$ export KUBECTL='gcloud preview container kubectl'
+$ export KUBECTL='gcloud alpha container kubectl'
 ```
 
 If you're running Kubernetes manually, set the `KUBECTL` environment variable
@@ -54,8 +54,10 @@ $ gcloud config set compute/zone us-central1-b
 Then create a cluster:
 
 ```
-$ gcloud preview container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud alpha container clusters create example --machine-type n1-standard-1 --num-nodes 3
 ```
+
+If prompted, install the alpha commands.
 
 ## Start an etcd cluster for Vitess
 
@@ -166,11 +168,12 @@ When we pick a master vttablet, Vitess will also take care of connecting the
 other replicas' mysqld instances to start replicating from the master mysqld.
 
 Since this is the first time we're starting up the shards, there is no existing
-replication happening, so we use the -force flag on ReparentShard to skip the
-usual validation of each tablet's replication state.
+replication happening, and all tablets are of the same base replica or spare
+type. So we use the -force flag on InitShardMaster to allow the transition
+of the first tablet from its type to master.
 
 ```
-$ kvtctl ReparentShard -force test_keyspace/0 test-0000000100
+$ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
 Once this is done, you should see one master and two replicas in vtctld's
@@ -242,15 +245,18 @@ for more details on how the app server interacts with Vitess.
 Tear down the Container Engine cluster:
 
 ```
-$ gcloud preview container clusters delete example
+$ gcloud alpha container clusters delete example
 ```
 
 Clean up other entities created for this example:
 
 ```
-$ gcloud compute forwarding-rules delete vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-vtctld
+$ gcloud compute forwarding-rules delete k8s-example-default-guestbook
 $ gcloud compute firewall-rules delete vtctld
-$ gcloud compute target-pools delete vtctld
+$ gcloud compute firewall-rules delete guestbook
+$ gcloud compute target-pools delete k8s-example-default-vtctld
+$ gcloud compute target-pools delete k8s-example-default-guestbook
 ```
 
 ## Troubleshooting

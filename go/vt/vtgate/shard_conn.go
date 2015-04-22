@@ -57,7 +57,10 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		return endpoints, nil
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
-	ticker := timer.NewRandTicker(connLife, connLife/2)
+	var ticker *timer.RandTicker
+	if tabletType != topo.TYPE_MASTER {
+		ticker = timer.NewRandTicker(connLife, connLife/2)
+	}
 	sdc := &ShardConn{
 		keyspace:           keyspace,
 		shard:              shard,
@@ -72,11 +75,13 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 		consolidator:       sync2.NewConsolidator(),
 		connectTimings:     tabletConnectTimings,
 	}
-	go func() {
-		for range ticker.C {
-			sdc.closeCurrent()
-		}
-	}()
+	if ticker != nil {
+		go func() {
+			for range ticker.C {
+				sdc.closeCurrent()
+			}
+		}()
+	}
 	return sdc
 }
 
@@ -180,7 +185,9 @@ func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, s
 
 // Close closes the underlying TabletConn.
 func (sdc *ShardConn) Close() {
-	sdc.ticker.Stop()
+	if sdc.ticker != nil {
+		sdc.ticker.Stop()
+	}
 	sdc.closeCurrent()
 }
 
@@ -329,8 +336,6 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.Code {
-		case tabletconn.ERR_TX_POOL_FULL:
-			return true
 		case tabletconn.ERR_FATAL:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
@@ -347,7 +352,7 @@ func (sdc *ShardConn) canRetry(ctx context.Context, err error, transactionID int
 			sdc.markDown(conn, err.Error())
 			return !inTransaction
 		default:
-			// Should not retry for normal server errors.
+			// Not retry for TX_POOL_FULL and normal server errors.
 			return false
 		}
 	}

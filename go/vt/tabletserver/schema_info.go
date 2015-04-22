@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
@@ -44,7 +45,7 @@ type ExecPlan struct {
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
-	Authorized tableacl.ACL
+	Authorized tacl.ACL
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -106,6 +107,7 @@ type SchemaInfo struct {
 	cachePool  *CachePool
 	lastChange time.Time
 	ticks      *timer.Timer
+	reloadTime time.Duration
 	endpoints  map[string]string
 }
 
@@ -115,26 +117,30 @@ func NewSchemaInfo(
 	statsPrefix string,
 	endpoints map[string]string,
 	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaInfo {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:   cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:  NewConnPool("", 2, idleTimeout),
-		ticks:     timer.NewTimer(reloadTime),
-		endpoints: endpoints,
+		queries:    cache.NewLRUCache(int64(queryCacheSize)),
+		connPool:   NewConnPool("", 2, idleTimeout, enablePublishStats),
+		ticks:      timer.NewTimer(reloadTime),
+		endpoints:  endpoints,
+		reloadTime: reloadTime,
 	}
-	stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
-	stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
-	stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
-	stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
-		return fmt.Sprintf("%v", si.queries.Oldest())
-	}))
-	stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	if enablePublishStats {
+		stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
+		stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
+		stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+		stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
+			return fmt.Sprintf("%v", si.queries.Oldest())
+		}))
+		stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
 	}
@@ -472,6 +478,16 @@ func (si *SchemaInfo) SetQueryCacheSize(size int) {
 func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
 	si.ticks.Trigger()
 	si.ticks.SetInterval(reloadTime)
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.reloadTime = reloadTime
+}
+
+// ReloadTime returns schema info reload time.
+func (si *SchemaInfo) ReloadTime() time.Duration {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	return si.reloadTime
 }
 
 func (si *SchemaInfo) getRowcacheStats() map[string]int64 {

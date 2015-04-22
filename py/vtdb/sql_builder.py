@@ -186,12 +186,7 @@ def build_where_clause(column_value_pairs):
 def select_by_columns_query(select_column_list, table_name, column_value_pairs=None,
                             order_by=None, group_by=None, limit=None,
                             for_update=False,client_aggregate=False,
-                            vt_routing_info=None, **columns):
-
-  # generate WHERE clause and bind variables
-  if not column_value_pairs:
-    column_value_pairs = columns.items()
-    column_value_pairs.sort()
+                            vt_routing_info=None):
 
   if client_aggregate:
     clause_list = [select_clause(select_column_list, table_name,
@@ -199,6 +194,7 @@ def select_by_columns_query(select_column_list, table_name, column_value_pairs=N
   else:
     clause_list = [select_clause(select_column_list, table_name)]
 
+  # generate WHERE clause and bind variables
   if column_value_pairs:
     where_clause, bind_vars = build_where_clause(column_value_pairs)
     # add vt routing info
@@ -224,11 +220,10 @@ def select_by_columns_query(select_column_list, table_name, column_value_pairs=N
   return query, bind_vars
 
 def update_columns_query(table_name, where_column_value_pairs=None,
-                           update_column_value_pairs=None, limit=None,
-                           order_by=None, **update_columns):
+                         update_column_value_pairs=None, limit=None,
+                         order_by=None):
   if not update_column_value_pairs:
-    update_column_value_pairs = update_columns.items()
-    update_column_value_pairs.sort()
+    raise dbexceptions.ProgrammingError("No update values specified.")
 
   clause_list = []
   bind_vals = {}

@@ -213,13 +213,13 @@ type LegacyZknsAddrs struct {
 }
 
 func writeAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
-	data := jscfg.ToJson(addr)
+	data := jscfg.ToJSON(addr)
 	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 func writeAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
-	data := jscfg.ToJson(addrs)
+	data := jscfg.ToJSON(addrs)
 	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }

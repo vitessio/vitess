@@ -293,9 +293,9 @@ index by_msg (msg)
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['ReparentShard', '-force', 'source_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'source_keyspace/0',
                      source_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'destination_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
 
     # read all the keyspaces, this will populate the topology cache.

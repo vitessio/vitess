@@ -48,7 +48,7 @@ class TopoOccTest(unittest.TestCase):
     utils.vtgate_kill(self.vtgate_zk)
 
   def rebuild(self):
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', '-rebuild_srv_shards', 'test_keyspace'], auto_log=True)
 
   def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
@@ -149,8 +149,7 @@ class TestTopo(unittest.TestCase):
     self.assertEqual({
         'ShardReferences': [{
             'KeyRange': {'End': '\xd0', 'Start': '\xc0'},
-            'Name': 'c0-d0'}],
-        'TabletTypes': ['rdonly', 'replica', 'master']},
+            'Name': 'c0-d0'}]},
                      keyspace, "keyspace reading is wrong")
     end_points = fkc.get_end_points("testing", "test_keyspace", "0", "master")
     self.assertEqual({

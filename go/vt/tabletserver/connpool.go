@@ -41,7 +41,8 @@ type ConnPool struct {
 func NewConnPool(
 	name string,
 	capacity int,
-	idleTimeout time.Duration) *ConnPool {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *ConnPool {
 	cp := &ConnPool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
@@ -50,12 +51,14 @@ func NewConnPool(
 	if name == "" {
 		return cp
 	}
-	stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
-	stats.Publish(name+"Available", stats.IntFunc(cp.Available))
-	stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
-	stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
-	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
-	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	if enablePublishStats {
+		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
+		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
+		stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
+		stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
+		stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
+		stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	}
 	return cp
 }
 

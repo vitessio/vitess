@@ -7,20 +7,25 @@ import (
 )
 
 type testConn struct {
-	id    int64
-	query string
+	id     int64
+	query  string
+	killed bool
 }
 
-func (tc testConn) Current() string { return tc.query }
+func (tc *testConn) Current() string { return tc.query }
 
-func (tc testConn) ID() int64 { return tc.id }
+func (tc *testConn) ID() int64 { return tc.id }
 
-func (tc testConn) Kill() {}
+func (tc *testConn) Kill() { tc.killed = true }
+
+func (tc *testConn) IsKilled() bool {
+	return tc.killed
+}
 
 func TestQueryList(t *testing.T) {
 	ql := NewQueryList()
 	connID := int64(1)
-	qd := NewQueryDetail(context.Background(), testConn{id: connID})
+	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1.connID != connID {
@@ -28,7 +33,7 @@ func TestQueryList(t *testing.T) {
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail(context.Background(), testConn{id: conn2ID})
+	qd2 := NewQueryDetail(context.Background(), &testConn{id: conn2ID})
 	ql.Add(qd2)
 
 	rows := ql.GetQueryzRows()

@@ -17,15 +17,19 @@ GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
 GKE_MACHINE_TYPE=${GKE_MACHINE_TYPE:-'n1-standard-1'}
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
+GKE_NUM_NODES=${GKE_NUM_NODES:-0}
 SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
 BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
+VTGATE_COUNT=${VTGATE_COUNT:-0}
 
 vttablet_template='vttablet-pod-template.yaml'
+vtgate_template='vtgate-controller-template.yaml'
 if $BENCHMARK_CLUSTER; then
   vttablet_template='vttablet-pod-benchmarking-template.yaml'
+  vtgate_template='vtgate-controller-benchmarking-template.yaml'
 fi
 
 # export for vttablet scripts
@@ -84,42 +88,60 @@ if [ -z "$GOPATH" ]; then
   exit -1
 fi
 
-export KUBECTL='gcloud preview container kubectl'
+export KUBECTL='gcloud alpha container kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD))
+num_nodes=$GKE_NUM_NODES
+if [ $num_nodes -eq 0 ]; then
+  num_nodes=$(($total_tablet_count>3?$total_tablet_count:3))
+fi
+vtgate_count=$VTGATE_COUNT
+if [ $vtgate_count -eq 0 ]; then
+  vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
+fi
+
 
 echo "****************************"
 echo "*Creating cluster:"
 echo "*  Zone: $GKE_ZONE"
 echo "*  Machine type: $GKE_MACHINE_TYPE"
-echo "*  Num nodes: $total_tablet_count"
+echo "*  Num nodes: $num_nodes"
 echo "*  SSD Size: $GKE_SSD_SIZE_GB"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
+echo "*  VTGate count: $vtgate_count"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud preview container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $total_tablet_count
+gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
-for i in `seq 1 $total_tablet_count`; do
-  $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i}.c.${project_id}.internal id=$i
+for i in `seq 1 $num_nodes`; do
+  for j in `seq 0 2`; do
+    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i}.c.${project_id}.internal id=$i
+    result=`$KUBECTL get nodes | grep id=$i`
+    if [ -n "$result" ]; then
+      break
+    fi
+    sleep 1
+  done
 done
 
 if [ $GKE_SSD_SIZE_GB -gt 0 ]
 then
   export VTDATAROOT_VOLUME='/ssd'
   echo Creating SSDs and attaching to container engine nodes
-  for i in `seq 1 $total_tablet_count`; do
+  for i in `seq 1 $num_nodes`; do
     diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
     nodename=k8s-$GKE_CLUSTER_NAME-node-$i
     gcloud compute disks create $diskname --type=pd-ssd --size=${GKE_SSD_SIZE_GB}GB
     gcloud compute instances attach-disk $nodename --disk $diskname
-    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME}"
+    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME}" &
   done
+  wait
 fi
 
 run_script etcd-up.sh
@@ -127,16 +149,16 @@ wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
 run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
-run_script vtgate-up.sh
+run_script vtgate-up.sh VTGATE_REPLICAS=$vtgate_count VTGATE_TEMPLATE=$vtgate_template
 
 wait_for_running_tasks vtctld 1
 wait_for_running_tasks vttablet $total_tablet_count
-wait_for_running_tasks vtgate 3
+wait_for_running_tasks vtgate $vtgate_count
 
 echo Creating firewall rule for vtctld...
 vtctl_port=15000
-gcloud compute firewall-rules create vtctld --allow tcp:$vtctl_port
-vtctl_ip=`gcloud compute forwarding-rules list | awk '$1~"vtctld" {print $3}'`
+gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctl_port
+vtctl_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtctld | awk '{print $3}'`
 vtctl_server="$vtctl_ip:$vtctl_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 
@@ -175,7 +197,7 @@ echo Done
 echo -n Reparenting...
 shard_num=1
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl ReparentShard -force test_keyspace/$shard test-0000000${shard_num}00
+  $kvtctl InitShardMaster -force test_keyspace/$shard test-0000000${shard_num}00
   let shard_num=shard_num+1
 done
 echo Done
@@ -185,13 +207,23 @@ echo Done
 
 echo Creating firewall rule for vtgate
 vtgate_port=15001
-gcloud compute firewall-rules create vtgate --allow tcp:$vtgate_port
-vtgate_ip=`gcloud compute forwarding-rules list | awk '$1~"vtgate" {print $3}'`
+gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate --allow tcp:$vtgate_port
+vtgate_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtgate | awk '{print $3}'`
 if [ -z "$vtgate_ip" ]
 then
   vtgate_server="No firewall rules created for vtgate. Add createExternalLoadBalancer: true if access to vtgate is desired"
 else
   vtgate_server="$vtgate_ip:$vtgate_port"
+fi
+
+if ! [ -z $NEWRELIC_LICENSE_KEY ]; then
+  for i in `seq 1 $num_nodes`; do
+    nodename=k8s-$GKE_CLUSTER_NAME-node-${i}
+    gcloud compute copy-files newrelic.sh $nodename:~/
+    gcloud compute copy-files newrelic_start_agent.sh $nodename:~/
+    gcloud compute copy-files newrelic_start_mysql_plugin.sh $nodename:~/
+    gcloud compute ssh $nodename --command "bash -c '~/newrelic.sh ${NEWRELIC_LICENSE_KEY}'"
+  done
 fi
 
 echo "****************************"

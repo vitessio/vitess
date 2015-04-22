@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 /*
@@ -30,36 +31,59 @@ gorpc_server.go to only use the '2' structures. Everything worked the same.
 
 */
 
+// PopulateReparentJournalArgs has arguments for PopulateReparentJournal
+type PopulateReparentJournalArgs struct {
+	TimeCreatedNS       int64
+	ActionName          string
+	MasterAlias         topo.TabletAlias
+	ReplicationPosition myproto.ReplicationPosition
+}
+
+// InitSlaveArgs has arguments for InitSlave
+type InitSlaveArgs struct {
+	Parent              topo.TabletAlias
+	ReplicationPosition myproto.ReplicationPosition
+	TimeCreatedNS       int64
+	WaitTimeout         time.Duration // pass in zero to wait indefinitely
+}
+
+// GetSchemaArgs has arguments for GetSchema
 type GetSchemaArgs struct {
 	Tables        []string
 	ExcludeTables []string
 	IncludeViews  bool
 }
 
+// WaitSlavePositionArgs has arguments for WaitSlavePosition
 type WaitSlavePositionArgs struct {
 	Position    myproto.ReplicationPosition
 	WaitTimeout time.Duration // pass in zero to wait indefinitely
 }
 
+// StopSlaveMinimumArgs has arguments for StopSlaveMinimum
 type StopSlaveMinimumArgs struct {
 	Position myproto.ReplicationPosition
 	WaitTime time.Duration
 }
 
+// GetSlavesReply has the reply for GetSlaves
 type GetSlavesReply struct {
 	Addrs []string
 }
 
+// WaitBlpPositionArgs has arguments for WaitBlpPosition
 type WaitBlpPositionArgs struct {
 	BlpPosition blproto.BlpPosition
 	WaitTimeout time.Duration
 }
 
+// RunBlpUntilArgs has arguments for RunBlpUntil
 type RunBlpUntilArgs struct {
 	BlpPositionList *blproto.BlpPositionList
 	WaitTimeout     time.Duration
 }
 
+// ExecuteFetchArgs has arguments for ExecuteFetch
 type ExecuteFetchArgs struct {
 	Query          string
 	MaxRows        int
@@ -71,11 +95,13 @@ type ExecuteFetchArgs struct {
 // gorpc doesn't support returning a streaming type during streaming
 // and a final return value, so using structures with either one set.
 
+// SnapshotStreamingReply has the two possible replies for Snapshot
 type SnapshotStreamingReply struct {
 	Log    *logutil.LoggerEvent
 	Result *actionnode.SnapshotReply
 }
 
+// TabletExternallyReparentedArgs has arguments for TabletExternallyReparented
 type TabletExternallyReparentedArgs struct {
 	ExternalID string
 }

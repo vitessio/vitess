@@ -22,6 +22,7 @@ import (
 This file contains the shard management code for zktopo.Server
 */
 
+// CreateShard is part of the topo.Server interface
 func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	pathList := []string{
@@ -34,7 +35,7 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = jscfg.ToJson(value)
+			c = jscfg.ToJSON(value)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -56,9 +57,10 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	return nil
 }
 
+// UpdateShard is part of the topo.Server interface
 func (zkts *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	stat, err := zkts.zconn.Set(shardPath, jscfg.ToJson(si.Shard), int(existingVersion))
+	stat, err := zkts.zconn.Set(shardPath, jscfg.ToJSON(si.Shard), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -73,6 +75,7 @@ func (zkts *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int6
 	return int64(stat.Version()), nil
 }
 
+// ValidateShard is part of the topo.Server interface
 func (zkts *Server) ValidateShard(keyspace, shard string) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	zkPaths := []string{
@@ -88,6 +91,7 @@ func (zkts *Server) ValidateShard(keyspace, shard string) error {
 	return nil
 }
 
+// GetShard is part of the topo.Server interface
 func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, stat, err := zkts.zconn.Get(shardPath)
@@ -106,6 +110,7 @@ func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	return topo.NewShardInfo(keyspace, shard, s, int64(stat.Version())), nil
 }
 
+// GetShardNames is part of the topo.Server interface
 func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	children, _, err := zkts.zconn.Children(shardsPath)
@@ -120,6 +125,7 @@ func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
 	return children, nil
 }
 
+// DeleteShard is part of the topo.Server interface
 func (zkts *Server) DeleteShard(keyspace, shard string) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	err := zk.DeleteRecursive(zkts.zconn, shardPath, -1)

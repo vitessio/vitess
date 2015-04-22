@@ -36,9 +36,17 @@ func (qri *QueryRuleInfo) RegisterQueryRuleSource(ruleSource string) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	if _, existed := qri.queryRulesMap[ruleSource]; existed {
-		log.Fatal("Query rule source " + ruleSource + " has been registered")
+		log.Errorf("Query rule source " + ruleSource + " has been registered")
+		panic("Query rule source " + ruleSource + " has been registered")
 	}
 	qri.queryRulesMap[ruleSource] = NewQueryRules()
+}
+
+// UnRegisterQueryRuleSource removes a registered query rule source name
+func (qri *QueryRuleInfo) UnRegisterQueryRuleSource(ruleSource string) {
+	qri.mu.Lock()
+	defer qri.mu.Unlock()
+	delete(qri.queryRulesMap, ruleSource)
 }
 
 // SetRules takes an external QueryRules structure and overwrite one of the

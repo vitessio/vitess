@@ -101,6 +101,12 @@ type RPCAgent interface {
 
 	// Reparenting related functions
 
+	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
+
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
+
+	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+
 	DemoteMaster(ctx context.Context) error
 
 	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
@@ -403,6 +409,78 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 //
 // Reparenting related functions
 //
+
+// InitMaster breaks slaves replication, get the current MySQL replication
+// position, insert a row in the reparent_journal table, and returns
+// the replication position
+func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	// first break the slaves, so anyone who may have been replicating
+	// before will stop. This is meant to catch misconfigured hosts.
+	if err := agent.MysqlDaemon.BreakSlaves(); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// get the current replication position
+	rp, err := agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// Set the server read-write, from now on we can accept real
+	// client writes. Note that if semi-sync replication is enabled,
+	// we'll still need some slaves to be able to commit
+	// transactions.
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// Change our type to master if not already
+	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *topo.Tablet) error {
+		tablet.Type = topo.TYPE_MASTER
+		tablet.Health = nil
+		return nil
+	}); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return rp, nil
+}
+
+// PopulateReparentJournal adds an entry into the reparent_journal table.
+func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+	cmds := mysqlctl.CreateReparentJournal()
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, masterAlias.String(), pos))
+
+	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
+}
+
+// InitSlave sets replication master and position, and waits for the
+// reparent_journal table entry up to context timeout
+func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+	ti, err := agent.TopoServer.GetTablet(parent)
+	if err != nil {
+		return err
+	}
+
+	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
+	status := &myproto.ReplicationStatus{
+		Position:           replicationPosition,
+		MasterHost:         ti.Hostname,
+		MasterPort:         ti.Portmap["mysql"],
+		MasterConnectRetry: 10,
+	}
+	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
+	if err != nil {
+		return err
+	}
+
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+		return err
+	}
+
+	// wait until we get the replicated row, or our context times out
+	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
+}
 
 // DemoteMaster demotes the current master, and marks it read-only in the topo.
 // Should be called under RPCWrapLockAction.

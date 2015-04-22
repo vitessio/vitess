@@ -25,14 +25,14 @@ func (wr *Wrangler) RebuildShardGraph(ctx context.Context, keyspace, shard strin
 // RebuildKeyspaceGraph rebuilds the serving graph data while locking out other changes.
 // If some shards were recently read / updated, pass them in the cache so
 // we don't read them again (and possible get stale replicated data)
-func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string, rebuildSrvShards bool) error {
 	actionNode := actionnode.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(ctx, keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(ctx, keyspace, cells)
+	err = wr.rebuildKeyspace(ctx, keyspace, cells, rebuildSrvShards)
 	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
@@ -62,7 +62,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells []string) error {
+func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells []string, rebuildSrvShards bool) error {
 	wr.logger.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
@@ -70,32 +70,41 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 		return err
 	}
 
-	shards, err := wr.ts.GetShardNames(keyspace)
-	if err != nil {
-		return err
-	}
+	var shardCache map[string]*topo.ShardInfo
+	if rebuildSrvShards {
+		shards, err := wr.ts.GetShardNames(keyspace)
+		if err != nil {
+			return nil
+		}
 
-	// Rebuild all shards in parallel, save the shards
-	shardCache := make(map[string]*topo.ShardInfo)
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	rec := concurrency.FirstErrorRecorder{}
-	for _, shard := range shards {
-		wg.Add(1)
-		go func(shard string) {
-			if shardInfo, err := wr.RebuildShardGraph(ctx, keyspace, shard, cells); err != nil {
-				rec.RecordError(fmt.Errorf("RebuildShardGraph failed: %v/%v %v", keyspace, shard, err))
-			} else {
-				mu.Lock()
-				shardCache[shard] = shardInfo
-				mu.Unlock()
-			}
-			wg.Done()
-		}(shard)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return rec.Error()
+		// Rebuild all shards in parallel, save the shards
+		shardCache = make(map[string]*topo.ShardInfo)
+		wg := sync.WaitGroup{}
+		mu := sync.Mutex{}
+		rec := concurrency.FirstErrorRecorder{}
+		for _, shard := range shards {
+			wg.Add(1)
+			go func(shard string) {
+				if shardInfo, err := wr.RebuildShardGraph(ctx, keyspace, shard, cells); err != nil {
+					rec.RecordError(fmt.Errorf("RebuildShardGraph failed: %v/%v %v", keyspace, shard, err))
+				} else {
+					mu.Lock()
+					shardCache[shard] = shardInfo
+					mu.Unlock()
+				}
+				wg.Done()
+			}(shard)
+		}
+		wg.Wait()
+		if rec.HasErrors() {
+			return rec.Error()
+		}
+
+	} else {
+		shardCache, err = topo.FindAllShardsInKeyspace(wr.ts, keyspace)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Build the list of cells to work on: we get the union
@@ -123,50 +132,23 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
-		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
-		for shard, si := range shardCache {
+		for _, si := range shardCache {
 			servedTypes := si.GetServedTypesPerCell(cell)
-
-			srvShard, err := wr.ts.GetSrvShard(cell, keyspace, shard)
-			switch err {
-			case nil:
-				// we keep going
-			case topo.ErrNoNode:
-				wr.logger.Infof("Cell %v for %v/%v has no SvrShard, using Shard data with no TabletTypes instead", cell, keyspace, shard)
-				srvShard = &topo.SrvShard{
-					Name:        si.ShardName(),
-					KeyRange:    si.KeyRange,
-					ServedTypes: servedTypes,
-					MasterCell:  si.MasterAlias.Cell,
-				}
-			default:
-				return err
-			}
-			for _, tabletType := range srvShard.TabletTypes {
-				keyspaceDbTypes[tabletType] = true
-			}
 
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
 			for _, tabletType := range servedTypes {
 				if _, ok := srvKeyspace.Partitions[tabletType]; !ok {
 					srvKeyspace.Partitions[tabletType] = &topo.KeyspacePartition{
-						Shards:          make([]topo.SrvShard, 0),
 						ShardReferences: make([]topo.ShardReference, 0),
 					}
 				}
-				srvKeyspace.Partitions[tabletType].Shards = append(srvKeyspace.Partitions[tabletType].Shards, *srvShard)
 				srvKeyspace.Partitions[tabletType].ShardReferences = append(srvKeyspace.Partitions[tabletType].ShardReferences, topo.ShardReference{
 					Name:     si.ShardName(),
 					KeyRange: si.KeyRange,
 				})
 			}
-		}
-
-		srvKeyspace.TabletTypes = make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType := range keyspaceDbTypes {
-			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
 		if err := wr.orderAndCheckPartitions(cell, srvKeyspace); err != nil {
@@ -190,7 +172,6 @@ func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *topo.SrvKe
 
 	// now check them all
 	for tabletType, partition := range srvKeyspace.Partitions {
-		topo.SrvShardArray(partition.Shards).Sort()
 		topo.ShardReferenceArray(partition.ShardReferences).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,
@@ -291,7 +272,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, true); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

@@ -46,6 +46,7 @@ func (batchQueryShard *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, k
 	} else {
 		(*batchQueryShard.Session).MarshalBson(buf, "Session")
 	}
+	bson.EncodeBool(buf, "NotInTransaction", batchQueryShard.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -104,6 +105,8 @@ func (batchQueryShard *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind by
 				batchQueryShard.Session = new(Session)
 				(*batchQueryShard.Session).UnmarshalBson(buf, kind)
 			}
+		case "NotInTransaction":
+			batchQueryShard.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

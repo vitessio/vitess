@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -85,6 +86,7 @@ func main() {
 	dbcfgs.App.EnableRowcache = *enableRowcache
 
 	if *tableAclConfig != "" {
+		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		tableacl.Init(*tableAclConfig)
 	}
 
@@ -94,7 +96,7 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(qsc, context.Background(), tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

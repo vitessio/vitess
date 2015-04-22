@@ -125,5 +125,5 @@ func (hook *Hook) ExecuteOptional() error {
 }
 
 func (hr *HookResult) String() string {
-	return jscfg.ToJson(hr)
+	return jscfg.ToJSON(hr)
 }

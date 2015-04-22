@@ -22,7 +22,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, "", nil)
+		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, "", nil, false)
 	})
 }
 
@@ -33,7 +33,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		return stc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecute", shardVars, "", nil)
+		return stc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecute", shardVars, "", nil, false)
 	})
 }
 
@@ -41,7 +41,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(context.Background(), queries, "TestScatterConnExecuteBatch", shards, "", nil)
+		qrs, err := stc.ExecuteBatch(context.Background(), queries, "TestScatterConnExecuteBatch", shards, "", nil, false)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +56,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
-		})
+		}, false)
 		return qr, err
 	})
 }
@@ -72,7 +72,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecute", shardVars, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
-		})
+		}, false)
 		return qr, err
 	})
 }
@@ -173,7 +173,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": 1,
 		},
 	}
-	_, _ = stc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, "", nil)
+	_, _ = stc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, "", nil, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
 	}
@@ -184,7 +184,7 @@ func TestMultiExecs(t *testing.T) {
 	sbc1.Queries = nil
 	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, "", nil, func(*mproto.QueryResult) error {
 		return nil
-	})
+	}, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
 	}
@@ -200,7 +200,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
-	})
+	}, false)
 	want := "send error"
 	// Ensure that we handle send errors.
 	if err == nil || err.Error() != want {
@@ -235,13 +235,13 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	s := createSandbox("TestScatterConnCommitSuccess")
 	sbc0 := &sandboxConn{}
 	s.MapTestConn("0", sbc0)
-	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, "", session)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, "", session, false)
 	wantSession := proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -254,7 +254,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, "", session)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, "", session, false)
 	wantSession = proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -293,14 +293,14 @@ func TestScatterConnRollback(t *testing.T) {
 	s := createSandbox("TestScatterConnRollback")
 	sbc0 := &sandboxConn{}
 	s.MapTestConn("0", sbc0)
-	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	sbc1 := &sandboxConn{}
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, "", session)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, "", session)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, "", session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, "", session, false)
 	err := stc.Rollback(context.Background(), session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -322,11 +322,116 @@ func TestScatterConnClose(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil, false)
 	stc.Close()
 	time.Sleep(1)
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CloseCount)
+	}
+}
+
+func TestScatterConnQueryNotInTransaction(t *testing.T) {
+	s := createSandbox("TestScatterConnQueryNotInTransaction")
+
+	// case 1: read query (not in transaction) followed by write query, not in the same shard.
+	sbc0 := &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	sbc1 := &sandboxConn{}
+	s.MapTestConn("1", sbc1)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	session := NewSafeSession(&proto.Session{InTransaction: true})
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, "", session, true)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, "", session, false)
+
+	wantSession := proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "TestScatterConnQueryNotInTransaction",
+			Shard:         "1",
+			TabletType:    "",
+			TransactionId: 1,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
+	}
+	stc.Commit(context.Background(), session)
+	if sbc0.ExecCount != 1 || sbc1.ExecCount != 3 {
+		t.Errorf("want 1/3, got %d/%d", sbc0.ExecCount, sbc1.ExecCount)
+	}
+	if sbc0.CommitCount != 0 {
+		t.Errorf("want 0, got %d", sbc0.CommitCount)
+	}
+	if sbc1.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.CommitCount)
+	}
+
+	// case 2: write query followed by read query (not in transaction), not in the same shard.
+	s.Reset()
+	sbc0 = &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	sbc1 = &sandboxConn{}
+	s.MapTestConn("1", sbc1)
+	stc = NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	session = NewSafeSession(&proto.Session{InTransaction: true})
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, "", session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, "", session, true)
+
+	wantSession = proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "TestScatterConnQueryNotInTransaction",
+			Shard:         "0",
+			TabletType:    "",
+			TransactionId: 1,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
+	}
+	stc.Commit(context.Background(), session)
+	if sbc0.ExecCount != 3 || sbc1.ExecCount != 1 {
+		t.Errorf("want 3/1, got %d/%d", sbc0.ExecCount, sbc1.ExecCount)
+	}
+	if sbc0.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.CommitCount)
+	}
+	if sbc1.CommitCount != 0 {
+		t.Errorf("want 0, got %d", sbc1.CommitCount)
+	}
+
+	// case 3: write query followed by read query, in the same shard.
+	s.Reset()
+	sbc0 = &sandboxConn{}
+	s.MapTestConn("0", sbc0)
+	sbc1 = &sandboxConn{}
+	s.MapTestConn("1", sbc1)
+	stc = NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	session = NewSafeSession(&proto.Session{InTransaction: true})
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, "", session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, "", session, true)
+
+	wantSession = proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "TestScatterConnQueryNotInTransaction",
+			Shard:         "0",
+			TabletType:    "",
+			TransactionId: 1,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
+	}
+	stc.Commit(context.Background(), session)
+	if sbc0.ExecCount != 4 || sbc1.ExecCount != 1 {
+		t.Errorf("want 4/1, got %d/%d", sbc0.ExecCount, sbc1.ExecCount)
+	}
+	if sbc0.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.CommitCount)
+	}
+	if sbc1.CommitCount != 0 {
+		t.Errorf("want 0, got %d", sbc1.CommitCount)
 	}
 }
 

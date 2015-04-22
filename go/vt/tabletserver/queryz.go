@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
@@ -108,49 +109,48 @@ func (sorter *queryzSorter) Less(i, j int) bool {
 	return sorter.less(sorter.rows[i], sorter.rows[j])
 }
 
-func (rqsc *realQueryServiceControl) registerQueryzHandler() {
-	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
-		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
-			acl.SendError(w, err)
-			return
-		}
-		startHTMLTable(w)
-		defer endHTMLTable(w)
-		w.Write(queryzHeader)
+func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	startHTMLTable(w)
+	defer endHTMLTable(w)
+	w.Write(queryzHeader)
 
-		si := rqsc.sqlQueryRPCService.qe.schemaInfo
-		keys := si.queries.Keys()
-		sorter := queryzSorter{
-			rows: make([]*queryzRow, 0, len(keys)),
-			less: func(row1, row2 *queryzRow) bool {
-				return row1.timePQ() > row2.timePQ()
-			},
+	keys := si.queries.Keys()
+	sorter := queryzSorter{
+		rows: make([]*queryzRow, 0, len(keys)),
+		less: func(row1, row2 *queryzRow) bool {
+			return row1.timePQ() > row2.timePQ()
+		},
+	}
+	for _, v := range si.queries.Keys() {
+		plan := si.getQuery(v)
+		if plan == nil {
+			continue
 		}
-		for _, v := range si.queries.Keys() {
-			plan := si.getQuery(v)
-			if plan == nil {
-				continue
-			}
-			Value := &queryzRow{
-				Query:  wrappable(v),
-				Table:  plan.TableName,
-				Plan:   plan.PlanId,
-				Reason: plan.Reason,
-			}
-			Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
-			timepq := time.Duration(int64(Value.tm) / Value.Count)
-			if timepq < 10*time.Millisecond {
-				Value.Color = "low"
-			} else if timepq < 100*time.Millisecond {
-				Value.Color = "medium"
-			} else {
-				Value.Color = "high"
-			}
-			sorter.rows = append(sorter.rows, Value)
+		Value := &queryzRow{
+			Query:  wrappable(v),
+			Table:  plan.TableName,
+			Plan:   plan.PlanId,
+			Reason: plan.Reason,
 		}
-		sort.Sort(&sorter)
-		for _, Value := range sorter.rows {
-			queryzTmpl.Execute(w, Value)
+		Value.Count, Value.tm, Value.Rows, Value.Errors = plan.Stats()
+		timepq := time.Duration(int64(Value.tm) / Value.Count)
+		if timepq < 10*time.Millisecond {
+			Value.Color = "low"
+		} else if timepq < 100*time.Millisecond {
+			Value.Color = "medium"
+		} else {
+			Value.Color = "high"
 		}
-	})
+		sorter.rows = append(sorter.rows, Value)
+	}
+	sort.Sort(&sorter)
+	for _, Value := range sorter.rows {
+		if err := queryzTmpl.Execute(w, Value); err != nil {
+			log.Errorf("queryz: couldn't execute template: %v", err)
+		}
+	}
 }
