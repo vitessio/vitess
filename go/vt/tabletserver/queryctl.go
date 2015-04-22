@@ -48,6 +48,7 @@ func init() {
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
 	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
+	flag.BoolVar(&qsConfig.EnablePublishStats, "queryserver-config-enable-publish-stats", DefaultQsConfig.EnablePublishStats, "set this flag to true makes queryservice publish monitoring stats")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "socket filename hint: a unique filename will be generated based on this input")
@@ -114,6 +115,7 @@ type Config struct {
 	StrictMode         bool
 	StrictTableAcl     bool
 	TerseErrors        bool
+	EnablePublishStats bool
 	StatsPrefix        string
 	DebugURLPrefix     string
 	PoolNamePrefix     string
@@ -145,6 +147,7 @@ var DefaultQsConfig = Config{
 	StrictMode:         true,
 	StrictTableAcl:     false,
 	TerseErrors:        false,
+	EnablePublishStats: true,
 	StatsPrefix:        "",
 	DebugURLPrefix:     "/debug",
 	PoolNamePrefix:     "",

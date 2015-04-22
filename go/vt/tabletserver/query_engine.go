@@ -127,6 +127,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		},
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 
 	mysqlStats = stats.NewTimings(config.StatsPrefix + "Mysql")
@@ -137,16 +138,19 @@ func NewQueryEngine(config Config) *QueryEngine {
 		config.RowCache,
 		time.Duration(config.IdleTimeout*1e9),
 		config.DebugURLPrefix+"/memcache/",
+		config.EnablePublishStats,
 	)
 	qe.connPool = NewConnPool(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 	qe.streamConnPool = NewConnPool(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 
 	// Services
@@ -157,6 +161,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
@@ -178,10 +183,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
-	stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-	stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-	stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-	stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
 	queryStats = stats.NewTimings(config.StatsPrefix + "Queries")
 	qpsRates = stats.NewRates(config.StatsPrefix+"QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings(config.StatsPrefix + "Waits")
@@ -190,11 +191,17 @@ func NewQueryEngine(config Config) *QueryEngine {
 	errorStats = stats.NewCounters(config.StatsPrefix + "Errors")
 	internalErrors = stats.NewCounters(config.StatsPrefix + "InternalErrors")
 	resultStats = stats.NewHistogram(config.StatsPrefix+"Results", resultBuckets)
-	stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
-		return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
-	}))
 	spotCheckCount = stats.NewInt(config.StatsPrefix + "RowcacheSpotCheckCount")
 
+	if config.EnablePublishStats {
+		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
+		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(qe.queryTimeout.Get))
+		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
+			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
+		}))
+	}
 	return qe
 }
 

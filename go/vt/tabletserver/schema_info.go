@@ -117,27 +117,30 @@ func NewSchemaInfo(
 	statsPrefix string,
 	endpoints map[string]string,
 	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaInfo {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:    cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:   NewConnPool("", 2, idleTimeout),
+		connPool:   NewConnPool("", 2, idleTimeout, enablePublishStats),
 		ticks:      timer.NewTimer(reloadTime),
 		endpoints:  endpoints,
 		reloadTime: reloadTime,
 	}
-	stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
-	stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
-	stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
-	stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
-		return fmt.Sprintf("%v", si.queries.Oldest())
-	}))
-	stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-	_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	if enablePublishStats {
+		stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
+		stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
+		stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+		stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
+			return fmt.Sprintf("%v", si.queries.Oldest())
+		}))
+		stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheStats", []string{"Table", "Stats"}, si.getRowcacheStats)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"RowcacheInvalidations", []string{"Table"}, si.getRowcacheInvalidations)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
 	}

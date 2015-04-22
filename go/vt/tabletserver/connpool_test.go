@@ -42,7 +42,7 @@ func TestConnectivity(t *testing.T) {
 	killStats = stats.NewCounters("TestKills")
 	internalErrors = stats.NewCounters("TestInternalErrors")
 	mysqlStats = stats.NewTimings("TestMySQLStats")
-	pool := NewConnPool("p1", 1, 30*time.Second)
+	pool := NewConnPool("p1", 1, 30*time.Second, false)
 	pool.Open(appParams, dbaParams)
 
 	conn, err := pool.Get(ctx)
