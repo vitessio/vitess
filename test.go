@@ -84,15 +84,18 @@ func (t Test) run() error {
 		}
 	}()
 
+	// Run the test.
 	output, err := dockerCmd.CombinedOutput()
 	close(done)
 	signal.Stop(sigchan)
 	close(sigchan)
 
+	// Save test output.
 	if err != nil || *logPass {
-		outFile := path.Join("_test", t.Name+".log")
+		outDir := path.Join("_test", *flavor)
+		outFile := path.Join(outDir, t.Name+".log")
 		t.logf("saving test output to %v", outFile)
-		if dirErr := os.MkdirAll("_test", os.FileMode(0755)); dirErr != nil {
+		if dirErr := os.MkdirAll(outDir, os.FileMode(0755)); dirErr != nil {
 			t.logf("Mkdir error: %v", dirErr)
 		}
 		if fileErr := ioutil.WriteFile(outFile, output, os.FileMode(0644)); fileErr != nil {
@@ -118,6 +121,7 @@ func main() {
 	if err := json.Unmarshal(configData, &config); err != nil {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
+	log.Printf("Bootstrap flavor: %v", *flavor)
 
 	// Keep stats.
 	failed := 0
