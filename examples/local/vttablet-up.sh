@@ -32,7 +32,17 @@ dbconfig_flags="\
 # Set up environment.
 export LD_LIBRARY_PATH=$VTROOT/dist/vt-zookeeper-3.3.5/lib:$LD_LIBRARY_PATH
 export ZK_CLIENT_CONFIG=$script_root/zk-client-conf.json
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
+
+case "$MYSQL_FLAVOR" in
+  "MySQL56")
+    bootstrap_archive=mysql-db-dir_5.6.24.tbz
+    ;;
+  "MariaDB")
+    bootstrap_archive=mysql-db-dir_10.0.13-MariaDB.tbz
+    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mariadb.cnf
+    ;;
+esac
+
 mkdir -p $VTDATAROOT/tmp
 
 # Try to find mysqld_safe on PATH.
@@ -63,7 +73,7 @@ for uid_index in 0 1 2; do
   echo "Starting MySQL for tablet $alias..."
   $VTROOT/bin/mysqlctl -log_dir $VTDATAROOT/tmp -tablet_uid $uid $dbconfig_flags \
     -mysql_port $mysql_port \
-    init -bootstrap_archive mysql-db-dir_10.0.13-MariaDB.tbz
+    init -bootstrap_archive $bootstrap_archive
 
   $VT_MYSQL_ROOT/bin/mysql -u vt_dba -S $VTDATAROOT/$tablet_dir/mysql.sock \
     -e "CREATE DATABASE IF NOT EXISTS vt_$keyspace"
