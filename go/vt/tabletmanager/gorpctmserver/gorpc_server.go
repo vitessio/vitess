@@ -444,6 +444,19 @@ func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.Rest
 	})
 }
 
+// SetMaster wraps RPCAgent.SetMaster
+func (tm *TabletManager) SetMaster(ctx context.Context, args *gorpcproto.SetMasterArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSetMaster, args, reply, true, func() error {
+		if args.WaitTimeout != 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
+			defer cancel()
+		}
+		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS)
+	})
+}
+
 // SlaveWasRestarted wraps RPCAgent.
 func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

@@ -117,6 +117,8 @@ type RPCAgent interface {
 
 	RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error
 
+	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
+
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
 	BreakSlaves(ctx context.Context) error
@@ -522,6 +524,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.Restart
 // replication up to the provided point, and then makes the slave the
 // shard master.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
 	// TODO(alainjobart) change the flavor API to take the context directly
 	// For now, extract the timeout from the context, or wait forever
 	var waitTimeout time.Duration
@@ -535,9 +542,12 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 		return myproto.ReplicationPosition{}, err
 	}
 
-	// TODO(alainjobart) implement a mysqld.PromoteSlave2
+	rp, err := agent.Mysqld.PromoteSlave2(agent.hookExtraEnv())
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
 
-	return myproto.ReplicationPosition{}, nil
+	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
@@ -572,6 +582,41 @@ func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.Rest
 		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	}
 	return nil
+}
+
+// SetMaster sets replication master, and waits for the
+// reparent_journal table entry up to context timeout
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+	ti, err := agent.TopoServer.GetTablet(parent)
+	if err != nil {
+		return err
+	}
+
+	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
+	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"], 10)
+	if err != nil {
+		return err
+	}
+
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+		return err
+	}
+
+	// change our type to spare if we used to be the master
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type == topo.TYPE_MASTER {
+		tablet.Type = topo.TYPE_SPARE
+		tablet.Health = nil
+		if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+			return err
+		}
+	}
+
+	// wait until we get the replicated row, or our context times out
+	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.

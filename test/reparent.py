@@ -231,7 +231,7 @@ class TestReparent(unittest.TestCase):
       t.reset_replication()
     utils.pause('force ReparentShard?')
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
-                     tablet_62344.tablet_alias])
+                     tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology(ping_tablets=True)
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
@@ -246,7 +246,7 @@ class TestReparent(unittest.TestCase):
 
     # Perform a graceful reparent operation to another cell.
     utils.pause('graceful ReparentShard?')
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
 
@@ -337,7 +337,7 @@ class TestReparent(unittest.TestCase):
 
     # Perform a graceful reparent operation.
     utils.pause('graceful ReparentShard?')
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
@@ -414,7 +414,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.kill_vttablet()
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias])
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
@@ -597,7 +597,7 @@ class TestReparent(unittest.TestCase):
       tablet_62344.mquery('vt_test_keyspace', q, write=True)
 
     # Perform a graceful reparent operation.
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias])
 
     tablet_41983.mquery('', 'start slave')

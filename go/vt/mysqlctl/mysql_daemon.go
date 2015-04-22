@@ -34,6 +34,7 @@ type MysqlDaemon interface {
 	MasterPosition() (proto.ReplicationPosition, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
+	SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	// Schema related methods
@@ -81,6 +82,15 @@ type FakeMysqlDaemon struct {
 	// StartReplicationCommandsResult is what
 	// StartReplicationCommands will return
 	StartReplicationCommandsResult []string
+
+	// SetMasterCommandsInput is matched against the input
+	// of SetMasterCommands (as "%v:%v,%v"). If it doesn't match,
+	// SetMasterCommands will return an error.
+	SetMasterCommandsInput string
+
+	// SetMasterCommandsResult is what
+	// SetMasterCommands will return
+	SetMasterCommandsResult []string
 
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
@@ -160,6 +170,15 @@ func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationSt
 		return nil, fmt.Errorf("wrong status for StartReplicationCommands: expected %v got %v", fmd.StartReplicationCommandsStatus, status)
 	}
 	return fmd.StartReplicationCommandsResult, nil
+}
+
+// SetMasterCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+	input := fmt.Sprintf("%v:%v,%v", masterHost, masterPort, masterConnectRetry)
+	if fmd.SetMasterCommandsInput != input {
+		return nil, fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterCommandsInput, input)
+	}
+	return fmd.SetMasterCommandsResult, nil
 }
 
 // WaitForReparentJournal is part of the MysqlDaemon interface

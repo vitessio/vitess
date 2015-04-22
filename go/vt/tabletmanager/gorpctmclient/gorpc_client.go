@@ -444,6 +444,23 @@ func (client *GoRPCTabletManagerClient) RestartSlave(ctx context.Context, tablet
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRestartSlave, rsd, &rpc.Unused{})
 }
 
+// SetMaster is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
+	args := &gorpcproto.SetMasterArgs{
+		Parent:        parent,
+		TimeCreatedNS: timeCreatedNS,
+	}
+	deadline, ok := ctx.Deadline()
+	if ok {
+		args.WaitTimeout = deadline.Sub(time.Now())
+		if args.WaitTimeout < 0 {
+			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.SetMaster on %v", tablet.Alias)}
+		}
+	}
+
+	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSetMaster, args, &rpc.Unused{})
+}
+
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveWasRestarted, args, &rpc.Unused{})

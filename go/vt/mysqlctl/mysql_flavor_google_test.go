@@ -276,6 +276,76 @@ func TestGoogleStartReplicationCommandsSSL(t *testing.T) {
 	}
 }
 
+func TestGoogleSetMasterCommands(t *testing.T) {
+	params := &sqldb.ConnParams{
+		Uname: "username",
+		Pass:  "password",
+	}
+	masterHost := "localhost"
+	masterPort := 123
+	masterConnectRetry := 1234
+	want := []string{
+		"STOP SLAVE",
+		`CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  CONNECT_USING_GROUP_ID`,
+		"START SLAVE",
+	}
+
+	got, err := (&googleMysql51{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("(&googleMysql51{}).SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+	}
+}
+
+func TestGoogleSetMasterCommandsSSL(t *testing.T) {
+	params := &sqldb.ConnParams{
+		Uname:     "username",
+		Pass:      "password",
+		SslCa:     "ssl-ca",
+		SslCaPath: "ssl-ca-path",
+		SslCert:   "ssl-cert",
+		SslKey:    "ssl-key",
+	}
+	mysql.EnableSSL(params)
+	masterHost := "localhost"
+	masterPort := 123
+	masterConnectRetry := 1234
+	want := []string{
+		"STOP SLAVE",
+		`CHANGE MASTER TO
+  MASTER_HOST = 'localhost',
+  MASTER_PORT = 123,
+  MASTER_USER = 'username',
+  MASTER_PASSWORD = 'password',
+  MASTER_CONNECT_RETRY = 1234,
+  MASTER_SSL = 1,
+  MASTER_SSL_CA = 'ssl-ca',
+  MASTER_SSL_CAPATH = 'ssl-ca-path',
+  MASTER_SSL_CERT = 'ssl-cert',
+  MASTER_SSL_KEY = 'ssl-key',
+  CONNECT_USING_GROUP_ID`,
+		"START SLAVE",
+	}
+
+	got, err := (&googleMysql51{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("(&googleMysql51{}).SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+	}
+}
+
 func TestGoogleParseGTID(t *testing.T) {
 	input := "123-456"
 	want := proto.GoogleGTID{ServerID: 123, GroupID: 456}

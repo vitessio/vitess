@@ -39,6 +39,10 @@ type MysqlFlavor interface {
 	// a given master and position as specified in a ReplicationStatus.
 	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
 
+	// SetMaster returns the commands to use the provided master
+	// as the new master (without changing any GTID position).
+	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
+
 	// ParseGTID parses a GTID in the canonical format of this MySQL flavor into
 	// a proto.GTID interface value.
 	ParseGTID(string) (proto.GTID, error)

@@ -80,6 +80,11 @@ const (
 	// TabletActionRestartSlave tells the remote tablet it has a new master.
 	TabletActionRestartSlave = "RestartSlave"
 
+	// TabletActionSetMaster tells a tablet it has a new master.
+	// The tablet will reparent to the new master, and wait for
+	// the reparent_journal entry.
+	TabletActionSetMaster = "SetMaster"
+
 	// TabletActionSlaveWasRestarted tells a tablet the mysql
 	// master was changed.  The tablet will check it is indeed the
 	// case, and update its own topology record.

@@ -35,6 +35,11 @@ func init() {
 		commandInitShardMaster,
 		"[-force] [-wait_slave_timeout=<duration>] <keyspace/shard> <tablet alias>",
 		"Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard, then PlannedReparentShard or EmergencyReparentShard should be used instead."})
+	addCommand("Shards", command{
+		"PlannedReparentShard",
+		commandPlannedReparentShard,
+		"<keyspace/shard> <tablet alias>",
+		"Reparents the shard to the new master. Both old and new master need to be up and running."})
 }
 
 func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -110,4 +115,24 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	return wr.InitShardMaster(ctx, keyspace, shard, tabletAlias, *force, *waitSlaveTimeout)
+}
+
+func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("action PlannedReparentShard requires <keyspace/shard> <tablet alias>")
+	}
+
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	if err != nil {
+		return err
+	}
+	return wr.PlannedReparentShard(ctx, keyspace, shard, tabletAlias, *waitSlaveTimeout)
 }

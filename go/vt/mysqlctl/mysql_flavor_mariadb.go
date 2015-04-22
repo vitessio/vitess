@@ -109,6 +109,20 @@ func (*mariaDB10) StartReplicationCommands(params *sqldb.ConnParams, status *pro
 	}, nil
 }
 
+// SetMasterCommands implements MysqlFlavor.SetMasterCommands().
+func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+	// Make CHANGE MASTER TO command.
+	args := changeMasterArgs2(params, masterHost, masterPort, masterConnectRetry)
+	args = append(args, "MASTER_USE_GTID = slave_pos")
+	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+
+	return []string{
+		"STOP SLAVE",
+		changeMasterTo,
+		"START SLAVE",
+	}, nil
+}
+
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*mariaDB10) ParseGTID(s string) (proto.GTID, error) {
 	return proto.ParseGTID(mariadbFlavorID, s)

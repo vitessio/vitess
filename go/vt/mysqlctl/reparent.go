@@ -173,6 +173,36 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	return
 }
 
+// PromoteSlave2 is the new PromoteSlave.
+func (mysqld *Mysqld) PromoteSlave2(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+	// stop replication for good
+	if err := mysqld.StopSlave(hookExtraEnv); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	// Promote to master.
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
+		return proto.ReplicationPosition{}, err
+	}
+	cmds := flavor.PromoteSlaveCommands()
+	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	rp, err := mysqld.MasterPosition()
+	if err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	if err := mysqld.SetReadOnly(false); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	return rp, nil
+}
+
 // RestartSlave tells a mysql slave that is has a new master
 func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, timeCheck int64) error {
 	log.Infof("Restart Slave")

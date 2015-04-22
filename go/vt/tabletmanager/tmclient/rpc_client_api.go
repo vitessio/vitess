@@ -177,6 +177,11 @@ type TabletManagerClient interface {
 	// RestartSlave tells the remote tablet it has a new master
 	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error
 
+	// SetMaster tells a tablet to make itself a slave to the
+	// passed in master tablet alias, and wait for the row in the
+	// reparent_journal table.
+	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error
+
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 

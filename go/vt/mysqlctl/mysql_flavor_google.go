@@ -154,6 +154,19 @@ func (*googleMysql51) StartReplicationCommands(params *sqldb.ConnParams, status 
 	}, nil
 }
 
+// SetMasterCommands implements MysqlFlavor.SetMasterCommands().
+func (*googleMysql51) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+	args := changeMasterArgs2(params, masterHost, masterPort, masterConnectRetry)
+	args = append(args, "CONNECT_USING_GROUP_ID")
+	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+
+	return []string{
+		"STOP SLAVE",
+		changeMasterTo,
+		"START SLAVE",
+	}, nil
+}
+
 // ParseGTID implements MysqlFlavor.ParseGTID().
 func (*googleMysql51) ParseGTID(s string) (proto.GTID, error) {
 	return proto.ParseGTID(googleMysqlFlavorID, s)

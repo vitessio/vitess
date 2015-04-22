@@ -286,6 +286,11 @@ func (client *FakeTabletManagerClient) RestartSlave(ctx context.Context, tablet 
 	return nil
 }
 
+// SetMaster is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
+	return nil
+}
+
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error {
 	return nil

@@ -1085,6 +1085,28 @@ func agentRPCTestRestartSlavePanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
+var testSetMasterCalled = false
+
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "SetMaster parent", parent, testMasterAlias)
+	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	testSetMasterCalled = true
+	return nil
+}
+
+func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
+	compareError(t, "SetMaster", err, true, testSetMasterCalled)
+}
+
+func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
 var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
 	Parent: topo.TabletAlias{
 		Cell: "prison",
@@ -1369,6 +1391,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromoted(ctx, t, client, ti)
 	agentRPCTestRestartSlave(ctx, t, client, ti)
+	agentRPCTestSetMaster(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
 	agentRPCTestBreakSlaves(ctx, t, client, ti)
 
@@ -1425,6 +1448,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, ti)
 	agentRPCTestRestartSlavePanic(ctx, t, client, ti)
+	agentRPCTestSetMasterPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
 	agentRPCTestBreakSlavesPanic(ctx, t, client, ti)
 
