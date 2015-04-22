@@ -146,8 +146,8 @@ def set_mysql_flavor(flavor):
 
   if flavor == "MariaDB":
     __mysql_flavor = MariaDB()
-  elif flavor == "Mysql56":
-    logging.error("Mysql56 support is currently under development, and not supported yet")
+  elif flavor == "MySQL56":
+    logging.error("MySQL 5.6 support is currently under development, and not supported yet")
     exit(1)
   else:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)

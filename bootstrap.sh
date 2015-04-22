@@ -139,8 +139,8 @@ if [ -z "$MYSQL_FLAVOR" ]; then
   export MYSQL_FLAVOR=MariaDB
 fi
 case "$MYSQL_FLAVOR" in
-  "Mysql56")
-    echo "Mysql 5.6 support is under development and not supported yet."
+  "MySQL56")
+    echo "MySQL 5.6 support is under development and not supported yet."
     exit 1
     ;;
 
