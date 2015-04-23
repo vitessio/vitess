@@ -30,6 +30,7 @@ type MysqlDaemon interface {
 	SlaveStatus() (*proto.ReplicationStatus, error)
 
 	// reparenting related methods
+	ResetReplicationCommands() ([]string, error)
 	BreakSlaves() error
 	MasterPosition() (proto.ReplicationPosition, error)
 	SetReadOnly(on bool) error
@@ -64,6 +65,12 @@ type FakeMysqlDaemon struct {
 
 	// CurrentSlaveStatus is returned by SlaveStatus
 	CurrentSlaveStatus *proto.ReplicationStatus
+
+	// ResetReplicationResult is returned by ResetReplication
+	ResetReplicationResult []string
+
+	// ResetReplicationError is returned by ResetReplication
+	ResetReplicationError error
 
 	// BreakSlavesError is returned by BreakSlaves
 	BreakSlavesError error
@@ -105,8 +112,14 @@ type FakeMysqlDaemon struct {
 	// ExpectedExecuteSuperQueryList is what we expect
 	// ExecuteSuperQueryList to be called with. If it doesn't
 	// match, ExecuteSuperQueryList will return an error.
-	// Note each string is just a substring if it begins with SUB
+	// Note each string is just a substring if it begins with SUB,
+	// so we support partial queries (usefull when queries contain
+	// data fields like timestamps)
 	ExpectedExecuteSuperQueryList []string
+
+	// ExpectedExecuteSuperQueryCurrent is the current index of the queries
+	// we expect
+	ExpectedExecuteSuperQueryCurrent int
 }
 
 // GetMasterAddr is part of the MysqlDaemon interface
@@ -146,6 +159,11 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
 		return nil, fmt.Errorf("no slave status defined")
 	}
 	return fmd.CurrentSlaveStatus, nil
+}
+
+// ResetReplicationCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
+	return fmd.ResetReplicationResult, fmd.ResetReplicationError
 }
 
 // BreakSlaves is part of the MysqlDaemon interface
@@ -188,19 +206,33 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
-	if len(queryList) != len(fmd.ExpectedExecuteSuperQueryList) {
-		return fmt.Errorf("wrong query list size for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
-	}
-	compExpected := make([]string, len(fmd.ExpectedExecuteSuperQueryList))
-	compGot := make([]string, len(queryList))
-	for i, expected := range fmd.ExpectedExecuteSuperQueryList {
+	for _, query := range queryList {
+		// test we still have a query to compare
+		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
+			return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)
+		}
+
+		// compare the query
+		expected := fmd.ExpectedExecuteSuperQueryList[fmd.ExpectedExecuteSuperQueryCurrent]
+		fmd.ExpectedExecuteSuperQueryCurrent++
 		if strings.HasPrefix(expected, "SUB") {
-			compExpected[i] = expected[3:]
-			compGot[i] = queryList[i][:len(compExpected[i])]
+			// remove the SUB from the expected,
+			// and truncate the query to length(expected)
+			expected = expected[3:]
+			query = query[:len(expected)]
+		}
+		if expected != query {
+			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
 		}
 	}
-	if !reflect.DeepEqual(compExpected, compGot) {
-		return fmt.Errorf("wrong query list for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
+	return nil
+}
+
+// CheckSuperQueryList returns an error if all the queries we expected
+// haven't been seen.
+func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
+	if fmd.ExpectedExecuteSuperQueryCurrent != len(fmd.ExpectedExecuteSuperQueryList) {
+		return fmt.Errorf("SuperQueryList wasn't consumed, saw %v queries, was expecting %v", fmd.ExpectedExecuteSuperQueryCurrent, len(fmd.ExpectedExecuteSuperQueryList))
 	}
 	return nil
 }

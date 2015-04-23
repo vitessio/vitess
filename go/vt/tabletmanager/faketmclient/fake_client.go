@@ -243,6 +243,11 @@ func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *
 // Reparenting related functions
 //
 
+// ResetReplication is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+	return nil
+}
+
 // InitMaster is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	return myproto.ReplicationPosition{}, nil

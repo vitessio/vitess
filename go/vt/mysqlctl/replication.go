@@ -363,6 +363,16 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	return errors.New("replication stopped, it will never catch up")
 }
 
+// ResetReplicationCommands returns the commands to run to reset all
+// replication for this host.
+func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
+	}
+	return flavor.ResetReplicationCommands(), nil
+}
+
 // BreakSlaves forces all slaves to error and stop.
 // This is extreme, but helpful for startup, emergencies and tests.
 // Insert a row, block the propagation of its subsequent delete and reinsert it.

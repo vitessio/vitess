@@ -83,6 +83,16 @@ func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosit
 	return nil
 }
 
+// ResetReplicationCommands implements MysqlFlavor.ResetReplicationCommands().
+func (*mariaDB10) ResetReplicationCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"RESET MASTER",
+		"SET GLOBAL gtid_slave_pos = ''",
+	}
+}
+
 // PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*mariaDB10) PromoteSlaveCommands() []string {
 	return []string{

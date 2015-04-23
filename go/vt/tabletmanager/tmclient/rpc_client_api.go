@@ -147,6 +147,11 @@ type TabletManagerClient interface {
 	// Reparenting related functions
 	//
 
+	// ResetReplication tells a tablet to completely reset its
+	// replication.  All binary and relay logs are flushed. All
+	// replication positions are reset.
+	ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error
+
 	// InitMaster tells a tablet to make itself the new master,
 	// and return the replication position the slaves should use to
 	// reparent to it.

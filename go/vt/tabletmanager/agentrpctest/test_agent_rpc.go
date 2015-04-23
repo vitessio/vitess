@@ -932,6 +932,26 @@ func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmcl
 // Reparenting related functions
 //
 
+var testResetReplicationCalled = false
+
+func (fra *fakeRPCAgent) ResetReplication(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testResetReplicationCalled = true
+	return nil
+}
+
+func agentRPCTestResetReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.ResetReplication(ctx, ti)
+	compareError(t, "ResetReplication", err, true, testResetReplicationCalled)
+}
+
+func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.ResetReplication(ctx, ti)
+	expectRPCWrapLockPanic(t, err)
+}
+
 func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))

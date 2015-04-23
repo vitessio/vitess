@@ -359,6 +359,14 @@ func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBl
 // Reparenting related functions
 //
 
+// ResetReplication wraps RPCAgent.ResetReplication
+func (tm *TabletManager) ResetReplication(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionResetReplication, args, reply, true, func() error {
+		return tm.agent.ResetReplication(ctx)
+	})
+}
+
 // InitMaster wraps RPCAgent.InitMaster
 func (tm *TabletManager) InitMaster(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

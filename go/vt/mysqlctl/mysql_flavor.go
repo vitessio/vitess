@@ -31,6 +31,10 @@ type MysqlFlavor interface {
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
 
+	// ResetReplicationCommands returns the commands to completely reset
+	// replication on the host.
+	ResetReplicationCommands() []string
+
 	// PromoteSlaveCommands returns the commands to run to change
 	// a slave into a master.
 	PromoteSlaveCommands() []string

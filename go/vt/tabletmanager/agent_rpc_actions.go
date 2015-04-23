@@ -101,6 +101,8 @@ type RPCAgent interface {
 
 	// Reparenting related functions
 
+	ResetReplication(ctx context.Context) error
+
 	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
@@ -413,6 +415,17 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 //
 // Reparenting related functions
 //
+
+// ResetReplication completely resets the replication on the host.
+// All binary and relay logs are flushed. All replication positions are reset.
+func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
+	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
+	if err != nil {
+		return err
+	}
+
+	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
+}
 
 // InitMaster breaks slaves replication, get the current MySQL replication
 // position, insert a row in the reparent_journal table, and returns

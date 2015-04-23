@@ -118,6 +118,16 @@ func (*googleMysql51) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationP
 	return fmt.Errorf("timed out waiting for position %v", targetPos)
 }
 
+// ResetReplicationCommands implements MysqlFlavor.ResetReplicationCommands().
+func (*googleMysql51) ResetReplicationCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"RESET MASTER",
+		"CHANGE MASTER TO MASTER_HOST = ''",
+	}
+}
+
 // PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*googleMysql51) PromoteSlaveCommands() []string {
 	return []string{

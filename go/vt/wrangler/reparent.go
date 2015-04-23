@@ -241,8 +241,30 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 		wr.logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", masterElectTabletAlias)
 	}
 
+	// First phase: reset replication on all tablets. If anyone fails,
+	// we stop. It is probably because it is unreachable, and may leave
+	// an unstable database process in the mix, with a database daemon
+	// at a wrong replication spot.
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for alias, tabletInfo := range tabletMap {
+		wg.Add(1)
+		go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
+			defer wg.Done()
+			wr.logger.Infof("resetting replication on tablet %v", alias)
+			if err := wr.TabletManagerClient().ResetReplication(ctx, tabletInfo); err != nil {
+				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
+			}
+		}(alias, tabletInfo)
+	}
+	wg.Wait()
+	if err := rec.Error(); err != nil {
+		return err
+	}
+
 	// Tell the new master to break its slaves, return its replication
-	// position, and add a row to the reparent_journal table.
+	// position
+	wr.logger.Infof("initializing master on %v", masterElectTabletAlias)
 	rp, err := wr.TabletManagerClient().InitMaster(ctx, masterElectTabletInfo)
 	if err != nil {
 		return err
@@ -257,19 +279,20 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	now := time.Now().UnixNano()
 	wgMaster := sync.WaitGroup{}
 	wgSlaves := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
 	var masterErr error
 	for alias, tabletInfo := range tabletMap {
 		if alias == masterElectTabletAlias {
 			wgMaster.Add(1)
 			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
+				wr.logger.Infof("populating reparent journal on new master %v", alias)
 				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
 			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
+				wr.logger.Infof("initializing slave %v", alias)
 				if err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp, now); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
 				}

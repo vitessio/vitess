@@ -47,6 +47,10 @@ const (
 	// TabletActionScrap scraps the live running tablet
 	TabletActionScrap = "Scrap"
 
+	// TabletActionResetReplication tells the tablet it should
+	// reset its replication state
+	TabletActionResetReplication = "ResetReplication"
+
 	// TabletActionInitMaster tells the tablet it should make itself the new
 	// master for the shard it's currently in.
 	TabletActionInitMaster = "InitMaster"

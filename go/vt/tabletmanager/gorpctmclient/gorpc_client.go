@@ -369,6 +369,11 @@ func (client *GoRPCTabletManagerClient) RunBlpUntil(ctx context.Context, tablet 
 // Reparenting related functions
 //
 
+// ResetReplication is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionResetReplication, &rpc.Unused{}, &rpc.Unused{})
+}
+
 // InitMaster is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
