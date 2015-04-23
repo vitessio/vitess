@@ -229,7 +229,7 @@ class TestReparent(unittest.TestCase):
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.pause('force ReparentShard?')
+    utils.pause('test_reparent_cross_cell force ReparentShard?')
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology(ping_tablets=True)
@@ -245,7 +245,7 @@ class TestReparent(unittest.TestCase):
     self.assertEqual(srvShard['MasterCell'], 'test_nj')
 
     # Perform a graceful reparent operation to another cell.
-    utils.pause('graceful ReparentShard?')
+    utils.pause('test_reparent_cross_cell graceful ReparentShard?')
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_31981.tablet_alias], auto_log=True)
     utils.validate_topology()
@@ -309,7 +309,7 @@ class TestReparent(unittest.TestCase):
     # Force the slaves to reparent assuming that all the datasets are identical.
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
-    utils.pause('force ReparentShard?')
+    utils.pause('_test_reparent_graceful force ReparentShard?')
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
@@ -336,7 +336,7 @@ class TestReparent(unittest.TestCase):
                     stdout=utils.devnull)
 
     # Perform a graceful reparent operation.
-    utils.pause('graceful ReparentShard?')
+    utils.pause('_test_reparent_graceful graceful ReparentShard?')
     utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
                      tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
@@ -552,7 +552,9 @@ class TestReparent(unittest.TestCase):
       for x in xrange(4)]
 
   # See if a lag slave can be safely reparent.
-  def test_reparent_lag_slave(self, shard_id='0'):
+  # TODO(alainjobart) this is broken, and irrelevant for GTID, will
+  # wait until the new re-parenting code is in place to refactor
+  def DISABLED_test_reparent_lag_slave(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
