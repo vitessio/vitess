@@ -95,8 +95,14 @@ func main() {
 	tabletserver.InitQueryService(qsc)
 	binlog.RegisterUpdateStreamService(mycnf)
 
+	// Create mysqld and register the health reporter (needs to be done
+	// before initializing the agent, so the initial health check
+	// done by the agent has the right reporter)
+	mysqld := mysqlctl.NewMysqld("Dba", "App", mycnf, &dbcfgs.Dba, &dbcfgs.App.ConnParams, &dbcfgs.Repl)
+	registerHealthReporter(mysqld)
+
 	// Depends on both query and updateStream.
-	agent, err = tabletmanager.NewActionAgent(context.Background(), qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)
@@ -105,7 +111,6 @@ func main() {
 	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 	servenv.OnRun(func() {
 		addStatusParts(qsc)
-		registerHealthReporter(qsc)
 	})
 	servenv.OnTerm(func() {
 		qsc.DisallowQueries()
