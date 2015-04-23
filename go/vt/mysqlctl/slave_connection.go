@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sync2"
@@ -105,8 +106,8 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SqlError); ok && sqlErr.Number() == 2013 {
-					// errno 2013 = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SqlError); ok && sqlErr.Number() == mysql.ErrServerLost {
+					// ErrServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)

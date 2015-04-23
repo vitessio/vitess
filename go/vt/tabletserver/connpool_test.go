@@ -78,7 +78,7 @@ func TestConnectivity(t *testing.T) {
 		newctx, cancel = withTimeout(ctx, 2*time.Millisecond)
 		_, err = conn.Exec(newctx, "select sleep(1) from dual", 1000, true)
 		cancel()
-		lostConn := "error: Lost connection to MySQL server during query (errno 2013) during query: select sleep(1) from dual"
+		lostConn := "error: the query was killed either because it timed out or was canceled: Lost connection to MySQL server during query (errno 2013) during query: select sleep(1) from dual"
 		if err == nil || err.Error() != lostConn {
 			t.Errorf("got: %v, want %s", err, lostConn)
 		}

@@ -367,7 +367,7 @@ class TestNocache(framework.TestCase):
       conn.begin()
       cu.execute("select sleep(0.5) from vtocc_test", {})
     except dbexceptions.DatabaseError as e:
-      if "error: Query" not in str(e) and "error: Lost connection" not in str(e):
+      if "error: Query" not in str(e) and "error: the query was killed" not in str(e):
         self.fail("Query not killed as expected")
     else:
       self.fail("Did not receive exception")
