@@ -36,6 +36,7 @@ export ZK_CLIENT_CONFIG=$script_root/zk-client-conf.json
 case "$MYSQL_FLAVOR" in
   "MySQL56")
     bootstrap_archive=mysql-db-dir_5.6.24.tbz
+    export EXTRA_MY_CNF=$VTROOT/config/mycnf/master_mysql56.cnf
     ;;
   "MariaDB")
     bootstrap_archive=mysql-db-dir_10.0.13-MariaDB.tbz

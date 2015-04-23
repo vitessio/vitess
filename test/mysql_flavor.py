@@ -126,6 +126,9 @@ class MySQL56(MysqlFlavor):
   def bootstrap_archive(self):
     return "mysql-db-dir_5.6.24.tbz"
 
+  def extra_my_cnf(self):
+    return environment.vttop + "/config/mycnf/master_mysql56.cnf"
+
 __mysql_flavor = None
 
 
