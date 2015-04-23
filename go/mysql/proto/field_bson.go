@@ -21,6 +21,7 @@ func (field *Field) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 
 	bson.EncodeString(buf, "Name", field.Name)
 	bson.EncodeInt64(buf, "Type", field.Type)
+	bson.EncodeInt64(buf, "Flags", field.Flags)
 
 	lenWriter.Close()
 }
@@ -43,6 +44,8 @@ func (field *Field) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			field.Name = bson.DecodeString(buf, kind)
 		case "Type":
 			field.Type = bson.DecodeInt64(buf, kind)
+		case "Flags":
+			field.Flags = bson.DecodeInt64(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

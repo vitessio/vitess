@@ -506,8 +506,8 @@ func (sbc *sandboxConn) getNextResult() *mproto.QueryResult {
 
 var singleRowResult = &mproto.QueryResult{
 	Fields: []mproto.Field{
-		{"id", 3},
-		{"value", 253}},
+		{"id", 3, mproto.VT_ZEROVALUE_FLAG},
+		{"value", 253, mproto.VT_ZEROVALUE_FLAG}},
 	RowsAffected: 1,
 	InsertId:     0,
 	Rows: [][]sqltypes.Value{{
