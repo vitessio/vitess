@@ -156,10 +156,11 @@ func NewActionAgent(
 
 	// try to initialize the tablet if we have to
 	if err := agent.InitTablet(port, securePort); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("agent.InitTablet failed: %v", err)
 	}
 
-	// Publish and set the TargetTabletType. Not a global var since it should never be changed.
+	// Publish and set the TargetTabletType. Not a global var
+	// since it should never be changed.
 	statsTabletType := stats.NewString("TargetTabletType")
 	statsTabletType.Set(*targetTabletType)
 
