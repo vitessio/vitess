@@ -272,7 +272,7 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	if err = sq.startRequest(session.SessionId, false, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, sq.qe.txPool.poolTimeout.Get())
+	ctx, cancel := withTimeout(ctx, sq.qe.txPool.PoolTimeout())
 	defer func() {
 		queryStats.Record("BEGIN", time.Now())
 		cancel()
