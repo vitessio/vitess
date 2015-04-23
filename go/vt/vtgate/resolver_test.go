@@ -17,6 +17,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -505,5 +506,26 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	_, err = res.ExecuteKeyspaceIds(context.Background(), query)
 	if err == nil {
 		t.Errorf("want %v, got nil", errStr)
+	}
+}
+
+func TestIsConnError(t *testing.T) {
+	var connErrorTests = []struct {
+		in      error
+		outCode int
+		outBool bool
+	}{
+		{fmt.Errorf("generic error"), 0, false},
+		{&ScatterConnError{Code: 9}, 9, true},
+		{&ShardConnError{Code: 9}, 9, true},
+		{&tabletconn.ServerError{Code: 9}, 0, false},
+	}
+
+	for _, tt := range connErrorTests {
+		gotCode, gotBool := isConnError(tt.in)
+		if (gotCode != tt.outCode) || (gotBool != tt.outBool) {
+			t.Errorf("isConnError(%v) => (%v, %v), want (%v, %v)",
+				tt.in, gotCode, gotBool, tt.outCode, tt.outBool)
+		}
 	}
 }

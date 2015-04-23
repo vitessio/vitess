@@ -90,12 +90,13 @@ type ShardConnError struct {
 	Code            int
 	ShardIdentifier string
 	InTransaction   bool
-	Err             string
+	// Preserve the original error, so that we don't need to parse the error string.
+	Err error
 }
 
 func (e *ShardConnError) Error() string {
 	if e.ShardIdentifier == "" {
-		return e.Err
+		return fmt.Sprintf("%v", e.Err)
 	}
 	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
@@ -397,7 +398,7 @@ func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction 
 		Code:            code,
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
-		Err:             in.Error(),
+		Err:             in,
 	}
 	return shardConnErr
 }

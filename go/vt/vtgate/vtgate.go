@@ -21,6 +21,7 @@ import (
 	kproto "github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -363,7 +364,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecute.Errorf("%v, query: %+v", err, query)
+		logError(err, query, vtg.logStreamExecute)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -405,7 +406,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteKeyspaceIds.Errorf("%v, query: %+v", err, query)
+		logError(err, query, vtg.logStreamExecuteKeyspaceIds)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -447,7 +448,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteKeyRanges.Errorf("%v, query: %+v", err, query)
+		logError(err, query, vtg.logStreamExecuteKeyRanges)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -492,7 +493,7 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		vtg.logStreamExecuteShard.Errorf("%v, query: %+v", err, query)
+		logError(err, query, vtg.logStreamExecuteShard)
 	}
 	// Now we can send the final Sessoin info.
 	if query.Session != nil {
@@ -542,6 +543,46 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	return nil
 }
 
+// Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
+// as errors in those components, but logged to Info in VTGate itself.
+func logError(err error, query interface{}, logger *logutil.ThrottledLogger) {
+	logMethod := logger.Errorf
+	if isErrorCausedByVTGate(err) {
+		logMethod = logger.Errorf
+	} else {
+		infoErrors.Add("NonVtgateErrors", 1)
+		logMethod = logger.Infof
+	}
+	logMethod("%v, query: %+v", err, query)
+}
+
+// Returns true if a given error is caused entirely due to VTGate, and not any of
+// the components that it depends on.
+func isErrorCausedByVTGate(err error) bool {
+	var errQueue []error
+	errQueue = append(errQueue, err)
+	for len(errQueue) > 0 {
+		// pop the first item from the queue
+		e := errQueue[0]
+		errQueue = errQueue[1:]
+
+		switch e := e.(type) {
+		case *ScatterConnError:
+			errQueue = append(errQueue, e.Errs...)
+		case *ShardConnError:
+			errQueue = append(errQueue, e.Err)
+		case *tabletconn.ServerError:
+			break
+		default:
+			// Return true if even a single error within the error queue was
+			// caused by VTGate. If we're not certain what caused the error, we
+			// default to assuming that VTGate was at fault
+			return true
+		}
+	}
+	return false
+}
+
 func handleExecuteError(err error, statsKey []string, query interface{}, logger *logutil.ThrottledLogger) string {
 	errStr := err.Error() + ", vtgate: " + servenv.ListeningURL.String()
 	if strings.Contains(errStr, errDupKey) {
@@ -550,7 +591,7 @@ func handleExecuteError(err error, statsKey []string, query interface{}, logger 
 		normalErrors.Add(statsKey, 1)
 	} else {
 		normalErrors.Add(statsKey, 1)
-		logger.Errorf("%v, query: %+v", err, query)
+		logError(err, query, logger)
 	}
 	return errStr
 }

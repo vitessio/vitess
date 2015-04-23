@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -731,5 +732,49 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
 		t.Errorf("splits contain the wrong sqls and/or keyranges, got: %v, want: %v", actualSqlsByKeyRange, expectedSqlsByKeyRange)
+	}
+}
+
+func TestIsErrorCausedByVTGate(t *testing.T) {
+	unknownError := fmt.Errorf("unknown error")
+	serverError := &tabletconn.ServerError{
+		Code: tabletconn.ERR_RETRY,
+		Err:  "vttablet: retry: error message",
+	}
+	shardConnUnknownErr := &ShardConnError{Err: unknownError}
+	shardConnServerErr := &ShardConnError{Err: serverError}
+
+	scatterConnErrAllUnknownErrs := &ScatterConnError{
+		Errs: []error{unknownError, unknownError, unknownError},
+	}
+	scatterConnErrMixed := &ScatterConnError{
+		Errs: []error{unknownError, shardConnServerErr, shardConnServerErr},
+	}
+	scatterConnErrAllServerErrs := &ScatterConnError{
+		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnServerErr},
+	}
+
+	inputToWant := map[error]bool{
+		unknownError:           true,
+		serverError:            false,
+		tabletconn.CONN_CLOSED: true,
+		// Errors wrapped in ShardConnError should get unwrapped
+		shardConnUnknownErr: true,
+		shardConnServerErr:  false,
+		// We consider a ScatterConnErr with all uknown errors to be from VTGate
+		scatterConnErrAllUnknownErrs: true,
+		// We consider a ScatterConnErr with a mix of errors to be from VTGate
+		scatterConnErrMixed: true,
+		// If every error in ScatterConnErr list is caused by external components, we shouldn't
+		// consider the error to be from VTGate
+		scatterConnErrAllServerErrs: false,
+	}
+
+	for input, want := range inputToWant {
+		got := isErrorCausedByVTGate(input)
+		if got != want {
+			t.Errorf("isErrorCausedByVTGate(%v) => %v, want %v",
+				input, got, want)
+		}
 	}
 }

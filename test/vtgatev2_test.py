@@ -863,6 +863,34 @@ class TestFailures(unittest.TestCase):
         keyranges=[self.keyrange])
     vtgate_conn.commit()
 
+  def test_vttablet_errors_not_logged(self):
+    """Verifies that errors which occur in VtTablet aren't logged as such in
+    VTGate.
+
+    Instead of making assertions by reading the log stream, we read a debug
+    vars that is incremented by VTGate whenever it chooses to log exceptions
+    to Infof instead of Errorf.
+    """
+    try:
+      vtgate_conn = get_connection()
+    except Exception as e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
+
+    keyspace_id = shard_kid_map[shard_names[self.shard_index]][0]
+    cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
+                                keyspace_ids=[pack_kid(keyspace_id)],
+                                writable=True)
+    with self.assertRaises(dbexceptions.DatabaseError):
+      cursor.execute("this is not valid syntax, throw an error", {})
+
+    try:
+      non_vtgate_errors = utils.get_vars(vtgate_port)['VtgateInfoErrorCounts']['NonVtgateErrors']
+    except KeyError as e:
+      self.fail("No errors in VTGate that weren't logged as exceptions: 'NonVtgateErrors' vars not found")
+    self.assertEqual(
+      non_vtgate_errors, 1
+    )
+
   def test_error_on_dml(self):
     try:
       vtgate_conn = get_connection()

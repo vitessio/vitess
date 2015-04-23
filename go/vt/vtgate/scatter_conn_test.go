@@ -13,6 +13,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 )
@@ -327,6 +328,24 @@ func TestScatterConnClose(t *testing.T) {
 	time.Sleep(1)
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CloseCount)
+	}
+}
+
+func TestScatterConnError(t *testing.T) {
+	err := &ScatterConnError{
+		Code: 12,
+		Errs: []error{
+			&ShardConnError{Code: 10, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
+			fmt.Errorf("generic error"),
+			tabletconn.CONN_CLOSED,
+		},
+	}
+
+	errString := err.Error()
+	wantErrString := "tabletconn error\ngeneric error\nvttablet: Connection Closed"
+
+	if errString != wantErrString {
+		t.Errorf("got: %v, want: %v", errString, wantErrString)
 	}
 }
 
