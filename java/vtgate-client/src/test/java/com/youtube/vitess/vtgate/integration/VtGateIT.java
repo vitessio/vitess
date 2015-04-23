@@ -1,4 +1,4 @@
-package com.youtube.vitess.vtgate.integration;
+  package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
@@ -116,8 +116,8 @@ public class VtGateIT {
     Row row = cursor.next();
     Cell idCell = row.next();
     Assert.assertEquals("id", idCell.getName());
-    Assert.assertEquals(UnsignedLong.class, idCell.getType());
-    UnsignedLong id = row.getULong(idCell.getName());
+    Assert.assertEquals(Long.class, idCell.getType());
+    Long id = row.getLong(idCell.getName());
 
     Cell nameCell = row.next();
     Assert.assertEquals("name", nameCell.getName());
@@ -307,7 +307,7 @@ public class VtGateIT {
     List<Long> actual = new ArrayList<>();
     for (Cursor cursor : cursors) {
       for (Row row : cursor) {
-        actual.add(row.getULong("id").longValue());
+        actual.add(row.getLong("id").longValue());
       }
     }
     Assert.assertTrue(expected.equals(actual));
