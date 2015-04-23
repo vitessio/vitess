@@ -515,7 +515,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['RunHealthCheck', tablet_62344.tablet_alias, 'replica'],
                       auto_log=True)
     self.check_healthz(tablet_62344, True)
-    
+
     # the slave won't be healthy at first, as replication is not running
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias, 'replica'],
                       auto_log=True)
@@ -542,6 +542,53 @@ class TestTabletManager(unittest.TestCase):
       self.assertEqual(ti['Portmap']['mysql'], t.mysql_port)
 
     # all done
+    tablet.kill_tablets([tablet_62344, tablet_62044])
+
+  def test_repeated_init_shard_master(self):
+    for t in tablet_62344, tablet_62044:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None,
+                       target_tablet_type='replica',
+                       lameduck_period='5s',
+                       init_keyspace='test_keyspace',
+                       init_shard='0')
+
+    # tablets are not replicating, so they won't be healthy
+    for t in tablet_62344, tablet_62044:
+      t.wait_for_vttablet_state('NOT_SERVING')
+      self.check_healthz(t, False)
+
+    # pick one master out of the two
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
+
+    # run health check on both, make sure they are both healthy
+    for t in tablet_62344, tablet_62044:
+          utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+                          auto_log=True)
+          self.check_healthz(t, True)
+
+    # pick the other one as master, make sure they are still healthy
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     tablet_62044.tablet_alias])
+
+    # run health check on both, make sure they are both healthy
+    for t in tablet_62344, tablet_62044:
+          utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+                          auto_log=True)
+          self.check_healthz(t, True)
+
+    # and come back to the original guy
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
+
+    # run health check on both, make sure they are both healthy
+    for t in tablet_62344, tablet_62044:
+          utils.run_vtctl(['RunHealthCheck', t.tablet_alias, 'replica'],
+                          auto_log=True)
+          self.check_healthz(t, True)
+
+    # and done
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
   def test_fallback_policy(self):
