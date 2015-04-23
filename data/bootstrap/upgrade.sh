@@ -31,7 +31,8 @@ mysqlctl $mysqlctl_args shutdown
 newfile=mysql-db-dir_$(cat $tablet_dir/data/mysql_upgrade_info).tbz
 
 echo Creating new bootstrap file: $newfile
-(cd $tablet_dir && tar -jcf data.tbz data innodb)
+# Remove auto-generated UUID file, if present (MySQL 5.6).
+(cd $tablet_dir && rm -f data/auto.cnf && tar -jcf data.tbz data innodb)
 mv $tablet_dir/data.tbz ./$newfile
 
 echo Removing tablet directory
