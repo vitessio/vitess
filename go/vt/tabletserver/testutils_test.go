@@ -125,6 +125,7 @@ func (util *testUtils) newQueryServiceConfig() Config {
 	config.StrictMode = true
 	config.RowCache.Binary = "ls"
 	config.RowCache.Connections = 100
+	config.EnablePublishStats = false
 	return config
 }
 
