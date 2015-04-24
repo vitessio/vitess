@@ -276,39 +276,6 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	return flavor.StartReplicationCommands(&params, status)
 }
 
-/*
-	mysql> SHOW BINLOG INFO FOR 5\G
-	*************************** 1. row ***************************
-	Log_name: vt-0000041983-bin.000001
-	Pos: 1194
-	Server_ID: 41983
-*/
-
-// BinlogInfo returns the filename and position for a Google MySQL group_id.
-// This command only exists in Google MySQL.
-func (mysqld *Mysqld) BinlogInfo(pos proto.ReplicationPosition) (fileName string, filePos uint, err error) {
-	if pos.IsZero() {
-		return fileName, filePos, fmt.Errorf("input position for BinlogInfo is uninitialized")
-	}
-	// Extract the group_id from the GoogleGTID. We can't just use String() on the
-	// ReplicationPosition, because that includes the server_id.
-	gtid, ok := pos.GTIDSet.(proto.GoogleGTID)
-	if !ok {
-		return "", 0, fmt.Errorf("Non-Google GTID in BinlogInfo(%#v), which is only supported on Google MySQL", pos)
-	}
-	info, err := mysqld.fetchSuperQueryMap(fmt.Sprintf("SHOW BINLOG INFO FOR %v", gtid.GroupID))
-	if err != nil {
-		return "", 0, err
-	}
-	fileName = info["Log_name"]
-	temp, err := strconv.ParseUint(info["Pos"], 10, 32)
-	if err != nil {
-		return fileName, filePos, err
-	}
-	filePos = uint(temp)
-	return fileName, filePos, err
-}
-
 // WaitForSlave waits for a slave if its lag is larger than given maxLag
 func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	// FIXME(msolomon) verify that slave started based on show slave status;
