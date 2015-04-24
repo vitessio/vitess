@@ -18,6 +18,7 @@ type fakeMysqlFlavor string
 
 func (f fakeMysqlFlavor) VersionMatch(version string) bool             { return version == string(f) }
 func (fakeMysqlFlavor) PromoteSlaveCommands() []string                 { return nil }
+func (fakeMysqlFlavor) ResetReplicationCommands() []string             { return nil }
 func (fakeMysqlFlavor) ParseGTID(string) (proto.GTID, error)           { return nil, nil }
 func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent { return nil }
 func (fakeMysqlFlavor) ParseReplicationPosition(string) (proto.ReplicationPosition, error) {

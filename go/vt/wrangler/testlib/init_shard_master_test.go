@@ -144,6 +144,8 @@ func TestInitMasterShardChecks(t *testing.T) {
 	master.FakeMysqlDaemon.BreakSlavesError = fmt.Errorf("forced test error")
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
+	master2.StartActionLoop(t, wr)
+	defer master2.StopActionLoop(t)
 	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "forced test error") {
 		t.Errorf("InitShardMaster with new master failing BreakSlaves returned wrong error: %v", err)
 	}
