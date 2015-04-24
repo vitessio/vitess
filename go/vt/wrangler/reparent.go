@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	initShardMasterOperation            = "InitShardMaster"
-	plannedReparentShardMasterOperation = "PlannedReparentShardMaster"
+	initShardMasterOperation      = "InitShardMaster"
+	plannedReparentShardOperation = "PlannedReparentShard"
 )
 
 // ReparentShard creates the reparenting action and launches a goroutine
@@ -334,7 +334,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 // when both the current and new master are reachable and in good shape.
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
 	// lock the shard
-	actionNode := actionnode.ReparentShard(plannedReparentShardMasterOperation, masterElectTabletAlias)
+	actionNode := actionnode.ReparentShard(plannedReparentShardOperation, masterElectTabletAlias)
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return err
@@ -400,7 +400,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, plannedReparentShardMasterOperation, alias, rp)
+				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, plannedReparentShardOperation, alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
