@@ -46,9 +46,13 @@ func TestTabletErrorConnError(t *testing.T) {
 	if !IsConnErr(tabletErr) {
 		t.Fatalf("table error: %v is a connection error", tabletErr)
 	}
-	tabletErr = NewTabletErrorSql(ErrFatal, sqldb.NewSqlError(2013, "test"))
+	tabletErr = NewTabletErrorSql(ErrFatal, sqldb.NewSqlError(mysql.ErrServerLost, "test"))
 	if IsConnErr(tabletErr) {
 		t.Fatalf("table error: %v is not a connection error", tabletErr)
+	}
+	want := "fatal: the query was killed either because it timed out or was canceled: test (errno 2013)"
+	if tabletErr.Error() != want {
+		t.Fatalf("tablet error: %v, want %s", tabletErr, want)
 	}
 	sqlErr := sqldb.NewSqlError(1998, "test")
 	if IsConnErr(sqlErr) {
