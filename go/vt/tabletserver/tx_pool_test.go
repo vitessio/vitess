@@ -123,12 +123,12 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 	// set pool capacity to 1
 	txPool.pool.SetCapacity(1)
 	defer txPool.Close()
-	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(-10*time.Second))
-	defer handleAndVerifyTabletError(t, "expect to get an error", ErrTxPoolFull)
 	// start the first transaction
-	txPool.Begin(ctx)
+	txPool.Begin(context.Background())
 	// start the second transaction, which should fail due to
 	// ErrTxPoolFull error
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(100*time.Millisecond))
+	defer handleAndVerifyTabletError(t, "expect to get an error", ErrTxPoolFull)
 	txPool.Begin(ctx)
 }
 

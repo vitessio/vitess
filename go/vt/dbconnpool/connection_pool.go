@@ -104,8 +104,12 @@ func (cp *ConnectionPool) Get(timeout time.Duration) (PoolConnection, error) {
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	ctx := context.Background()
+	if timeout != 0 {
+		var cancel func()
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	}
 	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err

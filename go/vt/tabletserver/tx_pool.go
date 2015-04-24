@@ -130,7 +130,7 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 		switch err {
 		case ErrConnPoolClosed:
 			panic(connPoolClosedErr)
-		case pools.TIMEOUT_ERR:
+		case pools.ErrTimeout:
 			axp.LogActive()
 			panic(NewTabletError(ErrTxPoolFull, "Transaction pool connection limit exceeded"))
 		}
