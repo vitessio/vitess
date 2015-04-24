@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 #include <mysql.h>
-#include <errmsg.h>
 
 // This API provides convenient C wrapper functions for mysql client.
 
