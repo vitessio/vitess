@@ -31,7 +31,6 @@ type MysqlDaemon interface {
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
-	BreakSlaves() error
 	MasterPosition() (proto.ReplicationPosition, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
@@ -71,9 +70,6 @@ type FakeMysqlDaemon struct {
 
 	// ResetReplicationError is returned by ResetReplication
 	ResetReplicationError error
-
-	// BreakSlavesError is returned by BreakSlaves
-	BreakSlavesError error
 
 	// CurrentMasterPosition is returned by MasterPosition
 	CurrentMasterPosition proto.ReplicationPosition
@@ -166,11 +162,6 @@ func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 	return fmd.ResetReplicationResult, fmd.ResetReplicationError
 }
 
-// BreakSlaves is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) BreakSlaves() error {
-	return fmd.BreakSlavesError
-}
-
 // MasterPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) MasterPosition() (proto.ReplicationPosition, error) {
 	return fmd.CurrentMasterPosition, nil
@@ -219,7 +210,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 			// remove the SUB from the expected,
 			// and truncate the query to length(expected)
 			expected = expected[3:]
-			query = query[:len(expected)]
+			if len(query) > len(expected) {
+				query = query[:len(expected)]
+			}
 		}
 		if expected != query {
 			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)

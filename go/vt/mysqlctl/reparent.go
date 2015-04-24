@@ -210,7 +210,9 @@ func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, w
 	if err != nil {
 		return err
 	}
-	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
+	allCmds := []string{"STOP SLAVE", "RESET SLAVE"}
+	allCmds = append(allCmds, cmds...)
+	if err := mysqld.ExecuteSuperQueryList(allCmds); err != nil {
 		return err
 	}
 

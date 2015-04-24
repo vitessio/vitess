@@ -431,9 +431,10 @@ func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
 // position, insert a row in the reparent_journal table, and returns
 // the replication position
 func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
-	// first break the slaves, so anyone who may have been replicating
-	// before will stop. This is meant to catch misconfigured hosts.
-	if err := agent.MysqlDaemon.BreakSlaves(); err != nil {
+	// we need to insert something in the binlogs, so we can get the
+	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
+	cmds := mysqlctl.CreateReparentJournal()
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 

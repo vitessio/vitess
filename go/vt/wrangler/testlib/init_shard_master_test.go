@@ -5,7 +5,6 @@
 package testlib
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -46,6 +45,8 @@ func TestInitMasterShard(t *testing.T) {
 	master.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"new master shouldn't use this"}
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"reset rep 1",
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -140,13 +141,13 @@ func TestInitMasterShardChecks(t *testing.T) {
 	}
 
 	// InitShardMaster where the new master fails (use force flag
-	// as we have 2 masters)
-	master.FakeMysqlDaemon.BreakSlavesError = fmt.Errorf("forced test error")
+	// as we have 2 masters). We force the failure by making the
+	// SQL commands executed on the master unexpected by the test fixture
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
 	master2.StartActionLoop(t, wr)
 	defer master2.StopActionLoop(t)
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "forced test error") {
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "unexpected extra query") {
 		t.Errorf("InitShardMaster with new master failing BreakSlaves returned wrong error: %v", err)
 	}
 }
@@ -174,6 +175,8 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",

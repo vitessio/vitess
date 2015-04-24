@@ -187,8 +187,6 @@ func TestMariadbStartReplicationCommands(t *testing.T) {
 		MasterConnectRetry: 1234,
 	}
 	want := []string{
-		"STOP SLAVE",
-		"RESET SLAVE",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
 		`CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -227,8 +225,6 @@ func TestMariadbStartReplicationCommandsSSL(t *testing.T) {
 		MasterConnectRetry: 1234,
 	}
 	want := []string{
-		"STOP SLAVE",
-		"RESET SLAVE",
 		"SET GLOBAL gtid_slave_pos = '1-41983-12345'",
 		`CHANGE MASTER TO
   MASTER_HOST = 'localhost',

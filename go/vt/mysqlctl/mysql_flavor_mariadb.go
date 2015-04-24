@@ -111,8 +111,6 @@ func (*mariaDB10) StartReplicationCommands(params *sqldb.ConnParams, status *pro
 	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 
 	return []string{
-		"STOP SLAVE",
-		"RESET SLAVE",
 		setSlavePos,
 		changeMasterTo,
 		"START SLAVE",
