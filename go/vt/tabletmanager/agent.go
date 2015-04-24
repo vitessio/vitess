@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
@@ -41,6 +42,7 @@ import (
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -222,7 +224,16 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Table
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
 	log.Infof("Running tablet callback because: %v", reason)
-	return agent.changeCallback(ctx, oldTablet, newTablet)
+	if err := agent.changeCallback(ctx, oldTablet, newTablet); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.StateChange{
+		OldTablet: *oldTablet,
+		NewTablet: *newTablet,
+		Reason:    reason,
+	})
+	return nil
 }
 
 func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {

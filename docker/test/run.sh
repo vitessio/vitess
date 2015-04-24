@@ -2,6 +2,7 @@
 
 flavor=$1
 cmd=$2
+args=
 
 if [[ -z "$flavor" ]]; then
   echo "Flavor must be specified as first argument."
@@ -20,7 +21,7 @@ fi
 # To avoid AUFS permission issues, files must allow access by "other"
 chmod -R o=g *
 
-args="-ti --rm -e USER=vitess -v /dev/log:/dev/log"
+args="$args --rm -e USER=vitess -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
@@ -33,15 +34,31 @@ if [[ -n "$VTDATAROOT" ]]; then
   echo "Mounting host dir $hostdir as VTDATAROOT"
   args="$args -v $hostdir:/vt/vtdataroot --name=$testid -h $testid"
 else
-  args="$args -h test"
+  testid=test-$$
+  args="$args --name=$testid -h $testid"
 fi
 
 # Run tests
 echo "Running tests in vitess/bootstrap:$flavor image..."
-docker run $args vitess/bootstrap:$flavor \
-  bash -c "rm -rf * && cp -R /tmp/src/* . && rm -rf Godeps/_workspace/pkg && $cmd"
+bashcmd="rm -rf * && cp -R /tmp/src/* . && rm -rf Godeps/_workspace/pkg && $cmd"
+
+if tty -s; then
+  # interactive shell
+  docker run -ti $args vitess/bootstrap:$flavor bash -c "$bashcmd"
+  exitcode=$?
+else
+  # non-interactive shell (kill child on signal)
+  trap 'docker rm -f $testid 2>/dev/null' SIGTERM SIGINT
+  docker run $args vitess/bootstrap:$flavor bash -c "$bashcmd" &
+  wait $!
+  exitcode=$?
+fi
 
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
+  # Use Docker user to clean up first, to avoid permission errors.
+  docker run $args vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
   rm -rf $hostdir
 fi
+
+exit $exitcode

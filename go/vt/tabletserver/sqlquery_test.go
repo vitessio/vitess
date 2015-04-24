@@ -5,16 +5,14 @@
 package tabletserver
 
 import (
-	"fmt"
+	"expvar"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
@@ -23,11 +21,12 @@ import (
 func TestSqlQueryAllowQueriesFailBadConn(t *testing.T) {
 	db := setUpSqlQueryTest()
 	db.EnableConnFail()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail")
 	}
@@ -36,15 +35,16 @@ func TestSqlQueryAllowQueriesFailBadConn(t *testing.T) {
 
 func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	// disable strict mode
 	config.StrictMode = false
 	sqlQuery := NewSqlQuery(config)
 	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
-	dbconfigs := newTestDBConfigs()
+	dbconfigs := testUtils.newDBConfigs()
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail because strict mode is disabled while rowcache is enabled.")
 	}
@@ -53,18 +53,19 @@ func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
 
 func TestSqlQueryAllowQueries(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
-	dbconfigs := newTestDBConfigs()
+	dbconfigs := testUtils.newDBConfigs()
 	sqlQuery.setState(StateServing)
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	sqlQuery.disallowQueries()
 	if err != nil {
 		t.Fatalf("SqlQuery.allowQueries should success, but get error: %v", err)
 	}
 	sqlQuery.setState(StateShuttingTx)
-	err = sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	err = sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail")
 	}
@@ -73,10 +74,11 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 
 func TestSqlQueryCheckMysql(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer sqlQuery.disallowQueries()
 	if err != nil {
 		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
@@ -88,10 +90,11 @@ func TestSqlQueryCheckMysql(t *testing.T) {
 
 func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
 	db := setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer sqlQuery.disallowQueries()
 	if err != nil {
 		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
@@ -105,12 +108,13 @@ func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
 
 func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
+	dbconfigs := testUtils.newDBConfigs()
 	// this causes QueryEngine not being initialized properly
 	sqlQuery.setState(StateServing)
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	defer sqlQuery.disallowQueries()
 	if err != nil {
 		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
@@ -123,7 +127,9 @@ func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 
 func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnablePublishStats = true
 	sqlQuery := NewSqlQuery(config)
 	// sqlquery start request fail because we are in StateNotServing;
 	// however, checkMySQL should return true. Here, we always assume
@@ -131,19 +137,31 @@ func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
 	if !sqlQuery.checkMySQL() {
 		t.Fatalf("checkMySQL should return true")
 	}
+	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
+	if tabletState == nil {
+		t.Fatalf("%sTabletState should be exposed", config.StatsPrefix)
+	}
+	varzState, err := strconv.Atoi(tabletState.String())
+	if err != nil {
+		t.Fatalf("invalid state reported by expvar, should be a valid state code, but got: %s", tabletState.String())
+	}
+	if varzState != StateNotServing {
+		t.Fatalf("queryservice should be in NOT_SERVING state, but exposed varz reports: %s", stateName[varzState])
+	}
 }
 
 func TestSqlQueryGetSessionId(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	if err := sqlQuery.GetSessionId(nil, nil); err == nil {
 		t.Fatalf("call GetSessionId should get an error")
 	}
 	keyspace := "test_keyspace"
 	shard := "0"
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -179,10 +197,11 @@ func TestSqlQueryGetSessionId(t *testing.T) {
 
 func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -272,6 +291,7 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 
 func TestSqlQueryCommitTransaciton(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSql := "select * from test_table limit 1000"
 	executeSqlResult := &mproto.QueryResult{
@@ -281,10 +301,10 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 		},
 	}
 	db.AddQuery(executeSql, executeSqlResult)
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -316,6 +336,7 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 
 func TestSqlQueryRollback(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSql := "select * from test_table limit 1000"
 	executeSqlResult := &mproto.QueryResult{
@@ -325,11 +346,10 @@ func TestSqlQueryRollback(t *testing.T) {
 		},
 	}
 	db.AddQuery(executeSql, executeSqlResult)
-
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -361,6 +381,7 @@ func TestSqlQueryRollback(t *testing.T) {
 
 func TestSqlQueryStreamExecute(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSql := "select * from test_table limit 1000"
 	executeSqlResult := &mproto.QueryResult{
@@ -371,11 +392,10 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 	}
 	db.AddQuery(executeSql, executeSqlResult)
 
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -412,18 +432,17 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 
 func TestSqlQueryExecuteBatch(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
 	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSql, sqlResult)
-
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -462,10 +481,11 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 
 func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -485,12 +505,13 @@ func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 
 func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	// make "begin" query fail
 	db.AddRejectedQuery("begin")
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -518,12 +539,13 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 
 func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	// make "commit" query fail
 	db.AddRejectedQuery("commit")
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -556,6 +578,7 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 
 func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
 	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
@@ -567,11 +590,10 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db.AddRejectedQuery(sql)
 	db.AddRejectedQuery(expanedSql)
 
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -618,6 +640,7 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 
 func TestSqlQueryExecuteBatchFailBeginWithoutCommit(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
 	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
@@ -625,11 +648,10 @@ func TestSqlQueryExecuteBatchFailBeginWithoutCommit(t *testing.T) {
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSql, sqlResult)
 
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -671,6 +693,7 @@ func TestSqlQueryExecuteBatchFailBeginWithoutCommit(t *testing.T) {
 
 func TestSqlQueryExecuteBatchSqlExecFailNotInTransaction(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
 	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
@@ -681,11 +704,10 @@ func TestSqlQueryExecuteBatchSqlExecFailNotInTransaction(t *testing.T) {
 	// cause execution error for this particular sql query
 	db.AddRejectedQuery(sql)
 
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -713,10 +735,11 @@ func TestSqlQueryExecuteBatchSqlExecFailNotInTransaction(t *testing.T) {
 
 func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	setUpSqlQueryTest()
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -744,18 +767,17 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 
 func TestExecuteBatchNestedTransaction(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
 	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSql, sqlResult)
-
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -804,12 +826,11 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 
 func TestSqlQuerySplitQuery(t *testing.T) {
 	setUpSqlQueryTest()
-
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -843,12 +864,11 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 
 func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 	setUpSqlQueryTest()
-
-	config := newTestSqlQueryConfig()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -882,6 +902,7 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 
 func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 	db := setUpSqlQueryTest()
+	testUtils := newTestUtils()
 	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
 	pkMinMaxQueryResp := &mproto.QueryResult{
 		Fields: []mproto.Field{
@@ -898,11 +919,10 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 	}
 	db.AddQuery(pkMinMaxQuery, pkMinMaxQueryResp)
 
-	config := newTestSqlQueryConfig()
+	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-
-	dbconfigs := newTestDBConfigs()
-	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, newMysqld(&dbconfigs))
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("allowQueries failed: %v", err)
 	}
@@ -1015,44 +1035,6 @@ func setUpSqlQueryTest() *fakesqldb.DB {
 		db.AddQuery(query, result)
 	}
 	return db
-}
-
-func newTestSqlQueryConfig() Config {
-	randID := rand.Int63()
-	config := DefaultQsConfig
-	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
-	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
-	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
-	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
-	config.StrictMode = true
-	config.RowCache.Binary = "ls"
-	config.RowCache.Connections = 100
-	return config
-}
-
-func newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
-	randID := rand.Int63()
-	return mysqlctl.NewMysqld(
-		fmt.Sprintf("Dba_%d", randID),
-		fmt.Sprintf("App_%d", randID),
-		mysqlctl.NewMycnf(0, 6802),
-		&dbconfigs.Dba,
-		&dbconfigs.App.ConnParams,
-		&dbconfigs.Repl,
-	)
-}
-
-func newTestDBConfigs() dbconfigs.DBConfigs {
-	appDBConfig := dbconfigs.DBConfig{
-		ConnParams:        sqldb.ConnParams{},
-		Keyspace:          "test_keyspace",
-		Shard:             "0",
-		EnableRowcache:    false,
-		EnableInvalidator: false,
-	}
-	return dbconfigs.DBConfigs{
-		App: appDBConfig,
-	}
 }
 
 func checkSqlQueryState(t *testing.T, sqlQuery *SqlQuery, expectState string) {

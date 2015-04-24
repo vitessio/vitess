@@ -1,10 +1,13 @@
 FROM vitess/bootstrap:mariadb
 
+# Clear out old tree from bootstrap image.
+USER root
+RUN rm -rf /vt/src/github.com/youtube/vitess
+
 # Re-copy sources from working tree
 COPY . /vt/src/github.com/youtube/vitess
 
 # Fix permissions
-USER root
 RUN chown -R vitess:vitess /vt
 USER vitess
 

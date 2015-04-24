@@ -17,7 +17,7 @@ import (
 var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
-	os.Setenv("MYSQL_FLAVOR", "GoogleMysql")
+	os.Setenv("MYSQL_FLAVOR", "MariaDB")
 	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
 	appConfig := dbconfigs.DefaultDBConfigs.App.ConnParams
 	replConfig := dbconfigs.DefaultDBConfigs.Repl

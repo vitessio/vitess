@@ -91,13 +91,15 @@ func NewSqlQuery(config Config) *SqlQuery {
 		config: config,
 	}
 	sq.qe = NewQueryEngine(config)
-	stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
-		sq.mu.Lock()
-		state := sq.state
-		sq.mu.Unlock()
-		return state
-	}))
-	stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
+	if config.EnablePublishStats {
+		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
+			sq.mu.Lock()
+			state := sq.state
+			sq.mu.Unlock()
+			return state
+		}))
+		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(sq.GetState))
+	}
 	return sq
 }
 
@@ -270,7 +272,7 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	if err = sq.startRequest(session.SessionId, false, false); err != nil {
 		return err
 	}
-	ctx, cancel := withTimeout(ctx, sq.qe.txPool.poolTimeout.Get())
+	ctx, cancel := withTimeout(ctx, sq.qe.txPool.PoolTimeout())
 	defer func() {
 		queryStats.Record("BEGIN", time.Now())
 		cancel()
@@ -335,12 +337,8 @@ func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQ
 			internalErrors.Add("Panic", 1)
 			return
 		}
-		if sq.config.TerseErrors {
-			if terr.SqlError == 0 {
-				*err = terr
-			} else {
-				*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
-			}
+		if sq.config.TerseErrors && terr.SqlError != 0 {
+			*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
 		} else {
 			*err = terr
 		}

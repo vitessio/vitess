@@ -1,0 +1,80 @@
+{
+  "Tests": [
+    {
+      "Name": "queryservice_vtocc",
+      "File": "queryservice_test.py",
+      "Args": "-m -e vtocc"
+    },
+    {
+      "Name": "queryservice_vttablet",
+      "File": "queryservice_test.py",
+      "Args": "-m -e vttablet"
+    },
+    {
+      "File": "vertical_split.py"
+    },
+    {
+      "File": "vertical_split_vtgate.py"
+    },
+    {
+      "File": "schema.py"
+    },
+    {
+      "File": "keyspace_test.py"
+    },
+    {
+      "File": "keyrange_test.py"
+    },
+    {
+      "File": "mysqlctl.py"
+    },
+    {
+      "File": "sharded.py"
+    },
+    {
+      "File": "secure.py"
+    },
+    {
+      "File": "binlog.py"
+    },
+    {
+      "File": "clone.py"
+    },
+    {
+      "File": "update_stream.py"
+    },
+    {
+      "File": "tabletmanager.py"
+    },
+    {
+      "File": "reparent.py"
+    },
+    {
+      "File": "vtdb_test.py"
+    },
+    {
+      "File": "vtgate_utils_test.py"
+    },
+    {
+      "File": "rowcache_invalidator.py"
+    },
+    {
+      "File": "vtgatev2_test.py"
+    },
+    {
+      "File": "zkocc_test.py"
+    },
+    {
+      "File": "initial_sharding_bytes.py"
+    },
+    {
+      "File": "initial_sharding.py"
+    },
+    {
+      "File": "resharding_bytes.py"
+    },
+    {
+      "File": "resharding.py"
+    }
+  ]
+}

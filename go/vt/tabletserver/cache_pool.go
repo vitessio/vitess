@@ -42,9 +42,10 @@ func NewCachePool(
 	name string,
 	rowCacheConfig RowCacheConfig,
 	idleTimeout time.Duration,
-	statsURL string) *CachePool {
+	statsURL string,
+	enablePublishStats bool) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout, statsURL: statsURL}
-	if name != "" {
+	if name != "" && enablePublishStats {
 		cp.memcacheStats = NewMemcacheStats(
 			rowCacheConfig.StatsPrefix+name, 10*time.Second, enableMain,
 			func(key string) string {

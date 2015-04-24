@@ -9,8 +9,13 @@ import (
 	"html/template"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 type fakeCallInfo struct {
@@ -38,16 +43,97 @@ func (fci *fakeCallInfo) HTML() template.HTML {
 
 type testUtils struct{}
 
+func newTestUtils() *testUtils {
+	return &testUtils{}
+}
+
 func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf("expect to get: %v, but got: %v", expected, result)
 	}
 }
 
+func (util *testUtils) checkTabletErrorWithRecover(t *testing.T, tabletErrType int, tabletErrStr string) {
+	err := recover()
+	if err == nil {
+		t.Fatalf("should get error")
+	}
+	util.checkTabletError(t, err, tabletErrType, tabletErrStr)
+}
+
+func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErrType int, tabletErrStr string) {
+	tabletError, ok := err.(*TabletError)
+	if !ok {
+		t.Fatalf("should return a TabletError, but got err: %v", err)
+	}
+	if tabletError.ErrorType != tabletErrType {
+		t.Fatalf("should return a TabletError with error type: %s", util.getTabletErrorString(tabletErrType))
+	}
+	if !strings.Contains(tabletError.Error(), tabletErrStr) {
+		t.Fatalf("expect the tablet error should contain string: '%s', but it does not. Got tablet error: '%s'", tabletErrStr, tabletError.Error())
+	}
+}
+
+func (util *testUtils) getTabletErrorString(tabletErrorType int) string {
+	switch tabletErrorType {
+	case ErrFail:
+		return "ErrFail"
+	case ErrRetry:
+		return "ErrRetry"
+	case ErrFatal:
+		return "ErrFatal"
+	case ErrTxPoolFull:
+		return "ErrTxPoolFull"
+	case ErrNotInTx:
+		return "ErrNotInTx"
+	}
+	return ""
+}
+
+func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
+	randID := rand.Int63()
+	return mysqlctl.NewMysqld(
+		fmt.Sprintf("Dba_%d", randID),
+		fmt.Sprintf("App_%d", randID),
+		mysqlctl.NewMycnf(0, 6802),
+		&dbconfigs.Dba,
+		&dbconfigs.App.ConnParams,
+		&dbconfigs.Repl,
+	)
+}
+
+func (util *testUtils) newDBConfigs() dbconfigs.DBConfigs {
+	appDBConfig := dbconfigs.DBConfig{
+		ConnParams:        sqldb.ConnParams{},
+		Keyspace:          "test_keyspace",
+		Shard:             "0",
+		EnableRowcache:    false,
+		EnableInvalidator: false,
+	}
+	return dbconfigs.DBConfigs{
+		App: appDBConfig,
+	}
+}
+
+func (util *testUtils) newQueryServiceConfig() Config {
+	randID := rand.Int63()
+	config := DefaultQsConfig
+	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
+	config.RowCache.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
+	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
+	config.StrictMode = true
+	config.RowCache.Binary = "ls"
+	config.RowCache.Connections = 100
+	config.EnablePublishStats = false
+	return config
+}
+
 func newTestSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaInfo {
+	idleTimeout time.Duration,
+	enablePublishStats bool) *SchemaInfo {
 	randID := rand.Int63()
 	return NewSchemaInfo(
 		queryCacheSize,
@@ -59,5 +145,7 @@ func newTestSchemaInfo(
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
 		reloadTime,
-		idleTimeout)
+		idleTimeout,
+		enablePublishStats,
+	)
 }

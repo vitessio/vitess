@@ -50,6 +50,9 @@ const (
 	// ErrOptionPreventsStatement is C.ER_OPTION_PREVENTS_STATEMENT
 	ErrOptionPreventsStatement = C.ER_OPTION_PREVENTS_STATEMENT
 
+	// ErrServerLost is C.CR_SERVER_LOST (2013)
+	ErrServerLost = C.CR_SERVER_LOST
+
 	// RedactedPassword is the password value used in redacted configs
 	RedactedPassword = "****"
 )

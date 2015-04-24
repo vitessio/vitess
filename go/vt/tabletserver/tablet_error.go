@@ -111,8 +111,8 @@ func IsConnErr(err error) bool {
 			return false
 		}
 	}
-	// 2013 means that someone sniped the query.
-	if sqlError == 2013 {
+	// ErrServerLost means that someone sniped the query.
+	if sqlError == mysql.ErrServerLost {
 		return false
 	}
 	return sqlError >= 2000 && sqlError <= 2018
@@ -122,6 +122,7 @@ func (te *TabletError) Error() string {
 	return te.Prefix() + te.Message
 }
 
+// Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
 	switch te.ErrorType {
@@ -133,6 +134,10 @@ func (te *TabletError) Prefix() string {
 		prefix = "tx_pool_full: "
 	case ErrNotInTx:
 		prefix = "not_in_tx: "
+	}
+	// Special case for killed queries.
+	if te.SqlError == mysql.ErrServerLost {
+		prefix = prefix + "the query was killed either because it timed out or was canceled: "
 	}
 	return prefix
 }
