@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
@@ -21,9 +20,10 @@ import (
 func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=0&limit=10", nil)
 	response := httptest.NewRecorder()
-	testLogger := streamlog.New("TestLogger", 100)
-	testLogger.Send("test msg")
-	querylogzHandler(testLogger, response, req)
+	ch := make(chan interface{}, 1)
+	ch <- "test msg"
+	querylogzHandler(ch, response, req)
+	close(ch)
 	if !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("should show an error page for an non SqlQueryStats")
 	}
@@ -44,8 +44,6 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.CacheMisses = 2
 	logStats.CacheInvalidations = 3
 	logStats.TransactionID = 131
-
-	testLogger := streamlog.New("TestLogger", 100)
 
 	// fast query
 	fastQueryPattern := []string{
@@ -70,9 +68,11 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td></td>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(1 * time.Millisecond)
-	testLogger.Send(logStats)
 	response := httptest.NewRecorder()
-	querylogzHandler(testLogger, response, req)
+	ch := make(chan interface{}, 1)
+	ch <- logStats
+	querylogzHandler(ch, response, req)
+	close(ch)
 	body, _ := ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, fastQueryPattern, logStats, body)
 
@@ -99,9 +99,11 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td></td>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(20 * time.Millisecond)
-	testLogger.Send(logStats)
 	response = httptest.NewRecorder()
-	querylogzHandler(testLogger, response, req)
+	ch = make(chan interface{}, 1)
+	ch <- logStats
+	querylogzHandler(ch, response, req)
+	close(ch)
 	body, _ = ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
 
@@ -128,8 +130,10 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td></td>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
-	testLogger.Send(logStats)
-	querylogzHandler(testLogger, response, req)
+	ch = make(chan interface{}, 1)
+	ch <- logStats
+	querylogzHandler(ch, response, req)
+	close(ch)
 	body, _ = ioutil.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 }
