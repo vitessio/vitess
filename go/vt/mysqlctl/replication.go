@@ -280,7 +280,8 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	return flavor.StartReplicationCommands(&params, status)
 }
 
-// SetMasterCommands starts a replication
+// SetMasterCommands returns the commands to run to make the provided
+// host / port the master.
 func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {

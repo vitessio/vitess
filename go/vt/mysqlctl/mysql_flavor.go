@@ -43,7 +43,7 @@ type MysqlFlavor interface {
 	// a given master and position as specified in a ReplicationStatus.
 	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
 
-	// SetMaster returns the commands to use the provided master
+	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).
 	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 
