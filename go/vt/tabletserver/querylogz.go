@@ -14,7 +14,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/streamlog"
 )
 
 var (
@@ -73,20 +72,20 @@ var (
 
 func init() {
 	http.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
-		querylogzHandler(SqlQueryLogger, w, r)
+		ch := SqlQueryLogger.Subscribe("querylogz")
+		defer SqlQueryLogger.Unsubscribe(ch)
+		querylogzHandler(ch, w, r)
 	})
 }
 
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
-func querylogzHandler(streamLogger *streamlog.StreamLogger, w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}
 	timeout, limit := parseTimeoutLimitParams(r)
-	ch := streamLogger.Subscribe("querylogz")
-	defer streamLogger.Unsubscribe(ch)
 	startHTMLTable(w)
 	defer endHTMLTable(w)
 	w.Write(querylogzHeader)
