@@ -508,3 +508,20 @@ func TestTimeout(t *testing.T) {
 	}
 	p.Put(r)
 }
+
+func TestExpired(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second)
+	defer p.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+	r, err := p.Get(ctx)
+	if err == nil {
+		p.Put(r)
+	}
+	cancel()
+	want := "resource pool timed out"
+	if err == nil || err.Error() != want {
+		t.Errorf("got %v, want %s", err, want)
+	}
+}
