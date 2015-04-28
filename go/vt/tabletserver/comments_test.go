@@ -83,5 +83,9 @@ func TestComments(t *testing.T) {
 		if !reflect.DeepEqual(query, want) {
 			t.Errorf("test input: '%s', got\n%+v, want\n%+v", testCase.input, query, want)
 		}
+		sql := string(restoreTrailing([]byte(testCase.outSql), want.BindVariables))
+		if !reflect.DeepEqual(testCase.input, sql) {
+			t.Fatalf("failed to restore to original sql, got: %s, want: %s", sql, testCase.input)
+		}
 	}
 }
