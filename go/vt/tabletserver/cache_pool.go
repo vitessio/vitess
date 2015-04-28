@@ -142,11 +142,11 @@ func (cp *CachePool) startCacheService() {
 	}
 	attempts := 0
 	for {
-		time.Sleep(100 * time.Millisecond)
 		c, err := cacheservice.Connect(cacheservice.Config{
 			Address: cp.socket,
 			Timeout: 30 * time.Millisecond,
 		})
+
 		if err != nil {
 			attempts++
 			if attempts >= 50 {
@@ -156,6 +156,7 @@ func (cp *CachePool) startCacheService() {
 				// FIXME(sougou): Throw proper error if we can recover
 				log.Fatalf("Can't connect to cache service: %s", cp.socket)
 			}
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		if _, err = c.Set("health", 0, 0, []byte("ok")); err != nil {
