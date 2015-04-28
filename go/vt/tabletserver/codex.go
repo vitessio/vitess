@@ -44,7 +44,7 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 		if length == -1 {
 			length = len(list)
 		} else if len(list) != length {
-			panic(fmt.Sprintf("mismatched lengths for values %v", pkValues))
+			panic(NewTabletError(ErrFail, "mismatched lengths for values %v", pkValues))
 		}
 	}
 	resolved = make([]interface{}, len(pkValues))
@@ -144,7 +144,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	case sqltypes.Value:
 		result = v
 	default:
-		panic(fmt.Sprintf("incompatible value type %v", v))
+		panic(NewTabletError(ErrFail, "incompatible value type %v", v))
 	}
 
 	if err = validateValue(col, result); err != nil {
@@ -173,11 +173,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	switch col.Category {
 	case schema.CAT_NUMBER:
 		if !value.IsNumeric() {
-			return NewTabletError(ErrFail, "type mismatch, expecting numeric type for %v", value)
+			return NewTabletError(ErrFail, "type mismatch, expecting numeric type for %v for column: %v", value, col)
 		}
 	case schema.CAT_VARBINARY:
 		if !value.IsString() {
-			return NewTabletError(ErrFail, "type mismatch, expecting string type for %v", value)
+			return NewTabletError(ErrFail, "type mismatch, expecting string type for %v for column: %v", value, col)
 		}
 	}
 	return nil
