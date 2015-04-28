@@ -320,7 +320,7 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def connect(addr, timeout, **kwargs):
-  conn = VTGateConnection(addr, timeout, **kwargs)
+def connect(*pargs, **kwargs):
+  conn = VTGateConnection(*pargs, **kwargs)
   conn.dial()
   return conn
