@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -36,6 +37,9 @@ type MysqlDaemon interface {
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
+	DemoteMaster() (proto.ReplicationPosition, error)
+	WaitMasterPos(proto.ReplicationPosition, time.Duration) error
+	PromoteSlave2(map[string]string) (proto.ReplicationPosition, error)
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
@@ -94,6 +98,16 @@ type FakeMysqlDaemon struct {
 	// SetMasterCommandsResult is what
 	// SetMasterCommands will return
 	SetMasterCommandsResult []string
+
+	// DemoteMasterPosition is returned by DemoteMaster
+	DemoteMasterPosition proto.ReplicationPosition
+
+	// WaitMasterPosition is checked by WaitMasterPos, if the
+	// same it returns nil, if different it returns an error
+	WaitMasterPosition proto.ReplicationPosition
+
+	// PromoteSlave2Result is returned by PromoteSlave2
+	PromoteSlave2Result proto.ReplicationPosition
 
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
@@ -193,6 +207,24 @@ func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int,
 // WaitForReparentJournal is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	return nil
+}
+
+// DemoteMaster is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) DemoteMaster() (proto.ReplicationPosition, error) {
+	return fmd.DemoteMasterPosition, nil
+}
+
+// WaitMasterPos is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) WaitMasterPos(pos proto.ReplicationPosition, waitTimeout time.Duration) error {
+	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
+		return nil
+	}
+	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
+}
+
+// PromoteSlave2 is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PromoteSlave2(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+	return fmd.PromoteSlave2Result, nil
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
