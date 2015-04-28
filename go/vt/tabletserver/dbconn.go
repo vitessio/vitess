@@ -69,10 +69,7 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
-	done, err := dbc.setDeadline(ctx)
-	if err != nil {
-		return nil, err
-	}
+	done := dbc.setDeadline(ctx)
 	if done != nil {
 		defer close(done)
 	}
@@ -91,10 +88,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*mpro
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
-	done, err := dbc.setDeadline(ctx)
-	if err != nil {
-		return err
-	}
+	done := dbc.setDeadline(ctx)
 	if done != nil {
 		defer close(done)
 	}
@@ -164,11 +158,11 @@ func (dbc *DBConn) reconnect() error {
 	return nil
 }
 
-func (dbc *DBConn) setDeadline(ctx context.Context) (done chan bool, err error) {
+func (dbc *DBConn) setDeadline(ctx context.Context) chan bool {
 	if ctx.Done() == nil {
-		return nil, nil
+		return nil
 	}
-	done = make(chan bool)
+	done := make(chan bool)
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -197,5 +191,5 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (done chan bool, err error) 
 		<-done
 		log.Warningf("Hung query returned")
 	}()
-	return done, nil
+	return done
 }
