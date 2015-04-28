@@ -122,20 +122,22 @@ func (dbc *DBConn) Recycle() {
 // Kill kills the currently executing query both on MySQL side
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
-func (dbc *DBConn) Kill() {
+func (dbc *DBConn) Kill() error {
 	killStats.Add("Queries", 1)
 	log.Infof("killing query %s", dbc.Current())
 	killConn, err := dbc.pool.dbaPool.Get(0)
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
-		return
+		return NewTabletError(ErrFail, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
+		return NewTabletError(ErrFail, "Could not kill query %s: %v", dbc.Current(), err)
 	}
+	return nil
 }
 
 // Current returns the currently executing query.

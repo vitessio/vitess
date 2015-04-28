@@ -22,7 +22,7 @@ type QueryDetail struct {
 type killable interface {
 	Current() string
 	ID() int64
-	Kill()
+	Kill() error
 }
 
 // NewQueryDetail creates a new QueryDetail
