@@ -11,7 +11,7 @@ desiredState:
         id: vtgate
         containers:
           - name: vtgate
-            image: vitess/root
+            image: vitess/lite
             volumeMounts:
               - name: syslog
                 mountPath: /dev/log
