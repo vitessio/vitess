@@ -47,6 +47,10 @@ const (
 	// TabletActionScrap scraps the live running tablet
 	TabletActionScrap = "Scrap"
 
+	// TabletActionResetReplication tells the tablet it should
+	// reset its replication state
+	TabletActionResetReplication = "ResetReplication"
+
 	// TabletActionInitMaster tells the tablet it should make itself the new
 	// master for the shard it's currently in.
 	TabletActionInitMaster = "InitMaster"
@@ -67,6 +71,11 @@ const (
 	// the master.
 	TabletActionPromoteSlave = "PromoteSlave"
 
+	// TabletActionPromoteSlaveWhenCaughtUp tells the tablet to wait
+	// for a given replication point, and when it reaches it
+	// switch to be a master.
+	TabletActionPromoteSlaveWhenCaughtUp = "PromoteSlaveWhenCaughtUp"
+
 	// TabletActionSlaveWasPromoted tells a tablet this previously slave
 	// tablet is now the master. The tablet will update its
 	// own topology record.
@@ -74,6 +83,11 @@ const (
 
 	// TabletActionRestartSlave tells the remote tablet it has a new master.
 	TabletActionRestartSlave = "RestartSlave"
+
+	// TabletActionSetMaster tells a tablet it has a new master.
+	// The tablet will reparent to the new master, and wait for
+	// the reparent_journal entry.
+	TabletActionSetMaster = "SetMaster"
 
 	// TabletActionSlaveWasRestarted tells a tablet the mysql
 	// master was changed.  The tablet will check it is indeed the

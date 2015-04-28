@@ -101,19 +101,25 @@ type RPCAgent interface {
 
 	// Reparenting related functions
 
+	ResetReplication(ctx context.Context) error
+
 	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
 
 	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
-	DemoteMaster(ctx context.Context) error
+	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
+
+	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	SlaveWasPromoted(ctx context.Context) error
 
 	RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error
+
+	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
@@ -410,13 +416,25 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 // Reparenting related functions
 //
 
+// ResetReplication completely resets the replication on the host.
+// All binary and relay logs are flushed. All replication positions are reset.
+func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
+	cmds, err := agent.MysqlDaemon.ResetReplicationCommands()
+	if err != nil {
+		return err
+	}
+
+	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
+}
+
 // InitMaster breaks slaves replication, get the current MySQL replication
 // position, insert a row in the reparent_journal table, and returns
 // the replication position
 func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
-	// first break the slaves, so anyone who may have been replicating
-	// before will stop. This is meant to catch misconfigured hosts.
-	if err := agent.MysqlDaemon.BreakSlaves(); err != nil {
+	// we need to insert something in the binlogs, so we can get the
+	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
+	cmds := mysqlctl.CreateReparentJournal()
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
@@ -482,11 +500,11 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
-// DemoteMaster demotes the current master, and marks it read-only in the topo.
+// DemoteMaster marks the server read-only, wait until it is done with
+// its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) DemoteMaster(ctx context.Context) error {
-	_, err := agent.Mysqld.DemoteMaster()
-	return err
+func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
 	// succeed. It will be less noisy to simply leave the entry
@@ -514,6 +532,36 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.Restart
 	log.Infof("PromoteSlave response: %v", *rsd)
 
 	return rsd, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
+}
+
+// PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
+// replication up to the provided point, and then makes the slave the
+// shard master.
+func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// TODO(alainjobart) change the flavor API to take the context directly
+	// For now, extract the timeout from the context, or wait forever
+	var waitTimeout time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		waitTimeout = deadline.Sub(time.Now())
+		if waitTimeout <= 0 {
+			waitTimeout = time.Millisecond
+		}
+	}
+	if err := agent.MysqlDaemon.WaitMasterPos(pos, waitTimeout); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	rp, err := agent.MysqlDaemon.PromoteSlave2(agent.hookExtraEnv())
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // SlaveWasPromoted promotes a slave to master, no questions asked.
@@ -548,6 +596,41 @@ func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.Rest
 		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	}
 	return nil
+}
+
+// SetMaster sets replication master, and waits for the
+// reparent_journal table entry up to context timeout
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+	ti, err := agent.TopoServer.GetTablet(parent)
+	if err != nil {
+		return err
+	}
+
+	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
+	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"], 10)
+	if err != nil {
+		return err
+	}
+
+	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
+		return err
+	}
+
+	// change our type to spare if we used to be the master
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type == topo.TYPE_MASTER {
+		tablet.Type = topo.TYPE_SPARE
+		tablet.Health = nil
+		if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+			return err
+		}
+	}
+
+	// wait until we get the replicated row, or our context times out
+	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
 // SlaveWasRestarted updates the parent record for a tablet.

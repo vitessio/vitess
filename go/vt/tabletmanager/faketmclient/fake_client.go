@@ -243,6 +243,11 @@ func (client *FakeTabletManagerClient) RunBlpUntil(ctx context.Context, tablet *
 // Reparenting related functions
 //
 
+// ResetReplication is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+	return nil
+}
+
 // InitMaster is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	return myproto.ReplicationPosition{}, nil
@@ -259,14 +264,21 @@ func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *to
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error {
-	return nil
+func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
 }
 
 // PromoteSlave is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error) {
 	var rsd actionnode.RestartSlaveData
 	return &rsd, nil
+}
+
+// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
 }
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
@@ -276,6 +288,11 @@ func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tab
 
 // RestartSlave is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error {
+	return nil
+}
+
+// SetMaster is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
 	return nil
 }
 

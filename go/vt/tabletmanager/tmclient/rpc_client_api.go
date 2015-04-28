@@ -147,6 +147,11 @@ type TabletManagerClient interface {
 	// Reparenting related functions
 	//
 
+	// ResetReplication tells a tablet to completely reset its
+	// replication.  All binary and relay logs are flushed. All
+	// replication positions are reset.
+	ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error
+
 	// InitMaster tells a tablet to make itself the new master,
 	// and return the replication position the slaves should use to
 	// reparent to it.
@@ -161,17 +166,26 @@ type TabletManagerClient interface {
 	// reparent_journal table.
 	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
-	// DemoteMaster tells the soon-to-be-former master it's gonna change
-	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error
+	// DemoteMaster tells the soon-to-be-former master it's gonna change,
+	// and it should go read-only and return its current position.
+	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
 	// PromoteSlave transforms the tablet from a slave to a master.
 	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error)
+
+	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
+	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RestartSlave tells the remote tablet it has a new master
 	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error
+
+	// SetMaster tells a tablet to make itself a slave to the
+	// passed in master tablet alias, and wait for the row in the
+	// reparent_journal table.
+	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error

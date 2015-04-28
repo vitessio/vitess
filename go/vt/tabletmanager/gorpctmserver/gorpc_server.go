@@ -359,6 +359,14 @@ func (tm *TabletManager) RunBlpUntil(ctx context.Context, args *gorpcproto.RunBl
 // Reparenting related functions
 //
 
+// ResetReplication wraps RPCAgent.ResetReplication
+func (tm *TabletManager) ResetReplication(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionResetReplication, args, reply, true, func() error {
+		return tm.agent.ResetReplication(ctx)
+	})
+}
+
 // InitMaster wraps RPCAgent.InitMaster
 func (tm *TabletManager) InitMaster(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
@@ -392,21 +400,37 @@ func (tm *TabletManager) InitSlave(ctx context.Context, args *gorpcproto.InitSla
 	})
 }
 
-// DemoteMaster wraps RPCAgent.
-func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+// DemoteMaster wraps RPCAgent.DemoteMaster
+func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionDemoteMaster, args, reply, true, func() error {
-		return tm.agent.DemoteMaster(ctx)
+		position, err := tm.agent.DemoteMaster(ctx)
+		if err == nil {
+			*reply = position
+		}
+		return err
 	})
 }
 
-// PromoteSlave wraps RPCAgent.
+// PromoteSlave wraps RPCAgent.PromoteSlave
 func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, reply *actionnode.RestartSlaveData) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlave, args, reply, true, func() error {
 		rsd, err := tm.agent.PromoteSlave(ctx)
 		if err == nil {
 			*reply = *rsd
+		}
+		return err
+	})
+}
+
+// PromoteSlaveWhenCaughtUp wraps RPCAgent.PromoteSlaveWhenCaughtUp
+func (tm *TabletManager) PromoteSlaveWhenCaughtUp(ctx context.Context, args *myproto.ReplicationPosition, reply *myproto.ReplicationPosition) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlaveWhenCaughtUp, args, reply, true, func() error {
+		rp, err := tm.agent.PromoteSlaveWhenCaughtUp(ctx, *args)
+		if err == nil {
+			*reply = rp
 		}
 		return err
 	})
@@ -425,6 +449,19 @@ func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.Rest
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionRestartSlave, args, reply, true, func() error {
 		return tm.agent.RestartSlave(ctx, args)
+	})
+}
+
+// SetMaster wraps RPCAgent.SetMaster
+func (tm *TabletManager) SetMaster(ctx context.Context, args *gorpcproto.SetMasterArgs, reply *rpc.Unused) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSetMaster, args, reply, true, func() error {
+		if args.WaitTimeout != 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
+			defer cancel()
+		}
+		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS)
 	})
 }
 

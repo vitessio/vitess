@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -30,11 +31,15 @@ type MysqlDaemon interface {
 	SlaveStatus() (*proto.ReplicationStatus, error)
 
 	// reparenting related methods
-	BreakSlaves() error
+	ResetReplicationCommands() ([]string, error)
 	MasterPosition() (proto.ReplicationPosition, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
+	SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
+	DemoteMaster() (proto.ReplicationPosition, error)
+	WaitMasterPos(proto.ReplicationPosition, time.Duration) error
+	PromoteSlave2(map[string]string) (proto.ReplicationPosition, error)
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
@@ -64,8 +69,11 @@ type FakeMysqlDaemon struct {
 	// CurrentSlaveStatus is returned by SlaveStatus
 	CurrentSlaveStatus *proto.ReplicationStatus
 
-	// BreakSlavesError is returned by BreakSlaves
-	BreakSlavesError error
+	// ResetReplicationResult is returned by ResetReplication
+	ResetReplicationResult []string
+
+	// ResetReplicationError is returned by ResetReplication
+	ResetReplicationError error
 
 	// CurrentMasterPosition is returned by MasterPosition
 	CurrentMasterPosition proto.ReplicationPosition
@@ -82,6 +90,25 @@ type FakeMysqlDaemon struct {
 	// StartReplicationCommands will return
 	StartReplicationCommandsResult []string
 
+	// SetMasterCommandsInput is matched against the input
+	// of SetMasterCommands (as "%v:%v,%v"). If it doesn't match,
+	// SetMasterCommands will return an error.
+	SetMasterCommandsInput string
+
+	// SetMasterCommandsResult is what
+	// SetMasterCommands will return
+	SetMasterCommandsResult []string
+
+	// DemoteMasterPosition is returned by DemoteMaster
+	DemoteMasterPosition proto.ReplicationPosition
+
+	// WaitMasterPosition is checked by WaitMasterPos, if the
+	// same it returns nil, if different it returns an error
+	WaitMasterPosition proto.ReplicationPosition
+
+	// PromoteSlave2Result is returned by PromoteSlave2
+	PromoteSlave2Result proto.ReplicationPosition
+
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
@@ -95,8 +122,14 @@ type FakeMysqlDaemon struct {
 	// ExpectedExecuteSuperQueryList is what we expect
 	// ExecuteSuperQueryList to be called with. If it doesn't
 	// match, ExecuteSuperQueryList will return an error.
-	// Note each string is just a substring if it begins with SUB
+	// Note each string is just a substring if it begins with SUB,
+	// so we support partial queries (usefull when queries contain
+	// data fields like timestamps)
 	ExpectedExecuteSuperQueryList []string
+
+	// ExpectedExecuteSuperQueryCurrent is the current index of the queries
+	// we expect
+	ExpectedExecuteSuperQueryCurrent int
 }
 
 // GetMasterAddr is part of the MysqlDaemon interface
@@ -138,9 +171,9 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
 	return fmd.CurrentSlaveStatus, nil
 }
 
-// BreakSlaves is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) BreakSlaves() error {
-	return fmd.BreakSlavesError
+// ResetReplicationCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
+	return fmd.ResetReplicationResult, fmd.ResetReplicationError
 }
 
 // MasterPosition is part of the MysqlDaemon interface
@@ -162,26 +195,69 @@ func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationSt
 	return fmd.StartReplicationCommandsResult, nil
 }
 
+// SetMasterCommands is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+	input := fmt.Sprintf("%v:%v,%v", masterHost, masterPort, masterConnectRetry)
+	if fmd.SetMasterCommandsInput != input {
+		return nil, fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterCommandsInput, input)
+	}
+	return fmd.SetMasterCommandsResult, nil
+}
+
 // WaitForReparentJournal is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error {
 	return nil
 }
 
+// DemoteMaster is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) DemoteMaster() (proto.ReplicationPosition, error) {
+	return fmd.DemoteMasterPosition, nil
+}
+
+// WaitMasterPos is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) WaitMasterPos(pos proto.ReplicationPosition, waitTimeout time.Duration) error {
+	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
+		return nil
+	}
+	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
+}
+
+// PromoteSlave2 is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PromoteSlave2(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+	return fmd.PromoteSlave2Result, nil
+}
+
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
-	if len(queryList) != len(fmd.ExpectedExecuteSuperQueryList) {
-		return fmt.Errorf("wrong query list size for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
-	}
-	compExpected := make([]string, len(fmd.ExpectedExecuteSuperQueryList))
-	compGot := make([]string, len(queryList))
-	for i, expected := range fmd.ExpectedExecuteSuperQueryList {
+	for _, query := range queryList {
+		// test we still have a query to compare
+		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
+			return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)
+		}
+
+		// compare the query
+		expected := fmd.ExpectedExecuteSuperQueryList[fmd.ExpectedExecuteSuperQueryCurrent]
+		fmd.ExpectedExecuteSuperQueryCurrent++
 		if strings.HasPrefix(expected, "SUB") {
-			compExpected[i] = expected[3:]
-			compGot[i] = queryList[i][:len(compExpected[i])]
+			// remove the SUB from the expected,
+			// and truncate the query to length(expected)
+			expected = expected[3:]
+			if len(query) > len(expected) {
+				query = query[:len(expected)]
+			}
+		}
+		if expected != query {
+			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
 		}
 	}
-	if !reflect.DeepEqual(compExpected, compGot) {
-		return fmt.Errorf("wrong query list for ExecuteSuperQueryList: expected %v got %v", fmd.ExpectedExecuteSuperQueryList, queryList)
+	return nil
+}
+
+// CheckSuperQueryList returns an error if all the queries we expected
+// haven't been seen.
+func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
+	if fmd.ExpectedExecuteSuperQueryCurrent != len(fmd.ExpectedExecuteSuperQueryList) {
+		return fmt.Errorf("SuperQueryList wasn't consumed, saw %v queries, was expecting %v", fmd.ExpectedExecuteSuperQueryCurrent, len(fmd.ExpectedExecuteSuperQueryList))
 	}
 	return nil
 }

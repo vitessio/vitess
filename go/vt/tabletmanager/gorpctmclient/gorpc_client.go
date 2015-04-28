@@ -369,6 +369,11 @@ func (client *GoRPCTabletManagerClient) RunBlpUntil(ctx context.Context, tablet 
 // Reparenting related functions
 //
 
+// ResetReplication is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) ResetReplication(ctx context.Context, tablet *topo.TabletInfo) error {
+	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionResetReplication, &rpc.Unused{}, &rpc.Unused{})
+}
+
 // InitMaster is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
@@ -408,8 +413,12 @@ func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *t
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionDemoteMaster, &rpc.Unused{}, &rpc.Unused{})
+func (client *GoRPCTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionDemoteMaster, &rpc.Unused{}, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
 }
 
 // PromoteSlave is part of the tmclient.TabletManagerClient interface
@@ -421,6 +430,15 @@ func (client *GoRPCTabletManagerClient) PromoteSlave(ctx context.Context, tablet
 	return &rsd, nil
 }
 
+// PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionPromoteSlaveWhenCaughtUp, &pos, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
+}
+
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveWasPromoted, &rpc.Unused{}, &rpc.Unused{})
@@ -429,6 +447,23 @@ func (client *GoRPCTabletManagerClient) SlaveWasPromoted(ctx context.Context, ta
 // RestartSlave is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRestartSlave, rsd, &rpc.Unused{})
+}
+
+// SetMaster is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
+	args := &gorpcproto.SetMasterArgs{
+		Parent:        parent,
+		TimeCreatedNS: timeCreatedNS,
+	}
+	deadline, ok := ctx.Deadline()
+	if ok {
+		args.WaitTimeout = deadline.Sub(time.Now())
+		if args.WaitTimeout < 0 {
+			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.SetMaster on %v", tablet.Alias)}
+		}
+	}
+
+	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSetMaster, args, &rpc.Unused{})
 }
 
 // SlaveWasRestarted is part of the tmclient.TabletManagerClient interface

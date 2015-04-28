@@ -47,6 +47,13 @@ type InitSlaveArgs struct {
 	WaitTimeout         time.Duration // pass in zero to wait indefinitely
 }
 
+// SetMasterArgs has arguments for SetMaster
+type SetMasterArgs struct {
+	Parent        topo.TabletAlias
+	TimeCreatedNS int64
+	WaitTimeout   time.Duration // pass in zero to wait indefinitely
+}
+
 // GetSchemaArgs has arguments for GetSchema
 type GetSchemaArgs struct {
 	Tables        []string

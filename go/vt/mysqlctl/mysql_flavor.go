@@ -31,6 +31,10 @@ type MysqlFlavor interface {
 	// SlaveStatus returns the ReplicationStatus of a slave.
 	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
 
+	// ResetReplicationCommands returns the commands to completely reset
+	// replication on the host.
+	ResetReplicationCommands() []string
+
 	// PromoteSlaveCommands returns the commands to run to change
 	// a slave into a master.
 	PromoteSlaveCommands() []string
@@ -38,6 +42,10 @@ type MysqlFlavor interface {
 	// StartReplicationCommands returns the commands to start replicating from
 	// a given master and position as specified in a ReplicationStatus.
 	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
+
+	// SetMasterCommands returns the commands to use the provided master
+	// as the new master (without changing any GTID position).
+	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 
 	// ParseGTID parses a GTID in the canonical format of this MySQL flavor into
 	// a proto.GTID interface value.

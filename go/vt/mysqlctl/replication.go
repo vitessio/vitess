@@ -47,13 +47,13 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus) []string {
+func changeMasterArgs2(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
-	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", status.MasterHost))
-	args = append(args, fmt.Sprintf("MASTER_PORT = %d", status.MasterPort))
+	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
+	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))
 	args = append(args, fmt.Sprintf("MASTER_USER = '%s'", params.Uname))
 	args = append(args, fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass))
-	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", status.MasterConnectRetry))
+	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry))
 
 	if mysql.SslEnabled(params) {
 		args = append(args, "MASTER_SSL = 1")
@@ -71,6 +71,10 @@ func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus)
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
 	return args
+}
+
+func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus) []string {
+	return changeMasterArgs2(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
@@ -276,6 +280,20 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	return flavor.StartReplicationCommands(&params, status)
 }
 
+// SetMasterCommands returns the commands to run to make the provided
+// host / port the master.
+func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
+	}
+	params, err := dbconfigs.MysqlParams(mysqld.replParams)
+	if err != nil {
+		return nil, err
+	}
+	return flavor.SetMasterCommands(&params, masterHost, masterPort, masterConnectRetry)
+}
+
 // WaitForSlave waits for a slave if its lag is larger than given maxLag
 func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	// FIXME(msolomon) verify that slave started based on show slave status;
@@ -311,6 +329,16 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 		return errors.New(strings.Join(errs, ", "))
 	}
 	return errors.New("replication stopped, it will never catch up")
+}
+
+// ResetReplicationCommands returns the commands to run to reset all
+// replication for this host.
+func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
+	flavor, err := mysqld.flavor()
+	if err != nil {
+		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
+	}
+	return flavor.ResetReplicationCommands(), nil
 }
 
 // BreakSlaves forces all slaves to error and stop.

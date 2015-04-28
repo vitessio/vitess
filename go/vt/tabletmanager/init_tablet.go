@@ -97,8 +97,10 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 				return fmt.Errorf("CreateKeyspace(%v) failed: %v", *initKeyspace, err)
 			}
 
-			// create the shard
-			if err := topo.CreateShard(agent.TopoServer, *initKeyspace, shard); err != nil {
+			// create the shard (it may already exist if
+			// someone else just created it, this code is
+			// not protected by a lock of any kind)
+			if err := topo.CreateShard(agent.TopoServer, *initKeyspace, shard); err != nil && err != topo.ErrNodeExists {
 				return fmt.Errorf("CreateShard(%v/%v) failed: %v", *initKeyspace, shard, err)
 			}
 

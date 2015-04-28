@@ -932,6 +932,26 @@ func agentRPCTestRunBlpUntilPanic(ctx context.Context, t *testing.T, client tmcl
 // Reparenting related functions
 //
 
+var testResetReplicationCalled = false
+
+func (fra *fakeRPCAgent) ResetReplication(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testResetReplicationCalled = true
+	return nil
+}
+
+func agentRPCTestResetReplication(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.ResetReplication(ctx, ti)
+	compareError(t, "ResetReplication", err, true, testResetReplicationCalled)
+}
+
+func agentRPCTestResetReplicationPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.ResetReplication(ctx, ti)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
 func (fra *fakeRPCAgent) InitMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1002,23 +1022,20 @@ func agentRPCTestInitSlavePanic(ctx context.Context, t *testing.T, client tmclie
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testDemoteMasterCalled = false
-
-func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) error {
+func (fra *fakeRPCAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	testDemoteMasterCalled = true
-	return nil
+	return testReplicationPosition, nil
 }
 
 func agentRPCTestDemoteMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.DemoteMaster(ctx, ti)
-	compareError(t, "DemoteMaster", err, true, testDemoteMasterCalled)
+	rp, err := client.DemoteMaster(ctx, ti)
+	compareError(t, "DemoteMaster", err, rp, testReplicationPosition)
 }
 
 func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.DemoteMaster(ctx, ti)
+	_, err := client.DemoteMaster(ctx, ti)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1036,6 +1053,32 @@ func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	_, err := client.PromoteSlave(ctx, ti)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
+var testReplicationPositionReturned = myproto.ReplicationPosition{
+	GTIDSet: myproto.MariadbGTID{
+		Domain:   5,
+		Server:   567,
+		Sequence: 3456,
+	},
+}
+
+func (fra *fakeRPCAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "PromoteSlaveWhenCaughtUp pos", pos, testReplicationPosition)
+	return testReplicationPositionReturned, nil
+}
+
+func agentRPCTestPromoteSlaveWhenCaughtUp(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.PromoteSlaveWhenCaughtUp(ctx, ti, testReplicationPosition)
+	compareError(t, "PromoteSlaveWhenCaughtUp", err, rp, testReplicationPositionReturned)
+}
+
+func agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.PromoteSlaveWhenCaughtUp(ctx, ti, testReplicationPosition)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1077,6 +1120,28 @@ func agentRPCTestRestartSlave(ctx context.Context, t *testing.T, client tmclient
 
 func agentRPCTestRestartSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	err := client.RestartSlave(ctx, ti, testRestartSlaveData)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
+var testSetMasterCalled = false
+
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "SetMaster parent", parent, testMasterAlias)
+	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	testSetMasterCalled = true
+	return nil
+}
+
+func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
+	compareError(t, "SetMaster", err, true, testSetMasterCalled)
+}
+
+func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1357,13 +1422,16 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRunBlpUntil(ctx, t, client, ti)
 
 	// Reparenting related functions
+	agentRPCTestResetReplication(ctx, t, client, ti)
 	agentRPCTestInitMaster(ctx, t, client, ti)
 	agentRPCTestPopulateReparentJournal(ctx, t, client, ti)
 	agentRPCTestInitSlave(ctx, t, client, ti)
 	agentRPCTestDemoteMaster(ctx, t, client, ti)
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
+	agentRPCTestPromoteSlaveWhenCaughtUp(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromoted(ctx, t, client, ti)
 	agentRPCTestRestartSlave(ctx, t, client, ti)
+	agentRPCTestSetMaster(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
 	agentRPCTestBreakSlaves(ctx, t, client, ti)
 
@@ -1413,13 +1481,16 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRunBlpUntilPanic(ctx, t, client, ti)
 
 	// Reparenting related functions
+	agentRPCTestResetReplicationPanic(ctx, t, client, ti)
 	agentRPCTestInitMasterPanic(ctx, t, client, ti)
 	agentRPCTestPopulateReparentJournalPanic(ctx, t, client, ti)
 	agentRPCTestInitSlavePanic(ctx, t, client, ti)
 	agentRPCTestDemoteMasterPanic(ctx, t, client, ti)
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
+	agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, ti)
 	agentRPCTestRestartSlavePanic(ctx, t, client, ti)
+	agentRPCTestSetMasterPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
 	agentRPCTestBreakSlavesPanic(ctx, t, client, ti)
 

@@ -5,7 +5,6 @@
 package testlib
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -42,7 +41,12 @@ func TestInitMasterShard(t *testing.T) {
 		},
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
+	master.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
+	master.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"new master shouldn't use this"}
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"reset rep 1",
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -50,8 +54,9 @@ func TestInitMasterShard(t *testing.T) {
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
 
-	// Slave1: expect to be re-parented
+	// Slave1: expect to be reset and re-parented
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 1"}
 	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
@@ -59,12 +64,16 @@ func TestInitMasterShard(t *testing.T) {
 		MasterConnectRetry: 10,
 	}
 	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
-	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = goodSlave1.FakeMysqlDaemon.StartReplicationCommandsResult
+	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"reset rep 1",
+		"cmd1",
+	}
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
 
 	// Slave2: expect to be re-parented
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
+	goodSlave2.FakeMysqlDaemon.ResetReplicationResult = []string{"reset rep 2"}
 	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
@@ -72,7 +81,11 @@ func TestInitMasterShard(t *testing.T) {
 		MasterConnectRetry: 10,
 	}
 	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1", "cmd2"}
-	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = goodSlave2.FakeMysqlDaemon.StartReplicationCommandsResult
+	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"reset rep 2",
+		"cmd1",
+		"cmd2",
+	}
 	goodSlave2.StartActionLoop(t, wr)
 	defer goodSlave2.StopActionLoop(t)
 
@@ -91,6 +104,15 @@ func TestInitMasterShard(t *testing.T) {
 	}
 	if si.MasterAlias != master.Tablet.Alias {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
+	}
+	if err := master.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("master.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	if err := goodSlave1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("goodSlave1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 }
 
@@ -119,11 +141,13 @@ func TestInitMasterShardChecks(t *testing.T) {
 	}
 
 	// InitShardMaster where the new master fails (use force flag
-	// as we have 2 masters)
-	master.FakeMysqlDaemon.BreakSlavesError = fmt.Errorf("forced test error")
+	// as we have 2 masters). We force the failure by making the
+	// SQL commands executed on the master unexpected by the test fixture
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "forced test error") {
+	master2.StartActionLoop(t, wr)
+	defer master2.StopActionLoop(t)
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "unexpected extra query") {
 		t.Errorf("InitShardMaster with new master failing BreakSlaves returned wrong error: %v", err)
 	}
 }
@@ -151,6 +175,8 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	}
 	master.FakeMysqlDaemon.ReadOnly = true
 	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",

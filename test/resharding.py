@@ -702,7 +702,7 @@ primary key (name)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
-    utils.run_vtctl(['ReparentShard', 'test_keyspace/80-c0',
+    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-c0',
                     shard_2_replica1.tablet_alias])
     logging.debug("Inserting lots of data on source shard after reparenting")
     self._insert_lots(3000, base=2000)
