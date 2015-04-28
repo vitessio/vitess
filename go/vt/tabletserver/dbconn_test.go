@@ -1,0 +1,121 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package tabletserver
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
+	"golang.org/x/net/context"
+)
+
+func TestDBConnExec(t *testing.T) {
+	db := fakesqldb.Register()
+	testUtils := newTestUtils()
+	sql := "select * from test_table limit 1000"
+	expectedResult := &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	appParams := &sqldb.ConnParams{}
+	dbaParams := &sqldb.ConnParams{}
+	connPool.Open(appParams, dbaParams)
+	defer connPool.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	dbConn, err := NewDBConn(connPool, appParams, dbaParams)
+	defer dbConn.Close()
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	// Exec succeed
+	result, err := dbConn.Exec(ctx, sql, 1, false)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	testUtils.checkEqual(t, expectedResult, result)
+	// Exec fail
+	db.EnableConnFail()
+	_, err = dbConn.Exec(ctx, sql, 1, false)
+	db.DisableConnFail()
+	testUtils.checkTabletError(t, err, ErrFatal, "")
+}
+
+func TestDBConnKill(t *testing.T) {
+	db := fakesqldb.Register()
+	testUtils := newTestUtils()
+	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	appParams := &sqldb.ConnParams{}
+	dbaParams := &sqldb.ConnParams{}
+	connPool.Open(appParams, dbaParams)
+	defer connPool.Close()
+	dbConn, _ := NewDBConn(connPool, appParams, dbaParams)
+	defer dbConn.Close()
+	query := fmt.Sprintf("kill %d", dbConn.ID())
+	db.AddQuery(query, &mproto.QueryResult{})
+	// Kill failed because we are not able to connect to the database
+	db.EnableConnFail()
+	err := dbConn.Kill()
+	testUtils.checkTabletError(t, err, ErrFail, "Failed to get conn from dba pool")
+	db.DisableConnFail()
+
+	// Kill succeed
+	err = dbConn.Kill()
+	if err != nil {
+		t.Fatalf("kill should succeed, but got error: %v", err)
+	}
+
+	err = dbConn.reconnect()
+	if err != nil {
+		t.Fatalf("reconnect should succeed, but got error: %v", err)
+	}
+	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
+	// Kill failed because "kill query_id" failed
+	db.AddRejectedQuery(newKillQuery)
+	err = dbConn.Kill()
+	testUtils.checkTabletError(t, err, ErrFail, "Could not kill query")
+
+}
+
+func TestDBConnStream(t *testing.T) {
+	db := fakesqldb.Register()
+	testUtils := newTestUtils()
+	sql := "select * from test_table limit 1000"
+	expectedResult := &mproto.QueryResult{
+		RowsAffected: 0,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.MakeString([]byte("123"))},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	appParams := &sqldb.ConnParams{}
+	dbaParams := &sqldb.ConnParams{}
+	connPool.Open(appParams, dbaParams)
+	defer connPool.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	dbConn, _ := NewDBConn(connPool, appParams, dbaParams)
+	defer dbConn.Close()
+	var result mproto.QueryResult
+	err := dbConn.Stream(
+		ctx, sql, func(r *mproto.QueryResult) error {
+			result = *r
+			return nil
+		}, 10)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	testUtils.checkEqual(t, expectedResult, &result)
+}
