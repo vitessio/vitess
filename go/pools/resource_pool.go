@@ -104,9 +104,12 @@ func (rp *ResourcePool) TryGet() (resource Resource, err error) {
 
 func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, err error) {
 	// If ctx has already expired, avoid racing with rp's resource channel.
-	if ctx.Err() != nil {
+	select {
+	case <-ctx.Done():
 		return nil, ErrTimeout
+	default:
 	}
+
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
