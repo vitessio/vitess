@@ -7,7 +7,7 @@ desiredState:
     id: vttablet-{{uid}}
     containers:
       - name: vttablet
-        image: vitess/root
+        image: vitess/lite
         volumeMounts:
           - name: syslog
             mountPath: /dev/log
@@ -61,7 +61,7 @@ desiredState:
             -rowcache-bin /usr/bin/memcached
             -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
       - name: mysql
-        image: vitess/root
+        image: vitess/lite
         volumeMounts:
           - name: syslog
             mountPath: /dev/log

@@ -363,6 +363,10 @@ $ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
 
     ``` sh
 $ kvtctl ListAllTablets test
+# The command's output is shown below:
+# test-0000000100 test_keyspace 0 master MASTER_IP:15002 MASTER_IP:3306 []
+# test-0000000101 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
+# test-0000000102 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
 ```
 
 1.  **Create a table**
@@ -391,10 +395,6 @@ CREATE TABLE test_table (
 
     ``` sh
 kvtctl GetSchema test-0000000100
-# The command's output is shown below:
-# test-0000000100 test_keyspace 0 master MASTER_IP:15002 MASTER_IP:3306 []
-# test-0000000101 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
-# test-0000000102 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
 ```
 
 1.  **Start <code>vtgate</code>**

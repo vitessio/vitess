@@ -13,7 +13,7 @@ desiredState:
         id: etcd-{{cell}}
         containers:
           - name: etcd
-            image: vitess/etcd:v0.4.6
+            image: vitess/etcd:v0.4.6-lite
             command:
               - bash
               - "-c"
