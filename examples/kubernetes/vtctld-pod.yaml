@@ -7,7 +7,7 @@ desiredState:
     id: vtctld
     containers:
       - name: vtctld
-        image: vitess/root
+        image: vitess/lite
         volumeMounts:
           - name: syslog
             mountPath: /dev/log

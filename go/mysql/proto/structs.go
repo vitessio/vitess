@@ -41,10 +41,35 @@ const (
 	VT_GEOMETRY    = 255
 )
 
+// MySQL field flags bitset values e.g. to distinguish between signed and unsigned integer.
+// Comments are taken from the original source code.
+// These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql_com.h
+const (
+	// VT_ZEROVALUE_FLAG is not part of the MySQL specification and only used in unit tests.
+	VT_ZEROVALUE_FLAG    = 0
+	VT_NOT_NULL_FLAG     = 1   /* Field can't be NULL */
+	VT_PRI_KEY_FLAG      = 2   /* Field is part of a primary key */
+	VT_UNIQUE_KEY_FLAG   = 4   /* Field is part of a unique key */
+	VT_MULTIPLE_KEY_FLAG = 8   /* Field is part of a key */
+	VT_BLOB_FLAG         = 16  /* Field is a blob */
+	VT_UNSIGNED_FLAG     = 32  /* Field is unsigned */
+	VT_ZEROFILL_FLAG     = 64  /* Field is zerofill */
+	VT_BINARY_FLAG       = 128 /* Field is binary   */
+	/* The following are only sent to new clients */
+	VT_ENUM_FLAG             = 256   /* field is an enum */
+	VT_AUTO_INCREMENT_FLAG   = 512   /* field is a autoincrement field */
+	VT_TIMESTAMP_FLAG        = 1024  /* Field is a timestamp */
+	VT_SET_FLAG              = 2048  /* field is a set */
+	VT_NO_DEFAULT_VALUE_FLAG = 4096  /* Field doesn't have default value */
+	VT_ON_UPDATE_NOW_FLAG    = 8192  /* Field is set to NOW on UPDATE */
+	VT_NUM_FLAG              = 32768 /* Field is num (for clients) */
+)
+
 // Field describes a column returned by MySQL.
 type Field struct {
-	Name string
-	Type int64
+	Name  string
+	Type  int64
+	Flags int64
 }
 
 //go:generate bsongen -file $GOFILE -type Field -o field_bson.go
@@ -77,6 +102,7 @@ type Charset struct {
 // - int64 if possible, otherwise, uint64
 // - float64 for floating point values that fit in a float
 // - []byte for everything else
+// TODO(mberlin): Make this a method of "Field" and consider VT_UNSIGNED_FLAG in "Flags" as well.
 func Convert(mysqlType int64, val sqltypes.Value) (interface{}, error) {
 	if val.IsNull() {
 		return nil, nil

@@ -203,6 +203,7 @@ type Result struct {
 	err   error
 }
 
+// TODO(mberlin): Populate flags here as well (e.g. to correctly identify unsigned integer type)?
 func NewResult(rowCount, rowsAffected, insertId int64, fields []mproto.Field) *Result {
 	return &Result{
 		qr: &mproto.QueryResult{
