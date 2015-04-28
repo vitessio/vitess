@@ -187,7 +187,9 @@ type Int struct {
 // NewInt returns a new Int
 func NewInt(name string) *Int {
 	v := new(Int)
-	Publish(name, v)
+	if name != "" {
+		Publish(name, v)
+	}
 	return v
 }
 
