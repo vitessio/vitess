@@ -131,7 +131,7 @@ func TestRowsFail(t *testing.T) {
 	ri = NewRows(&badResult2)
 	dest = make([]driver.Value, 1)
 	err = ri.Next(dest)
-	want = `conversion error: field: {field1 3}, val: value: strconv.ParseUint: parsing "value": invalid syntax`
+	want = `conversion error: field: {field1 3 0}, val: value: strconv.ParseUint: parsing "value": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("Next: %v, want %s", err, want)
 	}

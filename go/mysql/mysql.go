@@ -200,6 +200,7 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
 		fields[i].Name = string(fname)
 		fields[i].Type = int64(cfields[i]._type)
+		fields[i].Flags = int64(cfields[i].flags)
 	}
 	return fields
 }

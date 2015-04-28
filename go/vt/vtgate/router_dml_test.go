@@ -120,8 +120,8 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
 		Fields: []mproto.Field{
-			{"id", 3},
-			{"name", 253},
+			{"id", 3, mproto.VT_ZEROVALUE_FLAG},
+			{"name", 253, mproto.VT_ZEROVALUE_FLAG},
 		},
 		RowsAffected: 1,
 		InsertId:     0,
@@ -257,8 +257,8 @@ func TestDeleteVindexFail(t *testing.T) {
 
 	sbc.setResults([]*mproto.QueryResult{&mproto.QueryResult{
 		Fields: []mproto.Field{
-			{"id", 3},
-			{"name", 253},
+			{"id", 3, mproto.VT_ZEROVALUE_FLAG},
+			{"name", 253, mproto.VT_ZEROVALUE_FLAG},
 		},
 		RowsAffected: 1,
 		InsertId:     0,
