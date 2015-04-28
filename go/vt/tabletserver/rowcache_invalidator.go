@@ -68,11 +68,13 @@ func (rci *RowcacheInvalidator) PositionString() string {
 // NewRowcacheInvalidator creates a new RowcacheInvalidator.
 // Just like QueryEngine, this is a singleton class.
 // You must call this only once.
-func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine) *RowcacheInvalidator {
+func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine, enablePublishStats bool) *RowcacheInvalidator {
 	rci := &RowcacheInvalidator{qe: qe}
-	stats.Publish(statsPrefix+"RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
-	stats.Publish(statsPrefix+"RowcacheInvalidatorPosition", stats.StringFunc(rci.PositionString))
-	stats.Publish(statsPrefix+"RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
+	if enablePublishStats {
+		stats.Publish(statsPrefix+"RowcacheInvalidatorState", stats.StringFunc(rci.svm.StateName))
+		stats.Publish(statsPrefix+"RowcacheInvalidatorPosition", stats.StringFunc(rci.PositionString))
+		stats.Publish(statsPrefix+"RowcacheInvalidatorLagSeconds", stats.IntFunc(rci.lagSeconds.Get))
+	}
 	return rci
 }
 

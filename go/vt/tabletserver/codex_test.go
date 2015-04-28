@@ -332,7 +332,7 @@ func TestCodexValidateRow(t *testing.T) {
 	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
 	testUtils.checkTabletError(t, err, ErrFail, "data inconsistency")
 	// column 0 is int type but row is in string type
-	err = validateRow(&tableInfo, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte{})})
+	err = validateRow(&tableInfo, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
 	testUtils.checkTabletError(t, err, ErrFail, "type mismatch")
 }
 

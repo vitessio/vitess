@@ -91,10 +91,9 @@ func (util *testUtils) getTabletErrorString(tabletErrorType int) string {
 }
 
 func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
-	randID := rand.Int63()
 	return mysqlctl.NewMysqld(
-		fmt.Sprintf("Dba_%d", randID),
-		fmt.Sprintf("App_%d", randID),
+		"",
+		"",
 		mysqlctl.NewMycnf(0, 6802),
 		&dbconfigs.Dba,
 		&dbconfigs.App.ConnParams,

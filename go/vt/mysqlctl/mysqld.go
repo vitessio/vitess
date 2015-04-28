@@ -79,13 +79,25 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 	}
 
 	// create and open the connection pool for dba access
-	dbaMysqlStats := stats.NewTimings("Mysql" + dbaName)
-	dbaPool := dbconnpool.NewConnectionPool(dbaName+"ConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	dbaMysqlStatsName := ""
+	dbaPoolName := ""
+	if dbaName != "" {
+		dbaMysqlStatsName = "Mysql" + dbaName
+		dbaPoolName = dbaName + "ConnPool"
+	}
+	dbaMysqlStats := stats.NewTimings(dbaMysqlStatsName)
+	dbaPool := dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
 	dbaPool.Open(dbconnpool.DBConnectionCreator(dba, dbaMysqlStats))
 
 	// create and open the connection pool for app access
-	appMysqlStats := stats.NewTimings("Mysql" + appName)
-	appPool := dbconnpool.NewConnectionPool(appName+"ConnPool", *appPoolSize, *appIdleTimeout)
+	appMysqlStatsName := ""
+	appPoolName := ""
+	if appName != "" {
+		appMysqlStatsName = "Mysql" + appName
+		appPoolName = appName + "ConnPool"
+	}
+	appMysqlStats := stats.NewTimings(appMysqlStatsName)
+	appPool := dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)
 	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
 
 	return &Mysqld{

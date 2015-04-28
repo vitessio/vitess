@@ -130,8 +130,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 		config.EnablePublishStats,
 	)
 
-	mysqlStats = stats.NewTimings(config.StatsPrefix + "Mysql")
-
 	// Pools
 	qe.cachePool = NewCachePool(
 		config.PoolNamePrefix+"Rowcache",
@@ -165,7 +163,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
-	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe)
+	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe, config.EnablePublishStats)
 	qe.streamQList = NewQueryList()
 
 	// Vars
@@ -183,15 +181,16 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
-	queryStats = stats.NewTimings(config.StatsPrefix + "Queries")
-	qpsRates = stats.NewRates(config.StatsPrefix+"QPS", queryStats, 15, 60*time.Second)
-	waitStats = stats.NewTimings(config.StatsPrefix + "Waits")
-	killStats = stats.NewCounters(config.StatsPrefix + "Kills")
-	infoErrors = stats.NewCounters(config.StatsPrefix + "InfoErrors")
-	errorStats = stats.NewCounters(config.StatsPrefix + "Errors")
-	internalErrors = stats.NewCounters(config.StatsPrefix + "InternalErrors")
-	resultStats = stats.NewHistogram(config.StatsPrefix+"Results", resultBuckets)
-	spotCheckCount = stats.NewInt(config.StatsPrefix + "RowcacheSpotCheckCount")
+	mysqlStatsName := ""
+	queryStatsName := ""
+	qpsRateName := ""
+	waitStatsName := ""
+	killStatsName := ""
+	infoErrorsName := ""
+	errorStatsName := ""
+	internalErrorsName := ""
+	resultStatsName := ""
+	spotCheckCountName := ""
 
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -201,7 +200,29 @@ func NewQueryEngine(config Config) *QueryEngine {
 		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 		}))
+
+		mysqlStatsName = config.StatsPrefix + "Mysql"
+		queryStatsName = config.StatsPrefix + "Queries"
+		qpsRateName = config.StatsPrefix + "QPS"
+		waitStatsName = config.StatsPrefix + "Waits"
+		killStatsName = config.StatsPrefix + "Kills"
+		infoErrorsName = config.StatsPrefix + "InfoErrors"
+		errorStatsName = config.StatsPrefix + "Errors"
+		internalErrorsName = config.StatsPrefix + "InternalErrors"
+		resultStatsName = config.StatsPrefix + "Results"
+		spotCheckCountName = config.StatsPrefix + "RowcacheSpotCheckCount"
 	}
+	mysqlStats = stats.NewTimings(mysqlStatsName)
+	queryStats = stats.NewTimings(queryStatsName)
+	qpsRates = stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second)
+	waitStats = stats.NewTimings(waitStatsName)
+	killStats = stats.NewCounters(killStatsName)
+	infoErrors = stats.NewCounters(infoErrorsName)
+	errorStats = stats.NewCounters(errorStatsName)
+	internalErrors = stats.NewCounters(internalErrorsName)
+	resultStats = stats.NewHistogram(resultStatsName, resultBuckets)
+	spotCheckCount = stats.NewInt(spotCheckCountName)
+
 	return qe
 }
 
