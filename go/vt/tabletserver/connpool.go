@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -14,12 +13,6 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"golang.org/x/net/context"
-)
-
-var (
-	// ErrConnPoolClosed is returned / panicked when the
-	// connection pool is closed.
-	ErrConnPoolClosed = errors.New("connection pool is closed")
 )
 
 // ConnPool implements a custom connection pool for tabletserver.

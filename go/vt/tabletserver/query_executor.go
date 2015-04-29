@@ -518,7 +518,7 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) *DBConn {
 		qre.logStats.WaitingForConnection += time.Now().Sub(start)
 		return conn
 	case ErrConnPoolClosed:
-		panic(connPoolClosedErr)
+		panic(err)
 	}
 	panic(NewTabletErrorSql(ErrFatal, err))
 }

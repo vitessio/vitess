@@ -89,8 +89,6 @@ var (
 	qpsRates       *stats.Rates
 
 	resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
-
-	connPoolClosedErr = NewTabletError(ErrFatal, "connection pool is closed")
 )
 
 // CacheInvalidator provides the abstraction needed for an instant invalidation
@@ -106,7 +104,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 		return conn
 	}
 	if err == ErrConnPoolClosed {
-		panic(connPoolClosedErr)
+		panic(ErrConnPoolClosed)
 	}
 	panic(NewTabletErrorSql(ErrFatal, err))
 }
