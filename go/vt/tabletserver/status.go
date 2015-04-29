@@ -89,7 +89,7 @@ func (rqsc *realQueryServiceControl) AddStatusPart() {
 		status := queryserviceStatus{
 			State: rqsc.sqlQueryRPCService.GetState(),
 		}
-		rates := qpsRates.Get()
+		rates := rqsc.sqlQueryRPCService.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 

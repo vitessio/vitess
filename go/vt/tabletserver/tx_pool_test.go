@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
 	"golang.org/x/net/context"
 )
@@ -79,14 +78,14 @@ func TestTransactionKiller(t *testing.T) {
 	txPool.Open(&appParams, &dbaParams)
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := killStats.Counts()["Transactions"]
+	killCount := txPool.queryServiceStats.KillStats.Counts()["Transactions"]
 	transactionID := txPool.Begin(ctx)
 	txConn := txPool.Get(transactionID)
 	txConn.RecordQuery(sql)
 	txConn.Recycle()
 	// transaction killer should kill the query
 	txPool.WaitForEmpty()
-	killCountDiff := killStats.Counts()["Transactions"] - killCount
+	killCountDiff := txPool.queryServiceStats.KillStats.Counts()["Transactions"] - killCount
 	if killCountDiff != 1 {
 		t.Fatalf("query: %s should be killed by transaction killer", sql)
 	}
@@ -261,6 +260,7 @@ func newTxPool(enablePublishStats bool) *TxPool {
 	transactionTimeout := time.Duration(30 * time.Second)
 	txPoolTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
+	queryServiceStats := NewQueryServiceStats("", enablePublishStats)
 	return NewTxPool(
 		poolName,
 		txStatsPrefix,
@@ -269,20 +269,6 @@ func newTxPool(enablePublishStats bool) *TxPool {
 		txPoolTimeout,
 		idleTimeout,
 		enablePublishStats,
+		queryServiceStats,
 	)
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	name := "TestTxPool"
-	mysqlStats = stats.NewTimings(name + "Mysql")
-	queryStats = stats.NewTimings(name + "Queries")
-	waitStats = stats.NewTimings(name + "Waits")
-	killStats = stats.NewCounters(name + "Kills")
-	infoErrors = stats.NewCounters(name + "InfoErrors")
-	errorStats = stats.NewCounters(name + "Errors")
-	internalErrors = stats.NewCounters(name + "InternalErrors")
-	resultStats = stats.NewHistogram(name+"Results", resultBuckets)
-	spotCheckCount = stats.NewInt(name + "RowcacheSpotCheckCount")
-	qpsRates = stats.NewRates(name+"QPS", queryStats, 15, 60*time.Second)
 }

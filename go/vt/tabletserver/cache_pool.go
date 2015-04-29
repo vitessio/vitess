@@ -24,17 +24,18 @@ import (
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
 type CachePool struct {
-	name           string
-	pool           *pools.ResourcePool
-	maxPrefix      sync2.AtomicInt64
-	cmd            *exec.Cmd
-	rowCacheConfig RowCacheConfig
-	capacity       int
-	socket         string
-	idleTimeout    time.Duration
-	memcacheStats  *MemcacheStats
-	mu             sync.Mutex
-	statsURL       string
+	name              string
+	pool              *pools.ResourcePool
+	maxPrefix         sync2.AtomicInt64
+	cmd               *exec.Cmd
+	rowCacheConfig    RowCacheConfig
+	capacity          int
+	socket            string
+	idleTimeout       time.Duration
+	memcacheStats     *MemcacheStats
+	queryServiceStats *QueryServiceStats
+	mu                sync.Mutex
+	statsURL          string
 }
 
 // NewCachePool creates a new pool for rowcache connections.
@@ -43,11 +44,18 @@ func NewCachePool(
 	rowCacheConfig RowCacheConfig,
 	idleTimeout time.Duration,
 	statsURL string,
-	enablePublishStats bool) *CachePool {
-	cp := &CachePool{name: name, idleTimeout: idleTimeout, statsURL: statsURL}
+	enablePublishStats bool,
+	queryServiceStats *QueryServiceStats) *CachePool {
+	cp := &CachePool{
+		name:              name,
+		idleTimeout:       idleTimeout,
+		statsURL:          statsURL,
+		queryServiceStats: queryServiceStats,
+	}
 	if name != "" && enablePublishStats {
 		cp.memcacheStats = NewMemcacheStats(
 			rowCacheConfig.StatsPrefix+name, 10*time.Second, enableMain,
+			queryServiceStats,
 			func(key string) string {
 				conn := cp.Get(context.Background())
 				// This is not the same as defer cachePool.Put(conn)
@@ -57,7 +65,7 @@ func NewCachePool(
 					conn.Close()
 					conn = nil
 					log.Errorf("Cannot export memcache %v stats: %v", key, err)
-					internalErrors.Add("MemcacheStats", 1)
+					queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 					return ""
 				}
 				return string(stats)

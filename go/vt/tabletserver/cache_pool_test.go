@@ -230,11 +230,11 @@ func TestCachePoolMemcacheStatsFail(t *testing.T) {
 	cachePool.idleTimeout = idleTimeout
 	cachePool.Open()
 	defer cachePool.Close()
-	memcacheStatsBefore := internalErrors.Counts()["MemcacheStats"]
+	memcacheStatsBefore := cachePool.queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	// any memcache calls should fail
 	cache.EnableCacheServiceError()
 	cachePool.memcacheStats.update()
-	memcacheStatsAfter := internalErrors.Counts()["MemcacheStats"]
+	memcacheStatsAfter := cachePool.queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	if memcacheStatsAfter <= memcacheStatsBefore {
 		t.Fatalf("memcache stats should cause an internal error")
 	}
@@ -261,5 +261,12 @@ func newTestCachePool(rowcacheConfig RowCacheConfig, enablePublishStats bool) *C
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/cache-%d/", randID)
-	return NewCachePool(name, rowcacheConfig, 1*time.Second, statsURL, enablePublishStats)
+	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
+	return NewCachePool(
+		name,
+		rowcacheConfig,
+		1*time.Second,
+		statsURL,
+		enablePublishStats,
+		queryServiceStats)
 }

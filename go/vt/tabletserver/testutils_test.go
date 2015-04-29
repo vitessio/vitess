@@ -128,15 +128,27 @@ func (util *testUtils) newQueryServiceConfig() Config {
 	return config
 }
 
+func (util *testUtils) newConnPool() *ConnPool {
+	return NewConnPool(
+		"ConnPool",
+		100,
+		10*time.Second,
+		false,
+		NewQueryServiceStats("", false),
+	)
+}
+
 func newTestSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
 	enablePublishStats bool) *SchemaInfo {
 	randID := rand.Int63()
+	name := fmt.Sprintf("TestSchemaInfo-%d-", randID)
+	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
 	return NewSchemaInfo(
 		queryCacheSize,
-		fmt.Sprintf("TestSchemaInfo-%d-", randID),
+		name,
 		map[string]string{
 			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
 			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
@@ -146,5 +158,6 @@ func newTestSchemaInfo(
 		reloadTime,
 		idleTimeout,
 		enablePublishStats,
+		queryServiceStats,
 	)
 }

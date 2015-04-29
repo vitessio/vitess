@@ -99,16 +99,17 @@ type SchemaOverride struct {
 // SchemaInfo stores the schema info and performs operations that
 // keep itself and the rowcache up-to-date.
 type SchemaInfo struct {
-	mu         sync.Mutex
-	tables     map[string]*TableInfo
-	overrides  []SchemaOverride
-	queries    *cache.LRUCache
-	connPool   *ConnPool
-	cachePool  *CachePool
-	lastChange time.Time
-	ticks      *timer.Timer
-	reloadTime time.Duration
-	endpoints  map[string]string
+	mu                sync.Mutex
+	tables            map[string]*TableInfo
+	overrides         []SchemaOverride
+	queries           *cache.LRUCache
+	connPool          *ConnPool
+	cachePool         *CachePool
+	lastChange        time.Time
+	ticks             *timer.Timer
+	reloadTime        time.Duration
+	endpoints         map[string]string
+	queryServiceStats *QueryServiceStats
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
@@ -118,10 +119,11 @@ func NewSchemaInfo(
 	endpoints map[string]string,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
-	enablePublishStats bool) *SchemaInfo {
+	enablePublishStats bool,
+	queryServiceStats *QueryServiceStats) *SchemaInfo {
 	si := &SchemaInfo{
 		queries:    cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:   NewConnPool("", 2, idleTimeout, enablePublishStats),
+		connPool:   NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats),
 		ticks:      timer.NewTimer(reloadTime),
 		endpoints:  endpoints,
 		reloadTime: reloadTime,
@@ -250,7 +252,7 @@ func (si *SchemaInfo) Close() {
 // Reload reloads the schema info from the db. Any tables that have changed
 // since the last load are updated.
 func (si *SchemaInfo) Reload() {
-	defer logError()
+	defer logError(si.queryServiceStats)
 	ctx := context.Background()
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime(ctx)

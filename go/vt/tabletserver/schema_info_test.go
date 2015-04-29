@@ -32,7 +32,7 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -57,7 +57,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -81,7 +81,7 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -105,7 +105,7 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -129,7 +129,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -159,7 +159,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -179,7 +179,7 @@ func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
@@ -209,7 +209,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	// test cache type RW
@@ -292,7 +292,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	defer handleAndVerifyTabletError(
@@ -320,7 +320,7 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), cachePool, false)
@@ -343,7 +343,7 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), cachePool, false)
@@ -368,7 +368,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
@@ -395,7 +395,7 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
@@ -419,7 +419,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(true)
+	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
@@ -455,7 +455,7 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(true)
+	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
@@ -474,7 +474,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false)
+	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
 	cachePool.Open()
 	defer cachePool.Close()
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
@@ -506,7 +506,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	schemaInfo.ServeHTTP(response, request)
 }
 
-func newTestSchemaInfoCachePool(enablePublishStats bool) *CachePool {
+func newTestSchemaInfoCachePool(enablePublishStats bool, queryServiceStats *QueryServiceStats) *CachePool {
 	rowCacheConfig := RowCacheConfig{
 		Binary:      "ls",
 		Connections: 100,
@@ -514,7 +514,14 @@ func newTestSchemaInfoCachePool(enablePublishStats bool) *CachePool {
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/cache-%d", randID)
-	return NewCachePool(name, rowCacheConfig, 1*time.Second, statsURL, enablePublishStats)
+	return NewCachePool(
+		name,
+		rowCacheConfig,
+		1*time.Second,
+		statsURL,
+		enablePublishStats,
+		queryServiceStats,
+	)
 }
 
 func getSchemaInfoBaseTestQueries() map[string]*mproto.QueryResult {

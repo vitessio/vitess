@@ -301,7 +301,7 @@ func (rqsc *realQueryServiceControl) AllowQueries(dbconfigs *dbconfigs.DBConfigs
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
 func (rqsc *realQueryServiceControl) DisallowQueries() {
-	defer logError()
+	defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
 	rqsc.sqlQueryRPCService.disallowQueries()
 }
 
@@ -312,7 +312,7 @@ func (rqsc *realQueryServiceControl) IsServing() bool {
 
 // Reload the schema. If the query service is not running, nothing will happen
 func (rqsc *realQueryServiceControl) ReloadSchema() {
-	defer logError()
+	defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
 	rqsc.sqlQueryRPCService.qe.schemaInfo.triggerReload()
 }
 
@@ -332,7 +332,7 @@ func (rqsc *realQueryServiceControl) registerCheckMySQL() {
 			time.Sleep(1 * time.Second)
 			checkMySLQThrottler.Release()
 		}()
-		defer logError()
+		defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
 		if rqsc.sqlQueryRPCService.checkMySQL() {
 			return
 		}

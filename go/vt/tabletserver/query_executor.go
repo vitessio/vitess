@@ -44,7 +44,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
-		queryStats.Add(planName, duration)
+		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
 		if reply == nil {
 			qre.plan.AddStats(1, duration, 0, 1)
 			return
@@ -52,7 +52,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		qre.plan.AddStats(1, duration, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		resultStats.Add(int64(len(reply.Rows)))
+		qre.qe.queryServiceStats.ResultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
 	qre.checkPermissions()
@@ -117,7 +117,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	qre.logStats.OriginalSql = qre.query
 	qre.logStats.PlanType = qre.plan.PlanId.String()
-	defer queryStats.Record(qre.plan.PlanId.String(), time.Now())
+	defer qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), time.Now())
 
 	qre.checkPermissions()
 
@@ -272,7 +272,7 @@ func (qre *QueryExecutor) mustVerify() bool {
 }
 
 func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
-	spotCheckCount.Add(1)
+	qre.qe.queryServiceStats.SpotCheckCount.Add(1)
 	bv := map[string]interface{}{
 		"#pk": sqlparser.TupleEqualityList{
 			Columns: qre.plan.TableInfo.Indexes[0].Columns,
@@ -300,7 +300,7 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 	}
 	log.Warningf("query: %v", qre.plan.FullQuery)
 	log.Warningf("mismatch for: %v\ncache: %v\ndb:    %v", pk, rcresult.Row, dbrow)
-	internalErrors.Add("Mismatch", 1)
+	qre.qe.queryServiceStats.InternalErrors.Add("Mismatch", 1)
 }
 
 // execDirect always sends the query to mysql
@@ -541,7 +541,7 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 		logStats.QuerySources |= QuerySourceConsolidator
 		startTime := time.Now()
 		q.Wait()
-		waitStats.Record("Consolidations", startTime)
+		qre.qe.queryServiceStats.WaitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
 		panic(q.Err)
