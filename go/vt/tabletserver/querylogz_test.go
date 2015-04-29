@@ -18,7 +18,7 @@ import (
 )
 
 func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/querylogz?timeout=0&limit=10", nil)
+	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	response := httptest.NewRecorder()
 	ch := make(chan interface{}, 1)
 	ch <- "test msg"
@@ -30,7 +30,7 @@ func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
 }
 
 func TestQuerylogzHandler(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/querylogz?timeout=0&limit=10", nil)
+	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	logStats := newSqlQueryStats("Execute", context.Background())
 	logStats.PlanType = planbuilder.PLAN_PASS_SELECT.String()
 	logStats.OriginalSql = "select name from test_table limit 1000"
