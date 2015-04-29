@@ -16,7 +16,8 @@ import (
 
 func TestCodexBuildValuesList(t *testing.T) {
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 
 	// simple PK clause. e.g. where pk1 = 1
@@ -199,7 +200,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 func TestCodexResolvePKValues(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 	key := "var"
 	bindVariables := make(map[string]interface{})
@@ -236,7 +238,8 @@ func TestCodexResolvePKValues(t *testing.T) {
 func TestCodexResolveListArg(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 
 	key := "var"
@@ -262,7 +265,8 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	pk1 := "pk1"
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
-		map[string]string{pk1: "int", pk2: "varchar(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -292,7 +296,8 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk1 := "pk1"
 	pk2 := "pk2"
 	tableInfo := createTableInfo("Table",
-		map[string]string{pk1: "int", pk2: "varchar(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{pk1, pk2})
 
 	// set pk2 = 'xyz' where pk1=1 and pk2 = 'abc'
@@ -314,7 +319,8 @@ func TestCodexBuildStreamComment(t *testing.T) {
 func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 
 	func() {
@@ -326,7 +332,8 @@ func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
 func TestCodexValidateRow(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
@@ -405,7 +412,8 @@ func TestCodexBuildKey(t *testing.T) {
 func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	testUtils := newTestUtils()
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "int", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 	output := applyFilterWithPKDefaults(&tableInfo, []int{-1}, []sqltypes.Value{})
 	if len(output) != 1 {
@@ -422,7 +430,8 @@ func TestCodexValidateKey(t *testing.T) {
 	testUtils := newTestUtils()
 	queryServiceStats := NewQueryServiceStats("", false)
 	tableInfo := createTableInfo("Table",
-		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
+		[]string{"pk1", "pk2", "col1"},
+		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
 	// validate empty key
 	newKey := validateKey(&tableInfo, "", queryServiceStats)
@@ -462,9 +471,11 @@ func TestCodexUnicoded(t *testing.T) {
 	testUtils.checkEqual(t, "tes", out)
 }
 
-func createTableInfo(name string, cols map[string]string, pKeys []string) TableInfo {
+func createTableInfo(
+	name string, colNames []string, colTypes []string, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
-	for colName, colType := range cols {
+	for i, colName := range colNames {
+		colType := colTypes[i]
 		defaultVal := sqltypes.Value{}
 		if strings.Contains(colType, "int") {
 			defaultVal = sqltypes.MakeNumeric([]byte("0"))
