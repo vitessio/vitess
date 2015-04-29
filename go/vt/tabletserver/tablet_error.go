@@ -38,6 +38,9 @@ const (
 	maxErrLen = 5000
 )
 
+// ErrConnPoolClosed is returned / panicked when the connection pool is closed.
+var ErrConnPoolClosed = NewTabletError(ErrFatal, "connection pool is closed")
+
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 // TabletError is the erro type we use in this library

@@ -107,8 +107,8 @@ func TestBeginAfterConnPoolClosed(t *testing.T) {
 			t.Fatalf("expect to get an error")
 		}
 		err, ok := r.(*TabletError)
-		if !ok || err != connPoolClosedErr {
-			t.Fatalf("get error: %v, but expect: %v", err, connPoolClosedErr)
+		if !ok || err != ErrConnPoolClosed {
+			t.Fatalf("get error: %v, but expect: %v", err, ErrConnPoolClosed)
 		}
 	}()
 	txPool.Begin(ctx)
