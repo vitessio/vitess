@@ -16,7 +16,10 @@ func (tc *testConn) Current() string { return tc.query }
 
 func (tc *testConn) ID() int64 { return tc.id }
 
-func (tc *testConn) Kill() { tc.killed = true }
+func (tc *testConn) Kill() error {
+	tc.killed = true
+	return nil
+}
 
 func (tc *testConn) IsKilled() bool {
 	return tc.killed
