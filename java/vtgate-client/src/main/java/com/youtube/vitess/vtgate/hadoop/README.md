@@ -27,8 +27,10 @@ public class TableCsvMapper extends
 		Row row = value.getRow();
 		StringBuilder asCsv = new StringBuilder();
 		asCsv.append(row.getInt("id"));
-		asCsv.append(row.getString(","));
+		asCsv.append(",");
 		asCsv.append(row.getString("name"));
+		asCsv.append(",");
+		asCsv.append(row.getULong("keyspace_id"));
 		context.write(NullWritable.get(), new Text(asCsv.toString()));
 	}
 }
