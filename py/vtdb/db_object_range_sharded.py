@@ -32,8 +32,6 @@ def unpack_keyspace_id(kid):
  return struct.Struct('!Q').unpack(kid)[0]
 
 
-
-
 class DBObjectRangeSharded(db_object.DBObjectBase):
   """Base class for range-sharded db classes.
 
@@ -294,9 +292,8 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
       keyspace_id = unpack_keyspace_id(kid)
       bind_vars['keyspace_id'] = keyspace_id
 
-    query, bind_vars = sql_builder.insert_query(class_.table_name,
-                                                class_.columns_list,
-                                                **bind_vars)
+    query, bind_vars = class_.create_insert_query(**bind_vars)
+
     cursor.execute(query, bind_vars)
     return cursor.lastrowid
 
@@ -308,30 +305,29 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
 
     return where_column_value_pairs
 
-  @db_object.db_class_method
+  @db_object.write_db_class_method
   def update_columns(class_, cursor, where_column_value_pairs,
-                     **update_columns):
-
+                     update_column_value_pairs):
     where_column_value_pairs = class_._add_keyspace_id(
         unpack_keyspace_id(cursor.keyspace_ids[0]),
         where_column_value_pairs)
 
-    query, bind_vars = sql_builder.update_columns_query(
-        class_.table_name, where_column_value_pairs, **update_columns)
+    query, bind_vars = class_.create_update_query(where_column_value_pairs,
+                                                  update_column_value_pairs)
 
     rowcount = cursor.execute(query, bind_vars)
 
     # If the entity_id column is being updated, update lookup map.
     if class_.entity_id_lookup_map is not None:
       for entity_col in class_.entity_id_lookup_map.keys():
-        if entity_col in update_columns:
-          class_.update_sharding_key_entity_id_lookup(cursor, sharding_key,
-                                                      entity_col,
-                                                      update_columns[entity_col])
+        if entity_col in update_column_value_pairs:
+          class_.update_sharding_key_entity_id_lookup(
+              cursor, sharding_key, entity_col,
+              update_column_value_pairs[entity_col])
 
     return rowcount
 
-  @db_object.db_class_method
+  @db_object.write_db_class_method
   def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None):
 
     if not where_column_value_pairs:
@@ -374,6 +370,7 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     for col, value in bind_vars.iteritems():
       lookup_col = class_.get_lookup_column_name(col)
       new_bind_vars[lookup_col] = value
+    class_._validate_column_value_pairs_for_write(**new_bind_vars)
     return lookup_class.create(cursor_method, **new_bind_vars)
 
   @classmethod
@@ -400,14 +397,12 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
                                new_entity_id)
 
 
-  @db_object.db_class_method
+  @db_object.write_db_class_method
   def insert_primary(class_, cursor, **bind_vars):
     if class_.columns_list is None:
       raise dbexceptions.ProgrammingError("DB class should define columns_list")
 
-    query, bind_vars = sql_builder.insert_query(class_.table_name,
-                                                class_.columns_list,
-                                                **bind_vars)
+    query, bind_vars = class_.create_insert_query(**bind_vars)
     cursor.execute(query, bind_vars)
     return cursor.lastrowid
 
@@ -472,33 +467,33 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
     class_.insert_primary(new_cursor, **bind_vars)
     return new_inserted_key
 
-  @db_object.db_class_method
+  @db_object.write_db_class_method
   def update_columns(class_, cursor, where_column_value_pairs,
-                     **update_columns):
-
+                     update_column_value_pairs):
     sharding_key = cursor.routing.sharding_key
     if sharding_key is None:
       raise dbexceptions.ProgrammingError("sharding_key cannot be empty")
 
     # update the primary table first.
-    query, bind_vars = sql_builder.update_columns_query(
-        class_.table_name, where_column_value_pairs, **update_columns)
+    query, bind_vars = class_.create_update_query(
+        where_column_value_pairs, update_column_value_pairs)
 
     rowcount = cursor.execute(query, bind_vars)
 
     # If the entity_id column is being updated, update lookup map.
     lookup_cursor_method = functools.partial(
         db_object.create_cursor_from_old_cursor, cursor)
+
+    update_column_value_pairs = dict(update_column_value_pairs)
     for entity_col in class_.entity_id_lookup_map.keys():
-      if entity_col in update_columns:
-        class_.update_sharding_key_entity_id_lookup(lookup_cursor_method,
-                                                    sharding_key,
-                                                    entity_col,
-                                                    update_columns[entity_col])
+      if entity_col in update_column_value_pairs:
+        class_.update_sharding_key_entity_id_lookup(
+            lookup_cursor_method, sharding_key, entity_col,
+            update_column_value_pairs[entity_col])
 
     return rowcount
 
-  @db_object.db_class_method
+  @db_object.write_db_class_method
   def delete_by_columns(class_, cursor, where_column_value_pairs,
                         limit=None):
     sharding_key = cursor.routing.sharding_key

@@ -573,6 +573,7 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
 
   def test_batch_read(self):
+    # 1. Create select queries using DB classes.
     query_list = []
     bv_list = []
     user_id_list = [self.user_id_list[0], self.user_id_list[1]]
@@ -586,7 +587,9 @@ class TestRangeSharded(unittest.TestCase):
     query_list.append(q)
     bv_list.append(bv)
     with database_context.ReadFromMaster(self.dc) as context:
+      # 2. Cursor Creation using one of the DB classes.
       cursor = context.get_cursor(entity_id_map=entity_id_map)(db_class_sharded.VtUser)
+      # 3. Batch execution of reads.
       results = db_object.execute_batch_read(
           cursor, query_list, bv_list)
       self.assertEqual(len(results), len(query_list))
@@ -643,6 +646,7 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(results[1]['rowcount'], 1, "VtUserEmail update didn't update 1 row")
       self.assertEqual(results[2]['rowcount'], len(self.user_song_map[user_id]),
                        "VtSong deleted '%d' rows, expected '%d'" % (results[2]['rowcount'], len(self.user_song_map[user_id])))
+
 
 
 if __name__ == '__main__':
