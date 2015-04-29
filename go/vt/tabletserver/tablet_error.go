@@ -146,39 +146,39 @@ func (te *TabletError) Prefix() string {
 }
 
 // RecordStats will record the error in the proper stat bucket
-func (te *TabletError) RecordStats() {
+func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	switch te.ErrorType {
 	case ErrRetry:
-		infoErrors.Add("Retry", 1)
+		queryServiceStats.InfoErrors.Add("Retry", 1)
 	case ErrFatal:
-		infoErrors.Add("Fatal", 1)
+		queryServiceStats.InfoErrors.Add("Fatal", 1)
 	case ErrTxPoolFull:
-		errorStats.Add("TxPoolFull", 1)
+		queryServiceStats.ErrorStats.Add("TxPoolFull", 1)
 	case ErrNotInTx:
-		errorStats.Add("NotInTx", 1)
+		queryServiceStats.ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SqlError {
 		case mysql.ErrDupEntry:
-			infoErrors.Add("DupKey", 1)
+			queryServiceStats.InfoErrors.Add("DupKey", 1)
 		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
-			errorStats.Add("Deadlock", 1)
+			queryServiceStats.ErrorStats.Add("Deadlock", 1)
 		default:
-			errorStats.Add("Fail", 1)
+			queryServiceStats.ErrorStats.Add("Fail", 1)
 		}
 	}
 }
 
-func handleError(err *error, logStats *SQLQueryStats) {
+func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QueryServiceStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 			*err = NewTabletError(ErrFail, "%v: uncaught panic", x)
-			internalErrors.Add("Panic", 1)
+			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
 		*err = terr
-		terr.RecordStats()
+		terr.RecordStats(queryServiceStats)
 		if terr.ErrorType == ErrRetry { // Retry errors are too spammy
 			return
 		}
@@ -194,12 +194,12 @@ func handleError(err *error, logStats *SQLQueryStats) {
 	}
 }
 
-func logError() {
+func logError(queryServiceStats *QueryServiceStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			internalErrors.Add("Panic", 1)
+			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
 		if terr.ErrorType == ErrTxPoolFull {

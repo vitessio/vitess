@@ -64,8 +64,11 @@ type QueryEngine struct {
 	streamBufferSize sync2.AtomicInt64
 	strictTableAcl   bool
 
-	// loggers
+	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
+
+	// Stats
+	queryServiceStats *QueryServiceStats
 }
 
 type compiledPlan struct {
@@ -74,22 +77,6 @@ type compiledPlan struct {
 	BindVars      map[string]interface{}
 	TransactionID int64
 }
-
-var (
-	// stats are globals to allow anybody to set them
-	mysqlStats     *stats.Timings
-	queryStats     *stats.Timings
-	waitStats      *stats.Timings
-	killStats      *stats.Counters
-	infoErrors     *stats.Counters
-	errorStats     *stats.Counters
-	internalErrors *stats.Counters
-	resultStats    *stats.Histogram
-	spotCheckCount *stats.Int
-	qpsRates       *stats.Rates
-
-	resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
-)
 
 // CacheInvalidator provides the abstraction needed for an instant invalidation
 // vs. delayed invalidation in the case of in-transaction dmls
@@ -114,6 +101,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
+	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,
 		config.StatsPrefix,
@@ -126,6 +114,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.SchemaReloadTime*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
+		qe.queryServiceStats,
 	)
 
 	// Pools
@@ -135,18 +124,21 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.IdleTimeout*1e9),
 		config.DebugURLPrefix+"/memcache/",
 		config.EnablePublishStats,
+		qe.queryServiceStats,
 	)
 	qe.connPool = NewConnPool(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
+		qe.queryServiceStats,
 	)
 	qe.streamConnPool = NewConnPool(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
+		qe.queryServiceStats,
 	)
 
 	// Services
@@ -158,6 +150,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.EnablePublishStats,
+		qe.queryServiceStats,
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
@@ -175,21 +168,10 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.maxDMLRows = sync2.AtomicInt64(config.MaxDMLRows)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 
-	// loggers
+	// Loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	// Stats
-	mysqlStatsName := ""
-	queryStatsName := ""
-	qpsRateName := ""
-	waitStatsName := ""
-	killStatsName := ""
-	infoErrorsName := ""
-	errorStatsName := ""
-	internalErrorsName := ""
-	resultStatsName := ""
-	spotCheckCountName := ""
-
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
@@ -198,29 +180,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 		}))
-
-		mysqlStatsName = config.StatsPrefix + "Mysql"
-		queryStatsName = config.StatsPrefix + "Queries"
-		qpsRateName = config.StatsPrefix + "QPS"
-		waitStatsName = config.StatsPrefix + "Waits"
-		killStatsName = config.StatsPrefix + "Kills"
-		infoErrorsName = config.StatsPrefix + "InfoErrors"
-		errorStatsName = config.StatsPrefix + "Errors"
-		internalErrorsName = config.StatsPrefix + "InternalErrors"
-		resultStatsName = config.StatsPrefix + "Results"
-		spotCheckCountName = config.StatsPrefix + "RowcacheSpotCheckCount"
 	}
-	mysqlStats = stats.NewTimings(mysqlStatsName)
-	queryStats = stats.NewTimings(queryStatsName)
-	qpsRates = stats.NewRates(qpsRateName, queryStats, 15, 60*time.Second)
-	waitStats = stats.NewTimings(waitStatsName)
-	killStats = stats.NewCounters(killStatsName)
-	infoErrors = stats.NewCounters(infoErrorsName)
-	errorStats = stats.NewCounters(errorStatsName)
-	internalErrors = stats.NewCounters(internalErrorsName)
-	resultStats = stats.NewHistogram(resultStatsName, resultBuckets)
-	spotCheckCount = stats.NewInt(spotCheckCountName)
-
 	return qe
 }
 
@@ -281,7 +241,7 @@ func (qe *QueryEngine) Launch(f func()) {
 		defer func() {
 			qe.tasks.Done()
 			if x := recover(); x != nil {
-				internalErrors.Add("Task", 1)
+				qe.queryServiceStats.InternalErrors.Add("Task", 1)
 				log.Errorf("task error: %v", x)
 			}
 		}()
@@ -291,7 +251,7 @@ func (qe *QueryEngine) Launch(f func()) {
 
 // CheckMySQL returns true if we can connect to MySQL.
 func (qe *QueryEngine) CheckMySQL() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, mysqlStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App.ConnParams, qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false

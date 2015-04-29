@@ -15,7 +15,7 @@ import (
 func TestMemcacheStats(t *testing.T) {
 	statsPrefix := newStatsPrefix()
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 1*time.Second, enableMain,
+		statsPrefix, 1*time.Second, enableMain, NewQueryServiceStats("", false),
 		func(key string) string {
 			switch key {
 			case "slabs":
@@ -35,7 +35,7 @@ func TestMemcacheStats(t *testing.T) {
 func TestMemcacheStatsInvalidMainStatsValueType(t *testing.T) {
 	statsPrefix := newStatsPrefix()
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 1*time.Second, enableMain,
+		statsPrefix, 1*time.Second, enableMain, NewQueryServiceStats("", false),
 		func(key string) string {
 			switch key {
 			case "slabs":
@@ -57,7 +57,7 @@ func TestMemcacheStatsInvalidMainStatsValueType(t *testing.T) {
 func TestMemcacheStatsSlabsStats(t *testing.T) {
 	statsPrefix := newStatsPrefix()
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 1*time.Second, enableSlabs,
+		statsPrefix, 1*time.Second, enableSlabs, NewQueryServiceStats("", false),
 		func(key string) string {
 			switch key {
 			case "slabs":
@@ -95,7 +95,7 @@ func TestMemcacheStatsSlabsStats(t *testing.T) {
 func TestMemcacheStatsItemsStats(t *testing.T) {
 	statsPrefix := newStatsPrefix()
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 1*time.Second, enableItems,
+		statsPrefix, 1*time.Second, enableItems, NewQueryServiceStats("", false),
 		func(key string) string {
 			switch key {
 			case "slabs":
@@ -134,17 +134,18 @@ func TestMemcacheStatsItemsStats(t *testing.T) {
 
 func TestMemcacheStatsPanic(t *testing.T) {
 	statsPrefix := newStatsPrefix()
+	queryServiceStats := NewQueryServiceStats("", false)
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 100*time.Second, enableMain,
+		statsPrefix, 100*time.Second, enableMain, queryServiceStats,
 		func(key string) string {
 			panic("unknown error")
 		},
 	)
-	errCountBefore := internalErrors.Counts()["MemcacheStats"]
+	errCountBefore := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	memcacheStats.Open()
 	defer memcacheStats.Close()
 	memcacheStats.update()
-	errCountAfter := internalErrors.Counts()["MemcacheStats"]
+	errCountAfter := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	if errCountAfter-errCountBefore != 1 {
 		t.Fatalf("got unknown panic, MemcacheStats counter should increase by 1")
 	}
@@ -152,17 +153,18 @@ func TestMemcacheStatsPanic(t *testing.T) {
 
 func TestMemcacheStatsTabletError(t *testing.T) {
 	statsPrefix := newStatsPrefix()
+	queryServiceStats := NewQueryServiceStats("", false)
 	memcacheStats := NewMemcacheStats(
-		statsPrefix, 100*time.Second, enableMain,
+		statsPrefix, 100*time.Second, enableMain, queryServiceStats,
 		func(key string) string {
 			panic(NewTabletError(ErrFail, "unknown tablet error"))
 		},
 	)
-	errCountBefore := internalErrors.Counts()["MemcacheStats"]
+	errCountBefore := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	memcacheStats.Open()
 	defer memcacheStats.Close()
 	memcacheStats.update()
-	errCountAfter := internalErrors.Counts()["MemcacheStats"]
+	errCountAfter := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]
 	if errCountAfter-errCountBefore != 1 {
 		t.Fatalf("got tablet error, MemcacheStats counter should increase by 1")
 	}

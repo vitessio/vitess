@@ -268,9 +268,9 @@ func newTestTableInfo(cachePool *CachePool, tableType string, comment string) (*
 	ctx := context.Background()
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-
+	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := NewConnPool("", 2, connPoolIdleTimeout, false)
+	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats)
 	connPool.Open(&appParams, &dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {
@@ -295,7 +295,14 @@ func newTestTableInfoCachePool() *CachePool {
 	randID := rand.Int63()
 	name := fmt.Sprintf("TestCachePool-TableInfo-%d-", randID)
 	statsURL := fmt.Sprintf("/debug/tableinfo-cache-%d", randID)
-	return NewCachePool(name, rowCacheConfig, 1*time.Second, statsURL, false)
+	return NewCachePool(
+		name,
+		rowCacheConfig,
+		1*time.Second,
+		statsURL,
+		false,
+		NewQueryServiceStats("", false),
+	)
 }
 
 func getTestTableInfoQueries() map[string]*mproto.QueryResult {

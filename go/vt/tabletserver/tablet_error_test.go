@@ -95,65 +95,66 @@ func TestTabletErrorPrefix(t *testing.T) {
 
 func TestTabletErrorRecordStats(t *testing.T) {
 	tabletErr := NewTabletErrorSql(ErrRetry, sqldb.NewSqlError(2000, "test"))
-	retryCounterBefore := infoErrors.Counts()["Retry"]
-	tabletErr.RecordStats()
-	retryCounterAfter := infoErrors.Counts()["Retry"]
+	queryServiceStats := NewQueryServiceStats("", false)
+	retryCounterBefore := queryServiceStats.InfoErrors.Counts()["Retry"]
+	tabletErr.RecordStats(queryServiceStats)
+	retryCounterAfter := queryServiceStats.InfoErrors.Counts()["Retry"]
 	if retryCounterAfter-retryCounterBefore != 1 {
 		t.Fatalf("tablet error with error type ErrRetry should increase Retry error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrFatal, sqldb.NewSqlError(2000, "test"))
-	fatalCounterBefore := infoErrors.Counts()["Fatal"]
-	tabletErr.RecordStats()
-	fatalCounterAfter := infoErrors.Counts()["Fatal"]
+	fatalCounterBefore := queryServiceStats.InfoErrors.Counts()["Fatal"]
+	tabletErr.RecordStats(queryServiceStats)
+	fatalCounterAfter := queryServiceStats.InfoErrors.Counts()["Fatal"]
 	if fatalCounterAfter-fatalCounterBefore != 1 {
 		t.Fatalf("tablet error with error type ErrFatal should increase Fatal error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrTxPoolFull, sqldb.NewSqlError(2000, "test"))
-	txPoolFullCounterBefore := errorStats.Counts()["TxPoolFull"]
-	tabletErr.RecordStats()
-	txPoolFullCounterAfter := errorStats.Counts()["TxPoolFull"]
+	txPoolFullCounterBefore := queryServiceStats.ErrorStats.Counts()["TxPoolFull"]
+	tabletErr.RecordStats(queryServiceStats)
+	txPoolFullCounterAfter := queryServiceStats.ErrorStats.Counts()["TxPoolFull"]
 	if txPoolFullCounterAfter-txPoolFullCounterBefore != 1 {
 		t.Fatalf("tablet error with error type ErrTxPoolFull should increase TxPoolFull error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrNotInTx, sqldb.NewSqlError(2000, "test"))
-	notInTxCounterBefore := errorStats.Counts()["NotInTx"]
-	tabletErr.RecordStats()
-	notInTxCounterAfter := errorStats.Counts()["NotInTx"]
+	notInTxCounterBefore := queryServiceStats.ErrorStats.Counts()["NotInTx"]
+	tabletErr.RecordStats(queryServiceStats)
+	notInTxCounterAfter := queryServiceStats.ErrorStats.Counts()["NotInTx"]
 	if notInTxCounterAfter-notInTxCounterBefore != 1 {
 		t.Fatalf("tablet error with error type ErrNotInTx should increase NotInTx error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrFail, sqldb.NewSqlError(mysql.ErrDupEntry, "test"))
-	dupKeyCounterBefore := infoErrors.Counts()["DupKey"]
-	tabletErr.RecordStats()
-	dupKeyCounterAfter := infoErrors.Counts()["DupKey"]
+	dupKeyCounterBefore := queryServiceStats.InfoErrors.Counts()["DupKey"]
+	tabletErr.RecordStats(queryServiceStats)
+	dupKeyCounterAfter := queryServiceStats.InfoErrors.Counts()["DupKey"]
 	if dupKeyCounterAfter-dupKeyCounterBefore != 1 {
 		t.Fatalf("sql error with error type mysql.ErrDupEntry should increase DupKey error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrFail, sqldb.NewSqlError(mysql.ErrLockWaitTimeout, "test"))
-	lockWaitTimeoutCounterBefore := errorStats.Counts()["Deadlock"]
-	tabletErr.RecordStats()
-	lockWaitTimeoutCounterAfter := errorStats.Counts()["Deadlock"]
+	lockWaitTimeoutCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
+	tabletErr.RecordStats(queryServiceStats)
+	lockWaitTimeoutCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	if lockWaitTimeoutCounterAfter-lockWaitTimeoutCounterBefore != 1 {
 		t.Fatalf("sql error with error type mysql.ErrLockWaitTimeout should increase Deadlock error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrFail, sqldb.NewSqlError(mysql.ErrLockDeadlock, "test"))
-	deadlockCounterBefore := errorStats.Counts()["Deadlock"]
-	tabletErr.RecordStats()
-	deadlockCounterAfter := errorStats.Counts()["Deadlock"]
+	deadlockCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
+	tabletErr.RecordStats(queryServiceStats)
+	deadlockCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	if deadlockCounterAfter-deadlockCounterBefore != 1 {
 		t.Fatalf("sql error with error type mysql.ErrLockDeadlock should increase Deadlock error count by 1")
 	}
 
 	tabletErr = NewTabletErrorSql(ErrFail, sqldb.NewSqlError(mysql.ErrOptionPreventsStatement, "test"))
-	failCounterBefore := errorStats.Counts()["Fail"]
-	tabletErr.RecordStats()
-	failCounterAfter := errorStats.Counts()["Fail"]
+	failCounterBefore := queryServiceStats.ErrorStats.Counts()["Fail"]
+	tabletErr.RecordStats(queryServiceStats)
+	failCounterAfter := queryServiceStats.ErrorStats.Counts()["Fail"]
 	if failCounterAfter-failCounterBefore != 1 {
 		t.Fatalf("sql error with error type mysql.ErrOptionPreventsStatement should increase Fail error count by 1")
 	}
@@ -162,13 +163,14 @@ func TestTabletErrorRecordStats(t *testing.T) {
 func TestTabletErrorHandleUncaughtError(t *testing.T) {
 	var err error
 	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)
 		if !ok {
 			t.Fatalf("error should be a TabletError, but got error: %v", err)
 		}
 	}()
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, queryServiceStats)
 	panic("unknown error")
 }
 
@@ -176,13 +178,14 @@ func TestTabletErrorHandleRetryError(t *testing.T) {
 	var err error
 	tabletErr := NewTabletErrorSql(ErrRetry, sqldb.NewSqlError(1000, "test"))
 	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)
 		if !ok {
 			t.Fatalf("error should be a TabletError, but got error: %v", err)
 		}
 	}()
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, queryServiceStats)
 	panic(tabletErr)
 }
 
@@ -190,48 +193,52 @@ func TestTabletErrorHandleTxPoolFullError(t *testing.T) {
 	var err error
 	tabletErr := NewTabletErrorSql(ErrTxPoolFull, sqldb.NewSqlError(1000, "test"))
 	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)
 		if !ok {
 			t.Fatalf("error should be a TabletError, but got error: %v", err)
 		}
 	}()
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, queryServiceStats)
 	panic(tabletErr)
 }
 
 func TestTabletErrorLogUncaughtErr(t *testing.T) {
-	panicCountBefore := internalErrors.Counts()["Panic"]
+	queryServiceStats := NewQueryServiceStats("", false)
+	panicCountBefore := queryServiceStats.InternalErrors.Counts()["Panic"]
 	defer func() {
-		panicCountAfter := internalErrors.Counts()["Panic"]
+		panicCountAfter := queryServiceStats.InternalErrors.Counts()["Panic"]
 		if panicCountAfter-panicCountBefore != 1 {
 			t.Fatalf("Panic count should increase by 1 for uncaught panic")
 		}
 	}()
-	defer logError()
+	defer logError(queryServiceStats)
 	panic("unknown error")
 }
 
 func TestTabletErrorTxPoolFull(t *testing.T) {
 	tabletErr := NewTabletErrorSql(ErrTxPoolFull, sqldb.NewSqlError(1000, "test"))
+	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		err := recover()
 		if err != nil {
 			t.Fatalf("error should have been handled already")
 		}
 	}()
-	defer logError()
+	defer logError(queryServiceStats)
 	panic(tabletErr)
 }
 
 func TestTabletErrorFatal(t *testing.T) {
 	tabletErr := NewTabletErrorSql(ErrFatal, sqldb.NewSqlError(1000, "test"))
+	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		err := recover()
 		if err != nil {
 			t.Fatalf("error should have been handled already")
 		}
 	}()
-	defer logError()
+	defer logError(queryServiceStats)
 	panic(tabletErr)
 }

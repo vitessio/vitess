@@ -126,28 +126,28 @@ func (rci *RowcacheInvalidator) run(ctx *sync2.ServiceContext) error {
 			go checkMySQL()
 		}
 		log.Errorf("binlog.ServeUpdateStream returned err '%v', retrying in 1 second.", err.Error())
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		time.Sleep(1 * time.Second)
 	}
 	log.Infof("Rowcache invalidator stopped")
 	return nil
 }
 
-func handleInvalidationError(event *blproto.StreamEvent) {
+func (rci *RowcacheInvalidator) handleInvalidationError(event *blproto.StreamEvent) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic for %+v:\n%v\n%s", event, x, tb.Stack(4))
-			internalErrors.Add("Panic", 1)
+			rci.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
 		log.Errorf("%v: %+v", terr, event)
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 	}
 }
 
 func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
-	defer handleInvalidationError(event)
+	defer rci.handleInvalidationError(event)
 	switch event.Category {
 	case "DDL":
 		log.Infof("DDL invalidation: %s", event.Sql)
@@ -160,7 +160,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 		rci.AppendGTID(event.GTIDField.Value)
 	default:
 		log.Errorf("unknown event: %#v", event)
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return nil
 	}
 	rci.lagSeconds.Set(time.Now().Unix() - event.Timestamp)
@@ -184,12 +184,12 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 			key, err := sqltypes.BuildValue(pkVal)
 			if err != nil {
 				log.Errorf("Error building invalidation key for %#v: '%v'", event, err)
-				internalErrors.Add("Invalidation", 1)
+				rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 				return
 			}
 			sqlTypeKeys = append(sqlTypeKeys, key)
 		}
-		newKey := validateKey(tableInfo, buildKey(sqlTypeKeys))
+		newKey := validateKey(tableInfo, buildKey(sqlTypeKeys), rci.qe.queryServiceStats)
 		if newKey == "" {
 			continue
 		}
@@ -217,7 +217,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		log.Errorf("Error: %v: %s", err, sql)
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
 	var table *sqlparser.TableName
@@ -231,7 +231,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 		table = stmt.Table
 	default:
 		log.Errorf("Unrecognized: %s", sql)
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
 
@@ -245,7 +245,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 	tableInfo := rci.qe.schemaInfo.GetTable(tableName)
 	if tableInfo == nil {
 		log.Errorf("Table %s not found: %s", tableName, sql)
-		internalErrors.Add("Invalidation", 1)
+		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
 		return
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {

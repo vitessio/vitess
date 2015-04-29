@@ -420,33 +420,34 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 
 func TestCodexValidateKey(t *testing.T) {
 	testUtils := newTestUtils()
+	queryServiceStats := NewQueryServiceStats("", false)
 	tableInfo := createTableInfo("Table",
 		map[string]string{"pk1": "int", "pk2": "varbinary(128)", "col1": "int"},
 		[]string{"pk1", "pk2"})
 	// validate empty key
-	newKey := validateKey(&tableInfo, "")
+	newKey := validateKey(&tableInfo, "", queryServiceStats)
 	testUtils.checkEqual(t, "", newKey)
 	// validate keys that do not match number of pk columns
-	newKey = validateKey(&tableInfo, "1")
+	newKey = validateKey(&tableInfo, "1", queryServiceStats)
 	testUtils.checkEqual(t, "", newKey)
-	newKey = validateKey(&tableInfo, "1.2.3")
+	newKey = validateKey(&tableInfo, "1.2.3", queryServiceStats)
 	testUtils.checkEqual(t, "", newKey)
 	// validate keys with null
-	newKey = validateKey(&tableInfo, "'MQ=='.null")
+	newKey = validateKey(&tableInfo, "'MQ=='.null", queryServiceStats)
 	testUtils.checkEqual(t, "", newKey)
 	// validate keys with invalid base64 encoded string
-	newKey = validateKey(&tableInfo, "'MQ==<'.2")
+	newKey = validateKey(&tableInfo, "'MQ==<'.2", queryServiceStats)
 	testUtils.checkEqual(t, "", newKey)
 	// validate keys with invalid value
-	mismatchCounterBefore := internalErrors.Counts()["Mismatch"]
-	newKey = validateKey(&tableInfo, "not_a_number.2")
-	mismatchCounterAfter := internalErrors.Counts()["Mismatch"]
+	mismatchCounterBefore := queryServiceStats.InternalErrors.Counts()["Mismatch"]
+	newKey = validateKey(&tableInfo, "not_a_number.2", queryServiceStats)
+	mismatchCounterAfter := queryServiceStats.InternalErrors.Counts()["Mismatch"]
 	if mismatchCounterAfter-mismatchCounterBefore != 1 {
 		t.Fatalf("Mismatch counter should increase by one. Mismatch counter before: %d, after: %d, diff: %d", mismatchCounterBefore, mismatchCounterAfter, mismatchCounterAfter-mismatchCounterBefore)
 	}
 	testUtils.checkEqual(t, "", newKey)
 	// validate valid keys
-	newKey = validateKey(&tableInfo, "1.2")
+	newKey = validateKey(&tableInfo, "1.2", queryServiceStats)
 	testUtils.checkEqual(t, "1.2", newKey)
 
 }

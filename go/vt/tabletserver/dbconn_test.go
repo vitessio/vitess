@@ -27,14 +27,15 @@ func TestDBConnExec(t *testing.T) {
 		},
 	}
 	db.AddQuery(sql, expectedResult)
-	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	connPool := testUtils.newConnPool()
 	appParams := &sqldb.ConnParams{}
 	dbaParams := &sqldb.ConnParams{}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := NewDBConn(connPool, appParams, dbaParams)
+	queryServiceStats := NewQueryServiceStats("", false)
+	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
@@ -55,18 +56,19 @@ func TestDBConnExec(t *testing.T) {
 func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.Register()
 	testUtils := newTestUtils()
-	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	connPool := testUtils.newConnPool()
 	appParams := &sqldb.ConnParams{}
 	dbaParams := &sqldb.ConnParams{}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
-	dbConn, _ := NewDBConn(connPool, appParams, dbaParams)
+	queryServiceStats := NewQueryServiceStats("", false)
+	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &mproto.QueryResult{})
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
-	err := dbConn.Kill()
+	err = dbConn.Kill()
 	testUtils.checkTabletError(t, err, ErrFail, "Failed to get conn from dba pool")
 	db.DisableConnFail()
 
@@ -99,17 +101,18 @@ func TestDBConnStream(t *testing.T) {
 		},
 	}
 	db.AddQuery(sql, expectedResult)
-	connPool := NewConnPool("ConnPool", 100, 10*time.Second, false)
+	connPool := testUtils.newConnPool()
 	appParams := &sqldb.ConnParams{}
 	dbaParams := &sqldb.ConnParams{}
 	connPool.Open(appParams, dbaParams)
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, _ := NewDBConn(connPool, appParams, dbaParams)
+	queryServiceStats := NewQueryServiceStats("", false)
+	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
 	defer dbConn.Close()
 	var result mproto.QueryResult
-	err := dbConn.Stream(
+	err = dbConn.Stream(
 		ctx, sql, func(r *mproto.QueryResult) error {
 			result = *r
 			return nil

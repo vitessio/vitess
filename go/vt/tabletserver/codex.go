@@ -276,7 +276,7 @@ func applyFilterWithPKDefaults(tableInfo *TableInfo, columnNumbers []int, input 
 	return output
 }
 
-func validateKey(tableInfo *TableInfo, key string) (newKey string) {
+func validateKey(tableInfo *TableInfo, key string, qStats *QueryServiceStats) (newKey string) {
 	if key == "" {
 		// TODO: Verify auto-increment table
 		return
@@ -292,7 +292,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 			s, err := base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
 			if err != nil {
 				log.Warningf("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
-				internalErrors.Add("Mismatch", 1)
+				qStats.InternalErrors.Add("Mismatch", 1)
 				return
 			}
 			pkValues[i] = sqltypes.MakeString(s)
@@ -303,7 +303,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 			n, err := sqltypes.BuildNumeric(piece)
 			if err != nil {
 				log.Warningf("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
-				internalErrors.Add("Mismatch", 1)
+				qStats.InternalErrors.Add("Mismatch", 1)
 				return
 			}
 			pkValues[i] = n
@@ -311,7 +311,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 	}
 	if newKey = buildKey(pkValues); newKey != key {
 		log.Warningf("Error: Key mismatch, received: %s, computed: %s", key, newKey)
-		internalErrors.Add("Mismatch", 1)
+		qStats.InternalErrors.Add("Mismatch", 1)
 	}
 	return newKey
 }

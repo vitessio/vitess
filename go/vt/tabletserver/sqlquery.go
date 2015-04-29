@@ -141,7 +141,7 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 	sq.setState(StateInitializing)
 	sq.mu.Unlock()
 
-	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnParams, mysqlStats)
+	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnParams, sq.qe.queryServiceStats.MySQLStats)
 	if err != nil {
 		log.Infof("allowQueries failed: %v", err)
 		sq.mu.Lock()
@@ -267,14 +267,14 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", ctx)
 	logStats.OriginalSql = "begin"
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
 	if err = sq.startRequest(session.SessionId, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.txPool.PoolTimeout())
 	defer func() {
-		queryStats.Record("BEGIN", time.Now())
+		sq.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
 		cancel()
 		sq.endRequest()
 	}()
@@ -289,14 +289,14 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session) (err err
 	logStats := newSqlQueryStats("Commit", ctx)
 	logStats.OriginalSql = "commit"
 	logStats.TransactionID = session.TransactionId
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
 	if err = sq.startRequest(session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
 	defer func() {
-		queryStats.Record("COMMIT", time.Now())
+		sq.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 		cancel()
 		sq.endRequest()
 	}()
@@ -310,14 +310,14 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 	logStats := newSqlQueryStats("Rollback", ctx)
 	logStats.OriginalSql = "rollback"
 	logStats.TransactionID = session.TransactionId
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
 	if err = sq.startRequest(session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
 	defer func() {
-		queryStats.Record("ROLLBACK", time.Now())
+		sq.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
 		cancel()
 		sq.endRequest()
 	}()
@@ -334,7 +334,7 @@ func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQ
 		if !ok {
 			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
 			*err = NewTabletError(ErrFail, "%v: uncaught panic for %v", x, query)
-			internalErrors.Add("Panic", 1)
+			sq.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}
 		if sq.config.TerseErrors && terr.SqlError != 0 {
@@ -342,7 +342,7 @@ func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQ
 		} else {
 			*err = terr
 		}
-		terr.RecordStats()
+		terr.RecordStats(sq.qe.queryServiceStats)
 		// suppress these errors in logs
 		if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
 			return
@@ -438,7 +438,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 		return err
 	}
 	defer sq.endRequest()
-	defer handleError(&err, nil)
+	defer handleError(&err, nil, sq.qe.queryServiceStats)
 
 	beginCalled := false
 	session := proto.Session{
@@ -497,7 +497,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 // SplitQuery splits a BoundQuery into smaller queries that return a subset of rows from the original query.
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
-	defer handleError(&err, logStats)
+	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 	if err = sq.startRequest(req.SessionID, false, false); err != nil {
 		return err
 	}

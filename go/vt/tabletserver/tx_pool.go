@@ -45,14 +45,14 @@ const txLogInterval = time.Duration(1 * time.Minute)
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
-	pool        *ConnPool
-	activePool  *pools.Numbered
-	lastID      sync2.AtomicInt64
-	timeout     sync2.AtomicDuration
-	poolTimeout sync2.AtomicDuration
-	ticks       *timer.Timer
-	txStats     *stats.Timings
-
+	pool              *ConnPool
+	activePool        *pools.Numbered
+	lastID            sync2.AtomicInt64
+	timeout           sync2.AtomicDuration
+	poolTimeout       sync2.AtomicDuration
+	ticks             *timer.Timer
+	txStats           *stats.Timings
+	queryServiceStats *QueryServiceStats
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -66,15 +66,23 @@ func NewTxPool(
 	timeout time.Duration,
 	poolTimeout time.Duration,
 	idleTimeout time.Duration,
-	enablePublishStats bool) *TxPool {
+	enablePublishStats bool,
+	qStats *QueryServiceStats) *TxPool {
+
+	txStatsName := ""
+	if enablePublishStats {
+		txStatsName = txStatsPrefix + "Transactions"
+	}
+
 	axp := &TxPool{
-		pool:        NewConnPool(name, capacity, idleTimeout, enablePublishStats),
-		activePool:  pools.NewNumbered(),
-		lastID:      sync2.AtomicInt64(time.Now().UnixNano()),
-		timeout:     sync2.AtomicDuration(timeout),
-		poolTimeout: sync2.AtomicDuration(poolTimeout),
-		ticks:       timer.NewTimer(timeout / 10),
-		txStats:     stats.NewTimings(txStatsPrefix + "Transactions"),
+		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats),
+		activePool:        pools.NewNumbered(),
+		lastID:            sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout:           sync2.AtomicDuration(timeout),
+		poolTimeout:       sync2.AtomicDuration(poolTimeout),
+		ticks:             timer.NewTimer(timeout / 10),
+		txStats:           stats.NewTimings(txStatsName),
+		queryServiceStats: qStats,
 	}
 	// Careful: pool also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
@@ -99,7 +107,7 @@ func (axp *TxPool) Close() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
-		internalErrors.Add("StrayTransactions", 1)
+		axp.queryServiceStats.InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.discard(TxClose)
 	}
@@ -112,11 +120,11 @@ func (axp *TxPool) WaitForEmpty() {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer logError()
+	defer logError(axp.queryServiceStats)
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
-		killStats.Add("Transactions", 1)
+		axp.queryServiceStats.KillStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard(TxKill)
 	}
@@ -155,7 +163,7 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 // returns an error on failure instead of panic. The connection becomes free
 // and can be reused in the future.
 func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalidList map[string]DirtyKeys, err error) {
-	defer handleError(&err, nil)
+	defer handleError(&err, nil, axp.queryServiceStats)
 
 	conn := axp.Get(transactionID)
 	defer conn.discard(TxCommit)

@@ -107,14 +107,15 @@ type RetrieveCacheStats func(key string) string
 
 // MemcacheStats exports the Memcache internal stats through stats package.
 type MemcacheStats struct {
-	ticks       *timer.Timer
-	mu          sync.Mutex
-	main        map[string]string
-	slabs       map[string]map[string]int64
-	items       map[string]map[string]int64
-	statsPrefix string
-	statsFunc   RetrieveCacheStats
-	flags       int64
+	ticks             *timer.Timer
+	mu                sync.Mutex
+	main              map[string]string
+	slabs             map[string]map[string]int64
+	items             map[string]map[string]int64
+	statsPrefix       string
+	statsFunc         RetrieveCacheStats
+	queryServiceStats *QueryServiceStats
+	flags             int64
 }
 
 const (
@@ -129,15 +130,17 @@ func NewMemcacheStats(
 	statsPrefix string,
 	refreshFreq time.Duration,
 	flags int64,
+	queryServiceStats *QueryServiceStats,
 	statsFunc RetrieveCacheStats) *MemcacheStats {
 	memstats := &MemcacheStats{
-		ticks:       timer.NewTimer(refreshFreq),
-		statsPrefix: statsPrefix,
-		statsFunc:   statsFunc,
-		main:        make(map[string]string),
-		slabs:       make(map[string]map[string]int64),
-		items:       make(map[string]map[string]int64),
-		flags:       flags,
+		ticks:             timer.NewTimer(refreshFreq),
+		statsPrefix:       statsPrefix,
+		statsFunc:         statsFunc,
+		main:              make(map[string]string),
+		slabs:             make(map[string]map[string]int64),
+		items:             make(map[string]map[string]int64),
+		queryServiceStats: queryServiceStats,
+		flags:             flags,
 	}
 	if flags&enableMain > 0 {
 		memstats.publishMainStats()
@@ -209,7 +212,7 @@ func (memstats *MemcacheStats) publishMainStats() {
 				ival, err := strconv.ParseInt(memstats.main[key], 10, 64)
 				if err != nil {
 					log.Errorf("value '%v' for key %v is not an int", memstats.main[key], key)
-					internalErrors.Add("MemcacheStats", 1)
+					memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 					return -1
 				}
 				return ival
@@ -251,14 +254,14 @@ func (memstats *MemcacheStats) updateSlabsStats() {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		if slabsSingleMetrics[sKey] {
 			m, ok := memstats.slabs[sKey]
 			if !ok {
 				log.Errorf("Unknown memcache slabs stats %v: %v", sKey, ival)
-				internalErrors.Add("MemcacheStats", 1)
+				memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 				return
 			}
 			m[""] = ival
@@ -267,13 +270,13 @@ func (memstats *MemcacheStats) updateSlabsStats() {
 		subkey, slabid, err := parseSlabKey(sKey)
 		if err != nil {
 			log.Error(err)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m, ok := memstats.slabs[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache slabs stats %v %v: %v", subkey, slabid, ival)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m[slabid] = ival
@@ -299,19 +302,19 @@ func (memstats *MemcacheStats) updateItemsStats() {
 		ival, err := strconv.ParseInt(sValue, 10, 64)
 		if err != nil {
 			log.Error(err)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		subkey, slabid, err := parseItemKey(sKey)
 		if err != nil {
 			log.Error(err)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m, ok := memstats.items[subkey]
 		if !ok {
 			log.Errorf("Unknown memcache items stats %v %v: %v", subkey, slabid, ival)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			return
 		}
 		m[slabid] = ival
@@ -327,7 +330,7 @@ func (memstats *MemcacheStats) readStats(k string, proc func(key, value string))
 			} else {
 				log.Errorf("Could not read memcache stats: %v", x)
 			}
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 		}
 	}()
 
@@ -348,7 +351,7 @@ func (memstats *MemcacheStats) readStats(k string, proc func(key, value string))
 		//so less then 3 would be compatible with original memcached
 		if len(items) < 3 {
 			log.Errorf("Unexpected stats: %v", line)
-			internalErrors.Add("MemcacheStats", 1)
+			memstats.queryServiceStats.InternalErrors.Add("MemcacheStats", 1)
 			continue
 		}
 		proc(items[1], items[2])

@@ -22,11 +22,12 @@ import (
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type ConnPool struct {
-	mu          sync.Mutex
-	connections *pools.ResourcePool
-	capacity    int
-	idleTimeout time.Duration
-	dbaPool     *dbconnpool.ConnectionPool
+	mu                sync.Mutex
+	connections       *pools.ResourcePool
+	capacity          int
+	idleTimeout       time.Duration
+	dbaPool           *dbconnpool.ConnectionPool
+	queryServiceStats *QueryServiceStats
 }
 
 // NewConnPool creates a new ConnPool. The name is used
@@ -35,11 +36,13 @@ func NewConnPool(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	enablePublishStats bool) *ConnPool {
+	enablePublishStats bool,
+	queryServiceStats *QueryServiceStats) *ConnPool {
 	cp := &ConnPool{
-		capacity:    capacity,
-		idleTimeout: idleTimeout,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		capacity:          capacity,
+		idleTimeout:       idleTimeout,
+		dbaPool:           dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		queryServiceStats: queryServiceStats,
 	}
 	if name == "" {
 		return cp
@@ -68,10 +71,10 @@ func (cp *ConnPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	defer cp.mu.Unlock()
 
 	f := func() (pools.Resource, error) {
-		return NewDBConn(cp, appParams, dbaParams)
+		return NewDBConn(cp, appParams, dbaParams, cp.queryServiceStats)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, mysqlStats))
+	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, cp.queryServiceStats.MySQLStats))
 }
 
 // Close will close the pool and wait for connections to be returned before
