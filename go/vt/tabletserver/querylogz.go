@@ -95,6 +95,11 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 	for i := 0; i < limit; i++ {
 		select {
 		case out := <-ch:
+			select {
+			case <-tmr.C:
+				return
+			default:
+			}
 			stats, ok := out.(*SQLQueryStats)
 			if !ok {
 				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &SQLQueryStats{})
