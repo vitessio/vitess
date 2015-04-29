@@ -92,3 +92,13 @@ Vitess is a platform that continues to scale.
     up-to-date and consistent for different clients. What's more,
     your app doesn't need to keep track of the database topology
     as it changes.
+
+## Contact
+
+Ask questions in the
+[vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess)
+discussion forum.
+
+Subscribe to
+[vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
+for low-frequency updates like new features and releases.
