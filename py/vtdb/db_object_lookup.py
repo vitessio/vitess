@@ -18,7 +18,6 @@ from vtdb import shard_constants
 from vtdb import vtgate_cursor
 
 
-# TODO: is a generic Lookup interface for non-db based look classes needed ?
 class LookupDBObject(db_object_unsharded.DBObjectUnsharded):
   """This is an example implementation of lookup class where it is stored
   in unsharded db.
@@ -37,9 +36,9 @@ class LookupDBObject(db_object_unsharded.DBObjectUnsharded):
   def update(class_, cursor, sharding_key_column_name, sharding_key,
              entity_id_column, new_entity_id):
     where_column_value_pairs = [(sharding_key_column_name, sharding_key),]
-    update_columns = {entity_id_column:new_entity_id}
+    update_column_value_pairs = [(entity_id_column,new_entity_id),]
     return class_.update_columns(cursor, where_column_value_pairs,
-                                 **update_columns)
+                                 update_column_value_pairs)
 
   @classmethod
   def delete(class_, cursor, sharding_key_column_name, sharding_key):
