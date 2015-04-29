@@ -41,6 +41,16 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
  * [Topology Service](http://vitess.io/doc/TopologyService)
  * [V3 design](http://vitess.io/doc/VTGateV3)
 
+## Contact
+
+Ask questions in the
+[vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess)
+discussion forum.
+
+Subscribe to
+[vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
+for low-frequency updates like new features and releases.
+
 ## License
 
 Unless otherwise noted, the vitess source files are distributed
