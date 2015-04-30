@@ -94,11 +94,6 @@ func (gtid MariadbGTID) GTIDSet() GTIDSet {
 	return gtid
 }
 
-// Last implements GTIDSet.Last().
-func (gtid MariadbGTID) Last() GTID {
-	return gtid
-}
-
 // ContainsGTID implements GTIDSet.ContainsGTID().
 func (gtid MariadbGTID) ContainsGTID(other GTID) bool {
 	if other == nil {

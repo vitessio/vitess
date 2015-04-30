@@ -161,16 +161,6 @@ func TestMariaGTIDGTIDSet(t *testing.T) {
 	}
 }
 
-func TestMariaGTIDLast(t *testing.T) {
-	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := GTID(input)
-
-	got := input.Last()
-	if got != want {
-		t.Errorf("%#v.Last() = %#v, want %#v", input, got, want)
-	}
-}
-
 func TestMariaGTIDContainsLess(t *testing.T) {
 	input1 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 300}
 	input2 := MariadbGTID{Domain: 5, Server: 4727, Sequence: 700}

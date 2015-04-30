@@ -428,7 +428,6 @@ func (fakeGTID) SequenceNumber() uint64 { return 0 }
 func (fakeGTID) SequenceDomain() string { return "" }
 func (f fakeGTID) GTIDSet() GTIDSet     { return nil }
 
-func (fakeGTID) Last() GTID                 { return nil }
 func (fakeGTID) ContainsGTID(GTID) bool     { return false }
 func (fakeGTID) Contains(GTIDSet) bool      { return false }
 func (f fakeGTID) Equal(other GTIDSet) bool { return f == other.(fakeGTID) }

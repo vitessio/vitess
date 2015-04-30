@@ -21,10 +21,7 @@ type GTIDSet interface {
 	// registered in the transactionSetParsers map.
 	Flavor() string
 
-	// Last returns the GTID of the most recent transaction in the set.
-	Last() GTID
-
-	// Contains returns true if the set contains the specified transaction.
+	// ContainsGTID returns true if the set contains the specified transaction.
 	ContainsGTID(GTID) bool
 
 	// Contains returns true if the set is a superset of another set.
