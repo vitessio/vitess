@@ -21,8 +21,13 @@ import (
 var (
 	binlogStreamerErrors = stats.NewCounters("BinlogStreamerErrors")
 
-	ClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
-	ServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
+	// ErrClientEOF is returned by BinlogStreamer if the stream ended because the
+	// consumer of the stream indicated it doesn't want any more events.
+	ErrClientEOF = fmt.Errorf("binlog stream consumer ended the reply stream")
+	// ErrServerEOF is returned by BinlogStreamer if the stream ended because the
+	// connection to the mysqld server was lost, or the stream was terminated by
+	// mysqld.
+	ErrServerEOF = fmt.Errorf("binlog stream connection was closed by mysqld")
 
 	// statementPrefixes are normal sql statement prefixes.
 	statementPrefixes = map[string]int{
@@ -132,8 +137,8 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 // at a time, and groups them into transactions. It is called from within the
 // service function launched by Stream().
 //
-// If the sendTransaction func returns io.EOF, parseEvents returns ClientEOF.
-// If the events channel is closed, parseEvents returns ServerEOF.
+// If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
+// If the events channel is closed, parseEvents returns ErrServerEOF.
 func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan proto.BinlogEvent) (myproto.ReplicationPosition, error) {
 	var statements []proto.Statement
 	var format proto.BinlogFormat
@@ -162,7 +167,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {
-				return ClientEOF
+				return ErrClientEOF
 			}
 			return fmt.Errorf("send reply error: %v", err)
 		}
@@ -181,7 +186,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			if !ok {
 				// events channel has been closed, which means the connection died.
 				log.Infof("reached end of binlog event stream")
-				return pos, ServerEOF
+				return pos, ErrServerEOF
 			}
 		case <-ctx.ShuttingDown:
 			log.Infof("stopping early due to BinlogStreamer service shutdown")

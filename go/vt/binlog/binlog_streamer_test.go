@@ -193,7 +193,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -237,7 +237,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -285,7 +285,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
 		xidEvent{},
 	}
-	want := ClientEOF
+	want := ErrClientEOF
 
 	events := make(chan proto.BinlogEvent)
 
@@ -310,7 +310,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 }
 
 func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
-	want := ServerEOF
+	want := ErrServerEOF
 
 	events := make(chan proto.BinlogEvent)
 	close(events)
@@ -577,7 +577,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -626,7 +626,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -676,7 +676,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -722,7 +722,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -801,7 +801,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -846,7 +846,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -878,7 +878,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -922,7 +922,7 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -965,7 +965,7 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
