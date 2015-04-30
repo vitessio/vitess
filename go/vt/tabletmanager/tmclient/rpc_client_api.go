@@ -170,9 +170,6 @@ type TabletManagerClient interface {
 	// and it should go read-only and return its current position.
 	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
-	// PromoteSlave transforms the tablet from a slave to a master.
-	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error)
-
 	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
 	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
@@ -198,8 +195,8 @@ type TabletManagerClient interface {
 	// current position.
 	StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
-	// PromoteSlave2 makes the tablet the new master
-	PromoteSlave2(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	// PromoteSlave makes the tablet the new master
+	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
 	//
 	// Backup / restore related methods

@@ -1039,23 +1039,6 @@ func agentRPCTestDemoteMasterPanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	return testRestartSlaveData, nil
-}
-
-func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rsd, err := client.PromoteSlave(ctx, ti)
-	compareError(t, "PromoteSlave", err, rsd, testRestartSlaveData)
-}
-
-func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.PromoteSlave(ctx, ti)
-	expectRPCWrapLockActionPanic(t, err)
-}
-
 var testReplicationPositionReturned = myproto.ReplicationPosition{
 	GTIDSet: myproto.MariadbGTID{
 		Domain:   5,
@@ -1209,20 +1192,20 @@ func agentRPCTestStopReplicationAndGetPositionPanic(ctx context.Context, t *test
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return testReplicationPosition, nil
 }
 
-func agentRPCTestPromoteSlave2(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rp, err := client.PromoteSlave2(ctx, ti)
-	compareError(t, "PromoteSlave2", err, rp, testReplicationPosition)
+func agentRPCTestPromoteSlave(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.PromoteSlave(ctx, ti)
+	compareError(t, "PromoteSlave", err, rp, testReplicationPosition)
 }
 
-func agentRPCTestPromoteSlave2Panic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.PromoteSlave2(ctx, ti)
+func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.PromoteSlave(ctx, ti)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1461,7 +1444,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPopulateReparentJournal(ctx, t, client, ti)
 	agentRPCTestInitSlave(ctx, t, client, ti)
 	agentRPCTestDemoteMaster(ctx, t, client, ti)
-	agentRPCTestPromoteSlave(ctx, t, client, ti)
 	agentRPCTestPromoteSlaveWhenCaughtUp(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromoted(ctx, t, client, ti)
 	agentRPCTestRestartSlave(ctx, t, client, ti)
@@ -1469,7 +1451,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
 	agentRPCTestBreakSlaves(ctx, t, client, ti)
 	agentRPCTestStopReplicationAndGetPosition(ctx, t, client, ti)
-	agentRPCTestPromoteSlave2(ctx, t, client, ti)
+	agentRPCTestPromoteSlave(ctx, t, client, ti)
 
 	// Backup / restore related methods
 	agentRPCTestSnapshot(ctx, t, client, ti)
@@ -1522,7 +1504,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPopulateReparentJournalPanic(ctx, t, client, ti)
 	agentRPCTestInitSlavePanic(ctx, t, client, ti)
 	agentRPCTestDemoteMasterPanic(ctx, t, client, ti)
-	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 	agentRPCTestPromoteSlaveWhenCaughtUpPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, ti)
 	agentRPCTestRestartSlavePanic(ctx, t, client, ti)
@@ -1530,7 +1511,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
 	agentRPCTestBreakSlavesPanic(ctx, t, client, ti)
 	agentRPCTestStopReplicationAndGetPositionPanic(ctx, t, client, ti)
-	agentRPCTestPromoteSlave2Panic(ctx, t, client, ti)
+	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 
 	// Backup / restore related methods
 	agentRPCTestSnapshotPanic(ctx, t, client, ti)

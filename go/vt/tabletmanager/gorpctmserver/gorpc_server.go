@@ -412,18 +412,6 @@ func (tm *TabletManager) DemoteMaster(ctx context.Context, args *rpc.Unused, rep
 	})
 }
 
-// PromoteSlave wraps RPCAgent.PromoteSlave
-func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, reply *actionnode.RestartSlaveData) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlave, args, reply, true, func() error {
-		rsd, err := tm.agent.PromoteSlave(ctx)
-		if err == nil {
-			*reply = *rsd
-		}
-		return err
-	})
-}
-
 // PromoteSlaveWhenCaughtUp wraps RPCAgent.PromoteSlaveWhenCaughtUp
 func (tm *TabletManager) PromoteSlaveWhenCaughtUp(ctx context.Context, args *myproto.ReplicationPosition, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
@@ -493,11 +481,11 @@ func (tm *TabletManager) StopReplicationAndGetPosition(ctx context.Context, args
 	})
 }
 
-// PromoteSlave2 wraps RPCAgent.PromoteSlave2
-func (tm *TabletManager) PromoteSlave2(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
+// PromoteSlave wraps RPCAgent.PromoteSlave
+func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlave2, args, reply, true, func() error {
-		position, err := tm.agent.PromoteSlave2(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlave, args, reply, true, func() error {
+		position, err := tm.agent.PromoteSlave(ctx)
 		if err == nil {
 			*reply = position
 		}

@@ -269,12 +269,6 @@ func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet 
 	return rp, nil
 }
 
-// PromoteSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error) {
-	var rsd actionnode.RestartSlaveData
-	return &rsd, nil
-}
-
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
@@ -312,8 +306,8 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetPosition(ctx context
 	return rp, nil
 }
 
-// PromoteSlave2 is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PromoteSlave2(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+// PromoteSlave is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
 	return rp, nil
 }

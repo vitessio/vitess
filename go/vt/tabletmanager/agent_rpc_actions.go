@@ -111,8 +111,6 @@ type RPCAgent interface {
 
 	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
-
 	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	SlaveWasPromoted(ctx context.Context) error
@@ -127,7 +125,7 @@ type RPCAgent interface {
 
 	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error)
+	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	// Backup / restore related methods
 
@@ -515,29 +513,6 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 	// until well promote the master.
 }
 
-// PromoteSlave transforms the current tablet from a slave to a master.
-// It returns the data needed for other tablets to become a slave.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	// Perform the action.
-	rsd := &actionnode.RestartSlaveData{
-		Parent: tablet.Alias,
-		Force:  (tablet.Type == topo.TYPE_MASTER),
-	}
-	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("PromoteSlave response: %v", *rsd)
-
-	return rsd, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-}
-
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
@@ -560,7 +535,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 		return myproto.ReplicationPosition{}, err
 	}
 
-	rp, err := agent.MysqlDaemon.PromoteSlave2(agent.hookExtraEnv())
+	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -685,14 +660,14 @@ func (agent *ActionAgent) StopReplicationAndGetPosition(ctx context.Context) (my
 	return agent.MysqlDaemon.MasterPosition()
 }
 
-// PromoteSlave2 makes the current tablet the master
-func (agent *ActionAgent) PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error) {
+// PromoteSlave makes the current tablet the master
+func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
 	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
-	rp, err := agent.MysqlDaemon.PromoteSlave2(agent.hookExtraEnv())
+	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}

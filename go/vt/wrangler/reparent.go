@@ -575,7 +575,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// Promote the masterElect
 	wr.logger.Infof("promote slave %v", masterElectTabletAlias)
 	event.DispatchUpdate(ev, "promoting slave")
-	rp, err := wr.tmc.PromoteSlave2(ctx, masterElectTabletInfo)
+	rp, err := wr.tmc.PromoteSlave(ctx, masterElectTabletInfo)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", masterElectTabletAlias, err)
 	}

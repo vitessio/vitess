@@ -38,7 +38,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			Sequence: 990,
 		},
 	}
-	newMaster.FakeMysqlDaemon.PromoteSlave2Result = myproto.ReplicationPosition{
+	newMaster.FakeMysqlDaemon.PromoteSlaveResult = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   7,
 			Server:   456,

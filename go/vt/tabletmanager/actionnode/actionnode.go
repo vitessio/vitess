@@ -67,10 +67,6 @@ const (
 	// about to not be a master any more, and should go read-only.
 	TabletActionDemoteMaster = "DemoteMaster"
 
-	// TabletActionPromoteSlave tells the tablet it is going to be
-	// the master.
-	TabletActionPromoteSlave = "PromoteSlave"
-
 	// TabletActionPromoteSlaveWhenCaughtUp tells the tablet to wait
 	// for a given replication point, and when it reaches it
 	// switch to be a master.
@@ -102,8 +98,8 @@ const (
 	// and return the current position.
 	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"
 
-	// TabletActionPromoteSlave2 will make this tablet the master
-	TabletActionPromoteSlave2 = "PromoteSlave2"
+	// TabletActionPromoteSlave will make this tablet the master
+	TabletActionPromoteSlave = "PromoteSlave"
 
 	// TabletActionStopSlave will stop MySQL replication.
 	TabletActionStopSlave = "StopSlave"

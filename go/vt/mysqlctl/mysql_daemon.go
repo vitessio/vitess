@@ -39,7 +39,7 @@ type MysqlDaemon interface {
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 	DemoteMaster() (proto.ReplicationPosition, error)
 	WaitMasterPos(proto.ReplicationPosition, time.Duration) error
-	PromoteSlave2(map[string]string) (proto.ReplicationPosition, error)
+	PromoteSlave(map[string]string) (proto.ReplicationPosition, error)
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
@@ -106,8 +106,8 @@ type FakeMysqlDaemon struct {
 	// same it returns nil, if different it returns an error
 	WaitMasterPosition proto.ReplicationPosition
 
-	// PromoteSlave2Result is returned by PromoteSlave2
-	PromoteSlave2Result proto.ReplicationPosition
+	// PromoteSlaveResult is returned by PromoteSlave
+	PromoteSlaveResult proto.ReplicationPosition
 
 	// Schema that will be returned by GetSchema. If nil we'll
 	// return an error.
@@ -222,9 +222,9 @@ func (fmd *FakeMysqlDaemon) WaitMasterPos(pos proto.ReplicationPosition, waitTim
 	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
 }
 
-// PromoteSlave2 is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) PromoteSlave2(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
-	return fmd.PromoteSlave2Result, nil
+// PromoteSlave is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PromoteSlave(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+	return fmd.PromoteSlaveResult, nil
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
