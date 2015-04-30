@@ -26,11 +26,6 @@ func init() {
 		"<tablet alias>",
 		"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."})
 	addCommand("Shards", command{
-		"ReparentShard",
-		commandReparentShard,
-		"[-force] [-leave-master-read-only] <keyspace/shard> <tablet alias>",
-		"Specify which shard to reparent and which tablet should be the new master."})
-	addCommand("Shards", command{
 		"InitShardMaster",
 		commandInitShardMaster,
 		"[-force] [-wait_slave_timeout=<duration>] <keyspace/shard> <tablet alias>",
@@ -78,28 +73,6 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.ReparentTablet(ctx, tabletAlias)
-}
-
-func commandReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
-	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action ReparentShard requires <keyspace/shard> <tablet alias>")
-	}
-
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
-	if err != nil {
-		return err
-	}
-	return wr.ReparentShard(ctx, keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force, *waitSlaveTimeout)
 }
 
 func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
