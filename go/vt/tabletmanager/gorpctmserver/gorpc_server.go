@@ -252,18 +252,6 @@ func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.Unused, r
 	})
 }
 
-// ReparentPosition wraps RPCAgent.ReparentPosition
-func (tm *TabletManager) ReparentPosition(ctx context.Context, args *myproto.ReplicationPosition, reply *actionnode.RestartSlaveData) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrap(ctx, actionnode.TabletActionReparentPosition, args, reply, func() error {
-		rsd, err := tm.agent.ReparentPosition(ctx, args)
-		if err == nil {
-			*reply = *rsd
-		}
-		return err
-	})
-}
-
 // StopSlave wraps RPCAgent.StopSlave
 func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

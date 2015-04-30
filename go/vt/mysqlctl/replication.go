@@ -201,45 +201,6 @@ var (
 	ErrNotMaster = errors.New("no master status")
 )
 
-// ReparentPosition returns a replication state that will reparent a slave to the
-// correct master for a specified position.
-func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) (rs *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, reparentTime int64, err error) {
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition))
-	if err != nil {
-		return
-	}
-	if len(qr.Rows) != 1 {
-		err = fmt.Errorf("no reparent for position: %v", slavePosition)
-		return
-	}
-
-	reparentTime, err = qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition, qr.Rows[0][0], err)
-		return
-	}
-
-	rs, err = proto.NewReplicationStatus(qr.Rows[0][1].String())
-	if err != nil {
-		return
-	}
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		err = fmt.Errorf("can't parse replication position: %v", err)
-		return
-	}
-	rs.Position, err = flavor.ParseReplicationPosition(qr.Rows[0][2].String())
-	if err != nil {
-		return
-	}
-
-	waitPosition, err = flavor.ParseReplicationPosition(qr.Rows[0][3].String())
-	if err != nil {
-		return
-	}
-	return
-}
-
 // WaitMasterPos lets slaves wait to given replication position
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
 	flavor, err := mysqld.flavor()

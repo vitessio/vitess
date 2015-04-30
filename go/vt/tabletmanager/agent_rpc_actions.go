@@ -79,8 +79,6 @@ type RPCAgent interface {
 
 	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
-
 	StopSlave(ctx context.Context) error
 
 	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
@@ -322,22 +320,6 @@ func (agent *ActionAgent) WaitSlavePosition(ctx context.Context, position myprot
 // Should be called under RPCWrap.
 func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
 	return agent.Mysqld.MasterPosition()
-}
-
-// ReparentPosition returns the RestartSlaveData for the provided
-// ReplicationPosition.
-// Should be called under RPCWrap.
-func (agent *ActionAgent) ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	replicationStatus, waitPosition, timePromoted, err := agent.Mysqld.ReparentPosition(*rp)
-	if err != nil {
-		return nil, err
-	}
-	rsd := new(actionnode.RestartSlaveData)
-	rsd.ReplicationStatus = replicationStatus
-	rsd.TimePromoted = timePromoted
-	rsd.WaitPosition = waitPosition
-	rsd.Parent = agent.TabletAlias
-	return rsd, nil
 }
 
 // StopSlave will stop the replication

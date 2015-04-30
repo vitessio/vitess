@@ -175,12 +175,6 @@ func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, table
 	return rp, nil
 }
 
-// ReparentPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	var rsd actionnode.RestartSlaveData
-	return &rsd, nil
-}
-
 // StopSlave is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil

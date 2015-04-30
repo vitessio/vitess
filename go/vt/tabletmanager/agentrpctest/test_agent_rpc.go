@@ -719,24 +719,6 @@ var testRestartSlaveData = &actionnode.RestartSlaveData{
 	Force: true,
 }
 
-func (fra *fakeRPCAgent) ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "ReparentPosition position", rp.GTIDSet, testReplicationPosition.GTIDSet)
-	return testRestartSlaveData, nil
-}
-
-func agentRPCTestReparentPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rsd, err := client.ReparentPosition(ctx, ti, &testReplicationPosition)
-	compareError(t, "ReparentPosition", err, rsd, testRestartSlaveData)
-}
-
-func agentRPCTestReparentPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.ReparentPosition(ctx, ti, &testReplicationPosition)
-	expectRPCWrapPanic(t, err)
-}
-
 var testStopSlaveCalled = false
 
 func (fra *fakeRPCAgent) StopSlave(ctx context.Context) error {
@@ -1386,7 +1368,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveStatus(ctx, t, client, ti)
 	agentRPCTestWaitSlavePosition(ctx, t, client, ti)
 	agentRPCTestMasterPosition(ctx, t, client, ti)
-	agentRPCTestReparentPosition(ctx, t, client, ti)
 	agentRPCTestStopSlave(ctx, t, client, ti)
 	agentRPCTestStopSlaveMinimum(ctx, t, client, ti)
 	agentRPCTestStartSlave(ctx, t, client, ti)
@@ -1444,7 +1425,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveStatusPanic(ctx, t, client, ti)
 	agentRPCTestWaitSlavePositionPanic(ctx, t, client, ti)
 	agentRPCTestMasterPositionPanic(ctx, t, client, ti)
-	agentRPCTestReparentPositionPanic(ctx, t, client, ti)
 	agentRPCTestStopSlavePanic(ctx, t, client, ti)
 	agentRPCTestStopSlaveMinimumPanic(ctx, t, client, ti)
 	agentRPCTestStartSlavePanic(ctx, t, client, ti)

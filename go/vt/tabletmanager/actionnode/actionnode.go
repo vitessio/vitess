@@ -112,10 +112,6 @@ const (
 	// TabletActionMasterPosition returns the current master position
 	TabletActionMasterPosition = "MasterPosition"
 
-	// TabletActionReparentPosition returns the data for a slave
-	// to use to reparent to the target tablet at the given position.
-	TabletActionReparentPosition = "ReparentPosition"
-
 	// TabletActionSlaveStatus returns the current slave status
 	TabletActionSlaveStatus = "SlaveStatus"
 

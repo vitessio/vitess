@@ -103,10 +103,6 @@ type TabletManagerClient interface {
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
-	// ReparentPosition returns the data for a slave to use to reparent
-	// to the target tablet at the given position.
-	ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
-
 	// StopSlave stops the mysql replication
 	StopSlave(ctx context.Context, tablet *topo.TabletInfo) error
 
