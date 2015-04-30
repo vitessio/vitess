@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -191,19 +192,29 @@ func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string,
 		return err
 	}
 
+	// Create reusable Reparent event with available info
+	ev := &events.Reparent{}
+
 	// do the work
-	err = wr.initShardMasterLocked(ctx, keyspace, shard, masterElectTabletAlias, force, waitSlaveTimeout)
+	err = wr.initShardMasterLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, force, waitSlaveTimeout)
+	if err != nil {
+		event.DispatchUpdate(ev, "failed InitShardMaster: "+err.Error())
+	} else {
+		event.DispatchUpdate(ev, "finished InitShardMaster")
+	}
 
 	// and unlock
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
+	ev.ShardInfo = *shardInfo
 
+	event.DispatchUpdate(ev, "reading tablet map")
 	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
@@ -214,6 +225,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAlias)
 	}
+	ev.NewMaster = *masterElectTabletInfo.Tablet
 
 	// Check the master is the only master is the shard, or -force was used.
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
@@ -246,6 +258,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// we stop. It is probably because it is unreachable, and may leave
 	// an unstable database process in the mix, with a database daemon
 	// at a wrong replication spot.
+	event.DispatchUpdate(ev, "resetting replication on all tablets")
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for alias, tabletInfo := range tabletMap {
@@ -266,6 +279,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// Tell the new master to break its slaves, return its replication
 	// position
 	wr.logger.Infof("initializing master on %v", masterElectTabletAlias)
+	event.DispatchUpdate(ev, "initializing master")
 	rp, err := wr.TabletManagerClient().InitMaster(ctx, masterElectTabletInfo)
 	if err != nil {
 		return err
@@ -277,6 +291,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 	// We start all these in parallel, to handle the semi-sync
 	// case: for the master to be able to commit its row in the
 	// reparent_journal table, it needs connected slaves.
+	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
 	wgMaster := sync.WaitGroup{}
 	wgSlaves := sync.WaitGroup{}
@@ -327,6 +342,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, keyspace, shard s
 
 	// Then we rebuild the entire serving graph for the shard,
 	// to account for all changes.
+	event.DispatchUpdate(ev, "rebuilding shard graph")
 	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
 	return err
 }
@@ -341,19 +357,29 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 		return err
 	}
 
+	// Create reusable Reparent event with available info
+	ev := &events.Reparent{}
+
 	// do the work
-	err = wr.plannedReparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, waitSlaveTimeout)
+	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitSlaveTimeout)
+	if err != nil {
+		event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
+	} else {
+		event.DispatchUpdate(ev, "finished PlannedReparentShard")
+	}
 
 	// and unlock
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
+	ev.ShardInfo = *shardInfo
 
+	event.DispatchUpdate(ev, "reading tablet map")
 	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
@@ -364,6 +390,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAlias)
 	}
+	ev.NewMaster = *masterElectTabletInfo.Tablet
 	if shardInfo.MasterAlias == masterElectTabletAlias {
 		return fmt.Errorf("master-elect tablet %v is already the master", masterElectTabletAlias)
 	}
@@ -371,9 +398,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 	if !ok {
 		return fmt.Errorf("old master tablet %v is not in the shard", shardInfo.MasterAlias)
 	}
+	ev.OldMaster = *oldMasterTabletInfo.Tablet
 
 	// Demote the current master, get its replication position
 	wr.logger.Infof("demote current master %v", shardInfo.MasterAlias)
+	event.DispatchUpdate(ev, "demoting old master")
 	rp, err := wr.tmc.DemoteMaster(ctx, oldMasterTabletInfo)
 	if err != nil {
 		return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", shardInfo.MasterAlias, err)
@@ -382,6 +411,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 	// Wait on the master-elect tablet until it reaches that position,
 	// then promote it
 	wr.logger.Infof("promote slave %v", masterElectTabletAlias)
+	event.DispatchUpdate(ev, "promoting slave")
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo, rp)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAlias, err)
@@ -390,6 +420,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 	// Go through all the tablets:
 	// - new master: populate the reparent journal
 	// - everybody else: reparent to new master, wait for row
+	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
 	wgMaster := sync.WaitGroup{}
 	wgSlaves := sync.WaitGroup{}
@@ -440,6 +471,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, keyspace, sh
 	// Then we rebuild the entire serving graph for the shard,
 	// to account for all changes.
 	wr.logger.Infof("rebuilding shard graph")
+	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
 	return err
 }
@@ -454,19 +486,29 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 		return err
 	}
 
+	// Create reusable Reparent event with available info
+	ev := &events.Reparent{}
+
 	// do the work
-	err = wr.emergencyReparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, waitSlaveTimeout)
+	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitSlaveTimeout)
+	if err != nil {
+		event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
+	} else {
+		event.DispatchUpdate(ev, "finished EmergencyReparentShard")
+	}
 
 	// and unlock
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
+func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
+	ev.ShardInfo = *shardInfo
 
+	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
@@ -477,6 +519,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAlias)
 	}
+	ev.NewMaster = *masterElectTabletInfo.Tablet
 	if shardInfo.MasterAlias == masterElectTabletAlias {
 		return fmt.Errorf("master-elect tablet %v is already the master", masterElectTabletAlias)
 	}
@@ -497,6 +540,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 		}
 
 		if scrapOldMaster {
+			ev.OldMaster = *oldMasterTabletInfo.Tablet
 			wr.logger.Infof("scrapping old master %v", shardInfo.MasterAlias)
 
 			ctx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
@@ -514,6 +558,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 
 	// Stop replication on all slaves, get their current
 	// replication position
+	event.DispatchUpdate(ev, "stop replication on all slaves")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	positionMap := make(map[topo.TabletAlias]myproto.ReplicationPosition)
@@ -552,6 +597,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 
 	// Promote the masterElect
 	wr.logger.Infof("promote slave %v", masterElectTabletAlias)
+	event.DispatchUpdate(ev, "promoting slave")
 	rp, err := wr.tmc.PromoteSlave2(ctx, masterElectTabletInfo)
 	if err != nil {
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", masterElectTabletAlias, err)
@@ -562,6 +608,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 	// Go through all the tablets:
 	// - new master: populate the reparent journal
 	// - everybody else: reparent to new master, wait for row
+	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
 	wgMaster := sync.WaitGroup{}
 	wgSlaves := sync.WaitGroup{}
@@ -612,6 +659,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, keyspace, 
 	// Then we rebuild the entire serving graph for the shard,
 	// to account for all changes.
 	wr.logger.Infof("rebuilding shard graph")
+	event.DispatchUpdate(ev, "rebuilding shard serving graph")
 	_, err = wr.RebuildShardGraph(ctx, keyspace, shard, nil)
 	return err
 }
