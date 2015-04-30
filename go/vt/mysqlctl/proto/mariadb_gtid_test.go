@@ -123,31 +123,31 @@ func TestMariaGTIDFlavor(t *testing.T) {
 
 func TestMariaGTIDSequenceDomain(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := "12"
+	want := interface{}(uint32(12))
 
 	got := input.SequenceDomain()
 	if got != want {
-		t.Errorf("%#v.SequenceDomain() = '%v', want '%v'", input, got, want)
+		t.Errorf("%#v.SequenceDomain() = %#v, want %#v", input, got, want)
 	}
 }
 
 func TestMariaGTIDSourceServer(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := "345"
+	want := interface{}(uint32(345))
 
 	got := input.SourceServer()
 	if got != want {
-		t.Errorf("%#v.SourceServer() = '%v', want '%v'", input, got, want)
+		t.Errorf("%#v.SourceServer() = %#v, want %#v", input, got, want)
 	}
 }
 
 func TestMariaGTIDSequenceNumber(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := uint64(6789)
+	want := interface{}(uint64(6789))
 
 	got := input.SequenceNumber()
 	if got != want {
-		t.Errorf("%#v.SequenceNumber() = %v, want %v", input, got, want)
+		t.Errorf("%#v.SequenceNumber() = %#v, want %#v", input, got, want)
 	}
 }
 
