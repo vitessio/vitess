@@ -6,9 +6,6 @@ package wrangler
 
 /*
 This file handles the reparenting operations.
-
-FIXME(alainjobart) a lot of this code is being replaced now.
-The new code starts at InitShardMaster.
 */
 
 import (
@@ -32,71 +29,14 @@ const (
 	emergencyReparentShardOperation = "EmergencyReparentShard"
 )
 
-// ReparentShard creates the reparenting action and launches a goroutine
-// to coordinate the procedure.
-//
-//
-// leaveMasterReadOnly: leave the master in read-only mode, even
-//   though all the other necessary updates have been made.
-// forceReparentToCurrentMaster: mostly for test setups, this can
-//   cause data loss.
-func (wr *Wrangler) ReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool, waitSlaveTimeout time.Duration) error {
-	// lock the shard
-	actionNode := actionnode.ReparentShard("", masterElectTabletAlias)
-	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
-	if err != nil {
-		return err
-	}
+// FIXME(alainjobart) rework this ShardReplicationStatuses function,
+// it's clumpsy
 
-	// do the work
-	err = wr.reparentShardLocked(ctx, keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster, waitSlaveTimeout)
-
-	// and unlock
-	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
-}
-
-func (wr *Wrangler) reparentShardLocked(ctx context.Context, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool, waitSlaveTimeout time.Duration) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
-	if shardInfo.MasterAlias == masterElectTabletAlias && !forceReparentToCurrentMaster {
-		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", masterElectTabletAlias)
-	}
-
-	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
-	if !ok {
-		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, topotools.MapKeys(tabletMap))
-	}
-
-	// Create reusable Reparent event with available info
-	ev := &events.Reparent{
-		ShardInfo: *shardInfo,
-		NewMaster: *masterElectTablet.Tablet,
-	}
-
-	if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
-		ev.OldMaster = *oldMasterTablet.Tablet
-	}
-
-	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
-		err = wr.reparentShardGraceful(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, waitSlaveTimeout)
-	} else {
-		err = wr.reparentShardBrutal(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster, waitSlaveTimeout)
-	}
-
-	if err == nil {
-		// only log if it works, if it fails we'll show the error
-		wr.Logger().Infof("reparentShard finished")
-	}
-	return err
+// helper struct to queue up results
+type rpcContext struct {
+	tablet *topo.TabletInfo
+	status *myproto.ReplicationStatus
+	err    error
 }
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
@@ -126,6 +66,60 @@ func (wr *Wrangler) shardReplicationStatuses(ctx context.Context, shardInfo *top
 	tablets := topotools.CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	stats, err := wr.tabletReplicationStatuses(ctx, tablets)
 	return tablets, stats, err
+}
+
+// tabletReplicationStatuses returns the ReplicationStatus of each tablet in
+// tablets.
+func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*topo.TabletInfo) ([]*myproto.ReplicationStatus, error) {
+	wr.logger.Infof("tabletReplicationStatuses: %v", tablets)
+	calls := make([]*rpcContext, len(tablets))
+	wg := sync.WaitGroup{}
+
+	f := func(idx int) {
+		defer wg.Done()
+		ti := tablets[idx]
+		rpcCtx := &rpcContext{tablet: ti}
+		calls[idx] = rpcCtx
+		if ti.Type == topo.TYPE_MASTER {
+			pos, err := wr.tmc.MasterPosition(ctx, ti)
+			rpcCtx.err = err
+			if err == nil {
+				rpcCtx.status = &myproto.ReplicationStatus{Position: pos}
+			}
+		} else if ti.IsSlaveType() {
+			rpcCtx.status, rpcCtx.err = wr.tmc.SlaveStatus(ctx, ti)
+		}
+	}
+
+	for i, tablet := range tablets {
+		// Don't scan tablets that won't return something useful. Otherwise, you'll
+		// end up waiting for a timeout.
+		if tablet.Type == topo.TYPE_MASTER || tablet.IsSlaveType() {
+			wg.Add(1)
+			go f(i)
+		} else {
+			wr.logger.Infof("tabletReplicationPositions: skipping tablet %v type %v", tablet.Alias, tablet.Type)
+		}
+	}
+	wg.Wait()
+
+	someErrors := false
+	stats := make([]*myproto.ReplicationStatus, len(tablets))
+	for i, rpcCtx := range calls {
+		if rpcCtx == nil {
+			continue
+		}
+		if rpcCtx.err != nil {
+			wr.logger.Warningf("could not get replication status for tablet %v %v", rpcCtx.tablet.Alias, rpcCtx.err)
+			someErrors = true
+		} else {
+			stats[i] = rpcCtx.status
+		}
+	}
+	if someErrors {
+		return stats, fmt.Errorf("partial position map, some errors")
+	}
+	return stats, nil
 }
 
 // ReparentTablet tells a tablet to reparent this tablet to the current
