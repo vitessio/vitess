@@ -115,8 +115,6 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error
-
 	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
@@ -550,29 +548,6 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 	}
 
 	return agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-}
-
-// RestartSlave tells the tablet it has a new master
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type == topo.TYPE_LAG && !rsd.Force {
-		// if tablet is behind on replication, keep it lagged, but orphan it
-		tablet.Type = topo.TYPE_LAG_ORPHAN
-		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	}
-	if err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted); err != nil {
-		return err
-	}
-	// Complete the special orphan accounting.
-	if tablet.Type == topo.TYPE_LAG_ORPHAN {
-		tablet.Type = topo.TYPE_LAG
-		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	}
-	return nil
 }
 
 // SetMaster sets replication master, and waits for the

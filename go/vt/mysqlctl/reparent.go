@@ -115,30 +115,6 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.Replic
 	return rp, nil
 }
 
-// RestartSlave tells a mysql slave that is has a new master
-func (mysqld *Mysqld) RestartSlave(replicationStatus *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, timeCheck int64) error {
-	log.Infof("Restart Slave")
-	cmds, err := mysqld.StartReplicationCommands(replicationStatus)
-	if err != nil {
-		return err
-	}
-	allCmds := []string{"STOP SLAVE", "RESET SLAVE"}
-	allCmds = append(allCmds, cmds...)
-	if err := mysqld.ExecuteSuperQueryList(allCmds); err != nil {
-		return err
-	}
-
-	if err := mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
-		return err
-	}
-
-	if err := mysqld.WaitMasterPos(waitPosition, 0); err != nil {
-		return err
-	}
-
-	return mysqld.CheckReplication(timeCheck)
-}
-
 // CheckReplication checks for the magic row inserted under controlled reparenting.
 func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
 	log.Infof("Check replication restarted")

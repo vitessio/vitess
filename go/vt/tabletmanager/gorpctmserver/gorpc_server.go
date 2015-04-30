@@ -432,14 +432,6 @@ func (tm *TabletManager) SlaveWasPromoted(ctx context.Context, args *rpc.Unused,
 	})
 }
 
-// RestartSlave wraps RPCAgent.RestartSlave
-func (tm *TabletManager) RestartSlave(ctx context.Context, args *actionnode.RestartSlaveData, reply *rpc.Unused) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionRestartSlave, args, reply, true, func() error {
-		return tm.agent.RestartSlave(ctx, args)
-	})
-}
-
 // SetMaster wraps RPCAgent.SetMaster
 func (tm *TabletManager) SetMaster(ctx context.Context, args *gorpcproto.SetMasterArgs, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

@@ -77,9 +77,6 @@ const (
 	// own topology record.
 	TabletActionSlaveWasPromoted = "SlaveWasPromoted"
 
-	// TabletActionRestartSlave tells the remote tablet it has a new master.
-	TabletActionRestartSlave = "RestartSlave"
-
 	// TabletActionSetMaster tells a tablet it has a new master.
 	// The tablet will reparent to the new master, and wait for
 	// the reparent_journal entry.

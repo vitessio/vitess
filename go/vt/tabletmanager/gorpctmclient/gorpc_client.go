@@ -435,11 +435,6 @@ func (client *GoRPCTabletManagerClient) SlaveWasPromoted(ctx context.Context, ta
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveWasPromoted, &rpc.Unused{}, &rpc.Unused{})
 }
 
-// RestartSlave is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRestartSlave, rsd, &rpc.Unused{})
-}
-
 // SetMaster is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
 	args := &gorpcproto.SetMasterArgs{

@@ -176,9 +176,6 @@ type TabletManagerClient interface {
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error
 
-	// RestartSlave tells the remote tablet it has a new master
-	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error
-
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table.
