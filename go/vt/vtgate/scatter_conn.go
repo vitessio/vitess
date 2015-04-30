@@ -481,6 +481,21 @@ func (stc *ScatterConn) Close() error {
 	return nil
 }
 
+// ScatterConnError is the ScatterConn specific error.
+type ScatterConnError struct {
+	Code int
+	// Preserve the original errors, so that we don't need to parse the error string.
+	Errs []error
+}
+
+func (e *ScatterConnError) Error() string {
+	errStrings := make([]string, 0, len(e.Errs))
+	for _, err := range e.Errs {
+		errStrings = append(errStrings, fmt.Sprintf("%v", err))
+	}
+	return fmt.Sprintf("%v", strings.Join(errStrings, "\n"))
+}
+
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
 		return nil
@@ -499,13 +514,10 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	} else {
 		code = tabletconn.ERR_NORMAL
 	}
-	errs := make([]string, 0, len(errors))
-	for _, e := range errors {
-		errs = append(errs, e.Error())
-	}
-	return &ShardConnError{
+
+	return &ScatterConnError{
 		Code: code,
-		Err:  fmt.Sprintf("%v", strings.Join(errs, "\n")),
+		Errs: errors,
 	}
 }
 

@@ -56,6 +56,19 @@ func (res *Resolver) InitializeConnections(ctx context.Context) error {
 	return res.scatterConn.InitializeConnections(ctx)
 }
 
+// isConnError will be true if the error comes from the connection layer (ShardConn or
+// ScatterConn). The error code from the conn error is also returned.
+func isConnError(err error) (int, bool) {
+	switch e := err.(type) {
+	case *ScatterConnError:
+		return e.Code, true
+	case *ShardConnError:
+		return e.Code, true
+	default:
+		return 0, false
+	}
+}
+
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
@@ -117,7 +130,7 @@ func (res *Resolver) Execute(
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction)
-		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
+		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
 			if err != nil {
@@ -173,7 +186,7 @@ func (res *Resolver) ExecuteEntityIds(
 			query.TabletType,
 			NewSafeSession(query.Session),
 			query.NotInTransaction)
-		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
+		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
 				ctx,
@@ -249,7 +262,7 @@ func (res *Resolver) ExecuteBatch(
 			tabletType,
 			NewSafeSession(session),
 			notInTransaction)
-		if connError, ok := err.(*ShardConnError); ok && connError.Code == tabletconn.ERR_RETRY {
+		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
 			if err != nil {
