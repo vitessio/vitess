@@ -708,17 +708,6 @@ func agentRPCTestMasterPositionPanic(ctx context.Context, t *testing.T, client t
 	expectRPCWrapPanic(t, err)
 }
 
-var testRestartSlaveData = &actionnode.RestartSlaveData{
-	ReplicationStatus: testReplicationStatus,
-	WaitPosition:      testReplicationPosition,
-	TimePromoted:      0x7000000000000000,
-	Parent: topo.TabletAlias{
-		Cell: "ce",
-		Uid:  372,
-	},
-	Force: true,
-}
-
 var testStopSlaveCalled = false
 
 func (fra *fakeRPCAgent) StopSlave(ctx context.Context) error {

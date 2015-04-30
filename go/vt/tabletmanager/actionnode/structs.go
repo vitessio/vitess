@@ -5,10 +5,8 @@
 package actionnode
 
 import (
-	"fmt"
 	"time"
 
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -44,20 +42,6 @@ type HealthStreamReply struct {
 	ReplicationDelay time.Duration
 
 	// TODO(alainjobart) add some QPS reporting data here
-}
-
-// RestartSlaveData is returned by the master, and used to promote or
-// restart slaves
-type RestartSlaveData struct {
-	ReplicationStatus *myproto.ReplicationStatus
-	WaitPosition      myproto.ReplicationPosition
-	TimePromoted      int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent            topo.TabletAlias
-	Force             bool
-}
-
-func (rsd *RestartSlaveData) String() string {
-	return fmt.Sprintf("RestartSlaveData{ReplicationStatus:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
 }
 
 // SlaveWasRestartedArgs is the paylod for SlaveWasRestarted

@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"golang.org/x/net/context"
 )
@@ -113,19 +112,4 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.Replic
 	}
 
 	return rp, nil
-}
-
-// CheckReplication checks for the magic row inserted under controlled reparenting.
-func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
-	log.Infof("Check replication restarted")
-	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_log WHERE time_created_ns = %v",
-		timeCheck)
-	qr, err := mysqld.fetchSuperQuery(checkQuery)
-	if err != nil {
-		return err
-	}
-	if len(qr.Rows) != 1 {
-		return fmt.Errorf("replication failed - unexpected row count %v", len(qr.Rows))
-	}
-	return nil
 }
