@@ -217,7 +217,10 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 		}
 
 		// Strip the checksum, if any. We don't actually verify the checksum, so discard it.
-		ev, _ = ev.StripChecksum(format)
+		ev, _, err = ev.StripChecksum(format)
+		if err != nil {
+			return pos, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
+		}
 
 		// Update the GTID if the event has one. The actual event type could be
 		// something special like GTID_EVENT (MariaDB, MySQL 5.6), or it could be
