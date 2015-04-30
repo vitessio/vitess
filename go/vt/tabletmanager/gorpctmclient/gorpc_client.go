@@ -462,11 +462,6 @@ func (client *GoRPCTabletManagerClient) SlaveWasRestarted(ctx context.Context, t
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveWasRestarted, args, &rpc.Unused{})
 }
 
-// BreakSlaves is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionBreakSlaves, &rpc.Unused{}, &rpc.Unused{})
-}
-
 // StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition

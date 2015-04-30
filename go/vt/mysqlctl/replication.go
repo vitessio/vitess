@@ -341,33 +341,6 @@ func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
 	return flavor.ResetReplicationCommands(), nil
 }
 
-// BreakSlaves forces all slaves to error and stop.
-// This is extreme, but helpful for startup, emergencies and tests.
-// Insert a row, block the propagation of its subsequent delete and reinsert it.
-// This forces a failure on slaves only.
-func (mysqld *Mysqld) BreakSlaves() error {
-	now := time.Now().UnixNano()
-	note := "force slave halt" // Any this is why we always leave a note...
-
-	insertSql := fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, '%v')",
-		now, note)
-	deleteSql := fmt.Sprintf("DELETE FROM _vt.replication_log WHERE time_created_ns = %v", now)
-
-	cmds := []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		`CREATE TABLE IF NOT EXISTS _vt.replication_log (
-  time_created_ns BIGINT UNSIGNED NOT NULL,
-  note VARCHAR(255),
-  PRIMARY KEY (time_created_ns)) ENGINE=InnoDB`,
-		insertSql,
-		"SET sql_log_bin = 0",
-		deleteSql,
-		"SET sql_log_bin = 1",
-		insertSql}
-
-	return mysqld.ExecuteSuperQueryList(cmds)
-}
-
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+
 // | Id   | User    | Host                | db   | Command     | Time | State                                                          | Info             |
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+

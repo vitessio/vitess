@@ -121,8 +121,6 @@ type RPCAgent interface {
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
-	BreakSlaves(ctx context.Context) error
-
 	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
@@ -641,13 +639,6 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	}
 
 	return nil
-}
-
-// BreakSlaves will tinker with the replication stream in a way that
-// will stop all the slaves.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) BreakSlaves(ctx context.Context) error {
-	return agent.Mysqld.BreakSlaves()
 }
 
 // StopReplicationAndGetPosition stops MySQL replication, and returns the

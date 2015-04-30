@@ -295,11 +295,6 @@ func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, ta
 	return nil
 }
 
-// BreakSlaves is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error {
-	return nil
-}
-
 // StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition

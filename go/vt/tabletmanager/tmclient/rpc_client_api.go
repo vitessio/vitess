@@ -187,10 +187,6 @@ type TabletManagerClient interface {
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 
-	// BreakSlaves will tinker with the replication stream in a
-	// way that will stop all the slaves.
-	BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error
-
 	// StopReplicationAndGetPosition stops replication and returns the
 	// current position.
 	StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)

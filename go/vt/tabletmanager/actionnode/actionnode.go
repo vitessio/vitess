@@ -90,10 +90,6 @@ const (
 	// case, and update its own topology record.
 	TabletActionSlaveWasRestarted = "SlaveWasRestarted"
 
-	// TabletActionBreakSlaves will tinker with the replication
-	// stream in a way that will stop all the slaves.
-	TabletActionBreakSlaves = "BreakSlaves"
-
 	// TabletActionStopReplicationAndGetPosition will stop replication,
 	// and return the current position.
 	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"

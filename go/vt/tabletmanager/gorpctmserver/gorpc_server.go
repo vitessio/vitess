@@ -461,14 +461,6 @@ func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode
 	})
 }
 
-// BreakSlaves wraps RPCAgent.BreakSlaves
-func (tm *TabletManager) BreakSlaves(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBreakSlaves, args, reply, true, func() error {
-		return tm.agent.BreakSlaves(ctx)
-	})
-}
-
 // StopReplicationAndGetPosition wraps RPCAgent.StopReplicationAndGetPosition
 func (tm *TabletManager) StopReplicationAndGetPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

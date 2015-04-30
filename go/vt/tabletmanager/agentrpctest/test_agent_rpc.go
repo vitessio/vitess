@@ -1155,26 +1155,6 @@ func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, clien
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testBreakSlavesCalled = false
-
-func (fra *fakeRPCAgent) BreakSlaves(ctx context.Context) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	testBreakSlavesCalled = true
-	return nil
-}
-
-func agentRPCTestBreakSlaves(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.BreakSlaves(ctx, ti)
-	compareError(t, "BreakSlaves", err, true, testBreakSlavesCalled)
-}
-
-func agentRPCTestBreakSlavesPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.BreakSlaves(ctx, ti)
-	expectRPCWrapLockActionPanic(t, err)
-}
-
 func (fra *fakeRPCAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -1449,7 +1429,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRestartSlave(ctx, t, client, ti)
 	agentRPCTestSetMaster(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
-	agentRPCTestBreakSlaves(ctx, t, client, ti)
 	agentRPCTestStopReplicationAndGetPosition(ctx, t, client, ti)
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
 
@@ -1509,7 +1488,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestRestartSlavePanic(ctx, t, client, ti)
 	agentRPCTestSetMasterPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
-	agentRPCTestBreakSlavesPanic(ctx, t, client, ti)
 	agentRPCTestStopReplicationAndGetPositionPanic(ctx, t, client, ti)
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 
