@@ -125,6 +125,10 @@ type RPCAgent interface {
 
 	BreakSlaves(ctx context.Context) error
 
+	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
+
+	PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error)
+
 	// Backup / restore related methods
 
 	Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error)
@@ -665,6 +669,31 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) BreakSlaves(ctx context.Context) error {
 	return agent.Mysqld.BreakSlaves()
+}
+
+// StopReplicationAndGetPosition stops MySQL replication, and returns the
+// current position
+func (agent *ActionAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return agent.MysqlDaemon.MasterPosition()
+}
+
+// PromoteSlave2 makes the current tablet the master
+func (agent *ActionAgent) PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	rp, err := agent.MysqlDaemon.PromoteSlave2(agent.hookExtraEnv())
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // updateReplicationGraphForPromotedSlave makes sure the newly promoted slave

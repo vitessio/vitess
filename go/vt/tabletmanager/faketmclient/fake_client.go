@@ -306,6 +306,18 @@ func (client *FakeTabletManagerClient) BreakSlaves(ctx context.Context, tablet *
 	return nil
 }
 
+// StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
+}
+
+// PromoteSlave2 is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PromoteSlave2(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
+}
+
 //
 // Backup related methods
 //

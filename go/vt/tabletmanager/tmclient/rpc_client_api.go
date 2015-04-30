@@ -194,6 +194,13 @@ type TabletManagerClient interface {
 	// way that will stop all the slaves.
 	BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error
 
+	// StopReplicationAndGetPosition stops replication and returns the
+	// current position.
+	StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+
+	// PromoteSlave2 makes the tablet the new master
+	PromoteSlave2(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+
 	//
 	// Backup / restore related methods
 	//

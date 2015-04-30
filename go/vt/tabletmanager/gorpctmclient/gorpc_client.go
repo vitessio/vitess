@@ -476,6 +476,24 @@ func (client *GoRPCTabletManagerClient) BreakSlaves(ctx context.Context, tablet 
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionBreakSlaves, &rpc.Unused{}, &rpc.Unused{})
 }
 
+// StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionStopReplicationAndGetPosition, &rpc.Unused{}, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
+}
+
+// PromoteSlave2 is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) PromoteSlave2(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionPromoteSlave2, &rpc.Unused{}, &rp); err != nil {
+		return rp, err
+	}
+	return rp, nil
+}
+
 //
 // Backup related methods
 //

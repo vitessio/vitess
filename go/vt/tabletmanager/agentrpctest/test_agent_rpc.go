@@ -1192,6 +1192,40 @@ func agentRPCTestBreakSlavesPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapLockActionPanic(t, err)
 }
 
+func (fra *fakeRPCAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+func agentRPCTestStopReplicationAndGetPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.StopReplicationAndGetPosition(ctx, ti)
+	compareError(t, "StopReplicationAndGetPosition", err, rp, testReplicationPosition)
+}
+
+func agentRPCTestStopReplicationAndGetPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.StopReplicationAndGetPosition(ctx, ti)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
+func (fra *fakeRPCAgent) PromoteSlave2(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testReplicationPosition, nil
+}
+
+func agentRPCTestPromoteSlave2(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.PromoteSlave2(ctx, ti)
+	compareError(t, "PromoteSlave2", err, rp, testReplicationPosition)
+}
+
+func agentRPCTestPromoteSlave2Panic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.PromoteSlave2(ctx, ti)
+	expectRPCWrapLockActionPanic(t, err)
+}
+
 //
 // Backup / restore related methods
 //
@@ -1434,6 +1468,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSetMaster(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
 	agentRPCTestBreakSlaves(ctx, t, client, ti)
+	agentRPCTestStopReplicationAndGetPosition(ctx, t, client, ti)
+	agentRPCTestPromoteSlave2(ctx, t, client, ti)
 
 	// Backup / restore related methods
 	agentRPCTestSnapshot(ctx, t, client, ti)
@@ -1493,6 +1529,8 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSetMasterPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
 	agentRPCTestBreakSlavesPanic(ctx, t, client, ti)
+	agentRPCTestStopReplicationAndGetPositionPanic(ctx, t, client, ti)
+	agentRPCTestPromoteSlave2Panic(ctx, t, client, ti)
 
 	// Backup / restore related methods
 	agentRPCTestSnapshotPanic(ctx, t, client, ti)

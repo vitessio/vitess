@@ -98,6 +98,13 @@ const (
 	// stream in a way that will stop all the slaves.
 	TabletActionBreakSlaves = "BreakSlaves"
 
+	// TabletActionStopReplicationAndGetPosition will stop replication,
+	// and return the current position.
+	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"
+
+	// TabletActionPromoteSlave2 will make this tablet the master
+	TabletActionPromoteSlave2 = "PromoteSlave2"
+
 	// TabletActionStopSlave will stop MySQL replication.
 	TabletActionStopSlave = "StopSlave"
 
