@@ -128,17 +128,14 @@ func (wr *Wrangler) shardReplicationStatuses(ctx context.Context, shardInfo *top
 	return tablets, stats, err
 }
 
-// ReparentTablet attempts to reparent this tablet to the current
+// ReparentTablet tells a tablet to reparent this tablet to the current
 // master, based on the current replication position. If there is no
 // match, it will fail.
 func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletAlias) error {
 	// Get specified tablet.
 	// Get current shard master tablet.
 	// Sanity check they are in the same keyspace/shard.
-	// Get slave position for specified tablet.
-	// Get reparent position from master for the given slave position.
-	// Issue a restart slave on the specified tablet.
-
+	// Issue a SetMaster to the tablet.
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -165,22 +162,8 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletA
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	status, err := wr.tmc.SlaveStatus(ctx, ti)
-	if err != nil {
-		return err
-	}
-	wr.Logger().Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), status.Position)
-
-	rsd, err := wr.tmc.ReparentPosition(ctx, masterTi, &status.Position)
-	if err != nil {
-		return err
-	}
-
-	wr.Logger().Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationStatus.Position)
-	// An orphan is already in the replication graph but it is
-	// disconnected, hence we have to force this action.
-	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	return wr.tmc.RestartSlave(ctx, ti, rsd)
+	// and do the remote command
+	return wr.TabletManagerClient().SetMaster(ctx, ti, shardInfo.MasterAlias, 0)
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.

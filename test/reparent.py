@@ -550,10 +550,8 @@ class TestReparent(unittest.TestCase):
       "insert into vt_insert_test (msg) values ('test %s')" % x
       for x in xrange(4)]
 
-  # See if a lag slave can be safely reparent.
-  # TODO(alainjobart) this is broken, and irrelevant for GTID, will
-  # wait until the new re-parenting code is in place to refactor
-  def DISABLED_test_reparent_lag_slave(self, shard_id='0'):
+  # See if a missing slave can be safely reparented after the fact.
+  def test_reparent_with_down_slave(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
@@ -571,7 +569,7 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    tablet_41983.init_tablet('lag', 'test_keyspace', shard_id, start=True,
+    tablet_41983.init_tablet('spare', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
 
     # wait for all tablets to start
@@ -593,27 +591,40 @@ class TestReparent(unittest.TestCase):
 
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
-    tablet_41983.mquery('', 'stop slave')
+    utils.wait_procs([tablet_41983.shutdown_mysql()])
+
+    # Perform a graceful reparent operation. It will fail as one tablet is down.
+    stdout, stderr = utils.run_vtctl(['PlannedReparentShard',
+                                      'test_keyspace/' + shard_id,
+                                      tablet_62044.tablet_alias],
+                                      expect_fail=True)
+    if 'TabletManager.SetMaster on test_nj-0000041983 error' not in stderr:
+      self.fail(
+          "didn't find the right error strings in failed PlannedReparentShard: " +
+          stderr)
+
+    # insert data into the new master
     for q in self._populate_vt_insert_test:
-      tablet_62344.mquery('vt_test_keyspace', q, write=True)
+      tablet_62044.mquery('vt_test_keyspace', q, write=True)
 
-    # Perform a graceful reparent operation.
-    utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/' + shard_id,
-                     tablet_62044.tablet_alias])
-
-    tablet_41983.mquery('', 'start slave')
-    time.sleep(1)
+    # restart mysql on the old slave, should still be connecting to the
+    # old master
+    utils.wait_procs([tablet_41983.start_mysql()])
 
     utils.pause('check orphan')
 
+    # reparent the tablet, should catch up on replication really quickly
     utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
 
-    result = tablet_41983.mquery('vt_test_keyspace',
-                                 'select msg from vt_insert_test where id=1')
-    if len(result) != 1:
-      self.fail('expected 1 row from vt_insert_test: %s' % str(result))
-
-    utils.pause('check lag reparent')
+    # wait until it gets the data
+    timeout = 10.0
+    while True:
+      result = tablet_41983.mquery('vt_test_keyspace',
+                                   'select msg from vt_insert_test where id=1')
+      if len(result) == 1:
+        break
+      timeout = utils.wait_step('waiting for replication to catch up',
+                                timeout, sleep_time=0.1)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])

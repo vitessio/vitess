@@ -633,7 +633,11 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 		}
 	}
 
-	// wait until we get the replicated row, or our context times out
+	// if needed, wait until we get the replicated row, or our
+	// context times out
+	if timeCreatedNS == 0 {
+		return nil
+	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
