@@ -264,27 +264,20 @@ func (ev mariadbBinlogEvent) Format() (f blproto.BinlogFormat, err error) {
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte) {
+func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
 	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
 		// There is no checksum.
-		return ev, nil
+		return ev, nil, nil
 	default:
 		// Checksum is the last 4 bytes of the event buffer.
 		data := ev.Bytes()
 		length := len(data)
 		checksum := data[length-4:]
 		data = data[:length-4]
-		return mariadbBinlogEvent{binlogEvent: binlogEvent(data)}, checksum
+		return mariadbBinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
 	}
 }
-
-const (
-	// BinlogChecksumAlgOff indicates that checksums are supported but off.
-	BinlogChecksumAlgOff = 0
-	// BinlogChecksumAlgUndef indicates that checksums are not supported.
-	BinlogChecksumAlgUndef = 255
-)
 
 func init() {
 	registerFlavorBuiltin(mariadbFlavorID, &mariaDB10{})

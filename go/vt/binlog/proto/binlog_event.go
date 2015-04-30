@@ -78,7 +78,7 @@ type BinlogEvent interface {
 	// StripChecksum returns the checksum and a modified event with the checksum
 	// stripped off, if any. If there is no checksum, it returns the same event
 	// and a nil checksum.
-	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte)
+	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte, err error)
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.

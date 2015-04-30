@@ -49,17 +49,23 @@ func (fakeEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 func (fakeEvent) Rand(proto.BinlogFormat) (uint64, uint64, error) {
 	return 0, 0, errors.New("not a rand")
 }
-func (ev fakeEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev fakeEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidEvent struct{ fakeEvent }
 
-func (invalidEvent) IsValid() bool                                                   { return false }
-func (ev invalidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (invalidEvent) IsValid() bool { return false }
+func (ev invalidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type rotateEvent struct{ fakeEvent }
 
-func (rotateEvent) IsRotate() bool                                                  { return true }
-func (ev rotateEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (rotateEvent) IsRotate() bool { return true }
+func (ev rotateEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type formatEvent struct{ fakeEvent }
 
@@ -67,15 +73,17 @@ func (formatEvent) IsFormatDescription() bool { return true }
 func (formatEvent) Format() (proto.BinlogFormat, error) {
 	return proto.BinlogFormat{FormatVersion: 1}, nil
 }
-func (ev formatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev formatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidFormatEvent struct{ formatEvent }
 
 func (invalidFormatEvent) Format() (proto.BinlogFormat, error) {
 	return proto.BinlogFormat{}, errors.New("invalid format event")
 }
-func (ev invalidFormatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidFormatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 type queryEvent struct {
@@ -87,21 +95,25 @@ func (queryEvent) IsQuery() bool { return true }
 func (ev queryEvent) Query(proto.BinlogFormat) (proto.Query, error) {
 	return ev.query, nil
 }
-func (ev queryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev queryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidQueryEvent struct{ queryEvent }
 
 func (invalidQueryEvent) Query(proto.BinlogFormat) (proto.Query, error) {
 	return proto.Query{}, errors.New("invalid query event")
 }
-func (ev invalidQueryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidQueryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 type xidEvent struct{ fakeEvent }
 
-func (xidEvent) IsXID() bool                                                     { return true }
-func (ev xidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (xidEvent) IsXID() bool { return true }
+func (ev xidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type intVarEvent struct {
 	fakeEvent
@@ -113,15 +125,17 @@ func (intVarEvent) IsIntVar() bool { return true }
 func (ev intVarEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 	return ev.name, ev.value, nil
 }
-func (ev intVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev intVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidIntVarEvent struct{ intVarEvent }
 
 func (invalidIntVarEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 	return "", 0, errors.New("invalid intvar event")
 }
-func (ev invalidIntVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidIntVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 // sample MariaDB event data

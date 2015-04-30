@@ -264,3 +264,13 @@ func (ev binlogEvent) Rand(f blproto.BinlogFormat) (seed1 uint64, seed2 uint64, 
 func (ev binlogEvent) IsBeginGTID(f blproto.BinlogFormat) bool {
 	return false
 }
+
+// These constants are common between MariaDB 10.0 and MySQL 5.6.
+const (
+	// BinlogChecksumAlgOff indicates that checksums are supported but off.
+	BinlogChecksumAlgOff = 0
+	// BinlogChecksumAlgCRC32 indicates that CRC32 checksums are used.
+	BinlogChecksumAlgCRC32 = 1
+	// BinlogChecksumAlgUndef indicates that checksums are not supported.
+	BinlogChecksumAlgUndef = 255
+)
