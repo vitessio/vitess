@@ -13,6 +13,7 @@ tags
 
 # Eclipse files
 .project
+.pydevproject
 .settings/
 
 # cbson & other C build dirs
