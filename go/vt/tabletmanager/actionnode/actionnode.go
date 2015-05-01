@@ -115,10 +115,6 @@ const (
 	// TabletActionSlaveStatus returns the current slave status
 	TabletActionSlaveStatus = "SlaveStatus"
 
-	// TabletActionWaitSlavePosition waits until the slave reaches a
-	// replication position in MySQL replication
-	TabletActionWaitSlavePosition = "WaitSlavePosition"
-
 	// TabletActionWaitBLPPosition waits until the slave reaches a
 	// replication position in filtered replication
 	TabletActionWaitBLPPosition = "WaitBlpPosition"

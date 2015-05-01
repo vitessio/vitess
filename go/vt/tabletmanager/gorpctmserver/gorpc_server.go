@@ -228,18 +228,6 @@ func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, repl
 	})
 }
 
-// WaitSlavePosition wraps RPCAgent.WaitSlavePosition
-func (tm *TabletManager) WaitSlavePosition(ctx context.Context, args *gorpcproto.WaitSlavePositionArgs, reply *myproto.ReplicationStatus) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLock(ctx, actionnode.TabletActionWaitSlavePosition, args, reply, true, func() error {
-		status, err := tm.agent.WaitSlavePosition(ctx, args.Position, args.WaitTimeout)
-		if err == nil {
-			*reply = *status
-		}
-		return err
-	})
-}
-
 // MasterPosition wraps RPCAgent.MasterPosition
 func (tm *TabletManager) MasterPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

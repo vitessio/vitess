@@ -670,26 +670,6 @@ var testReplicationPosition = myproto.ReplicationPosition{
 		Sequence: 890,
 	},
 }
-var testWaitSlavePositionWaitTimeout = time.Hour
-
-func (fra *fakeRPCAgent) WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "WaitSlavePosition position", position, testReplicationPosition)
-	compare(fra.t, "WaitSlavePosition waitTimeout", waitTimeout, testWaitSlavePositionWaitTimeout)
-	return testReplicationStatus, nil
-}
-
-func agentRPCTestWaitSlavePosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rs, err := client.WaitSlavePosition(ctx, ti, testReplicationPosition, testWaitSlavePositionWaitTimeout)
-	compareError(t, "WaitSlavePosition", err, rs, testReplicationStatus)
-}
-
-func agentRPCTestWaitSlavePositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.WaitSlavePosition(ctx, ti, testReplicationPosition, testWaitSlavePositionWaitTimeout)
-	expectRPCWrapLockPanic(t, err)
-}
 
 func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
 	if fra.panics {
@@ -1355,7 +1335,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 
 	// Replication related methods
 	agentRPCTestSlaveStatus(ctx, t, client, ti)
-	agentRPCTestWaitSlavePosition(ctx, t, client, ti)
 	agentRPCTestMasterPosition(ctx, t, client, ti)
 	agentRPCTestStopSlave(ctx, t, client, ti)
 	agentRPCTestStopSlaveMinimum(ctx, t, client, ti)
@@ -1412,7 +1391,6 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 
 	// Replication related methods
 	agentRPCTestSlaveStatusPanic(ctx, t, client, ti)
-	agentRPCTestWaitSlavePositionPanic(ctx, t, client, ti)
 	agentRPCTestMasterPositionPanic(ctx, t, client, ti)
 	agentRPCTestStopSlavePanic(ctx, t, client, ti)
 	agentRPCTestStopSlaveMinimumPanic(ctx, t, client, ti)

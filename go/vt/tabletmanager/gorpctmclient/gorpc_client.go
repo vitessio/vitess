@@ -265,18 +265,6 @@ func (client *GoRPCTabletManagerClient) SlaveStatus(ctx context.Context, tablet 
 	return &status, nil
 }
 
-// WaitSlavePosition is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionWaitSlavePosition, &gorpcproto.WaitSlavePositionArgs{
-		Position:    waitPos,
-		WaitTimeout: waitTime,
-	}, &status); err != nil {
-		return nil, err
-	}
-	return &status, nil
-}
-
 // MasterPosition is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition

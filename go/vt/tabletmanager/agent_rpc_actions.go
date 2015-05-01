@@ -75,8 +75,6 @@ type RPCAgent interface {
 
 	SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error)
 
-	WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error)
-
 	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	StopSlave(ctx context.Context) error
@@ -303,17 +301,6 @@ func (agent *ActionAgent) ExecuteFetch(ctx context.Context, query string, maxrow
 // Should be called under RPCWrap.
 func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error) {
 	return agent.MysqlDaemon.SlaveStatus()
-}
-
-// WaitSlavePosition waits until we reach the provided position,
-// and returns the current position
-// Should be called under RPCWrapLock.
-func (agent *ActionAgent) WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
-	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
-		return nil, err
-	}
-
-	return agent.Mysqld.SlaveStatus()
 }
 
 // MasterPosition returns the master position

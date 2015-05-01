@@ -61,12 +61,6 @@ type GetSchemaArgs struct {
 	IncludeViews  bool
 }
 
-// WaitSlavePositionArgs has arguments for WaitSlavePosition
-type WaitSlavePositionArgs struct {
-	Position    myproto.ReplicationPosition
-	WaitTimeout time.Duration // pass in zero to wait indefinitely
-}
-
 // StopSlaveMinimumArgs has arguments for StopSlaveMinimum
 type StopSlaveMinimumArgs struct {
 	Position myproto.ReplicationPosition

@@ -96,10 +96,6 @@ type TabletManagerClient interface {
 	// SlaveStatus returns the tablet's mysql slave status.
 	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error)
 
-	// WaitSlavePosition asks the tablet to wait until it reaches that
-	// position in mysql replication
-	WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
-
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 

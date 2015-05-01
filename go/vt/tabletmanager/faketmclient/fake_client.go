@@ -163,12 +163,6 @@ func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *
 	return &status, nil
 }
 
-// WaitSlavePosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	return &status, nil
-}
-
 // MasterPosition is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
