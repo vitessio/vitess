@@ -175,9 +175,9 @@ func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *to
 }
 
 // StopSlaveMinimum is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	return &status, nil
+func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+	var pos myproto.ReplicationPosition
+	return pos, nil
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface

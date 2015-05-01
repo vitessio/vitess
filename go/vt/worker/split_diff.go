@@ -329,7 +329,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
 		}
 		stopPositionList.Entries[i].Uid = ss.Uid
-		stopPositionList.Entries[i].Position = stoppedAt.Position
+		stopPositionList.Entries[i].Position = stoppedAt
 
 		// change the cleaner actions from ChangeSlaveType(rdonly)
 		// to StartSlave() + ChangeSlaveType(spare)

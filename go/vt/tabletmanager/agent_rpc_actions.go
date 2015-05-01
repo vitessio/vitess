@@ -79,7 +79,7 @@ type RPCAgent interface {
 
 	StopSlave(ctx context.Context) error
 
-	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
+	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	StartSlave(ctx context.Context) error
 
@@ -317,14 +317,14 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position.
-func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
-	return agent.Mysqld.SlaveStatus()
+	return agent.Mysqld.MasterPosition()
 }
 
 // StartSlave will start the replication

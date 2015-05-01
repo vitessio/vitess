@@ -249,12 +249,12 @@ func (tm *TabletManager) StopSlave(ctx context.Context, args *rpc.Unused, reply 
 }
 
 // StopSlaveMinimum wraps RPCAgent.StopSlaveMinimum
-func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationStatus) error {
+func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLock(ctx, actionnode.TabletActionStopSlaveMinimum, args, reply, true, func() error {
-		status, err := tm.agent.StopSlaveMinimum(ctx, args.Position, args.WaitTime)
+		pos, err := tm.agent.StopSlaveMinimum(ctx, args.Position, args.WaitTime)
 		if err == nil {
-			*reply = *status
+			*reply = pos
 		}
 		return err
 	})

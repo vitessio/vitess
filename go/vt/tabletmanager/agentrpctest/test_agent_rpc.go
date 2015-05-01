@@ -710,18 +710,18 @@ func agentRPCTestStopSlavePanic(ctx context.Context, t *testing.T, client tmclie
 
 var testStopSlaveMinimumWaitTime = time.Hour
 
-func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "StopSlaveMinimum position", position.GTIDSet, testReplicationPosition.GTIDSet)
 	compare(fra.t, "StopSlaveMinimum waitTime", waitTime, testStopSlaveMinimumWaitTime)
-	return testReplicationStatus, nil
+	return testReplicationPositionReturned, nil
 }
 
 func agentRPCTestStopSlaveMinimum(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rs, err := client.StopSlaveMinimum(ctx, ti, testReplicationPosition, testStopSlaveMinimumWaitTime)
-	compareError(t, "StopSlave", err, rs, testReplicationStatus)
+	pos, err := client.StopSlaveMinimum(ctx, ti, testReplicationPosition, testStopSlaveMinimumWaitTime)
+	compareError(t, "StopSlave", err, pos, testReplicationPositionReturned)
 }
 
 func agentRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {

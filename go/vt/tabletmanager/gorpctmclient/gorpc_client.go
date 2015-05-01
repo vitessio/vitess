@@ -280,15 +280,15 @@ func (client *GoRPCTabletManagerClient) StopSlave(ctx context.Context, tablet *t
 }
 
 // StopSlaveMinimum is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
+func (client *GoRPCTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionStopSlaveMinimum, &gorpcproto.StopSlaveMinimumArgs{
 		Position: minPos,
 		WaitTime: waitTime,
-	}, &status); err != nil {
-		return nil, err
+	}, &pos); err != nil {
+		return pos, err
 	}
-	return &status, nil
+	return pos, nil
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface
