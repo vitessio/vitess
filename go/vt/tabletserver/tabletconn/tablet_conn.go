@@ -24,8 +24,8 @@ const (
 )
 
 const (
-	CONN_CLOSED = OperationalError("vttablet: Connection Closed")
-	CANCELLED   = OperationalError("vttablet: Context cancelled")
+	ConnClosed = OperationalError("vttablet: Connection Closed")
+	Cancelled  = OperationalError("vttablet: Context Cancelled")
 )
 
 var (

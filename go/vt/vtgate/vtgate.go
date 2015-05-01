@@ -572,8 +572,8 @@ func isErrorCausedByVTGate(err error) bool {
 		case *ShardConnError:
 			errQueue = append(errQueue, e.Err)
 		case tabletconn.OperationalError:
-			// tabletconn.CANCELLED errors are due to client behavior, not VTGate errors.
-			if e != tabletconn.CANCELLED {
+			// tabletconn.Cancelled errors are due to client behavior, not VTGate errors.
+			if e != tabletconn.Cancelled {
 				return true
 			}
 		case *tabletconn.ServerError:

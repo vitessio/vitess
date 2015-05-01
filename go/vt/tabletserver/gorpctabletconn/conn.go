@@ -95,7 +95,7 @@ func (conn *TabletBson) Execute(ctx context.Context, query string, bindVars map[
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return nil, tabletconn.CONN_CLOSED
+		return nil, tabletconn.ConnClosed
 	}
 
 	req := &tproto.Query{
@@ -119,7 +119,7 @@ func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return nil, tabletconn.CONN_CLOSED
+		return nil, tabletconn.ConnClosed
 	}
 
 	req := tproto.QueryList{
@@ -142,7 +142,7 @@ func (conn *TabletBson) StreamExecute(ctx context.Context, query string, bindVar
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return nil, nil, tabletconn.CONN_CLOSED
+		return nil, nil, tabletconn.ConnClosed
 	}
 
 	req := &tproto.Query{
@@ -173,7 +173,7 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return 0, tabletconn.CONN_CLOSED
+		return 0, tabletconn.ConnClosed
 	}
 
 	req := &tproto.Session{
@@ -192,7 +192,7 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return tabletconn.CONN_CLOSED
+		return tabletconn.ConnClosed
 	}
 
 	req := &tproto.Session{
@@ -211,7 +211,7 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return tabletconn.CONN_CLOSED
+		return tabletconn.ConnClosed
 	}
 
 	req := &tproto.Session{
@@ -230,7 +230,7 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		err = tabletconn.CONN_CLOSED
+		err = tabletconn.ConnClosed
 		return
 	}
 	req := &tproto.SplitQueryRequest{
@@ -287,6 +287,9 @@ func tabletError(err error) error {
 			code = tabletconn.ERR_NORMAL
 		}
 		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+	}
+	if err == context.Canceled {
+		return tabletconn.Cancelled
 	}
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
 }
