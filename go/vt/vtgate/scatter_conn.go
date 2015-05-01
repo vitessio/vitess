@@ -560,7 +560,11 @@ func (stc *ScatterConn) multiGo(
 			err = action(sdc, transactionID, results)
 			if err != nil {
 				allErrors.RecordError(err)
-				stc.tabletCallErrorCount.Add(statsKey, 1)
+				// Don't increment the error counter for duplicate keys, as those errors
+				// are caused by client queries and are not VTGate's fault.
+				if !strings.Contains(err.Error(), errDupKey) {
+					stc.tabletCallErrorCount.Add(statsKey, 1)
+				}
 				return
 			}
 		}(shard)
