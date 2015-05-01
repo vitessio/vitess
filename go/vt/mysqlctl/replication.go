@@ -30,11 +30,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-const (
-	// SlaveStartDeadline is the deadline for starting a slave
-	SlaveStartDeadline = 30
-)
-
 var masterPasswordStart = "  MASTER_PASSWORD = '"
 var masterPasswordEnd = "',\n"
 
@@ -47,7 +42,7 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-func changeMasterArgs2(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
+func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
 	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
 	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))
@@ -71,10 +66,6 @@ func changeMasterArgs2(params *sqldb.ConnParams, masterHost string, masterPort i
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
 	return args
-}
-
-func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus) []string {
-	return changeMasterArgs2(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
