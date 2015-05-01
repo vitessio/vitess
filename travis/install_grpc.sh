@@ -23,8 +23,8 @@ fi
 CONFIG=opt ./tools/run_tests/build_python.sh
 if [ "$grpc_dist" != "" ]; then
   pip install -r src/python/requirements.txt -t $grpc_dist/lib/python2.7/site-packages
-  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/src
+  CFLAGS=-I$grpc_dist/include LDFLAGS=-L$grpc_dist/lib pip install src/python/src -t $grpc_dist/lib/python2.7/site-packages
 else
   pip install -r src/python/requirements.txt
- pip install src/python/src
+  pip install src/python/src
 fi
