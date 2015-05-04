@@ -711,7 +711,6 @@ class TestFailures(unittest.TestCase):
 
   def tablet_start(self, tablet, tablet_type, lameduck_period='0.5s'):
     return tablet.start_vttablet(lameduck_period=lameduck_period)
-    #                             target_tablet_type=tablet_type)
 
   def test_status_with_error(self):
     """Tests that the status page loads correctly after a VTGate error."""
@@ -1081,6 +1080,7 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet2.wait_for_vttablet_state('SERVING')
     self.replica_tablet2.kill_vttablet()
     self.replica_tablet.kill_vttablet(wait=False)
+    time.sleep(0.1)
     # send query while vttablet is in lameduck, should fail as no vttablet
     try:
       vtgate_conn._execute(
@@ -1146,6 +1146,7 @@ class TestFailures(unittest.TestCase):
     self.assertTrue((t2_query_count_after-t2_query_count_before) == 1)
     # kill tablet2 and leave it in lameduck mode
     self.replica_tablet2.kill_vttablet(wait=False)
+    time.sleep(0.1)
     # send query while tablet2 is in lameduck, should retry on tablet1
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_before = int(tablet1_vars['Queries']['TotalCount'])
