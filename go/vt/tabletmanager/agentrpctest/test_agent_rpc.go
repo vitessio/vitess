@@ -611,7 +611,7 @@ func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	testExecuteFetchDbConfigName = dbconfigs.DbaConfigName
-	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
 	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
 	testExecuteFetchDbConfigName = dbconfigs.AppConfigName
 	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
@@ -619,7 +619,7 @@ func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient
 }
 
 func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	_, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
 	expectRPCWrapPanic(t, err)
 
 	_, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)

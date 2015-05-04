@@ -90,6 +90,7 @@ type ExecuteFetchArgs struct {
 	MaxRows        int
 	WantFields     bool
 	DisableBinlogs bool
+	ReloadSchema   bool
 	DBConfigName   dbconfigs.DbConfigName
 }
 
