@@ -215,7 +215,7 @@ class EarlyAdopterVtctlStub(object):
   def ExecuteVtctlCommand(self, request):
     raise NotImplementedError()
   ExecuteVtctlCommand.async = None
-def early_adopter_create_Vtctl_server(servicer, port, root_certificates, key_chain_pairs):
+def early_adopter_create_Vtctl_server(servicer, port, private_key=None, certificate_chain=None):
   import vtctl_pb2
   import vtctl_pb2
   method_service_descriptions = {
@@ -225,8 +225,8 @@ def early_adopter_create_Vtctl_server(servicer, port, root_certificates, key_cha
       vtctl_pb2.LoggerEvent.SerializeToString,
     ),
   }
-  return implementations.secure_server("vtctl.Vtctl", method_service_descriptions, port, root_certificates, key_chain_pairs)
-def early_adopter_create_Vtctl_stub(host, port):
+  return implementations.server("vtctl.Vtctl", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
+def early_adopter_create_Vtctl_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
   import vtctl_pb2
   import vtctl_pb2
   method_invocation_descriptions = {
@@ -235,5 +235,5 @@ def early_adopter_create_Vtctl_stub(host, port):
       vtctl_pb2.LoggerEvent.FromString,
     ),
   }
-  return implementations.stub("vtctl.Vtctl", method_invocation_descriptions, host, port)
+  return implementations.stub("vtctl.Vtctl", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)
