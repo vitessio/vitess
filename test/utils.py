@@ -720,8 +720,10 @@ class Vtctld(object):
 
     # save the running instance so vtctl commands can be remote executed now
     protocol = protocols_flavor().vtctl_client_protocol()
-    # temporary protocol override until python client support works
     if protocol == "grpc":
+      # import the grpc vtctl client implementation, disabled for now:
+      # from vtctl import grpc_vtctl_client
+      # temporary protocol override until python client support works
       protocol = "gorpc"
     global vtctld, vtctld_connection
     if not vtctld:

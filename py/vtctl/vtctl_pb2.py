@@ -192,7 +192,7 @@ _sym_db.RegisterMessage(LoggerEvent)
 
 import abc
 from grpc.early_adopter import implementations
-from grpc.early_adopter import utilities
+from grpc.framework.alpha import utilities
 class EarlyAdopterVtctlServicer(object):
   """<fill me in later!>"""
   __metaclass__ = abc.ABCMeta
@@ -225,7 +225,7 @@ def early_adopter_create_Vtctl_server(servicer, port, root_certificates, key_cha
       vtctl_pb2.LoggerEvent.SerializeToString,
     ),
   }
-  return implementations.secure_server(method_service_descriptions, port, root_certificates, key_chain_pairs)
+  return implementations.secure_server("vtctl.Vtctl", method_service_descriptions, port, root_certificates, key_chain_pairs)
 def early_adopter_create_Vtctl_stub(host, port):
   import vtctl_pb2
   import vtctl_pb2
@@ -235,5 +235,5 @@ def early_adopter_create_Vtctl_stub(host, port):
       vtctl_pb2.LoggerEvent.FromString,
     ),
   }
-  return implementations.insecure_stub(method_invocation_descriptions, host, port)
+  return implementations.stub("vtctl.Vtctl", method_invocation_descriptions, host, port)
 # @@protoc_insertion_point(module_scope)
