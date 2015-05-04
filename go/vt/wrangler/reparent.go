@@ -72,54 +72,39 @@ func (wr *Wrangler) shardReplicationStatuses(ctx context.Context, shardInfo *top
 // tablets.
 func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*topo.TabletInfo) ([]*myproto.ReplicationStatus, error) {
 	wr.logger.Infof("tabletReplicationStatuses: %v", tablets)
-	calls := make([]*rpcContext, len(tablets))
 	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	result := make([]*myproto.ReplicationStatus, len(tablets))
 
-	f := func(idx int) {
-		defer wg.Done()
-		ti := tablets[idx]
-		rpcCtx := &rpcContext{tablet: ti}
-		calls[idx] = rpcCtx
+	for i, ti := range tablets {
+		// Don't scan tablets that won't return something
+		// useful. Otherwise, you'll end up waiting for a timeout.
 		if ti.Type == topo.TYPE_MASTER {
-			pos, err := wr.tmc.MasterPosition(ctx, ti)
-			rpcCtx.err = err
-			if err == nil {
-				rpcCtx.status = &myproto.ReplicationStatus{Position: pos}
-			}
-		} else if ti.IsSlaveType() {
-			rpcCtx.status, rpcCtx.err = wr.tmc.SlaveStatus(ctx, ti)
-		}
-	}
-
-	for i, tablet := range tablets {
-		// Don't scan tablets that won't return something useful. Otherwise, you'll
-		// end up waiting for a timeout.
-		if tablet.Type == topo.TYPE_MASTER || tablet.IsSlaveType() {
 			wg.Add(1)
-			go f(i)
-		} else {
-			wr.logger.Infof("tabletReplicationPositions: skipping tablet %v type %v", tablet.Alias, tablet.Type)
+			go func(i int, ti *topo.TabletInfo) {
+				defer wg.Done()
+				pos, err := wr.tmc.MasterPosition(ctx, ti)
+				if err != nil {
+					rec.RecordError(fmt.Errorf("MasterPosition(%v) failed: %v", ti.Alias, err))
+				} else {
+					result[i] = &myproto.ReplicationStatus{Position: pos}
+				}
+			}(i, ti)
+		} else if ti.IsSlaveType() {
+			wg.Add(1)
+			go func(i int, ti *topo.TabletInfo) {
+				defer wg.Done()
+				status, err := wr.tmc.SlaveStatus(ctx, ti)
+				if err != nil {
+					rec.RecordError(fmt.Errorf("SlaveStatus(%v) failed: %v", ti.Alias, err))
+				} else {
+					result[i] = status
+				}
+			}(i, ti)
 		}
 	}
 	wg.Wait()
-
-	someErrors := false
-	stats := make([]*myproto.ReplicationStatus, len(tablets))
-	for i, rpcCtx := range calls {
-		if rpcCtx == nil {
-			continue
-		}
-		if rpcCtx.err != nil {
-			wr.logger.Warningf("could not get replication status for tablet %v %v", rpcCtx.tablet.Alias, rpcCtx.err)
-			someErrors = true
-		} else {
-			stats[i] = rpcCtx.status
-		}
-	}
-	if someErrors {
-		return stats, fmt.Errorf("partial position map, some errors")
-	}
-	return stats, nil
+	return result, rec.Error()
 }
 
 // ReparentTablet tells a tablet to reparent this tablet to the current
