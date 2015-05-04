@@ -155,12 +155,6 @@ const (
 	// a potential master and don't worry about lag when reparenting.
 	TYPE_EXPERIMENTAL = TabletType("experimental")
 
-	// a slaved copy of the data intentionally lagged for pseudo backup
-	TYPE_LAG = TabletType("lag")
-	// when a reparent occurs, the tablet goes into lag_orphan state until
-	// it can be reparented properly
-	TYPE_LAG_ORPHAN = TabletType("lag_orphan")
-
 	// a slaved copy of the data that was serving but is now applying
 	// a schema change. Will go bak to its serving type after the
 	// upgrade
@@ -196,8 +190,6 @@ var AllTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_BATCH,
 	TYPE_SPARE,
 	TYPE_EXPERIMENTAL,
-	TYPE_LAG,
-	TYPE_LAG_ORPHAN,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
 	TYPE_SNAPSHOT_SOURCE,
@@ -213,8 +205,6 @@ var SlaveTabletTypes = []TabletType{
 	TYPE_BATCH,
 	TYPE_SPARE,
 	TYPE_EXPERIMENTAL,
-	TYPE_LAG,
-	TYPE_LAG_ORPHAN,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
 	TYPE_SNAPSHOT_SOURCE,
@@ -252,9 +242,9 @@ func MakeStringTypeList(types []TabletType) []string {
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -314,9 +304,9 @@ func IsRunningUpdateStream(tt TabletType) bool {
 
 // IsInReplicationGraph returns if this tablet appears in the replication graph
 // Only IDLE and SCRAP are not in the replication graph.
-// The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE
-// and LAG_ORPHAN: these have had a master at some point (or were the
-// master), so they are in the graph.
+// The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE:
+// these have had a master at some point (or were the master), so they are
+// in the graph.
 func IsInReplicationGraph(tt TabletType) bool {
 	switch tt {
 	case TYPE_IDLE, TYPE_SCRAP:
@@ -329,10 +319,10 @@ func IsInReplicationGraph(tt TabletType) bool {
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // IDLE and SCRAP are not either
-// BACKUP, RESTORE, LAG_ORPHAN, TYPE_CHECKER may or may not be, but we don't know for sure
+// BACKUP, RESTORE, TYPE_CHECKER may or may not be, but we don't know for sure
 func IsSlaveType(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN, TYPE_CHECKER:
+	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_CHECKER:
 		return false
 	}
 	return true
