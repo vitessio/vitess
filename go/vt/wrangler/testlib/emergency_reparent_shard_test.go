@@ -156,3 +156,49 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 		t.Fatalf("moreAdvancedSlave.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 }
+
+func TestReparentTablet(t *testing.T) {
+	ctx := context.Background()
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+
+	// create shard and tablets
+	if err := topo.CreateShard(ts, "test_keyspace", "0"); err != nil {
+		t.Fatalf("CreateShard failed: %v", err)
+	}
+	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
+	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
+
+	// mark the master inside the shard
+	si, err := ts.GetShard("test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.MasterAlias = master.Tablet.Alias
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
+
+	// master action loop (to initialize host and port)
+	master.StartActionLoop(t, wr)
+	defer master.StopActionLoop(t)
+
+	// slave loop
+	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", master.Tablet.Hostname, master.Tablet.Portmap["mysql"], 10)
+	slave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
+	slave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"set master cmd 1",
+	}
+	slave.StartActionLoop(t, wr)
+	defer slave.StopActionLoop(t)
+
+	// run ReparentTablet
+	if err := wr.ReparentTablet(ctx, slave.Tablet.Alias); err != nil {
+		t.Fatalf("ReparentTablet failed: %v", err)
+	}
+
+	// check what was run
+	if err := slave.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
+		t.Fatalf("slave.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+	}
+}
