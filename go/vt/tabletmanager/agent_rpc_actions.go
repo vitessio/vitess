@@ -75,15 +75,11 @@ type RPCAgent interface {
 
 	SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error)
 
-	WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error)
-
 	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
-
-	ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
 
 	StopSlave(ctx context.Context) error
 
-	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
+	StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	StartSlave(ctx context.Context) error
 
@@ -111,19 +107,17 @@ type RPCAgent interface {
 
 	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error)
-
 	PromoteSlaveWhenCaughtUp(ctx context.Context, replicationPosition myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	SlaveWasPromoted(ctx context.Context) error
-
-	RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error
 
 	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
-	BreakSlaves(ctx context.Context) error
+	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
+
+	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	// Backup / restore related methods
 
@@ -309,37 +303,10 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.Replication
 	return agent.MysqlDaemon.SlaveStatus()
 }
 
-// WaitSlavePosition waits until we reach the provided position,
-// and returns the current position
-// Should be called under RPCWrapLock.
-func (agent *ActionAgent) WaitSlavePosition(ctx context.Context, position myproto.ReplicationPosition, waitTimeout time.Duration) (*myproto.ReplicationStatus, error) {
-	if err := agent.Mysqld.WaitMasterPos(position, waitTimeout); err != nil {
-		return nil, err
-	}
-
-	return agent.Mysqld.SlaveStatus()
-}
-
 // MasterPosition returns the master position
 // Should be called under RPCWrap.
 func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
 	return agent.Mysqld.MasterPosition()
-}
-
-// ReparentPosition returns the RestartSlaveData for the provided
-// ReplicationPosition.
-// Should be called under RPCWrap.
-func (agent *ActionAgent) ReparentPosition(ctx context.Context, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	replicationStatus, waitPosition, timePromoted, err := agent.Mysqld.ReparentPosition(*rp)
-	if err != nil {
-		return nil, err
-	}
-	rsd := new(actionnode.RestartSlaveData)
-	rsd.ReplicationStatus = replicationStatus
-	rsd.TimePromoted = timePromoted
-	rsd.WaitPosition = waitPosition
-	rsd.Parent = agent.TabletAlias
-	return rsd, nil
 }
 
 // StopSlave will stop the replication
@@ -350,14 +317,14 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
 // provided position.
-func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
+func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
 	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
-		return nil, err
+		return myproto.ReplicationPosition{}, err
 	}
-	return agent.Mysqld.SlaveStatus()
+	return agent.Mysqld.MasterPosition()
 }
 
 // StartSlave will start the replication
@@ -511,29 +478,6 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 	// until well promote the master.
 }
 
-// PromoteSlave transforms the current tablet from a slave to a master.
-// It returns the data needed for other tablets to become a slave.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (*actionnode.RestartSlaveData, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	// Perform the action.
-	rsd := &actionnode.RestartSlaveData{
-		Parent: tablet.Alias,
-		Force:  (tablet.Type == topo.TYPE_MASTER),
-	}
-	rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted, err = agent.Mysqld.PromoteSlave(false, agent.hookExtraEnv())
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("PromoteSlave response: %v", *rsd)
-
-	return rsd, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-}
-
 // PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
 // replication up to the provided point, and then makes the slave the
 // shard master.
@@ -556,7 +500,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 		return myproto.ReplicationPosition{}, err
 	}
 
-	rp, err := agent.MysqlDaemon.PromoteSlave2(agent.hookExtraEnv())
+	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -573,29 +517,6 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 	}
 
 	return agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
-}
-
-// RestartSlave tells the tablet it has a new master
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) RestartSlave(ctx context.Context, rsd *actionnode.RestartSlaveData) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type == topo.TYPE_LAG && !rsd.Force {
-		// if tablet is behind on replication, keep it lagged, but orphan it
-		tablet.Type = topo.TYPE_LAG_ORPHAN
-		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	}
-	if err = agent.Mysqld.RestartSlave(rsd.ReplicationStatus, rsd.WaitPosition, rsd.TimePromoted); err != nil {
-		return err
-	}
-	// Complete the special orphan accounting.
-	if tablet.Type == topo.TYPE_LAG_ORPHAN {
-		tablet.Type = topo.TYPE_LAG
-		return topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	}
-	return nil
 }
 
 // SetMaster sets replication master, and waits for the
@@ -629,7 +550,11 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 		}
 	}
 
-	// wait until we get the replicated row, or our context times out
+	// if needed, wait until we get the replicated row, or our
+	// context times out
+	if timeCreatedNS == 0 {
+		return nil
+	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
@@ -660,11 +585,29 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	return nil
 }
 
-// BreakSlaves will tinker with the replication stream in a way that
-// will stop all the slaves.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) BreakSlaves(ctx context.Context) error {
-	return agent.Mysqld.BreakSlaves()
+// StopReplicationAndGetPosition stops MySQL replication, and returns the
+// current position
+func (agent *ActionAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return agent.MysqlDaemon.MasterPosition()
+}
+
+// PromoteSlave makes the current tablet the master
+func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
 // updateReplicationGraphForPromotedSlave makes sure the newly promoted slave

@@ -163,22 +163,10 @@ func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *
 	return &status, nil
 }
 
-// WaitSlavePosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	return &status, nil
-}
-
 // MasterPosition is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
 	return rp, nil
-}
-
-// ReparentPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error) {
-	var rsd actionnode.RestartSlaveData
-	return &rsd, nil
 }
 
 // StopSlave is part of the tmclient.TabletManagerClient interface
@@ -187,9 +175,9 @@ func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *to
 }
 
 // StopSlaveMinimum is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error) {
-	var status myproto.ReplicationStatus
-	return &status, nil
+func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, minPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
+	var pos myproto.ReplicationPosition
+	return pos, nil
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface
@@ -269,12 +257,6 @@ func (client *FakeTabletManagerClient) DemoteMaster(ctx context.Context, tablet 
 	return rp, nil
 }
 
-// PromoteSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error) {
-	var rsd actionnode.RestartSlaveData
-	return &rsd, nil
-}
-
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
@@ -283,11 +265,6 @@ func (client *FakeTabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Cont
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error {
-	return nil
-}
-
-// RestartSlave is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error {
 	return nil
 }
 
@@ -301,9 +278,16 @@ func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, ta
 	return nil
 }
 
-// BreakSlaves is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error {
-	return nil
+// StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
+}
+
+// PromoteSlave is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
+	return rp, nil
 }
 
 //

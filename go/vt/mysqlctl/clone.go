@@ -28,8 +28,16 @@ const (
 )
 
 const (
+	// slaveStartDeadline is the deadline for starting a slave
+	slaveStartDeadline = 30
+)
+
+const (
+	// SnapshotManifestFile is the file name for the snapshot manifest.
 	SnapshotManifestFile = "snapshot_manifest.json"
-	SnapshotURLPath      = "/snapshot"
+
+	// SnapshotURLPath is the URL where to find the snapshot manifest.
+	SnapshotURLPath = "/snapshot"
 )
 
 // Validate that this instance is a reasonable source of data.
@@ -74,6 +82,8 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool, hookExtraEnv map[stri
 	return nil
 }
 
+// ValidateCloneTarget makes sure this mysql daemon is a valid target
+// for a clone.
 func (mysqld *Mysqld) ValidateCloneTarget(hookExtraEnv map[string]string) error {
 	// run a hook to check local things
 	h := hook.NewSimpleHook("preflight_restore")
@@ -125,21 +135,6 @@ func findFilesToServe(srcDir, dstDir string, compress bool) ([]string, []string,
 		}
 	}
 	return sources, destinations, nil
-}
-
-func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
-	fiList, err := ioutil.ReadDir(mysqld.config.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	dbNames := make([]string, 0, 16)
-	for _, fi := range fiList {
-		if strings.HasSuffix(fi.Name(), "vt_") {
-			dbNames = append(dbNames, fi.Name())
-		}
-	}
-	return dbNames, nil
 }
 
 func (mysqld *Mysqld) createSnapshot(logger logutil.Logger, concurrency int, serverMode bool) ([]SnapshotFile, error) {
@@ -215,7 +210,7 @@ func (mysqld *Mysqld) createSnapshot(logger logutil.Logger, concurrency int, ser
 	return newSnapshotFiles(sources, destinations, mysqld.SnapshotDir, concurrency, !serverMode)
 }
 
-// This function runs on the machine acting as the source for the clone.
+// CreateSnapshot runs on the machine acting as the source for the clone.
 //
 // Check master/slave status and determine restore needs.
 // If this instance is a slave, stop replication, otherwise place in read-only mode.
@@ -234,7 +229,7 @@ func (mysqld *Mysqld) createSnapshot(logger logutil.Logger, concurrency int, ser
 //   Compute hash (of uncompressed files, as we serve uncompressed files)
 //   Place symlinks in /vt/clone_src where they will be served by http server
 //   Leave mysql stopped, return slaveStartRequired, readOnly
-func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
+func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestURLPath string, slaveStartRequired, readOnly bool, err error) {
 	if dbName == "" {
 		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -316,7 +311,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 			logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 		} else {
 			smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
-			if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
+			if snapshotErr = writeJSON(smFile, sm); snapshotErr != nil {
 				logger.Errorf("CreateSnapshot failed: %v", snapshotErr)
 			}
 		}
@@ -341,6 +336,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 	return path.Join(SnapshotURLPath, relative), slaveStartRequired, readOnly, nil
 }
 
+// SnapshotSourceEnd removes the current snapshot, and restarts mysqld.
 func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnapshot bool, hookExtraEnv map[string]string) error {
 	if deleteSnapshot {
 		// clean out our files
@@ -363,7 +359,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 		}
 
 		// this should be quick, but we might as well just wait
-		if err := mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
+		if err := mysqld.WaitForSlaveStart(slaveStartDeadline); err != nil {
 			return err
 		}
 	}
@@ -376,7 +372,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 	return nil
 }
 
-func writeJson(filename string, x interface{}) error {
+func writeJSON(filename string, x interface{}) error {
 	data, err := json.MarshalIndent(x, "  ", "  ")
 	if err != nil {
 		return err
@@ -384,6 +380,7 @@ func writeJson(filename string, x interface{}) error {
 	return ioutil2.WriteFileAtomic(filename, data, 0660)
 }
 
+// ReadSnapshotManifest reads and unpacks a SnapshotManifest
 func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -396,8 +393,8 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 	return sm, nil
 }
 
-// This piece runs on the presumably empty machine acting as the target in the
-// create replica action.
+// RestoreFromSnapshot runs on the presumably empty machine acting as
+// the target in the create replica action.
 //
 // validate target (self)
 // shutdown_mysql()
@@ -441,7 +438,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(logger logutil.Logger, snapshotManifes
 	}
 
 	if !dontWaitForSlaveStart {
-		if err := mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
+		if err := mysqld.WaitForSlaveStart(slaveStartDeadline); err != nil {
 			return err
 		}
 	}

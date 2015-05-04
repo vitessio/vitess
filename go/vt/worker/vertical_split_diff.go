@@ -333,7 +333,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
 	}
 	stopPositionList.Entries[0].Uid = ss.Uid
-	stopPositionList.Entries[0].Position = stoppedAt.Position
+	stopPositionList.Entries[0].Position = stoppedAt
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
 	// to StartSlave() + ChangeSlaveType(spare)

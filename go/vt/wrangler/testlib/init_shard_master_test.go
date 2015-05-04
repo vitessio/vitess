@@ -148,7 +148,7 @@ func TestInitMasterShardChecks(t *testing.T) {
 	master2.StartActionLoop(t, wr)
 	defer master2.StopActionLoop(t)
 	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, true /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "unexpected extra query") {
-		t.Errorf("InitShardMaster with new master failing BreakSlaves returned wrong error: %v", err)
+		t.Errorf("InitShardMaster with new master failing in new master InitMaster returned wrong error: %v", err)
 	}
 }
 

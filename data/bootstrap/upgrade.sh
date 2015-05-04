@@ -20,7 +20,7 @@ set -e
 mkdir -p $logdir
 
 echo Starting mysqld
-mysqlctl $mysqlctl_args init -skip_schema
+mysqlctl $mysqlctl_args init
 
 echo Running mysql_upgrade
 mysql_upgrade --socket=$tablet_dir/mysql.sock --user=vt_dba 

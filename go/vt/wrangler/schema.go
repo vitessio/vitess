@@ -20,7 +20,6 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 )
 
@@ -387,39 +386,22 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !newParentTabletAlias.IsZero() {
 		log.Infof("Reparenting with new master set to %v", newParentTabletAlias)
-		tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
-		if err != nil {
-			return nil, err
-		}
-
-		slaveTabletMap, masterTabletMap := topotools.SortedTabletMap(tabletMap)
-		newMasterTablet, err := wr.ts.GetTablet(newParentTabletAlias)
-		if err != nil {
-			return nil, err
-		}
+		oldMasterAlias := shardInfo.MasterAlias
 
 		// Create reusable Reparent event with available info
-		ev := &events.Reparent{
-			ShardInfo: *shardInfo,
-			NewMaster: *newMasterTablet.Tablet,
-		}
+		ev := &events.Reparent{}
 
-		if oldMasterTablet, ok := tabletMap[shardInfo.MasterAlias]; ok {
-			ev.OldMaster = *oldMasterTablet.Tablet
-		}
-
-		err = wr.reparentShardGraceful(ctx, ev, shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false, waitSlaveTimeout)
-		if err != nil {
+		if err := wr.plannedReparentShardLocked(ctx, ev, shardInfo.Keyspace(), shardInfo.ShardName(), newParentTabletAlias, waitSlaveTimeout); err != nil {
 			return nil, err
 		}
 
 		// Here we would apply the schema change to the old
-		// master, but after a reparent it's in Scrap state,
-		// so no need to.  When/if reparent leaves the
-		// original master in a different state (like replica
-		// or rdonly), then we should apply the schema there
-		// too.
-		log.Infof("Skipping schema change on old master %v in complex mode, it's been Scrapped", masterTabletAlias)
+		// master, but we just scrap it, to be consistent
+		// with the previous implementation of the reparent.
+		// (this code will be refactored at some point anyway)
+		if err := wr.Scrap(ctx, oldMasterAlias, false, false); err != nil {
+			wr.Logger().Warningf("Scrapping old master %v from shard %v/%v failed: %v", oldMasterAlias, shardInfo.Keyspace(), shardInfo.ShardName(), err)
+		}
 	}
 	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }

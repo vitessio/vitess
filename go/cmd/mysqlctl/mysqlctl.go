@@ -33,10 +33,9 @@ var (
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
-	skipSchema := subFlags.Bool("skip_schema", false, "don't apply initial schema")
 	subFlags.Parse(args)
 
-	if err := mysqld.Init(*waitTime, *bootstrapArchive, *skipSchema); err != nil {
+	if err := mysqld.Init(*waitTime, *bootstrapArchive); err != nil {
 		return fmt.Errorf("failed init mysql: %v", err)
 	}
 	return nil
@@ -144,7 +143,7 @@ type command struct {
 }
 
 var commands = []command{
-	command{"init", initCmd, "[-wait_time=20s] [-bootstrap_archive=mysql-db-dir.tbz] [-skip_schema]",
+	command{"init", initCmd, "[-wait_time=20s] [-bootstrap_archive=mysql-db-dir.tbz]",
 		"Initalizes the directory structure and starts mysqld"},
 	command{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},

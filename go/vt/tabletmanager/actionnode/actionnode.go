@@ -67,10 +67,6 @@ const (
 	// about to not be a master any more, and should go read-only.
 	TabletActionDemoteMaster = "DemoteMaster"
 
-	// TabletActionPromoteSlave tells the tablet it is going to be
-	// the master.
-	TabletActionPromoteSlave = "PromoteSlave"
-
 	// TabletActionPromoteSlaveWhenCaughtUp tells the tablet to wait
 	// for a given replication point, and when it reaches it
 	// switch to be a master.
@@ -80,9 +76,6 @@ const (
 	// tablet is now the master. The tablet will update its
 	// own topology record.
 	TabletActionSlaveWasPromoted = "SlaveWasPromoted"
-
-	// TabletActionRestartSlave tells the remote tablet it has a new master.
-	TabletActionRestartSlave = "RestartSlave"
 
 	// TabletActionSetMaster tells a tablet it has a new master.
 	// The tablet will reparent to the new master, and wait for
@@ -94,9 +87,12 @@ const (
 	// case, and update its own topology record.
 	TabletActionSlaveWasRestarted = "SlaveWasRestarted"
 
-	// TabletActionBreakSlaves will tinker with the replication
-	// stream in a way that will stop all the slaves.
-	TabletActionBreakSlaves = "BreakSlaves"
+	// TabletActionStopReplicationAndGetPosition will stop replication,
+	// and return the current position.
+	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"
+
+	// TabletActionPromoteSlave will make this tablet the master
+	TabletActionPromoteSlave = "PromoteSlave"
 
 	// TabletActionStopSlave will stop MySQL replication.
 	TabletActionStopSlave = "StopSlave"
@@ -116,16 +112,8 @@ const (
 	// TabletActionMasterPosition returns the current master position
 	TabletActionMasterPosition = "MasterPosition"
 
-	// TabletActionReparentPosition returns the data for a slave
-	// to use to reparent to the target tablet at the given position.
-	TabletActionReparentPosition = "ReparentPosition"
-
 	// TabletActionSlaveStatus returns the current slave status
 	TabletActionSlaveStatus = "SlaveStatus"
-
-	// TabletActionWaitSlavePosition waits until the slave reaches a
-	// replication position in MySQL replication
-	TabletActionWaitSlavePosition = "WaitSlavePosition"
 
 	// TabletActionWaitBLPPosition waits until the slave reaches a
 	// replication position in filtered replication

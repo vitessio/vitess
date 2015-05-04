@@ -327,7 +327,7 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 // Init will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file, unpack a skeleton database,
 // and create some management tables.
-func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string, skipSchema bool) error {
+func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string) error {
 	log.Infof("mysqlctl.Init")
 	err := mysqld.createDirs()
 	if err != nil {
@@ -361,27 +361,7 @@ func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string,
 		return err
 	}
 
-	// Load initial schema.
-	if skipSchema {
-		return nil
-	}
-	schemaPath := path.Join(root, "data/bootstrap/_vt_schema.sql")
-	schema, err := ioutil.ReadFile(schemaPath)
-	if err != nil {
-		return err
-	}
-
-	sqlCmds := make([]string, 0, 10)
-	log.Infof("initial schema: %v", string(schema))
-	for _, cmd := range strings.Split(string(schema), ";") {
-		cmd = strings.TrimSpace(cmd)
-		if cmd == "" {
-			continue
-		}
-		sqlCmds = append(sqlCmds, cmd)
-	}
-
-	return mysqld.ExecuteSuperQueryList(sqlCmds)
+	return nil
 }
 
 func (mysqld *Mysqld) initConfig(root string) error {

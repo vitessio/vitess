@@ -30,11 +30,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-const (
-	// SlaveStartDeadline is the deadline for starting a slave
-	SlaveStartDeadline = 30
-)
-
 var masterPasswordStart = "  MASTER_PASSWORD = '"
 var masterPasswordEnd = "',\n"
 
@@ -47,7 +42,7 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-func changeMasterArgs2(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
+func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) []string {
 	var args []string
 	args = append(args, fmt.Sprintf("MASTER_HOST = '%s'", masterHost))
 	args = append(args, fmt.Sprintf("MASTER_PORT = %d", masterPort))
@@ -71,10 +66,6 @@ func changeMasterArgs2(params *sqldb.ConnParams, masterHost string, masterPort i
 		args = append(args, fmt.Sprintf("MASTER_SSL_KEY = '%s'", params.SslKey))
 	}
 	return args
-}
-
-func changeMasterArgs(params *sqldb.ConnParams, status *proto.ReplicationStatus) []string {
-	return changeMasterArgs2(params, status.MasterHost, status.MasterPort, status.MasterConnectRetry)
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
@@ -201,45 +192,6 @@ var (
 	ErrNotMaster = errors.New("no master status")
 )
 
-// ReparentPosition returns a replication state that will reparent a slave to the
-// correct master for a specified position.
-func (mysqld *Mysqld) ReparentPosition(slavePosition proto.ReplicationPosition) (rs *proto.ReplicationStatus, waitPosition proto.ReplicationPosition, reparentTime int64, err error) {
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition))
-	if err != nil {
-		return
-	}
-	if len(qr.Rows) != 1 {
-		err = fmt.Errorf("no reparent for position: %v", slavePosition)
-		return
-	}
-
-	reparentTime, err = qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition, qr.Rows[0][0], err)
-		return
-	}
-
-	rs, err = proto.NewReplicationStatus(qr.Rows[0][1].String())
-	if err != nil {
-		return
-	}
-	flavor, err := mysqld.flavor()
-	if err != nil {
-		err = fmt.Errorf("can't parse replication position: %v", err)
-		return
-	}
-	rs.Position, err = flavor.ParseReplicationPosition(qr.Rows[0][2].String())
-	if err != nil {
-		return
-	}
-
-	waitPosition, err = flavor.ParseReplicationPosition(qr.Rows[0][3].String())
-	if err != nil {
-		return
-	}
-	return
-}
-
 // WaitMasterPos lets slaves wait to given replication position
 func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {
 	flavor, err := mysqld.flavor()
@@ -339,33 +291,6 @@ func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
 		return nil, fmt.Errorf("ResetReplicationCommands needs flavor: %v", err)
 	}
 	return flavor.ResetReplicationCommands(), nil
-}
-
-// BreakSlaves forces all slaves to error and stop.
-// This is extreme, but helpful for startup, emergencies and tests.
-// Insert a row, block the propagation of its subsequent delete and reinsert it.
-// This forces a failure on slaves only.
-func (mysqld *Mysqld) BreakSlaves() error {
-	now := time.Now().UnixNano()
-	note := "force slave halt" // Any this is why we always leave a note...
-
-	insertSql := fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, '%v')",
-		now, note)
-	deleteSql := fmt.Sprintf("DELETE FROM _vt.replication_log WHERE time_created_ns = %v", now)
-
-	cmds := []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		`CREATE TABLE IF NOT EXISTS _vt.replication_log (
-  time_created_ns BIGINT UNSIGNED NOT NULL,
-  note VARCHAR(255),
-  PRIMARY KEY (time_created_ns)) ENGINE=InnoDB`,
-		insertSql,
-		"SET sql_log_bin = 0",
-		deleteSql,
-		"SET sql_log_bin = 1",
-		insertSql}
-
-	return mysqld.ExecuteSuperQueryList(cmds)
 }
 
 // +------+---------+---------------------+------+-------------+------+----------------------------------------------------------------+------------------+

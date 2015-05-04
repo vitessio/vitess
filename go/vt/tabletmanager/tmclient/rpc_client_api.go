@@ -96,23 +96,15 @@ type TabletManagerClient interface {
 	// SlaveStatus returns the tablet's mysql slave status.
 	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error)
 
-	// WaitSlavePosition asks the tablet to wait until it reaches that
-	// position in mysql replication
-	WaitSlavePosition(ctx context.Context, tablet *topo.TabletInfo, waitPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
-
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
-
-	// ReparentPosition returns the data for a slave to use to reparent
-	// to the target tablet at the given position.
-	ReparentPosition(ctx context.Context, tablet *topo.TabletInfo, rp *myproto.ReplicationPosition) (*actionnode.RestartSlaveData, error)
 
 	// StopSlave stops the mysql replication
 	StopSlave(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// StopSlaveMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationStatus, error)
+	StopSlaveMinimum(ctx context.Context, tablet *topo.TabletInfo, stopPos myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error)
 
 	// StartSlave starts the mysql replication
 	StartSlave(ctx context.Context, tablet *topo.TabletInfo) error
@@ -170,17 +162,11 @@ type TabletManagerClient interface {
 	// and it should go read-only and return its current position.
 	DemoteMaster(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
-	// PromoteSlave transforms the tablet from a slave to a master.
-	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (*actionnode.RestartSlaveData, error)
-
 	// PromoteSlaveWhenCaughtUp transforms the tablet from a slave to a master.
 	PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo.TabletInfo, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error)
 
 	// SlaveWasPromoted tells the remote tablet it is now the master
 	SlaveWasPromoted(ctx context.Context, tablet *topo.TabletInfo) error
-
-	// RestartSlave tells the remote tablet it has a new master
-	RestartSlave(ctx context.Context, tablet *topo.TabletInfo, rsd *actionnode.RestartSlaveData) error
 
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
@@ -190,9 +176,12 @@ type TabletManagerClient interface {
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 
-	// BreakSlaves will tinker with the replication stream in a
-	// way that will stop all the slaves.
-	BreakSlaves(ctx context.Context, tablet *topo.TabletInfo) error
+	// StopReplicationAndGetPosition stops replication and returns the
+	// current position.
+	StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+
+	// PromoteSlave makes the tablet the new master
+	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
 
 	//
 	// Backup / restore related methods
