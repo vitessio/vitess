@@ -23,7 +23,7 @@ func TestRunSchemaChangesDataSourcerOpenFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, true, false, false)
 	handler := newFakeHandler()
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
 	if err != errDataSourcerOpen {
 		t.Fatalf("data sourcer open fail, shoud get error: %v, but get error: %v",
@@ -35,7 +35,7 @@ func TestRunSchemaChangesDataSourcerReadFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, false, true, false)
 	handler := newFakeHandler()
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
 	if err != errDataSourcerRead {
 		t.Fatalf("data sourcer read fail, shoud get error: %v, but get error: %v",
@@ -50,7 +50,7 @@ func TestRunSchemaChangesValidationFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, false, false, false)
 	handler := newFakeHandler()
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
@@ -61,7 +61,7 @@ func TestRunSchemaChanges(t *testing.T) {
 	dataSourcer := NewSimepleDataSourcer("select * from test_db;")
 	handler := newFakeHandler()
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
@@ -87,10 +87,9 @@ func newFakeVtGateConn() *fakevtgateconn.FakeVTGateConn {
 	return fakevtgateconn.NewFakeVTGateConn(context.Background(), "", 1*time.Second)
 }
 
-func newFakeVtGateExecutor(addr string, conn *fakevtgateconn.FakeVTGateConn) *VtGateExecutor {
+func newFakeVtGateExecutor(conn *fakevtgateconn.FakeVTGateConn) *VtGateExecutor {
 	return NewVtGateExecutor(
 		"test_keyspace",
-		addr,
 		conn,
 		1*time.Second)
 }
