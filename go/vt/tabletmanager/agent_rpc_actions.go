@@ -306,7 +306,7 @@ func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.Replication
 // MasterPosition returns the master position
 // Should be called under RPCWrap.
 func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
-	return agent.Mysqld.MasterPosition()
+	return agent.MysqlDaemon.MasterPosition()
 }
 
 // StopSlave will stop the replication

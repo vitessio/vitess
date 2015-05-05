@@ -269,18 +269,6 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 		if err != nil {
 			return nil, err
 		}
-		if ti.Type == topo.TYPE_LAG {
-			// lag tablets are usually behind, not replicating,
-			// and a general pain. So let's just skip them
-			// all together.
-			// TODO(alainjobart) figure out other types to skip:
-			// ValidateSchemaShard only does the serving types.
-			// We do everything in the replication graph
-			// but LAG. This seems fine for now.
-			log.Infof("Skipping tablet %v as it is LAG", ti.Alias)
-			continue
-		}
-
 		statusArray = append(statusArray, &tabletStatus{ti: ti})
 	}
 
