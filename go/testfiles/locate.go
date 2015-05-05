@@ -25,10 +25,25 @@ func Glob(pattern string) []string {
 	if vtroot == "" {
 		panic(fmt.Errorf("VTROOT is not set"))
 	}
-	resolved := path.Join(vtroot, "data", "test", pattern)
+	dir := path.Join(vtroot, "data", "test")
+	if exists, err := exists(dir); !exists {
+		panic(err)
+	}
+	resolved := path.Join(dir, pattern)
 	out, err := filepath.Glob(resolved)
 	if err != nil {
 		panic(err)
 	}
 	return out
+}
+
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, err
+	}
+	return false, err
 }
