@@ -107,7 +107,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			defer conn.Recycle()
 			reply = qre.execSQL(conn, qre.query, true)
 		default:
-			panic(NewTabletError(ErrNotInTx, "DMLs not allowed outside of transactions"))
+			reply = qre.execDmlAutoCommit()
 		}
 	}
 	return reply
@@ -129,6 +129,46 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	defer qre.qe.streamQList.Remove(qd)
 
 	qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, sendReply)
+}
+
+func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult) {
+	transactionID := qre.qe.txPool.Begin(qre.ctx)
+	qre.logStats.AddRewrittenSql("begin", time.Now())
+	defer func() {
+		err := recover()
+		if err == nil {
+			qre.qe.Commit(qre.ctx, qre.logStats, transactionID)
+			qre.logStats.AddRewrittenSql("commit", time.Now())
+		} else {
+			qre.qe.txPool.Rollback(qre.ctx, transactionID)
+			qre.logStats.AddRewrittenSql("rollback", time.Now())
+			panic(err)
+		}
+	}()
+	conn := qre.qe.txPool.Get(transactionID)
+	defer conn.Recycle()
+	var invalidator CacheInvalidator
+	if qre.plan.TableInfo != nil && qre.plan.TableInfo.CacheType != schema.CACHE_NONE {
+		invalidator = conn.DirtyKeys(qre.plan.TableName)
+	}
+	switch qre.plan.PlanId {
+	case planbuilder.PLAN_PASS_DML:
+		if qre.qe.strictMode.Get() != 0 {
+			panic(NewTabletError(ErrFail, "DML too complex"))
+		}
+		reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+	case planbuilder.PLAN_INSERT_PK:
+		reply = qre.execInsertPK(conn)
+	case planbuilder.PLAN_INSERT_SUBQUERY:
+		reply = qre.execInsertSubquery(conn)
+	case planbuilder.PLAN_DML_PK:
+		reply = qre.execDMLPK(conn, invalidator)
+	case planbuilder.PLAN_DML_SUBQUERY:
+		reply = qre.execDMLSubquery(conn, invalidator)
+	default:
+		panic(NewTabletError(ErrFatal, "unsupported query: %s", qre.query))
+	}
+	return reply
 }
 
 func (qre *QueryExecutor) checkPermissions() {
