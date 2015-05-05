@@ -86,9 +86,9 @@ func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*to
 				pos, err := wr.tmc.MasterPosition(ctx, ti)
 				if err != nil {
 					rec.RecordError(fmt.Errorf("MasterPosition(%v) failed: %v", ti.Alias, err))
-				} else {
-					result[i] = &myproto.ReplicationStatus{Position: pos}
+					return
 				}
+				result[i] = &myproto.ReplicationStatus{Position: pos}
 			}(i, ti)
 		} else if ti.IsSlaveType() {
 			wg.Add(1)
@@ -97,9 +97,9 @@ func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*to
 				status, err := wr.tmc.SlaveStatus(ctx, ti)
 				if err != nil {
 					rec.RecordError(fmt.Errorf("SlaveStatus(%v) failed: %v", ti.Alias, err))
-				} else {
-					result[i] = status
+					return
 				}
+				result[i] = status
 			}(i, ti)
 		}
 	}
