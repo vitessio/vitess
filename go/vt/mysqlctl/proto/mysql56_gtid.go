@@ -7,9 +7,34 @@ package proto
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 const mysql56FlavorID = "MySQL56"
+
+// parseMysql56GTID is registered as a GTID parser.
+func parseMysql56GTID(s string) (GTID, error) {
+	// Split into parts.
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid MySQL 5.6 GTID (%v): expecting UUID:Sequence", s)
+	}
+
+	// Parse Server ID.
+	sid, err := ParseSID(parts[0])
+	if err != nil {
+		return nil, fmt.Errorf("invalid MySQL 5.6 GTID Server ID (%v): %v", parts[0], err)
+	}
+
+	// Parse Sequence number.
+	seq, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid MySQL 5.6 GTID Sequence number (%v): %v", parts[1], err)
+	}
+
+	return Mysql56GTID{Server: sid, Sequence: seq}, nil
+}
 
 // SID is the 16-byte unique ID of a MySQL 5.6 server.
 type SID [16]byte
@@ -82,4 +107,8 @@ func (gtid Mysql56GTID) SequenceNumber() interface{} {
 // GTIDSet implements GTID.GTIDSet().
 func (gtid Mysql56GTID) GTIDSet() GTIDSet {
 	return Mysql56GTIDSet{}.AddGTID(gtid)
+}
+
+func init() {
+	gtidParsers[mysql56FlavorID] = parseMysql56GTID
 }

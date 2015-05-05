@@ -7,8 +7,10 @@ package proto
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 type interval struct {
@@ -17,6 +19,94 @@ type interval struct {
 
 func (iv interval) contains(other interval) bool {
 	return iv.start <= other.start && other.end <= iv.end
+}
+
+type intervalList []interval
+
+// Len implements sort.Interface.
+func (s intervalList) Len() int { return len(s) }
+
+// Less implements sort.Interface.
+func (s intervalList) Less(i, j int) bool { return s[i].start < s[j].start }
+
+// Swap implements sort.Interface.
+func (s intervalList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func parseInterval(s string) (interval, error) {
+	parts := strings.Split(s, "-")
+	start, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return interval{}, fmt.Errorf("invalid interval (%q): %v", s, err)
+	}
+	if start < 1 {
+		return interval{}, fmt.Errorf("invalid interval (%q): start must be > 0", s)
+	}
+
+	switch len(parts) {
+	case 1:
+		return interval{start: start, end: start}, nil
+	case 2:
+		end, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return interval{}, fmt.Errorf("invalid interval (%q): %v", s, err)
+		}
+		return interval{start: start, end: end}, nil
+	default:
+		return interval{}, fmt.Errorf("invalid interval (%q): expected start-end or single number", s)
+	}
+}
+
+// parseMysql56GTIDSet is registered as a GTIDSet parser.
+//
+// https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html
+func parseMysql56GTIDSet(s string) (GTIDSet, error) {
+	set := Mysql56GTIDSet{}
+
+	// gtid_set: uuid_set [, uuid_set] ...
+	for _, uuidSet := range strings.Split(s, ",") {
+		uuidSet = strings.TrimSpace(uuidSet)
+		if uuidSet == "" {
+			continue
+		}
+
+		// uuid_set: uuid:interval[:interval]...
+		parts := strings.Split(uuidSet, ":")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): expected uuid:interval", s)
+		}
+
+		// Parse Server ID.
+		sid, err := ParseSID(parts[0])
+		if err != nil {
+			return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): %v", s, err)
+		}
+
+		// Parse Intervals.
+		intervals := make([]interval, 0, len(parts)-1)
+		for _, part := range parts[1:] {
+			iv, err := parseInterval(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid MySQL 5.6 GTID set (%q): %v", s, err)
+			}
+			if iv.end < iv.start {
+				// According to MySQL 5.6 code:
+				//   "The end of an interval may be 0, but any interval that has an
+				//    endpoint that is smaller than the start is discarded."
+				continue
+			}
+			intervals = append(intervals, iv)
+		}
+		if len(intervals) == 0 {
+			// We might have discarded all the intervals.
+			continue
+		}
+
+		// Internally we expect intervals to be stored in order.
+		sort.Sort(intervalList(intervals))
+		set[sid] = intervals
+	}
+
+	return set, nil
 }
 
 // Mysql56GTIDSet implements GTIDSet for MySQL 5.6.
@@ -32,9 +122,9 @@ func (set Mysql56GTIDSet) SIDs() []SID {
 	return sids
 }
 
-// Len implements sort.Interface.
 type sidList []SID
 
+// Len implements sort.Interface.
 func (s sidList) Len() int { return len(s) }
 
 // Less implements sort.Interface.
@@ -248,4 +338,8 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	}
 
 	return buf.Bytes()
+}
+
+func init() {
+	gtidSetParsers[mysql56FlavorID] = parseMysql56GTIDSet
 }

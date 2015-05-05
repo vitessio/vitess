@@ -6,9 +6,110 @@ package proto
 
 import (
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
+
+func TestSortSIDList(t *testing.T) {
+	input := []SID{
+		{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+	}
+	want := []SID{
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16},
+		{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	}
+	sort.Sort(sidList(input))
+	if !reflect.DeepEqual(input, want) {
+		t.Errorf("got %#v, want %#v", input, want)
+	}
+}
+
+func TestParseMysql56GTIDSet(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}
+
+	table := map[string]Mysql56GTIDSet{
+		// Empty
+		"": Mysql56GTIDSet{},
+		// Simple case
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}},
+		},
+		// Capital hex chars
+		"00010203-0405-0607-0809-0A0B0C0D0E0F:1-5": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}},
+		},
+		// Interval with same start and end
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": Mysql56GTIDSet{
+			sid1: []interval{{12, 12}},
+		},
+		// Multiple intervals
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Multiple intervals, out of oder
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Intervals with end < start are discarded by MySQL 5.6
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:8-7": Mysql56GTIDSet{},
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Multiple SIDs
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}, {10, 20}},
+			sid2: []interval{{1, 5}, {50, 50}},
+		},
+		// Multiple SIDs with space around the comma
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20, 00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": Mysql56GTIDSet{
+			sid1: []interval{{1, 5}, {10, 20}},
+			sid2: []interval{{1, 5}, {50, 50}},
+		},
+	}
+
+	for input, want := range table {
+		got, err := parseMysql56GTIDSet(input)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			continue
+		}
+		if !got.Equal(want) {
+			t.Errorf("parseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
+		}
+	}
+}
+
+func TestParseMysql56GTIDSetInvalid(t *testing.T) {
+	table := []string{
+		// No intervals
+		"00010203-0405-0607-0809-0a0b0c0d0e0f",
+		// Invalid SID
+		"00010203-0405-060X-0809-0a0b0c0d0e0f:1-5",
+		// Invalid intervals
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:0-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-2-3",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-",
+	}
+
+	for _, input := range table {
+		_, err := parseMysql56GTIDSet(input)
+		if err == nil {
+			t.Errorf("parseMysql56GTIDSet(%#v) expected error, got none", err)
+		}
+	}
+}
 
 func TestMysql56GTIDSetString(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -174,7 +275,11 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 
 	for _, other := range equal {
 		if !set.Equal(other) {
-			t.Errorf("Equal(%#v) = false, want true", other)
+			t.Errorf("%#v.Equal(%#v) = false, want true", set, other)
+		}
+		// Equality should be transitive.
+		if !other.Equal(set) {
+			t.Errorf("%#v.Equal(%#v) = false, want true", other, set)
 		}
 	}
 
@@ -218,7 +323,11 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 
 	for _, other := range notEqual {
 		if set.Equal(other) {
-			t.Errorf("Equal(%#v) = true, want false", other)
+			t.Errorf("%#v.Equal(%#v) = true, want false", set, other)
+		}
+		// Equality should be transitive.
+		if other.Equal(set) {
+			t.Errorf("%#v.Equal(%#v) = true, want false", other, set)
 		}
 	}
 }

@@ -428,7 +428,13 @@ func (fakeGTID) SequenceNumber() interface{} { return int(1) }
 func (fakeGTID) SequenceDomain() interface{} { return int(1) }
 func (f fakeGTID) GTIDSet() GTIDSet          { return nil }
 
-func (fakeGTID) ContainsGTID(GTID) bool     { return false }
-func (fakeGTID) Contains(GTIDSet) bool      { return false }
-func (f fakeGTID) Equal(other GTIDSet) bool { return f == other.(fakeGTID) }
-func (fakeGTID) AddGTID(GTID) GTIDSet       { return nil }
+func (fakeGTID) ContainsGTID(GTID) bool { return false }
+func (fakeGTID) Contains(GTIDSet) bool  { return false }
+func (f fakeGTID) Equal(other GTIDSet) bool {
+	otherFake, ok := other.(fakeGTID)
+	if !ok {
+		return false
+	}
+	return f == otherFake
+}
+func (fakeGTID) AddGTID(GTID) GTIDSet { return nil }
