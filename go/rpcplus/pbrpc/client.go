@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"code.google.com/p/goprotobuf/proto"
+	"github.com/golang/protobuf/proto"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
