@@ -1,0 +1,236 @@
+// This file contains all the types and servers necessary to make
+// Stubby calls to Vttablet.
+
+syntax = "proto3";
+
+package queryservice;
+
+// SessionParams is passed to GetSessionId. The server will
+// double-check the keyspace and shard are what the tablet is serving.
+message SessionParams {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+// SessionInfo is returned by GetSessionId. Use the provided
+// session_id in the Session object for any subsequent call.
+message SessionInfo {
+  int64 session_id = 1;
+}
+
+// TransactionInfo is returned by Begin. Use the provided
+// transaction_id in the Session object for any subsequent call to be inside
+// the transaction.
+message TransactionInfo {
+  int64 transaction_id = 1;
+}
+
+// Session is passed to all calls.
+message Session {
+  // session_id comes from SessionInfo and is required.
+  int64 session_id = 1;
+
+  // transaction_id comes from TransactionInfo and is required for queries
+  // inside a transaction.
+  int64 transaction_id = 2;
+}
+
+// BindVariable represents a single bind variable in a Query
+message BindVariable {
+  string name = 1;
+  enum Type {
+    TYPE_NULL = 0;
+    TYPE_BYTES = 1;
+    TYPE_INT = 2;
+    TYPE_UINT = 3;
+    TYPE_FLOAT = 4;
+    TYPE_BYTES_LIST = 5;
+    TYPE_INT_LIST = 6;
+    TYPE_UINT_LIST = 7;
+    TYPE_FLOAT_LIST = 8;
+
+  }
+  Type type = 2;
+  bytes value_bytes = 3;
+  int64 value_int = 4;
+  uint64 value_uint = 5;
+  double value_float = 6;
+  repeated bytes value_bytes_list = 7;
+  repeated int64 value_int_list = 8;
+  repeated uint64 value_uint_list = 9;
+  repeated double value_float_list = 10;
+}
+
+// Query is the payload to Execute
+message Query {
+  bytes sql = 1;
+  repeated BindVariable bind_variables = 2;
+  Session session = 3;
+}
+
+// BoundQuery is one query in a QueryList
+message BoundQuery {
+  bytes sql = 1;
+  repeated BindVariable bind_variables = 2;
+}
+
+// QueryList is the payload to ExecuteBatch
+message QueryList {
+  repeated BoundQuery queries = 1;
+  Session session = 2;
+}
+
+// Field describes a single column returned by a query
+message Field {
+  // name of the field as returned by mysql C API
+  string name = 1;
+
+  // Type follows enum_field_types from mysql.h.
+  enum Type {
+    TYPE_DECIMAL = 0;
+    TYPE_TINY = 1;
+    TYPE_SHORT = 2;
+    TYPE_LONG = 3;
+    TYPE_FLOAT = 4;
+    TYPE_DOUBLE = 5;
+    TYPE_NULL = 6;
+    TYPE_TIMESTAMP = 7;
+    TYPE_LONGLONG = 8;
+    TYPE_INT24 = 9;
+    TYPE_DATE = 10;
+    TYPE_TIME = 11;
+    TYPE_DATETIME = 12;
+    TYPE_YEAR = 13;
+    TYPE_NEWDATE = 14;
+    TYPE_VARCHAR = 15;
+    TYPE_BIT = 16;
+    TYPE_NEWDECIMAL = 246;
+    TYPE_ENUM = 247;
+    TYPE_SET = 248;
+    TYPE_TINY_BLOB = 249;
+    TYPE_MEDIUM_BLOB = 250;
+    TYPE_LONG_BLOB = 251;
+    TYPE_BLOB = 252;
+    TYPE_VAR_STRING = 253;
+    TYPE_STRING = 254;
+    TYPE_GEOMETRY = 255;
+  }
+  Type type = 2;
+
+  // Flag contains the MySQL field flags bitset values e.g. to
+  // distinguish between signed and unsigned integer.  These numbers
+  // should exactly match values defined in
+  // dist/mysql-5.1.52/include/mysql_com.h
+  enum Flag {
+    // ZEROVALUE_FLAG is not part of the MySQL specification and only
+    // used in unit tests.
+    VT_ZEROVALUE_FLAG        = 0;
+    VT_NOT_NULL_FLAG         = 1;
+    VT_PRI_KEY_FLAG          = 2;
+    VT_UNIQUE_KEY_FLAG       = 4;
+    VT_MULTIPLE_KEY_FLAG     = 8;
+    VT_BLOB_FLAG             = 16;
+    VT_UNSIGNED_FLAG         = 32;
+    VT_ZEROFILL_FLAG         = 64;
+    VT_BINARY_FLAG           = 128;
+    VT_ENUM_FLAG             = 256;
+    VT_AUTO_INCREMENT_FLAG   = 512;
+    VT_TIMESTAMP_FLAG        = 1024;
+    VT_SET_FLAG              = 2048;
+    VT_NO_DEFAULT_VALUE_FLAG = 4096;
+    VT_ON_UPDATE_NOW_FLAG    = 8192;
+    VT_NUM_FLAG              = 32768;
+  }
+  // flags is essentially a bitset<Flag>.
+  int64 flags = 3;
+}
+
+// Cell is a single value, an array of Cell is a Row
+message Cell {
+  bytes value = 1;
+}
+
+// Row is a database row.
+message Row {
+  repeated Cell values = 1;
+}
+
+// QueryResult is returned by Execute and ExecuteStream.
+//
+// As returned by Execute, len(fields) is always equal to len(row)
+// (for each row in rows).
+//
+// As returned by StreamExecute, the first QueryResult has the fields
+// set, and subsequent QueryResult have rows set. And as Execute,
+// len(QueryResult[0].fields) is always equal to len(row) (for each
+// row in rows for each QueryResult in QueryResult[1:]).
+message QueryResult {
+  repeated Field fields = 1;
+  uint64 rows_affected = 2;
+  uint64 insert_id = 3;
+  repeated Row rows = 4;
+}
+
+// QueryResultList is the return type for ExecuteBatch
+message QueryResultList {
+  repeated QueryResult list = 1;
+}
+
+// SplitQueryRequest is the payload for SplitQuery
+message SplitQueryRequest {
+  BoundQuery query = 1;
+  int64 split_count = 2;
+  Session session = 3;
+}
+
+// QuerySplit represents one query to execute on the tablet
+message QuerySplit {
+  BoundQuery query = 1;
+  int64 row_count = 2;
+}
+
+// SplitQueryResult is returned by SplitQuery and represents all the queries
+// to execute in order to get the entire data set.
+message SplitQueryResult {
+  repeated QuerySplit queries = 1;
+}
+
+// CommitResponse is returned by Commit, and empty.
+message CommitResponse {}
+
+// RollbackResponse is returned by Rollback, and empty.
+message RollbackResponse {}
+
+// SqlQuery defines the tablet SQL query, implemented by vttablet.
+service SqlQuery {
+  // GetSessionId returns a valid session id to be used for
+  // subsequent calls. This should be the first call by clients.
+  rpc GetSessionId (SessionParams) returns (SessionInfo) {};
+
+  // Execute executes the specified SQL query (might be in a
+  // transaction context, if Query.session.transaction_id is set).
+  rpc Execute (Query) returns (QueryResult) {};
+
+  // ExecuteBatch executes a list of queries, and returns the result
+  // for each query.
+  rpc ExecuteBatch(QueryList) returns (QueryResultList) {};
+
+  // StreamExecute executes a streaming query. Use this method if the
+  // query returns a large number of rows. The first QueryResult will
+  // contain the Fields, subsequent QueryResult messages will contain
+  // the rows.
+  rpc StreamExecute (Query) returns (stream QueryResult) {};
+
+  // Begin a transaction.
+  rpc Begin (Session) returns (TransactionInfo) {};
+
+  // Commit a transaction.
+  rpc Commit (Session) returns (CommitResponse) {};
+
+  // Rollback a transaction.
+  rpc Rollback (Session) returns (RollbackResponse) {};
+
+  // SplitQuery is the API to facilitate MapReduce-type iterations
+  // over large data sets (like full table dumps).
+  rpc SplitQuery(SplitQueryRequest) returns (SplitQueryResult) {};
+}
