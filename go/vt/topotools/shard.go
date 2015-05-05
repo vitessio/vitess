@@ -51,6 +51,7 @@ func GetOrCreateShard(ctx context.Context, ts topo.Server, keyspace, shard strin
 		}
 
 		// try to read the shard again, maybe someone created it
+		// in between the original GetShard and the LockKeyspace
 		si, finalErr = ts.GetShard(keyspace, shard)
 
 		// and unlock
