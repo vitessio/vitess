@@ -62,24 +62,6 @@ public class VtGateIT {
   }
 
   /**
-   * Test DMLs are not allowed outside a transaction
-   */
-  @Test
-  public void testDMLOutsideTransaction() throws ConnectionException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    String deleteSql = "delete from vtgate_test";
-    try {
-      vtgate.execute(new QueryBuilder(deleteSql, testEnv.keyspace, "master").addKeyspaceId(
-          testEnv.getAllKeyspaceIds().get(0)).build());
-      Assert.fail("did not raise DatabaseException");
-    } catch (DatabaseException e) {
-      Assert.assertTrue(e.getMessage().contains("not_in_tx"));
-    } finally {
-      vtgate.close();
-    }
-  }
-
-  /**
    * Test selects using ExecuteKeyspaceIds
    */
   @Test
