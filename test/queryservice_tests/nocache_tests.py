@@ -107,7 +107,7 @@ class TestNocache(framework.TestCase):
     self.assertEqual(txlog[4], "rollback")
     self.assertEqual(txlog[5], "insert into vtocc_test values(4, null, null, null)")
     cu = self.env.execute("select * from vtocc_test")
-    self.assertEqual(cu.rowcount, 3)
+    self.assertEqual(cu.rowcount, 4)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
@@ -116,14 +116,9 @@ class TestNocache(framework.TestCase):
 
   def test_nontx_dml(self):
     vstart = self.env.debug_vars()
-    try:
-      self.env.execute("insert into vtocc_test values(4, null, null, null)")
-    except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "not_in_tx: DMLs")
-    else:
-      self.fail("Did not receive exception")
+    results = self.env.execute("insert into vtocc_test values(444, null, null, null)")
     vend = self.env.debug_vars()
-    self.assertEqual(vstart.mget("Errors.NotInTx", 0)+1, vend.Errors.NotInTx)
+    self.assertEqual(results.description, [])
 
   def test_trailing_comment(self):
     vstart = self.env.debug_vars()

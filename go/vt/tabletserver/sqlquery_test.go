@@ -691,7 +691,7 @@ func TestSqlQueryExecuteBatchFailBeginWithoutCommit(t *testing.T) {
 	}
 }
 
-func TestSqlQueryExecuteBatchSqlExecFailNotInTransaction(t *testing.T) {
+func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db := setUpSqlQueryTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
@@ -728,8 +728,8 @@ func TestSqlQueryExecuteBatchSqlExecFailNotInTransaction(t *testing.T) {
 			*sqlResult,
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
+	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err != nil {
+		t.Fatalf("SqlQuery.ExecuteBatch should succeed")
 	}
 }
 
