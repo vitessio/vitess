@@ -36,7 +36,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.OriginalSql = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000
 	logStats.NumberOfQueries = 1
-	logStats.StartTime = time.Unix(123456789, 0)
+	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
 	logStats.MysqlResponseTime = 1 * time.Millisecond
 	logStats.WaitingForConnection = 10 * time.Nanosecond
 	logStats.CacheHits = 17
@@ -141,6 +141,6 @@ func TestQuerylogzHandler(t *testing.T) {
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *SQLQueryStats, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
-		t.Fatalf("querylogz page does not contain stats: %v, page: %s", logStats, string(page))
+		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
 	}
 }
