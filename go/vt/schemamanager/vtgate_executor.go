@@ -19,25 +19,22 @@ import (
 
 // VtGateExecutor applies schema changes via VtGate
 type VtGateExecutor struct {
-	keyspace   string
-	conn       vtgateconn.VTGateConn
-	vtGateAddr string
-	timeout    time.Duration
-	isClosed   bool
+	keyspace string
+	conn     vtgateconn.VTGateConn
+	timeout  time.Duration
+	isClosed bool
 }
 
 // NewVtGateExecutor creates a new VtGateExecutor instance
 func NewVtGateExecutor(
 	keyspace string,
-	addr string,
 	conn vtgateconn.VTGateConn,
 	timeout time.Duration) *VtGateExecutor {
 	return &VtGateExecutor{
-		keyspace:   keyspace,
-		vtGateAddr: addr,
-		conn:       conn,
-		timeout:    timeout,
-		isClosed:   true,
+		keyspace: keyspace,
+		conn:     conn,
+		timeout:  timeout,
+		isClosed: true,
 	}
 }
 

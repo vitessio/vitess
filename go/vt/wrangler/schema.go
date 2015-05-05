@@ -528,8 +528,8 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.Tab
 	}
 	createSql := sd.ToSQLStrings()
 
-	for _, sqlLine := range createSql {
-		err = wr.applySqlShard(ctx, tabletInfo, sqlLine)
+	for i, sqlLine := range createSql {
+		err = wr.applySqlShard(ctx, tabletInfo, sqlLine, i == len(createSql)-1)
 		if err != nil {
 			return err
 		}
@@ -544,7 +544,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.Tab
 // Thus it should be used only for changes that can be applies on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string) error {
+func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
 	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)
@@ -552,7 +552,7 @@ func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletIn
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on masters.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo, filledChange, 0, false, false)
+	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo, filledChange, 0, false, false, reloadSchema)
 	return err
 }
 

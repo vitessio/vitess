@@ -318,7 +318,7 @@ def get_vars(port):
 # wait_for_vars will wait until we can actually get the vars from a process,
 # and if var is specified, will wait until that var is in vars
 def wait_for_vars(name, port, var=None):
-  timeout = 5.0
+  timeout = 10.0
   while True:
     v = get_vars(port)
     if v and (var is None or var in v):

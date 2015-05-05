@@ -5,16 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	schmgr "github.com/youtube/vitess/go/vt/schemamanager"
+	"github.com/youtube/vitess/go/vt/schemamanager/uihandler"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	// register gorpc vtgate client
+	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
 )
 
 var (
@@ -265,12 +270,10 @@ func main() {
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
 
-	// vschema editor
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		templateLoader.ServeTemplate("index.html", indexContent, w, r)
 	})
 
-	// vschema editor
 	http.HandleFunc("/content/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, *templateDir+r.URL.Path[8:])
 	})
@@ -475,6 +478,23 @@ func main() {
 		}
 		w.Write(result)
 	})
-
+	http.HandleFunc("/json/schema-manager", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		sqlStr := r.FormValue("data")
+		keyspace := r.FormValue("keyspace")
+		shards, err := ts.GetShardNames(keyspace)
+		if err != nil {
+			httpError(w, "error getting shards for keyspace: <"+keyspace+">, error: %v", err)
+		}
+		schmgr.Run(
+			schmgr.NewSimepleDataSourcer(sqlStr),
+			schmgr.NewVtGateExecutor(
+				keyspace, nil, 1*time.Second),
+			uihandler.NewUIEventHandler(w),
+			shards)
+	})
 	servenv.RunDefault()
 }

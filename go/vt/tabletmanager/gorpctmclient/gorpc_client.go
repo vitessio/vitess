@@ -223,13 +223,14 @@ func (client *GoRPCTabletManagerClient) ApplySchema(ctx context.Context, tablet 
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (client *GoRPCTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
 	var qr mproto.QueryResult
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionExecuteFetch, &gorpcproto.ExecuteFetchArgs{
 		Query:          query,
 		MaxRows:        maxRows,
 		WantFields:     wantFields,
 		DisableBinlogs: disableBinlogs,
+		ReloadSchema:   reloadSchema,
 		DBConfigName:   dbconfigs.DbaConfigName,
 	}, &qr); err != nil {
 		return nil, err
