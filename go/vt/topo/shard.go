@@ -302,6 +302,9 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.
+// This should be called while holding the keyspace lock for the shard.
+// (call topotools.CreateShard to do that for you).
+// In unit tests (that are not parallel), this function can be called directly.
 func CreateShard(ts Server, keyspace, shard string) error {
 
 	name, keyRange, err := ValidateShardName(shard)

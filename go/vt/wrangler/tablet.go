@@ -29,21 +29,23 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 	}
 
 	if tablet.IsInReplicationGraph() {
-		// create the parent keyspace and shard if needed
-		if createShardAndKeyspace {
-			if err := wr.ts.CreateKeyspace(tablet.Keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
-				return err
-			}
+		// get the shard, possibly creating it
+		var err error
+		var si *topo.ShardInfo
 
-			if err := topo.CreateShard(wr.ts, tablet.Keyspace, tablet.Shard); err != nil && err != topo.ErrNodeExists {
-				return err
+		if createShardAndKeyspace {
+			// create the parent keyspace and shard if needed
+			si, err = topotools.GetOrCreateShard(ctx, wr.ts, tablet.Keyspace, tablet.Shard)
+		} else {
+			si, err = wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
+			if err == topo.ErrNoNode {
+				return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 			}
 		}
 
 		// get the shard, checks a couple things
-		si, err := wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
 		if err != nil {
-			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+			return fmt.Errorf("cannot get (or create) shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		}
 		if si.KeyRange != tablet.KeyRange {
 			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)

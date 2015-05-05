@@ -247,6 +247,14 @@ func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
 	}).SetGuid()
 }
 
+// KeyspaceCreateShard returns an ActionNode to use to lock a keyspace
+// for shard creation
+func KeyspaceCreateShard() *ActionNode {
+	return (&ActionNode{
+		Action: KeyspaceActionCreateShard,
+	}).SetGuid()
+}
+
 //methods to build the serving shard action nodes
 
 // RebuildSrvShard returns an ActionNode
