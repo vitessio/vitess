@@ -227,6 +227,9 @@ const (
 	// KeyspaceActionSetServedFrom updates ServedFrom
 	KeyspaceActionSetServedFrom = "SetKeyspaceServedFrom"
 
+	// KeyspaceActionCreateShard protects shard creation within the keyspace
+	KeyspaceActionCreateShard = "KeyspaceCreateShard"
+
 	//
 	// SrvShard actions - very local locking, for consistency.
 	// These are just descriptive and used for locking / logging.

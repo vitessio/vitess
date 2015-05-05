@@ -90,25 +90,9 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 		log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
 
 		// read the shard, create it if necessary
-		si, err := agent.TopoServer.GetShard(*initKeyspace, shard)
-		if err == topo.ErrNoNode {
-			// create the keyspace, maybe it already exists
-			if err := agent.TopoServer.CreateKeyspace(*initKeyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
-				return fmt.Errorf("CreateKeyspace(%v) failed: %v", *initKeyspace, err)
-			}
-
-			// create the shard (it may already exist if
-			// someone else just created it, this code is
-			// not protected by a lock of any kind)
-			if err := topo.CreateShard(agent.TopoServer, *initKeyspace, shard); err != nil && err != topo.ErrNodeExists {
-				return fmt.Errorf("CreateShard(%v/%v) failed: %v", *initKeyspace, shard, err)
-			}
-
-			// and re-read the shard object
-			si, err = agent.TopoServer.GetShard(*initKeyspace, shard)
-		}
+		si, err := topotools.GetOrCreateShard(ctx, agent.TopoServer, *initKeyspace, shard)
 		if err != nil {
-			return fmt.Errorf("InitTablet cannot read shard: %v", err)
+			return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 		}
 		if si.MasterAlias == agent.TabletAlias {
 			// we are the current master for this shard (probably
