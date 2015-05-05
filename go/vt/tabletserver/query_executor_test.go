@@ -64,24 +64,84 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	checkPlanID(t, planbuilder.PLAN_PASS_DML, qre.plan.PlanId)
 	defer handleAndVerifyTabletError(
 		t,
+		"update should fail because strict mode is enabled",
+		ErrFail)
+	qre.Execute()
+}
+
+func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
+	query := "update test_table set pk = foo()"
+	expected := &mproto.QueryResult{
+		Fields: []mproto.Field{},
+		Rows:   [][]sqltypes.Value{},
+	}
+	db.AddQuery(query, expected)
+	// non strict mode
+	qre, sqlQuery := newTestQueryExecutor(query, context.Background(), noFlags)
+	checkPlanID(t, planbuilder.PLAN_PASS_DML, qre.plan.PlanId)
+	testUtils.checkEqual(t, expected, qre.Execute())
+	sqlQuery.disallowQueries()
+
+	// strict mode
+	qre, sqlQuery = newTestQueryExecutor(
+		"update test_table set pk = foo()",
+		context.Background(),
+		enableRowCache|enableStrict)
+	defer sqlQuery.disallowQueries()
+	checkPlanID(t, planbuilder.PLAN_PASS_DML, qre.plan.PlanId)
+	defer handleAndVerifyTabletError(
+		t,
 		"update should fail because strict mode is not enabled",
 		ErrFail)
 	qre.Execute()
 }
 
-func TestQueryExecutorPlanInsertPkOutsideATransaction(t *testing.T) {
+func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	setUpQueryExecutorTest()
+	testUtils := newTestUtils()
 	qre, sqlQuery := newTestQueryExecutor(
 		"insert into test_table values(1)",
 		context.Background(),
 		enableRowCache|enableStrict)
 	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_INSERT_PK, qre.plan.PlanId)
-	defer handleAndVerifyTabletError(
-		t,
-		"insert query should fail because it is outside a transaction",
-		ErrNotInTx)
-	qre.Execute()
+	testUtils.checkEqual(t, &mproto.QueryResult{}, qre.Execute())
+}
+
+func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
+	fields := []mproto.Field{
+		mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+	}
+	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
+	expected := &mproto.QueryResult{
+		Fields: fields,
+		Rows:   [][]sqltypes.Value{},
+	}
+	db.AddQuery(query, expected)
+	selectQuery := "select pk from test_table where pk = 1 limit 1000"
+	db.AddQuery(selectQuery, &mproto.QueryResult{
+		Fields:       fields,
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
+		},
+	})
+
+	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
+
+	db.AddQuery(insertQuery, &mproto.QueryResult{
+		Fields: fields,
+	})
+
+	qre, sqlQuery := newTestQueryExecutor(
+		query, context.Background(), enableRowCache|enableStrict)
+	defer sqlQuery.disallowQueries()
+	checkPlanID(t, planbuilder.PLAN_INSERT_SUBQUERY, qre.plan.PlanId)
+	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
@@ -135,6 +195,21 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	testUtils.checkEqual(t, expected, qre.Execute())
 }
 
+func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
+	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
+	// expected.Rows is always nil, intended
+	expected := &mproto.QueryResult{}
+	db.AddQuery(query, expected)
+
+	qre, sqlQuery := newTestQueryExecutor(
+		query, context.Background(), enableRowCache|enableStrict)
+	defer sqlQuery.disallowQueries()
+	checkPlanID(t, planbuilder.PLAN_DML_PK, qre.plan.PlanId)
+	testUtils.checkEqual(t, expected, qre.Execute())
+}
+
 func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	testUtils := &testUtils{}
@@ -148,6 +223,22 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 		query, context.Background(), enableRowCache|enableTx|enableStrict)
 	defer sqlQuery.disallowQueries()
 	defer testCommitHelper(t, sqlQuery, qre)
+	checkPlanID(t, planbuilder.PLAN_DML_SUBQUERY, qre.plan.PlanId)
+	testUtils.checkEqual(t, expected, qre.Execute())
+}
+
+func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	testUtils := &testUtils{}
+	query := "update test_table set addr = 3 where name = 1 limit 1000"
+	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
+	// expected.Rows is always nil, intended
+	expected := &mproto.QueryResult{}
+	db.AddQuery(query, expected)
+	db.AddQuery(expandedQuery, expected)
+	qre, sqlQuery := newTestQueryExecutor(
+		query, context.Background(), enableRowCache|enableStrict)
+	defer sqlQuery.disallowQueries()
 	checkPlanID(t, planbuilder.PLAN_DML_SUBQUERY, qre.plan.PlanId)
 	testUtils.checkEqual(t, expected, qre.Execute())
 }
@@ -935,5 +1026,6 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
+		"rollback": &mproto.QueryResult{},
 	}
 }
