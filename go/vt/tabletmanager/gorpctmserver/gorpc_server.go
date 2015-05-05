@@ -207,6 +207,9 @@ func (tm *TabletManager) ExecuteFetch(ctx context.Context, args *gorpcproto.Exec
 		qr, err := tm.agent.ExecuteFetch(ctx, args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs, args.DBConfigName)
 		if err == nil {
 			*reply = *qr
+			if args.ReloadSchema {
+				tm.agent.ReloadSchema(ctx)
+			}
 		}
 		return err
 	})

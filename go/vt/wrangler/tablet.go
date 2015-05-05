@@ -269,10 +269,10 @@ func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool) (*mproto.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, wantFields, disableBinlogs)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti, query, maxRows, wantFields, disableBinlogs, reloadSchema)
 }

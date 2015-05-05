@@ -14,7 +14,7 @@ import (
 
 func TestOpenVtGateExecutor(t *testing.T) {
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	if err := exec.Open(); err != nil {
 		t.Fatalf("failed to call executor.Open: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestOpenVtGateExecutor(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	defer exec.Close()
 
 	invalidSelect := []string{"select  from test_table"}
@@ -56,7 +56,7 @@ func TestExecuteWithoutOpen(t *testing.T) {
 	shards := []string{"0", "1"}
 	sqls := []string{"insert into  test_table values (1, 2)"}
 	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	result := exec.Execute(sqls, shards)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail because Execute() is being called before Open()")
@@ -86,7 +86,7 @@ func TestExecuteDML(t *testing.T) {
 		}
 	}
 
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	exec.Open()
 	defer exec.Close()
 	result := exec.Execute(invalidSqls, shards)
@@ -121,7 +121,7 @@ func TestExecuteDDL(t *testing.T) {
 				&mproto.QueryResult{})
 		}
 	}
-	exec := newFakeVtGateExecutor("localhost:12345", fakeConn)
+	exec := newFakeVtGateExecutor(fakeConn)
 	exec.Open()
 	defer exec.Close()
 	result := exec.Execute(validSqls, shards)

@@ -973,6 +973,8 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 	maxRows := subFlags.Int("max_rows", 10000, "maximum number of rows to allow in reset")
 	wantFields := subFlags.Bool("want_fields", false, "also get the field names")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "disable writing to binlogs during the query")
+	reloadSchema := subFlags.Bool("reload_schema", false, "if this flag is true, tablet schema will be reloaded after executing given query")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -985,7 +987,7 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs)
+	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs, *reloadSchema)
 	if err == nil {
 		wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
 	}
