@@ -471,6 +471,10 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 // its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
 	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
@@ -502,6 +506,10 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 
 	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 
@@ -604,6 +612,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.Replication
 
 	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// Set the server read-write
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 

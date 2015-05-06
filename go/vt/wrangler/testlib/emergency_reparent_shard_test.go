@@ -31,6 +31,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA)
 
 	// new master
+	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -47,10 +48,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer newMaster.StopActionLoop(t)
 
 	// old master, will be scrapped
+	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
 	// good slave 1
+	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -67,6 +70,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodSlave1.StopActionLoop(t)
 
 	// good slave 2
+	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -100,6 +104,17 @@ func TestEmergencyReparentShard(t *testing.T) {
 	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
+	if newMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("newMaster.FakeMysqlDaemon.ReadOnly set")
+	}
+	// old master read-only flag doesn't matter, it is scrapped
+	if !goodSlave1.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
+	}
+
 }
 
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent

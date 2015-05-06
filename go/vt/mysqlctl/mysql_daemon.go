@@ -37,8 +37,16 @@ type MysqlDaemon interface {
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
+
+	// DemoteMaster waits for all current transactions to finish,
+	// and returns the current replication position. It will not
+	// change the read_only state of the server.
 	DemoteMaster() (proto.ReplicationPosition, error)
+
 	WaitMasterPos(proto.ReplicationPosition, time.Duration) error
+
+	// PromoteSlave makes the slave the new master. It will not change
+	// the read_only state of the server.
 	PromoteSlave(map[string]string) (proto.ReplicationPosition, error)
 
 	// Schema related methods
