@@ -26,7 +26,7 @@ more information on that.
 
 The vitess tool chain doesn't depend on
 [semi-sync replication](https://dev.mysql.com/doc/refman/5.6/en/replication-semisync.html),
-but will work if it is enabled. Our bigger deployements have it
+but will work if it is enabled. Our bigger deployments have it
 enabled, but your use case may vary.
 
 ## Active Reparents
@@ -63,10 +63,10 @@ The actions performed are:
 - if any tablet fails, we error out.
 - we then rebuild the serving graph for the shard.
 
-### Planned Raparents: vtctl PlannedReparentShard
+### Planned Reparents: vtctl PlannedReparentShard
 
 This command is used when both the current master and the new master
-are alive and functionning properly.
+are alive and functioning properly.
 
 The actions performed are:
 - we tell the old master to go read-only. It then shuts down its query
@@ -111,7 +111,7 @@ The actions performed are:
 Note: the user is responsible for finding the most advanced master
 ('vtctl ShardReplicationPositions' is very useful for that
 purpose). Later on, we might want to automate that part, but for now
-we don't want a master to be picked randomely (possibly in another
+we don't want a master to be picked randomly (possibly in another
 cell) and break an installation.
 
 ## External Reparents
