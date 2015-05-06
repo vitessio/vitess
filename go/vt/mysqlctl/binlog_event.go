@@ -141,6 +141,12 @@ func (ev binlogEvent) Format() (f blproto.BinlogFormat, err error) {
 	if f.HeaderLength < 19 {
 		return f, fmt.Errorf("header length = %d, should be >= 19", f.HeaderLength)
 	}
+
+	// MySQL/MariaDB 5.3+ always adds a 4-byte checksum to the end of a
+	// FORMAT_DESCRIPTION_EVENT, regardless of the server setting. The byte
+	// immediately before that checksum tells us which checksum algorithm (if any)
+	// is used for the rest of the events.
+	f.ChecksumAlgorithm = data[len(data)-5]
 	return f, nil
 }
 

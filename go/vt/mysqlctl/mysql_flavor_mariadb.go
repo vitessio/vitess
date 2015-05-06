@@ -244,23 +244,6 @@ func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 	}, nil
 }
 
-// Format overrides binlogEvent.Format().
-func (ev mariadbBinlogEvent) Format() (f blproto.BinlogFormat, err error) {
-	// Call parent.
-	f, err = ev.binlogEvent.Format()
-	if err != nil {
-		return
-	}
-
-	// MariaDB 5.3+ always adds a 4-byte checksum to the end of a
-	// FORMAT_DESCRIPTION_EVENT, regardless of the server setting. The byte
-	// immediately before that checksum tells us which checksum algorithm (if any)
-	// is used for the rest of the events.
-	data := ev.Bytes()
-	f.ChecksumAlgorithm = data[len(data)-5]
-	return
-}
-
 // StripChecksum implements BinlogEvent.StripChecksum().
 func (ev mariadbBinlogEvent) StripChecksum(f blproto.BinlogFormat) (blproto.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {
