@@ -743,31 +743,35 @@ func TestIsErrorCausedByVTGate(t *testing.T) {
 	}
 	shardConnUnknownErr := &ShardConnError{Err: unknownError}
 	shardConnServerErr := &ShardConnError{Err: serverError}
+	shardConnCancelledErr := &ShardConnError{Err: tabletconn.Cancelled}
 
 	scatterConnErrAllUnknownErrs := &ScatterConnError{
 		Errs: []error{unknownError, unknownError, unknownError},
 	}
 	scatterConnErrMixed := &ScatterConnError{
-		Errs: []error{unknownError, shardConnServerErr, shardConnServerErr},
+		Errs: []error{unknownError, shardConnServerErr, shardConnCancelledErr},
 	}
-	scatterConnErrAllServerErrs := &ScatterConnError{
-		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnServerErr},
+	scatterConnErrAllNonVTGateErrs := &ScatterConnError{
+		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnCancelledErr},
 	}
 
 	inputToWant := map[error]bool{
-		unknownError:           true,
-		serverError:            false,
-		tabletconn.CONN_CLOSED: true,
+		unknownError:         true,
+		serverError:          false,
+		tabletconn.Cancelled: false,
+		// OperationalErrors that are not tabletconn.Cancelled might be from VTGate
+		tabletconn.ConnClosed: true,
 		// Errors wrapped in ShardConnError should get unwrapped
-		shardConnUnknownErr: true,
-		shardConnServerErr:  false,
-		// We consider a ScatterConnErr with all uknown errors to be from VTGate
+		shardConnUnknownErr:   true,
+		shardConnServerErr:    false,
+		shardConnCancelledErr: false,
+		// We consider a ScatterConnErr with all unknown errors to be from VTGate
 		scatterConnErrAllUnknownErrs: true,
 		// We consider a ScatterConnErr with a mix of errors to be from VTGate
 		scatterConnErrMixed: true,
 		// If every error in ScatterConnErr list is caused by external components, we shouldn't
 		// consider the error to be from VTGate
-		scatterConnErrAllServerErrs: false,
+		scatterConnErrAllNonVTGateErrs: false,
 	}
 
 	for input, want := range inputToWant {
