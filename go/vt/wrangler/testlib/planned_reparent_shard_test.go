@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -64,6 +65,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
+	oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled = true
 
 	// good slave 1
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
@@ -115,4 +117,8 @@ func TestPlannedReparentShard(t *testing.T) {
 	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
 	}
+	if oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled {
+		t.Errorf("oldMaster...QueryServiceEnabled set")
+	}
+
 }

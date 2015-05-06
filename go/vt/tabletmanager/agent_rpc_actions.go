@@ -471,9 +471,16 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 // its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	// Set the server read-only. Note all active connections are not
+	// affected.
 	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
+
+	// Now stop the query service, to make sure nobody is writing to the
+	// database. This will in effect close the connection pools to the
+	// database.
+	agent.disallowQueries()
 
 	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will
