@@ -403,6 +403,14 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				wr.logger.Infof("setting new master on slave %v", alias)
 				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
+					return
+				}
+
+				// also restart replication on old master
+				if alias == oldMasterTabletInfo.Alias {
+					if err := wr.TabletManagerClient().StartSlave(ctx, tabletInfo); err != nil {
+						rec.RecordError(fmt.Errorf("old master %v StartSlave failed: %v", alias, err))
+					}
 				}
 			}(alias, tabletInfo)
 		}
