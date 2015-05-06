@@ -21,6 +21,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+var danglingTabletConn = stats.NewInt("DanglingTabletConn")
+
 // ShardConn represents a load balanced connection to a group
 // of vttablets that belong to the same shard. ShardConn can
 // be concurrently used across goroutines. Such requests are
@@ -198,7 +200,11 @@ func (sdc *ShardConn) closeCurrent() {
 	if sdc.conn == nil {
 		return
 	}
-	go sdc.conn.Close()
+	go func(conn tabletconn.TabletConn) {
+		danglingTabletConn.Add(1)
+		conn.Close()
+		danglingTabletConn.Add(-1)
+	}(sdc.conn)
 	sdc.conn = nil
 }
 
@@ -375,7 +381,11 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 	}
 	sdc.balancer.MarkDown(conn.EndPoint().Uid, reason)
 
-	go sdc.conn.Close()
+	go func(conn tabletconn.TabletConn) {
+		danglingTabletConn.Add(1)
+		conn.Close()
+		danglingTabletConn.Add(-1)
+	}(sdc.conn)
 	sdc.conn = nil
 }
 
