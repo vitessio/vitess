@@ -116,7 +116,7 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", master.Tablet.Hostname, master.Tablet.Portmap["mysql"], 10)
+	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.Portmap["mysql"])
 	slave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	slave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",

@@ -35,7 +35,7 @@ type MysqlDaemon interface {
 	MasterPosition() (proto.ReplicationPosition, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
-	SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
+	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	// DemoteMaster waits for all current transactions to finish,
@@ -99,7 +99,7 @@ type FakeMysqlDaemon struct {
 	StartReplicationCommandsResult []string
 
 	// SetMasterCommandsInput is matched against the input
-	// of SetMasterCommands (as "%v:%v,%v"). If it doesn't match,
+	// of SetMasterCommands (as "%v:%v"). If it doesn't match,
 	// SetMasterCommands will return an error.
 	SetMasterCommandsInput string
 
@@ -197,6 +197,7 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 
 // StartReplicationCommands is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
+	status.MasterConnectRetry = int(masterConnectRetry.Seconds())
 	if !reflect.DeepEqual(fmd.StartReplicationCommandsStatus, status) {
 		return nil, fmt.Errorf("wrong status for StartReplicationCommands: expected %v got %v", fmd.StartReplicationCommandsStatus, status)
 	}
@@ -204,8 +205,8 @@ func (fmd *FakeMysqlDaemon) StartReplicationCommands(status *proto.ReplicationSt
 }
 
 // SetMasterCommands is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
-	input := fmt.Sprintf("%v:%v,%v", masterHost, masterPort, masterConnectRetry)
+func (fmd *FakeMysqlDaemon) SetMasterCommands(masterHost string, masterPort int) ([]string, error) {
+	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
 	if fmd.SetMasterCommandsInput != input {
 		return nil, fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterCommandsInput, input)
 	}

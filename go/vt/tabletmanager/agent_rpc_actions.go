@@ -447,12 +447,10 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 		return err
 	}
 
-	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
 	status := &myproto.ReplicationStatus{
-		Position:           replicationPosition,
-		MasterHost:         ti.Hostname,
-		MasterPort:         ti.Portmap["mysql"],
-		MasterConnectRetry: 10,
+		Position:   replicationPosition,
+		MasterHost: ti.Hostname,
+		MasterPort: ti.Portmap["mysql"],
 	}
 	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 	if err != nil {
@@ -549,8 +547,8 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 		replicating = true
 	}
 
-	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
-	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"], 10)
+	// Create the list of commands to set the master
+	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
 	if err != nil {
 		return err
 	}

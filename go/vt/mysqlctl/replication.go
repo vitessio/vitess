@@ -219,7 +219,10 @@ func (mysqld *Mysqld) MasterPosition() (rp proto.ReplicationPosition, err error)
 	return flavor.MasterPosition(mysqld)
 }
 
-// StartReplicationCommands starts a replication
+// StartReplicationCommands returns the commands used to start
+// replication to the provided master using the provided starting
+// position.  The provided MasterConnectRetry will be ignored and
+// replaced by the command line parameter.
 func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
@@ -229,12 +232,13 @@ func (mysqld *Mysqld) StartReplicationCommands(status *proto.ReplicationStatus) 
 	if err != nil {
 		return nil, err
 	}
+	status.MasterConnectRetry = int(masterConnectRetry.Seconds())
 	return flavor.StartReplicationCommands(&params, status)
 }
 
 // SetMasterCommands returns the commands to run to make the provided
 // host / port the master.
-func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
+func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]string, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
 		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
@@ -243,7 +247,7 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int, maste
 	if err != nil {
 		return nil, err
 	}
-	return flavor.SetMasterCommands(&params, masterHost, masterPort, masterConnectRetry)
+	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 }
 
 // WaitForSlave waits for a slave if its lag is larger than given maxLag

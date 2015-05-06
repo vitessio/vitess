@@ -58,7 +58,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.DemoteMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
-	oldMaster.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	oldMaster.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",
@@ -73,7 +73,7 @@ func TestPlannedReparentShard(t *testing.T) {
 		SlaveIORunning:  true,
 		SlaveSQLRunning: true,
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -85,7 +85,7 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

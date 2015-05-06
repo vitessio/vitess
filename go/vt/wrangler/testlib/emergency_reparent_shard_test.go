@@ -65,7 +65,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		SlaveIORunning:  true,
 		SlaveSQLRunning: true,
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -84,7 +84,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 454,
 		},
 	}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{

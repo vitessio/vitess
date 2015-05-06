@@ -50,6 +50,9 @@ var (
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
 	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+
+	// masterConnectRetry is used in 'SET MASTER' commands
+	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
