@@ -347,6 +347,19 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 		// Adding wrong flavor is a no-op.
 		fakeGTID{}: set,
 
+		// Adding GTIDs that are already in the set
+		Mysql56GTID{Server: sid1, Sequence: 20}: Mysql56GTIDSet{
+			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+		},
+		Mysql56GTID{Server: sid1, Sequence: 30}: Mysql56GTIDSet{
+			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+		},
+		Mysql56GTID{Server: sid1, Sequence: 25}: Mysql56GTIDSet{
+			sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+			sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+		},
 		// New interval beginning
 		Mysql56GTID{Server: sid1, Sequence: 1}: Mysql56GTIDSet{
 			sid1: []interval{{1, 1}, {20, 30}, {35, 40}, {42, 45}},

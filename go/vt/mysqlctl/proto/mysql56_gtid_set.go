@@ -258,6 +258,12 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 		return set
 	}
 
+	// If it's already in the set, we can return the same instance.
+	// This is safe because GTIDSets are immutable.
+	if set.ContainsGTID(gtid) {
+		return set
+	}
+
 	// Make a copy and add the new GTID in the proper place.
 	// This function is not supposed to modify the original set.
 	newSet := make(Mysql56GTIDSet)
