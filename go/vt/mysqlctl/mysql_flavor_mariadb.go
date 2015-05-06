@@ -124,9 +124,7 @@ func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string,
 	args = append(args, "MASTER_USE_GTID = slave_pos")
 	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 
-	return []string{
-		changeMasterTo,
-	}, nil
+	return []string{changeMasterTo}, nil
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
