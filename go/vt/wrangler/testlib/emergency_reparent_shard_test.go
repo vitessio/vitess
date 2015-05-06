@@ -31,6 +31,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA)
 
 	// new master
+	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -47,10 +48,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer newMaster.StopActionLoop(t)
 
 	// old master, will be scrapped
+	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 
-	// good slave 1
+	// good slave 1 is replicating
+	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -58,15 +61,22 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 455,
 		},
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
+		SlaveIORunning:  true,
+		SlaveSQLRunning: true,
+	}
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"set master cmd 1",
+		"START SLAVE",
 	}
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
 
-	// good slave 2
+	// good slave 2 is not replicating
+	goodSlave2.FakeMysqlDaemon.ReadOnly = true
 	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -74,7 +84,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 454,
 		},
 	}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -100,6 +110,17 @@ func TestEmergencyReparentShard(t *testing.T) {
 	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
+	if newMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("newMaster.FakeMysqlDaemon.ReadOnly set")
+	}
+	// old master read-only flag doesn't matter, it is scrapped
+	if !goodSlave1.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
+	}
+
 }
 
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent

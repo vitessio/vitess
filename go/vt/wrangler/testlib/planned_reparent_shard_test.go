@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -31,6 +32,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA)
 
 	// new master
+	newMaster.FakeMysqlDaemon.ReadOnly = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   7,
@@ -54,26 +56,36 @@ func TestPlannedReparentShard(t *testing.T) {
 	defer newMaster.StopActionLoop(t)
 
 	// old master
+	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.DemoteMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
-	oldMaster.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	oldMaster.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
+	oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled = true
 
-	// good slave 1
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	// good slave 1 is replicating
+	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
+		SlaveIORunning:  true,
+		SlaveSQLRunning: true,
+	}
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"set master cmd 1",
+		"START SLAVE",
 	}
 	goodSlave1.StartActionLoop(t, wr)
 	defer goodSlave1.StopActionLoop(t)
 
-	// good slave 2
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v,%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"], 10)
+	// good slave 2 is not replicating
+	goodSlave2.FakeMysqlDaemon.ReadOnly = true
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -88,15 +100,31 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// check what was run
 	if err := newMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+		t.Errorf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 	if err := oldMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("oldMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+		t.Errorf("oldMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 	if err := goodSlave1.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodSlave1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+		t.Errorf("goodSlave1.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
 	if err := goodSlave2.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+		t.Errorf("goodSlave2.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
+	if newMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("newMaster.FakeMysqlDaemon.ReadOnly set")
+	}
+	if !oldMaster.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("oldMaster.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !goodSlave1.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
+	}
+	if oldMaster.Agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).QueryServiceEnabled {
+		t.Errorf("oldMaster...QueryServiceEnabled set")
+	}
+
 }

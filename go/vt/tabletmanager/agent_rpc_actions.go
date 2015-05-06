@@ -447,12 +447,10 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 		return err
 	}
 
-	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
 	status := &myproto.ReplicationStatus{
-		Position:           replicationPosition,
-		MasterHost:         ti.Hostname,
-		MasterPort:         ti.Portmap["mysql"],
-		MasterConnectRetry: 10,
+		Position:   replicationPosition,
+		MasterHost: ti.Hostname,
+		MasterPort: ti.Portmap["mysql"],
 	}
 	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 	if err != nil {
@@ -471,6 +469,17 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 // its current transactions, and returns its master position.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error) {
+	// Set the server read-only. Note all active connections are not
+	// affected.
+	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// Now stop the query service, to make sure nobody is writing to the
+	// database. This will in effect close the connection pools to the
+	// database.
+	agent.disallowQueries()
+
 	return agent.MysqlDaemon.DemoteMaster()
 	// There is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will
@@ -505,6 +514,10 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 		return myproto.ReplicationPosition{}, err
 	}
 
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
 	return rp, agent.updateReplicationGraphForPromotedSlave(ctx, tablet)
 }
 
@@ -527,10 +540,23 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 		return err
 	}
 
-	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
-	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"], 10)
+	// See if we are replicating at all
+	replicating := false
+	rs, err := agent.MysqlDaemon.SlaveStatus()
+	if err == nil && (rs.SlaveIORunning || rs.SlaveSQLRunning) {
+		replicating = true
+	}
+
+	// Create the list of commands to set the master
+	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
 	if err != nil {
 		return err
+	}
+	if replicating {
+		newCmds := []string{"STOP SLAVE"}
+		newCmds = append(newCmds, cmds...)
+		newCmds = append(newCmds, "START SLAVE")
+		cmds = newCmds
 	}
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
@@ -552,7 +578,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 
 	// if needed, wait until we get the replicated row, or our
 	// context times out
-	if timeCreatedNS == 0 {
+	if !replicating || timeCreatedNS == 0 {
 		return nil
 	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
@@ -604,6 +630,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.Replication
 
 	rp, err := agent.MysqlDaemon.PromoteSlave(agent.hookExtraEnv())
 	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+
+	// Set the server read-write
+	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 

@@ -264,7 +264,6 @@ func TestMariadbSetMasterCommands(t *testing.T) {
 	masterPort := 123
 	masterConnectRetry := 1234
 	want := []string{
-		"STOP SLAVE",
 		`CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -272,7 +271,6 @@ func TestMariadbSetMasterCommands(t *testing.T) {
   MASTER_PASSWORD = 'password',
   MASTER_CONNECT_RETRY = 1234,
   MASTER_USE_GTID = slave_pos`,
-		"START SLAVE",
 	}
 
 	got, err := (&mariaDB10{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)
@@ -299,7 +297,6 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 	masterPort := 123
 	masterConnectRetry := 1234
 	want := []string{
-		"STOP SLAVE",
 		`CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -312,7 +309,6 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
   MASTER_SSL_CERT = 'ssl-cert',
   MASTER_SSL_KEY = 'ssl-key',
   MASTER_USE_GTID = slave_pos`,
-		"START SLAVE",
 	}
 
 	got, err := (&mariaDB10{}).SetMasterCommands(params, masterHost, masterPort, masterConnectRetry)

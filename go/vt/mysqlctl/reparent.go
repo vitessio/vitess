@@ -72,8 +72,6 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 // If the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
 func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
-	// label as TYPE_REPLICA
-	mysqld.SetReadOnly(true)
 	cmds := []string{
 		"FLUSH TABLES WITH READ LOCK",
 		"UNLOCK TABLES",
@@ -104,10 +102,6 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.Replic
 
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		return proto.ReplicationPosition{}, err
-	}
-
-	if err := mysqld.SetReadOnly(false); err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
