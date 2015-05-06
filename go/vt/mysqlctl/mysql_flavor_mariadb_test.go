@@ -139,14 +139,16 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}).Format()
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumQueryEvent)}
 	wantEvent := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumStrippedQueryEvent)}
 	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
-	gotEvent, gotChecksum := input.StripChecksum(f)
+	gotEvent, gotChecksum, err := input.StripChecksum(f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !reflect.DeepEqual(gotEvent, wantEvent) || !reflect.DeepEqual(gotChecksum, wantChecksum) {
 		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, %v)", input, gotEvent, gotChecksum, wantEvent, wantChecksum)
 	}
@@ -155,13 +157,15 @@ func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}).Format()
 	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := input
-	gotEvent, gotChecksum := input.StripChecksum(f)
+	gotEvent, gotChecksum, err := input.StripChecksum(f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
 		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
 	}

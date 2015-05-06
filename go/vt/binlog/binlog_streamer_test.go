@@ -49,17 +49,23 @@ func (fakeEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 func (fakeEvent) Rand(proto.BinlogFormat) (uint64, uint64, error) {
 	return 0, 0, errors.New("not a rand")
 }
-func (ev fakeEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev fakeEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidEvent struct{ fakeEvent }
 
-func (invalidEvent) IsValid() bool                                                   { return false }
-func (ev invalidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (invalidEvent) IsValid() bool { return false }
+func (ev invalidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type rotateEvent struct{ fakeEvent }
 
-func (rotateEvent) IsRotate() bool                                                  { return true }
-func (ev rotateEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (rotateEvent) IsRotate() bool { return true }
+func (ev rotateEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type formatEvent struct{ fakeEvent }
 
@@ -67,15 +73,17 @@ func (formatEvent) IsFormatDescription() bool { return true }
 func (formatEvent) Format() (proto.BinlogFormat, error) {
 	return proto.BinlogFormat{FormatVersion: 1}, nil
 }
-func (ev formatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev formatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidFormatEvent struct{ formatEvent }
 
 func (invalidFormatEvent) Format() (proto.BinlogFormat, error) {
 	return proto.BinlogFormat{}, errors.New("invalid format event")
 }
-func (ev invalidFormatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidFormatEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 type queryEvent struct {
@@ -87,21 +95,25 @@ func (queryEvent) IsQuery() bool { return true }
 func (ev queryEvent) Query(proto.BinlogFormat) (proto.Query, error) {
 	return ev.query, nil
 }
-func (ev queryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev queryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidQueryEvent struct{ queryEvent }
 
 func (invalidQueryEvent) Query(proto.BinlogFormat) (proto.Query, error) {
 	return proto.Query{}, errors.New("invalid query event")
 }
-func (ev invalidQueryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidQueryEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 type xidEvent struct{ fakeEvent }
 
-func (xidEvent) IsXID() bool                                                     { return true }
-func (ev xidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (xidEvent) IsXID() bool { return true }
+func (ev xidEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type intVarEvent struct {
 	fakeEvent
@@ -113,15 +125,17 @@ func (intVarEvent) IsIntVar() bool { return true }
 func (ev intVarEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 	return ev.name, ev.value, nil
 }
-func (ev intVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) { return ev, nil }
+func (ev intVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
 type invalidIntVarEvent struct{ intVarEvent }
 
 func (invalidIntVarEvent) IntVar(proto.BinlogFormat) (string, uint64, error) {
 	return "", 0, errors.New("invalid intvar event")
 }
-func (ev invalidIntVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte) {
-	return ev, nil
+func (ev invalidIntVarEvent) StripChecksum(proto.BinlogFormat) (proto.BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 // sample MariaDB event data
@@ -179,7 +193,7 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -223,7 +237,7 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -271,7 +285,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
 		xidEvent{},
 	}
-	want := ClientEOF
+	want := ErrClientEOF
 
 	events := make(chan proto.BinlogEvent)
 
@@ -296,7 +310,7 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 }
 
 func TestBinlogStreamerParseEventsServerEOF(t *testing.T) {
-	want := ServerEOF
+	want := ErrServerEOF
 
 	events := make(chan proto.BinlogEvent)
 	close(events)
@@ -563,7 +577,7 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -612,7 +626,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -662,7 +676,7 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -708,7 +722,7 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -787,7 +801,7 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -832,7 +846,7 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -864,7 +878,7 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -908,7 +922,7 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -951,7 +965,7 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		_, err := bls.parseEvents(ctx, events)
 		return err
 	})
-	if err := svm.Join(); err != ServerEOF {
+	if err := svm.Join(); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
