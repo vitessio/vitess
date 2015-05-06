@@ -542,10 +542,23 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 		return err
 	}
 
+	// See if we are replicating at all
+	replicating := false
+	rs, err := agent.MysqlDaemon.SlaveStatus()
+	if err == nil && (rs.SlaveIORunning || rs.SlaveSQLRunning) {
+		replicating = true
+	}
+
 	// TODO(alainjobart) fix the hardcoding of MasterConnectRetry
 	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"], 10)
 	if err != nil {
 		return err
+	}
+	if replicating {
+		newCmds := []string{"STOP SLAVE"}
+		newCmds = append(newCmds, cmds...)
+		newCmds = append(newCmds, "START SLAVE")
+		cmds = newCmds
 	}
 
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
@@ -567,7 +580,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 
 	// if needed, wait until we get the replicated row, or our
 	// context times out
-	if timeCreatedNS == 0 {
+	if !replicating || timeCreatedNS == 0 {
 		return nil
 	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)

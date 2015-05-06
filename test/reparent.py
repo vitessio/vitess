@@ -613,8 +613,10 @@ class TestReparent(unittest.TestCase):
 
     utils.pause('check orphan')
 
-    # reparent the tablet, should catch up on replication really quickly
+    # reparent the tablet (will not start replication, so we have to
+    # do it ourselves), then it should catch up on replication really quickly
     utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
+    utils.run_vtctl(['StartSlave', tablet_41983.tablet_alias])
 
     # wait until it gets the data
     timeout = 10.0

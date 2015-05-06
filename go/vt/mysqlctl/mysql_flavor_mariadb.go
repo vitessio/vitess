@@ -125,9 +125,7 @@ func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string,
 	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 
 	return []string{
-		"STOP SLAVE",
 		changeMasterTo,
-		"START SLAVE",
 	}, nil
 }
 

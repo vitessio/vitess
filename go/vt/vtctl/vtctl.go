@@ -74,6 +74,12 @@ var commands = []commandGroup{
 			command{"SetReadWrite", commandSetReadWrite,
 				"[<tablet alias>]",
 				"Sets the tablet as ReadWrite."},
+			command{"StartSlave", commandStartSlave,
+				"[<tablet alias>]",
+				"Starts replication on the slave."},
+			command{"StopSlave", commandStopSlave,
+				"[<tablet alias>]",
+				"Stops replication on the slave."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <tablet alias> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
@@ -713,6 +719,44 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 	}
 	return wr.TabletManagerClient().SetReadWrite(ctx, ti)
+}
+
+func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action StartSlave requires <tablet alias>")
+	}
+
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return wr.TabletManagerClient().StartSlave(ctx, ti)
+}
+
+func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action StopSlave requires <tablet alias>")
+	}
+
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return wr.TabletManagerClient().StopSlave(ctx, ti)
 }
 
 func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -21,8 +21,9 @@ This file handles the differences between flavors of mysql.
 
 // MysqlFlavor is the abstract interface for a flavor.
 type MysqlFlavor interface {
-	// VersionMatch returns true if the version string (from SELECT VERSION())
-	// represents a server that this flavor knows how to talk to.
+	// VersionMatch returns true if the version string (from
+	// SELECT VERSION()) represents a server that this flavor
+	// knows how to talk to.
 	VersionMatch(version string) bool
 
 	// MasterPosition returns the ReplicationPosition of a master.
@@ -39,40 +40,48 @@ type MysqlFlavor interface {
 	// a slave into a master.
 	PromoteSlaveCommands() []string
 
-	// StartReplicationCommands returns the commands to start replicating from
-	// a given master and position as specified in a ReplicationStatus.
+	// StartReplicationCommands returns the commands to start
+	// replicating from a given master and position as specified
+	// in a ReplicationStatus. It should start replication.
 	StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error)
 
 	// SetMasterCommands returns the commands to use the provided master
 	// as the new master (without changing any GTID position).
+	// It is guaranteed to be called with replication stopped.
+	// It should not start or stop replication.
 	SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error)
 
-	// ParseGTID parses a GTID in the canonical format of this MySQL flavor into
-	// a proto.GTID interface value.
+	// ParseGTID parses a GTID in the canonical format of this
+	// MySQL flavor into a proto.GTID interface value.
 	ParseGTID(string) (proto.GTID, error)
 
-	// ParseReplicationPosition parses a replication position in the canonical
-	// format of this MySQL flavor into a proto.ReplicationPosition struct.
+	// ParseReplicationPosition parses a replication position in
+	// the canonical format of this MySQL flavor into a
+	// proto.ReplicationPosition struct.
 	ParseReplicationPosition(string) (proto.ReplicationPosition, error)
 
-	// SendBinlogDumpCommand sends the flavor-specific version of the
-	// COM_BINLOG_DUMP command to start dumping raw binlog events over a slave
-	// connection, starting at a given GTID.
+	// SendBinlogDumpCommand sends the flavor-specific version of
+	// the COM_BINLOG_DUMP command to start dumping raw binlog
+	// events over a slave connection, starting at a given GTID.
 	SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error
 
-	// MakeBinlogEvent takes a raw packet from the MySQL binlog stream connection
-	// and returns a BinlogEvent through which the packet can be examined.
+	// MakeBinlogEvent takes a raw packet from the MySQL binlog
+	// stream connection and returns a BinlogEvent through which
+	// the packet can be examined.
 	MakeBinlogEvent(buf []byte) blproto.BinlogEvent
 
-	// WaitMasterPos waits until slave replication reaches at least targetPos.
+	// WaitMasterPos waits until slave replication reaches at
+	// least targetPos.
 	WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error
 
-	// EnableBinlogPlayback prepares the server to play back events from a binlog stream.
-	// Whatever it does for a given flavor, it must be idempotent.
+	// EnableBinlogPlayback prepares the server to play back
+	// events from a binlog stream.  Whatever it does for a given
+	// flavor, it must be idempotent.
 	EnableBinlogPlayback(mysqld *Mysqld) error
 
-	// DisableBinlogPlayback returns the server to the normal state after playback is done.
-	// Whatever it does for a given flavor, it must be idempotent.
+	// DisableBinlogPlayback returns the server to the normal
+	// state after playback is done.  Whatever it does for a given
+	// flavor, it must be idempotent.
 	DisableBinlogPlayback(mysqld *Mysqld) error
 }
 
