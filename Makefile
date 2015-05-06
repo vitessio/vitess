@@ -4,6 +4,10 @@
 
 MAKEFLAGS = -s
 
+# Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
+# Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
+.NOTPARALLEL:
+
 .PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_vtgate_client_test
 
 all: build test
