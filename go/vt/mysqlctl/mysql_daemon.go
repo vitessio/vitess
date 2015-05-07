@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -55,7 +57,8 @@ type MysqlDaemon interface {
 	// GetDbConnection returns a connection to be able to talk to the database.
 	// It accepts a dbconfig name to determine which db user it the connection should have.
 	GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error)
-
+	// GetDbaConnection returns a dba connection.
+	GetDbaConnection() (*dbconnpool.DBConnection, error)
 	// query execution methods
 	ExecuteSuperQueryList(queryList []string) error
 }
@@ -284,11 +287,6 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 // GetDbConnection is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
 	switch dbconfigName {
-	case dbconfigs.DbaConfigName:
-		if fmd.DbaConnectionFactory == nil {
-			return nil, fmt.Errorf("no DbaConnectionFactory set in this FakeMysqlDaemon")
-		}
-		return fmd.DbaConnectionFactory()
 	case dbconfigs.AppConfigName:
 		if fmd.DbAppConnectionFactory == nil {
 			return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
@@ -296,4 +294,9 @@ func (fmd *FakeMysqlDaemon) GetDbConnection(dbconfigName dbconfigs.DbConfigName)
 		return fmd.DbAppConnectionFactory()
 	}
 	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
+}
+
+// GetDbaConnection is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(&sqldb.ConnParams{}, stats.NewTimings(""))
 }

@@ -592,30 +592,37 @@ var testExecuteFetchResult = &mproto.QueryResult{
 }
 var testExecuteFetchDbConfigName dbconfigs.DbConfigName
 
-func (fra *fakeRPCAgent) ExecuteFetch(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, dbconfigName dbconfigs.DbConfigName) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetch query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetch maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetch wantFields", wantFields)
-	compare(fra.t, "ExecuteFetch dbconfigName", dbconfigName, testExecuteFetchDbConfigName)
-	switch dbconfigName {
-	case dbconfigs.DbaConfigName:
-		compareBool(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs)
-	case dbconfigs.AppConfigName:
-		compare(fra.t, "ExecuteFetch disableBinlogs", disableBinlogs, false)
+	compare(fra.t, "ExecuteFetchAsDba query", query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsDba maxrows", maxrows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsDba wantFields", wantFields)
+	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", disableBinlogs)
+	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", reloadSchema)
+
+	return testExecuteFetchResult, nil
+}
+
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool, dbconfigName dbconfigs.DbConfigName) (*mproto.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
 	}
+	compare(fra.t, "ExecuteFetchAsApp query", query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsApp maxrows", maxrows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsApp wantFields", wantFields)
+	compare(fra.t, "ExecuteFetchAsApp dbconfigName", dbconfigName, testExecuteFetchDbConfigName)
 	return testExecuteFetchResult, nil
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	testExecuteFetchDbConfigName = dbconfigs.DbaConfigName
-	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
-	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
+	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, true)
+	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	testExecuteFetchDbConfigName = dbconfigs.AppConfigName
 	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
-	compareError(t, "ExecuteFetch", err, qr, testExecuteFetchResult)
+	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 }
 
 func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {

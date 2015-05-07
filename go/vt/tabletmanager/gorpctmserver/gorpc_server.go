@@ -200,16 +200,25 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, args *myproto.SchemaCh
 	})
 }
 
-// ExecuteFetch wraps RPCAgent.ExecuteFetch
-func (tm *TabletManager) ExecuteFetch(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
+// ExecuteFetchAsDba wraps RPCAgent.ExecuteFetchAsDba
+func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetch, args, reply, func() error {
-		qr, err := tm.agent.ExecuteFetch(ctx, args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs, args.DBConfigName)
+	return tm.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsDba, args, reply, func() error {
+		qr, err := tm.agent.ExecuteFetchAsDba(ctx, args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs, args.ReloadSchema)
 		if err == nil {
 			*reply = *qr
-			if args.ReloadSchema {
-				tm.agent.ReloadSchema(ctx)
-			}
+		}
+		return err
+	})
+}
+
+// ExecuteFetchAsApp wraps RPCAgent.ExecuteFetchAsApp
+func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsApp, args, reply, func() error {
+		qr, err := tm.agent.ExecuteFetchAsApp(ctx, args.Query, args.MaxRows, args.WantFields, args.DBConfigName)
+		if err == nil {
+			*reply = *qr
 		}
 		return err
 	})
