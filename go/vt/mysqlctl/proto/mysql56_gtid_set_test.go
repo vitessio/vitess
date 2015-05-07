@@ -423,11 +423,11 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 		// sid1: interval 1 start
 		20, 0, 0, 0, 0, 0, 0, 0,
 		// sid1: interval 1 end
-		30, 0, 0, 0, 0, 0, 0, 0,
+		31, 0, 0, 0, 0, 0, 0, 0,
 		// sid1: interval 2 start
 		35, 0, 0, 0, 0, 0, 0, 0,
 		// sid1: interval 2 end
-		40, 0, 0, 0, 0, 0, 0, 0,
+		41, 0, 0, 0, 0, 0, 0, 0,
 		// sid2
 		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16,
 		// sid2: n_intervals
@@ -435,7 +435,7 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 		// sid2: interval 1 start
 		1, 0, 0, 0, 0, 0, 0, 0,
 		// sid2: interval 1 end
-		5, 0, 0, 0, 0, 0, 0, 0,
+		6, 0, 0, 0, 0, 0, 0, 0,
 	}
 	if got := input.SIDBlock(); !reflect.DeepEqual(got, want) {
 		t.Errorf("%#v.SIDBlock() = %#v, want %#v", input, got, want)

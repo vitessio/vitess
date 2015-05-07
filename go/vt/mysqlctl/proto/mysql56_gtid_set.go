@@ -339,7 +339,9 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 
 		for _, iv := range intervals {
 			binary.Write(buf, binary.LittleEndian, iv.start)
-			binary.Write(buf, binary.LittleEndian, iv.end)
+			// MySQL's internal form for intervals adds 1 to the end value.
+			// See Gtid_set::add_gtid_text() in rpl_gtid_set.cc for example.
+			binary.Write(buf, binary.LittleEndian, iv.end+1)
 		}
 	}
 
