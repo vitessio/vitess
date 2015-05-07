@@ -1,0 +1,41 @@
+apiVersion: v1beta1
+kind: ReplicationController
+id: vtgate
+desiredState:
+  replicas: {{replicas}}
+  replicaSelector: {name: vtgate}
+  podTemplate:
+    desiredState:
+      manifest:
+        version: v1beta1
+        id: vtgate
+        containers:
+          - name: vtgate
+            image: vitess/lite
+            volumeMounts:
+              - name: syslog
+                mountPath: /dev/log
+              - name: vtdataroot
+                mountPath: /vt/vtdataroot
+            command:
+              - sh
+              - "-c"
+              - >-
+                mkdir -p $VTDATAROOT/tmp &&
+                chown -R vitess /vt &&
+                su -p -c "/vt/bin/vtgate
+                -topo_implementation etcd
+                -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+                -log_dir $VTDATAROOT/tmp
+                -alsologtostderr
+                -port 15001
+                -cell test" vitess
+        volumes:
+          - name: syslog
+            source: {hostDir: {path: /dev/log}}
+          - name: vtdataroot
+            source: {emptyDir: {}}
+    labels:
+      name: vtgate
+labels:
+  name: vtgate

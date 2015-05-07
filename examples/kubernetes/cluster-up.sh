@@ -25,10 +25,10 @@ BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
 VTGATE_COUNT=${VTGATE_COUNT:-0}
 
 vttablet_template='vttablet-pod-template.yaml'
-vtgate_template='vtgate-pod-template.yaml'
+vtgate_script='vtgate-up.sh'
 if $BENCHMARK_CLUSTER; then
   vttablet_template='vttablet-pod-benchmarking-template.yaml'
-  vtgate_template='vtgate-pod-benchmarking-template.yaml'
+  vtgate_script='vtgate-benchmarking-up.sh'
 fi
 
 # export for vttablet scripts
@@ -112,11 +112,12 @@ echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
 gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
+gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
 for i in `seq 1 $num_nodes`; do
   for j in `seq 0 2`; do
-    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i}.c.${project_id}.internal id=$i
+    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i} id=$i
     result=`$KUBECTL get nodes | grep id=$i`
     if [ -n "$result" ]; then
       break
@@ -144,7 +145,7 @@ wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
 run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
-run_script vtgate-up.sh STARTING_INDEX=$total_tablet_count VTGATE_REPLICAS=$vtgate_count VTGATE_TEMPLATE=$vtgate_template
+run_script $vtgate_script STARTING_INDEX=$total_tablet_count VTGATE_REPLICAS=$vtgate_count
 
 wait_for_running_tasks vtctld 1
 wait_for_running_tasks vttablet $total_tablet_count
