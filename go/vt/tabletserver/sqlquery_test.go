@@ -705,6 +705,7 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db.AddRejectedQuery(sql)
 
 	config := testUtils.newQueryServiceConfig()
+	config.EnableAutoCommit = true
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
 	err := sqlQuery.allowQueries(&dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))

@@ -59,6 +59,7 @@ func init() {
 	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
+	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
 }
 
 // RowCacheConfig encapsulates the configuration for RowCache
@@ -116,6 +117,7 @@ type Config struct {
 	StrictTableAcl     bool
 	TerseErrors        bool
 	EnablePublishStats bool
+	EnableAutoCommit   bool
 	StatsPrefix        string
 	DebugURLPrefix     string
 	PoolNamePrefix     string
@@ -148,6 +150,7 @@ var DefaultQsConfig = Config{
 	StrictTableAcl:     false,
 	TerseErrors:        false,
 	EnablePublishStats: true,
+	EnableAutoCommit:   false,
 	StatsPrefix:        "",
 	DebugURLPrefix:     "/debug",
 	PoolNamePrefix:     "",

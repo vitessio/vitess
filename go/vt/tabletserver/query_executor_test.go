@@ -824,6 +824,8 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	config.TransactionCap = 100
 	config.SpotCheckRatio = 1.0
 	config.EnablePublishStats = false
+	config.EnableAutoCommit = true
+
 	if flags&enableStrict > 0 {
 		config.StrictMode = true
 	} else {
