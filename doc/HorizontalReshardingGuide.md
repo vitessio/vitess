@@ -49,7 +49,7 @@ Next, we will copy the data from the source shard and split it into the correct 
 The vtworker can be started by, for example:
 
 ```
-vtworker --min_healthy_rdonly_endpoints 1 SplitClone --cell=test --strategy=-populate_blp_checkpoint test_keyspace/0
+vtworker --min_healthy_rdonly_endpoints 1 --cell=test SplitClone --strategy=-populate_blp_checkpoint test_keyspace/0
 ```
 
 The worker will take some time, depending on how large your dataset is that needs to be copied.
