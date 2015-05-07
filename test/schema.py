@@ -243,7 +243,7 @@ class TestSchema(unittest.TestCase):
                     auto_log=True)
 
     # check all expected hosts have the change
-    self._check_tables(shard_0_master, 1) # was stuck a long time ago as scrap
+    self._check_tables(shard_0_master, 2) # was stuck a long time ago as scrap
     self._check_tables(shard_0_replica1, 3) # current master
     self._check_tables(shard_0_replica2, 3)
     self._check_tables(shard_0_rdonly, 3)
@@ -262,7 +262,7 @@ class TestSchema(unittest.TestCase):
     # check all expected hosts have the change:
     # - master won't have it as it's a complex change
     # - backup won't have it as IsReplicatingType is false
-    self._check_tables(shard_0_master, 1) # was stuck a long time ago as scrap
+    self._check_tables(shard_0_master, 2) # was stuck a long time ago as scrap
     self._check_tables(shard_0_replica1, 3) # current master
     self._check_tables(shard_0_replica2, 4)
     self._check_tables(shard_0_rdonly, 4)

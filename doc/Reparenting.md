@@ -80,11 +80,12 @@ The actions performed are:
     wait for the entry in the test table. (if a slave wasn't
     replicating, we don't change its state and don't start replication
     after reparent)
+  - additionally, on the old master, we start replication, so it catches up.
 
 The old master is left as 'spare' in this scenario. If health checking
 is enabled on that tablet (using target\_tablet\_type parameter for
 vttablet), the server will most likely rejoin the cluster as a
-replica.
+replica on the next health check.
 
 ### Emergency Reparent: vtctl EmergencyReparentShard
 

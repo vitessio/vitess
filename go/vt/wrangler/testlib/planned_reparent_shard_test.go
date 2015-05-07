@@ -33,6 +33,7 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
+	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   7,
@@ -57,6 +58,7 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
+	oldMaster.FakeMysqlDaemon.Replicating = false
 	oldMaster.FakeMysqlDaemon.DemoteMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
@@ -69,6 +71,7 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.Replicating = true
 	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
 		SlaveIORunning:  true,
 		SlaveSQLRunning: true,
@@ -85,6 +88,7 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
+	goodSlave2.FakeMysqlDaemon.Replicating = false
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
@@ -127,4 +131,12 @@ func TestPlannedReparentShard(t *testing.T) {
 		t.Errorf("oldMaster...QueryServiceEnabled set")
 	}
 
+	// verify the old master was told to start replicating (and not
+	// the slave that wasn't replicating in the first place)
+	if !oldMaster.FakeMysqlDaemon.Replicating {
+		t.Errorf("oldMaster.FakeMysqlDaemon.Replicating not set")
+	}
+	if goodSlave2.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")
+	}
 }

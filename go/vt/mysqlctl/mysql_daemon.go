@@ -71,7 +71,9 @@ type FakeMysqlDaemon struct {
 	// return an error.
 	MysqlPort int
 
-	// Replicating is updated when calling StopSlave
+	// Replicating is updated when calling StartSlave / StopSlave
+	// (it is not used at all when calling SlaveStatus, it is the
+	// test owner responsability to have these two match)
 	Replicating bool
 
 	// CurrentSlaveStatus is returned by SlaveStatus
