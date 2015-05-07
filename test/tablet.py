@@ -393,6 +393,7 @@ class Tablet(object):
     if extra_args:
       args.extend(extra_args)
 
+    args.extend(['-enable-autocommit'])
     stderr_fd = open(os.path.join(environment.vtlogroot, '%s-%d.stderr' % (binary, self.tablet_uid)), 'w')
     # increment count only the first time
     if not self.proc:
