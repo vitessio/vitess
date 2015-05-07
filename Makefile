@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_vtgate_client_test
 
 all: build test
 
@@ -21,7 +21,7 @@ build:
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
-test: unit_test queryservice_test integration_test
+test: unit_test queryservice_test integration_test java_vtgate_client_test
 site_test: unit_test site_integration_test
 
 clean:
