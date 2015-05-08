@@ -1,22 +1,43 @@
 # Getting Started
 
-This guide describes how to build Vitess manually.
-If you prefer, you can instead build with our
-[Dockerfile](https://github.com/youtube/vitess/blob/master/Dockerfile),
-or use an
-[Automated Build](https://registry.hub.docker.com/repos/vitess/).
+There are two ways to build Vitess:
+with [Docker](https://www.docker.com/), or manually.
 
 If you run into issues or have questions, please post on our
 [forum](https://groups.google.com/forum/#!forum/vitess).
 
-## Dependencies
+## Docker Build
+
+If you just want to run Vitess in Docker, you can use one of our
+[Automated Builds](https://registry.hub.docker.com/repos/vitess/).
+The `vitess/base` image contains a full development environment,
+capable of building Vitess and running integration tests.
+The `vitess/lite` image contains only the compiled Vitess binaries,
+excluding ZooKeeper. It can run Vitess, but lacks the environment
+needed to build it or run tests.
+
+You can also build the Vitess Docker images yourself,
+to include your own patches or baked-in config.
+The [Dockerfile](https://github.com/youtube/vitess/blob/master/Dockerfile)
+in the root of the Vitess tree will build `vitess/base`.
+Other images can be built with scripts located in the
+[docker](https://github.com/youtube/vitess/tree/master/docker) subdirectory.
+
+## Manual Build
+
+
+
+
+
+### Dependencies
 
 * We currently develop on Ubuntu 14.04 (Trusty) and Debian 7.0 (Wheezy).
 * You'll need some kind of Java Runtime if you use ZooKeeper.
   We use OpenJDK (*sudo apt-get install openjdk-7-jre*).
 * [Go](http://golang.org) 1.3+: Needed for building Vitess.
-* [MariaDB](https://mariadb.org/): We currently develop with version 10.0.14.
-  Other 10.0.x versions may also work.
+* MySQL: We support [MariaDB](https://mariadb.org/) 10.0
+  and [MySQL](https://www.mysql.com/) 5.6.
+  We currently test against MariaDB 10.0.17 and MySQL 5.6.24.
 * [ZooKeeper](http://zookeeper.apache.org/)
   or [etcd](https://github.com/coreos/etcd) 0.4.6:
   By default, Vitess uses ZooKeeper as the lock service.
@@ -26,13 +47,15 @@ If you run into issues or have questions, please post on our
 * [Memcached](http://memcached.org): Used for the rowcache.
 * [Python](http://python.org) 2.7: For the client and testing.
 
-## Building
+### Building
 
 [Install Go](http://golang.org/doc/install).
 
-[Install MariaDB](https://downloads.mariadb.org/).
+Install [MariaDB](https://downloads.mariadb.org/) 10.0
+or [MySQL](http://dev.mysql.com/downloads/mysql/) 5.6.
 You can use any installation method (src/bin/rpm/deb),
-but be sure to include the client development headers (**libmariadbclient-dev**).
+but be sure to include the client development headers
+(**libmariadbclient-dev** or **libmysqlclient-dev**).
 
 ZooKeeper 3.3.5 is included by default. If you plan to use it, you don't need
 to install anything else.
@@ -55,13 +78,17 @@ cd $WORKSPACE
 sudo apt-get install make automake libtool memcached python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
 git clone https://github.com/youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
+
+# Pick one of these:
 export MYSQL_FLAVOR=MariaDB
+export MYSQL_FLAVOR=MySQL56
+
 ./bootstrap.sh
 . ./dev.env
 make build
 ```
 
-## Testing
+### Testing
 
 If you want to use etcd, set the following environment variable:
 
@@ -81,14 +108,14 @@ environment, you can run a set of lighter tests:
 make site_test
 ```
 
-### Common Test Issues
+#### Common Test Issues
 
 Many common failures come from running the full developer test suite
 (_make_ or _make test_) on an underpowered machine. If you still get
 these errors with the lighter set of site tests (*make site_test*),
 please let us know on the mailing list.
 
-#### Node already exists, port in use, etc.
+##### Node already exists, port in use, etc.
 
 Sometimes a failed test may leave behind orphaned processes.
 If you use the default settings, you can find these by looking for
@@ -100,21 +127,21 @@ pgrep -f -l '(vtdataroot|VTDATAROOT)' # list Vitess processes
 pkill -f '(vtdataroot|VTDATAROOT)' # kill Vitess processes
 ```
 
-#### Too many connections to MySQL, or other timeouts
+##### Too many connections to MySQL, or other timeouts
 
 This often means your disk is too slow. If you don't have access to an SSD,
 you can try [testing against a ramdisk](TestingOnARamDisk.md).
 
-#### Connection refused to tablet, MySQL socket not found, etc.
+##### Connection refused to tablet, MySQL socket not found, etc.
 
 This could mean you ran out of RAM and a server crashed when it tried to allocate more.
 Some of the heavier tests currently require up to 8GB RAM.
 
-#### Connection refused in zkctl test
+##### Connection refused in zkctl test
 
 This could indicate that no Java Runtime is installed.
 
-#### Running out of disk space
+##### Running out of disk space
 
 Some of the larger tests use up to 4GB of temporary space on disk.
 
@@ -123,3 +150,5 @@ Some of the larger tests use up to 4GB of temporary space on disk.
 Once you have a successful `make build`, you can proceed to start up a
 [local cluster](https://github.com/youtube/vitess/tree/master/examples/local)
 for testing.
+
+You can do that either with the manual build, or inside a Docker container.
