@@ -24,6 +24,8 @@ MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
 BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
 VTGATE_COUNT=${VTGATE_COUNT:-0}
 
+# Get region from zone (everything to last dash)
+gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
 vttablet_template='vttablet-pod-template.yaml'
 vtgate_script='vtgate-up.sh'
 if $BENCHMARK_CLUSTER; then
@@ -152,10 +154,11 @@ wait_for_running_tasks vttablet $total_tablet_count
 wait_for_running_tasks vtgate $vtgate_count
 
 echo Creating firewall rule for vtctld...
-vtctl_port=15000
-gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctl_port
-vtctl_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtctld | awk '{print $3}'`
-vtctl_server="$vtctl_ip:$vtctl_port"
+vtctld_port=15000
+gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
+vtctld_pool=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region $vtctld_port`
+vtctld_ip=`gcloud compute forwarding-rules list | grep $vtctld_pool | awk '{print $3}'`
+vtctl_server="$vtctld_ip:$vtctld_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 
 echo Waiting for tablets to be visible in the topology
@@ -204,13 +207,9 @@ echo Done
 echo Creating firewall rule for vtgate
 vtgate_port=15001
 gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate --allow tcp:$vtgate_port
-vtgate_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtgate | awk '{print $3}'`
-if [ -z "$vtgate_ip" ]
-then
-  vtgate_server="No firewall rules created for vtgate. Add createExternalLoadBalancer: true if access to vtgate is desired"
-else
-  vtgate_server="$vtgate_ip:$vtgate_port"
-fi
+vtgate_pool=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region $vtgate_port`
+vtgate_ip=`gcloud compute forwarding-rules list | grep $vtgate_pool | awk '{print $3}'`
+vtgate_server="$vtgate_ip:$vtgate_port"
 
 if [ -n "$NEWRELIC_LICENSE_KEY" -a $GKE_SSD_SIZE_GB -gt 0 ]; then
   for i in `seq 1 $num_nodes`; do
