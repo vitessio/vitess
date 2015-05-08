@@ -258,6 +258,12 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 		return set
 	}
 
+	// If it's already in the set, we can return the same instance.
+	// This is safe because GTIDSets are immutable.
+	if set.ContainsGTID(gtid) {
+		return set
+	}
+
 	// Make a copy and add the new GTID in the proper place.
 	// This function is not supposed to modify the original set.
 	newSet := make(Mysql56GTIDSet)
@@ -333,7 +339,9 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 
 		for _, iv := range intervals {
 			binary.Write(buf, binary.LittleEndian, iv.start)
-			binary.Write(buf, binary.LittleEndian, iv.end)
+			// MySQL's internal form for intervals adds 1 to the end value.
+			// See Gtid_set::add_gtid_text() in rpl_gtid_set.cc for example.
+			binary.Write(buf, binary.LittleEndian, iv.end+1)
 		}
 	}
 
