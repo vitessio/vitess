@@ -16,8 +16,8 @@ for i in `seq 1 $num_ssds`; do
   gcloud compute disks delete $base_ssd_name$i --zone $GKE_ZONE -q
 done
 
-vtctld="k8s-${GKE_CLUSTER_NAME}-default-vtctld"
-vtgate="k8s-${GKE_CLUSTER_NAME}-default-vtgate"
+vtctld=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region 15000`
+vtgate=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region 15001`
 
 gcloud compute forwarding-rules delete $vtctld -q --region=$gke_region
 gcloud compute forwarding-rules delete $vtgate -q --region=$gke_region
