@@ -20,6 +20,8 @@ For a list of options, run:
 */
 package main
 
+// This Go script shouldn't rely on any packages that aren't in the standard
+// library, since that would require the user to bootstrap before running it.
 import (
 	"encoding/json"
 	"flag"
@@ -35,6 +37,7 @@ import (
 	"time"
 )
 
+// Flags
 var (
 	flavor   = flag.String("flavor", "mariadb", "bootstrap flavor to run against")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
@@ -44,30 +47,24 @@ var (
 
 // Config is the overall object serialized in test/config.json.
 type Config struct {
-	Tests []Test
+	Tests []*Test
 }
 
 // Test is an entry from the test/config.json file.
 type Test struct {
 	Name, File, Args string
+
+	cmd *exec.Cmd
 }
 
 // run executes a single try.
-func (t Test) run() error {
-	testCmd := fmt.Sprintf("make build && test/%s %s", t.File, t.Args)
-	dockerCmd := exec.Command("docker/test/run.sh", *flavor, testCmd)
-
-	// Kill child process if we get a signal.
-	sigchan := make(chan os.Signal)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		if _, ok := <-sigchan; ok {
-			if dockerCmd.Process != nil {
-				dockerCmd.Process.Signal(syscall.SIGTERM)
-			}
-			log.Fatalf("received signal, quitting")
-		}
-	}()
+// dir is the location of the vitess repo to use.
+func (t *Test) run(dir string) error {
+	// Teardown is unnecessary since Docker kills everything.
+	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
+	dockerCmd := exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
+	dockerCmd.Dir = dir
+	t.cmd = dockerCmd
 
 	// Stop the test if it takes too long.
 	done := make(chan struct{})
@@ -87,8 +84,6 @@ func (t Test) run() error {
 	// Run the test.
 	output, err := dockerCmd.CombinedOutput()
 	close(done)
-	signal.Stop(sigchan)
-	close(sigchan)
 
 	// Save test output.
 	if err != nil || *logPass {
@@ -105,7 +100,17 @@ func (t Test) run() error {
 	return err
 }
 
-func (t Test) logf(format string, v ...interface{}) {
+// stop will terminate the test if it's running.
+// If the test is not running, it's a no-op.
+func (t *Test) stop() {
+	if cmd := t.cmd; cmd != nil {
+		if proc := cmd.Process; proc != nil {
+			proc.Signal(syscall.SIGTERM)
+		}
+	}
+}
+
+func (t *Test) logf(format string, v ...interface{}) {
 	log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
 }
 
@@ -123,50 +128,105 @@ func main() {
 	}
 	log.Printf("Bootstrap flavor: %v", *flavor)
 
+	// Copy working repo to tmpDir.
+	tmpDir, err := ioutil.TempDir(os.TempDir(), "vt_")
+	if err != nil {
+		log.Fatalf("Can't create temp dir in %v", os.TempDir())
+	}
+	log.Printf("Copying working repo to temp dir %v", tmpDir)
+	if out, err := exec.Command("cp", "-R", ".", tmpDir).CombinedOutput(); err != nil {
+		log.Fatalf("Can't copy working repo to temp dir %v: %v: %s", tmpDir, err, out)
+	}
+	// The temp copy needs permissive access so the Docker user can read it.
+	if out, err := exec.Command("chmod", "-R", "go=u", tmpDir).CombinedOutput(); err != nil {
+		log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
+	}
+
 	// Keep stats.
 	failed := 0
 	passed := 0
 	flaky := 0
 
-	// Run tests.
-	for _, test := range config.Tests {
-		if test.Name == "" {
-			test.Name = strings.TrimSuffix(test.File, ".py")
-		}
+	// Listen for signals.
+	sigchan := make(chan os.Signal)
+	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
-		for try := 1; ; try++ {
-			if try > *retryMax {
-				// Every try failed.
-				test.logf("retry limit exceeded")
-				failed++
+	// Run tests.
+	stop := make(chan struct{}) // Close this to tell the loop to stop.
+	done := make(chan struct{}) // The loop closes this when it has stopped.
+	go func() {
+		defer func() {
+			signal.Stop(sigchan)
+			close(done)
+		}()
+
+		for _, test := range config.Tests {
+			if test.Name == "" {
+				test.Name = strings.TrimSuffix(test.File, ".py")
+			}
+
+			for try := 1; ; try++ {
+				select {
+				case <-stop:
+					test.logf("cancelled")
+					return
+				default:
+				}
+
+				if try > *retryMax {
+					// Every try failed.
+					test.logf("retry limit exceeded")
+					failed++
+					break
+				}
+
+				test.logf("running (try %v/%v)...", try, *retryMax)
+				start := time.Now()
+				if err := test.run(tmpDir); err != nil {
+					// This try failed.
+					test.logf("FAILED (try %v/%v): %v", try, *retryMax, err)
+					continue
+				}
+
+				if try == 1 {
+					// Passed on the first try.
+					test.logf("PASSED in %v", time.Since(start))
+					passed++
+				} else {
+					// Passed, but not on the first try.
+					test.logf("FLAKY (1/%v passed)", try)
+					flaky++
+				}
 				break
 			}
-
-			test.logf("running (try %v/%v)...", try, *retryMax)
-			start := time.Now()
-			if err := test.run(); err != nil {
-				// This try failed.
-				test.logf("FAILED (try %v/%v): %v", try, *retryMax, err)
-				continue
-			}
-
-			if try == 1 {
-				// Passed on the first try.
-				test.logf("PASSED in %v", time.Since(start))
-				passed++
-			} else {
-				// Passed, but not on the first try.
-				test.logf("FLAKY (1/%v passed)", try)
-				flaky++
-			}
-			break
 		}
+	}()
+
+	// Stop the loop and kill child processes if we get a signal.
+	select {
+	case <-sigchan:
+		log.Printf("received signal, quitting")
+		// Stop the test loop and wait for it to quit.
+		close(stop)
+		<-done
+		// Terminate all existing tests.
+		for _, t := range config.Tests {
+			t.stop()
+		}
+	case <-done:
+	}
+
+	// Clean up temp dir.
+	log.Printf("Removing temp dir %v", tmpDir)
+	if err := os.RemoveAll(tmpDir); err != nil {
+		log.Printf("Failed to remove temp dir: %v", err)
 	}
 
 	// Print stats.
-	log.Printf("%v PASSED, %v FLAKY, %v FAILED", passed, flaky, failed)
+	skipped := len(config.Tests) - passed - flaky - failed
+	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
 
-	if failed > 0 {
+	if failed > 0 || skipped > 0 {
 		os.Exit(1)
 	}
 }
