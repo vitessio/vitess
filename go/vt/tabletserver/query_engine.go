@@ -63,6 +63,7 @@ type QueryEngine struct {
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
 	strictTableAcl   bool
+	enableAutoCommit bool
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -100,7 +101,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // This is a singleton class.
 // You must call this only once.
 func NewQueryEngine(config Config) *QueryEngine {
-	qe := &QueryEngine{}
+	qe := &QueryEngine{enableAutoCommit: config.EnableAutoCommit}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 	qe.schemaInfo = NewSchemaInfo(
 		config.QueryCacheSize,

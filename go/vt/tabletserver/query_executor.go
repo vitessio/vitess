@@ -107,6 +107,9 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 			defer conn.Recycle()
 			reply = qre.execSQL(conn, qre.query, true)
 		default:
+			if !qre.qe.enableAutoCommit {
+				panic(NewTabletError(ErrFatal, "unsupported query: %s", qre.query))
+			}
 			reply = qre.execDmlAutoCommit()
 		}
 	}

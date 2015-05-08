@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
@@ -135,6 +136,41 @@ func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 	return nil
 }
 
+func positionCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
+	subFlags.Parse(args)
+	if len(args) < 3 {
+		return fmt.Errorf("Not enough arguments for position operation.")
+	}
+
+	pos1, err := myproto.DecodeReplicationPosition(args[1])
+	if err != nil {
+		return err
+	}
+
+	switch args[0] {
+	case "equal":
+		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Println(pos1.Equal(pos2))
+	case "at_least":
+		pos2, err := myproto.DecodeReplicationPosition(args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Println(pos1.AtLeast(pos2))
+	case "append":
+		gtid, err := myproto.DecodeGTID(args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Println(myproto.AppendGTID(pos1, gtid))
+	}
+
+	return nil
+}
+
 type command struct {
 	name   string
 	method func(*mysqlctl.Mysqld, *flag.FlagSet, []string) error
@@ -164,6 +200,10 @@ var commands = []command{
 	command{"restore", restoreCmd,
 		"[-fetch_concurrency=3] [-fetch_retry_count=3] [-dont_wait_for_slave_start] <snapshot manifest file>",
 		"Restores a full snapshot"},
+
+	command{"position", positionCmd,
+		"<operation> <pos1> <pos2 | gtid>",
+		"Compute operations on replication positions"},
 }
 
 func main() {

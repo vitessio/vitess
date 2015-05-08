@@ -124,9 +124,7 @@ func (*mariaDB10) SetMasterCommands(params *sqldb.ConnParams, masterHost string,
 	args = append(args, "MASTER_USE_GTID = slave_pos")
 	changeMasterTo := "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
 
-	return []string{
-		changeMasterTo,
-	}, nil
+	return []string{changeMasterTo}, nil
 }
 
 // ParseGTID implements MysqlFlavor.ParseGTID().
@@ -242,23 +240,6 @@ func (ev mariadbBinlogEvent) GTID(f blproto.BinlogFormat) (proto.GTID, error) {
 		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
 		Server:   ev.ServerID(),
 	}, nil
-}
-
-// Format overrides binlogEvent.Format().
-func (ev mariadbBinlogEvent) Format() (f blproto.BinlogFormat, err error) {
-	// Call parent.
-	f, err = ev.binlogEvent.Format()
-	if err != nil {
-		return
-	}
-
-	// MariaDB 5.3+ always adds a 4-byte checksum to the end of a
-	// FORMAT_DESCRIPTION_EVENT, regardless of the server setting. The byte
-	// immediately before that checksum tells us which checksum algorithm (if any)
-	// is used for the rest of the events.
-	data := ev.Bytes()
-	f.ChecksumAlgorithm = data[len(data)-5]
-	return
 }
 
 // StripChecksum implements BinlogEvent.StripChecksum().

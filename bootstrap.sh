@@ -93,14 +93,14 @@ fi
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
-go get github.com/golang/protobuf/proto
-go get golang.org/x/net/context
-go get golang.org/x/tools/cmd/goimports
-go get github.com/golang/glog
-go get github.com/golang/lint/golint
-go get github.com/tools/godep
-go get google.golang.org/grpc
-go get -a github.com/golang/protobuf/protoc-gen-go
+go get -u github.com/golang/protobuf/proto
+go get -u golang.org/x/net/context
+go get -u golang.org/x/tools/cmd/goimports
+go get -u github.com/golang/glog
+go get -u github.com/golang/lint/golint
+go get -u github.com/tools/godep
+go get -u google.golang.org/grpc
+go get -u -a github.com/golang/protobuf/protoc-gen-go
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {
@@ -121,12 +121,12 @@ function goversion_min() {
 # if Go is installed somewhere that requires root access. However, this tool
 # is optional, so we should hide any errors to avoid confusion.
 if goversion_min 1.4; then
-  go get golang.org/x/tools/cmd/cover &> /dev/null
+  go get -u golang.org/x/tools/cmd/cover &> /dev/null
 else
-  go get code.google.com/p/go.tools/cmd/cover &> /dev/null
+  go get -u code.google.com/p/go.tools/cmd/cover &> /dev/null
 fi
-go get github.com/modocache/gover
-go get github.com/mattn/goveralls
+go get -u github.com/modocache/gover
+go get -u github.com/mattn/goveralls
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
