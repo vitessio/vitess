@@ -326,7 +326,8 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	}
 	addrs := make([]string, 0, 32)
 	for _, row := range qr.Rows {
-		if row[colCommand].String() == binlogDumpCommand {
+		// Check for prefix, since it could be "Binlog Dump GTID".
+		if strings.HasPrefix(row[colCommand].String(), binlogDumpCommand) {
 			host, _, err := netutil.SplitHostPort(row[colClientAddr].String())
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
