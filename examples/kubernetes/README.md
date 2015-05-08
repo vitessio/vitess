@@ -59,6 +59,12 @@ $ gcloud alpha container clusters create example --machine-type n1-standard-1 --
 
 If prompted, install the alpha commands.
 
+Update the configuration with the cluster name:
+
+```
+$ gcloud config set container/cluster example
+```
+
 ## Start an etcd cluster for Vitess
 
 Once you have a running Kubernetes deployment, make sure to set `KUBECTL`

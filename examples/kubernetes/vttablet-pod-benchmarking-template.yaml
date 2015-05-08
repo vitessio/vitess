@@ -65,7 +65,7 @@ desiredState:
             -rowcache-socket $VTDATAROOT/{{tablet_subdir}}/memcache.sock" vitess
         env:
           - name: GOMAXPROCS
-            value: 16
+            value: "16"
       - name: mysql
         image: vitess/root
         volumeMounts:

@@ -1,0 +1,38 @@
+apiVersion: v1beta1
+kind: Pod
+id: vtgate-{{uid}}
+desiredState:
+  manifest:
+    version: v1beta1
+    id: vt
+    containers:
+      - name: vtgate
+        image: vitess/root
+        volumeMounts:
+          - name: syslog
+            mountPath: /dev/log
+          - name: vtdataroot
+            mountPath: /vt/vtdataroot
+        command:
+          - sh
+          - "-c"
+          - >-
+            mkdir -p $VTDATAROOT/tmp &&
+            chown -R vitess /vt &&
+            su -p -c "/vt/bin/vtgate
+            -topo_implementation etcd
+            -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT
+            -log_dir $VTDATAROOT/tmp
+            -alsologtostderr
+            -port 15001
+            -cell test" vitess
+        env:
+          - name: GOMAXPROCS
+            value: "16"
+    volumes:
+      - name: syslog
+        source: {hostDir: {path: /dev/log}}
+      - name: vtdataroot
+        source: {{vtdataroot_volume}}
+labels:
+  name: vtgate
