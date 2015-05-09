@@ -227,6 +227,7 @@ func (client *GoRPCTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, t
 	var qr mproto.QueryResult
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionExecuteFetchAsDba, &gorpcproto.ExecuteFetchArgs{
 		Query:          query,
+		DbName:         tablet.DbName(),
 		MaxRows:        maxRows,
 		WantFields:     wantFields,
 		DisableBinlogs: disableBinlogs,

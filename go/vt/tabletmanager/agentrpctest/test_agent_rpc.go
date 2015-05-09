@@ -592,7 +592,7 @@ var testExecuteFetchResult = &mproto.QueryResult{
 }
 var testExecuteFetchDbConfigName dbconfigs.DbConfigName
 
-func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

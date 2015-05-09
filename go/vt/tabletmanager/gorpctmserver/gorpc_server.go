@@ -204,7 +204,7 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, args *myproto.SchemaCh
 func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsDba, args, reply, func() error {
-		qr, err := tm.agent.ExecuteFetchAsDba(ctx, args.Query, args.MaxRows, args.WantFields, args.DisableBinlogs, args.ReloadSchema)
+		qr, err := tm.agent.ExecuteFetchAsDba(ctx, args.Query, args.DbName, args.MaxRows, args.WantFields, args.DisableBinlogs, args.ReloadSchema)
 		if err == nil {
 			*reply = *qr
 		}

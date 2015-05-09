@@ -69,7 +69,7 @@ type RPCAgent interface {
 
 	ApplySchema(ctx context.Context, change *myproto.SchemaChange) (*myproto.SchemaChangeResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error)
 
 	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool, dbconfigName dbconfigs.DbConfigName) (*proto.QueryResult, error)
 
@@ -267,7 +267,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields bool, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error) {
 	// get a connection
 	conn, err := agent.MysqlDaemon.GetDbaConnection()
 	if err != nil {
@@ -279,6 +279,12 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, m
 	if disableBinlogs {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
 		if err != nil {
+			return nil, err
+		}
+	}
+
+	if dbName != "" {
+		if _, err := conn.ExecuteFetch("USE "+dbName, 1, false); err != nil {
 			return nil, err
 		}
 	}

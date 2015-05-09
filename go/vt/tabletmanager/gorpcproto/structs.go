@@ -87,6 +87,7 @@ type RunBlpUntilArgs struct {
 // ExecuteFetchArgs has arguments for ExecuteFetch
 type ExecuteFetchArgs struct {
 	Query          string
+	DbName         string
 	MaxRows        int
 	WantFields     bool
 	DisableBinlogs bool
