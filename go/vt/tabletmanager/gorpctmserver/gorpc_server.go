@@ -216,7 +216,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, args *gorpcproto
 func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, args *gorpcproto.ExecuteFetchArgs, reply *mproto.QueryResult) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TabletActionExecuteFetchAsApp, args, reply, func() error {
-		qr, err := tm.agent.ExecuteFetchAsApp(ctx, args.Query, args.MaxRows, args.WantFields, args.DBConfigName)
+		qr, err := tm.agent.ExecuteFetchAsApp(ctx, args.Query, args.MaxRows, args.WantFields)
 		if err == nil {
 			*reply = *qr
 		}

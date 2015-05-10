@@ -11,7 +11,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -242,10 +241,9 @@ func (client *GoRPCTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, t
 func (client *GoRPCTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields bool) (*mproto.QueryResult, error) {
 	var qr mproto.QueryResult
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionExecuteFetchAsApp, &gorpcproto.ExecuteFetchArgs{
-		Query:        query,
-		MaxRows:      maxRows,
-		WantFields:   wantFields,
-		DBConfigName: dbconfigs.AppConfigName,
+		Query:      query,
+		MaxRows:    maxRows,
+		WantFields: wantFields,
 	}, &qr); err != nil {
 		return nil, err
 	}

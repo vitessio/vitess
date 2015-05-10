@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"golang.org/x/net/context"
@@ -54,9 +53,8 @@ type MysqlDaemon interface {
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
 
-	// GetDbConnection returns a connection to be able to talk to the database.
-	// It accepts a dbconfig name to determine which db user it the connection should have.
-	GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error)
+	// GetAppConnection returns a app connection to be able to talk to the database.
+	GetAppConnection() (dbconnpool.PoolConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
 	// query execution methods
@@ -284,16 +282,12 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
 }
 
-// GetDbConnection is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
-	switch dbconfigName {
-	case dbconfigs.AppConfigName:
-		if fmd.DbAppConnectionFactory == nil {
-			return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
-		}
-		return fmd.DbAppConnectionFactory()
+// GetAppConnection is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetAppConnection() (dbconnpool.PoolConnection, error) {
+	if fmd.DbAppConnectionFactory == nil {
+		return nil, fmt.Errorf("no DbAppConnectionFactory set in this FakeMysqlDaemon")
 	}
-	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
+	return fmd.DbAppConnectionFactory()
 }
 
 // GetDbaConnection is part of the MysqlDaemon interface.

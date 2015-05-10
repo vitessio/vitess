@@ -529,16 +529,10 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	return nil
 }
 
-// GetDbConnection returns a connection from the pool chosen by dbconfigName.
+// GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
-	switch dbconfigName {
-	case dbconfigs.DbaConfigName:
-		return mysqld.dbaPool.Get(0)
-	case dbconfigs.AppConfigName:
-		return mysqld.appPool.Get(0)
-	}
-	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
+func (mysqld *Mysqld) GetAppConnection() (dbconnpool.PoolConnection, error) {
+	return mysqld.appPool.Get(0)
 }
 
 // GetDbaConnection creates a new DBConnection.

@@ -14,7 +14,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -590,7 +589,6 @@ var testExecuteFetchResult = &mproto.QueryResult{
 		},
 	},
 }
-var testExecuteFetchDbConfigName dbconfigs.DbConfigName
 
 func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
 	if fra.panics {
@@ -605,22 +603,19 @@ func (fra *fakeRPCAgent) ExecuteFetchAsDba(ctx context.Context, query string, db
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool, dbconfigName dbconfigs.DbConfigName) (*mproto.QueryResult, error) {
+func (fra *fakeRPCAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*mproto.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "ExecuteFetchAsApp query", query, testExecuteFetchQuery)
 	compare(fra.t, "ExecuteFetchAsApp maxrows", maxrows, testExecuteFetchMaxRows)
 	compareBool(fra.t, "ExecuteFetchAsApp wantFields", wantFields)
-	compare(fra.t, "ExecuteFetchAsApp dbconfigName", dbconfigName, testExecuteFetchDbConfigName)
 	return testExecuteFetchResult, nil
 }
 
 func agentRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	testExecuteFetchDbConfigName = dbconfigs.DbaConfigName
 	qr, err := client.ExecuteFetchAsDba(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	testExecuteFetchDbConfigName = dbconfigs.AppConfigName
 	qr, err = client.ExecuteFetchAsApp(ctx, ti, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 }

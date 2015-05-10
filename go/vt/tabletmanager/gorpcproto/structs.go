@@ -8,7 +8,6 @@ import (
 	"time"
 
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -92,7 +91,6 @@ type ExecuteFetchArgs struct {
 	WantFields     bool
 	DisableBinlogs bool
 	ReloadSchema   bool
-	DBConfigName   dbconfigs.DbConfigName
 }
 
 // gorpc doesn't support returning a streaming type during streaming

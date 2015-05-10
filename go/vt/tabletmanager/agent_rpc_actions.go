@@ -16,7 +16,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -71,7 +70,7 @@ type RPCAgent interface {
 
 	ExecuteFetchAsDba(ctx context.Context, query string, dbName string, maxrows int, wantFields, disableBinlogs bool, reloadSchema bool) (*proto.QueryResult, error)
 
-	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool, dbconfigName dbconfigs.DbConfigName) (*proto.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*proto.QueryResult, error)
 
 	// Replication related methods
 
@@ -310,9 +309,9 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 
 // ExecuteFetchAsApp will execute the given query, possibly disabling binlogs.
 // Should be called under RPCWrap.
-func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool, dbconfigName dbconfigs.DbConfigName) (*proto.QueryResult, error) {
+func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, maxrows int, wantFields bool) (*proto.QueryResult, error) {
 	// get a connection
-	conn, err := agent.MysqlDaemon.GetDbConnection(dbconfigName)
+	conn, err := agent.MysqlDaemon.GetAppConnection()
 	if err != nil {
 		return nil, err
 	}
