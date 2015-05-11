@@ -6,6 +6,7 @@ package schemamanager
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
@@ -47,9 +48,22 @@ func TestRunSchemaChangesDataSourcerReadFail(t *testing.T) {
 }
 
 func TestRunSchemaChangesValidationFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, true, false, false)
+	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, false, false, false)
 	handler := newFakeHandler()
 	exec := newFakeExecutor()
+	err := Run(dataSourcer, exec, handler)
+	if err == nil {
+		t.Fatalf("run schema change should fail due to executor.Validate fail")
+	}
+}
+
+func TestRunSchemaChangesExecutorOpenFail(t *testing.T) {
+	dataSourcer := newFakeDataSourcer([]string{"create table test_table (pk int);"}, false, false, false)
+	handler := newFakeHandler()
+	exec := NewTabletExecutor(
+		faketmclient.NewFakeTabletManagerClient(),
+		newFakeTopo(),
+		"unknown_keyspace")
 	err := Run(dataSourcer, exec, handler)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
@@ -97,6 +111,10 @@ func newFakeTopo() *fakeTopo {
 }
 
 func (topoServer *fakeTopo) GetShardNames(keyspace string) ([]string, error) {
+	if keyspace != "test_keyspace" {
+		return nil, fmt.Errorf("expect to get keyspace: test_keyspace, but got: %s",
+			keyspace)
+	}
 	return []string{"0", "1", "2"}, nil
 }
 

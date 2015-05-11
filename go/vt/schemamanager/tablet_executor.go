@@ -70,7 +70,7 @@ func (exec *TabletExecutor) Validate(sqls []string) error {
 	for _, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil
+			return err
 		}
 		if _, ok := stat.(*sqlparser.DDL); !ok {
 			return fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
