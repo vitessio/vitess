@@ -4,6 +4,7 @@ These Dockerfiles create images that contain everything Vitess expects to have
 after successfully running `bootstrap.sh` and `dev.env`.
 
 The `vitess/bootstrap` image comes in different flavors:
+
 * `vitess/bootstrap:common` - dependencies that are common to all flavors
 * `vitess/bootstrap:mariadb` - bootstrap image for MariaDB
 

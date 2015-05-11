@@ -29,3 +29,20 @@ type TablesRequest struct {
 	Tables   []string
 	Charset  *mproto.Charset
 }
+
+// UpdateStream is the interface for the server
+type UpdateStream interface {
+	// ServeUpdateStream serves the query and streams the result
+	// for the full update stream
+	ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply *StreamEvent) error) error
+
+	// StreamKeyRange streams events related to a KeyRange only
+	StreamKeyRange(req *KeyRangeRequest, sendReply func(reply *BinlogTransaction) error) error
+
+	// StreamTables streams events related to a set of Tables only
+	StreamTables(req *TablesRequest, sendReply func(reply *BinlogTransaction) error) error
+
+	// HandlePanic should be called in a defer,
+	// first thing in the RPC implementation.
+	HandlePanic(*error)
+}

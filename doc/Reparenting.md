@@ -54,6 +54,7 @@ live system, it errs on the side of safety, and will abort if any
 tablet is not responding right.
 
 The actions performed are:
+
 * any existing tablet replication is stopped. If any tablet fails
   (because it is not available or not succeeding), we abort.
 * the master-elect is initialized as a master.
@@ -69,6 +70,7 @@ This command is used when both the current master and the new master
 are alive and functioning properly.
 
 The actions performed are:
+
 * we tell the old master to go read-only. It then shuts down its query
   service. We get its replication position back.
 * we tell the master-elect to wait for that replication data, and then
@@ -80,7 +82,7 @@ The actions performed are:
     wait for the entry in the test table. (if a slave wasn't
     replicating, we don't change its state and don't start replication
     after reparent)
-  - additionally, on the old master, we start replication, so it catches up.
+  * additionally, on the old master, we start replication, so it catches up.
 
 The old master is left as 'spare' in this scenario. If health checking
 is enabled on that tablet (using target\_tablet\_type parameter for
@@ -96,6 +98,7 @@ just make sure the master-elect is the most advanced in replication
 within all the available slaves, and reparent everybody.
 
 The actions performed are:
+
 * if the current master is still alive, we scrap it. That will make it
   stop what it's doing, stop its query service, and be unusable.
 * we gather the current replication position on all slaves.
@@ -122,6 +125,7 @@ servers. We then trigger the 'vtctl TabletExternallyReparented'
 command.
 
 The flow for that command is as follows:
+
 * the shard is locked in the global topology server.
 * we read the Shard object from the global topology server.
 * we read all the tablets in the replication graph for the shard. Note
@@ -145,6 +149,7 @@ The flow for that command is as follows:
   successfully reparented.
 
 Failure cases:
+
 * The global topology server has to be available for locking and
   modification during this operation. If not, the operation will just
   fail.

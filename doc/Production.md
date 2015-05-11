@@ -1,6 +1,7 @@
 # Production setup
 Setting up vitess in production will depend on many factors.
 Here are some initial considerations:
+
 * *Global Transaction IDs*: Vitess requires a version of MySQL
 that supports GTIDs.
 We currently support MariaDB 10.0 and MySQL 5.6.

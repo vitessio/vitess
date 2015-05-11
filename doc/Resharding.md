@@ -14,6 +14,7 @@ higher level concepts on Sharding.
 To follow a step-by-step guide for how to shard a keyspace, you can see [this page](HorizontalReshardingGuide.md).
 
 In general, the process to achieve this goal is composed of the following steps:
+
 * pick the original shard(s)
 * pick the destination shard(s) coverage
 * create the destination shard(s) tablets (in a mode where they are not used to serve traffic yet)
@@ -33,6 +34,7 @@ In general, the process to achieve this goal is composed of the following steps:
 ## Applications
 
 The main application we currently support:
+
 * in a sharded keyspace, split or merge shards (horizontal sharding)
 * in a non-sharded keyspace, break out some tables into a different keyspace (vertical sharding)
 
@@ -43,6 +45,7 @@ downtime for the application.
 ## Scaling Up and Down
 
 Here is a quick table of what to do with Vitess when a change is required:
+
 * uniformly increase read capacity: add replicas, or split shards
 * uniformly increase write capacity: split shards
 * reclaim free space: merge shards / keyspaces
@@ -53,6 +56,7 @@ Here is a quick table of what to do with Vitess when a change is required:
 
 The cornerstone of Resharding is being able to replicate the right data. Mysql doesn't support any filtering, so the
 Vitess project implements it entirely:
+
 * the tablet server tags transactions with comments that describe what the scope of the statements are (which keyspace_id,
 which table, ...). That way the MySQL binlogs contain all filtering data.
 * a server process can filter and stream the MySQL binlogs (using the comments).

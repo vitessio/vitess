@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -38,6 +39,7 @@ var (
 	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
 )
 
+// UpdateStream is the real implementation of proto.UpdateStream
 type UpdateStream struct {
 	mycnf *mysqlctl.Mycnf
 
@@ -80,13 +82,16 @@ func (sl *streamList) Stop() {
 	sl.Unlock()
 }
 
-// UpdateStreamRpcService is the singleton that gets initialized during
+// UpdateStream is the singleton that gets initialized during
 // startup and that gets called by all RPC server implementations
 var UpdateStreamRpcService *UpdateStream
 
-// Glue to delay registration of RPC servers until we have all the objects
-type RegisterUpdateStreamServiceFunc func(*UpdateStream)
+// RegisterUpdateStreamServiceFunc is the type to use for delayed
+// registration of RPC servers until we have all the objects
+type RegisterUpdateStreamServiceFunc func(proto.UpdateStream)
 
+// RegisterUpdateStreamServices is the list of all registration
+// callbacks to invoke
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // RegisterUpdateStreamService needs to be called to start listening
@@ -115,24 +120,30 @@ func logError() {
 	}
 }
 
+// EnableUpdateStreamService enables the RPC service for UpdateStream
 func EnableUpdateStreamService(dbname string, mysqld *mysqlctl.Mysqld) {
 	defer logError()
 	UpdateStreamRpcService.enable(dbname, mysqld)
 }
 
+// DisableUpdateStreamService disables the RPC service for UpdateStream
 func DisableUpdateStreamService() {
 	defer logError()
 	UpdateStreamRpcService.disable()
 }
 
+// ServeUpdateStream sill serve one UpdateStream
 func ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
+// IsUpdateStreamEnabled returns true if the RPC service is enabled
 func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
+// GetReplicationPosition returns the current replication position of
+// the service
 func GetReplicationPosition() (myproto.ReplicationPosition, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
@@ -178,13 +189,8 @@ func (updateStream *UpdateStream) isEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
+// ServeUpdateStream is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = x.(error)
-		}
-	}()
-
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -215,13 +221,8 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	return svm.Join()
 }
 
+// StreamKeyRange is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = x.(error)
-		}
-	}()
-
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -251,13 +252,8 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	return svm.Join()
 }
 
+// StreamTables is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = x.(error)
-		}
-	}()
-
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -285,6 +281,14 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.streams.Add(svm)
 	defer updateStream.streams.Delete(svm)
 	return svm.Join()
+}
+
+// HandlePanic is part of the proto.UpdateStream interface
+func (updateStream *UpdateStream) HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		*err = fmt.Errorf("uncaught panic: %v", x)
+	}
 }
 
 func (updateStream *UpdateStream) getReplicationPosition() (myproto.ReplicationPosition, error) {

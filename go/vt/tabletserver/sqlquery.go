@@ -532,6 +532,13 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	return nil
 }
 
+// HandlePanic is part of the queryservice.QueryService interface
+func (sq *SqlQuery) HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		*err = fmt.Errorf("uncaught panic: %v", x)
+	}
+}
+
 // startRequest validates the current state and sessionID and registers
 // the request (a waitgroup) as started. Every startRequest requires one
 // and only one corresponding endRequest. When the service shuts down,

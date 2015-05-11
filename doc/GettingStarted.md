@@ -25,10 +25,6 @@ Other images can be built with scripts located in the
 
 ## Manual Build
 
-
-
-
-
 ### Dependencies
 
 * We currently develop on Ubuntu 14.04 (Trusty) and Debian 7.0 (Wheezy).

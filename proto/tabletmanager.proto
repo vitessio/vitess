@@ -8,9 +8,9 @@ package tabletmanager;
 import "vtctl.proto";
 
 message SnapshotArgs {
-  optional int64 concurrency = 1;
-  optional bool server_mode = 2;
-  optional bool force_master_snapshot = 3;
+  int64 concurrency = 1;
+  bool server_mode = 2;
+  bool force_master_snapshot = 3;
 }
 
 service TabletManager {
