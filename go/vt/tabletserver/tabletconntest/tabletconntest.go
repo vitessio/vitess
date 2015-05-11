@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -227,6 +226,8 @@ func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+var panicWait = make(chan struct{})
+
 // StreamExecute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
@@ -248,8 +249,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 		f.t.Errorf("sendReply1 failed: %v", err)
 	}
 	if f.panics && !f.streamExecutePanicsEarly {
-		// let the response flow through before panicing
-		time.Sleep(time.Second)
+		// wait until the client gets the response, then panics
+		<-panicWait
 		panic(fmt.Errorf("test-triggered panic late"))
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
@@ -353,6 +354,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
+	close(panicWait)
 	if _, ok := <-stream; ok {
 		t.Fatalf("StreamExecute returned more results")
 	}
