@@ -7,20 +7,30 @@
 package tabletconntest
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 )
 
-// fakeQueryService has the server side of this fake
-type fakeQueryService struct {
-	t *testing.T
+// FakeQueryService has the server side of this fake
+type FakeQueryService struct {
+	t                        *testing.T
+	panics                   bool
+	streamExecutePanicsEarly bool
+}
+
+// HandlePanic is part of the queryservice.QueryService interface
+func (f *FakeQueryService) HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		*err = fmt.Errorf("caught test panic: %v", x)
+	}
 }
 
 // TestKeyspace is the Keyspace we use for this test
@@ -32,7 +42,7 @@ const TestShard = "test_shard"
 const testSessionId int64 = 5678
 
 // GetSessionId is part of the queryservice.QueryService interface
-func (f *fakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if sessionParams.Keyspace != TestKeyspace {
 		f.t.Errorf("invalid keyspace: got %v expected %v", sessionParams.Keyspace, TestKeyspace)
 	}
@@ -44,7 +54,10 @@ func (f *fakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *fakeQueryService) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if session.SessionId != testSessionId {
 		f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
 	}
@@ -69,8 +82,18 @@ func testBegin(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if _, err := conn.Begin(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // Commit is part of the queryservice.QueryService interface
-func (f *fakeQueryService) Commit(ctx context.Context, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, session *proto.Session) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if session.SessionId != testSessionId {
 		f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
 	}
@@ -91,8 +114,18 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if err := conn.Commit(ctx, commitTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // Rollback is part of the queryservice.QueryService interface
-func (f *fakeQueryService) Rollback(ctx context.Context, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, session *proto.Session) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if session.SessionId != testSessionId {
 		f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
 	}
@@ -113,8 +146,18 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if err := conn.Rollback(ctx, rollbackTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // Execute is part of the queryservice.QueryService interface
-func (f *fakeQueryService) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
+func (f *FakeQueryService) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if query.Sql != executeQuery {
 		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", query.Sql, executeQuery)
 	}
@@ -176,8 +219,18 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *fakeQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+	if f.panics && f.streamExecutePanicsEarly {
+		panic(fmt.Errorf("test-triggered panic early"))
+	}
 	if query.Sql != streamExecuteQuery {
 		f.t.Errorf("invalid StreamExecute.Query.Sql: got %v expected %v", query.Sql, streamExecuteQuery)
 	}
@@ -192,6 +245,9 @@ func (f *fakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 	}
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
+	}
+	if f.panics && !f.streamExecutePanicsEarly {
+		panic(fmt.Errorf("test-triggered panic late"))
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
 		f.t.Errorf("sendReply2 failed: %v", err)
@@ -269,8 +325,44 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
+	// early panic is before sending the Fields, that is returned
+	// by the StreamExecute call itself
+	ctx := context.Background()
+	fake.streamExecutePanicsEarly = true
+	if _, _, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+
+	// late panic is after sending Fields
+	fake.streamExecutePanicsEarly = false
+	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	if err != nil {
+		t.Fatalf("StreamExecute failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute failed: cannot read result1")
+	}
+	if len(qr.Rows) == 0 {
+		qr.Rows = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
+	}
+	if _, ok := <-stream; ok {
+		t.Fatalf("StreamExecute returned more results")
+	}
+	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *fakeQueryService) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if !reflect.DeepEqual(queryList.Queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
 	}
@@ -352,8 +444,18 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *fakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
 	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
 	}
@@ -398,13 +500,24 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
+	ctx := context.Background()
+	if _, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitCount); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // CreateFakeServer returns the fake server for the tests
-func CreateFakeServer(t *testing.T) queryservice.QueryService {
-	return &fakeQueryService{t}
+func CreateFakeServer(t *testing.T) *FakeQueryService {
+	return &FakeQueryService{
+		t:      t,
+		panics: false,
+		streamExecutePanicsEarly: false,
+	}
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, conn tabletconn.TabletConn) {
+func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	testBegin(t, conn)
 	testCommit(t, conn)
 	testRollback(t, conn)
@@ -412,4 +525,14 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn) {
 	testStreamExecute(t, conn)
 	testExecuteBatch(t, conn)
 	testSplitQuery(t, conn)
+
+	// force panics, make sure they're caught
+	fake.panics = true
+	testBeginPanics(t, conn)
+	testCommitPanics(t, conn)
+	testRollbackPanics(t, conn)
+	testExecutePanics(t, conn)
+	testStreamExecutePanics(t, conn, fake)
+	testExecuteBatchPanics(t, conn)
+	testSplitQueryPanics(t, conn)
 }

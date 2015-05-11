@@ -55,7 +55,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	}
 
 	// run the test suite
-	tabletconntest.TestSuite(t, client)
+	tabletconntest.TestSuite(t, client, service)
 
 	// and clean up
 	client.Close()
