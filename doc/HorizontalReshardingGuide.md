@@ -122,7 +122,7 @@ vtctl MigrateServedTypes -reverse test_keyspace/0 replica
 ## Scrap the source shard
 
 If all the above steps were successful, it’s safe to remove the source shard (which should no longer be in use):
-- For each tablet in the source shard: `vtctl ScrapTablet <source tablet alias>`
-- For each tablet in the source shard: `vtctl DeleteTablet <source tablet alias>`
-- Rebuild the serving graph: `vtctl RebuildKeyspaceGraph test_keyspace`
-- Delete the source shard: `vtctl DeleteShard test_keyspace/0`
+* For each tablet in the source shard: `vtctl ScrapTablet <source tablet alias>`
+* For each tablet in the source shard: `vtctl DeleteTablet <source tablet alias>`
+* Rebuild the serving graph: `vtctl RebuildKeyspaceGraph test_keyspace`
+* Delete the source shard: `vtctl DeleteShard test_keyspace/0`
