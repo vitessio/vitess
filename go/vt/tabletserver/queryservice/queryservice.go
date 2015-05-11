@@ -31,6 +31,10 @@ type QueryService interface {
 
 	// Map reduce helper
 	SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+
+	// Helper for RPC panic handling: call this in a defer statement
+	// at the beginning of each RPC handling method.
+	HandlePanic(*error)
 }
 
 // ErrorQueryService is an implementation of QueryService that returns a
@@ -77,4 +81,8 @@ func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, queryList *proto.Q
 // SplitQuery is part of QueryService interface
 func (e *ErrorQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// HandlePanic is part of QueryService interface
+func (e *ErrorQueryService) HandlePanic(*error) {
 }
