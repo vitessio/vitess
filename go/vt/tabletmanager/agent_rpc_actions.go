@@ -283,9 +283,9 @@ func (agent *ActionAgent) ExecuteFetchAsDba(ctx context.Context, query string, d
 	}
 
 	if dbName != "" {
-		if _, err := conn.ExecuteFetch("USE "+dbName, 1, false); err != nil {
-			return nil, err
-		}
+		// This execute might fail if db does not exist.
+		// Error is ignored because given query might create this database.
+		conn.ExecuteFetch("USE "+dbName, 1, false)
 	}
 
 	// run the query
