@@ -8,6 +8,7 @@ package fakesqldb
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,16 +43,18 @@ func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
 	*result = *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.data[query] = result
-	db.queryCalled[query] = 0
+	key := strings.ToLower(query)
+	db.data[key] = result
+	db.queryCalled[key] = 0
 }
 
 // GetQuery gets a query from the fake DB.
 func (db *DB) GetQuery(query string) (*proto.QueryResult, bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	result, ok := db.data[query]
-	db.queryCalled[query]++
+	key := strings.ToLower(query)
+	result, ok := db.data[key]
+	db.queryCalled[key]++
 	return result, ok
 }
 
@@ -59,22 +62,23 @@ func (db *DB) GetQuery(query string) (*proto.QueryResult, bool) {
 func (db *DB) DeleteQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	delete(db.data, query)
-	delete(db.queryCalled, query)
+	key := strings.ToLower(query)
+	delete(db.data, key)
+	delete(db.queryCalled, key)
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
 func (db *DB) AddRejectedQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.rejectedData[query] = &proto.QueryResult{}
+	db.rejectedData[strings.ToLower(query)] = &proto.QueryResult{}
 }
 
 // HasRejectedQuery returns true if this query will be rejected.
 func (db *DB) HasRejectedQuery(query string) bool {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	_, ok := db.rejectedData[query]
+	_, ok := db.rejectedData[strings.ToLower(query)]
 	return ok
 }
 
@@ -82,14 +86,14 @@ func (db *DB) HasRejectedQuery(query string) bool {
 func (db *DB) DeleteRejectedQuery(query string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	delete(db.rejectedData, query)
+	delete(db.rejectedData, strings.ToLower(query))
 }
 
 // GetQueryCalledNum returns how many times db executes a certain query.
 func (db *DB) GetQueryCalledNum(query string) int {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	num, ok := db.queryCalled[query]
+	num, ok := db.queryCalled[strings.ToLower(query)]
 	if !ok {
 		return 0
 	}

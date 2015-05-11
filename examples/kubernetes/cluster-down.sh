@@ -9,15 +9,15 @@ GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
 base_ssd_name="$GKE_CLUSTER_NAME-vt-ssd-"
 
-gcloud alpha container clusters delete $GKE_CLUSTER_NAME
+gcloud alpha container clusters delete $GKE_CLUSTER_NAME -z $GKE_ZONE -q
 
 num_ssds=`gcloud compute disks list | awk -v name="$base_ssd_name" -v zone=$GKE_ZONE '$1~name && $2==zone' | wc -l`
 for i in `seq 1 $num_ssds`; do
   gcloud compute disks delete $base_ssd_name$i --zone $GKE_ZONE -q
 done
 
-vtctld="k8s-${GKE_CLUSTER_NAME}-default-vtctld"
-vtgate="k8s-${GKE_CLUSTER_NAME}-default-vtgate"
+vtctld=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region 15000`
+vtgate=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region 15001`
 
 gcloud compute forwarding-rules delete $vtctld -q --region=$gke_region
 gcloud compute forwarding-rules delete $vtgate -q --region=$gke_region

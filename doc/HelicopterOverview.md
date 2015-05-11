@@ -6,30 +6,30 @@ and what kind of effort it would require for you to start using Vitess.
 
 ## When do you need Vitess?
 
-  - You store all your data in a MySQL database, and have a significant number of
+  * You store all your data in a MySQL database, and have a significant number of
   clients. At some point, you start getting Too many connections errors from
   MySQL, so you have to change the max_connections system variable. Every MySQL
   connection has a memory overhead, which is just below 3 MB in the default
   configuration. If you want 1500 additional connections, you will need over 4 GB
   of additional RAM – and this is not going to be contributing to faster queries.
 
-  - From time to time, your developers make mistakes. For example, they make your
+  * From time to time, your developers make mistakes. For example, they make your
   app issue a query without setting a LIMIT, which makes the database slow for
   all users. Or maybe they issue updates that break statement based replication.
   Whenever you see such a query, you react, but it usually takes some time and
   effort to get the story straight.
 
-  - You store your data in a MySQL database, and your database has grown
+  * You store your data in a MySQL database, and your database has grown
   uncomfortably big. You are planning to do some horizontal sharding. MySQL
   doesn’t support sharding, so you will have write the code to perform the
   sharding, and then bake all the sharding logic into your app.
 
-  - You run a MySQL cluster, and use replication for availability: you have a master
+  * You run a MySQL cluster, and use replication for availability: you have a master
   database and a few replicas, and in the case of a master failure some replica
   should become the new master. You have to manage the lifecycle of the databases,
   and communicate the current state of the system to the application.
 
-  - You run a MySQL cluster, and have custom database configurations for different
+  * You run a MySQL cluster, and have custom database configurations for different
   workloads. There’s the master where all the writes go, fast read-only replicas
   for web clients, slower read-only replicas for batch jobs, and another kind of
   slower replicas for backups. If you have horizontal sharding, this setup is

@@ -54,14 +54,14 @@ live system, it errs on the side of safety, and will abort if any
 tablet is not responding right.
 
 The actions performed are:
-- any existing tablet replication is stopped. If any tablet fails
+* any existing tablet replication is stopped. If any tablet fails
   (because it is not available or not succeeding), we abort.
-- the master-elect is initialized as a master.
-- in parallel for each tablet, we do:
-  - on the master-elect, we insert an entry in a test table.
-  - on the slaves, we set the master, and wait for the entry in the test table.
-- if any tablet fails, we error out.
-- we then rebuild the serving graph for the shard.
+* the master-elect is initialized as a master.
+* in parallel for each tablet, we do:
+  * on the master-elect, we insert an entry in a test table.
+  * on the slaves, we set the master, and wait for the entry in the test table.
+* if any tablet fails, we error out.
+* we then rebuild the serving graph for the shard.
 
 ### Planned Reparents: vtctl PlannedReparentShard
 
@@ -69,14 +69,14 @@ This command is used when both the current master and the new master
 are alive and functioning properly.
 
 The actions performed are:
-- we tell the old master to go read-only. It then shuts down its query
+* we tell the old master to go read-only. It then shuts down its query
   service. We get its replication position back.
-- we tell the master-elect to wait for that replication data, and then
+* we tell the master-elect to wait for that replication data, and then
   start being the master.
-- in parallel for each tablet, we do:
-  - on the master-elect, we insert an entry in a test table. If that
+* in parallel for each tablet, we do:
+  * on the master-elect, we insert an entry in a test table. If that
     works, we update the MasterAlias record of the global Shard object.
-  - on the slaves (including the old master), we set the master, and
+  * on the slaves (including the old master), we set the master, and
     wait for the entry in the test table. (if a slave wasn't
     replicating, we don't change its state and don't start replication
     after reparent)
@@ -96,15 +96,15 @@ just make sure the master-elect is the most advanced in replication
 within all the available slaves, and reparent everybody.
 
 The actions performed are:
-- if the current master is still alive, we scrap it. That will make it
+* if the current master is still alive, we scrap it. That will make it
   stop what it's doing, stop its query service, and be unusable.
-- we gather the current replication position on all slaves.
-- we make sure the master-elect has the most advanced position.
-- we promote the master-elect.
-- in parallel for each tablet, we do:
-  - on the master-elect, we insert an entry in a test table. If that
+* we gather the current replication position on all slaves.
+* we make sure the master-elect has the most advanced position.
+* we promote the master-elect.
+* in parallel for each tablet, we do:
+  * on the master-elect, we insert an entry in a test table. If that
     works, we update the MasterAlias record of the global Shard object.
-  - on the slaves (excluding the old master), we set the master, and
+  * on the slaves (excluding the old master), we set the master, and
     wait for the entry in the test table. (if a slave wasn't
     replicating, we don't change its state and don't start replication
     after reparent)
@@ -122,33 +122,33 @@ servers. We then trigger the 'vtctl TabletExternallyReparented'
 command.
 
 The flow for that command is as follows:
-- the shard is locked in the global topology server.
-- we read the Shard object from the global topology server.
-- we read all the tablets in the replication graph for the shard. Note
+* the shard is locked in the global topology server.
+* we read the Shard object from the global topology server.
+* we read all the tablets in the replication graph for the shard. Note
   we allow partial reads here, so if a data center is down, as long as
   the data center containing the new master is up, we keep going.
-- the new master performs a 'SlaveWasPromoted' action. This remote
+* the new master performs a 'SlaveWasPromoted' action. This remote
   action makes sure the new master is not a MySQL slave of another
   server (the 'show slave status' command should not return anything,
   meaning 'reset slave' should have been called).
-- for every host in the replication graph, we call the
+* for every host in the replication graph, we call the
   'SlaveWasRestarted' action. It takes as parameter the address of the
   new master. On each slave, we update the topology server record for
   that tablet with the new master, and the replication graph for that
   tablet as well.
-- for the old master, if it doesn't successfully return from
+* for the old master, if it doesn't successfully return from
   'SlaveWasRestarted', we change its type to 'spare' (so a dead old
   master doesn't interfere).
-- we then update the Shard object with the new master.
-- we rebuild the serving graph for that shard. This will update the
+* we then update the Shard object with the new master.
+* we rebuild the serving graph for that shard. This will update the
   'master' record for sure, and also keep all the tablets that have
   successfully reparented.
 
 Failure cases:
-- The global topology server has to be available for locking and
+* The global topology server has to be available for locking and
   modification during this operation. If not, the operation will just
   fail.
-- If a single topology server is down in one data center (and it's not
+* If a single topology server is down in one data center (and it's not
   the master data center), the tablets in that data center will be
   ignored by the reparent. When the topology server comes back up,
   just re-run 'vtctl InitTablet' on the tablets, and that will fix

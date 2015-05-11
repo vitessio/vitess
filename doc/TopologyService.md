@@ -41,12 +41,12 @@ An entire Keyspace can be locked. We use this during resharding for instance, wh
 ### Shard
 
 A Shard contains a subset of the data for a Keyspace. The Shard record in the global topology contains:
-- the MySQL Master tablet alias for this shard
-- the sharding key range covered by this Shard inside the Keyspace
-- the tablet types this Shard is serving (master, replica, batch, …), per cell if necessary.
-- if during filtered replication, the source shards this shard is replicating from
-- the list of cells that have tablets in this shard
-- shard-global tablet controls, like blacklisted tables no tablet should serve in this shard
+* the MySQL Master tablet alias for this shard
+* the sharding key range covered by this Shard inside the Keyspace
+* the tablet types this Shard is serving (master, replica, batch, …), per cell if necessary.
+* if during filtered replication, the source shards this shard is replicating from
+* the list of cells that have tablets in this shard
+* shard-global tablet controls, like blacklisted tables no tablet should serve in this shard
 
 A Shard can be locked. We use this during operations that affect either the Shard record, or multiple tablets within a Shard (like reparenting), so multiple jobs don’t concurrently alter the data.
 
@@ -61,19 +61,19 @@ This section describes the data structures stored in the local instance (per cel
 ### Tablets
 
 The Tablet record has a lot of information about a single vttablet process running inside a tablet (along with the MySQL process):
-- the Tablet Alias (cell+unique id) that uniquely identifies the Tablet
-- the Hostname, IP address and port map of the Tablet
-- the current Tablet type (master, replica, batch, spare, …)
-- which Keyspace / Shard the tablet is part of
-- the health map for the Tablet (if in degraded mode)
-- the sharding Key Range served by this Tablet
-- user-specified tag map (to store per installation data for instance)
+* the Tablet Alias (cell+unique id) that uniquely identifies the Tablet
+* the Hostname, IP address and port map of the Tablet
+* the current Tablet type (master, replica, batch, spare, …)
+* which Keyspace / Shard the tablet is part of
+* the health map for the Tablet (if in degraded mode)
+* the sharding Key Range served by this Tablet
+* user-specified tag map (to store per installation data for instance)
 
 A Tablet record is created before a tablet can be running (either by `vtctl InitTablet` or by passing the `init_*` parameters to vttablet). The only way a Tablet record will be updated is one of:
-- The vttablet process itself owns the record while it is running, and can change it.
-- At init time, before the tablet starts
-- After shutdown, when the tablet gets scrapped or deleted.
-- If a tablet becomes unresponsive, it may be forced to spare to remove it from the serving graph (such as when reparenting away from a dead master, by the `vtctl ReparentShard` action).
+* The vttablet process itself owns the record while it is running, and can change it.
+* At init time, before the tablet starts
+* After shutdown, when the tablet gets scrapped or deleted.
+* If a tablet becomes unresponsive, it may be forced to spare to remove it from the serving graph (such as when reparenting away from a dead master, by the `vtctl ReparentShard` action).
 
 ### Replication Graph
 
@@ -86,16 +86,16 @@ The Serving Graph is what the clients use to find which EndPoints to send querie
 #### SrvKeyspace
 
 It is the local representation of a Keyspace. It contains information on what shard to use for getting to the data (but not information about each individual shard):
-- the partitions map is keyed by the tablet type (master, replica, batch, …) and the values are list of shards to use for serving.
-- it also contains the global Keyspace fields, copied for fast access.
+* the partitions map is keyed by the tablet type (master, replica, batch, …) and the values are list of shards to use for serving.
+* it also contains the global Keyspace fields, copied for fast access.
 
 It can be rebuilt by running `vtctl RebuildKeyspaceGraph`. It is not automatically rebuilt when adding new tablets in a cell, as this would cause too much overhead and is only needed once per cell/keyspace. It may also be changed during horizontal and vertical splits.
 
 #### SrvShard
 
 It is the local representation of a Shard. It contains information on details internal to this Shard only, but not to any tablet running in this shard:
-- the name and sharding Key Range for this Shard.
-- the cell that has the master for this Shard.
+* the name and sharding Key Range for this Shard.
+* the cell that has the master for this Shard.
 
 It is possible to lock a SrvShard object, to massively update all EndPoints in it.
 
@@ -104,10 +104,10 @@ It can be rebuilt (along with all the EndPoints in this Shard) by running `vtctl
 #### EndPoints
 
 For each possible serving type (master, replica, batch), in each Cell / Keyspace / Shard, we maintain a rolled-up EndPoint list. Each entry in the list has information about one Tablet:
-- the Tablet Uid
-- the Host on which the Tablet resides
-- the port map for that Tablet
-- the health map for that Tablet
+* the Tablet Uid
+* the Host on which the Tablet resides
+* the port map for that Tablet
+* the health map for that Tablet
 
 ## Workflows Involving the Topology Server
 
@@ -144,13 +144,13 @@ For locking, we use an auto-incrementing file name in the `/action` subdirectory
 
 Note the paths used to store global and per-cell data do not overlap, so a single ZK can be used for both global and local ZKs. This is however not recommended, for reliability reasons.
 
-- Keyspace: `/zk/global/vt/keyspaces/<keyspace>`
-- Shard: `/zk/global/vt/keyspaces/<keyspace>/shards/<shard>`
-- Tablet: `/zk/<cell>/vt/tablets/<uid>`
-- Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
-- SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
-- SrvShard: `/zk/<cell>/vt/ns/<keyspace>/<shard>`
-- EndPoints: `/zk/<cell>/vt/ns/<keyspace>/<shard>/<tablet type>`
+* Keyspace: `/zk/global/vt/keyspaces/<keyspace>`
+* Shard: `/zk/global/vt/keyspaces/<keyspace>/shards/<shard>`
+* Tablet: `/zk/<cell>/vt/tablets/<uid>`
+* Replication Graph: `/zk/<cell>/vt/replication/<keyspace>/<shard>`
+* SrvKeyspace: `/zk/<cell>/vt/ns/<keyspace>`
+* SrvShard: `/zk/<cell>/vt/ns/<keyspace>/<shard>`
+* EndPoints: `/zk/<cell>/vt/ns/<keyspace>/<shard>/<tablet type>`
 
 We provide the 'zk' utility for easy access to the topology data in ZooKeeper. For instance:
 ```
@@ -171,11 +171,11 @@ We use the `_Data` filename to store the data, JSON encoded.
 For locking, we store a `_Lock` file with various contents in the directory that contains the object to lock.
 
 We use the following paths:
-- Keyspace: `/vt/keyspaces/<keyspace>/_Data`
-- Shard: `/vt/keyspaces/<keyspace>/<shard>/_Data`
-- Tablet: `/vt/tablets/<cell>-<uid>/_Data`
-- Replication Graph: `/vt/replication/<keyspace>/<shard>/_Data`
-- SrvKeyspace: `/vt/ns/<keyspace>/_Data`
-- SrvShard: `/vt/ns/<keyspace>/<shard>/_Data`
-- EndPoints: `/vt/ns/<keyspace>/<shard>/<tablet type>`
+* Keyspace: `/vt/keyspaces/<keyspace>/_Data`
+* Shard: `/vt/keyspaces/<keyspace>/<shard>/_Data`
+* Tablet: `/vt/tablets/<cell>-<uid>/_Data`
+* Replication Graph: `/vt/replication/<keyspace>/<shard>/_Data`
+* SrvKeyspace: `/vt/ns/<keyspace>/_Data`
+* SrvShard: `/vt/ns/<keyspace>/<shard>/_Data`
+* EndPoints: `/vt/ns/<keyspace>/<shard>/<tablet type>`
 

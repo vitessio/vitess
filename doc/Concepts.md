@@ -30,19 +30,19 @@ eventual consistency guarantees), run data analysis tools that take a long time 
 ### Tablet
 
 A tablet is a single server that runs:
-- a MySQL instance
-- a vttablet instance
-- a local row cache instance
-- an other per-db process that is necessary for operational purposes
+* a MySQL instance
+* a vttablet instance
+* a local row cache instance
+* an other per-db process that is necessary for operational purposes
 
 It can be idle (not assigned to any keyspace), or assigned to a keyspace/shard. If it becomes unhealthy, it is usually changed to scrap.
 
 It has a type. The commonly used types are:
-- master: for the mysql master, RW database.
-- replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
-- rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
-- spare: for a mysql slave not used at the moment (hot spare).
-- experimental, schema, lag, backup, restore, checker, ... : various types for specific purposes.
+* master: for the mysql master, RW database.
+* replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
+* rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
+* spare: for a mysql slave not used at the moment (hot spare).
+* experimental, schema, lag, backup, restore, checker, ... : various types for specific purposes.
 
 Only master, replica and rdonly are advertised in the Serving Graph.
 
@@ -107,11 +107,11 @@ There is one local instance of that service per Cell (Data Center). The goal is 
 using the remaining Cells. (a Zookeeper instance running on 3 or 5 hosts locally is a good configuration).
 
 The data is partitioned as follows:
-- Keyspaces: global instance
-- Shards: global instance
-- Tablets: local instances
-- Serving Graph: local instances
-- Replication Graph: the master alias is in the global instance, the master-slave map is in the local cells.
+* Keyspaces: global instance
+* Shards: global instance
+* Tablets: local instances
+* Serving Graph: local instances
+* Replication Graph: the master alias is in the global instance, the master-slave map is in the local cells.
 
 Clients are designed to just read the local Serving Graph, therefore they only need the local instance to be up.
 
