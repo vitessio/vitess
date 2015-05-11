@@ -59,6 +59,12 @@ $ gcloud alpha container clusters create example --machine-type n1-standard-1 --
 
 If prompted, install the alpha commands.
 
+Update the configuration with the cluster name:
+
+```
+$ gcloud config set container/cluster example
+```
+
 ## Start an etcd cluster for Vitess
 
 Once you have a running Kubernetes deployment, make sure to set `KUBECTL`
@@ -103,8 +109,18 @@ $ gcloud compute firewall-rules create vtctld --allow tcp:15000
 
 # get the address of the load balancer for vtctld
 $ gcloud compute forwarding-rules list
-NAME   REGION      IP_ADDRESS    IP_PROTOCOL TARGET
-vtctld us-central1 12.34.56.78   TCP         us-central1/targetPools/vtctld
+NAME                             REGION      IP_ADDRESS    IP_PROTOCOL TARGET
+aa6f47950f5a011e4b8f242010af0fe1 us-central1 12.34.56.78   TCP         us-central1/targetPools/aa6f47950f5a011e4b8f242010af0fe1
+```
+
+Note that Kubernetes will generate the name of the forwarding-rule and
+target-pool based on a hash of source/target IP addresses.  If there are
+multiple rules (perhaps due to running other services on GKE), use the following
+to determine the correct target pool:
+
+```
+$ util/get_forwarded_pool.sh example us-central1 15000
+aa6f47950f5a011e4b8f242010af0fe1
 ```
 
 In the example above, you would then access vtctld at

@@ -17,7 +17,6 @@ GKE_ZONE=${GKE_ZONE:-'us-central1-b'}
 GKE_MACHINE_TYPE=${GKE_MACHINE_TYPE:-'n1-standard-1'}
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
-GKE_NUM_NODES=${GKE_NUM_NODES:-0}
 SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
@@ -25,11 +24,13 @@ MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
 BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
 VTGATE_COUNT=${VTGATE_COUNT:-0}
 
+# Get region from zone (everything to last dash)
+gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
 vttablet_template='vttablet-pod-template.yaml'
-vtgate_template='vtgate-controller-template.yaml'
+vtgate_script='vtgate-up.sh'
 if $BENCHMARK_CLUSTER; then
   vttablet_template='vttablet-pod-benchmarking-template.yaml'
-  vtgate_template='vtgate-controller-benchmarking-template.yaml'
+  vtgate_script='vtgate-benchmarking-up.sh'
 fi
 
 # export for vttablet scripts
@@ -94,15 +95,11 @@ gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD))
-num_nodes=$GKE_NUM_NODES
-if [ $num_nodes -eq 0 ]; then
-  num_nodes=$(($total_tablet_count>3?$total_tablet_count:3))
-fi
 vtgate_count=$VTGATE_COUNT
 if [ $vtgate_count -eq 0 ]; then
   vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
 fi
-
+num_nodes=$(($total_tablet_count+$vtgate_count))
 
 echo "****************************"
 echo "*Creating cluster:"
@@ -117,11 +114,12 @@ echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
 gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
+gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
 for i in `seq 1 $num_nodes`; do
   for j in `seq 0 2`; do
-    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i}.c.${project_id}.internal id=$i
+    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i} id=$i
     result=`$KUBECTL get nodes | grep id=$i`
     if [ -n "$result" ]; then
       break
@@ -149,17 +147,18 @@ wait_for_running_tasks etcd 6
 
 run_script vtctld-up.sh
 run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
-run_script vtgate-up.sh VTGATE_REPLICAS=$vtgate_count VTGATE_TEMPLATE=$vtgate_template
+run_script $vtgate_script STARTING_INDEX=$total_tablet_count VTGATE_REPLICAS=$vtgate_count
 
 wait_for_running_tasks vtctld 1
 wait_for_running_tasks vttablet $total_tablet_count
 wait_for_running_tasks vtgate $vtgate_count
 
 echo Creating firewall rule for vtctld...
-vtctl_port=15000
-gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctl_port
-vtctl_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtctld | awk '{print $3}'`
-vtctl_server="$vtctl_ip:$vtctl_port"
+vtctld_port=15000
+gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtctld --allow tcp:$vtctld_port
+vtctld_pool=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region $vtctld_port`
+vtctld_ip=`gcloud compute forwarding-rules list | grep $vtctld_pool | awk '{print $3}'`
+vtctl_server="$vtctld_ip:$vtctld_port"
 kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 
 echo Waiting for tablets to be visible in the topology
@@ -208,15 +207,11 @@ echo Done
 echo Creating firewall rule for vtgate
 vtgate_port=15001
 gcloud compute firewall-rules create ${GKE_CLUSTER_NAME}-vtgate --allow tcp:$vtgate_port
-vtgate_ip=`gcloud compute forwarding-rules list | grep $GKE_CLUSTER_NAME | grep vtgate | awk '{print $3}'`
-if [ -z "$vtgate_ip" ]
-then
-  vtgate_server="No firewall rules created for vtgate. Add createExternalLoadBalancer: true if access to vtgate is desired"
-else
-  vtgate_server="$vtgate_ip:$vtgate_port"
-fi
+vtgate_pool=`util/get_forwarded_pool.sh $GKE_CLUSTER_NAME $gke_region $vtgate_port`
+vtgate_ip=`gcloud compute forwarding-rules list | grep $vtgate_pool | awk '{print $3}'`
+vtgate_server="$vtgate_ip:$vtgate_port"
 
-if ! [ -z $NEWRELIC_LICENSE_KEY ]; then
+if [ -n "$NEWRELIC_LICENSE_KEY" -a $GKE_SSD_SIZE_GB -gt 0 ]; then
   for i in `seq 1 $num_nodes`; do
     nodename=k8s-$GKE_CLUSTER_NAME-node-${i}
     gcloud compute copy-files newrelic.sh $nodename:~/

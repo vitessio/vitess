@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/fakesqldb"
+	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
 
