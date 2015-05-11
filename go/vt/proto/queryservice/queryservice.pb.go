@@ -616,7 +616,7 @@ func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *Query, opts ...g
 		return nil, err
 	}
 	x := &sqlQueryStreamExecuteClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
+	if err := x.ClientStream.SendProto(in); err != nil {
 		return nil, err
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
@@ -636,7 +636,7 @@ type sqlQueryStreamExecuteClient struct {
 
 func (x *sqlQueryStreamExecuteClient) Recv() (*QueryResult, error) {
 	m := new(QueryResult)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
+	if err := x.ClientStream.RecvProto(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -710,9 +710,9 @@ func RegisterSqlQueryServer(s *grpc.Server, srv SqlQueryServer) {
 	s.RegisterService(&_SqlQuery_serviceDesc, srv)
 }
 
-func _SqlQuery_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_GetSessionId_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(SessionParams)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).GetSessionId(ctx, in)
@@ -722,9 +722,9 @@ func _SqlQuery_GetSessionId_Handler(srv interface{}, ctx context.Context, codec 
 	return out, nil
 }
 
-func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(Query)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).Execute(ctx, in)
@@ -734,9 +734,9 @@ func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.
 	return out, nil
 }
 
-func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(QueryList)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).ExecuteBatch(ctx, in)
@@ -748,7 +748,7 @@ func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec 
 
 func _SqlQuery_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Query)
-	if err := stream.RecvMsg(m); err != nil {
+	if err := stream.RecvProto(m); err != nil {
 		return err
 	}
 	return srv.(SqlQueryServer).StreamExecute(m, &sqlQueryStreamExecuteServer{stream})
@@ -764,12 +764,12 @@ type sqlQueryStreamExecuteServer struct {
 }
 
 func (x *sqlQueryStreamExecuteServer) Send(m *QueryResult) error {
-	return x.ServerStream.SendMsg(m)
+	return x.ServerStream.SendProto(m)
 }
 
-func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(Session)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).Begin(ctx, in)
@@ -779,9 +779,9 @@ func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 	return out, nil
 }
 
-func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(Session)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).Commit(ctx, in)
@@ -791,9 +791,9 @@ func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.C
 	return out, nil
 }
 
-func _SqlQuery_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_Rollback_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(Session)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).Rollback(ctx, in)
@@ -803,9 +803,9 @@ func _SqlQuery_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc
 	return out, nil
 }
 
-func _SqlQuery_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _SqlQuery_SplitQuery_Handler(srv interface{}, ctx context.Context, buf []byte) (proto.Message, error) {
 	in := new(SplitQueryRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
+	if err := proto.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
 	out, err := srv.(SqlQueryServer).SplitQuery(ctx, in)
