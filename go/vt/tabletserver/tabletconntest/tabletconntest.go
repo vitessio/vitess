@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -247,6 +248,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 		f.t.Errorf("sendReply1 failed: %v", err)
 	}
 	if f.panics && !f.streamExecutePanicsEarly {
+		// let the response flow through before panicing
+		time.Sleep(time.Second)
 		panic(fmt.Errorf("test-triggered panic late"))
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
