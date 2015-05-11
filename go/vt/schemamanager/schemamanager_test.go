@@ -7,10 +7,12 @@ package schemamanager
 import (
 	"errors"
 	"testing"
-	"time"
 
-	fakevtgateconn "github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 )
 
 var (
@@ -22,9 +24,8 @@ var (
 func TestRunSchemaChangesDataSourcerOpenFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, true, false, false)
 	handler := newFakeHandler()
-	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor(fakeConn)
-	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
+	exec := newFakeExecutor()
+	err := Run(dataSourcer, exec, handler)
 	if err != errDataSourcerOpen {
 		t.Fatalf("data sourcer open fail, shoud get error: %v, but get error: %v",
 			errDataSourcerOpen, err)
@@ -34,9 +35,8 @@ func TestRunSchemaChangesDataSourcerOpenFail(t *testing.T) {
 func TestRunSchemaChangesDataSourcerReadFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, false, true, false)
 	handler := newFakeHandler()
-	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor(fakeConn)
-	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
+	exec := newFakeExecutor()
+	err := Run(dataSourcer, exec, handler)
 	if err != errDataSourcerRead {
 		t.Fatalf("data sourcer read fail, shoud get error: %v, but get error: %v",
 			errDataSourcerRead, err)
@@ -47,22 +47,20 @@ func TestRunSchemaChangesDataSourcerReadFail(t *testing.T) {
 }
 
 func TestRunSchemaChangesValidationFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, false, false, false)
+	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, true, false, false)
 	handler := newFakeHandler()
-	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor(fakeConn)
-	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
+	exec := newFakeExecutor()
+	err := Run(dataSourcer, exec, handler)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
 	}
 }
 
 func TestRunSchemaChanges(t *testing.T) {
-	dataSourcer := NewSimepleDataSourcer("select * from test_db;")
+	dataSourcer := NewSimpleDataSourcer("create table test_table (pk int);")
 	handler := newFakeHandler()
-	fakeConn := newFakeVtGateConn()
-	exec := newFakeVtGateExecutor(fakeConn)
-	err := Run(dataSourcer, exec, handler, []string{"0", "1", "2"})
+	exec := newFakeExecutor()
+	err := Run(dataSourcer, exec, handler)
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
 	}
@@ -83,15 +81,42 @@ func TestRunSchemaChanges(t *testing.T) {
 	}
 }
 
-func newFakeVtGateConn() *fakevtgateconn.FakeVTGateConn {
-	return fakevtgateconn.NewFakeVTGateConn(context.Background(), "", 1*time.Second)
+func newFakeExecutor() *TabletExecutor {
+	return NewTabletExecutor(
+		faketmclient.NewFakeTabletManagerClient(),
+		newFakeTopo(),
+		"test_keyspace")
 }
 
-func newFakeVtGateExecutor(conn *fakevtgateconn.FakeVTGateConn) *VtGateExecutor {
-	return NewVtGateExecutor(
-		"test_keyspace",
-		conn,
-		1*time.Second)
+type fakeTopo struct {
+	faketopo.FakeTopo
+}
+
+func newFakeTopo() *fakeTopo {
+	return &fakeTopo{}
+}
+
+func (topoServer *fakeTopo) GetShardNames(keyspace string) ([]string, error) {
+	return []string{"0", "1", "2"}, nil
+}
+
+func (topoServer *fakeTopo) GetShard(keyspace string, shard string) (*topo.ShardInfo, error) {
+	value := &topo.Shard{
+		MasterAlias: topo.TabletAlias{
+			Cell: "test_cell",
+			Uid:  0,
+		},
+	}
+	return topo.NewShardInfo(keyspace, shard, value, 0), nil
+}
+
+func (topoServer *fakeTopo) GetTablet(tabletAlias topo.TabletAlias) (*topo.TabletInfo, error) {
+	return &topo.TabletInfo{
+		Tablet: &topo.Tablet{
+			Alias:    tabletAlias,
+			Keyspace: "test_keyspace",
+		},
+	}, nil
 }
 
 type fakeDataSourcer struct {
