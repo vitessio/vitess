@@ -57,6 +57,7 @@ level picture of all the servers and their current state.
 
 ### vtworker
 vtworker is meant to host long-running processes. It supports a plugin infrastructure, and offers libraries to easily pick tablets to use. We have developed:
+
 * resharding differ jobs: meant to check data integrity during shard splits and joins.
 * vertical split differ jobs: meant to check data integrity during vertical splits and joins.
 
@@ -66,6 +67,7 @@ It is very easy to add other checker processes for in-tablet integrity checks (v
 vtprimecache is a mysql cache primer for faster replication. If the single MySQL replication thread is falling behind, vtprimecache activates and starts reading the available relay logs. It then uses a few threads / connections to MySQL to execute modified statements and prime the MySQL buffer cache. The idea is for instance if an 'update table X where id=2' statement is going to be executed by the replication SQL thread 2 or 3 seconds from now, might as well execute a concurrent 'select from table X where id=2' now and prime the MySQL buffer cache. In practice, this shows a speed improvement in replication speed by 30 to 40 percents.
 
 ### Other support tools
+
 * *mysqlctl*: manage MySQL instances.
 * *zkctl*: manage ZooKeeper instances.
 * *zk*: command line ZooKeeper client and explorer.

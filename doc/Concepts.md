@@ -1,6 +1,9 @@
 # Concepts
+
 We need to introduce some common terminologies that are used in Vitess:
+
 ### Keyspace
+
 A keyspace is a logical database.
 In its simplest form, it directly maps to a MySQL database name.
 When you read data from a keyspace, it is as if you read from a MySQL database.
@@ -30,6 +33,7 @@ eventual consistency guarantees), run data analysis tools that take a long time 
 ### Tablet
 
 A tablet is a single server that runs:
+
 * a MySQL instance
 * a vttablet instance
 * a local row cache instance
@@ -38,6 +42,7 @@ A tablet is a single server that runs:
 It can be idle (not assigned to any keyspace), or assigned to a keyspace/shard. If it becomes unhealthy, it is usually changed to scrap.
 
 It has a type. The commonly used types are:
+
 * master: for the mysql master, RW database.
 * replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
 * rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
@@ -107,6 +112,7 @@ There is one local instance of that service per Cell (Data Center). The goal is 
 using the remaining Cells. (a Zookeeper instance running on 3 or 5 hosts locally is a good configuration).
 
 The data is partitioned as follows:
+
 * Keyspaces: global instance
 * Shards: global instance
 * Tablets: local instances

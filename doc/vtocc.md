@@ -8,6 +8,7 @@ It can be pointed to an existing database, and you should be able
 to send queries through it.
 
 ## vtocc features
+
 * Connection pooling.
 * SQL parser: Although very close, the vtocc SQL parser is not SQL-92
   compliant. It has left out constructs that are deemed uncommon or
@@ -36,6 +37,7 @@ to send queries through it.
 * A rich set of monitoring features to watch over, diagnose or analyze performance.
 
 ## Protocol
+
 vtocc uses the bsonrpc protocol. This means that it uses [bson encoding](http://bsonspec.org)
 to receive and send messages. There is currently a [python client](https://github.com/youtube/vitess/blob/master/py/vtdb/tablet.py). A java client is
 also getting implemented.
@@ -44,6 +46,7 @@ If you are familiar with go, you can actually plug in any protocol you desire, l
 thrift or protobufs.
 
 ## Data types
+
 vtocc has not been well tested with exotic data types. Specifically, we don't know how it
 will handle boolean and timestamp columns. Otherwise, we have [tests](https://github.com/youtube/vitess/blob/master/test/test_data/test_schema.sql#L45) for
 the commonly used data types.
@@ -56,6 +59,7 @@ key columns. This is because other column types are not bitwise comparable. For 
 varchar comparison in MySQL is collation dependent. So, those types are not supported.
 
 ## Bind variables
+
 One major differentiator with vtocc is its use of bind variables. When you send a query,
 you build it like this:
 
@@ -81,7 +85,9 @@ Additionally, vtocc tracks statistics grouped by these query strings, which are
 useful for analysis and troubleshooting.
 
 ## Execute functions
+
 There are three Execute functions:
+
 * **Execute**: This is an OLTP execute function that is expected to return a limited set
   of rows. If the number of rows exceeds the max allowed limit, an error is returned.
 * **BatchExecute** executes a set of OLTP statements as a single round-trip request. If you
@@ -92,13 +98,17 @@ There are three Execute functions:
   potentially require full table scans.
 
 ## Command line arguments
+
 'vtocc -h' should print the full set of command line arguments. Here is an explanation
 of what they mean:
+
 #### DB connection parameters
+
 There are four types of db-config parameters. db-config-app-* specify the connection parameters
 that will be used to serve the app. The 'repl' parameters will be used by the rowcache to connect
 to the server as a replica to fetch binlog events for invalidation. The 'dba' and 'filtered'
 parameters are only used when running as vttablet.
+
 * **db-config-app-charset="utf8"**: Only utf8 or latin1 are currently supported.
 * **db-config-app-dbname=""**: Name of the MySQL database to serve queries for.
 * **db-config-app-keyspace=""**: It’s recommended that this value be set to the same as dbname. Clients connecting to vtocc will need to specify the keyspace name, which will be used as sanity check.
@@ -110,7 +120,9 @@ parameters are only used when running as vttablet.
 TODO: Document the rest of the flags.
 
 #### Query server parameters
+
 All timeout related parameters below are specified in seconds. A value of zero means never.
+
 * **port=0**: Server port.
 * **queryserver-config-idle-timeout=1800**: vtocc has many connection pools to connect to mysql. If any connection in the pool has been idle for longer than the specified time, then vtocc discards the connection and creates a new one instead. This value should be less than the MySQL idle timeout.
 * **queryserver-config-max-result-size=10000**: vtocc adds a limit clause to all unbounded queries. If the result returned exceeds this number, it returns an error instead.
@@ -125,6 +137,7 @@ All timeout related parameters below are specified in seconds. A value of zero m
 * **queryserver-config-transaction-timeout=30**: The amount of time to allow a transaction to complete before killing it.
 
 #### Logging parameters
+
 * **alsologtostderr=false**: log to standard error as well as files.
 * **keep_logs=0**: keep logs for this long (zero to keep forever).
 * **log_backtrace_at=:0**: when logging hits line file:N, emit a stack trace.
@@ -132,5 +145,4 @@ All timeout related parameters below are specified in seconds. A value of zero m
 * **logtostderr=false**: log to standard error instead of files.
 * **stderrthreshold=WARNING**: logs at or above this threshold go to stderr.
 * **purge_logs_interval=1h0m0s**: how often try to remove old logs.
-
 

@@ -16,6 +16,7 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 ## Documentation
 
 ### Intro
+
  * [Helicopter overview](http://vitess.io):
      high level overview of Vitess that should tell you whether Vitess is for you.
  * [Sharding in Vitess](http://vitess.io/doc/Sharding)

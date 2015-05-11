@@ -41,6 +41,7 @@ An entire Keyspace can be locked. We use this during resharding for instance, wh
 ### Shard
 
 A Shard contains a subset of the data for a Keyspace. The Shard record in the global topology contains:
+
 * the MySQL Master tablet alias for this shard
 * the sharding key range covered by this Shard inside the Keyspace
 * the tablet types this Shard is serving (master, replica, batch, …), per cell if necessary.
@@ -61,6 +62,7 @@ This section describes the data structures stored in the local instance (per cel
 ### Tablets
 
 The Tablet record has a lot of information about a single vttablet process running inside a tablet (along with the MySQL process):
+
 * the Tablet Alias (cell+unique id) that uniquely identifies the Tablet
 * the Hostname, IP address and port map of the Tablet
 * the current Tablet type (master, replica, batch, spare, …)
@@ -70,6 +72,7 @@ The Tablet record has a lot of information about a single vttablet process runni
 * user-specified tag map (to store per installation data for instance)
 
 A Tablet record is created before a tablet can be running (either by `vtctl InitTablet` or by passing the `init_*` parameters to vttablet). The only way a Tablet record will be updated is one of:
+
 * The vttablet process itself owns the record while it is running, and can change it.
 * At init time, before the tablet starts
 * After shutdown, when the tablet gets scrapped or deleted.
@@ -86,6 +89,7 @@ The Serving Graph is what the clients use to find which EndPoints to send querie
 #### SrvKeyspace
 
 It is the local representation of a Keyspace. It contains information on what shard to use for getting to the data (but not information about each individual shard):
+
 * the partitions map is keyed by the tablet type (master, replica, batch, …) and the values are list of shards to use for serving.
 * it also contains the global Keyspace fields, copied for fast access.
 
@@ -94,6 +98,7 @@ It can be rebuilt by running `vtctl RebuildKeyspaceGraph`. It is not automatical
 #### SrvShard
 
 It is the local representation of a Shard. It contains information on details internal to this Shard only, but not to any tablet running in this shard:
+
 * the name and sharding Key Range for this Shard.
 * the cell that has the master for this Shard.
 
@@ -104,6 +109,7 @@ It can be rebuilt (along with all the EndPoints in this Shard) by running `vtctl
 #### EndPoints
 
 For each possible serving type (master, replica, batch), in each Cell / Keyspace / Shard, we maintain a rolled-up EndPoint list. Each entry in the list has information about one Tablet:
+
 * the Tablet Uid
 * the Host on which the Tablet resides
 * the port map for that Tablet
@@ -171,6 +177,7 @@ We use the `_Data` filename to store the data, JSON encoded.
 For locking, we store a `_Lock` file with various contents in the directory that contains the object to lock.
 
 We use the following paths:
+
 * Keyspace: `/vt/keyspaces/<keyspace>/_Data`
 * Shard: `/vt/keyspaces/<keyspace>/<shard>/_Data`
 * Tablet: `/vt/tablets/<cell>-<uid>/_Data`

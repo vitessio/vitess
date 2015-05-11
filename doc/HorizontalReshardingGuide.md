@@ -85,6 +85,7 @@ A single SplitDiff vtworker can be run by, for example:
 `vtworker -min_healthy_rdonly_endpoints=1 --cell=test SplitDiff test_keyspace/-80`
 
 After completion, the source and destination rdonly tablets need to be put back into the serving graph:
+
 ```
 vtctl ChangeSlaveType <source rdonly tablet alias> rdonly
 vtctl ChangeSlaveType <destination rdonly tablet alias> rdonly
@@ -122,6 +123,7 @@ vtctl MigrateServedTypes -reverse test_keyspace/0 replica
 ## Scrap the source shard
 
 If all the above steps were successful, it’s safe to remove the source shard (which should no longer be in use):
+
 * For each tablet in the source shard: `vtctl ScrapTablet <source tablet alias>`
 * For each tablet in the source shard: `vtctl DeleteTablet <source tablet alias>`
 * Rebuild the serving graph: `vtctl RebuildKeyspaceGraph test_keyspace`

@@ -24,6 +24,7 @@ environment variables.
 ### Parameterizing cluster scripts
 
 The cluster-up.sh script supports the following environment variables:
+
 * GKE_ZONE - Zone to use for Container Engine (default us-central1-b)
 * GKE_MACHINE_TYPE - Container Engine machine type (default n1-standard-1)
 * GKE_NUM_NODES - Number of nodes to use for the cluster (default 3).
@@ -43,5 +44,4 @@ vitess/examples/kubernetes$ ./cluster-up.sh
 ### Parameterizing vttablet scripts
 
 Both SHARDS and TABLETS_PER_SHARD from cluster-up.sh apply to vttablet-up.sh.
-
 

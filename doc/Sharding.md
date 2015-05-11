@@ -29,6 +29,7 @@ sharding, as we need to figure out if a value is within a Shard's
 range.
 
 Vitess was designed to allow two types of sharding keys:
+
 * Binary data: just an array of bytes. We use regular byte array
   comparison here. Can be used for strings. MySQL representation is a
   VARBINARY field.
@@ -72,12 +73,14 @@ Two Key Ranges are consecutive if the End of the first one is equal to
 the Start of the next one.
 
 Two special values exist:
+
 * if a Start is empty, it represents the lowest value, and all values
   are greater than it.
 * if an End is empty, it represents the biggest value, and all values
   are strictly lower than it.
 
 Examples:
+
 * Start=[], End=[]: full Key Range
 * Start=[], End=[0x80]: Lower half of the Key Range.
 * Start=[0x80], End=[]: Upper half of the Key Range.
@@ -101,6 +104,7 @@ We will use this convention in the rest of this document.
 ### Sharding Key Partition
 
 A partition represent a set of Key Ranges that cover the entire space. For instance, the following four shards are a valid full partition:
+
 * -40
 * 40-80
 * 80-c0
@@ -115,6 +119,7 @@ minimal downtime.
 ### Resharding
 
 Vitess provides a set of tools and processes to deal with Range Based Shards:
+
 * [Dynamic resharding](Resharding.md) allows splitting or merging of shards with no
   read downtime, and very minimal master unavailability (<5s).
 * Client APIs are designed to take sharding into account.
