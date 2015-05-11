@@ -42,11 +42,11 @@ $ vtctl -wait-time=30s ValidateSchemaKeyspace user
 ## Changing the Schema
 
 Goals:
-- simplify schema updates on the fleet
-- minimize human actions / errors
-- guarantee no or very little downtime for most schema updates
-- do not store any permanent schema data in Topology Server, just use it for actions.
-- only look at tables for now (not stored procedures or grants for instance, although they both could be added fairly easily in the same manner)
+* simplify schema updates on the fleet
+* minimize human actions / errors
+* guarantee no or very little downtime for most schema updates
+* do not store any permanent schema data in Topology Server, just use it for actions.
+* only look at tables for now (not stored procedures or grants for instance, although they both could be added fairly easily in the same manner)
 
 We’re trying to get reasonable confidence that a schema update is going to work before applying it. Since we cannot really apply a change to live tables without potentially causing trouble, we have implemented a Preflight operation: it copies the current schema into a temporary database, applies the change there to validate it, and gathers the resulting schema. After this Preflight, we have a good idea of what to expect, and we can apply the change to any database and make sure it worked.
 
@@ -71,35 +71,37 @@ type SchemaChange struct {
 ```
 
 And the associated ApplySchema remote action for a tablet. Then the performed steps are:
-- The database to use is either derived from the tablet dbName if UseVt is false, or is the _vt database. A ‘use dbname’ is prepended to the Sql.
-- (if BeforeSchema is not nil) read the schema, make sure it is equal to BeforeSchema. If not equal: if Force is not set, we will abort, if Force is set, we’ll issue a warning and keep going.
-- if AllowReplication is false, we’ll disable replication (adding SET sql_log_bin=0 before the Sql).
-- We will then apply the Sql command.
-- (if AfterSchema is not nil) read the schema again, make sure it is equal to AfterSchema. If not equal: if Force is not set, we will issue an error, if Force is set, we’ll issue a warning.
+* The database to use is either derived from the tablet dbName if UseVt is false, or is the _vt database. A ‘use dbname’ is prepended to the Sql.
+* (if BeforeSchema is not nil) read the schema, make sure it is equal to BeforeSchema. If not equal: if Force is not set, we will abort, if Force is set, we’ll issue a warning and keep going.
+* if AllowReplication is false, we’ll disable replication (adding SET sql_log_bin=0 before the Sql).
+* We will then apply the Sql command.
+* (if AfterSchema is not nil) read the schema again, make sure it is equal to AfterSchema. If not equal: if Force is not set, we will issue an error, if Force is set, we’ll issue a warning.
 
 We will return the following information:
-- whether it worked or not (doh!)
-- BeforeSchema
-- AfterSchema
+* whether it worked or not (doh!)
+* BeforeSchema
+* AfterSchema
 
 ### Use case 1: Single tablet update:
-- we first do a Preflight (to know what BeforeSchema and AfterSchema will be). This can be disabled, but is not recommended.
-- we then do the schema upgrade. We will check BeforeSchema before the upgrade, and AfterSchema after the upgrade.
+* we first do a Preflight (to know what BeforeSchema and AfterSchema will be). This can be disabled, but is not recommended.
+* we then do the schema upgrade. We will check BeforeSchema before the upgrade, and AfterSchema after the upgrade.
 
 ### Use case 2: Single Shard update:
-- need to figure out (or be told) if it’s a simple or complex schema update (does it require the shell game?). For now we'll use a command line flag.
-- in any case, do a Preflight on the master, to get the BeforeSchema and AfterSchema values.
-- in any case, gather the schema on all databases, to see which ones have been upgraded already or not. This guarantees we can interrupt and restart a schema change. Also, this makes sure no action is currently running on the databases we're about to change.
-- if simple:
- - nobody has it: apply to master, very similar to a single tablet update.
- - some tablets have it but not others: error out
-- if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent at the end.
- - Note the Backup, and Lag servers won't apply a complex schema change. Only the servers actively in the replication graph will.
- - the process can be interrupted at any time, restarting it as a complex schema upgrade should just work.
+
+* need to figure out (or be told) if it’s a simple or complex schema update (does it require the shell game?). For now we'll use a command line flag.
+* in any case, do a Preflight on the master, to get the BeforeSchema and AfterSchema values.
+* in any case, gather the schema on all databases, to see which ones have been upgraded already or not. This guarantees we can interrupt and restart a schema change. Also, this makes sure no action is currently running on the databases we're about to change.
+* if simple:
+  * nobody has it: apply to master, very similar to a single tablet update.
+  * some tablets have it but not others: error out
+* if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent at the end.
+  * Note the Backup, and Lag servers won't apply a complex schema change. Only the servers actively in the replication graph will.
+  * the process can be interrupted at any time, restarting it as a complex schema upgrade should just work.
 
 ### Use case 3: Keyspace update:
-- Similar to Single Shard, but the BeforeSchema and AfterSchema values are taken from the first shard, and used in all shards after that.
-- We don't know the new masters to use on each shard, so just skip re-parenting all together.
+
+* Similar to Single Shard, but the BeforeSchema and AfterSchema values are taken from the first shard, and used in all shards after that.
+* We don't know the new masters to use on each shard, so just skip re-parenting all together.
 
 This translates into the following vtctl commands:
 
