@@ -152,8 +152,11 @@ const (
 	// TabletActionApplySchema will actually apply the schema change
 	TabletActionApplySchema = "ApplySchema"
 
-	// TabletActionExecuteFetch uses the DBA connection pool to run queries.
-	TabletActionExecuteFetch = "ExecuteFetch"
+	// TabletActionExecuteFetchAsDba uses the DBA connection to run queries.
+	TabletActionExecuteFetchAsDba = "ExecuteFetchAsDba"
+
+	// TabletActionExecuteFetchAsApp uses the App connection to run queries.
+	TabletActionExecuteFetchAsApp = "ExecuteFetchAsApp"
 
 	// TabletActionGetPermissions returns the mysql permissions set
 	TabletActionGetPermissions = "GetPermissions"

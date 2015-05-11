@@ -57,14 +57,15 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config      *Mycnf
-	dba         *sqldb.ConnParams
-	dbApp       *sqldb.ConnParams
-	dbaPool     *dbconnpool.ConnectionPool
-	appPool     *dbconnpool.ConnectionPool
-	replParams  *sqldb.ConnParams
-	TabletDir   string
-	SnapshotDir string
+	config        *Mycnf
+	dba           *sqldb.ConnParams
+	dbApp         *sqldb.ConnParams
+	dbaPool       *dbconnpool.ConnectionPool
+	appPool       *dbconnpool.ConnectionPool
+	replParams    *sqldb.ConnParams
+	dbaMysqlStats *stats.Timings
+	TabletDir     string
+	SnapshotDir   string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -104,14 +105,15 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 	appPool.Open(dbconnpool.DBConnectionCreator(app, appMysqlStats))
 
 	return &Mysqld{
-		config:      config,
-		dba:         dba,
-		dbApp:       app,
-		dbaPool:     dbaPool,
-		appPool:     appPool,
-		replParams:  repl,
-		TabletDir:   TabletDir(config.ServerId),
-		SnapshotDir: SnapshotDir(config.ServerId),
+		config:        config,
+		dba:           dba,
+		dbApp:         app,
+		dbaPool:       dbaPool,
+		appPool:       appPool,
+		replParams:    repl,
+		dbaMysqlStats: dbaMysqlStats,
+		TabletDir:     TabletDir(config.ServerId),
+		SnapshotDir:   SnapshotDir(config.ServerId),
 	}
 }
 
@@ -527,16 +529,15 @@ func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	return nil
 }
 
-// GetDbConnection returns a connection from the pool chosen by dbconfigName.
+// GetAppConnection returns a connection from the app pool.
 // Recycle needs to be called on the result.
-func (mysqld *Mysqld) GetDbConnection(dbconfigName dbconfigs.DbConfigName) (dbconnpool.PoolConnection, error) {
-	switch dbconfigName {
-	case dbconfigs.DbaConfigName:
-		return mysqld.dbaPool.Get(0)
-	case dbconfigs.AppConfigName:
-		return mysqld.appPool.Get(0)
-	}
-	return nil, fmt.Errorf("unknown dbconfigName: %v", dbconfigName)
+func (mysqld *Mysqld) GetAppConnection() (dbconnpool.PoolConnection, error) {
+	return mysqld.appPool.Get(0)
+}
+
+// GetDbaConnection creates a new DBConnection.
+func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(mysqld.dba, mysqld.dbaMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba
