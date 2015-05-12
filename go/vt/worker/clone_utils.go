@@ -284,8 +284,7 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true)
 	cancel()
 	if err != nil {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
-		return result, nil
+		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
 	}
 	if len(qr.Rows) != 1 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)
