@@ -29,7 +29,7 @@ type EventHandler interface {
 type Executor interface {
 	Open() error
 	Validate(sqls []string) error
-	Execute(sqls []string, shards []string) *ExecuteResult
+	Execute(sqls []string) *ExecuteResult
 	Close() error
 }
 
@@ -57,8 +57,7 @@ type ShardResult struct {
 // Run schema changes on Vitess through VtGate
 func Run(sourcer DataSourcer,
 	exec Executor,
-	handler EventHandler,
-	shards []string) error {
+	handler EventHandler) error {
 	if err := sourcer.Open(); err != nil {
 		log.Errorf("failed to open data sourcer: %v", err)
 		return err
@@ -80,7 +79,7 @@ func Run(sourcer DataSourcer,
 		return handler.OnValidationFail(err)
 	}
 	handler.OnValidationSuccess(sqls)
-	result := exec.Execute(sqls, shards)
+	result := exec.Execute(sqls)
 	handler.OnExecutorComplete(result)
 	return nil
 }

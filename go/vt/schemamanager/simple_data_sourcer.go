@@ -11,16 +11,16 @@ type SimpleDataSourcer struct {
 	sqls []string
 }
 
-// NewSimepleDataSourcer creates a new SimpleDataSourcer instance
-func NewSimepleDataSourcer(sqlStr string) *SimpleDataSourcer {
-	result := SimpleDataSourcer{}
+// NewSimpleDataSourcer creates a new SimpleDataSourcer instance
+func NewSimpleDataSourcer(sqlStr string) *SimpleDataSourcer {
+	result := &SimpleDataSourcer{sqls: make([]string, 0, 32)}
 	for _, sql := range strings.Split(sqlStr, ";") {
 		s := strings.TrimSpace(sql)
 		if s != "" {
 			result.sqls = append(result.sqls, s)
 		}
 	}
-	return &result
+	return result
 }
 
 // Open is a no-op

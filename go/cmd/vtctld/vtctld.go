@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -485,16 +484,16 @@ func main() {
 		}
 		sqlStr := r.FormValue("data")
 		keyspace := r.FormValue("keyspace")
-		shards, err := ts.GetShardNames(keyspace)
-		if err != nil {
-			httpError(w, "error getting shards for keyspace: <"+keyspace+">, error: %v", err)
-		}
+		executor := schmgr.NewTabletExecutor(
+			tmclient.NewTabletManagerClient(),
+			ts,
+			keyspace)
+
 		schmgr.Run(
-			schmgr.NewSimepleDataSourcer(sqlStr),
-			schmgr.NewVtGateExecutor(
-				keyspace, nil, 1*time.Second),
+			schmgr.NewSimpleDataSourcer(sqlStr),
+			executor,
 			uihandler.NewUIEventHandler(w),
-			shards)
+		)
 	})
 	servenv.RunDefault()
 }
