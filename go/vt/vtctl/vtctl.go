@@ -1754,7 +1754,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
+	sql := subFlags.String("sql", "", "a list of sql commands separated by semicolon")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
 	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
