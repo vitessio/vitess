@@ -70,8 +70,7 @@ ts datetime,
 msg varchar(4096),
 primary key (id)
 ) Engine=InnoDB'''
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_table_template,
                      'test_keyspace'],
                     auto_log=True)

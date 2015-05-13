@@ -58,7 +58,7 @@ class TestEnv(object):
       fname = os.path.join(environment.tmproot, "ddl.sql")
       with open(fname, "w") as f:
         f.write(ddl)
-      utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql-file', fname, keyspace])
+      utils.run_vtctl(['ApplySchema', '-sql-file', fname, keyspace])
 
   def teardown(self):
     all_tablets = self.tablet_map.values()

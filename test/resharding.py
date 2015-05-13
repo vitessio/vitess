@@ -211,28 +211,23 @@ name varchar(64),
 primary key (name)
 ) Engine=InnoDB'''
 
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_table_template % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_table_template % ("resharding2"),
                      'test_keyspace'],
                     auto_log=True)
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_view_template % ("view1", "resharding1"),
                      'test_keyspace'],
                     auto_log=True)
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_timestamp_table,
                      'test_keyspace'],
                     auto_log=True)
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_unrelated_table,
                      'test_keyspace'],
                     auto_log=True)

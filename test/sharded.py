@@ -107,16 +107,10 @@ class TestSharded(unittest.TestCase):
       t.wait_for_vttablet_state('SERVING')
 
     # apply the schema on the first shard through vtctl, so all tablets
-    # are the same (replication is not enabled yet, so allow_replication=false
-    # is just there to be tested)
+    # are the same.
     utils.run_vtctl(['ApplySchema',
-                     '-stop-replication',
                      '-sql=' + create_vt_select_test.replace("\n", ""),
-                     shard_0_master.tablet_alias])
-    utils.run_vtctl(['ApplySchema',
-                     '-stop-replication',
-                     '-sql=' + create_vt_select_test.replace("\n", ""),
-                     shard_0_replica.tablet_alias])
+                     'test_keyspace'])
 
     # start vtgate, we'll use it later
     vtgate_server, vtgate_port = utils.vtgate_start()
@@ -127,12 +121,6 @@ class TestSharded(unittest.TestCase):
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
-
-    # apply the schema on the second shard using a simple schema upgrade
-    utils.run_vtctl(['ApplySchemaShard',
-                     '-simple',
-                     '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
-                     'test_keyspace/80-'])
 
     # insert some values directly (db is RO after minority reparent)
     # FIXME(alainjobart) these values don't match the shard map
@@ -193,9 +181,9 @@ class TestSharded(unittest.TestCase):
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/-80'])
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/80-'])
     out, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
-                               trap_output=True, raise_on_error=False)
+                                trap_output=True, raise_on_error=False)
     if 'test_nj-0000062344 and test_nj-0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err or \
-       'test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err:
+    'test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err:
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 
     # validate versions

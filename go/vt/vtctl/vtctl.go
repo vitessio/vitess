@@ -1773,7 +1773,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
 	sql := subFlags.String("sql", "", "a list of sql commands separated by semicolon")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1787,7 +1786,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *simple, *force, *waitSlaveTimeout)
+	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, true, *force, *waitSlaveTimeout)
 	if err == nil {
 		log.Infof(scr.String())
 	}

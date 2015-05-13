@@ -81,7 +81,7 @@ class TestEnv(object):
           utils.run_vtctl(['InitShardMaster', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       if self.schema:
-        utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql', self.schema, self.keyspace])
+        utils.run_vtctl(['ApplySchema', '-sql', self.schema, self.keyspace])
       if self.vschema:
         if self.vschema[0] == '{':
           utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
