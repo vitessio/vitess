@@ -240,6 +240,13 @@ var commands = []commandGroup{
 			command{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
 				"Asks a remote tablet to reload its schema."},
+			command{"ValidateSchemaShard", commandValidateSchemaShard,
+				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
+				"Validate the master schema matches all the slaves."},
+			command{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
+				"[-exclude_tables=''] [-include-views] <keyspace name>",
+				"Validate the master schema from shard 0 matches all the other tablets in the keyspace."},
+
 			command{"ApplySchema", commandApplySchema,
 				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
 				"Apply the schema change to the specified keyspace."},
@@ -1767,6 +1774,45 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	return wr.ReloadSchema(ctx, tabletAlias)
+}
+
+func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
+	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action ValidateSchemaShard requires <keyspace/shard>")
+	}
+
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews)
+}
+
+func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of regexps for tables to exclude")
+	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action ValidateSchemaKeyspace requires <keyspace name>")
+	}
+
+	keyspace := subFlags.Arg(0)
+	var excludeTableArray []string
+	if *excludeTables != "" {
+		excludeTableArray = strings.Split(*excludeTables, ",")
+	}
+	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews)
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
