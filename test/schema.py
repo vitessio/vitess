@@ -141,24 +141,22 @@ class TestSchema(unittest.TestCase):
       tables = tablet.mquery(db_name, 'show tables')
 
   def _apply_schema(self, keyspace, sql):
-    out, err, returncode = utils.run_vtctl(['ApplySchema',
-                                            '-sql='+sql,
-                                            keyspace],
-                                            trap_output=True,
-                                            log_level='INFO',
-                                            raise_on_error=False)
-    self.assertEqual(0, returncode)
+    out, err  = utils.run_vtctl(['ApplySchema',
+                                 '-sql='+sql,
+                                 keyspace],
+                                 trap_output=True,
+                                 log_level='INFO',
+                                 raise_on_error=True)
 
     return out
 
   def _get_schema(self, tablet_alias, tables):
-    out, err, returncode = utils.run_vtctl(['GetSchema',
-                                            '-tables='+tables,
-                                            tablet_alias],
-                                            trap_output=True,
-                                            log_level='INFO',
-                                            raise_on_error=False)
-    self.assertEqual(0, returncode)
+    out, err = utils.run_vtctl(['GetSchema',
+                                '-tables='+tables,
+                                tablet_alias],
+                                trap_output=True,
+                                log_level='INFO',
+                                raise_on_error=True)
     return out
 
   def _create_test_table_sql(self, table):
