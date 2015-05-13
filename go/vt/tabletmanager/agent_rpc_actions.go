@@ -331,7 +331,7 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.Replicati
 	return agent.MysqlDaemon.MasterPosition()
 }
 
-// StopSlave will stop the replication Works both when Vitess manages
+// StopSlave will stop the replication. Works both when Vitess manages
 // replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
