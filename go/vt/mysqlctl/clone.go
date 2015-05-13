@@ -276,7 +276,7 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 			return
 		}
-		var slaveStatus *proto.ReplicationStatus
+		var slaveStatus proto.ReplicationStatus
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return

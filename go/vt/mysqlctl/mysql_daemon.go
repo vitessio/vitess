@@ -29,7 +29,7 @@ type MysqlDaemon interface {
 	// replication related methods
 	StartSlave(hookExtraEnv map[string]string) error
 	StopSlave(hookExtraEnv map[string]string) error
-	SlaveStatus() (*proto.ReplicationStatus, error)
+	SlaveStatus() (proto.ReplicationStatus, error)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
@@ -77,9 +77,6 @@ type FakeMysqlDaemon struct {
 	// test owner responsability to have these two match)
 	Replicating bool
 
-	// CurrentSlaveStatus is returned by SlaveStatus
-	CurrentSlaveStatus *proto.ReplicationStatus
-
 	// ResetReplicationResult is returned by ResetReplication
 	ResetReplicationResult []string
 
@@ -87,7 +84,14 @@ type FakeMysqlDaemon struct {
 	ResetReplicationError error
 
 	// CurrentMasterPosition is returned by MasterPosition
+	// and SlaveStatus
 	CurrentMasterPosition proto.ReplicationPosition
+
+	// CurrentMasterHost is returned by SlaveStatus
+	CurrentMasterHost string
+
+	// CurrentMasterport is returned by SlaveStatus
+	CurrentMasterPort int
 
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
@@ -175,11 +179,14 @@ func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
-	if fmd.CurrentSlaveStatus == nil {
-		return nil, fmt.Errorf("no slave status defined")
-	}
-	return fmd.CurrentSlaveStatus, nil
+func (fmd *FakeMysqlDaemon) SlaveStatus() (proto.ReplicationStatus, error) {
+	return proto.ReplicationStatus{
+		Position:        fmd.CurrentMasterPosition,
+		SlaveIORunning:  fmd.Replicating,
+		SlaveSQLRunning: fmd.Replicating,
+		MasterHost:      fmd.CurrentMasterHost,
+		MasterPort:      fmd.CurrentMasterPort,
+	}, nil
 }
 
 // ResetReplicationCommands is part of the MysqlDaemon interface
@@ -260,6 +267,14 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 		}
 		if expected != query {
 			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
+		}
+
+		// intercept some queries to update our status
+		switch query {
+		case SqlStartSlave:
+			fmd.Replicating = true
+		case SqlStopSlave:
+			fmd.Replicating = false
 		}
 	}
 	return nil

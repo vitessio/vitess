@@ -30,7 +30,7 @@ type MysqlFlavor interface {
 	MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
+	SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error)
 
 	// ResetReplicationCommands returns the commands to completely reset
 	// replication on the host.

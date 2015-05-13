@@ -54,6 +54,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.Replicating = true
 	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -61,14 +62,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 455,
 		},
 	}
-	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: true,
-	}
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"STOP SLAVE",
 		"set master cmd 1",
 		"START SLAVE",
 	}
@@ -77,6 +73,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
+	goodSlave2.FakeMysqlDaemon.Replicating = false
 	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -120,7 +117,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
 	}
-
+	if !goodSlave1.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.Replicating not set")
+	}
+	if goodSlave2.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")
+	}
 }
 
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent

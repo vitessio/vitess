@@ -234,7 +234,7 @@ func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, repl
 	return tm.agent.RPCWrap(ctx, actionnode.TabletActionSlaveStatus, args, reply, func() error {
 		status, err := tm.agent.SlaveStatus(ctx)
 		if err == nil {
-			*reply = *status
+			*reply = status
 		}
 		return err
 	})
@@ -429,7 +429,7 @@ func (tm *TabletManager) SetMaster(ctx context.Context, args *gorpcproto.SetMast
 			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
 			defer cancel()
 		}
-		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS)
+		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS, args.ForceStartSlave)
 	})
 }
 
@@ -441,13 +441,13 @@ func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode
 	})
 }
 
-// StopReplicationAndGetPosition wraps RPCAgent.StopReplicationAndGetPosition
-func (tm *TabletManager) StopReplicationAndGetPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
+// StopReplicationAndGetStatus wraps RPCAgent.StopReplicationAndGetStatus
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationStatus) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionStopReplicationAndGetPosition, args, reply, true, func() error {
-		position, err := tm.agent.StopReplicationAndGetPosition(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionStopReplicationAndGetStatus, args, reply, true, func() error {
+		status, err := tm.agent.StopReplicationAndGetStatus(ctx)
 		if err == nil {
-			*reply = position
+			*reply = status
 		}
 		return err
 	})

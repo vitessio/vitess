@@ -41,16 +41,16 @@ func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosit
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
+func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
 	if err != nil {
-		return nil, ErrNotSlave
+		return proto.ReplicationStatus{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Executed_Gtid_Set"])
 	if err != nil {
-		return nil, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
+		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
 	}
 	return status, nil
 }
