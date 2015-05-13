@@ -237,6 +237,9 @@ var commands = []commandGroup{
 			command{"GetSchema", commandGetSchema,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <tablet alias>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
+			command{"ReloadSchema", commandReloadSchema,
+				"<tablet alias>",
+				"Asks a remote tablet to reload its schema."},
 			command{"ApplySchema", commandApplySchema,
 				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
 				"Apply the schema change to the specified keyspace."},
@@ -1750,6 +1753,20 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 	}
 	return err
+}
+
+func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action ReloadSchema requires <tablet alias>")
+	}
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.ReloadSchema(ctx, tabletAlias)
 }
 
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
