@@ -32,7 +32,7 @@ const rpcTimeout = time.Second * 30
 func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, reply interface{}, verbose bool, f func() error, lock, runAfterAction bool) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("TabletManager.%v(%v) panic: %v\n%s", name, args, x, tb.Stack(4))
+			log.Errorf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, agent.TabletAlias, x, tb.Stack(4))
 			err = fmt.Errorf("caught panic during %v: %v", name, x)
 		}
 	}()
@@ -53,11 +53,11 @@ func (agent *ActionAgent) rpcWrapper(ctx context.Context, name string, args, rep
 	}
 
 	if err = f(); err != nil {
-		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
+		log.Warningf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, agent.TabletAlias, from, err.Error())
 		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
 	if verbose {
-		log.Infof("TabletManager.%v(%v)(from %v): %#v", name, args, from, reply)
+		log.Infof("TabletManager.%v(%v)(on %v from %v): %#v", name, args, agent.TabletAlias, from, reply)
 	}
 	if runAfterAction {
 		err = agent.refreshTablet(ctx, "RPC("+name+")")

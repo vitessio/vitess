@@ -117,9 +117,9 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	return nil
 }
 
-// StartSlave starts a slave
-func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
-	if err := mysqld.ExecuteSuperQuery(SqlStartSlave); err != nil {
+// StartSlave starts a slave on the provided MysqldDaemon
+func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
+	if err := md.ExecuteSuperQueryList([]string{SqlStartSlave}); err != nil {
 		return err
 	}
 
@@ -128,15 +128,15 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
-// StopSlave stops a slave
-func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
+// StopSlave stops a slave on the provided MysqldDaemon
+func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 
-	return mysqld.ExecuteSuperQuery(SqlStopSlave)
+	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
 }
 
 // GetMasterAddr returns master address

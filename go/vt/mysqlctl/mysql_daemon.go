@@ -27,8 +27,6 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int, error)
 
 	// replication related methods
-	StartSlave(hookExtraEnv map[string]string) error
-	StopSlave(hookExtraEnv map[string]string) error
 	SlaveStatus() (proto.ReplicationStatus, error)
 
 	// reparenting related methods
@@ -164,18 +162,6 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int, error) {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
 	return fmd.MysqlPort, nil
-}
-
-// StartSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
-	fmd.Replicating = true
-	return nil
-}
-
-// StopSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
-	fmd.Replicating = false
-	return nil
 }
 
 // SlaveStatus is part of the MysqlDaemon interface

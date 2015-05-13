@@ -32,6 +32,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
+	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -40,6 +41,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -65,6 +67,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"set master cmd 1",
 		"START SLAVE",
 	}
@@ -138,12 +141,16 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// new master
+	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
 		},
+	}
+	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 	}
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
@@ -153,12 +160,16 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	defer oldMaster.StopActionLoop(t)
 
 	// more advanced slave
+	moreAdvancedSlave.FakeMysqlDaemon.Replicating = true
 	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,
 		},
+	}
+	moreAdvancedSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 	}
 	moreAdvancedSlave.StartActionLoop(t, wr)
 	defer moreAdvancedSlave.StopActionLoop(t)

@@ -297,6 +297,10 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
 		}
+		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP SLAVE",
+			"START SLAVE",
+		}
 		sourceRdonly.RPCServer.Register(gorpcqueryservice.New(&verticalSqlQuery{t: t}))
 	}
 

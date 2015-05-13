@@ -536,7 +536,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			defer cancel()
 			rp, err := wr.TabletManagerClient().StopReplicationAndGetStatus(ctx, tabletInfo)
 			if err != nil {
-				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet", alias)
+				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()

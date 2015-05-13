@@ -331,28 +331,31 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.Replicati
 	return agent.MysqlDaemon.MasterPosition()
 }
 
-// StopSlave will stop the replication
+// StopSlave will stop the replication Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
+	return mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
-// provided position.
+// provided position. Works both when Vitess manages
+// replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	return agent.Mysqld.MasterPosition()
 }
 
-// StartSlave will start the replication
+// StartSlave will start the replication. Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
+	return mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // GetSlaves returns the address of all the slaves
@@ -642,12 +645,22 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status
 func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+	// get the status before we stop replication
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err != nil {
-		return myproto.ReplicationStatus{}, err
+		return myproto.ReplicationStatus{}, fmt.Errorf("before status failed: %v", err)
 	}
-	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
-		return myproto.ReplicationStatus{}, err
+	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
+		// no replication is running, just return what we got
+		return rs, nil
+	}
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("stop slave failed: %v", err)
+	}
+	// now patch in the current position
+	rs.Position, err = agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("after position failed: %v", err)
 	}
 	return rs, nil
 }
