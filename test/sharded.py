@@ -108,9 +108,19 @@ class TestSharded(unittest.TestCase):
 
     # apply the schema on the first shard through vtctl, so all tablets
     # are the same.
-    utils.run_vtctl(['ApplySchema',
-                     '-sql=' + create_vt_select_test.replace("\n", ""),
-                     'test_keyspace'])
+    shard_0_master.mquery('vt_test_keyspace',
+                          create_vt_select_test.replace("\n", ""), write=True)
+    shard_0_replica.mquery('vt_test_keyspace',
+                           create_vt_select_test.replace("\n", ""), write=True)
+
+    # apply the schema on the second shard.
+    shard_1_master.mquery('vt_test_keyspace',
+                          create_vt_select_test_reverse.replace("\n", ""), write=True)
+    shard_1_replica.mquery('vt_test_keyspace',
+                           create_vt_select_test_reverse.replace("\n", ""), write=True)
+
+    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
     # start vtgate, we'll use it later
     vtgate_server, vtgate_port = utils.vtgate_start()
@@ -181,9 +191,9 @@ class TestSharded(unittest.TestCase):
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/-80'])
     utils.run_vtctl(['ValidateSchemaShard', 'test_keyspace/80-'])
     out, err = utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'],
-                                trap_output=True, raise_on_error=False)
+                               trap_output=True, raise_on_error=False)
     if 'test_nj-0000062344 and test_nj-0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err or \
-    'test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err:
+       'test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE' not in err:
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 
     # validate versions
