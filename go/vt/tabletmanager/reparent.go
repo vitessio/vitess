@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -27,6 +28,8 @@ var (
 	fastReparent = flag.Bool("fast_external_reparent", false, "Skip updating of fields in topology that aren't needed if all MySQL reparents are done by an external tool, instead of by Vitess directly.")
 
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 10*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
+
+	externalReparentStats = stats.NewTimings("ExternalReparents")
 )
 
 // SetReparentFlags changes flag values. It should only be used in tests.
@@ -38,6 +41,8 @@ func SetReparentFlags(fast bool, timeout time.Duration) {
 // fastTabletExternallyReparented completely replaces TabletExternallyReparented
 // if the -fast_external_reparent flag is specified.
 func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, externalID string) (err error) {
+	startTime := time.Now()
+
 	// If there is a finalize step running, wait for it to finish or time out
 	// before checking the global shard record again.
 	if agent.finalizeReparentCtx != nil {
@@ -105,6 +110,7 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
 	}
+	externalReparentStats.Record("NewMasterVisible", startTime)
 
 	// Start the finalize stage with a background context, but connect the trace.
 	bgCtx, cancel := context.WithTimeout(agent.batchCtx, *finalizeReparentTimeout)
@@ -117,7 +123,9 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 		if err != nil {
 			log.Warningf("finalizeTabletExternallyReparented error: %v", err)
 			event.DispatchUpdate(ev, "failed: "+err.Error())
+			return
 		}
+		externalReparentStats.Record("FullRebuild", startTime)
 	}()
 
 	return nil
