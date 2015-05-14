@@ -116,9 +116,14 @@ func (hook *Hook) Execute() (result *HookResult) {
 // Execute an optional hook, returns a printable error
 func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
-	if hr.ExitStatus == HOOK_DOES_NOT_EXIST {
+	switch hr.ExitStatus {
+	case HOOK_DOES_NOT_EXIST:
 		log.Infof("%v hook doesn't exist", hook.Name)
-	} else if hr.ExitStatus != HOOK_SUCCESS {
+	case HOOK_VTROOT_ERROR:
+		log.Infof("VTROOT not set, so %v hook doesn't exist", hook.Name)
+	case HOOK_SUCCESS:
+		// nothing to do here
+	default:
 		return fmt.Errorf("%v hook failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
 	}
 	return nil
