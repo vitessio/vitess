@@ -14,12 +14,12 @@ import (
 var basicTable1 = &TableDefinition{
 	Name:   "table1",
 	Schema: "table schema 1",
-	Type:   TABLE_BASE_TABLE,
+	Type:   TableBaseTable,
 }
 var basicTable2 = &TableDefinition{
 	Name:   "table2",
 	Schema: "table schema 2",
-	Type:   TABLE_BASE_TABLE,
+	Type:   TableBaseTable,
 }
 
 var table3 = &TableDefinition{
@@ -27,19 +27,19 @@ var table3 = &TableDefinition{
 	Schema: "CREATE TABLE `table3` (\n" +
 		"id bigint not null,\n" +
 		") Engine=InnoDB",
-	Type: TABLE_BASE_TABLE,
+	Type: TableBaseTable,
 }
 
 var view1 = &TableDefinition{
 	Name:   "view1",
 	Schema: "view schema 1",
-	Type:   TABLE_VIEW,
+	Type:   TableView,
 }
 
 var view2 = &TableDefinition{
 	Name:   "view2",
 	Schema: "view schema 2",
-	Type:   TABLE_VIEW,
+	Type:   TableView,
 }
 
 func TestToSQLStrings(t *testing.T) {
@@ -153,12 +153,12 @@ func TestSchemaDiff(t *testing.T) {
 			&TableDefinition{
 				Name:   "table1",
 				Schema: "schema1",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 			&TableDefinition{
 				Name:   "table2",
 				Schema: "schema2",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 		},
 	}
@@ -170,7 +170,7 @@ func TestSchemaDiff(t *testing.T) {
 			&TableDefinition{
 				Name:   "table2",
 				Schema: "schema2",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 		},
 	}
@@ -180,7 +180,7 @@ func TestSchemaDiff(t *testing.T) {
 			&TableDefinition{
 				Name:   "table2",
 				Schema: "table2",
-				Type:   TABLE_VIEW,
+				Type:   TableView,
 			},
 		},
 	}
@@ -190,7 +190,7 @@ func TestSchemaDiff(t *testing.T) {
 			&TableDefinition{
 				Name:   "table2",
 				Schema: "table2",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 		},
 	}
@@ -232,10 +232,10 @@ func TestSchemaDiff(t *testing.T) {
 	sd2.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	testDiff(t, sd2, sd1, "sd2", "sd1", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table1", Schema: "schema1", Type: TABLE_BASE_TABLE})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table1", Schema: "schema1", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TABLE_BASE_TABLE})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
 }
 
