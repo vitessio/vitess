@@ -164,7 +164,7 @@ func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissi
 // SetReadOnly makes the mysql instance read-only or read-write
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
-	return agent.Mysqld.SetReadOnly(rdonly)
+	return agent.MysqlDaemon.SetReadOnly(rdonly)
 }
 
 // ChangeType changes the tablet type
@@ -342,13 +342,13 @@ func (agent *ActionAgent) StopSlave(ctx context.Context) error {
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
-	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
+	if err := agent.MysqlDaemon.WaitMasterPos(position, waitTime); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return agent.Mysqld.MasterPosition()
+	return agent.MysqlDaemon.MasterPosition()
 }
 
 // StartSlave will start the replication. Works both when Vitess manages
@@ -400,7 +400,7 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
 		return nil, err
 	}
-	rp, err := agent.Mysqld.MasterPosition()
+	rp, err := agent.MysqlDaemon.MasterPosition()
 	return &rp, err
 }
 
