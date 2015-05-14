@@ -79,8 +79,7 @@ def setUpModule():
         index by_msg (msg)
         ) Engine=InnoDB'''
 
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_table,
                      'test_keyspace'], auto_log=True)
 

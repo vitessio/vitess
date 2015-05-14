@@ -246,18 +246,10 @@ var commands = []commandGroup{
 			command{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
 				"[-exclude_tables=''] [-include-views] <keyspace name>",
 				"Validate the master schema from shard 0 matches all the other tablets in the keyspace."},
-			command{"PreflightSchema", commandPreflightSchema,
-				"{-sql=<sql> || -sql-file=<filename>} <tablet alias>",
-				"Apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file."},
+
 			command{"ApplySchema", commandApplySchema,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-skip-preflight] [-stop-replication] <tablet alias>",
-				"Apply the schema change to the specified tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type)."},
-			command{"ApplySchemaShard", commandApplySchemaShard,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] [-new-parent=<tablet alias>] <keyspace/shard>",
-				"Apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care."},
-			command{"ApplySchemaKeyspace", commandApplySchemaKeyspace,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] <keyspace>",
-				"Apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care."},
+				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				"Apply the schema change to the specified keyspace."},
 			command{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <src tablet alias> <dest keyspace/shard>",
 				"Copy the schema from a source tablet to the specified shard. The schema is applied directly on the master of the destination shard, and is propogated to the replicas through binlogs."},
@@ -1823,122 +1815,10 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	return wr.ValidateSchemaKeyspace(ctx, keyspace, excludeTableArray, *includeViews)
 }
 
-func commandPreflightSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action PreflightSchema requires <tablet alias>")
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-	scr, err := wr.PreflightSchema(ctx, tabletAlias, change)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
-}
-
 func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
+	sql := subFlags.String("sql", "", "a list of sql commands separated by semicolon")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	skipPreflight := subFlags.Bool("skip-preflight", false, "do not preflight the schema (use with care)")
-	stopReplication := subFlags.Bool("stop-replication", false, "stop replication before applying schema")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplySchema requires <tablet alias>")
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-
-	sc := &myproto.SchemaChange{}
-	sc.Sql = change
-	sc.AllowReplication = !(*stopReplication)
-
-	// do the preflight to get before and after schema
-	if !(*skipPreflight) {
-		scr, err := wr.PreflightSchema(ctx, tabletAlias, sc.Sql)
-		if err != nil {
-			return fmt.Errorf("preflight failed: %v", err)
-		}
-		log.Infof("Preflight: " + scr.String())
-		sc.BeforeSchema = scr.BeforeSchema
-		sc.AfterSchema = scr.AfterSchema
-		sc.Force = *force
-	}
-
-	scr, err := wr.ApplySchema(ctx, tabletAlias, sc)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
-}
-
-func commandApplySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
-	newParent := subFlags.String("new-parent", "", "will reparent to this tablet after the change")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action ApplySchemaShard requires <keyspace/shard>")
-	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	change, err := getFileParam(*sql, *sqlFile, "sql")
-	if err != nil {
-		return err
-	}
-	var newParentAlias topo.TabletAlias
-	if *newParent != "" {
-		newParentAlias, err = topo.ParseTabletAliasString(*newParent)
-		if err != nil {
-			return err
-		}
-	}
-
-	if (*simple) && (*newParent != "") {
-		return fmt.Errorf("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
-	}
-
-	scr, err := wr.ApplySchemaShard(ctx, keyspace, shard, change, newParentAlias, *simple, *force, *waitSlaveTimeout)
-	if err == nil {
-		log.Infof(scr.String())
-	}
-	return err
-}
-
-func commandApplySchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will apply the schema even if preflight schema doesn't match")
-	sql := subFlags.String("sql", "", "sql command")
-	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
-	simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 30*time.Second, "time to wait for slaves to catch up in reparenting")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1952,7 +1832,7 @@ func commandApplySchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, *simple, *force, *waitSlaveTimeout)
+	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, true, *force, *waitSlaveTimeout)
 	if err == nil {
 		log.Infof(scr.String())
 	}

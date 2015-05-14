@@ -113,13 +113,11 @@ index by_msg (msg)
     create_view_template = '''create view %s(id, msg) as select id, msg from %s'''
 
     for t in ['moving1', 'moving2', 'staying1', 'staying2']:
-      utils.run_vtctl(['ApplySchemaKeyspace',
-                       '-simple',
+      utils.run_vtctl(['ApplySchema',
                        '-sql=' + create_table_template % (t),
                        'source_keyspace'],
                       auto_log=True)
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_view_template % ('view1', 'moving1'),
                      'source_keyspace'],
                     auto_log=True)
