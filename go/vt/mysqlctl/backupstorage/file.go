@@ -45,6 +45,9 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 	p := path.Join(fbs.root, bucket)
 	f, err := os.Open(p)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	defer f.Close()
@@ -66,6 +69,7 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 			name:   info.Name(),
 		})
 	}
+	SortBackupHandleArray(result)
 	return result, nil
 }
 
