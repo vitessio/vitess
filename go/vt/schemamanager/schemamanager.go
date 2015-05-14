@@ -69,7 +69,8 @@ func Run(sourcer DataSourcer,
 	sqls, err := sourcer.Read()
 	if err != nil {
 		log.Errorf("failed to read data from data sourcer: %v", err)
-		return handler.OnDataSourcerReadFail(err)
+		handler.OnDataSourcerReadFail(err)
+		return err
 	}
 	handler.OnDataSourcerReadSuccess(sqls)
 	if err := exec.Open(); err != nil {
@@ -79,7 +80,8 @@ func Run(sourcer DataSourcer,
 	defer exec.Close()
 	if err := exec.Validate(sqls); err != nil {
 		log.Errorf("validation fail: %v", err)
-		return handler.OnValidationFail(err)
+		handler.OnValidationFail(err)
+		return err
 	}
 	handler.OnValidationSuccess(sqls)
 	result := exec.Execute(sqls)

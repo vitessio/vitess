@@ -71,6 +71,19 @@ func TestRunSchemaChangesExecutorOpenFail(t *testing.T) {
 	}
 }
 
+func TestRunSchemaChangesExecutorExecuteFail(t *testing.T) {
+	dataSourcer := newFakeDataSourcer([]string{"create table test_table (pk int);"}, false, false, false)
+	handler := newFakeHandler()
+	exec := NewTabletExecutor(
+		newFakeTabletManagerClient(),
+		newFakeTopo(),
+		"test_keyspace")
+	err := Run(dataSourcer, exec, handler)
+	if err == nil {
+		t.Fatalf("run schema change should fail due to executor.Execute fail")
+	}
+}
+
 func TestRunSchemaChanges(t *testing.T) {
 	sql := "create table test_table (pk int)"
 	dataSourcer := NewSimpleDataSourcer(sql)

@@ -26,7 +26,7 @@ func (handler *ConsoleEventHandler) OnDataSourcerReadSuccess(sql []string) error
 // OnDataSourcerReadFail is called when schemamanager fails to read all sql statements.
 func (handler *ConsoleEventHandler) OnDataSourcerReadFail(err error) error {
 	fmt.Printf("Failed to read schema changes, error: %v\n", err)
-	return nil
+	return err
 }
 
 // OnValidationSuccess is called when schemamanager successfully validates all sql statements.
@@ -38,7 +38,7 @@ func (handler *ConsoleEventHandler) OnValidationSuccess([]string) error {
 // OnValidationFail is called when schemamanager fails to validate sql statements.
 func (handler *ConsoleEventHandler) OnValidationFail(err error) error {
 	fmt.Printf("Failed to validate sqls, error: %v\n", err)
-	return nil
+	return err
 }
 
 // OnExecutorComplete  is called when schemamanager finishes applying schema changes.
