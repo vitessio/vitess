@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 )
@@ -42,20 +43,16 @@ type FileBackupStorage struct {
 
 // ListBackups is part of the BackupStorage interface
 func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error) {
+	// ReadDir already sorts the results
 	p := path.Join(fbs.root, bucket)
-	f, err := os.Open(p)
+	fi, err := ioutil.ReadDir(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	defer f.Close()
 
-	fi, err := f.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
 	result := make([]BackupHandle, 0, len(fi))
 	for _, info := range fi {
 		if !info.IsDir() {
@@ -69,7 +66,6 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 			name:   info.Name(),
 		})
 	}
-	SortBackupHandleArray(result)
 	return result, nil
 }
 

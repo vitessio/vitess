@@ -9,7 +9,6 @@ package backupstorage
 import (
 	"flag"
 	"io"
-	"sort"
 
 	log "github.com/golang/glog"
 )
@@ -58,20 +57,6 @@ type BackupStorage interface {
 	// RemoveBackup removes all the data associated with a backup.
 	// It will not appear in ListBackups after RemoveBackup succeeds.
 	RemoveBackup(bucket, name string) error
-}
-
-// Helper code to sort BackupHandle arrays
-
-type byName []BackupHandle
-
-func (bha byName) Len() int           { return len(bha) }
-func (bha byName) Swap(i, j int)      { bha[i], bha[j] = bha[j], bha[i] }
-func (bha byName) Less(i, j int) bool { return bha[i].Name() < bha[j].Name() }
-
-// SortBackupHandleArray will sort the BackupHandle array by name.
-// To be used by implementations on the result of ListBackups.
-func SortBackupHandleArray(bha []BackupHandle) {
-	sort.Sort(byName(bha))
 }
 
 // BackupStorageMap contains the registered implementations for BackupStorage
