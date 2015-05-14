@@ -103,7 +103,7 @@ type fakeHealthCheck struct {
 	reportError            error
 }
 
-func (fhc *fakeHealthCheck) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error) {
+func (fhc *fakeHealthCheck) Report(isSlaveType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error) {
 	return fhc.reportReplicationDelay, fhc.reportError
 }
 

@@ -156,7 +156,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	if tablet.Type == topo.TYPE_MASTER {
 		typeForHealthCheck = topo.TYPE_MASTER
 	}
-	replicationDelay, err := agent.HealthReporter.Report(typeForHealthCheck, shouldQueryServiceBeRunning)
+	replicationDelay, err := agent.HealthReporter.Report(topo.IsSlaveType(typeForHealthCheck), shouldQueryServiceBeRunning)
 	health := make(map[string]string)
 	if err == nil {
 		if replicationDelay > *unhealthyThreshold {

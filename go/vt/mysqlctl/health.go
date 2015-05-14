@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // mysqlReplicationLag implements health.Reporter
@@ -15,8 +14,8 @@ type mysqlReplicationLag struct {
 }
 
 // Report is part of the health.Reporter interface
-func (mrl *mysqlReplicationLag) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	if !topo.IsSlaveType(tabletType) {
+func (mrl *mysqlReplicationLag) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+	if !isSlaveType {
 		return 0, nil
 	}
 
