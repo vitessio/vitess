@@ -179,7 +179,6 @@ class TestSchema(unittest.TestCase):
       self._create_test_table_sql('vt_select_test01'),
       self._create_test_table_sql('vt_select_test02'),
       self._create_test_table_sql('vt_select_test03'),
-      self._alter_test_table_sql('vt_select_test03', 'msg'),
       self._create_test_table_sql('vt_select_test04')])
 
     tables = ','.join([
@@ -195,6 +194,16 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_2_master, 4)
 
     # get schema for each shard
+    shard_0_schema = self._get_schema(shard_0_master.tablet_alias, tables)
+    shard_1_schema = self._get_schema(shard_1_master.tablet_alias, tables)
+    shard_2_schema = self._get_schema(shard_2_master.tablet_alias, tables)
+
+    # all shards should have the same schema
+    self.assertEqual(shard_0_schema, shard_1_schema)
+    self.assertEqual(shard_0_schema, shard_2_schema)
+
+    self._apply_schema(test_keyspace, self._alter_test_table_sql('vt_select_test03', 'msg'))
+
     shard_0_schema = self._get_schema(shard_0_master.tablet_alias, tables)
     shard_1_schema = self._get_schema(shard_1_master.tablet_alias, tables)
     shard_2_schema = self._get_schema(shard_2_master.tablet_alias, tables)

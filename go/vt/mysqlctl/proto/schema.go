@@ -189,6 +189,12 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 // generates a report on what's different between two SchemaDefinition
 // for now, we skip the VIEW entirely.
 func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
+	if left == nil && right == nil {
+		return
+	}
+	if left == nil || right == nil {
+		er.RecordError(fmt.Errorf("%s and %s are different, %s: %v, %s: %v", leftName, rightName, leftName, rightName, left, right))
+	}
 	if left.DatabaseSchema != right.DatabaseSchema {
 		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
 	}
@@ -196,16 +202,6 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
-		// skip views
-		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
-			leftIndex++
-			continue
-		}
-		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
-			rightIndex++
-			continue
-		}
-
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
@@ -224,6 +220,11 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
 			er.RecordError(fmt.Errorf("%v and %v disagree on schema for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Schema, right.TableDefinitions[rightIndex].Schema))
 		}
+
+		if left.TableDefinitions[leftIndex].Type != right.TableDefinitions[rightIndex].Type {
+			er.RecordError(fmt.Errorf("%v and %v disagree on table type for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Type, right.TableDefinitions[rightIndex].Type))
+		}
+
 		leftIndex++
 		rightIndex++
 	}
@@ -232,11 +233,17 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
 		}
+		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
+			er.RecordError(fmt.Errorf("%v has an extra view named %v", leftName, left.TableDefinitions[leftIndex].Name))
+		}
 		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+		}
+		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
+			er.RecordError(fmt.Errorf("%v has an extra view named %v", rightName, right.TableDefinitions[rightIndex].Name))
 		}
 		rightIndex++
 	}
