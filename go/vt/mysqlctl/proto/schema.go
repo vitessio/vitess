@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/youtube/vitess/go/jscfg"
@@ -43,15 +42,6 @@ func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
-// sort by reverse DataLength
-type ByReverseDataLength struct {
-	TableDefinitions
-}
-
-func (bdl ByReverseDataLength) Less(i, j int) bool {
-	return bdl.TableDefinitions[j].DataLength < bdl.TableDefinitions[i].DataLength
-}
-
 type SchemaDefinition struct {
 	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
 	DatabaseSchema string
@@ -65,10 +55,6 @@ type SchemaDefinition struct {
 
 func (sd *SchemaDefinition) String() string {
 	return jscfg.ToJSON(sd)
-}
-
-func (sd *SchemaDefinition) SortByReverseDataLength() {
-	sort.Sort(ByReverseDataLength{sd.TableDefinitions})
 }
 
 // FilterTables returns a copy which includes only
@@ -186,14 +172,14 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 	return append(sqlStrings, createViewSql...)
 }
 
-// generates a report on what's different between two SchemaDefinition
-// for now, we skip the VIEW entirely.
+// generates a report on what's different between two SchemaDefinition, including views.
 func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
 	}
 	if left == nil || right == nil {
-		er.RecordError(fmt.Errorf("%s and %s are different, %s: %v, %s: %v", leftName, rightName, leftName, rightName, left, right))
+		er.RecordError(fmt.Errorf("%v and %v are different, %s: %v, %s: %v", leftName, rightName, leftName, left, rightName, right))
+		return
 	}
 	if left.DatabaseSchema != right.DatabaseSchema {
 		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
