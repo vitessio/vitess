@@ -4,23 +4,21 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func TestReporters(t *testing.T) {
 
 	ag := NewAggregator()
 
-	ag.Register("a", FunctionReporter(func(topo.TabletType, bool) (time.Duration, error) {
+	ag.Register("a", FunctionReporter(func(bool, bool) (time.Duration, error) {
 		return 10 * time.Second, nil
 	}))
 
-	ag.Register("b", FunctionReporter(func(topo.TabletType, bool) (time.Duration, error) {
+	ag.Register("b", FunctionReporter(func(bool, bool) (time.Duration, error) {
 		return 5 * time.Second, nil
 	}))
 
-	delay, err := ag.Report(topo.TYPE_REPLICA, true)
+	delay, err := ag.Report(true, true)
 
 	if err != nil {
 		t.Error(err)
@@ -29,10 +27,10 @@ func TestReporters(t *testing.T) {
 		t.Errorf("delay=%v, want 10s", delay)
 	}
 
-	ag.Register("c", FunctionReporter(func(topo.TabletType, bool) (time.Duration, error) {
+	ag.Register("c", FunctionReporter(func(bool, bool) (time.Duration, error) {
 		return 0, errors.New("e error")
 	}))
-	if _, err := ag.Report(topo.TYPE_REPLICA, false); err == nil {
+	if _, err := ag.Report(true, false); err == nil {
 		t.Errorf("ag.Run: expected error")
 	}
 
