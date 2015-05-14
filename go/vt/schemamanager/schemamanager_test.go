@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -60,7 +62,7 @@ func TestRunSchemaChangesExecutorOpenFail(t *testing.T) {
 	dataSourcer := newFakeDataSourcer([]string{"create table test_table (pk int);"}, false, false, false)
 	handler := newFakeHandler()
 	exec := NewTabletExecutor(
-		faketmclient.NewFakeTabletManagerClient(),
+		newFakeTabletManagerClient(),
 		newFakeTopo(),
 		"unknown_keyspace")
 	err := Run(dataSourcer, exec, handler)
@@ -70,9 +72,29 @@ func TestRunSchemaChangesExecutorOpenFail(t *testing.T) {
 }
 
 func TestRunSchemaChanges(t *testing.T) {
-	dataSourcer := NewSimpleDataSourcer("create table test_table (pk int);")
+	sql := "create table test_table (pk int)"
+	dataSourcer := NewSimpleDataSourcer(sql)
 	handler := newFakeHandler()
-	exec := newFakeExecutor()
+	fakeTmc := newFakeTabletManagerClient()
+	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
+		BeforeSchema: &proto.SchemaDefinition{},
+		AfterSchema: &proto.SchemaDefinition{
+			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+			TableDefinitions: []*proto.TableDefinition{
+				&proto.TableDefinition{
+					Name:   "test_table",
+					Schema: sql,
+					Type:   proto.TABLE_BASE_TABLE,
+				},
+			},
+		},
+	})
+
+	exec := NewTabletExecutor(
+		fakeTmc,
+		newFakeTopo(),
+		"test_keyspace")
+
 	err := Run(dataSourcer, exec, handler)
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
@@ -96,9 +118,35 @@ func TestRunSchemaChanges(t *testing.T) {
 
 func newFakeExecutor() *TabletExecutor {
 	return NewTabletExecutor(
-		faketmclient.NewFakeTabletManagerClient(),
+		newFakeTabletManagerClient(),
 		newFakeTopo(),
 		"test_keyspace")
+}
+
+func newFakeTabletManagerClient() *fakeTabletManagerClient {
+	return &fakeTabletManagerClient{
+		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
+		preflightSchemas:    make(map[string]*proto.SchemaChangeResult),
+	}
+}
+
+type fakeTabletManagerClient struct {
+	tmclient.TabletManagerClient
+	preflightSchemas map[string]*proto.SchemaChangeResult
+}
+
+func (client *fakeTabletManagerClient) AddSchemaChange(
+	sql string, schemaResult *proto.SchemaChangeResult) {
+	client.preflightSchemas[sql] = schemaResult
+}
+
+func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*proto.SchemaChangeResult, error) {
+	result, ok := client.preflightSchemas[change]
+	if !ok {
+		var scr proto.SchemaChangeResult
+		return &scr, nil
+	}
+	return result, nil
 }
 
 type fakeTopo struct{}

@@ -6,6 +6,7 @@ package proto
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -161,10 +162,69 @@ func TestSchemaDiff(t *testing.T) {
 			},
 		},
 	}
-	testDiff(t, sd1, sd1, "sd1", "sd2", []string{})
 
 	sd2 := &SchemaDefinition{TableDefinitions: make([]*TableDefinition, 0, 2)}
+
+	sd3 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "schema2",
+				Type:   TABLE_BASE_TABLE,
+			},
+		},
+	}
+
+	sd4 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "table2",
+				Type:   TABLE_VIEW,
+			},
+		},
+	}
+
+	sd5 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "table2",
+				Type:   TABLE_BASE_TABLE,
+			},
+		},
+	}
+
+	testDiff(t, sd1, sd1, "sd1", "sd2", []string{})
+
 	testDiff(t, sd2, sd2, "sd2", "sd2", []string{})
+
+	// two schemas are considered the same if both nil
+	testDiff(t, nil, nil, "sd1", "sd2", nil)
+
+	testDiff(t, sd1, nil, "sd1", "sd2", []string{
+		fmt.Sprintf("sd1 and sd2 are different, sd1: %v, sd2: null", sd1),
+	})
+
+	testDiff(t, sd1, sd3, "sd1", "sd3", []string{
+		"sd1 has an extra table named table1",
+	})
+
+	testDiff(t, sd3, sd1, "sd3", "sd1", []string{
+		"sd1 has an extra table named table1",
+	})
+
+	testDiff(t, sd2, sd4, "sd2", "sd4", []string{
+		"sd4 has an extra view named table2",
+	})
+
+	testDiff(t, sd4, sd2, "sd4", "sd2", []string{
+		"sd4 has an extra view named table2",
+	})
+
+	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
+		fmt.Sprintf("sd4 and sd5 disagree on table type for table table2:\nVIEW\n differs from:\nBASE TABLE"),
+	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	sd2.DatabaseSchema = "DONT CREATE DATABASE {{.DatabaseName}}"

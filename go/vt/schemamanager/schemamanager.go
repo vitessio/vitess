@@ -5,6 +5,9 @@
 package schemamanager
 
 import (
+	"encoding/json"
+	"fmt"
+
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
@@ -81,5 +84,9 @@ func Run(sourcer DataSourcer,
 	handler.OnValidationSuccess(sqls)
 	result := exec.Execute(sqls)
 	handler.OnExecutorComplete(result)
+	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {
+		out, _ := json.MarshalIndent(result, "", "  ")
+		return fmt.Errorf("Schema change failed, ExecuteResult: %v\n", string(out))
+	}
 	return nil
 }
