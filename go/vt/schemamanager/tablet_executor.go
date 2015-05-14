@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -21,6 +22,7 @@ type TabletExecutor struct {
 	tmClient    tmclient.TabletManagerClient
 	topoServer  topo.Server
 	tabletInfos []*topo.TabletInfo
+	schemaDiffs []*proto.SchemaChangeResult
 	isClosed    bool
 }
 
@@ -72,8 +74,33 @@ func (exec *TabletExecutor) Validate(sqls []string) error {
 		if err != nil {
 			return err
 		}
-		if _, ok := stat.(*sqlparser.DDL); !ok {
+		_, ok := stat.(*sqlparser.DDL)
+		if !ok {
 			return fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
+		}
+	}
+	return nil
+}
+
+func (exec *TabletExecutor) preflightSchemaChanges(sqls []string) error {
+	if len(exec.tabletInfos) == 0 {
+		return nil
+	}
+	exec.schemaDiffs = make([]*proto.SchemaChangeResult, len(sqls))
+	for i := range sqls {
+		schemaDiff, err := exec.tmClient.PreflightSchema(
+			context.Background(), exec.tabletInfos[0], sqls[i])
+		if err != nil {
+			return err
+		}
+		exec.schemaDiffs[i] = schemaDiff
+		diffs := proto.DiffSchemaToArray(
+			"BeforeSchema",
+			exec.schemaDiffs[i].BeforeSchema,
+			"AfterSchema",
+			exec.schemaDiffs[i].AfterSchema)
+		if len(diffs) == 0 {
+			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
 		}
 	}
 	return nil
@@ -87,6 +114,13 @@ func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
 		execResult.ExecutorErr = "executor is closed"
 		return &execResult
 	}
+
+	// make sure every schema change introduces a table definition change
+	if err := exec.preflightSchemaChanges(sqls); err != nil {
+		execResult.ExecutorErr = err.Error()
+		return &execResult
+	}
+
 	for index, sql := range sqls {
 		execResult.CurSqlIndex = index
 		exec.executeOnAllTablets(&execResult, sql)

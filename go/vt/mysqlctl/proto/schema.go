@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/youtube/vitess/go/jscfg"
@@ -17,10 +16,13 @@ import (
 )
 
 const (
+	// TABLE_BASE_TABLE indicates the table type is a base table.
 	TABLE_BASE_TABLE = "BASE TABLE"
-	TABLE_VIEW       = "VIEW"
+	// TABLE_VIEW indicates the table type is a view.
+	TABLE_VIEW = "VIEW"
 )
 
+// TableDefinition contains all schema information about a table.
 type TableDefinition struct {
 	Name              string   // the table name
 	Schema            string   // the SQL to run to create the table
@@ -32,26 +34,20 @@ type TableDefinition struct {
 	// be approximate count)
 }
 
-// helper methods for sorting
+// TableDefinitions is a list of TableDefinition.
 type TableDefinitions []*TableDefinition
 
+// Len returns TableDefinitions length.
 func (tds TableDefinitions) Len() int {
 	return len(tds)
 }
 
+// Swap used for sorting TableDefinitions.
 func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
-// sort by reverse DataLength
-type ByReverseDataLength struct {
-	TableDefinitions
-}
-
-func (bdl ByReverseDataLength) Less(i, j int) bool {
-	return bdl.TableDefinitions[j].DataLength < bdl.TableDefinitions[i].DataLength
-}
-
+// SchemaDefinition defines schema for a certain database.
 type SchemaDefinition struct {
 	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
 	DatabaseSchema string
@@ -65,10 +61,6 @@ type SchemaDefinition struct {
 
 func (sd *SchemaDefinition) String() string {
 	return jscfg.ToJSON(sd)
-}
-
-func (sd *SchemaDefinition) SortByReverseDataLength() {
-	sort.Sort(ByReverseDataLength{sd.TableDefinitions})
 }
 
 // FilterTables returns a copy which includes only
@@ -141,6 +133,8 @@ func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, include
 	return &copy, nil
 }
 
+// GenerateSchemaVersion return a unique schema version string based on
+// its TableDefinitions.
 func (sd *SchemaDefinition) GenerateSchemaVersion() {
 	hasher := md5.New()
 	for _, td := range sd.TableDefinitions {
@@ -151,6 +145,7 @@ func (sd *SchemaDefinition) GenerateSchemaVersion() {
 	sd.Version = hex.EncodeToString(hasher.Sum(nil))
 }
 
+// GetTable returns TableDefinition for a given table name.
 func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
 	for _, td := range sd.TableDefinitions {
 		if td.Name == table {
@@ -186,9 +181,16 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 	return append(sqlStrings, createViewSql...)
 }
 
-// generates a report on what's different between two SchemaDefinition
-// for now, we skip the VIEW entirely.
+// DiffSchema generates a report on what's different between two SchemaDefinitions
+// including views.
 func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
+	if left == nil && right == nil {
+		return
+	}
+	if left == nil || right == nil {
+		er.RecordError(fmt.Errorf("%v and %v are different, %s: %v, %s: %v", leftName, rightName, leftName, left, rightName, right))
+		return
+	}
 	if left.DatabaseSchema != right.DatabaseSchema {
 		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
 	}
@@ -196,16 +198,6 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
-		// skip views
-		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
-			leftIndex++
-			continue
-		}
-		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
-			rightIndex++
-			continue
-		}
-
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
@@ -224,6 +216,11 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
 			er.RecordError(fmt.Errorf("%v and %v disagree on schema for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Schema, right.TableDefinitions[rightIndex].Schema))
 		}
+
+		if left.TableDefinitions[leftIndex].Type != right.TableDefinitions[rightIndex].Type {
+			er.RecordError(fmt.Errorf("%v and %v disagree on table type for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Type, right.TableDefinitions[rightIndex].Type))
+		}
+
 		leftIndex++
 		rightIndex++
 	}
@@ -232,26 +229,33 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
 		}
+		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
+			er.RecordError(fmt.Errorf("%v has an extra view named %v", leftName, left.TableDefinitions[leftIndex].Name))
+		}
 		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
 		}
+		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
+			er.RecordError(fmt.Errorf("%v has an extra view named %v", rightName, right.TableDefinitions[rightIndex].Name))
+		}
 		rightIndex++
 	}
 }
 
+// DiffSchemaToArray diffs two schemas and return the schema diffs if there is any.
 func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
 	er := concurrency.AllErrorRecorder{}
 	DiffSchema(leftName, left, rightName, right, &er)
 	if er.HasErrors() {
 		return er.ErrorStrings()
-	} else {
-		return nil
 	}
+	return nil
 }
 
+// SchemaChange contains all necessary information to apply a schema change.
 type SchemaChange struct {
 	Sql              string
 	Force            bool
@@ -260,6 +264,8 @@ type SchemaChange struct {
 	AfterSchema      *SchemaDefinition
 }
 
+// SchemaChangeResult contains before and after table schemas for
+// a schema change sql.
 type SchemaChangeResult struct {
 	BeforeSchema *SchemaDefinition
 	AfterSchema  *SchemaDefinition
