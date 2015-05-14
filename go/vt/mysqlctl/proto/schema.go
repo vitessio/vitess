@@ -16,10 +16,13 @@ import (
 )
 
 const (
+	// TABLE_BASE_TABLE indicates the table type is a base table.
 	TABLE_BASE_TABLE = "BASE TABLE"
-	TABLE_VIEW       = "VIEW"
+	// TABLE_VIEW indicates the table type is a view.
+	TABLE_VIEW = "VIEW"
 )
 
+// TableDefinition contains all schema information about a table.
 type TableDefinition struct {
 	Name              string   // the table name
 	Schema            string   // the SQL to run to create the table
@@ -31,17 +34,20 @@ type TableDefinition struct {
 	// be approximate count)
 }
 
-// helper methods for sorting
+// TableDefinitions is a list of TableDefinition.
 type TableDefinitions []*TableDefinition
 
+// Len returns TableDefinitions length.
 func (tds TableDefinitions) Len() int {
 	return len(tds)
 }
 
+// Swap used for sorting TableDefinitions.
 func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
+// SchemaDefinition defines schema for a certain database.
 type SchemaDefinition struct {
 	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
 	DatabaseSchema string
@@ -127,6 +133,8 @@ func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, include
 	return &copy, nil
 }
 
+// GenerateSchemaVersion return a unique schema version string based on
+// its TableDefinitions.
 func (sd *SchemaDefinition) GenerateSchemaVersion() {
 	hasher := md5.New()
 	for _, td := range sd.TableDefinitions {
@@ -137,6 +145,7 @@ func (sd *SchemaDefinition) GenerateSchemaVersion() {
 	sd.Version = hex.EncodeToString(hasher.Sum(nil))
 }
 
+// GetTable returns TableDefinition for a given table name.
 func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
 	for _, td := range sd.TableDefinitions {
 		if td.Name == table {
@@ -172,7 +181,8 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 	return append(sqlStrings, createViewSql...)
 }
 
-// generates a report on what's different between two SchemaDefinition, including views.
+// DiffSchema generates a report on what's different between two SchemaDefinitions
+// including views.
 func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
@@ -235,16 +245,17 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 	}
 }
 
+// DiffSchemaToArray diffs two schemas and return the schema diffs if there is any.
 func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
 	er := concurrency.AllErrorRecorder{}
 	DiffSchema(leftName, left, rightName, right, &er)
 	if er.HasErrors() {
 		return er.ErrorStrings()
-	} else {
-		return nil
 	}
+	return nil
 }
 
+// SchemaChange contains all necessary information to apply a schema change.
 type SchemaChange struct {
 	Sql              string
 	Force            bool
@@ -253,6 +264,8 @@ type SchemaChange struct {
 	AfterSchema      *SchemaDefinition
 }
 
+// SchemaChangeResult contains before and after table schemas for
+// a schema change sql.
 type SchemaChangeResult struct {
 	BeforeSchema *SchemaDefinition
 	AfterSchema  *SchemaDefinition
