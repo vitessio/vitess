@@ -283,13 +283,13 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
 				&myproto.TableDefinition{
 					Name: "view1",
-					Type: myproto.TABLE_VIEW,
+					Type: myproto.TableView,
 				},
 			},
 		}

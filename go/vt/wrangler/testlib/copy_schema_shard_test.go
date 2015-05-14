@@ -149,12 +149,12 @@ func TestCopySchemaShard(t *testing.T) {
 			&myproto.TableDefinition{
 				Name:   "table1",
 				Schema: "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TABLE_BASE_TABLE,
+				Type:   myproto.TableBaseTable,
 			},
 			&myproto.TableDefinition{
 				Name:   "view1",
 				Schema: "CREATE TABLE `view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TABLE_VIEW,
+				Type:   myproto.TableView,
 			},
 		},
 	}

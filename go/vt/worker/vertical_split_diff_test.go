@@ -142,17 +142,17 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name: "view1",
-					Type: myproto.TABLE_VIEW,
+					Type: myproto.TableView,
 				},
 			},
 		}

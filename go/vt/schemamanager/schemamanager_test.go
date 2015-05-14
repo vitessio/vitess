@@ -84,7 +84,7 @@ func TestRunSchemaChanges(t *testing.T) {
 				&proto.TableDefinition{
 					Name:   "test_table",
 					Schema: sql,
-					Type:   proto.TABLE_BASE_TABLE,
+					Type:   proto.TableBaseTable,
 				},
 			},
 		},

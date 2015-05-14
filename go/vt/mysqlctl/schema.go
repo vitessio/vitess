@@ -33,7 +33,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if !includeViews {
-		sql += " AND table_type = '" + proto.TABLE_BASE_TABLE + "'"
+		sql += " AND table_type = '" + proto.TableBaseTable + "'"
 	}
 	qr, err := mysqld.fetchSuperQuery(sql)
 	if err != nil {
@@ -80,7 +80,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		// vt/tabletserver/table_info.go:162
 		norm := qr.Rows[0][1].String()
 		norm = autoIncr.ReplaceAllLiteralString(norm, "")
-		if tableType == proto.TABLE_VIEW {
+		if tableType == proto.TableView {
 			// Views will have the dbname in there, replace it
 			// with {{.DatabaseName}}
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
@@ -212,7 +212,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*prot
 	sql += "CREATE DATABASE _vt_preflight;\n"
 	sql += "USE _vt_preflight;\n"
 	for _, td := range beforeSchema.TableDefinitions {
-		if td.Type == proto.TABLE_BASE_TABLE {
+		if td.Type == proto.TableBaseTable {
 			sql += td.Schema + ";\n"
 		}
 	}
