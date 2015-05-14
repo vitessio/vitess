@@ -30,8 +30,13 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-var masterPasswordStart = "  MASTER_PASSWORD = '"
-var masterPasswordEnd = "',\n"
+const (
+	// SqlStartSlave is the SQl command issued to start MySQL replication
+	SqlStartSlave = "START SLAVE"
+
+	// SqlStopSlave is the SQl command issued to stop MySQL replication
+	SqlStopSlave = "STOP SLAVE"
+)
 
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
@@ -69,8 +74,8 @@ func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort in
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) *proto.ReplicationStatus {
-	status := &proto.ReplicationStatus{
+func parseSlaveStatus(fields map[string]string) proto.ReplicationStatus {
+	status := proto.ReplicationStatus{
 		MasterHost:      fields["Master_Host"],
 		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
 		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
@@ -112,9 +117,9 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	return nil
 }
 
-// StartSlave starts a slave
-func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
-	if err := mysqld.ExecuteSuperQuery("START SLAVE"); err != nil {
+// StartSlave starts a slave on the provided MysqldDaemon
+func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
+	if err := md.ExecuteSuperQueryList([]string{SqlStartSlave}); err != nil {
 		return err
 	}
 
@@ -123,15 +128,15 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
-// StopSlave stops a slave
-func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
+// StopSlave stops a slave on the provided MysqldDaemon
+func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 
-	return mysqld.ExecuteSuperQuery("STOP SLAVE")
+	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
 }
 
 // GetMasterAddr returns master address
@@ -202,10 +207,10 @@ func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTim
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
+func (mysqld *Mysqld) SlaveStatus() (proto.ReplicationStatus, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
-		return nil, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
 	}
 	return flavor.SlaveStatus(mysqld)
 }

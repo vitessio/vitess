@@ -69,6 +69,9 @@ func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error
 	return rowMap, nil
 }
 
+const masterPasswordStart = "  MASTER_PASSWORD = '"
+const masterPasswordEnd = "',\n"
+
 func redactMasterPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
 	if i == -1 {

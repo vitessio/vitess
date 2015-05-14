@@ -255,12 +255,12 @@ func (client *GoRPCTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, t
 //
 
 // SlaveStatus is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error) {
+func (client *GoRPCTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
 	var status myproto.ReplicationStatus
 	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveStatus, &rpc.Unused{}, &status); err != nil {
-		return nil, err
+		return myproto.ReplicationStatus{}, err
 	}
-	return &status, nil
+	return status, nil
 }
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface
@@ -413,10 +413,11 @@ func (client *GoRPCTabletManagerClient) SlaveWasPromoted(ctx context.Context, ta
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
+func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	args := &gorpcproto.SetMasterArgs{
-		Parent:        parent,
-		TimeCreatedNS: timeCreatedNS,
+		Parent:          parent,
+		TimeCreatedNS:   timeCreatedNS,
+		ForceStartSlave: forceStartSlave,
 	}
 	deadline, ok := ctx.Deadline()
 	if ok {
@@ -434,10 +435,10 @@ func (client *GoRPCTabletManagerClient) SlaveWasRestarted(ctx context.Context, t
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSlaveWasRestarted, args, &rpc.Unused{})
 }
 
-// StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionStopReplicationAndGetPosition, &rpc.Unused{}, &rp); err != nil {
+// StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
+	var rp myproto.ReplicationStatus
+	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionStopReplicationAndGetStatus, &rpc.Unused{}, &rp); err != nil {
 		return rp, err
 	}
 	return rp, nil

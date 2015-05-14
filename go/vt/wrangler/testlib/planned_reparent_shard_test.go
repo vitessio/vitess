@@ -64,6 +64,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",
+		"START SLAVE",
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
@@ -72,10 +73,6 @@ func TestPlannedReparentShard(t *testing.T) {
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.Replicating = true
-	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: true,
-	}
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -135,6 +132,9 @@ func TestPlannedReparentShard(t *testing.T) {
 	// the slave that wasn't replicating in the first place)
 	if !oldMaster.FakeMysqlDaemon.Replicating {
 		t.Errorf("oldMaster.FakeMysqlDaemon.Replicating not set")
+	}
+	if !goodSlave1.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.Replicating not set")
 	}
 	if goodSlave2.FakeMysqlDaemon.Replicating {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")

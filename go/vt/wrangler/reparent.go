@@ -99,7 +99,7 @@ func (wr *Wrangler) tabletReplicationStatuses(ctx context.Context, tablets []*to
 					rec.RecordError(fmt.Errorf("SlaveStatus(%v) failed: %v", ti.Alias, err))
 					return
 				}
-				result[i] = status
+				result[i] = &status
 			}(i, ti)
 		}
 	}
@@ -142,7 +142,7 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletA
 	}
 
 	// and do the remote command
-	return wr.TabletManagerClient().SetMaster(ctx, ti, shardInfo.MasterAlias, 0)
+	return wr.TabletManagerClient().SetMaster(ctx, ti, shardInfo.MasterAlias, 0, false)
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.
@@ -401,16 +401,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
 				wr.logger.Infof("setting new master on slave %v", alias)
-				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now); err != nil {
+				// also restart replication on old master
+				forceStartSlave := alias == oldMasterTabletInfo.Alias
+				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 					return
-				}
-
-				// also restart replication on old master
-				if alias == oldMasterTabletInfo.Alias {
-					if err := wr.TabletManagerClient().StartSlave(ctx, tabletInfo); err != nil {
-						rec.RecordError(fmt.Errorf("old master %v StartSlave failed: %v", alias, err))
-					}
 				}
 			}(alias, tabletInfo)
 		}
@@ -531,7 +526,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "stop replication on all slaves")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	positionMap := make(map[topo.TabletAlias]myproto.ReplicationPosition)
+	statusMap := make(map[topo.TabletAlias]myproto.ReplicationStatus)
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
@@ -539,29 +534,29 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			wr.logger.Infof("getting replication position from %v", alias)
 			ctx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 			defer cancel()
-			rp, err := wr.TabletManagerClient().StopReplicationAndGetPosition(ctx, tabletInfo)
+			rp, err := wr.TabletManagerClient().StopReplicationAndGetStatus(ctx, tabletInfo)
 			if err != nil {
-				wr.logger.Warningf("failed to get replication position from %v, ignoring tablet", alias)
+				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()
-			positionMap[alias] = rp
+			statusMap[alias] = rp
 			mu.Unlock()
 		}(alias, tabletInfo)
 	}
 	wg.Wait()
 
 	// Verify masterElect is alive and has the most advanced position
-	masterElectPosition, ok := positionMap[masterElectTabletAlias]
+	masterElectStatus, ok := statusMap[masterElectTabletAlias]
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", masterElectTabletAlias)
 	}
-	for alias, pos := range positionMap {
+	for alias, status := range statusMap {
 		if alias == masterElectTabletAlias {
 			continue
 		}
-		if !masterElectPosition.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAlias, pos, masterElectPosition)
+		if !masterElectStatus.Position.AtLeast(status.Position) {
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAlias, status.Position, masterElectStatus)
 		}
 	}
 
@@ -597,7 +592,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			go func(alias topo.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
 				wr.logger.Infof("setting new master on slave %v", alias)
-				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now); err != nil {
+				forceStartSlave := false
+				if status, ok := statusMap[alias]; ok {
+					forceStartSlave = status.SlaveIORunning || status.SlaveSQLRunning
+				}
+				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)

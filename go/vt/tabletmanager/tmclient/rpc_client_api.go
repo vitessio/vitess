@@ -94,7 +94,7 @@ type TabletManagerClient interface {
 	//
 
 	// SlaveStatus returns the tablet's mysql slave status.
-	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error)
 
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
@@ -170,15 +170,15 @@ type TabletManagerClient interface {
 
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
-	// reparent_journal table.
-	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error
+	// reparent_journal table (if timeCreatedNS is non-zero).
+	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error
 
-	// StopReplicationAndGetPosition stops replication and returns the
+	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
-	StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)
+	StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error)
 
 	// PromoteSlave makes the tablet the new master
 	PromoteSlave(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error)

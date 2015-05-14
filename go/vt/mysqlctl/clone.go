@@ -273,10 +273,10 @@ func (mysqld *Mysqld) CreateSnapshot(logger logutil.Logger, dbName, sourceAddr s
 		}
 		masterAddr = mysqld.IPAddr()
 	} else {
-		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
+		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return
 		}
-		var slaveStatus *proto.ReplicationStatus
+		var slaveStatus proto.ReplicationStatus
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return
@@ -354,7 +354,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 
 	// Restore original mysqld state that we saved above.
 	if slaveStartRequired {
-		if err := mysqld.StartSlave(hookExtraEnv); err != nil {
+		if err := StartSlave(mysqld, hookExtraEnv); err != nil {
 			return err
 		}
 

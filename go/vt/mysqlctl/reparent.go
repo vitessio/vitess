@@ -82,12 +82,10 @@ func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
 	return mysqld.MasterPosition()
 }
 
-// PromoteSlave will promote a slave to be the new master
+// PromoteSlave will promote a slave to be the new master.
 func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
-	// stop replication for good
-	if err := mysqld.StopSlave(hookExtraEnv); err != nil {
-		return proto.ReplicationPosition{}, err
-	}
+	// we handle replication, just stop it
+	cmds := []string{SqlStopSlave}
 
 	// Promote to master.
 	flavor, err := mysqld.flavor()
@@ -95,7 +93,7 @@ func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.Replic
 		err = fmt.Errorf("PromoteSlave needs flavor: %v", err)
 		return proto.ReplicationPosition{}, err
 	}
-	cmds := flavor.PromoteSlaveCommands()
+	cmds = append(cmds, flavor.PromoteSlaveCommands()...)
 	if err := mysqld.ExecuteSuperQueryList(cmds); err != nil {
 		return proto.ReplicationPosition{}, err
 	}

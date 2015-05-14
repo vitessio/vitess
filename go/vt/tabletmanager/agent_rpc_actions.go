@@ -74,7 +74,7 @@ type RPCAgent interface {
 
 	// Replication related methods
 
-	SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error)
 
 	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
@@ -112,11 +112,11 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
+	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
-	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
+	StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error)
 
 	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
 
@@ -321,7 +321,7 @@ func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, m
 
 // SlaveStatus returns the replication status
 // Should be called under RPCWrap.
-func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error) {
+func (agent *ActionAgent) SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
 	return agent.MysqlDaemon.SlaveStatus()
 }
 
@@ -331,28 +331,31 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.Replicati
 	return agent.MysqlDaemon.MasterPosition()
 }
 
-// StopSlave will stop the replication
+// StopSlave will stop the replication. Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
+	return mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
-// provided position.
+// provided position. Works both when Vitess manages
+// replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
 	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
 	return agent.Mysqld.MasterPosition()
 }
 
-// StartSlave will start the replication
+// StartSlave will start the replication. Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
+	return mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // GetSlaves returns the address of all the slaves
@@ -556,31 +559,37 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	ti, err := agent.TopoServer.GetTablet(parent)
 	if err != nil {
 		return err
 	}
 
-	// See if we are replicating at all
-	replicating := false
+	// See if we were replicating at all, and should be replicating
+	wasReplicating := false
+	shouldbeReplicating := false
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err == nil && (rs.SlaveIORunning || rs.SlaveSQLRunning) {
-		replicating = true
+		wasReplicating = true
+		shouldbeReplicating = true
+	}
+	if forceStartSlave {
+		shouldbeReplicating = true
 	}
 
 	// Create the list of commands to set the master
-	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
+	cmds := []string{}
+	if wasReplicating {
+		cmds = append(cmds, mysqlctl.SqlStopSlave)
+	}
+	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
 	if err != nil {
 		return err
 	}
-	if replicating {
-		newCmds := []string{"STOP SLAVE"}
-		newCmds = append(newCmds, cmds...)
-		newCmds = append(newCmds, "START SLAVE")
-		cmds = newCmds
+	cmds = append(cmds, smc...)
+	if shouldbeReplicating {
+		cmds = append(cmds, mysqlctl.SqlStartSlave)
 	}
-
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
@@ -600,7 +609,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 
 	// if needed, wait until we get the replicated row, or our
 	// context times out
-	if !replicating || timeCreatedNS == 0 {
+	if !shouldbeReplicating || timeCreatedNS == 0 {
 		return nil
 	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
@@ -633,14 +642,27 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	return nil
 }
 
-// StopReplicationAndGetPosition stops MySQL replication, and returns the
-// current position
-func (agent *ActionAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
-	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
-		return myproto.ReplicationPosition{}, err
+// StopReplicationAndGetStatus stops MySQL replication, and returns the
+// current status
+func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+	// get the status before we stop replication
+	rs, err := agent.MysqlDaemon.SlaveStatus()
+	if err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("before status failed: %v", err)
 	}
-
-	return agent.MysqlDaemon.MasterPosition()
+	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
+		// no replication is running, just return what we got
+		return rs, nil
+	}
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("stop slave failed: %v", err)
+	}
+	// now patch in the current position
+	rs.Position, err = agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("after position failed: %v", err)
+	}
+	return rs, nil
 }
 
 // PromoteSlave makes the current tablet the master

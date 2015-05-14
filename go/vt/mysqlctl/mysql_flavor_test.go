@@ -33,7 +33,9 @@ func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos proto.Replication
 func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error) {
 	return proto.ReplicationPosition{}, nil
 }
-func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) { return nil, nil }
+func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
+	return proto.ReplicationStatus{}, nil
+}
 func (fakeMysqlFlavor) StartReplicationCommands(params *sqldb.ConnParams, status *proto.ReplicationStatus) ([]string, error) {
 	return nil, nil
 }

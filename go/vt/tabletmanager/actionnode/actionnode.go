@@ -87,9 +87,9 @@ const (
 	// case, and update its own topology record.
 	TabletActionSlaveWasRestarted = "SlaveWasRestarted"
 
-	// TabletActionStopReplicationAndGetPosition will stop replication,
-	// and return the current position.
-	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"
+	// TabletActionStopReplicationAndGetStatus will stop replication,
+	// and return the current replication status.
+	TabletActionStopReplicationAndGetStatus = "StopReplicationAndGetStatus"
 
 	// TabletActionPromoteSlave will make this tablet the master
 	TabletActionPromoteSlave = "PromoteSlave"

@@ -158,9 +158,9 @@ func (client *FakeTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, ta
 //
 
 // SlaveStatus is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (*myproto.ReplicationStatus, error) {
+func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
 	var status myproto.ReplicationStatus
-	return &status, nil
+	return status, nil
 }
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface
@@ -269,7 +269,7 @@ func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tab
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64) error {
+func (client *FakeTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	return nil
 }
 
@@ -278,9 +278,9 @@ func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, ta
 	return nil
 }
 
-// StopReplicationAndGetPosition is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) StopReplicationAndGetPosition(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationPosition, error) {
-	var rp myproto.ReplicationPosition
+// StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topo.TabletInfo) (myproto.ReplicationStatus, error) {
+	var rp myproto.ReplicationStatus
 	return rp, nil
 }
 
