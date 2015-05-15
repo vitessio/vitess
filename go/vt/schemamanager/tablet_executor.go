@@ -63,29 +63,72 @@ func (exec *TabletExecutor) Open() error {
 		exec.tabletInfos[i] = tabletInfo
 		log.Infof("\t\tTabletInfo: %+v\n", tabletInfo)
 	}
+
+	if len(exec.tabletInfos) == 0 {
+		return fmt.Errorf("keyspace: %s does not contain any master tablets", exec.keyspace)
+	}
 	exec.isClosed = false
 	return nil
 }
 
 // Validate validates a list of sql statements
 func (exec *TabletExecutor) Validate(sqls []string) error {
-	for _, sql := range sqls {
+	if exec.isClosed {
+		return fmt.Errorf("executor is closed")
+	}
+	parsedDDLs := make([]*sqlparser.DDL, len(sqls))
+	for i, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
-		_, ok := stat.(*sqlparser.DDL)
+		ddl, ok := stat.(*sqlparser.DDL)
 		if !ok {
 			return fmt.Errorf("schema change works for DDLs only, but get non DDL statement: %s", sql)
+		}
+		parsedDDLs[i] = ddl
+	}
+	return exec.detectBigSchemaChanges(parsedDDLs)
+}
+
+// a schema change that satisfies any following condition is considered
+// to be a big schema change and will be rejected.
+//   1. Alter more than 100,000 rows.
+//   2. Change a table with more than 2,000,000 rows (Drops are fine).
+func (exec *TabletExecutor) detectBigSchemaChanges(parsedDDLs []*sqlparser.DDL) error {
+	// exec.tabletInfos is guaranteed to have at least one element;
+	// Otherwise, Open should fail and executor should fail.
+	masterTabletInfo := exec.tabletInfos[0]
+	// get database schema, excluding views.
+	dbSchema, err := exec.tmClient.GetSchema(
+		context.Background(), masterTabletInfo, []string{}, []string{}, false)
+	if err != nil {
+		return fmt.Errorf("unable to get database schema, error: %v", err)
+	}
+	tableWithCount := make(map[string]uint64, dbSchema.TableDefinitions.Len())
+	for _, tableSchema := range dbSchema.TableDefinitions {
+		tableWithCount[tableSchema.Name] = tableSchema.RowCount
+	}
+	for _, ddl := range parsedDDLs {
+		if ddl.Action == sqlparser.AST_DROP {
+			continue
+		}
+		tableName := string(ddl.Table)
+		if rowCount, ok := tableWithCount[tableName]; ok {
+			if rowCount > 100000 && ddl.Action == sqlparser.AST_ALTER {
+				return fmt.Errorf(
+					"big schema change, ddl: %v alters a table with more than 100 thousand rows", ddl)
+			}
+			if rowCount > 2000000 {
+				return fmt.Errorf(
+					"big schema change, ddl: %v changes a table with more than 2 million rows", ddl)
+			}
 		}
 	}
 	return nil
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(sqls []string) error {
-	if len(exec.tabletInfos) == 0 {
-		return nil
-	}
 	exec.schemaDiffs = make([]*proto.SchemaChangeResult, len(sqls))
 	for i := range sqls {
 		schemaDiff, err := exec.tmClient.PreflightSchema(

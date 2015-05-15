@@ -103,6 +103,8 @@ func TestRunSchemaChanges(t *testing.T) {
 		},
 	})
 
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+
 	exec := NewTabletExecutor(
 		fakeTmc,
 		newFakeTopo(),
@@ -140,12 +142,14 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
 		preflightSchemas:    make(map[string]*proto.SchemaChangeResult),
+		schemaDefinitions:   make(map[string]*proto.SchemaDefinition),
 	}
 }
 
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
-	preflightSchemas map[string]*proto.SchemaChangeResult
+	preflightSchemas  map[string]*proto.SchemaChangeResult
+	schemaDefinitions map[string]*proto.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
@@ -153,11 +157,24 @@ func (client *fakeTabletManagerClient) AddSchemaChange(
 	client.preflightSchemas[sql] = schemaResult
 }
 
+func (client *fakeTabletManagerClient) AddSchemaDefinition(
+	dbName string, schemaDefinition *proto.SchemaDefinition) {
+	client.schemaDefinitions[dbName] = schemaDefinition
+}
+
 func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topo.TabletInfo, change string) (*proto.SchemaChangeResult, error) {
 	result, ok := client.preflightSchemas[change]
 	if !ok {
 		var scr proto.SchemaChangeResult
 		return &scr, nil
+	}
+	return result, nil
+}
+
+func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+	result, ok := client.schemaDefinitions[tablet.DbName()]
+	if !ok {
+		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())
 	}
 	return result, nil
 }
