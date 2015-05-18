@@ -9,6 +9,7 @@ functions for long running actions. 'vtworker' binary will use these.
 package worker
 
 import (
+	"flag"
 	"html/template"
 	"time"
 
@@ -49,11 +50,10 @@ type Resolver interface {
 	GetDestinationMaster(shardName string) (*topo.TabletInfo, error)
 }
 
-// Resolvers should attempt to keep the previous topo resolution cached for at
-// least this long.
-const resolveTTL = 15 * time.Second
-
 var (
+	resolveTTL            = flag.Duration("resolve_ttl", 15*time.Second, "Amount of time that a topo resolution can be cached for")
+	executeFetchRetryTime = flag.Duration("executefetch_retry_time", 30*time.Second, "Amount of time we should wait before retrying ExecuteFetch calls")
+
 	statsState = stats.NewString("WorkerState")
 	// the number of times that the worker attempst to reresolve the masters
 	statsDestinationAttemptedResolves = stats.NewInt("WorkerDestinationAttemptedResolves")
