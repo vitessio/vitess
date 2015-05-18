@@ -187,6 +187,9 @@ type TabletManagerClient interface {
 	// Backup / restore related methods
 	//
 
+	// Backup creates a database backup
+	Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, ErrFunc, error)
+
 	// Snapshot takes a database snapshot
 	Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc, error)
 

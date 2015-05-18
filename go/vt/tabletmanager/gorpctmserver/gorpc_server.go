@@ -467,6 +467,33 @@ func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, rep
 
 // backup related methods
 
+// Backup wraps RPCAgent.Backup
+func (tm *TabletManager) Backup(ctx context.Context, args *gorpcproto.BackupArgs, sendReply func(interface{}) error) error {
+	ctx = callinfo.RPCWrapCallInfo(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBackup, args, nil, true, func() error {
+		// create a logger, send the result back to the caller
+		logger := logutil.NewChannelLogger(10)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			for e := range logger {
+				// Note we don't interrupt the loop here, as
+				// we still need to flush and finish the
+				// command, even if the channel to the client
+				// has been broken. We'll just keep trying
+				// to send.
+				sendReply(&e)
+			}
+			wg.Done()
+		}()
+
+		err := tm.agent.Backup(ctx, args.Concurrency, logger)
+		close(logger)
+		wg.Wait()
+		return err
+	})
+}
+
 // Snapshot wraps RPCAgent.Snapshot
 func (tm *TabletManager) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

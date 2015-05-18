@@ -132,7 +132,9 @@ func (fbs *FileBackupStorage) RemoveBackup(bucket, name string) error {
 // RegisterFileBackupStorage should be called after Flags has been
 // initialized, to register the FileBackupStorage implementation
 func RegisterFileBackupStorage() {
-	BackupStorageMap["file"] = &FileBackupStorage{
-		root: *fileBackupStorageRoot,
+	if *fileBackupStorageRoot != "" {
+		BackupStorageMap["file"] = &FileBackupStorage{
+			root: *fileBackupStorageRoot,
+		}
 	}
 }

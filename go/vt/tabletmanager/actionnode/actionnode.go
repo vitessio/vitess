@@ -165,6 +165,9 @@ const (
 	// replication slaves.
 	TabletActionGetSlaves = "GetSlaves"
 
+	// TabletActionBackup takes a db backup and stores it into BackupStorage
+	TabletActionBackup = "Backup"
+
 	// TabletActionSnapshot takes a db snapshot
 	TabletActionSnapshot = "Snapshot"
 

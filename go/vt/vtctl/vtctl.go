@@ -104,6 +104,9 @@ var commands = []commandGroup{
 			command{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Block the action queue for the specified duration (mostly for testing)."},
+			command{"Backup", commandBackup,
+				"[-concurrency=4] <tablet alias>",
+				"Stop mysqld and copy data to BackupStorage."},
 			command{"Snapshot", commandSnapshot,
 				"[-force] [-server-mode] [-concurrency=4] <tablet alias>",
 				"Stop mysqld and copy compressed data aside."},
@@ -899,6 +902,33 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return err
 	}
 	return wr.TabletManagerClient().Sleep(ctx, ti, duration)
+}
+
+func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action Backup requires <tablet alias>")
+	}
+
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, tabletInfo, *concurrency)
+	if err != nil {
+		return err
+	}
+	for e := range logStream {
+		wr.Logger().Infof("%v", e)
+	}
+	return errFunc()
 }
 
 func commandSnapshotSourceEnd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

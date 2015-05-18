@@ -94,6 +94,11 @@ type ExecuteFetchArgs struct {
 	ReloadSchema   bool
 }
 
+// BackupArgs has arguments for Backup
+type BackupArgs struct {
+	Concurrency int
+}
+
 // gorpc doesn't support returning a streaming type during streaming
 // and a final return value, so using structures with either one set.
 

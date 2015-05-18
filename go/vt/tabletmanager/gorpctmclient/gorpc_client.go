@@ -457,6 +457,55 @@ func (client *GoRPCTabletManagerClient) PromoteSlave(ctx context.Context, tablet
 // Backup related methods
 //
 
+// Backup is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
+	var connectTimeout time.Duration
+	deadline, ok := ctx.Deadline()
+	if ok {
+		connectTimeout = deadline.Sub(time.Now())
+		if connectTimeout < 0 {
+			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Backup on %v", tablet.Alias)}
+		}
+	}
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	rpcstream := make(chan *logutil.LoggerEvent, 10)
+	c := rpcClient.StreamGo("TabletManager.Backup", &gorpcproto.BackupArgs{
+		Concurrency: concurrency,
+	}, rpcstream)
+	interrupted := false
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				// context is done
+				interrupted = true
+				close(logstream)
+				rpcClient.Close()
+				return
+			case ssr, ok := <-rpcstream:
+				if !ok {
+					close(logstream)
+					rpcClient.Close()
+					return
+				}
+				logstream <- ssr
+			}
+		}
+	}()
+	return logstream, func() error {
+		// this is only called after streaming is done
+		if interrupted {
+			return fmt.Errorf("TabletManager.Backup interrupted by context")
+		}
+		return c.Error
+	}, nil
+}
+
 // Snapshot is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
 	var connectTimeout time.Duration

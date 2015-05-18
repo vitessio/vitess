@@ -418,7 +418,8 @@ class Tablet(object):
                      target_tablet_type=None, full_mycnf_args=False,
                      extra_args=None, extra_env=None, include_mysql_port=True,
                      init_tablet_type=None, init_keyspace=None,
-                     init_shard=None, init_db_name_override=None):
+                     init_shard=None, init_db_name_override=None,
+                     supports_backups=False):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -484,6 +485,11 @@ class Tablet(object):
         args.extend(['-init_db_name_override', init_db_name_override])
       else:
         self.dbname = 'vt_' + init_keyspace
+
+    if supports_backups:
+      args.extend(['-backup_storage_implementation', 'file',
+                   '-file_backup_storage_root',
+                   os.path.join(environment.tmproot, 'backupstorage')])
 
     if extra_args:
       args.extend(extra_args)

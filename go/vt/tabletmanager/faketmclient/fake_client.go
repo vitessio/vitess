@@ -294,6 +294,14 @@ func (client *FakeTabletManagerClient) PromoteSlave(ctx context.Context, tablet 
 // Backup related methods
 //
 
+// Backup is part of the tmclient.TabletManagerClient interface
+func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
+	logstream := make(chan *logutil.LoggerEvent, 10)
+	return logstream, func() error {
+		return nil
+	}, nil
+}
+
 // Snapshot is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
 	logstream := make(chan *logutil.LoggerEvent, 10)

@@ -122,6 +122,8 @@ type RPCAgent interface {
 
 	// Backup / restore related methods
 
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger) error
+
 	Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error)
 
 	SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs) error
@@ -713,6 +715,54 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 //
 // Backup / restore related methods
 //
+
+// Backup takes a db backup and sends it to the BackupStorage
+// Should be called under RPCWrapLockAction.
+func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+	// update our type to TYPE_BACKUP
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	if tablet.Type == topo.TYPE_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
+	}
+	originalType := tablet.Type
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string)); err != nil {
+		return err
+	}
+
+	// let's update our internal state (stop query service and other things)
+	if err := agent.refreshTablet(ctx, "backup"); err != nil {
+		return fmt.Errorf("failed to update state before backup: %v", err)
+	}
+
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
+	// now we can run the backup
+	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+	name := fmt.Sprintf("%v-%v", tablet.Alias, time.Now().Unix())
+	returnErr := agent.Mysqld.Backup(l, bucket, name, concurrency, agent.hookExtraEnv())
+
+	// and change our type back to the appropriate value:
+	// - if healthcheck is enabled, go to spare
+	// - if not, go back to original type
+	if agent.IsRunningHealthCheck() {
+		originalType = topo.TYPE_SPARE
+	}
+	err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
+	if err != nil {
+		// failure in changing the topology type is probably worse,
+		// so returning that (we logged the snapshot error anyway)
+		if returnErr != nil {
+			l.Errorf("mysql backup command returned error: %v", returnErr)
+		}
+		returnErr = err
+	}
+
+	return returnErr
+}
 
 // Snapshot takes a db snapshot
 // Should be called under RPCWrapLockAction.

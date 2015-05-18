@@ -1127,6 +1127,41 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 // Backup / restore related methods
 //
 
+var testBackupConcurrency = 24
+var testBackupCalled = false
+
+func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "Backup args", concurrency, testBackupConcurrency)
+	logStuff(logger, 10)
+	testBackupCalled = true
+	return nil
+}
+
+func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
+	if err != nil {
+		t.Fatalf("Backup failed: %v", err)
+	}
+	compareLoggedStuff(t, "Backup", logChannel, 10)
+	err = errFunc()
+	compareError(t, "Backup", err, true, testBackupCalled)
+}
+
+func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
+	if err != nil {
+		t.Fatalf("Backup failed: %v", err)
+	}
+	if e, ok := <-logChannel; ok {
+		t.Fatalf("Unexpected Backup logs: %v", e)
+	}
+	err = errFunc()
+	expectRPCWrapLockActionPanic(t, err)
+}
+
 var testSnapshotArgs = &actionnode.SnapshotArgs{
 	Concurrency:         42,
 	ServerMode:          true,
@@ -1364,6 +1399,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
 
 	// Backup / restore related methods
+	agentRPCTestBackup(ctx, t, client, ti)
 	agentRPCTestSnapshot(ctx, t, client, ti)
 	agentRPCTestSnapshotSourceEnd(ctx, t, client, ti)
 	agentRPCTestReserveForRestore(ctx, t, client, ti)
@@ -1420,6 +1456,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 
 	// Backup / restore related methods
+	agentRPCTestBackupPanic(ctx, t, client, ti)
 	agentRPCTestSnapshotPanic(ctx, t, client, ti)
 	agentRPCTestSnapshotSourceEndPanic(ctx, t, client, ti)
 	agentRPCTestReserveForRestorePanic(ctx, t, client, ti)
