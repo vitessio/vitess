@@ -466,7 +466,7 @@ func (scw *SplitCloneWorker) copy() error {
 	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == myproto.TABLE_BASE_TABLE {
+		if td.Type == myproto.TableBaseTable {
 			// find the column to split on
 			columnIndexes[tableIndex] = -1
 			for i, name := range td.Columns {
@@ -534,7 +534,7 @@ func (scw *SplitCloneWorker) copy() error {
 	for shardIndex := range scw.sourceShards {
 		sema := sync2.NewSemaphore(scw.sourceReaderCount, 0)
 		for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-			if td.Type == myproto.TABLE_VIEW {
+			if td.Type == myproto.TableView {
 				continue
 			}
 

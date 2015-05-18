@@ -416,7 +416,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i].mu.Lock()
-		if td.Type == myproto.TABLE_BASE_TABLE {
+		if td.Type == myproto.TableBaseTable {
 			vscw.tableStatus[i].rowCount = td.RowCount
 		} else {
 			vscw.tableStatus[i].isView = true
@@ -466,7 +466,7 @@ func (vscw *VerticalSplitCloneWorker) copy() error {
 	sourceWaitGroup := sync.WaitGroup{}
 	sema := sync2.NewSemaphore(vscw.sourceReaderCount, 0)
 	for tableIndex, td := range sourceSchemaDefinition.TableDefinitions {
-		if td.Type == myproto.TABLE_VIEW {
+		if td.Type == myproto.TableView {
 			continue
 		}
 

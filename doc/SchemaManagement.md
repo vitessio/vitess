@@ -61,89 +61,14 @@ type SchemaChangeResult struct {
 }
 ```
 
-The ApplySchema action applies a schema change. It is described by the following structure (also returns a SchemaChangeResult):
+The ApplySchema action applies a schema change to a specified keyspace, the performed steps are:
 
-```go
-type SchemaChange struct {
- Sql              string
- Force            bool
- AllowReplication bool
- BeforeSchema     *SchemaDefinition
- AfterSchema      *SchemaDefinition
-}
-```
-
-And the associated ApplySchema remote action for a tablet. Then the performed steps are:
-
-* The database to use is either derived from the tablet dbName if UseVt is false, or is the _vt database. A ‘use dbname’ is prepended to the Sql.
-* (if BeforeSchema is not nil) read the schema, make sure it is equal to BeforeSchema. If not equal: if Force is not set, we will abort, if Force is set, we’ll issue a warning and keep going.
-* if AllowReplication is false, we’ll disable replication (adding SET sql_log_bin=0 before the Sql).
-* We will then apply the Sql command.
-* (if AfterSchema is not nil) read the schema again, make sure it is equal to AfterSchema. If not equal: if Force is not set, we will issue an error, if Force is set, we’ll issue a warning.
-
-We will return the following information:
-
-* whether it worked or not (doh!)
-* BeforeSchema
-* AfterSchema
-
-### Use case 1: Single tablet update:
-
-* we first do a Preflight (to know what BeforeSchema and AfterSchema will be). This can be disabled, but is not recommended.
-* we then do the schema upgrade. We will check BeforeSchema before the upgrade, and AfterSchema after the upgrade.
-
-### Use case 2: Single Shard update:
-
-* need to figure out (or be told) if it’s a simple or complex schema update (does it require the shell game?). For now we'll use a command line flag.
-* in any case, do a Preflight on the master, to get the BeforeSchema and AfterSchema values.
-* in any case, gather the schema on all databases, to see which ones have been upgraded already or not. This guarantees we can interrupt and restart a schema change. Also, this makes sure no action is currently running on the databases we're about to change.
-* if simple:
-  * nobody has it: apply to master, very similar to a single tablet update.
-  * some tablets have it but not others: error out
-* if complex: do the shell game while disabling replication. Skip the tablets that already have it. Have an option to re-parent at the end.
-  * Note the Backup, and Lag servers won't apply a complex schema change. Only the servers actively in the replication graph will.
-  * the process can be interrupted at any time, restarting it as a complex schema upgrade should just work.
-
-### Use case 3: Keyspace update:
-
-* Similar to Single Shard, but the BeforeSchema and AfterSchema values are taken from the first shard, and used in all shards after that.
-* We don't know the new masters to use on each shard, so just skip re-parenting all together.
-
-This translates into the following vtctl commands:
+* It first finds shards belong to this keyspace, including newly added shards in the presence of [resharding event](Resharding.md).
+* Validate the sql syntax and reject the schema change if the sql 1) Alter more then 100,000 rows, or 2) The targed table has more then 2,000,000 rows. The rational behind this is that ApplySchema simply applies schema changes to the masters; therefore, a big schema change that takes too much time slows down the replication and may reduce the availability of the overall system.
+* Create a temporary database that has the same schema as the targeted table. Apply the sql to it and makes sure it changes table structure. 
+* Apply the Sql command to the database.
+* Read the schema again, make sure it is equal to AfterSchema.
 
 ```
-PreflightSchema {-sql=<sql> || -sql_file=<filename>} <tablet alias>
+ApplySchema {-sql=<sql> || -sql_file=<filename>} <keyspace>
 ```
-
-apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
-This will create a temporary database, copy the existing keyspace schema into it, apply the schema change, and re-read the resulting schema.
-
-```
-$ echo "create table test_table(id int);" > change.sql
-$ vtctl PreflightSchema -sql_file=change.sql nyc-0002009001
-```
-
-```
-ApplySchema {-sql=<sql> || -sql_file=<filename>} [-skip_preflight] [-stop_replication] <tablet alias>
-```
-
-apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file.
-a PreflightSchema operation will first be used to make sure the schema is OK (unless skip_preflight is specified).
-
-```
-ApplySchemaShard {-sql=<sql> || -sql_file=<filename>} [-simple] [-new_parent=<tablet alias>] <keyspace/shard>
-```
-
-apply the schema change to the specific shard. If simple is specified, we just apply on the live master. Otherwise, we do the shell game and will optionally re-parent.
-if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
-
-```
-$ vtctl ApplySchemaShard --sql-file=change.sql -simple vtx/0
-$ vtctl ApplySchemaShard --sql-file=change.sql -new_parent=nyc-0002009002 vtx/0
-```
-
-```
-ApplySchemaKeyspace {-sql=<sql> || -sql_file=<filename>} [-simple] <keyspace>
-```
-
-apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave.

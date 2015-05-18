@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	// TABLE_BASE_TABLE indicates the table type is a base table.
-	TABLE_BASE_TABLE = "BASE TABLE"
-	// TABLE_VIEW indicates the table type is a view.
-	TABLE_VIEW = "VIEW"
+	// TableBaseTable indicates the table type is a base table.
+	TableBaseTable = "BASE TABLE"
+	// TableView indicates the table type is a view.
+	TableView = "VIEW"
 )
 
 // TableDefinition contains all schema information about a table.
@@ -28,7 +28,7 @@ type TableDefinition struct {
 	Schema            string   // the SQL to run to create the table
 	Columns           []string // the columns in the order that will be used to dump and load the data
 	PrimaryKeyColumns []string // the columns used by the primary key, in order
-	Type              string   // TABLE_BASE_TABLE or TABLE_VIEW
+	Type              string   // TableBaseTable or TableView
 	DataLength        uint64   // how much space the data file takes.
 	RowCount          uint64   // how many rows in the table (may
 	// be approximate count)
@@ -118,7 +118,7 @@ func (sd *SchemaDefinition) FilterTables(tables, excludeTables []string, include
 			continue
 		}
 
-		if !includeViews && table.Type == TABLE_VIEW {
+		if !includeViews && table.Type == TableView {
 			continue
 		}
 
@@ -165,7 +165,7 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 	sqlStrings = append(sqlStrings, sd.DatabaseSchema)
 
 	for _, td := range sd.TableDefinitions {
-		if td.Type == TABLE_VIEW {
+		if td.Type == TableView {
 			createViewSql = append(createViewSql, td.Schema)
 		} else {
 			lines := strings.Split(td.Schema, "\n")
@@ -226,19 +226,19 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 	}
 
 	for leftIndex < len(left.TableDefinitions) {
-		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
+		if left.TableDefinitions[leftIndex].Type == TableBaseTable {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
 		}
-		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
+		if left.TableDefinitions[leftIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", leftName, left.TableDefinitions[leftIndex].Name))
 		}
 		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
-		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
+		if right.TableDefinitions[rightIndex].Type == TableBaseTable {
 			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
 		}
-		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
+		if right.TableDefinitions[rightIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", rightName, right.TableDefinitions[rightIndex].Name))
 		}
 		rightIndex++
