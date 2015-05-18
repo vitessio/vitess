@@ -179,18 +179,18 @@ func (mysqld *Mysqld) Backup(logger logutil.Logger, bucket, name string, backupC
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
 
-	if err = mysqld.backup(logger, bs, bh, backupConcurrency, hookExtraEnv); err != nil {
-		if err := bs.AbortBackup(bh); err != nil {
+	if err = mysqld.backup(logger, bh, backupConcurrency, hookExtraEnv); err != nil {
+		if err := bh.AbortBackup(); err != nil {
 			logger.Errorf("failed to abort backup: %v", err)
 		}
 	} else {
-		err = bs.EndBackup(bh)
+		err = bh.EndBackup()
 	}
 
 	return err
 }
 
-func (mysqld *Mysqld) backup(logger logutil.Logger, bs backupstorage.BackupStorage, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
+func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// save initial state so we can restore
 	slaveStartRequired := false
@@ -240,7 +240,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bs backupstorage.BackupStora
 		}
 		replicationPosition = slaveStatus.Position
 	}
-	logger.Infof("using replication position: %#v", replicationPosition)
+	logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
 	if err = mysqld.Shutdown(true, MysqlWaitTime); err != nil {
@@ -255,7 +255,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bs backupstorage.BackupStora
 	logger.Infof("found %v files to backup", len(fes))
 
 	// backup everything
-	if err := mysqld.backupFiles(logger, bs, bh, fes, replicationPosition, backupConcurrency); err != nil {
+	if err := mysqld.backupFiles(logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
 		return fmt.Errorf("cannot backup files: %v", err)
 	}
 
@@ -286,7 +286,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bs backupstorage.BackupStora
 	return nil
 }
 
-func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bs backupstorage.BackupStorage, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) error {
+func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) error {
 
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
@@ -314,7 +314,7 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bs backupstorage.Backup
 
 			// open the destination file for writing, and a buffer
 			name := fmt.Sprintf("%v", i)
-			wc, err := bs.AddFile(bh, name)
+			wc, err := bh.AddFile(name)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("cannot add file: %v", err))
 				return
@@ -358,7 +358,7 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bs backupstorage.Backup
 	}
 
 	// open the MANIFEST
-	wc, err := bs.AddFile(bh, backupManifest)
+	wc, err := bh.AddFile(backupManifest)
 	if err != nil {
 		return fmt.Errorf("cannot add %v to backup: %v", backupManifest, err)
 	}

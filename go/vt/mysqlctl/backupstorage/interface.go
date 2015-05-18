@@ -25,34 +25,43 @@ type BackupHandle interface {
 	// Name is the individual name of the backup. Will contain
 	// tabletAlias-timestamp.
 	Name() string
-}
-
-// BackupStorage is the interface to the storage system
-type BackupStorage interface {
-	// ListBackups returns all the backups in a bucket.
-	ListBackups(bucket string) ([]BackupHandle, error)
-
-	// StartBackup creates a new backup with the given name.
-	// If a backup with the same name already exists, it's an error.
-	StartBackup(bucket, name string) (BackupHandle, error)
 
 	// AddFile opens a new file to be added to the backup.
+	// Only works for read-write backups (created by StartBackup).
 	// filename is guaranteed to only contain alphanumerical
 	// characters and hyphens.
 	// It should be thread safe, it is possible to call AddFile in
 	// multiple go routines once a backup has been started.
-	AddFile(handle BackupHandle, filename string) (io.WriteCloser, error)
+	AddFile(filename string) (io.WriteCloser, error)
 
 	// EndBackup stops and closes a backup. The contents should be kept.
-	EndBackup(handle BackupHandle) error
+	// Only works for read-write backups (created by StartBackup).
+	EndBackup() error
 
 	// AbortBackup stops a backup, and removes the contents that
 	// have been copied already. It is called if an error occurs
 	// while the backup is being taken, and the backup cannot be finished.
-	AbortBackup(handle BackupHandle) error
+	// Only works for read-write backups (created by StartBackup).
+	AbortBackup() error
 
 	// ReadFile starts reading a file from a backup.
-	ReadFile(handle BackupHandle, filename string) (io.ReadCloser, error)
+	// Only works for read-only backups (created by ListBackups).
+	ReadFile(filename string) (io.ReadCloser, error)
+}
+
+// BackupStorage is the interface to the storage system
+type BackupStorage interface {
+	// ListBackups returns all the backups in a bucket.  The
+	// returned backups are read-only (ReadFile can be called, but
+	// AddFile/EndBackup/AbortBackup cannot)
+	ListBackups(bucket string) ([]BackupHandle, error)
+
+	// StartBackup creates a new backup with the given name.  If a
+	// backup with the same name already exists, it's an error.
+	// The returned backup is read-write
+	// (AddFile/EndBackup/AbortBackup cann all be called, not
+	// ReadFile)
+	StartBackup(bucket, name string) (BackupHandle, error)
 
 	// RemoveBackup removes all the data associated with a backup.
 	// It will not appear in ListBackups after RemoveBackup succeeds.

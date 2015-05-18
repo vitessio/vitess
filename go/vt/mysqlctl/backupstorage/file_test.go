@@ -55,8 +55,8 @@ func TestListBackups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := fbs.EndBackup(bh); err != nil {
-		t.Fatalf("fbs.EndBackup failed: %v", err)
+	if err := bh.EndBackup(); err != nil {
+		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// verify we have one entry now
@@ -76,8 +76,8 @@ func TestListBackups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := fbs.EndBackup(bh); err != nil {
-		t.Fatalf("fbs.EndBackup failed: %v", err)
+	if err := bh.EndBackup(); err != nil {
+		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// verify we have two sorted entries now
@@ -112,8 +112,8 @@ func TestListBackups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := fbs.AbortBackup(bh); err != nil {
-		t.Fatalf("fbs.AbortBackup failed: %v", err)
+	if err := bh.AbortBackup(); err != nil {
+		t.Fatalf("bh.AbortBackup failed: %v", err)
 	}
 	bhs, err = fbs.ListBackups(bucket)
 	if err != nil {
@@ -123,6 +123,17 @@ func TestListBackups(t *testing.T) {
 		bhs[0].Bucket() != bucket ||
 		bhs[0].Name() != firstBackup {
 		t.Fatalf("ListBackups after abort returned wrong results: %#v", bhs)
+	}
+
+	// check we cannot chaneg a backup we listed
+	if _, err := bhs[0].AddFile("test"); err == nil {
+		t.Fatalf("was able to AddFile to read-only backup")
+	}
+	if err := bhs[0].EndBackup(); err == nil {
+		t.Fatalf("was able to EndBackup a read-only backup")
+	}
+	if err := bhs[0].AbortBackup(); err == nil {
+		t.Fatalf("was able to AbortBackup a read-only backup")
 	}
 }
 
@@ -140,9 +151,9 @@ func TestFileContents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	wc, err := fbs.AddFile(bh, filename1)
+	wc, err := bh.AddFile(filename1)
 	if err != nil {
-		t.Fatalf("fbs.AddFile failed: %v", err)
+		t.Fatalf("bh.AddFile failed: %v", err)
 	}
 	if _, err := wc.Write([]byte(contents1)); err != nil {
 		t.Fatalf("wc.Write failed: %v", err)
@@ -150,8 +161,15 @@ func TestFileContents(t *testing.T) {
 	if err := wc.Close(); err != nil {
 		t.Fatalf("wc.Close failed: %v", err)
 	}
-	if err := fbs.EndBackup(bh); err != nil {
-		t.Fatalf("fbs.EndBackup failed: %v", err)
+
+	// test we can't read back on read-write backup
+	if _, err := bh.ReadFile(filename1); err == nil {
+		t.Fatalf("was able to ReadFile to read-write backup")
+	}
+
+	// and close
+	if err := bh.EndBackup(); err != nil {
+		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// re-read the file
@@ -159,9 +177,9 @@ func TestFileContents(t *testing.T) {
 	if err != nil || len(bhs) != 1 {
 		t.Fatalf("ListBackups after abort returned wrong return: %v %v", err, bhs)
 	}
-	rc, err := fbs.ReadFile(bhs[0], filename1)
+	rc, err := bhs[0].ReadFile(filename1)
 	if err != nil {
-		t.Fatalf("fbs.ReadFile failed: %v", err)
+		t.Fatalf("bhs[0].ReadFile failed: %v", err)
 	}
 	buf := make([]byte, len(contents1)+10)
 	if n, err := rc.Read(buf); (err != nil && err != io.EOF) || n != len(contents1) {

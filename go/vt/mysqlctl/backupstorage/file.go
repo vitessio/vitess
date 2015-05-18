@@ -22,8 +22,10 @@ var (
 
 // FileBackupHandle implements BackupHandle for local file system.
 type FileBackupHandle struct {
-	bucket string
-	name   string
+	fbs      *FileBackupStorage
+	bucket   string
+	name     string
+	readOnly bool
 }
 
 // Bucket is part of the BackupHandle interface
@@ -34,6 +36,40 @@ func (fbh *FileBackupHandle) Bucket() string {
 // Name is part of the BackupHandle interface
 func (fbh *FileBackupHandle) Name() string {
 	return fbh.name
+}
+
+// AddFile is part of the BackupHandle interface
+func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+	if fbh.readOnly {
+		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
+	}
+	p := path.Join(fbh.fbs.root, fbh.bucket, fbh.name, filename)
+	return os.Create(p)
+}
+
+// EndBackup is part of the BackupHandle interface
+func (fbh *FileBackupHandle) EndBackup() error {
+	if fbh.readOnly {
+		return fmt.Errorf("EndBackup cannot be called on read-only backup")
+	}
+	return nil
+}
+
+// AbortBackup is part of the BackupHandle interface
+func (fbh *FileBackupHandle) AbortBackup() error {
+	if fbh.readOnly {
+		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
+	}
+	return fbh.fbs.RemoveBackup(fbh.bucket, fbh.name)
+}
+
+// ReadFile is part of the BackupHandle interface
+func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+	if !fbh.readOnly {
+		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
+	}
+	p := path.Join(fbh.fbs.root, fbh.bucket, fbh.name, filename)
+	return os.Open(p)
 }
 
 // FileBackupStorage implements BackupStorage for local file system.
@@ -62,8 +98,10 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 			continue
 		}
 		result = append(result, &FileBackupHandle{
-			bucket: bucket,
-			name:   info.Name(),
+			fbs:      fbs,
+			bucket:   bucket,
+			name:     info.Name(),
+			readOnly: true,
 		})
 	}
 	return result, nil
@@ -84,43 +122,11 @@ func (fbs *FileBackupStorage) StartBackup(bucket, name string) (BackupHandle, er
 	}
 
 	return &FileBackupHandle{
-		bucket: bucket,
-		name:   name,
+		fbs:      fbs,
+		bucket:   bucket,
+		name:     name,
+		readOnly: false,
 	}, nil
-}
-
-// AddFile is part of the BackupStorage interface
-func (fbs *FileBackupStorage) AddFile(handle BackupHandle, filename string) (io.WriteCloser, error) {
-	fbh, ok := handle.(*FileBackupHandle)
-	if !ok {
-		return nil, fmt.Errorf("FileBackupStorage only accepts FileBackupHandle")
-	}
-	p := path.Join(fbs.root, fbh.bucket, fbh.name, filename)
-	return os.Create(p)
-}
-
-// EndBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) EndBackup(handle BackupHandle) error {
-	return nil
-}
-
-// AbortBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) AbortBackup(handle BackupHandle) error {
-	fbh, ok := handle.(*FileBackupHandle)
-	if !ok {
-		return fmt.Errorf("FileBackupStorage only accepts FileBackupHandle")
-	}
-	return fbs.RemoveBackup(fbh.bucket, fbh.name)
-}
-
-// ReadFile is part of the BackupStorage interface
-func (fbs *FileBackupStorage) ReadFile(handle BackupHandle, filename string) (io.ReadCloser, error) {
-	fbh, ok := handle.(*FileBackupHandle)
-	if !ok {
-		return nil, fmt.Errorf("FileBackupStorage only accepts FileBackupHandle")
-	}
-	p := path.Join(fbs.root, fbh.bucket, fbh.name, filename)
-	return os.Open(p)
 }
 
 // RemoveBackup is part of the BackupStorage interface
