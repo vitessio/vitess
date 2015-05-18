@@ -225,7 +225,7 @@ func TestSplitDiff(t *testing.T) {
 	sourceRdonly1.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
 	sourceRdonly2.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
 
-	wrk.Run()
+	wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
 	if wrk.err != nil || wrk.state != stateSCDone {

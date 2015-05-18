@@ -50,12 +50,10 @@ type SourceSpec struct {
 // database: any row in the subset spec needs to have a conuterpart in
 // the superset spec.
 type SQLDiffWorker struct {
-	wr        *wrangler.Wrangler
-	cell      string
-	shard     string
-	cleaner   *wrangler.Cleaner
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	wr      *wrangler.Wrangler
+	cell    string
+	shard   string
+	cleaner *wrangler.Cleaner
 
 	// alias in the following 2 fields is during
 	// SQLDifferFindTargets, read-only after that.
@@ -72,15 +70,12 @@ type SQLDiffWorker struct {
 
 // NewSQLDiffWorker returns a new SQLDiffWorker object.
 func NewSQLDiffWorker(wr *wrangler.Wrangler, cell string, superset, subset SourceSpec) Worker {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &SQLDiffWorker{
-		wr:        wr,
-		cell:      cell,
-		superset:  superset,
-		subset:    subset,
-		cleaner:   new(wrangler.Cleaner),
-		ctx:       ctx,
-		ctxCancel: cancel,
+		wr:       wr,
+		cell:     cell,
+		superset: superset,
+		subset:   subset,
+		cleaner:  new(wrangler.Cleaner),
 
 		state: sqlDiffNotSarted,
 	}
@@ -139,28 +134,21 @@ func (worker *SQLDiffWorker) StatusAsText() string {
 	return result
 }
 
-// Cancel is part of the Worker interface
-func (worker *SQLDiffWorker) Cancel() {
-	worker.ctxCancel()
-}
-
-func (worker *SQLDiffWorker) checkInterrupted() bool {
+func (worker *SQLDiffWorker) checkInterrupted(ctx context.Context) error {
 	select {
-	case <-worker.ctx.Done():
-		if worker.ctx.Err() == context.DeadlineExceeded {
-			return false
-		}
-		worker.recordError(topo.ErrInterrupted)
-		return true
+	case <-ctx.Done():
+		err := ctx.Err()
+		worker.recordError(err)
+		return err
 	default:
 	}
-	return false
+	return nil
 }
 
 // Run is mostly a wrapper to run the cleanup at the end.
-func (worker *SQLDiffWorker) Run() {
+func (worker *SQLDiffWorker) Run(ctx context.Context) error {
 	resetVars()
-	err := worker.run()
+	err := worker.run(ctx)
 
 	worker.setState(sqlDiffCleanUp)
 	cerr := worker.cleaner.CleanUp(worker.wr)
@@ -173,37 +161,31 @@ func (worker *SQLDiffWorker) Run() {
 	}
 	if err != nil {
 		worker.recordError(err)
-		return
-	}
-	worker.setState(sqlDiffDone)
-}
-
-func (worker *SQLDiffWorker) Error() error {
-	return worker.err
-}
-
-func (worker *SQLDiffWorker) run() error {
-	// first state: find targets
-	if err := worker.findTargets(); err != nil {
 		return err
 	}
-	if worker.checkInterrupted() {
-		return topo.ErrInterrupted
+	worker.setState(sqlDiffDone)
+	return nil
+}
+
+func (worker *SQLDiffWorker) run(ctx context.Context) error {
+	// first state: find targets
+	if err := worker.findTargets(ctx); err != nil {
+		return err
+	}
+	if err := worker.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// second phase: synchronize replication
-	if err := worker.synchronizeReplication(); err != nil {
-		if worker.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := worker.synchronizeReplication(ctx); err != nil {
 		return err
 	}
-	if worker.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := worker.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// third phase: diff
-	if err := worker.diff(); err != nil {
+	if err := worker.diff(ctx); err != nil {
 		return err
 	}
 
@@ -214,18 +196,18 @@ func (worker *SQLDiffWorker) run() error {
 // - find one rdonly in superset
 // - find one rdonly in subset
 // - mark them all as 'checker' pointing back to us
-func (worker *SQLDiffWorker) findTargets() error {
+func (worker *SQLDiffWorker) findTargets(ctx context.Context) error {
 	worker.setState(sqlDiffFindTargets)
 
 	// find an appropriate endpoint in superset
 	var err error
-	worker.superset.alias, err = findChecker(worker.ctx, worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
+	worker.superset.alias, err = findChecker(ctx, worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
 	if err != nil {
 		return err
 	}
 
 	// find an appropriate endpoint in subset
-	worker.subset.alias, err = findChecker(worker.ctx, worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
+	worker.subset.alias, err = findChecker(ctx, worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
 	if err != nil {
 		return err
 	}
@@ -238,7 +220,7 @@ func (worker *SQLDiffWorker) findTargets() error {
 // 2 - sleep for 5 seconds
 // 3 - ask the superset slave to stop replication
 // Note this is not 100% correct, but good enough for now
-func (worker *SQLDiffWorker) synchronizeReplication() error {
+func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	worker.setState(sqlDiffSynchronizeReplication)
 
 	// stop replication on subset slave
@@ -247,14 +229,14 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(worker.ctx, 60*time.Second)
-	err = worker.wr.TabletManagerClient().StopSlave(ctx, subsetTablet)
+	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, subsetTablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
-	if worker.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := worker.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
@@ -268,8 +250,8 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 
 	// sleep for a few seconds
 	time.Sleep(5 * time.Second)
-	if worker.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := worker.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// stop replication on superset slave
@@ -278,8 +260,8 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(worker.ctx, 60*time.Second)
-	err = worker.wr.TabletManagerClient().StopSlave(ctx, supersetTablet)
+	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, supersetTablet)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.superset.alias, err)
@@ -302,20 +284,20 @@ func (worker *SQLDiffWorker) synchronizeReplication() error {
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
-func (worker *SQLDiffWorker) diff() error {
+func (worker *SQLDiffWorker) diff(ctx context.Context) error {
 	worker.setState(sqlDiffRunning)
 
 	// run the diff
 	worker.wr.Logger().Infof("Running the diffs...")
 
-	supersetQueryResultReader, err := NewQueryResultReaderForTablet(worker.ctx, worker.wr.TopoServer(), worker.superset.alias, worker.superset.SQL)
+	supersetQueryResultReader, err := NewQueryResultReaderForTablet(ctx, worker.wr.TopoServer(), worker.superset.alias, worker.superset.SQL)
 	if err != nil {
 		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(superset) failed: %v", err)
 		return err
 	}
 	defer supersetQueryResultReader.Close()
 
-	subsetQueryResultReader, err := NewQueryResultReaderForTablet(worker.ctx, worker.wr.TopoServer(), worker.subset.alias, worker.subset.SQL)
+	subsetQueryResultReader, err := NewQueryResultReaderForTablet(ctx, worker.wr.TopoServer(), worker.subset.alias, worker.subset.SQL)
 	if err != nil {
 		worker.wr.Logger().Errorf("NewQueryResultReaderForTablet(subset) failed: %v", err)
 		return err

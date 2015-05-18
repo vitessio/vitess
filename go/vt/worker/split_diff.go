@@ -43,8 +43,6 @@ type SplitDiffWorker struct {
 	shard         string
 	excludeTables []string
 	cleaner       *wrangler.Cleaner
-	ctx           context.Context
-	ctxCancel     context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -68,7 +66,6 @@ type SplitDiffWorker struct {
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
 func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitDiffWorker{
 		wr:            wr,
 		cell:          cell,
@@ -76,8 +73,6 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, exc
 		shard:         shard,
 		excludeTables: excludeTables,
 		cleaner:       &wrangler.Cleaner{},
-		ctx:           ctx,
-		ctxCancel:     cancel,
 
 		state: stateSDNotSarted,
 	}
@@ -133,28 +128,21 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	return result
 }
 
-// Cancel is part of the Worker interface
-func (sdw *SplitDiffWorker) Cancel() {
-	sdw.ctxCancel()
-}
-
-func (sdw *SplitDiffWorker) checkInterrupted() bool {
+func (sdw *SplitDiffWorker) checkInterrupted(ctx context.Context) error {
 	select {
-	case <-sdw.ctx.Done():
-		if sdw.ctx.Err() == context.DeadlineExceeded {
-			return false
-		}
-		sdw.recordError(topo.ErrInterrupted)
-		return true
+	case <-ctx.Done():
+		err := ctx.Err()
+		sdw.recordError(err)
+		return err
 	default:
 	}
-	return false
+	return nil
 }
 
 // Run is mostly a wrapper to run the cleanup at the end.
-func (sdw *SplitDiffWorker) Run() {
+func (sdw *SplitDiffWorker) Run(ctx context.Context) error {
 	resetVars()
-	err := sdw.run()
+	err := sdw.run(ctx)
 
 	sdw.setState(stateSDCleanUp)
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
@@ -167,48 +155,39 @@ func (sdw *SplitDiffWorker) Run() {
 	}
 	if err != nil {
 		sdw.recordError(err)
-		return
+		return err
 	}
 	sdw.setState(stateSDDone)
+	return nil
 }
 
-func (sdw *SplitDiffWorker) Error() error {
-	return sdw.err
-}
-
-func (sdw *SplitDiffWorker) run() error {
+func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
 	if err := sdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if sdw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := sdw.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// second state: find targets
-	if err := sdw.findTargets(); err != nil {
+	if err := sdw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if sdw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := sdw.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// third phase: synchronize replication
-	if err := sdw.synchronizeReplication(); err != nil {
-		if sdw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := sdw.synchronizeReplication(ctx); err != nil {
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if sdw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := sdw.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// fourth phase: diff
-	if err := sdw.diff(); err != nil {
-		if sdw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := sdw.diff(ctx); err != nil {
 		return fmt.Errorf("diff() failed: %v", err)
 	}
 
@@ -244,12 +223,12 @@ func (sdw *SplitDiffWorker) init() error {
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
-func (sdw *SplitDiffWorker) findTargets() error {
+func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	sdw.setState(stateSDFindTargets)
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	sdw.destinationAlias, err = findChecker(sdw.ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
+	sdw.destinationAlias, err = findChecker(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
@@ -257,7 +236,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 	// find an appropriate endpoint in the source shards
 	sdw.sourceAliases = make([]topo.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
-		sdw.sourceAliases[i], err = findChecker(sdw.ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
+		sdw.sourceAliases[i], err = findChecker(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 		}
@@ -284,7 +263,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 //   (remove the cleanup task that does the same)
 // At this point, all checker instances are stopped at the same point.
 
-func (sdw *SplitDiffWorker) synchronizeReplication() error {
+func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.setState(stateSDSynchronizeReplication)
 
 	masterInfo, err := sdw.wr.TopoServer().GetTablet(sdw.shardInfo.MasterAlias)
@@ -294,8 +273,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
-	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
+	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp for %v failed: %v", sdw.shardInfo.MasterAlias, err)
@@ -322,8 +301,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, sourceTablet, blpPos.Position, 30*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, 30*time.Second)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
@@ -344,8 +323,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
-	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(ctx, masterInfo, &stopPositionList, 30*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, 30*time.Second)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
@@ -358,8 +337,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
-	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, destinationTablet, masterPos, 30*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, 30*time.Second)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
@@ -373,8 +352,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	ctx, cancel = context.WithTimeout(sdw.ctx, 60*time.Second)
-	err = sdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
+	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
 	}
@@ -391,7 +370,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
-func (sdw *SplitDiffWorker) diff() error {
+func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	sdw.setState(stateSDDiff)
 
 	sdw.wr.Logger().Infof("Gathering schema information...")
@@ -401,9 +380,9 @@ func (sdw *SplitDiffWorker) diff() error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			ctx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		sdw.wr.Logger().Infof("Got schema from destination %v", sdw.destinationAlias)
@@ -413,9 +392,9 @@ func (sdw *SplitDiffWorker) diff() error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			ctx, cancel := context.WithTimeout(sdw.ctx, 60*time.Second)
+			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(
-				ctx, sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+				shortCtx, sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 			cancel()
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
@@ -462,14 +441,14 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.wr.Logger().Errorf("Source shard doesn't overlap with destination????: %v", err)
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(sdw.ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(source) failed: %v", err)
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(sdw.ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.wr.Logger().Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				return

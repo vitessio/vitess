@@ -12,6 +12,8 @@ import (
 	"html/template"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -24,18 +26,10 @@ type Worker interface {
 	// StatusAsText returns the current worker status in plain text
 	StatusAsText() string
 
-	// Run is the main entry point for the worker. It will be called
-	// in a go routine.
-	// When Cancel() is called, Run should exit as soon as possible.
-	Run()
-
-	// Cancel should attempt to force the Worker to exit as soon as possible.
-	// Note that cleanup actions may still run after cancellation.
-	Cancel()
-
-	// Error returns the error status of the job, if any.
-	// It will only be called after Run() has completed.
-	Error() error
+	// Run is the main entry point for the worker. It will be
+	// called in a go routine.  When the passed in context is
+	// cancelled, Run should exit as soon as possible.
+	Run(context.Context) error
 }
 
 // Resolver is an interface that should be implemented by any workers that need to
@@ -43,7 +37,7 @@ type Worker interface {
 type Resolver interface {
 	// ResolveDestinationMasters forces the worker to (re)resolve the topology and update
 	// the destination masters that it knows about.
-	ResolveDestinationMasters() error
+	ResolveDestinationMasters(ctx context.Context) error
 
 	// GetDestinationMaster returns the most recently resolved destination master for a particular shard.
 	GetDestinationMaster(shardName string) (*topo.TabletInfo, error)

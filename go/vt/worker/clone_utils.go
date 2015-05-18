@@ -212,7 +212,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			return ti, fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
 		case <-t.C:
 			// Re-resolve and retry 30s after the failure
-			err = r.ResolveDestinationMasters()
+			err = r.ResolveDestinationMasters(ctx)
 			if err != nil {
 				return ti, fmt.Errorf("unable to re-resolve masters for ExecuteFetch, due to: %v", err)
 			}

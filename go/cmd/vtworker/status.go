@@ -68,16 +68,14 @@ func initStatusHandling() {
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		logger := currentMemoryLogger
-		done := currentDone
+		ctx := currentContext
 		currentWorkerMutex.Unlock()
 
 		data := make(map[string]interface{})
 		if wrk != nil {
 			data["Status"] = wrk.StatusAsHTML()
-			select {
-			case <-done:
+			if ctx == nil {
 				data["Done"] = true
-			default:
 			}
 			if logger != nil {
 				data["Logs"] = template.HTML(strings.Replace(logger.String(), "\n", "</br>\n", -1))
@@ -99,29 +97,27 @@ func initStatusHandling() {
 			acl.SendError(w, err)
 			return
 		}
+
 		currentWorkerMutex.Lock()
-		wrk := currentWorker
-		done := currentDone
-		currentWorkerMutex.Unlock()
 
 		// no worker, we go to the menu
-		if wrk == nil {
+		if currentWorker == nil {
+			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
 
 		// check the worker is really done
-		select {
-		case <-done:
-			currentWorkerMutex.Lock()
+		if currentContext == nil {
 			currentWorker = nil
 			currentMemoryLogger = nil
-			currentDone = nil
 			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		default:
-			httpError(w, "worker still executing", nil)
+			return
 		}
+
+		currentWorkerMutex.Unlock()
+		httpError(w, "worker still executing", nil)
 	})
 
 	// cancel handler
@@ -130,18 +126,20 @@ func initStatusHandling() {
 			acl.SendError(w, err)
 			return
 		}
-		currentWorkerMutex.Lock()
-		wrk := currentWorker
-		currentWorkerMutex.Unlock()
 
-		// no worker, we go to the menu
-		if wrk == nil {
+		currentWorkerMutex.Lock()
+
+		// no worker, or not running, we go to the menu
+		if currentWorker == nil || currentCancelFunc == nil {
+			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
 
 		// otherwise, cancel the running worker and go back to the status page
-		wrk.Cancel()
+		cancel := currentCancelFunc
+		currentWorkerMutex.Unlock()
+		cancel()
 		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 
 	})

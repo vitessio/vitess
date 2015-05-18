@@ -134,7 +134,7 @@ func TestSqlDiffer(t *testing.T) {
 		rdonly.RPCServer.Register(gorpcqueryservice.New(&sqlDifferSqlQuery{t: t}))
 	}
 
-	wrk.Run()
+	wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
 	if wrk.err != nil || wrk.state != stateSCDone {

@@ -51,8 +51,6 @@ type SplitCloneWorker struct {
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
-	ctx                    context.Context
-	ctxCancel              context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -94,7 +92,6 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitCloneWorker{
 		wr:                     wr,
 		cell:                   cell,
@@ -107,8 +104,6 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
-		ctx:                    ctx,
-		ctxCancel:              cancel,
 
 		state: stateSCNotSarted,
 		ev: &events.SplitClone{
@@ -195,28 +190,21 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-// Cancel is part of the Worker interface
-func (scw *SplitCloneWorker) Cancel() {
-	scw.ctxCancel()
-}
-
-func (scw *SplitCloneWorker) checkInterrupted() bool {
+func (scw *SplitCloneWorker) checkInterrupted(ctx context.Context) error {
 	select {
-	case <-scw.ctx.Done():
-		if scw.ctx.Err() == context.DeadlineExceeded {
-			return false
-		}
-		scw.recordError(topo.ErrInterrupted)
-		return true
+	case <-ctx.Done():
+		err := ctx.Err()
+		scw.recordError(err)
+		return err
 	default:
 	}
-	return false
+	return nil
 }
 
 // Run implements the Worker interface
-func (scw *SplitCloneWorker) Run() {
+func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
-	err := scw.run()
+	err := scw.run(ctx)
 
 	scw.setState(stateSCCleanUp)
 	cerr := scw.cleaner.CleanUp(scw.wr)
@@ -229,46 +217,32 @@ func (scw *SplitCloneWorker) Run() {
 	}
 	if err != nil {
 		scw.recordError(err)
-		return
+		return err
 	}
 	scw.setState(stateSCDone)
+	return nil
 }
 
-func (scw *SplitCloneWorker) Error() error {
-	return scw.err
-}
-
-func (scw *SplitCloneWorker) run() error {
+func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := scw.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// second state: find targets
-	if err := scw.findTargets(); err != nil {
-		// A canceled context can appear to cause an application error
-		if scw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := scw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := scw.checkInterrupted(ctx); err != nil {
+		return err
 	}
 
 	// third state: copy data
-	if err := scw.copy(); err != nil {
-		// A canceled context can appear to cause an application error
-		if scw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := scw.copy(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
-	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
 	}
 
 	return nil
@@ -331,14 +305,14 @@ func (scw *SplitCloneWorker) init() error {
 // - find one rdonly in the source shard
 // - mark it as 'checker' pointing back to us
 // - get the aliases of all the targets
-func (scw *SplitCloneWorker) findTargets() error {
+func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	scw.setState(stateSCFindTargets)
 	var err error
 
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = findChecker(scw.ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = findChecker(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -353,8 +327,8 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-		err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i])
+		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
@@ -368,13 +342,13 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	return scw.ResolveDestinationMasters()
+	return scw.ResolveDestinationMasters(ctx)
 }
 
 // ResolveDestinationMasters implements the Resolver interface.
 // It will attempt to resolve all shards and update scw.destinationShardsToTablets;
 // if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
-func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+func (scw *SplitCloneWorker) ResolveDestinationMasters(ctx context.Context) error {
 	statsDestinationAttemptedResolves.Add(1)
 	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
 
@@ -389,7 +363,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	}
 
 	for _, si := range scw.destinationShards {
-		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
+		ti, err := resolveDestinationShardMaster(ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
@@ -415,12 +389,12 @@ func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.Table
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
 // the schema on these tablets, to minimize the chances of the topo changing in between.
-func (scw *SplitCloneWorker) findReloadTargets() error {
+func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 	scw.reloadAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
+		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
@@ -434,7 +408,7 @@ func (scw *SplitCloneWorker) findReloadTargets() error {
 //	- copy the data from source tablets to destination masters (wtih replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (scw *SplitCloneWorker) copy() error {
+func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	scw.setState(stateSCCopy)
 
 	// get source schema from the first shard
@@ -442,8 +416,8 @@ func (scw *SplitCloneWorker) copy() error {
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(ctx, scw.sourceAliases[0], nil, scw.excludeTables, true)
+	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
@@ -498,8 +472,7 @@ func (scw *SplitCloneWorker) copy() error {
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
-		if !scw.checkInterrupted() {
-			scw.Cancel()
+		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
 		}
 		mu.Unlock()
@@ -520,7 +493,7 @@ func (scw *SplitCloneWorker) copy() error {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(scw.ctx, scw.wr, scw, shardName, insertChannel); err != nil {
+					if err := executeFetchLoop(ctx, scw.wr, scw, shardName, insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -540,7 +513,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			chunks, err := findChunks(scw.ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := findChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
@@ -558,7 +531,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(scw.ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					qrr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
@@ -566,7 +539,7 @@ func (scw *SplitCloneWorker) copy() error {
 					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, scw.ctx.Done()); err != nil {
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, ctx.Done()); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatus[tableIndex].threadDone()
@@ -595,8 +568,8 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
-			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
+			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
 				return err
@@ -610,7 +583,7 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(shardName string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSqlCommands(scw.ctx, scw.wr, scw, shardName, queries); err != nil {
+				if err := runSqlCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
 			}(si.ShardName())
@@ -630,8 +603,8 @@ func (scw *SplitCloneWorker) copy() error {
 	} else {
 		for _, si := range scw.destinationShards {
 			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-			err := scw.wr.SetSourceShards(ctx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
 			cancel()
 			if err != nil {
 				return fmt.Errorf("failed to set source shards: %v", err)
@@ -639,7 +612,7 @@ func (scw *SplitCloneWorker) copy() error {
 		}
 	}
 
-	err = scw.findReloadTargets()
+	err = scw.findReloadTargets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
 	}
@@ -652,8 +625,8 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-				err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
+				shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 				cancel()
 				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
