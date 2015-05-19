@@ -377,6 +377,11 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		}
 		mu.Unlock()
 	}
+	shouldStop := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return firstError != nil
+	}
 
 	destinationWaitGroup := sync.WaitGroup{}
 
@@ -421,6 +426,10 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 
 				sema.Acquire()
 				defer sema.Release()
+
+				if shouldStop() {
+					return
+				}
 
 				vscw.tableStatus[tableIndex].threadStarted()
 

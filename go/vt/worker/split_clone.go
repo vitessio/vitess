@@ -438,6 +438,11 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		}
 		mu.Unlock()
 	}
+	shouldStop := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return firstError != nil
+	}
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
@@ -487,6 +492,10 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 					sema.Acquire()
 					defer sema.Release()
+
+					if shouldStop() {
+						return
+					}
 
 					scw.tableStatus[tableIndex].threadStarted()
 
