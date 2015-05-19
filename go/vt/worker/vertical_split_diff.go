@@ -21,22 +21,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const (
-	// all the states for the worker
-	stateVSDNotSarted = "not started"
-	stateVSDDone      = "done"
-	stateVSDError     = "error"
-
-	stateVSDInit                   = "initializing"
-	stateVSDFindTargets            = "finding target instances"
-	stateVSDSynchronizeReplication = "synchronizing replication"
-	stateVSDDiff                   = "running the diff"
-	stateVSDCleanUp                = "cleaning up"
-)
-
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type VerticalSplitDiffWorker struct {
+	StatusWorker
+
 	wr            *wrangler.Wrangler
 	cell          string
 	keyspace      string
@@ -45,21 +34,16 @@ type VerticalSplitDiffWorker struct {
 	cleaner       *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
-	mu    sync.Mutex
-	state string
 
-	// populated if state == stateVSDError
-	err error
-
-	// populated during stateVSDInit, read-only after that
+	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
 	shardInfo    *topo.ShardInfo
 
-	// populated during stateVSDFindTargets, read-only after that
+	// populated during WorkerStateFindTargets, read-only after that
 	sourceAlias      topo.TabletAlias
 	destinationAlias topo.TabletAlias
 
-	// populated during stateVSDDiff
+	// populated during WorkerStateDiff
 	sourceSchemaDefinition      *myproto.SchemaDefinition
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
@@ -67,44 +51,26 @@ type VerticalSplitDiffWorker struct {
 // NewVerticalSplitDiffWorker returns a new VerticalSplitDiffWorker object.
 func NewVerticalSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
 	return &VerticalSplitDiffWorker{
+		StatusWorker:  NewStatusWorker(),
 		wr:            wr,
 		cell:          cell,
 		keyspace:      keyspace,
 		shard:         shard,
 		excludeTables: excludeTables,
 		cleaner:       &wrangler.Cleaner{},
-
-		state: stateVSDNotSarted,
 	}
-}
-
-func (vsdw *VerticalSplitDiffWorker) setState(state string) {
-	vsdw.mu.Lock()
-	vsdw.state = state
-	statsState.Set(state)
-	vsdw.mu.Unlock()
-}
-
-func (vsdw *VerticalSplitDiffWorker) recordError(err error) {
-	vsdw.mu.Lock()
-	vsdw.state = stateVSDError
-	statsState.Set(stateVSDError)
-	vsdw.err = err
-	vsdw.mu.Unlock()
 }
 
 // StatusAsHTML is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
-	vsdw.mu.Lock()
-	defer vsdw.mu.Unlock()
+	vsdw.Mu.Lock()
+	defer vsdw.Mu.Unlock()
 	result := "<b>Working on:</b> " + vsdw.keyspace + "/" + vsdw.shard + "</br>\n"
-	result += "<b>State:</b> " + vsdw.state + "</br>\n"
-	switch vsdw.state {
-	case stateVSDError:
-		result += "<b>Error</b>: " + vsdw.err.Error() + "</br>\n"
-	case stateVSDDiff:
+	result += "<b>State:</b> " + vsdw.State.String() + "</br>\n"
+	switch vsdw.State {
+	case WorkerStateDiff:
 		result += "<b>Running</b>:</br>\n"
-	case stateVSDDone:
+	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 	}
 
@@ -113,30 +79,17 @@ func (vsdw *VerticalSplitDiffWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText is part of the Worker interface.
 func (vsdw *VerticalSplitDiffWorker) StatusAsText() string {
-	vsdw.mu.Lock()
-	defer vsdw.mu.Unlock()
+	vsdw.Mu.Lock()
+	defer vsdw.Mu.Unlock()
 	result := "Working on: " + vsdw.keyspace + "/" + vsdw.shard + "\n"
-	result += "State: " + vsdw.state + "\n"
-	switch vsdw.state {
-	case stateVSDError:
-		result += "Error: " + vsdw.err.Error() + "\n"
-	case stateVSDDiff:
+	result += "State: " + vsdw.State.String() + "\n"
+	switch vsdw.State {
+	case WorkerStateDiff:
 		result += "Running...\n"
-	case stateVSDDone:
+	case WorkerStateDone:
 		result += "Success.\n"
 	}
 	return result
-}
-
-func (vsdw *VerticalSplitDiffWorker) checkInterrupted(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		vsdw.recordError(err)
-		return err
-	default:
-	}
-	return nil
 }
 
 // Run is mostly a wrapper to run the cleanup at the end.
@@ -144,7 +97,7 @@ func (vsdw *VerticalSplitDiffWorker) Run(ctx context.Context) error {
 	resetVars()
 	err := vsdw.run(ctx)
 
-	vsdw.setState(stateVSDCleanUp)
+	vsdw.SetState(WorkerStateCleanUp)
 	cerr := vsdw.cleaner.CleanUp(vsdw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -154,10 +107,10 @@ func (vsdw *VerticalSplitDiffWorker) Run(ctx context.Context) error {
 		}
 	}
 	if err != nil {
-		vsdw.recordError(err)
+		vsdw.SetState(WorkerStateError)
 		return err
 	}
-	vsdw.setState(stateVSDDone)
+	vsdw.SetState(WorkerStateDone)
 	return nil
 }
 
@@ -166,7 +119,7 @@ func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 	if err := vsdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := vsdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -174,7 +127,7 @@ func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 	if err := vsdw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := vsdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -182,7 +135,7 @@ func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 	if err := vsdw.synchronizeReplication(ctx); err != nil {
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if err := vsdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -197,7 +150,7 @@ func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 // init phase:
 // - read the shard info, make sure it has sources
 func (vsdw *VerticalSplitDiffWorker) init() error {
-	vsdw.setState(stateVSDInit)
+	vsdw.SetState(WorkerStateInit)
 
 	var err error
 
@@ -233,7 +186,7 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
 func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
-	vsdw.setState(stateVSDFindTargets)
+	vsdw.SetState(WorkerStateFindTargets)
 
 	// find an appropriate endpoint in destination shard
 	var err error
@@ -270,7 +223,7 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 // At this point, all checker instances are stopped at the same point.
 
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
-	vsdw.setState(stateVSDSynchronizeReplication)
+	vsdw.SetState(WorkerStateSyncReplication)
 
 	masterInfo, err := vsdw.wr.TopoServer().GetTablet(vsdw.shardInfo.MasterAlias)
 	if err != nil {
@@ -374,7 +327,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 // - for each table in destination, run a diff pipeline.
 
 func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
-	vsdw.setState(stateVSDDiff)
+	vsdw.SetState(WorkerStateDiff)
 
 	vsdw.wr.Logger().Infof("Gathering schema information...")
 	wg := sync.WaitGroup{}

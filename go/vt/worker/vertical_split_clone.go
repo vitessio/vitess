@@ -24,21 +24,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const (
-	// all the states for the worker
-	stateVSCNotSarted = "not started"
-	stateVSCDone      = "done"
-	stateVSCError     = "error"
-
-	stateVSCInit        = "initializing"
-	stateVSCFindTargets = "finding target instances"
-	stateVSCCopy        = "copying the data"
-	stateVSCCleanUp     = "cleaning up"
-)
-
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard
 // to a destination keyspace/shard.
 type VerticalSplitCloneWorker struct {
+	StatusWorker
+
 	wr                     *wrangler.Wrangler
 	cell                   string
 	destinationKeyspace    string
@@ -51,21 +41,16 @@ type VerticalSplitCloneWorker struct {
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
 
-	// all subsequent fields are protected by the mutex
-	mu    sync.Mutex
-	state string
+	// all subsequent fields are protected by the StatusWorker mutex
 
-	// populated if state == stateVSCError
-	err error
-
-	// populated during stateVSCInit, read-only after that
+	// populated during WorkerStateInit, read-only after that
 	sourceKeyspace string
 
-	// populated during stateVSCFindTargets, read-only after that
+	// populated during WorkerStateFindTargets, read-only after that
 	sourceAlias  topo.TabletAlias
 	sourceTablet *topo.TabletInfo
 
-	// populated during stateVSCCopy
+	// populated during WorkerStateCopy
 	tableStatus []*tableStatus
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
@@ -88,6 +73,7 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		return nil, err
 	}
 	return &VerticalSplitCloneWorker{
+		StatusWorker:           NewStatusWorker(),
 		wr:                     wr,
 		cell:                   cell,
 		destinationKeyspace:    destinationKeyspace,
@@ -100,7 +86,6 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
 
-		state: stateVSCNotSarted,
 		ev: &events.VerticalSplitClone{
 			Cell:     cell,
 			Keyspace: destinationKeyspace,
@@ -111,41 +96,30 @@ func NewVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, destinationKeyspac
 	}, nil
 }
 
-func (vscw *VerticalSplitCloneWorker) setState(state string) {
-	vscw.mu.Lock()
-	vscw.state = state
-	statsState.Set(state)
-	vscw.mu.Unlock()
-
-	event.DispatchUpdate(vscw.ev, state)
+func (vscw *VerticalSplitCloneWorker) setState(state StatusWorkerState) {
+	vscw.SetState(state)
+	event.DispatchUpdate(vscw.ev, state.String())
 }
 
-func (vscw *VerticalSplitCloneWorker) recordError(err error) {
-	vscw.mu.Lock()
-	vscw.state = stateVSCError
-	statsState.Set(stateVSCError)
-	vscw.err = err
-	vscw.mu.Unlock()
-
+func (vscw *VerticalSplitCloneWorker) setErrorState(err error) {
+	vscw.SetState(WorkerStateError)
 	event.DispatchUpdate(vscw.ev, "error: "+err.Error())
 }
 
 // StatusAsHTML implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
-	vscw.mu.Lock()
-	defer vscw.mu.Unlock()
+	vscw.Mu.Lock()
+	defer vscw.Mu.Unlock()
 	result := "<b>Working on:</b> " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "</br>\n"
-	result += "<b>State:</b> " + vscw.state + "</br>\n"
-	switch vscw.state {
-	case stateVSCError:
-		result += "<b>Error</b>: " + vscw.err.Error() + "</br>\n"
-	case stateVSCCopy:
+	result += "<b>State:</b> " + vscw.State.String() + "</br>\n"
+	switch vscw.State {
+	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + vscw.sourceAlias.String() + "</br>\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
-	case stateVSCDone:
+	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += strings.Join(statuses, "</br>\n")
@@ -156,20 +130,18 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
-	vscw.mu.Lock()
-	defer vscw.mu.Unlock()
+	vscw.Mu.Lock()
+	defer vscw.Mu.Unlock()
 	result := "Working on: " + vscw.destinationKeyspace + "/" + vscw.destinationShard + "\n"
-	result += "State: " + vscw.state + "\n"
-	switch vscw.state {
-	case stateVSCError:
-		result += "Error: " + vscw.err.Error() + "\n"
-	case stateVSCCopy:
+	result += "State: " + vscw.State.String() + "\n"
+	switch vscw.State {
+	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + vscw.sourceAlias.String() + "\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
-	case stateVSCDone:
+	case WorkerStateDone:
 		result += "Success:\n"
 		statuses, _ := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += strings.Join(statuses, "\n")
@@ -177,23 +149,12 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-func (vscw *VerticalSplitCloneWorker) checkInterrupted(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		vscw.recordError(err)
-		return err
-	default:
-	}
-	return nil
-}
-
 // Run implements the Worker interface
 func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
 	err := vscw.run(ctx)
 
-	vscw.setState(stateVSCCleanUp)
+	vscw.setState(WorkerStateCleanUp)
 	cerr := vscw.cleaner.CleanUp(vscw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -203,10 +164,10 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 	if err != nil {
-		vscw.recordError(err)
+		vscw.setErrorState(err)
 		return err
 	}
-	vscw.setState(stateVSCDone)
+	vscw.setState(WorkerStateDone)
 	return nil
 }
 
@@ -215,7 +176,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := vscw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -223,7 +184,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := vscw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -231,7 +192,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.copy(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if err := vscw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -241,7 +202,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 // init phase:
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (vscw *VerticalSplitCloneWorker) init() error {
-	vscw.setState(stateVSCInit)
+	vscw.setState(WorkerStateInit)
 
 	// read the keyspace and validate it
 	destinationKeyspaceInfo, err := vscw.wr.TopoServer().GetKeyspace(vscw.destinationKeyspace)
@@ -278,7 +239,7 @@ func (vscw *VerticalSplitCloneWorker) init() error {
 // - mark it as 'checker' pointing back to us
 // - get the aliases of all the targets
 func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
-	vscw.setState(stateVSCFindTargets)
+	vscw.setState(WorkerStateFindTargets)
 
 	// find an appropriate endpoint in the source shard
 	var err error
@@ -366,7 +327,7 @@ func (vscw *VerticalSplitCloneWorker) findReloadTargets(ctx context.Context) err
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
-	vscw.setState(stateVSCCopy)
+	vscw.setState(WorkerStateCopy)
 
 	// get source schema
 	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -379,7 +340,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter")
 	}
 	vscw.wr.Logger().Infof("Source tablet has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-	vscw.mu.Lock()
+	vscw.Mu.Lock()
 	vscw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		vscw.tableStatus[i] = &tableStatus{
@@ -388,7 +349,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		}
 	}
 	vscw.startTime = time.Now()
-	vscw.mu.Unlock()
+	vscw.Mu.Unlock()
 
 	// Count rows
 	for i, td := range sourceSchemaDefinition.TableDefinitions {

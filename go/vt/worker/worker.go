@@ -65,3 +65,13 @@ func resetVars() {
 	statsDestinationActualResolves.Set(0)
 	statsRetryCounters.Reset()
 }
+
+// checkInterrupted returns ctx.Err() iff ctx.Done()
+func checkInterrupted(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	return nil
+}

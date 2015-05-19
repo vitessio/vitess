@@ -25,21 +25,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const (
-	// all the states for the worker
-	stateSCNotSarted = "not started"
-	stateSCDone      = "done"
-	stateSCError     = "error"
-
-	stateSCInit        = "initializing"
-	stateSCFindTargets = "finding target instances"
-	stateSCCopy        = "copying the data"
-	stateSCCleanUp     = "cleaning up"
-)
-
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
 type SplitCloneWorker struct {
+	StatusWorker
+
 	wr                     *wrangler.Wrangler
 	cell                   string
 	keyspace               string
@@ -53,22 +43,17 @@ type SplitCloneWorker struct {
 	cleaner                *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
-	mu    sync.Mutex
-	state string
 
-	// populated if state == stateSCError
-	err error
-
-	// populated during stateSCInit, read-only after that
+	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 
-	// populated during stateSCFindTargets, read-only after that
+	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []topo.TabletAlias
 	sourceTablets []*topo.TabletInfo
 
-	// populated during stateSCCopy
+	// populated during WorkerStateCopy
 	tableStatus []*tableStatus
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
@@ -93,6 +78,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		return nil, err
 	}
 	return &SplitCloneWorker{
+		StatusWorker:           NewStatusWorker(),
 		wr:                     wr,
 		cell:                   cell,
 		keyspace:               keyspace,
@@ -105,7 +91,6 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
 
-		state: stateSCNotSarted,
 		ev: &events.SplitClone{
 			Cell:          cell,
 			Keyspace:      keyspace,
@@ -116,22 +101,13 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	}, nil
 }
 
-func (scw *SplitCloneWorker) setState(state string) {
-	scw.mu.Lock()
-	scw.state = state
-	statsState.Set(state)
-	scw.mu.Unlock()
-
-	event.DispatchUpdate(scw.ev, state)
+func (scw *SplitCloneWorker) setState(state StatusWorkerState) {
+	scw.SetState(state)
+	event.DispatchUpdate(scw.ev, state.String())
 }
 
-func (scw *SplitCloneWorker) recordError(err error) {
-	scw.mu.Lock()
-	scw.state = stateSCError
-	statsState.Set(stateSCError)
-	scw.err = err
-	scw.mu.Unlock()
-
+func (scw *SplitCloneWorker) setErrorState(err error) {
+	scw.SetState(WorkerStateError)
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
@@ -145,20 +121,18 @@ func (scw *SplitCloneWorker) formatSources() string {
 
 // StatusAsHTML implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
-	scw.mu.Lock()
-	defer scw.mu.Unlock()
+	scw.Mu.Lock()
+	defer scw.Mu.Unlock()
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
-	result += "<b>State:</b> " + scw.state + "</br>\n"
-	switch scw.state {
-	case stateSCError:
-		result += "<b>Error</b>: " + scw.err.Error() + "</br>\n"
-	case stateSCCopy:
+	result += "<b>State:</b> " + scw.State.String() + "</br>\n"
+	switch scw.State {
+	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
 		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
-	case stateSCDone:
+	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "</br>\n")
@@ -169,20 +143,18 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsText() string {
-	scw.mu.Lock()
-	defer scw.mu.Unlock()
+	scw.Mu.Lock()
+	defer scw.Mu.Unlock()
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
-	result += "State: " + scw.state + "\n"
-	switch scw.state {
-	case stateSCError:
-		result += "Error: " + scw.err.Error() + "\n"
-	case stateSCCopy:
+	result += "State: " + scw.State.String() + "\n"
+	switch scw.State {
+	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
 		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
-	case stateSCDone:
+	case WorkerStateDone:
 		result += "Success:\n"
 		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "\n")
@@ -190,23 +162,12 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-func (scw *SplitCloneWorker) checkInterrupted(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		scw.recordError(err)
-		return err
-	default:
-	}
-	return nil
-}
-
 // Run implements the Worker interface
 func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
 	err := scw.run(ctx)
 
-	scw.setState(stateSCCleanUp)
+	scw.setState(WorkerStateCleanUp)
 	cerr := scw.cleaner.CleanUp(scw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -216,10 +177,10 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		}
 	}
 	if err != nil {
-		scw.recordError(err)
+		scw.setErrorState(err)
 		return err
 	}
-	scw.setState(stateSCDone)
+	scw.setState(WorkerStateDone)
 	return nil
 }
 
@@ -228,7 +189,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := scw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -236,7 +197,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	if err := scw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := scw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -251,7 +212,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 // init phase:
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (scw *SplitCloneWorker) init() error {
-	scw.setState(stateSCInit)
+	scw.setState(WorkerStateInit)
 	var err error
 
 	// read the keyspace and validate it
@@ -306,7 +267,7 @@ func (scw *SplitCloneWorker) init() error {
 // - mark it as 'checker' pointing back to us
 // - get the aliases of all the targets
 func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
-	scw.setState(stateSCFindTargets)
+	scw.setState(WorkerStateFindTargets)
 	var err error
 
 	// find an appropriate endpoint in the source shards
@@ -409,7 +370,7 @@ func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
 func (scw *SplitCloneWorker) copy(ctx context.Context) error {
-	scw.setState(stateSCCopy)
+	scw.setState(WorkerStateCopy)
 
 	// get source schema from the first shard
 	// TODO(alainjobart): for now, we assume the schema is compatible
@@ -426,7 +387,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", scw.sourceAliases[0])
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-	scw.mu.Lock()
+	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		scw.tableStatus[i] = &tableStatus{
@@ -435,7 +396,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 		}
 	}
 	scw.startTime = time.Now()
-	scw.mu.Unlock()
+	scw.Mu.Unlock()
 
 	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))

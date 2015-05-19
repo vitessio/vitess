@@ -21,22 +21,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const (
-	// all the states for the worker
-	stateSDNotSarted = "not started"
-	stateSDDone      = "done"
-	stateSDError     = "error"
-
-	stateSDInit                   = "initializing"
-	stateSDFindTargets            = "finding target instances"
-	stateSDSynchronizeReplication = "synchronizing replication"
-	stateSDDiff                   = "running the diff"
-	stateSDCleanUp                = "cleaning up"
-)
-
 // SplitDiffWorker executes a diff between a destination shard and its
 // source shards in a shard split case.
 type SplitDiffWorker struct {
+	StatusWorker
+
 	wr            *wrangler.Wrangler
 	cell          string
 	keyspace      string
@@ -45,21 +34,16 @@ type SplitDiffWorker struct {
 	cleaner       *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
-	mu    sync.Mutex
-	state string
 
-	// populated if state == stateSDError
-	err error
-
-	// populated during stateSDInit, read-only after that
+	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo *topo.KeyspaceInfo
 	shardInfo    *topo.ShardInfo
 
-	// populated during stateSDFindTargets, read-only after that
+	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases    []topo.TabletAlias
 	destinationAlias topo.TabletAlias
 
-	// populated during stateSDDiff
+	// populated during WorkerStateDiff
 	sourceSchemaDefinitions     []*myproto.SchemaDefinition
 	destinationSchemaDefinition *myproto.SchemaDefinition
 }
@@ -67,44 +51,26 @@ type SplitDiffWorker struct {
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
 func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, excludeTables []string) Worker {
 	return &SplitDiffWorker{
+		StatusWorker:  NewStatusWorker(),
 		wr:            wr,
 		cell:          cell,
 		keyspace:      keyspace,
 		shard:         shard,
 		excludeTables: excludeTables,
 		cleaner:       &wrangler.Cleaner{},
-
-		state: stateSDNotSarted,
 	}
-}
-
-func (sdw *SplitDiffWorker) setState(state string) {
-	sdw.mu.Lock()
-	sdw.state = state
-	statsState.Set(state)
-	sdw.mu.Unlock()
-}
-
-func (sdw *SplitDiffWorker) recordError(err error) {
-	sdw.mu.Lock()
-	sdw.state = stateSDError
-	statsState.Set(stateSDError)
-	sdw.err = err
-	sdw.mu.Unlock()
 }
 
 // StatusAsHTML is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
-	sdw.mu.Lock()
-	defer sdw.mu.Unlock()
+	sdw.Mu.Lock()
+	defer sdw.Mu.Unlock()
 	result := "<b>Working on:</b> " + sdw.keyspace + "/" + sdw.shard + "</br>\n"
-	result += "<b>State:</b> " + sdw.state + "</br>\n"
-	switch sdw.state {
-	case stateSDError:
-		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
-	case stateSDDiff:
+	result += "<b>State:</b> " + sdw.State.String() + "</br>\n"
+	switch sdw.State {
+	case WorkerStateDiff:
 		result += "<b>Running...</b></br>\n"
-	case stateSDDone:
+	case WorkerStateDone:
 		result += "<b>Success.</b></br>\n"
 	}
 
@@ -113,30 +79,17 @@ func (sdw *SplitDiffWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText is part of the Worker interface
 func (sdw *SplitDiffWorker) StatusAsText() string {
-	sdw.mu.Lock()
-	defer sdw.mu.Unlock()
+	sdw.Mu.Lock()
+	defer sdw.Mu.Unlock()
 	result := "Working on: " + sdw.keyspace + "/" + sdw.shard + "\n"
-	result += "State: " + sdw.state + "\n"
-	switch sdw.state {
-	case stateSDError:
-		result += "Error: " + sdw.err.Error() + "\n"
-	case stateSDDiff:
+	result += "State: " + sdw.State.String() + "\n"
+	switch sdw.State {
+	case WorkerStateDiff:
 		result += "Running...\n"
-	case stateSDDone:
+	case WorkerStateDone:
 		result += "Success.\n"
 	}
 	return result
-}
-
-func (sdw *SplitDiffWorker) checkInterrupted(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		sdw.recordError(err)
-		return err
-	default:
-	}
-	return nil
 }
 
 // Run is mostly a wrapper to run the cleanup at the end.
@@ -144,7 +97,7 @@ func (sdw *SplitDiffWorker) Run(ctx context.Context) error {
 	resetVars()
 	err := sdw.run(ctx)
 
-	sdw.setState(stateSDCleanUp)
+	sdw.SetState(WorkerStateCleanUp)
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -154,10 +107,10 @@ func (sdw *SplitDiffWorker) Run(ctx context.Context) error {
 		}
 	}
 	if err != nil {
-		sdw.recordError(err)
+		sdw.SetState(WorkerStateError)
 		return err
 	}
-	sdw.setState(stateSDDone)
+	sdw.SetState(WorkerStateDone)
 	return nil
 }
 
@@ -166,7 +119,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := sdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -174,7 +127,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := sdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -182,7 +135,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.synchronizeReplication(ctx); err != nil {
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if err := sdw.checkInterrupted(ctx); err != nil {
+	if err := checkInterrupted(ctx); err != nil {
 		return err
 	}
 
@@ -197,7 +150,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 // init phase:
 // - read the shard info, make sure it has sources
 func (sdw *SplitDiffWorker) init() error {
-	sdw.setState(stateSDInit)
+	sdw.SetState(WorkerStateInit)
 
 	var err error
 	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(sdw.keyspace)
@@ -224,7 +177,7 @@ func (sdw *SplitDiffWorker) init() error {
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
 func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
-	sdw.setState(stateSDFindTargets)
+	sdw.SetState(WorkerStateFindTargets)
 
 	// find an appropriate endpoint in destination shard
 	var err error
@@ -264,7 +217,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 // At this point, all checker instances are stopped at the same point.
 
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
-	sdw.setState(stateSDSynchronizeReplication)
+	sdw.SetState(WorkerStateSyncReplication)
 
 	masterInfo, err := sdw.wr.TopoServer().GetTablet(sdw.shardInfo.MasterAlias)
 	if err != nil {
@@ -371,7 +324,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 // - for each table in destination, run a diff pipeline.
 
 func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
-	sdw.setState(stateSDDiff)
+	sdw.SetState(WorkerStateDiff)
 
 	sdw.wr.Logger().Infof("Gathering schema information...")
 	sdw.sourceSchemaDefinitions = make([]*myproto.SchemaDefinition, len(sdw.sourceAliases))

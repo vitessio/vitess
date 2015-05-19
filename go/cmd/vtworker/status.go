@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -69,14 +70,19 @@ func initStatusHandling() {
 		wrk := currentWorker
 		logger := currentMemoryLogger
 		ctx := currentContext
+		err := lastRunError
 		currentWorkerMutex.Unlock()
 
 		data := make(map[string]interface{})
 		if wrk != nil {
-			data["Status"] = wrk.StatusAsHTML()
+			status := template.HTML("Current worker:<br>\n") + wrk.StatusAsHTML()
 			if ctx == nil {
 				data["Done"] = true
+				if err != nil {
+					status += template.HTML(fmt.Sprintf("<br>\nEnded with an error: %v<br>\n", err))
+				}
 			}
+			data["Status"] = status
 			if logger != nil {
 				data["Logs"] = template.HTML(strings.Replace(logger.String(), "\n", "</br>\n", -1))
 			} else {

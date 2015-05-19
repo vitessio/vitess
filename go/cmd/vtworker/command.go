@@ -116,6 +116,7 @@ func runCommand(args []string) error {
 				err := lastRunError
 				currentWorkerMutex.Unlock()
 				if err != nil {
+					log.Errorf("Ended with an error: %v", err)
 					os.Exit(1)
 				}
 				os.Exit(0)
