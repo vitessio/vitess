@@ -329,7 +329,7 @@ func testSplitClone(t *testing.T, strategy string) {
 	rightRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
 
 	// Only wait 1 ms between retries, so that the test passes faster
-	executeFetchRetryTime = (1 * time.Millisecond)
+	*executeFetchRetryTime = (1 * time.Millisecond)
 
 	wrk.Run(ctx)
 	status := wrk.StatusAsText()

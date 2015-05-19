@@ -151,9 +151,6 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
 
-// The amount of time we should wait before retrying ExecuteFetch calls
-var executeFetchRetryTime = (30 * time.Second)
-
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
@@ -190,6 +187,9 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		case errNo == "1290":
 			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", ti, err)
 			statsRetryCounters.Add("ReadOnly", 1)
+		case errNo == "2002" || errNo == "2006":
+			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", ti, err)
+			statsRetryCounters.Add("ConnectionError", 1)
 		case errNo == "1062":
 			if !isRetry {
 				return ti, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", ti, err)
@@ -200,7 +200,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			// Unknown error
 			return ti, err
 		}
-		t := time.NewTimer(executeFetchRetryTime)
+		t := time.NewTimer(*executeFetchRetryTime)
 		// don't leak memory if the timer isn't triggered
 		defer t.Stop()
 
