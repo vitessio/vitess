@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -106,7 +107,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, tablet.DbName(), blacklistedTables)
 		if err != nil {
 			return err
 		}

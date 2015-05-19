@@ -70,6 +70,10 @@ type MysqlDaemon interface {
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+
+	// Close will close this instance of Mysqld. It will wait for all dba
+	// queries to be finished.
+	Close()
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
@@ -335,6 +339,10 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, 
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
 	return qr, nil
+}
+
+// Close is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Close() {
 }
 
 // CheckSuperQueryList returns an error if all the queries we expected

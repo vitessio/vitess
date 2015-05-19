@@ -457,8 +457,8 @@ func (agent *ActionAgent) Stop() {
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
-	if agent.Mysqld != nil {
-		agent.Mysqld.Close()
+	if agent.MysqlDaemon != nil {
+		agent.MysqlDaemon.Close()
 	}
 }
 

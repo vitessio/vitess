@@ -114,7 +114,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
-func (mysqld *Mysqld) ResolveTables(dbName string, tables []string) ([]string, error) {
+func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
 	sd, err := mysqld.GetSchema(dbName, tables, nil, true)
 	if err != nil {
 		return nil, err
