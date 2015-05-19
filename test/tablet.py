@@ -240,7 +240,7 @@ class Tablet(object):
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', '_vt', 'mysql']:
+      if dbname in ['information_schema', 'mysql']:
         continue
       self.drop_db(dbname)
 

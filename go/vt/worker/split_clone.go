@@ -384,7 +384,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	defer scw.resolveMu.Unlock()
 
 	// If the last resolution was fresh enough, return it.
-	if time.Now().Sub(scw.resolveTime) < resolveTTL {
+	if time.Now().Sub(scw.resolveTime) < *resolveTTL {
 		return nil
 	}
 

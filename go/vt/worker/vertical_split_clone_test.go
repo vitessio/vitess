@@ -314,7 +314,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	destRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalDestinationsFactory(t, 30)
 
 	// Only wait 1 ms between retries, so that the test passes faster
-	executeFetchRetryTime = (1 * time.Millisecond)
+	*executeFetchRetryTime = (1 * time.Millisecond)
 
 	wrk.Run()
 	status := wrk.StatusAsText()
