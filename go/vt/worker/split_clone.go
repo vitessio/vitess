@@ -189,7 +189,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -197,7 +197,7 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	if err := scw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 

@@ -66,8 +66,8 @@ func resetVars() {
 	statsRetryCounters.Reset()
 }
 
-// checkInterrupted returns ctx.Err() iff ctx.Done()
-func checkInterrupted(ctx context.Context) error {
+// checkDone returns ctx.Err() iff ctx.Done()
+func checkDone(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

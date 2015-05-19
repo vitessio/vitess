@@ -117,7 +117,7 @@ func (worker *SQLDiffWorker) run(ctx context.Context) error {
 	if err := worker.findTargets(ctx); err != nil {
 		return err
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -125,7 +125,7 @@ func (worker *SQLDiffWorker) run(ctx context.Context) error {
 	if err := worker.synchronizeReplication(ctx); err != nil {
 		return err
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -180,7 +180,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Cannot stop slave %v: %v", worker.subset.alias, err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -195,7 +195,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// sleep for a few seconds
 	time.Sleep(5 * time.Second)
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 

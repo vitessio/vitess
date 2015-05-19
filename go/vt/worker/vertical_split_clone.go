@@ -176,7 +176,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -184,7 +184,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -192,7 +192,7 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	if err := vscw.copy(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 

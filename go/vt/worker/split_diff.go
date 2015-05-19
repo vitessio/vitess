@@ -119,7 +119,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -127,7 +127,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
@@ -135,7 +135,7 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	if err := sdw.synchronizeReplication(ctx); err != nil {
 		return fmt.Errorf("synchronizeReplication() failed: %v", err)
 	}
-	if err := checkInterrupted(ctx); err != nil {
+	if err := checkDone(ctx); err != nil {
 		return err
 	}
 
