@@ -185,6 +185,7 @@ public class Bsonify {
     query.put("Sql", request.getSql());
     BSONObject b = new BasicBSONObject();
     b.put("Keyspace", request.getKeyspace());
+    b.put("SplitColumn", request.getSplitColumn());
     b.put("Query", query);
     b.put("SplitCount", request.getSplitCount());
     return b;

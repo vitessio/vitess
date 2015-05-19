@@ -17,26 +17,31 @@ import (
 // one primary key and the leading primary key must be numeric, see
 // QuerySplitter.splitBoundaries()
 type QuerySplitter struct {
-	query      *proto.BoundQuery
-	splitCount int
-	schemaInfo *SchemaInfo
-	sel        *sqlparser.Select
-	tableName  string
-	pkCol      string
-	rowCount   int64
+	query       *proto.BoundQuery
+	splitCount  int
+	schemaInfo  *SchemaInfo
+	sel         *sqlparser.Select
+	tableName   string
+	splitColumn string
+	rowCount    int64
 }
 
 // NewQuerySplitter creates a new QuerySplitter. query is the original query
 // to split and splitCount is the desired number of splits. splitCount must
 // be a positive int, if not it will be set to 1.
-func NewQuerySplitter(query *proto.BoundQuery, splitCount int, schemaInfo *SchemaInfo) *QuerySplitter {
+func NewQuerySplitter(
+	query *proto.BoundQuery,
+	splitColumn string,
+	splitCount int,
+	schemaInfo *SchemaInfo) *QuerySplitter {
 	if splitCount < 1 {
 		splitCount = 1
 	}
 	return &QuerySplitter{
-		query:      query,
-		splitCount: splitCount,
-		schemaInfo: schemaInfo,
+		query:       query,
+		splitCount:  splitCount,
+		schemaInfo:  schemaInfo,
+		splitColumn: splitColumn,
 	}
 }
 
@@ -74,7 +79,17 @@ func (qs *QuerySplitter) validateQuery() error {
 	if len(tableInfo.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
-	qs.pkCol = tableInfo.GetPKColumn(0).Name
+	if qs.splitColumn != "" {
+		for _, index := range tableInfo.Indexes {
+			for _, column := range index.Columns {
+				if qs.splitColumn == column {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %s, TableInfo.Table: %v", qs.splitColumn, tableInfo.Table)
+	}
+	qs.splitColumn = tableInfo.GetPKColumn(0).Name
 	return nil
 }
 
@@ -130,9 +145,9 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 		return qs.sel.Where
 	}
 	pk := &sqlparser.ColName{
-		Name: []byte(qs.pkCol),
+		Name: []byte(qs.splitColumn),
 	}
-	// pkCol >= start
+	// splitColumn >= start
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.AST_GE,
@@ -140,7 +155,7 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 			Right:    sqlparser.NumVal((start).Raw()),
 		}
 	}
-	// pkCol < end
+	// splitColumn < end
 	if !end.IsNull() {
 		endClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.AST_LT,
@@ -154,7 +169,7 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 		if endClause == nil {
 			clauses = startClause
 		} else {
-			// pkCol >= start AND pkCol < end
+			// splitColumn >= start AND splitColumn < end
 			clauses = &sqlparser.AndExpr{
 				Left:  startClause,
 				Right: endClause,
