@@ -18,8 +18,9 @@ if [[ ! -f bootstrap.sh ]]; then
   exit 1
 fi
 
-# To avoid AUFS permission issues, files must allow access by "other"
-chmod -R o=g *
+# To avoid AUFS permission issues, files must allow access by "other" (permissions rX required).
+# Mirror permissions to "other" from the owning group (for which we assume it has at least rX permissions).
+chmod -R o=g .
 
 args="$args --rm -e USER=vitess -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
