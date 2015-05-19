@@ -12,6 +12,17 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
+const (
+	SchemaChangeDirName = "schema_change_dir"
+)
+
+// ControllerFactory takes a set params and construct a Controller instance.
+type ControllerFactory func(params map[string]string) (Controller, error)
+
+var (
+	controllerFactories = make(map[string]ControllerFactory)
+)
+
 // Controller is responsible for getting schema change for a
 // certain keyspace and also handling various events happened during schema
 // change.
@@ -69,6 +80,7 @@ func Run(controller Controller, executor Executor) error {
 		controller.OnReadFail(err)
 		return err
 	}
+
 	controller.OnReadSuccess()
 	keyspace := controller.GetKeyspace()
 	if err := executor.Open(keyspace); err != nil {
@@ -89,4 +101,21 @@ func Run(controller Controller, executor Executor) error {
 		return fmt.Errorf("Schema change failed, ExecuteResult: %v\n", string(out))
 	}
 	return nil
+}
+
+// RegisterControllerFactory register a control factory.
+func RegisterControllerFactory(name string, factory ControllerFactory) {
+	if _, ok := controllerFactories[name]; ok {
+		panic(fmt.Sprintf("register a registered key: %s", name))
+	}
+	controllerFactories[name] = factory
+}
+
+// GetControllerFactory gets a ControllerFactory.
+func GetControllerFactory(name string) (ControllerFactory, error) {
+	factory, ok := controllerFactories[name]
+	if !ok {
+		return nil, fmt.Errorf("there is no data sourcer factory with name: %s", name)
+	}
+	return factory, nil
 }

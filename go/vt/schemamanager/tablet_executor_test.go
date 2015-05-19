@@ -13,7 +13,7 @@ import (
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor()
 	if err := executor.Open("test_keyspace"); err != nil {
-		t.Fatalf("executor.Open() should succeed")
+		t.Fatalf("executor.Open should succeed")
 	}
 
 	defer executor.Close()

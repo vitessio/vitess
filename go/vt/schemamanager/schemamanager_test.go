@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"testing"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
@@ -125,6 +126,67 @@ func TestSchemaManagerRun(t *testing.T) {
 	}
 }
 
+func TestSchemaManagerExecutorFail(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	controller := newFakeController([]string{sql}, false, false, false)
+	fakeTmc := newFakeTabletManagerClient()
+	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
+		BeforeSchema: &proto.SchemaDefinition{},
+		AfterSchema: &proto.SchemaDefinition{
+			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+			TableDefinitions: []*proto.TableDefinition{
+				&proto.TableDefinition{
+					Name:   "test_table",
+					Schema: sql,
+					Type:   proto.TableBaseTable,
+				},
+			},
+		},
+	})
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.EnableExecuteFetchAsDbaError = true
+	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
+
+	err := Run(controller, executor)
+	if err == nil {
+		t.Fatalf("schema change should fail")
+	}
+}
+
+func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	RegisterControllerFactory(
+		"test_controller",
+		func(params map[string]string) (Controller, error) {
+			return newFakeController([]string{sql}, false, false, false), nil
+
+		})
+
+	_, err := GetControllerFactory("unknown")
+	if err == nil {
+		t.Fatalf("controller factory is not registered, GetControllerFactory should return an error")
+	}
+	_, err = GetControllerFactory("test_controller")
+	if err != nil {
+		t.Fatalf("GetControllerFactory should succeed, but get an error: %v", err)
+	}
+	func() {
+		defer func() {
+			err := recover()
+			if err == nil {
+				t.Fatalf("RegisterControllerFactory should fail, it registers a registered ControllerFactory")
+			}
+		}()
+		RegisterControllerFactory(
+			"test_controller",
+			func(params map[string]string) (Controller, error) {
+				return newFakeController([]string{sql}, false, false, false), nil
+
+			})
+	}()
+}
+
 func newFakeExecutor() *TabletExecutor {
 	return NewTabletExecutor(
 		newFakeTabletManagerClient(),
@@ -141,8 +203,9 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
-	preflightSchemas  map[string]*proto.SchemaChangeResult
-	schemaDefinitions map[string]*proto.SchemaDefinition
+	EnableExecuteFetchAsDbaError bool
+	preflightSchemas             map[string]*proto.SchemaChangeResult
+	schemaDefinitions            map[string]*proto.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
@@ -170,6 +233,14 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())
 	}
 	return result, nil
+}
+
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
+	if client.EnableExecuteFetchAsDbaError {
+		var result mproto.QueryResult
+		return &result, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
+	}
+	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, wantFields, disableBinlogs, reloadSchema)
 }
 
 type fakeTopo struct{}
