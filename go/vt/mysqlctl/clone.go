@@ -359,7 +359,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 		}
 
 		// this should be quick, but we might as well just wait
-		if err := mysqld.WaitForSlaveStart(slaveStartDeadline); err != nil {
+		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
 			return err
 		}
 	}
@@ -438,7 +438,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(logger logutil.Logger, snapshotManifes
 	}
 
 	if !dontWaitForSlaveStart {
-		if err := mysqld.WaitForSlaveStart(slaveStartDeadline); err != nil {
+		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
 			return err
 		}
 	}

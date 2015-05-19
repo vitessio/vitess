@@ -40,6 +40,7 @@ type MysqlDaemon interface {
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
 	MasterPosition() (proto.ReplicationPosition, error)
+	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
@@ -235,6 +236,11 @@ func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 // MasterPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) MasterPosition() (proto.ReplicationPosition, error) {
 	return fmd.CurrentMasterPosition, nil
+}
+
+// IsReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
+	return fmd.ReadOnly, nil
 }
 
 // SetReadOnly is part of the MysqlDaemon interface

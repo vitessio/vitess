@@ -743,7 +743,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// now we can run the backup
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
 	name := fmt.Sprintf("%v-%v", tablet.Alias, time.Now().Unix())
-	returnErr := agent.Mysqld.Backup(l, bucket, name, concurrency, agent.hookExtraEnv())
+	returnErr := mysqlctl.Backup(agent.Mysqld, l, bucket, name, concurrency, agent.hookExtraEnv())
 
 	// and change our type back to the appropriate value:
 	// - if healthcheck is enabled, go to spare

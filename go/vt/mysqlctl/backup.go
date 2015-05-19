@@ -188,7 +188,7 @@ func findFilesTobackup(cnf *Mycnf, logger logutil.Logger) ([]FileEntry, error) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func (mysqld *Mysqld) Backup(logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// start the backup with the BackupStorage
 	bs := backupstorage.GetBackupStorage()
@@ -197,7 +197,7 @@ func (mysqld *Mysqld) Backup(logger logutil.Logger, bucket, name string, backupC
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
 
-	if err = mysqld.backup(logger, bh, backupConcurrency, hookExtraEnv); err != nil {
+	if err = backup(mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
 		if err := bh.AbortBackup(); err != nil {
 			logger.Errorf("failed to abort backup: %v", err)
 		}
@@ -208,7 +208,7 @@ func (mysqld *Mysqld) Backup(logger logutil.Logger, bucket, name string, backupC
 	return err
 }
 
-func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
+func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// save initial state so we can restore
 	slaveStartRequired := false
@@ -273,7 +273,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandl
 	logger.Infof("found %v files to backup", len(fes))
 
 	// backup everything
-	if err := mysqld.backupFiles(logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
+	if err := backupFiles(mysqld, logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
 		return fmt.Errorf("cannot backup files: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandl
 		}
 
 		// this should be quick, but we might as well just wait
-		if err := mysqld.WaitForSlaveStart(slaveStartDeadline); err != nil {
+		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
 			return fmt.Errorf("slave is not restarting: %v", err)
 		}
 	}
@@ -304,7 +304,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandl
 	return nil
 }
 
-func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) error {
+func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) error {
 
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}

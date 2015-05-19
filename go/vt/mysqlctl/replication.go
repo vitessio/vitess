@@ -89,8 +89,9 @@ func parseSlaveStatus(fields map[string]string) proto.ReplicationStatus {
 	return status
 }
 
-// WaitForSlaveStart waits a slave until given deadline passed
-func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
+// WaitForSlaveStart waits for MySQL replication to start until given
+// deadline (in seconds) passed.
+func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 	var rowMap map[string]string
 	for slaveWait := 0; slaveWait < slaveStartDeadline; slaveWait++ {
 		status, err := mysqld.SlaveStatus()
