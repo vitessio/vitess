@@ -188,8 +188,23 @@ func NewActionAgent(
 	// register the RPC services from the agent
 	agent.registerQueryService()
 
-	// start health check if needed
-	agent.initHeathCheck()
+	// two cases then:
+	// - restoreFromBackup is set: we restore, then initHealthCheck, all
+	//   in the background
+	// - restoreFromBackup is not set: we initHealthCheck right away
+	if *restoreFromBackup {
+		go func() {
+			// restoreFromBackup wil just be a regular action
+			// (same as if it was triggered remotely)
+			agent.restoreFromBackup()
+
+			// after the restore is done, start health check
+			agent.initHeathCheck()
+		}()
+	} else {
+		// synchronously start health check if needed
+		agent.initHeathCheck()
+	}
 
 	return agent, nil
 }

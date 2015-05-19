@@ -7,6 +7,7 @@ package mysqlctl
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
@@ -36,6 +39,11 @@ const (
 	backupManifest = "MANIFEST"
 )
 
+var (
+	// ErrNoBackup is returned when there is no backup
+	ErrNoBackup = errors.New("no available backup")
+)
+
 // FileEntry is one file to backup
 type FileEntry struct {
 	// Base is one of:
@@ -52,7 +60,7 @@ type FileEntry struct {
 	Hash string
 }
 
-func (fe *FileEntry) open(cnf *Mycnf) (*os.File, error) {
+func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	// find the root to use
 	var root string
 	switch fe.Base {
@@ -68,7 +76,17 @@ func (fe *FileEntry) open(cnf *Mycnf) (*os.File, error) {
 
 	// and open the file
 	name := path.Join(root, fe.Name)
-	fd, err := os.Open(name)
+	var fd *os.File
+	var err error
+	if readOnly {
+		fd, err = os.Open(name)
+	} else {
+		dir := path.Dir(name)
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("cannot create destination directory %v: %v", dir, err)
+		}
+		fd, err = os.Create(name)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cannot open source file %v: %v", name, err)
 	}
@@ -305,7 +323,7 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.Backup
 			}
 
 			// open the source file for reading
-			source, err := fe.open(mysqld.config)
+			source, err := fe.open(mysqld.config, true)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -378,4 +396,163 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.Backup
 	}
 
 	return nil
+}
+
+// checkNoDB makes sure there is no vt_ db already there. Used by Restore,
+// we do not wnat to destroy an existing DB.
+func (mysqld *Mysqld) checkNoDB() error {
+	qr, err := mysqld.fetchSuperQuery("SHOW DATABASES")
+	if err != nil {
+		return fmt.Errorf("checkNoDB failed: %v", err)
+	}
+
+	for _, row := range qr.Rows {
+		if strings.HasPrefix(row[0].String(), "vt_") {
+			dbName := row[0].String()
+			tableQr, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
+			if err != nil {
+				return fmt.Errorf("checkNoDB failed: %v", err)
+			} else if len(tableQr.Rows) == 0 {
+				// no tables == empty db, all is well
+				continue
+			}
+			return fmt.Errorf("checkNoDB failed, found active db %v", dbName)
+		}
+	}
+
+	return nil
+}
+
+// restoreFiles will copy all the files from the BackupStorage to the
+// right place
+func (mysqld *Mysqld) restoreFiles(bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int) error {
+	sema := sync2.NewSemaphore(restoreConcurrency, 0)
+	rec := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for i, fe := range fes {
+		wg.Add(1)
+		go func(i int, fe FileEntry) {
+			defer wg.Done()
+
+			// wait until we are ready to go, skip if we already
+			// encountered an error
+			sema.Acquire()
+			defer sema.Release()
+			if rec.HasErrors() {
+				return
+			}
+
+			// open the source file for reading
+			name := fmt.Sprintf("%v", i)
+			source, err := bh.ReadFile(name)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+			defer source.Close()
+
+			// open the destination file for writing
+			dstFile, err := fe.open(mysqld.config, false)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+			defer dstFile.Close()
+
+			// create a buffering output
+			dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
+
+			// create hash to write the compressed data to
+			hasher := newHasher()
+
+			// create a Tee: we split the input into the hasher
+			// and into the gunziper
+			tee := io.TeeReader(source, hasher)
+
+			// create the uncompresser
+			gz, err := cgzip.NewReader(tee)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+			defer gz.Close()
+
+			// copy the data. Will also write to the hasher
+			if _, err = io.Copy(dst, gz); err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			// check the hash
+			hash := hasher.HashString()
+			if hash != fe.Hash {
+				rec.RecordError(fmt.Errorf("hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash))
+				return
+			}
+
+			// flush the buffer
+			dst.Flush()
+		}(i, fe)
+	}
+	wg.Wait()
+	return rec.Error()
+}
+
+// Restore is the main entry point for backup restore.  If there is no
+// appropriate backup on the BackupStorage, Restore logs an error
+// and returns ErrNoBackup. Any other error is returned.
+func (mysqld *Mysqld) Restore(bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+	// find the right backup handle: most recent one, with a MANIFEST
+	log.Infof("Restore: looking for a suitable backup to restore")
+	bs := backupstorage.GetBackupStorage()
+	bhs, err := bs.ListBackups(bucket)
+	if err != nil {
+		return proto.ReplicationPosition{}, fmt.Errorf("ListBackups failed: %v", err)
+	}
+	toRestore := len(bhs) - 1
+	var bh backupstorage.BackupHandle
+	var bm BackupManifest
+	for toRestore >= 0 {
+		bh = bhs[toRestore]
+		if rc, err := bh.ReadFile(backupManifest); err == nil {
+			dec := json.NewDecoder(rc)
+			err := dec.Decode(&bm)
+			rc.Close()
+			if err != nil {
+				log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot JSON decode MANIFEST: %v)", bh.Name(), bucket, err)
+			} else {
+				log.Infof("Restore: found backup %v %v to restore with %v files", bh.Bucket(), bh.Name(), len(bm.FileEntries))
+				break
+			}
+		} else {
+			log.Warningf("Possibly incomplete backup %v in bucket %v on BackupStorage (cannot read MANIFEST)", bh.Name(), bucket)
+		}
+		toRestore--
+	}
+	if toRestore < 0 {
+		log.Errorf("No backup to restore on BackupStorage for bucket %v", bucket)
+		return proto.ReplicationPosition{}, ErrNoBackup
+	}
+
+	log.Infof("Restore: checking no existing data is present")
+	if err := mysqld.checkNoDB(); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	log.Infof("Restore: shutdown mysqld")
+	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	log.Infof("Restore: copying all files")
+	if err := mysqld.restoreFiles(bh, bm.FileEntries, restoreConcurrency); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	log.Infof("Restore: restart mysqld")
+	if err := mysqld.Start(MysqlWaitTime); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
+	return bm.ReplicationPosition, nil
 }

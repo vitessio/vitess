@@ -20,6 +20,9 @@ use_mysqlctld = True
 
 tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld)
 tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
+tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
+
+setup_procs = []
 
 def setUpModule():
   try:
@@ -30,10 +33,12 @@ def setUpModule():
     setup_procs = [
         tablet_master.init_mysql(),
         tablet_replica1.init_mysql(),
+        tablet_replica2.init_mysql(),
         ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
       tablet_replica1.wait_for_mysqlctl_socket()
+      tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
   except:
@@ -53,6 +58,7 @@ def tearDownModule():
     teardown_procs = [
         tablet_master.teardown_mysql(),
         tablet_replica1.teardown_mysql(),
+        tablet_replica2.teardown_mysql(),
         ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -62,13 +68,14 @@ def tearDownModule():
 
   tablet_master.remove_tree()
   tablet_replica1.remove_tree()
+  tablet_replica2.remove_tree()
 
 
 class TestBackup(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server().wipe()
-    for t in [tablet_master, tablet_replica1]:
+    for t in [tablet_master, tablet_replica1, tablet_replica2]:
       t.reset_replication()
       t.clean_dbs()
 
@@ -78,34 +85,63 @@ class TestBackup(unittest.TestCase):
   primary key (id)
   ) Engine=InnoDB'''
 
-  _populate_vt_insert_test = [
-      "insert into vt_insert_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
+  def _insert_master(self, index):
+    tablet_master.mquery('vt_test_keyspace',
+                         "insert into vt_insert_test (msg) values ('test %s')" % index, write=True)
 
   def test_backup(self):
+    """test_backup will:
+    - create a shard with master and replica1 only
+    - run InitShardMaster
+    - insert some data
+    - take a backup
+    - insert more data on the master
+    - bring up tablet_replica2 after the fact, let it restore the backup
+    - check all data is right (before+after backup data)
+    """
     for t in tablet_master, tablet_replica1:
       t.create_db('vt_test_keyspace')
 
-    tablet_master.init_tablet('master', 'test_keyspace', '0', start=True)
+    tablet_master.init_tablet('master', 'test_keyspace', '0', start=True,
+                              supports_backups=True)
     tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
                                 supports_backups=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_master.tablet_alias])
 
     # insert data on master, wait for slave to get it
-    tablet_master.populate('vt_test_keyspace', self._create_vt_insert_test,
-                           self._populate_vt_insert_test)
+    tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
+    self._insert_master(1)
     timeout = 10
     while True:
       result = tablet_replica1.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
-      if result[0][0] == 4:
+      if result[0][0] == 1:
         break
       timeout = utils.wait_step('slave tablet getting data', timeout)
 
     # backup the slave
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
 
-    for t in tablet_master, tablet_replica1:
+    # insert more data on the master
+    self._insert_master(2)
+
+    # now bring up the other slave, health check on, init_tablet on, restore on
+    tablet_replica2.start_vttablet(wait_for_state='SERVING',
+                                   target_tablet_type='replica',
+                                   init_keyspace='test_keyspace',
+                                   init_shard='0',
+                                   supports_backups=True,
+                                   extra_args=['-restore_from_backup'])
+
+    # check the new slave has the data
+    timeout = 10
+    while True:
+      result = tablet_replica2.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
+      if result[0][0] == 2:
+        break
+      timeout = utils.wait_step('new slave tablet getting data', timeout)
+
+    for t in tablet_master, tablet_replica1, tablet_replica2:
       t.kill_vttablet()
 
 if __name__ == '__main__':

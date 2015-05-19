@@ -487,7 +487,8 @@ class Tablet(object):
         self.dbname = 'vt_' + init_keyspace
 
     if supports_backups:
-      args.extend(['-backup_storage_implementation', 'file',
+      args.extend(['-restore_from_backup',
+                   '-backup_storage_implementation', 'file',
                    '-file_backup_storage_root',
                    os.path.join(environment.tmproot, 'backupstorage')])
 
