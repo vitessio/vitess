@@ -98,6 +98,7 @@ class TestBackup(unittest.TestCase):
     - insert more data on the master
     - bring up tablet_replica2 after the fact, let it restore the backup
     - check all data is right (before+after backup data)
+    - list the backup, remove it
     """
     for t in tablet_master, tablet_replica1:
       t.create_db('vt_test_keyspace')
@@ -130,8 +131,7 @@ class TestBackup(unittest.TestCase):
                                    target_tablet_type='replica',
                                    init_keyspace='test_keyspace',
                                    init_shard='0',
-                                   supports_backups=True,
-                                   extra_args=['-restore_from_backup'])
+                                   supports_backups=True)
 
     # check the new slave has the data
     timeout = 10
@@ -140,6 +140,28 @@ class TestBackup(unittest.TestCase):
       if result[0][0] == 2:
         break
       timeout = utils.wait_step('new slave tablet getting data', timeout)
+
+    # list the backups
+    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                   ['ListBackups', 'test_keyspace/0'],
+                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups = backups.splitlines()
+    logging.debug("list of backups: %s", backups)
+    self.assertEqual(len(backups), 1)
+    self.assertTrue(backups[0].startswith(tablet_replica1.tablet_alias))
+
+    # remove the backup
+    utils.run_vtctl(tablet.get_backup_storage_flags() +
+                    ['RemoveBackup', 'test_keyspace/0', backups[0]],
+                     auto_log=True, mode=utils.VTCTL_VTCTL)
+
+    # make sure the list of backups is empty now
+    backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +
+                                   ['ListBackups', 'test_keyspace/0'],
+                                   mode=utils.VTCTL_VTCTL, trap_output=True)
+    backups = backups.splitlines()
+    logging.debug("list of backups after remove: %s", backups)
+    self.assertEqual(len(backups), 0)
 
     for t in tablet_master, tablet_replica1, tablet_replica2:
       t.kill_vttablet()
