@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -19,6 +20,13 @@ import (
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
 type MysqlDaemon interface {
+	// Cnf returns the underlying mycnf
+	Cnf() *Mycnf
+
+	// methods related to mysql running or not
+	Start(mysqlWaitTime time.Duration) error
+	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
+
 	// GetMasterAddr returns the mysql master address, as shown by
 	// 'show slave status'.
 	GetMasterAddr() (string, error)
@@ -55,13 +63,23 @@ type MysqlDaemon interface {
 	GetAppConnection() (dbconnpool.PoolConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
-	// query execution methods
+
+	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(queryList []string) error
+
+	// FetchSuperQuery executes one query, returns the result
+	FetchSuperQuery(query string) (*mproto.QueryResult, error)
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	// Mycnf will be returned by Cnf()
+	Mycnf *Mycnf
+
+	// Running is used by Start / Shutdown
+	Running bool
+
 	// MasterAddr will be returned by GetMasterAddr(). Set to "" to return
 	// ErrNotSlave, or to "ERROR" to return an error.
 	MasterAddr string
@@ -143,6 +161,40 @@ type FakeMysqlDaemon struct {
 	// ExpectedExecuteSuperQueryCurrent is the current index of the queries
 	// we expect
 	ExpectedExecuteSuperQueryCurrent int
+
+	// FetchSuperQueryResults is used by FetchSuperQuery
+	FetchSuperQueryMap map[string]*mproto.QueryResult
+}
+
+// NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
+// to be running
+func NewFakeMysqlDaemon() *FakeMysqlDaemon {
+	return &FakeMysqlDaemon{
+		Running: true,
+	}
+}
+
+// Cnf is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Cnf() *Mycnf {
+	return fmd.Mycnf
+}
+
+// Start is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Start(mysqlWaitTime time.Duration) error {
+	if fmd.Running {
+		return fmt.Errorf("fake mysql daemon already running")
+	}
+	fmd.Running = true
+	return nil
+}
+
+// Shutdown is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
+	if !fmd.Running {
+		return fmt.Errorf("fake mysql daemon not running")
+	}
+	fmd.Running = false
+	return nil
 }
 
 // GetMasterAddr is part of the MysqlDaemon interface
@@ -264,6 +316,19 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 		}
 	}
 	return nil
+}
+
+// FetchSuperQuery returns the results from the map, if any
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+	if fmd.FetchSuperQueryMap == nil {
+		return nil, fmt.Errorf("unexpected query: %v", query)
+	}
+
+	qr, ok := fmd.FetchSuperQueryMap[query]
+	if !ok {
+		return nil, fmt.Errorf("unexpected query: %v", query)
+	}
+	return qr, nil
 }
 
 // CheckSuperQueryList returns an error if all the queries we expected

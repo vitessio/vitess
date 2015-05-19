@@ -31,7 +31,7 @@ func TestInitTablet(t *testing.T) {
 	// start with idle, and a tablet record that doesn't exist
 	port := 1234
 	securePort := 2345
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
+	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	agent := &ActionAgent{
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,

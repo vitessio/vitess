@@ -21,7 +21,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	sd := &proto.SchemaDefinition{}
 
 	// get the database creation command
-	qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE DATABASE " + dbName)
+	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE " + dbName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
@@ -35,7 +35,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	if !includeViews {
 		sql += " AND table_type = '" + proto.TableBaseTable + "'"
 	}
-	qr, err := mysqld.fetchSuperQuery(sql)
+	qr, err := mysqld.FetchSuperQuery(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			}
 		}
 
-		qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
+		qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

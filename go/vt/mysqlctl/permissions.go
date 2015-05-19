@@ -8,11 +8,12 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
+// GetPermissions lists the permissions on the mysqld
 func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {
 	permissions := &proto.Permissions{}
 
 	// get Users
-	qr, err := mysqld.fetchSuperQuery("SELECT * FROM mysql.user")
+	qr, err := mysqld.FetchSuperQuery("SELECT * FROM mysql.user")
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +22,7 @@ func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {
 	}
 
 	// get Dbs
-	qr, err = mysqld.fetchSuperQuery("SELECT * FROM mysql.db")
+	qr, err = mysqld.FetchSuperQuery("SELECT * FROM mysql.db")
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +31,7 @@ func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {
 	}
 
 	// get Hosts
-	qr, err = mysqld.fetchSuperQuery("SELECT * FROM mysql.host")
+	qr, err = mysqld.FetchSuperQuery("SELECT * FROM mysql.host")
 	if err != nil {
 		return nil, err
 	}

@@ -266,7 +266,7 @@ func (mysqld *Mysqld) backup(logger logutil.Logger, bh backupstorage.BackupHandl
 	}
 
 	// get the files to backup
-	fes, err := findFilesTobackup(mysqld.config, logger)
+	fes, err := findFilesTobackup(mysqld.Cnf(), logger)
 	if err != nil {
 		return fmt.Errorf("cannot find files to backup: %v", err)
 	}
@@ -323,7 +323,7 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.Backup
 			}
 
 			// open the source file for reading
-			source, err := fe.open(mysqld.config, true)
+			source, err := fe.open(mysqld.Cnf(), true)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -400,8 +400,8 @@ func (mysqld *Mysqld) backupFiles(logger logutil.Logger, bh backupstorage.Backup
 
 // checkNoDB makes sure there is no vt_ db already there. Used by Restore,
 // we do not wnat to destroy an existing DB.
-func (mysqld *Mysqld) checkNoDB() error {
-	qr, err := mysqld.fetchSuperQuery("SHOW DATABASES")
+func checkNoDB(mysqld MysqlDaemon) error {
+	qr, err := mysqld.FetchSuperQuery("SHOW DATABASES")
 	if err != nil {
 		return fmt.Errorf("checkNoDB failed: %v", err)
 	}
@@ -409,7 +409,7 @@ func (mysqld *Mysqld) checkNoDB() error {
 	for _, row := range qr.Rows {
 		if strings.HasPrefix(row[0].String(), "vt_") {
 			dbName := row[0].String()
-			tableQr, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
+			tableQr, err := mysqld.FetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
 				return fmt.Errorf("checkNoDB failed: %v", err)
 			} else if len(tableQr.Rows) == 0 {
@@ -425,7 +425,7 @@ func (mysqld *Mysqld) checkNoDB() error {
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place
-func (mysqld *Mysqld) restoreFiles(bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int) error {
+func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -452,7 +452,7 @@ func (mysqld *Mysqld) restoreFiles(bh backupstorage.BackupHandle, fes []FileEntr
 			defer source.Close()
 
 			// open the destination file for writing
-			dstFile, err := fe.open(mysqld.config, false)
+			dstFile, err := fe.open(cnf, false)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -501,7 +501,7 @@ func (mysqld *Mysqld) restoreFiles(bh backupstorage.BackupHandle, fes []FileEntr
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func (mysqld *Mysqld) Restore(bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
 	bs := backupstorage.GetBackupStorage()
@@ -535,7 +535,7 @@ func (mysqld *Mysqld) Restore(bucket string, restoreConcurrency int, hookExtraEn
 	}
 
 	log.Infof("Restore: checking no existing data is present")
-	if err := mysqld.checkNoDB(); err != nil {
+	if err := checkNoDB(mysqld); err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
@@ -545,7 +545,7 @@ func (mysqld *Mysqld) Restore(bucket string, restoreConcurrency int, hookExtraEn
 	}
 
 	log.Infof("Restore: copying all files")
-	if err := mysqld.restoreFiles(bh, bm.FileEntries, restoreConcurrency); err != nil {
+	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, restoreConcurrency); err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 

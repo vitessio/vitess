@@ -110,7 +110,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	if ok {
 		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+puid, 3300+puid)
 	}

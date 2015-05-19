@@ -150,7 +150,7 @@ func (mysqld *Mysqld) GetMasterAddr() (string, error) {
 
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'port'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +166,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
@@ -325,7 +325,7 @@ const (
 
 // FindSlaves gets IP addresses for all currently connected slaves.
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	qr, err := mysqld.FetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.
 		}
 
 		cmd := binlogplayer.QueryBlpCheckpoint(bp.Uid)
-		qr, err := mysqld.fetchSuperQuery(cmd)
+		qr, err := mysqld.FetchSuperQuery(cmd)
 		if err != nil {
 			return err
 		}

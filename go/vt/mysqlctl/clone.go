@@ -92,7 +92,7 @@ func (mysqld *Mysqld) ValidateCloneTarget(hookExtraEnv map[string]string) error 
 		return err
 	}
 
-	qr, err := mysqld.fetchSuperQuery("SHOW DATABASES")
+	qr, err := mysqld.FetchSuperQuery("SHOW DATABASES")
 	if err != nil {
 		return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
 	}
@@ -100,7 +100,7 @@ func (mysqld *Mysqld) ValidateCloneTarget(hookExtraEnv map[string]string) error 
 	for _, row := range qr.Rows {
 		if strings.HasPrefix(row[0].String(), "vt_") {
 			dbName := row[0].String()
-			tableQr, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
+			tableQr, err := mysqld.FetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
 				return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
 			} else if len(tableQr.Rows) == 0 {
