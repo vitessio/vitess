@@ -256,7 +256,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	}
 
 	// stop replication on it
-	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {
@@ -330,7 +330,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	vscw.setState(WorkerStateCopy)
 
 	// get source schema
-	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, true)
 	cancel()
 	if err != nil {
@@ -369,18 +369,15 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	mu := sync.Mutex{}
 	var firstError error
 
+	ctx, cancel = context.WithCancel(ctx)
 	processError := func(format string, args ...interface{}) {
 		vscw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
+			cancel()
 		}
 		mu.Unlock()
-	}
-	shouldStop := func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return firstError != nil
 	}
 
 	destinationWaitGroup := sync.WaitGroup{}
@@ -427,10 +424,6 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				sema.Acquire()
 				defer sema.Release()
 
-				if shouldStop() {
-					return
-				}
-
 				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
@@ -461,7 +454,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	// then create and populate the blp_checkpoint table
 	if vscw.strategy.PopulateBlpCheckpoint {
 		// get the current position from the source
-		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		status, err := vscw.wr.TabletManagerClient().SlaveStatus(shortCtx, vscw.sourceTablet)
 		cancel()
 		if err != nil {
@@ -494,7 +487,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		vscw.wr.Logger().Infof("Skipping setting SourceShard on destination shard.")
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
-		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables)
 		cancel()
 		if err != nil {
@@ -514,7 +507,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-			shortCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 			cancel()
 			if err != nil {

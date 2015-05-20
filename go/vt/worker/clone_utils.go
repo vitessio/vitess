@@ -30,7 +30,7 @@ import (
 // Does a topo lookup for a single shard, and returns the tablet record of the master tablet.
 func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
 	var ti *topo.TabletInfo
-	newCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	newCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	si, err := topo.GetShard(newCtx, wr.TopoServer(), keyspace, shard)
 	cancel()
 	if err != nil {
@@ -43,7 +43,7 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 
 	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
 
-	newCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	newCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	ti, err = topo.GetTablet(newCtx, wr.TopoServer(), si.MasterAlias)
 	cancel()
 	if err != nil {
@@ -280,7 +280,7 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true)
 	cancel()
 	if err != nil {

@@ -288,7 +288,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
@@ -377,7 +377,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
@@ -430,18 +430,15 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	mu := sync.Mutex{}
 	var firstError error
 
+	ctx, cancel = context.WithCancel(ctx)
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
 		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
+			cancel()
 		}
 		mu.Unlock()
-	}
-	shouldStop := func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return firstError != nil
 	}
 
 	insertChannels := make([]chan string, len(scw.destinationShards))
@@ -493,10 +490,6 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 					sema.Acquire()
 					defer sema.Release()
 
-					if shouldStop() {
-						return
-					}
-
 					scw.tableStatus[tableIndex].threadStarted()
 
 					// build the query, and start the streaming
@@ -538,7 +531,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
-			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
@@ -573,7 +566,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		for _, si := range scw.destinationShards {
 			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
 			cancel()
 			if err != nil {
@@ -595,7 +588,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 				cancel()
 				if err != nil {

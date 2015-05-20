@@ -174,7 +174,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, subsetTablet)
 	cancel()
 	if err != nil {
@@ -205,7 +205,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, supersetTablet)
 	cancel()
 	if err != nil {

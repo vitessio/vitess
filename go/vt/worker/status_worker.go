@@ -38,7 +38,12 @@ func (state StatusWorkerState) String() string {
 // and StatusAsText to make it easier on workers if they don't need to
 // export more.
 type StatusWorker struct {
-	Mu    *sync.Mutex
+	// Mu is protecting the state variable, and can also be used
+	// by implementations to protect their own variables.
+	Mu *sync.Mutex
+
+	// State contains the worker's current state, and should only
+	// be accessed under Mu.
 	State StatusWorkerState
 }
 

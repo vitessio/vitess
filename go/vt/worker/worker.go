@@ -47,6 +47,7 @@ type Resolver interface {
 var (
 	resolveTTL            = flag.Duration("resolve_ttl", 15*time.Second, "Amount of time that a topo resolution can be cached for")
 	executeFetchRetryTime = flag.Duration("executefetch_retry_time", 30*time.Second, "Amount of time we should wait before retrying ExecuteFetch calls")
+	remoteActionsTimeout  = flag.Duration("remote_actions_timeout", time.Minute, "Amount of time to wait for remote actions (like replication stop, ...)")
 
 	statsState = stats.NewString("WorkerState")
 	// the number of times that the worker attempst to reresolve the masters

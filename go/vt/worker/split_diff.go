@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"sync"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -226,7 +225,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// 1 - stop the master binlog replication, get its current position
 	sdw.wr.Logger().Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
-	shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	blpPositionList, err := sdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
@@ -254,8 +253,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 		// stop replication
 		sdw.wr.Logger().Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], blpPos.Position)
-		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, 30*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		stoppedAt, err := sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, blpPos.Position, *remoteActionsTimeout)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], blpPos.Position, err)
@@ -276,8 +275,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	sdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
-	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
-	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, 30*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterPos, err := sdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
@@ -290,8 +289,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
-	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, 30*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	_, err = sdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum for %v at %v failed: %v", sdw.destinationAlias, masterPos, err)
@@ -305,7 +304,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
-	shortCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
@@ -333,7 +332,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		var err error
-		shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
 			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
@@ -345,7 +344,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		wg.Add(1)
 		go func(i int, sourceAlias topo.TabletAlias) {
 			var err error
-			shortCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(
 				shortCtx, sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 			cancel()
