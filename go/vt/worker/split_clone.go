@@ -25,21 +25,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const (
-	// all the states for the worker
-	stateSCNotSarted = "not started"
-	stateSCDone      = "done"
-	stateSCError     = "error"
-
-	stateSCInit        = "initializing"
-	stateSCFindTargets = "finding target instances"
-	stateSCCopy        = "copying the data"
-	stateSCCleanUp     = "cleaning up"
-)
-
 // SplitCloneWorker will clone the data within a keyspace from a
 // source set of shards to a destination set of shards.
 type SplitCloneWorker struct {
+	StatusWorker
+
 	wr                     *wrangler.Wrangler
 	cell                   string
 	keyspace               string
@@ -51,26 +41,19 @@ type SplitCloneWorker struct {
 	minTableSizeForSplit   uint64
 	destinationWriterCount int
 	cleaner                *wrangler.Cleaner
-	ctx                    context.Context
-	ctxCancel              context.CancelFunc
 
 	// all subsequent fields are protected by the mutex
-	mu    sync.Mutex
-	state string
 
-	// populated if state == stateSCError
-	err error
-
-	// populated during stateSCInit, read-only after that
+	// populated during WorkerStateInit, read-only after that
 	keyspaceInfo      *topo.KeyspaceInfo
 	sourceShards      []*topo.ShardInfo
 	destinationShards []*topo.ShardInfo
 
-	// populated during stateSCFindTargets, read-only after that
+	// populated during WorkerStateFindTargets, read-only after that
 	sourceAliases []topo.TabletAlias
 	sourceTablets []*topo.TabletInfo
 
-	// populated during stateSCCopy
+	// populated during WorkerStateCopy
 	tableStatus []*tableStatus
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
@@ -94,8 +77,8 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	return &SplitCloneWorker{
+		StatusWorker:           NewStatusWorker(),
 		wr:                     wr,
 		cell:                   cell,
 		keyspace:               keyspace,
@@ -107,10 +90,7 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 		minTableSizeForSplit:   minTableSizeForSplit,
 		destinationWriterCount: destinationWriterCount,
 		cleaner:                &wrangler.Cleaner{},
-		ctx:                    ctx,
-		ctxCancel:              cancel,
 
-		state: stateSCNotSarted,
 		ev: &events.SplitClone{
 			Cell:          cell,
 			Keyspace:      keyspace,
@@ -121,22 +101,13 @@ func NewSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, ex
 	}, nil
 }
 
-func (scw *SplitCloneWorker) setState(state string) {
-	scw.mu.Lock()
-	scw.state = state
-	statsState.Set(state)
-	scw.mu.Unlock()
-
-	event.DispatchUpdate(scw.ev, state)
+func (scw *SplitCloneWorker) setState(state StatusWorkerState) {
+	scw.SetState(state)
+	event.DispatchUpdate(scw.ev, state.String())
 }
 
-func (scw *SplitCloneWorker) recordError(err error) {
-	scw.mu.Lock()
-	scw.state = stateSCError
-	statsState.Set(stateSCError)
-	scw.err = err
-	scw.mu.Unlock()
-
+func (scw *SplitCloneWorker) setErrorState(err error) {
+	scw.SetState(WorkerStateError)
 	event.DispatchUpdate(scw.ev, "error: "+err.Error())
 }
 
@@ -150,20 +121,18 @@ func (scw *SplitCloneWorker) formatSources() string {
 
 // StatusAsHTML implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
-	scw.mu.Lock()
-	defer scw.mu.Unlock()
+	scw.Mu.Lock()
+	defer scw.Mu.Unlock()
 	result := "<b>Working on:</b> " + scw.keyspace + "/" + scw.shard + "</br>\n"
-	result += "<b>State:</b> " + scw.state + "</br>\n"
-	switch scw.state {
-	case stateSCError:
-		result += "<b>Error</b>: " + scw.err.Error() + "</br>\n"
-	case stateSCCopy:
+	result += "<b>State:</b> " + scw.State.String() + "</br>\n"
+	switch scw.State {
+	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
 		result += "<b>Copying from</b>: " + scw.formatSources() + "</br>\n"
 		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
-	case stateSCDone:
+	case WorkerStateDone:
 		result += "<b>Success</b>:</br>\n"
 		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "</br>\n")
@@ -174,20 +143,18 @@ func (scw *SplitCloneWorker) StatusAsHTML() template.HTML {
 
 // StatusAsText implements the Worker interface
 func (scw *SplitCloneWorker) StatusAsText() string {
-	scw.mu.Lock()
-	defer scw.mu.Unlock()
+	scw.Mu.Lock()
+	defer scw.Mu.Unlock()
 	result := "Working on: " + scw.keyspace + "/" + scw.shard + "\n"
-	result += "State: " + scw.state + "\n"
-	switch scw.state {
-	case stateSCError:
-		result += "Error: " + scw.err.Error() + "\n"
-	case stateSCCopy:
+	result += "State: " + scw.State.String() + "\n"
+	switch scw.State {
+	case WorkerStateCopy:
 		result += "Running:\n"
 		result += "Copying from: " + scw.formatSources() + "\n"
 		statuses, eta := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
-	case stateSCDone:
+	case WorkerStateDone:
 		result += "Success:\n"
 		statuses, _ := formatTableStatuses(scw.tableStatus, scw.startTime)
 		result += strings.Join(statuses, "\n")
@@ -195,30 +162,12 @@ func (scw *SplitCloneWorker) StatusAsText() string {
 	return result
 }
 
-// Cancel is part of the Worker interface
-func (scw *SplitCloneWorker) Cancel() {
-	scw.ctxCancel()
-}
-
-func (scw *SplitCloneWorker) checkInterrupted() bool {
-	select {
-	case <-scw.ctx.Done():
-		if scw.ctx.Err() == context.DeadlineExceeded {
-			return false
-		}
-		scw.recordError(topo.ErrInterrupted)
-		return true
-	default:
-	}
-	return false
-}
-
 // Run implements the Worker interface
-func (scw *SplitCloneWorker) Run() {
+func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 	resetVars()
-	err := scw.run()
+	err := scw.run(ctx)
 
-	scw.setState(stateSCCleanUp)
+	scw.setState(WorkerStateCleanUp)
 	cerr := scw.cleaner.CleanUp(scw.wr)
 	if cerr != nil {
 		if err != nil {
@@ -228,47 +177,33 @@ func (scw *SplitCloneWorker) Run() {
 		}
 	}
 	if err != nil {
-		scw.recordError(err)
-		return
+		scw.setErrorState(err)
+		return err
 	}
-	scw.setState(stateSCDone)
+	scw.setState(WorkerStateDone)
+	return nil
 }
 
-func (scw *SplitCloneWorker) Error() error {
-	return scw.err
-}
-
-func (scw *SplitCloneWorker) run() error {
+func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
 	if err := scw.init(); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := checkDone(ctx); err != nil {
+		return err
 	}
 
 	// second state: find targets
-	if err := scw.findTargets(); err != nil {
-		// A canceled context can appear to cause an application error
-		if scw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := scw.findTargets(ctx); err != nil {
 		return fmt.Errorf("findTargets() failed: %v", err)
 	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
+	if err := checkDone(ctx); err != nil {
+		return err
 	}
 
 	// third state: copy data
-	if err := scw.copy(); err != nil {
-		// A canceled context can appear to cause an application error
-		if scw.checkInterrupted() {
-			return topo.ErrInterrupted
-		}
+	if err := scw.copy(ctx); err != nil {
 		return fmt.Errorf("copy() failed: %v", err)
-	}
-	if scw.checkInterrupted() {
-		return topo.ErrInterrupted
 	}
 
 	return nil
@@ -277,7 +212,7 @@ func (scw *SplitCloneWorker) run() error {
 // init phase:
 // - read the destination keyspace, make sure it has 'servedFrom' values
 func (scw *SplitCloneWorker) init() error {
-	scw.setState(stateSCInit)
+	scw.setState(WorkerStateInit)
 	var err error
 
 	// read the keyspace and validate it
@@ -331,14 +266,14 @@ func (scw *SplitCloneWorker) init() error {
 // - find one rdonly in the source shard
 // - mark it as 'checker' pointing back to us
 // - get the aliases of all the targets
-func (scw *SplitCloneWorker) findTargets() error {
-	scw.setState(stateSCFindTargets)
+func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
+	scw.setState(WorkerStateFindTargets)
 	var err error
 
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = findChecker(scw.ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = findChecker(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -353,8 +288,8 @@ func (scw *SplitCloneWorker) findTargets() error {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}
 
-		ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-		err := scw.wr.TabletManagerClient().StopSlave(ctx, scw.sourceTablets[i])
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
 			return fmt.Errorf("cannot stop replication on tablet %v", alias)
@@ -368,13 +303,13 @@ func (scw *SplitCloneWorker) findTargets() error {
 		action.TabletType = topo.TYPE_SPARE
 	}
 
-	return scw.ResolveDestinationMasters()
+	return scw.ResolveDestinationMasters(ctx)
 }
 
 // ResolveDestinationMasters implements the Resolver interface.
 // It will attempt to resolve all shards and update scw.destinationShardsToTablets;
 // if it is unable to do so, it will not modify scw.destinationShardsToTablets at all.
-func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
+func (scw *SplitCloneWorker) ResolveDestinationMasters(ctx context.Context) error {
 	statsDestinationAttemptedResolves.Add(1)
 	destinationShardsToTablets := make(map[string]*topo.TabletInfo)
 
@@ -389,7 +324,7 @@ func (scw *SplitCloneWorker) ResolveDestinationMasters() error {
 	}
 
 	for _, si := range scw.destinationShards {
-		ti, err := resolveDestinationShardMaster(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
+		ti, err := resolveDestinationShardMaster(ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
@@ -415,12 +350,12 @@ func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.Table
 
 // Find all tablets on all destination shards. This should be done immediately before reloading
 // the schema on these tablets, to minimize the chances of the topo changing in between.
-func (scw *SplitCloneWorker) findReloadTargets() error {
+func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
 	scw.reloadAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
 	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(scw.ctx, si.Keyspace(), si.ShardName(), scw.wr)
+		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
 		if err != nil {
 			return err
 		}
@@ -434,16 +369,16 @@ func (scw *SplitCloneWorker) findReloadTargets() error {
 //	- copy the data from source tablets to destination masters (wtih replication on)
 // Assumes that the schema has already been created on each destination tablet
 // (probably from vtctl's CopySchemaShard)
-func (scw *SplitCloneWorker) copy() error {
-	scw.setState(stateSCCopy)
+func (scw *SplitCloneWorker) copy(ctx context.Context) error {
+	scw.setState(WorkerStateCopy)
 
 	// get source schema from the first shard
 	// TODO(alainjobart): for now, we assume the schema is compatible
 	// on all source shards. Furthermore, we estimate the number of rows
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
-	ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-	sourceSchemaDefinition, err := scw.wr.GetSchema(ctx, scw.sourceAliases[0], nil, scw.excludeTables, true)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
@@ -452,7 +387,7 @@ func (scw *SplitCloneWorker) copy() error {
 		return fmt.Errorf("no tables matching the table filter in tablet %v", scw.sourceAliases[0])
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
-	scw.mu.Lock()
+	scw.Mu.Lock()
 	scw.tableStatus = make([]*tableStatus, len(sourceSchemaDefinition.TableDefinitions))
 	for i, td := range sourceSchemaDefinition.TableDefinitions {
 		scw.tableStatus[i] = &tableStatus{
@@ -461,7 +396,7 @@ func (scw *SplitCloneWorker) copy() error {
 		}
 	}
 	scw.startTime = time.Now()
-	scw.mu.Unlock()
+	scw.Mu.Unlock()
 
 	// Find the column index for the sharding columns in all the databases, and count rows
 	columnIndexes := make([]int, len(sourceSchemaDefinition.TableDefinitions))
@@ -495,12 +430,13 @@ func (scw *SplitCloneWorker) copy() error {
 	mu := sync.Mutex{}
 	var firstError error
 
+	ctx, cancel = context.WithCancel(ctx)
 	processError := func(format string, args ...interface{}) {
 		scw.wr.Logger().Errorf(format, args...)
 		mu.Lock()
-		if !scw.checkInterrupted() {
-			scw.Cancel()
+		if firstError == nil {
 			firstError = fmt.Errorf(format, args...)
+			cancel()
 		}
 		mu.Unlock()
 	}
@@ -520,7 +456,7 @@ func (scw *SplitCloneWorker) copy() error {
 				destinationWaitGroup.Add(1)
 				go func() {
 					defer destinationWaitGroup.Done()
-					if err := executeFetchLoop(scw.ctx, scw.wr, scw, shardName, insertChannel); err != nil {
+					if err := executeFetchLoop(ctx, scw.wr, scw, shardName, insertChannel); err != nil {
 						processError("executeFetchLoop failed: %v", err)
 					}
 				}()
@@ -540,7 +476,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			chunks, err := findChunks(scw.ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := findChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
@@ -558,7 +494,7 @@ func (scw *SplitCloneWorker) copy() error {
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
-					qrr, err := NewQueryResultReaderForTablet(scw.ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
+					qrr, err := NewQueryResultReaderForTablet(ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)
 						return
@@ -566,7 +502,7 @@ func (scw *SplitCloneWorker) copy() error {
 					defer qrr.Close()
 
 					// process the data
-					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, scw.ctx.Done()); err != nil {
+					if err := scw.processData(td, tableIndex, qrr, rowSplitter, insertChannels, scw.destinationPackCount, ctx.Done()); err != nil {
 						processError("processData failed: %v", err)
 					}
 					scw.tableStatus[tableIndex].threadDone()
@@ -595,8 +531,8 @@ func (scw *SplitCloneWorker) copy() error {
 
 		// get the current position from the sources
 		for shardIndex := range scw.sourceShards {
-			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-			status, err := scw.wr.TabletManagerClient().SlaveStatus(ctx, scw.sourceTablets[shardIndex])
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			status, err := scw.wr.TabletManagerClient().SlaveStatus(shortCtx, scw.sourceTablets[shardIndex])
 			cancel()
 			if err != nil {
 				return err
@@ -610,7 +546,7 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(shardName string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSqlCommands(scw.ctx, scw.wr, scw, shardName, queries); err != nil {
+				if err := runSqlCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
 			}(si.ShardName())
@@ -630,8 +566,8 @@ func (scw *SplitCloneWorker) copy() error {
 	} else {
 		for _, si := range scw.destinationShards {
 			scw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", si.Keyspace(), si.ShardName())
-			ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-			err := scw.wr.SetSourceShards(ctx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
+			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			err := scw.wr.SetSourceShards(shortCtx, si.Keyspace(), si.ShardName(), scw.sourceAliases, nil)
 			cancel()
 			if err != nil {
 				return fmt.Errorf("failed to set source shards: %v", err)
@@ -639,7 +575,7 @@ func (scw *SplitCloneWorker) copy() error {
 		}
 	}
 
-	err = scw.findReloadTargets()
+	err = scw.findReloadTargets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed before reloading schema on destination tablets: %v", err)
 	}
@@ -652,8 +588,8 @@ func (scw *SplitCloneWorker) copy() error {
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
-				ctx, cancel := context.WithTimeout(scw.ctx, 60*time.Second)
-				err := scw.wr.TabletManagerClient().ReloadSchema(ctx, ti)
+				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 				cancel()
 				if err != nil {
 					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)

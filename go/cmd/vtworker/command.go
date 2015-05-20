@@ -112,7 +112,11 @@ func runCommand(args []string) error {
 			case <-done:
 				log.Infof("Command is done:")
 				log.Info(wrk.StatusAsText())
-				if wrk.Error() != nil {
+				currentWorkerMutex.Lock()
+				err := lastRunError
+				currentWorkerMutex.Unlock()
+				if err != nil {
+					log.Errorf("Ended with an error: %v", err)
 					os.Exit(1)
 				}
 				os.Exit(0)

@@ -331,10 +331,10 @@ func testSplitClone(t *testing.T, strategy string) {
 	// Only wait 1 ms between retries, so that the test passes faster
 	*executeFetchRetryTime = (1 * time.Millisecond)
 
-	wrk.Run()
+	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
-	if wrk.err != nil || wrk.state != stateSCDone {
+	if err != nil || wrk.State != WorkerStateDone {
 		t.Errorf("Worker run failed")
 	}
 
