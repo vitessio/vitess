@@ -7,7 +7,7 @@ import com.youtube.vitess.vtgate.BatchQuery;
 import com.youtube.vitess.vtgate.BatchQueryResponse;
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Field;
-import com.youtube.vitess.vtgate.FieldType;
+import com.youtube.vitess.vtgate.Field.Flag;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -156,8 +156,12 @@ public class Bsonify {
       BSONObject fieldBson = (BSONObject) field;
       String fieldName = new String((byte[]) fieldBson.get("Name"));
       int mysqlType = Ints.checkedCast((Long) fieldBson.get("Type"));
-      FieldType fieldType = FieldType.get(mysqlType);
-      fieldList.add(new Field(fieldName, fieldType));
+      int mysqlFlags = Flag.VT_ZEROVALUE_FLAG.mysqlFlag;
+      Object flags = fieldBson.get("Flags");
+      if (flags != null) {
+        mysqlFlags = Ints.checkedCast((Long) flags);
+      }
+      fieldList.add(Field.newFieldFromMysql(fieldName, mysqlType, mysqlFlags));
     }
     return fieldList;
   }
@@ -172,8 +176,7 @@ public class Bsonify {
       for (Object col : cols) {
         byte[] val = col != null ? (byte[]) col : null;
         Field field = fieldsIter.next();
-        FieldType ft = field.getType();
-        cells.add(new Cell(field.getName(), ft.convert(val), ft.javaType));
+        cells.add(field.convertValueToCell(val));
       }
       rowList.add(new Row(cells));
     }
