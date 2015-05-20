@@ -42,7 +42,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, *endPoint, tablet.Keyspace, tablet.Shard, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +153,7 @@ func (qrr *QueryResultReader) Error() error {
 	return qrr.clientErrFn()
 }
 
+// Close closes the connection to the tablet.
 func (qrr *QueryResultReader) Close() {
 	qrr.conn.Close()
 }
