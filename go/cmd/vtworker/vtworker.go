@@ -59,7 +59,9 @@ func installSignalHandlers() {
 		// we got a signal, notify our modules
 		currentWorkerMutex.Lock()
 		defer currentWorkerMutex.Unlock()
-		currentWorker.Cancel()
+		if currentWorker != nil {
+			currentWorker.Cancel()
+		}
 	}()
 }
 
