@@ -400,7 +400,7 @@ func (mysqld *Mysqld) initConfig(root string) error {
 
 func (mysqld *Mysqld) createDirs() error {
 	log.Infof("creating directory %s", mysqld.TabletDir)
-	if err := os.MkdirAll(mysqld.TabletDir, 0775); err != nil {
+	if err := os.MkdirAll(mysqld.TabletDir, os.ModePerm); err != nil {
 		return err
 	}
 	for _, dir := range TopLevelDirs() {
@@ -410,7 +410,7 @@ func (mysqld *Mysqld) createDirs() error {
 	}
 	for _, dir := range mysqld.config.directoryList() {
 		log.Infof("creating directory %s", dir)
-		if err := os.MkdirAll(dir, 0775); err != nil {
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -433,14 +433,14 @@ func (mysqld *Mysqld) createTopDir(dir string) error {
 		if os.IsNotExist(err) {
 			topdir := path.Join(mysqld.TabletDir, dir)
 			log.Infof("creating directory %s", topdir)
-			return os.MkdirAll(topdir, 0775)
+			return os.MkdirAll(topdir, os.ModePerm)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
 	source := path.Join(mysqld.TabletDir, dir)
 	log.Infof("creating directory %s", linkto)
-	err = os.MkdirAll(linkto, 0775)
+	err = os.MkdirAll(linkto, os.ModePerm)
 	if err != nil {
 		return err
 	}

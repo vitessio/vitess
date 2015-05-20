@@ -47,8 +47,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceInnodbLogDir := path.Join(root, "source_innodb_log")
 	sourceDataDir := path.Join(root, "source_data")
 	sourceDataDbDir := path.Join(sourceDataDir, "vt_db")
-	sourceExtraDir := path.Join(sourceDataDir, "extra_dir")
-	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir, sourceExtraDir} {
+	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		if err := os.MkdirAll(s, os.ModePerm); err != nil {
 			t.Fatalf("failed to create directory %v: %v", s, err)
 		}
@@ -61,9 +60,6 @@ func TestBackupRestore(t *testing.T) {
 	}
 	if err := ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file db.opt: %v", err)
-	}
-	if err := ioutil.WriteFile(path.Join(sourceExtraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file extra.stuff: %v", err)
 	}
 
 	// create a master tablet, not started, just for shard health

@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -145,7 +144,7 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 	return fes, nil
 }
 
-func findFilesTobackup(cnf *Mycnf, logger logutil.Logger) ([]FileEntry, error) {
+func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 	var err error
 	var result []FileEntry
 
@@ -167,18 +166,6 @@ func findFilesTobackup(cnf *Mycnf, logger logutil.Logger) ([]FileEntry, error) {
 
 	for _, fi := range fis {
 		p := path.Join(cnf.DataDir, fi.Name())
-
-		// If this is not a directory, try to eval it as a syslink.
-		if !fi.IsDir() {
-			p, err = filepath.EvalSymlinks(p)
-			if err != nil {
-				return nil, err
-			}
-			fi, err = os.Stat(p)
-			if err != nil {
-				return nil, err
-			}
-		}
 		if isDbDir(p) {
 			result, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
 			if err != nil {
@@ -203,14 +190,12 @@ func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, back
 	}
 
 	if err = backup(mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
-		if err := bh.AbortBackup(); err != nil {
-			logger.Errorf("failed to abort backup: %v", err)
+		if abortErr := bh.AbortBackup(); abortErr != nil {
+			logger.Errorf("failed to abort backup: %v", abortErr)
 		}
-	} else {
-		err = bh.EndBackup()
+		return err
 	}
-
-	return err
+	return bh.EndBackup()
 }
 
 func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
@@ -271,7 +256,7 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	}
 
 	// get the files to backup
-	fes, err := findFilesTobackup(mysqld.Cnf(), logger)
+	fes, err := findFilesTobackup(mysqld.Cnf())
 	if err != nil {
 		return fmt.Errorf("cannot find files to backup: %v", err)
 	}
