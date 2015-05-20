@@ -5,9 +5,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 # Delete the pods for all shards
 cell='test'
 keyspace='test_keyspace'
@@ -22,6 +19,6 @@ for shard in `seq 1 $num_shards`; do
     printf -v alias '%s-%010d' $cell $uid
 
     echo "Deleting pod for tablet $alias..."
-    $KUBECTL delete pod vttablet-$uid
+    kubectl delete pod vttablet-$uid
   done
 done

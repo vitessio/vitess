@@ -4,9 +4,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 
@@ -18,7 +15,7 @@ fi
 replicas=$VTGATE_REPLICAS
 
 echo "Creating vtgate service..."
-$KUBECTL create -f vtgate-service.yaml
+kubectl create -f vtgate-service.yaml
 
 sed_script=""
 for var in replicas vtdataroot_volume; do
@@ -26,4 +23,4 @@ for var in replicas vtdataroot_volume; do
 done
 
 echo "Creating vtgate replicationController..."
-cat vtgate-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
+cat vtgate-controller-template.yaml | sed -e "$sed_script" | kubectl create -f -
