@@ -14,7 +14,9 @@ import (
 )
 
 var (
-	backupStorageImplementation = flag.String("backup_storage_implementation", "", "which implementation to use for the backup storage feature")
+	// BackupStorageImplementation is the implementation to use
+	// for BackupStorage. Exported for test purposes.
+	BackupStorageImplementation = flag.String("backup_storage_implementation", "", "which implementation to use for the backup storage feature")
 )
 
 // BackupHandle describes an individual backup.
@@ -74,7 +76,7 @@ var BackupStorageMap = make(map[string]BackupStorage)
 // GetBackupStorage returns the current BackupStorage implementation.
 // Should be called after flags have been initialized.
 func GetBackupStorage() BackupStorage {
-	bs, ok := BackupStorageMap[*backupStorageImplementation]
+	bs, ok := BackupStorageMap[*BackupStorageImplementation]
 	if !ok {
 		log.Fatalf("no registered implementation of BackupStorage")
 	}

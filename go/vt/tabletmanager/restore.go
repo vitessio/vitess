@@ -7,7 +7,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"log"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -22,11 +21,11 @@ var (
 	restoreConcurrency = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
 )
 
-// restoreFromBackup is the main entry point for backup restore.
-// It will either work, fail gracefully and log the error, or log.Fatal
-// in case of a non-recoverable error.
+// RestoreFromBackup is the main entry point for backup restore.
+// It will either work, fail gracefully, or return
+// an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (agent *ActionAgent) restoreFromBackup() {
+func (agent *ActionAgent) RestoreFromBackup() error {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
@@ -38,7 +37,7 @@ func (agent *ActionAgent) restoreFromBackup() {
 		tablet.Type = topo.TYPE_RESTORE
 		return nil
 	}); err != nil {
-		log.Fatalf("Cannot change type to RESTORE: %v", err)
+		return fmt.Errorf("Cannot change type to RESTORE: %v", err)
 	}
 
 	// do the optional restore, if that fails we are in a bad state,
@@ -46,18 +45,18 @@ func (agent *ActionAgent) restoreFromBackup() {
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
 	pos, err := mysqlctl.Restore(agent.MysqlDaemon, bucket, *restoreConcurrency, agent.hookExtraEnv())
 	if err != nil && err != mysqlctl.ErrNoBackup {
-		log.Fatalf("Cannot restore original backup: %v", err)
+		return fmt.Errorf("Cannot restore original backup: %v", err)
 	}
 
 	if err == nil {
 		// now read the shard to find the current master, and its location
 		si, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
 		if err != nil {
-			log.Fatalf("Cannot read shard: %v", err)
+			return fmt.Errorf("Cannot read shard: %v", err)
 		}
 		ti, err := agent.TopoServer.GetTablet(si.MasterAlias)
 		if err != nil {
-			log.Fatalf("Cannot read master tablet %v: %v", si.MasterAlias, err)
+			return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
 		}
 
 		// set replication straight
@@ -68,10 +67,10 @@ func (agent *ActionAgent) restoreFromBackup() {
 		}
 		cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 		if err != nil {
-			log.Fatalf("MysqlDaemon.StartReplicationCommands failed: %v", err)
+			return fmt.Errorf("MysqlDaemon.StartReplicationCommands failed: %v", err)
 		}
 		if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
-			log.Fatalf("MysqlDaemon.ExecuteSuperQueryList failed: %v", err)
+			return fmt.Errorf("MysqlDaemon.ExecuteSuperQueryList failed: %v", err)
 		}
 	}
 
@@ -80,6 +79,7 @@ func (agent *ActionAgent) restoreFromBackup() {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
-		log.Fatalf("Cannot change type back to %v: %v", originalType, err)
+		return fmt.Errorf("Cannot change type back to %v: %v", originalType, err)
 	}
+	return nil
 }

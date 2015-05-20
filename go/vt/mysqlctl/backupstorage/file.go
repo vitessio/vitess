@@ -17,7 +17,9 @@ import (
 // BackupStorage interface.
 
 var (
-	fileBackupStorageRoot = flag.String("file_backup_storage_root", "", "root directory for the file backup storage")
+	// FileBackupStorageRoot is where the backups will go.
+	// Exported for test purposes.
+	FileBackupStorageRoot = flag.String("file_backup_storage_root", "", "root directory for the file backup storage")
 )
 
 // FileBackupHandle implements BackupHandle for local file system.
@@ -138,9 +140,9 @@ func (fbs *FileBackupStorage) RemoveBackup(bucket, name string) error {
 // RegisterFileBackupStorage should be called after Flags has been
 // initialized, to register the FileBackupStorage implementation
 func RegisterFileBackupStorage() {
-	if *fileBackupStorageRoot != "" {
+	if *FileBackupStorageRoot != "" {
 		BackupStorageMap["file"] = &FileBackupStorage{
-			root: *fileBackupStorageRoot,
+			root: *FileBackupStorageRoot,
 		}
 	}
 }

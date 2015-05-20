@@ -196,7 +196,10 @@ func NewActionAgent(
 		go func() {
 			// restoreFromBackup wil just be a regular action
 			// (same as if it was triggered remotely)
-			agent.restoreFromBackup()
+			if err := agent.RestoreFromBackup(); err != nil {
+				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+				log.Fatalf("RestoreFromBackup failed: %v", err)
+			}
 
 			// after the restore is done, start health check
 			agent.initHeathCheck()
