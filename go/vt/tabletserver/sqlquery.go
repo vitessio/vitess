@@ -507,7 +507,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		sq.endRequest()
 	}()
 
-	splitter := NewQuerySplitter(&(req.Query), req.SplitCount, sq.qe.schemaInfo)
+	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, sq.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query validation error: %s, request: %#v", err, req)
@@ -520,12 +520,12 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	}
 	conn := qre.getConn(sq.qe.connPool)
 	defer conn.Recycle()
-	// TODO: For fetching pkMinMax, include where clauses on the
+	// TODO: For fetching MinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
-	// range of PKs to work with.
-	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.pkCol, splitter.pkCol, splitter.tableName)
-	pkMinMax := qre.execSQL(conn, minMaxSql, true)
-	reply.Queries, err = splitter.split(pkMinMax)
+	// range of split column to work with.
+	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.splitColumn, splitter.splitColumn, splitter.tableName)
+	splitColumnMinMax := qre.execSQL(conn, minMaxSql, true)
+	reply.Queries, err = splitter.split(splitColumnMinMax)
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
 	}

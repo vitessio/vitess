@@ -306,7 +306,7 @@ public class VtGateIT {
     Util.waitForTablet("rdonly", 40, 3, testEnv);
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     Map<Query, Long> queries =
-        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", 1);
+        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", 1, "");
     vtgate.close();
 
     // Verify 2 splits, one per shard
@@ -342,7 +342,7 @@ public class VtGateIT {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     int splitCount = 6;
     Map<Query, Long> queries =
-        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitCount);
+        vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitCount, "");
     vtgate.close();
 
     // Verify 6 splits, 3 per shard
@@ -370,7 +370,7 @@ public class VtGateIT {
   public void testSplitQueryInvalidTable() throws Exception {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     try {
-      vtgate.splitQuery("test_keyspace", "select id from invalid_table", 1);
+      vtgate.splitQuery("test_keyspace", "select id from invalid_table", 1, "");
       Assert.fail("failed to raise connection exception");
     } catch (ConnectionException e) {
       Assert.assertTrue(
