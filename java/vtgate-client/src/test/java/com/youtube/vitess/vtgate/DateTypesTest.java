@@ -1,5 +1,8 @@
 package com.youtube.vitess.vtgate;
 
+import com.youtube.vitess.vtgate.Field.FieldType;
+import com.youtube.vitess.vtgate.Field.Flag;
+
 import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
@@ -37,7 +40,8 @@ public class DateTypesTest {
   }
 
   private void check(FieldType typeUnderTest, DateTime dt, byte[] bytes) throws ParseException {
-    Object o = typeUnderTest.convert(bytes);
+    Field f = Field.newFieldForTest(typeUnderTest, Flag.VT_ZEROVALUE_FLAG);
+    Object o = f.convert(bytes);
     Assert.assertEquals(DateTime.class, o.getClass());
     Assert.assertEquals(dt, (DateTime) o);
   }
