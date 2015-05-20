@@ -92,7 +92,7 @@ small_integration_test_files = \
 	sharded.py \
 	secure.py \
 	binlog.py \
-	clone.py \
+	backup.py \
 	update_stream.py
 
 medium_integration_test_files = \

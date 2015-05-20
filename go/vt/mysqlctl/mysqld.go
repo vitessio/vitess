@@ -42,8 +42,6 @@ const (
 )
 
 var (
-	// TODO(aaijazi): for reasons I don't understand, the dba pool size needs to be fairly large (15+)
-	// for test/clone.py to pass.
 	dbaPoolSize    = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
 	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
