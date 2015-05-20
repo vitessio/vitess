@@ -1,37 +1,51 @@
 # TODO(mberlin): Remove all "free" and "ps" commands once https://github.com/travis-ci/travis-ci/issues/4013 is resolved.
+# Use container-based infrastructure (see: http://docs.travis-ci.com/user/workers/container-based-infrastructure/).
+sudo: false
 language: go
 go:
   - 1.4
+addons:
+  apt:
+    sources:
+    - mariadb-10.0
+    packages:
+    - libmariadbclient18
+    - libmariadbclient-dev
+    - mariadb-client
+    - mariadb-server
+    - automake
+    - libtool
+    - memcached
+    - python-dev
+    - python-mysqldb
+    - python-pip
+    - python-virtualenv
+    - libssl-dev
+    - g++
+    - mercurial
+    - git
+    - pkg-config
+    - bison
+    - bc
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
   matrix:
-    - MAKE_TARGET=java_vtgate_client_test
-    - MAKE_TARGET=unit_test_goveralls
-    - MAKE_TARGET=small_integration_test
-    - MAKE_TARGET=medium_integration_test
-    - MAKE_TARGET=large_integration_test
-    - MAKE_TARGET=queryservice_test
+#    - MAKE_TARGET=java_vtgate_client_test
+#    - MAKE_TARGET=unit_test_goveralls
+#    - MAKE_TARGET=small_integration_test
+#    - MAKE_TARGET=medium_integration_test
+#    - MAKE_TARGET=large_integration_test
+#    - MAKE_TARGET=queryservice_test
     - MAKE_TARGET=unit_test
-before_install:
+install:
   - |
       free -m | grep "buffers/cache" | awk '{ if ($3 > 900) { print "\n\nCAUTION - CAUTION - CAUTION\n\nFLAKING TEST LIKELY BECAUSE MEMORY USAGE IS TOO HIGH ("$3" MB).\n\n" } else { print "\n\nINFO - LOOKS LIKE NO MEMORY IS LEAKING, TEST RESULTS WILL NOT BE FLAKY\n\n" } }'
   - free -m
   - ps -A -o pid,rss,vsz,cmd --sort -rss
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-  - bash -v travis/dependencies.sh
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-  - sudo bash -v travis/install_grpc.sh
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-install:
-  - bash -v bootstrap.sh --skip_root_installs
+  - bash -v bootstrap.sh
   - free -m
   - ps -A -o pid,rss,vsz,cmd --sort -rss
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
