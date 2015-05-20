@@ -168,18 +168,6 @@ const (
 	// TabletActionBackup takes a db backup and stores it into BackupStorage
 	TabletActionBackup = "Backup"
 
-	// TabletActionSnapshot takes a db snapshot
-	TabletActionSnapshot = "Snapshot"
-
-	// TabletActionSnapshotSourceEnd restarts the mysql server
-	TabletActionSnapshotSourceEnd = "SnapshotSourceEnd"
-
-	// TabletActionReserveForRestore will prepare a server for restore
-	TabletActionReserveForRestore = "ReserveForRestore"
-
-	// TabletActionRestore will restore a backup
-	TabletActionRestore = "Restore"
-
 	//
 	// Shard actions - involve all tablets in a shard.
 	// These are just descriptive and used for locking / logging.

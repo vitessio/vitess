@@ -107,21 +107,6 @@ var commands = []commandGroup{
 			command{"Backup", commandBackup,
 				"[-concurrency=4] <tablet alias>",
 				"Stop mysqld and copy data to BackupStorage."},
-			command{"Snapshot", commandSnapshot,
-				"[-force] [-server-mode] [-concurrency=4] <tablet alias>",
-				"Stop mysqld and copy compressed data aside."},
-			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
-				"[-slave-start] [-read-write] <tablet alias> <original tablet type>",
-				"Restart Mysql and restore original server type." +
-					"Valid <tablet type>:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
-			command{"Restore", commandRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <src tablet alias> <src manifest file> <dst tablet alias> [<new master tablet alias>]",
-				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
-					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
-			command{"Clone", commandClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias> <dst tablet alias> ...",
-				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
@@ -929,110 +914,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		wr.Logger().Infof("%v", e)
 	}
 	return errFunc()
-}
-
-func commandSnapshotSourceEnd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	slaveStartRequired := subFlags.Bool("slave-start", false, "will restart replication")
-	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("action SnapshotSourceEnd requires <tablet alias> <original server type>")
-	}
-
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
-	if err != nil {
-		return err
-	}
-	return wr.SnapshotSourceEnd(ctx, tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
-}
-
-func commandSnapshot(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	serverMode := subFlags.Bool("server-mode", false, "will symlink the data files and leave mysqld stopped")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action Snapshot requires <tablet alias>")
-	}
-
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	sr, originalType, err := wr.Snapshot(ctx, tabletAlias, *force, *concurrency, *serverMode)
-	if err == nil {
-		log.Infof("Manifest: %v", sr.ManifestPath)
-		log.Infof("ParentAlias: %v", sr.ParentAlias)
-		if *serverMode {
-			log.Infof("SlaveStartRequired: %v", sr.SlaveStartRequired)
-			log.Infof("ReadOnly: %v", sr.ReadOnly)
-			log.Infof("OriginalType: %v", originalType)
-		}
-	}
-	return err
-}
-
-func commandRestore(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from snapshot source that is the replication master)")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
-		return fmt.Errorf("action Restore requires <src tablet alias> <src manifest path> <dst tablet alias> [<new master tablet alias>]")
-	}
-	srcTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dstTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(2))
-	if err != nil {
-		return err
-	}
-	parentAlias := srcTabletAlias
-	if subFlags.NArg() == 4 {
-		parentAlias, err = topo.ParseTabletAliasString(subFlags.Arg(3))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.Restore(ctx, srcTabletAlias, subFlags.Arg(1), dstTabletAlias, parentAlias, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
-}
-
-func commandClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() < 2 {
-		return fmt.Errorf("action Clone requires <src tablet alias> <dst tablet alias> [...]")
-	}
-
-	srcTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dstTabletAliases := make([]topo.TabletAlias, subFlags.NArg()-1)
-	for i := 1; i < subFlags.NArg(); i++ {
-		dstTabletAliases[i-1], err = topo.ParseTabletAliasString(subFlags.Arg(i))
-		if err != nil {
-			return err
-		}
-	}
-	return wr.Clone(ctx, srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

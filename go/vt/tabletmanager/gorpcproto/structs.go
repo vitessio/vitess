@@ -8,9 +8,7 @@ import (
 	"time"
 
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -97,15 +95,6 @@ type ExecuteFetchArgs struct {
 // BackupArgs has arguments for Backup
 type BackupArgs struct {
 	Concurrency int
-}
-
-// gorpc doesn't support returning a streaming type during streaming
-// and a final return value, so using structures with either one set.
-
-// SnapshotStreamingReply has the two possible replies for Snapshot
-type SnapshotStreamingReply struct {
-	Log    *logutil.LoggerEvent
-	Result *actionnode.SnapshotReply
 }
 
 // TabletExternallyReparentedArgs has arguments for TabletExternallyReparented

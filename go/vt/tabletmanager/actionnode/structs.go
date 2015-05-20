@@ -49,46 +49,6 @@ type SlaveWasRestartedArgs struct {
 	Parent topo.TabletAlias
 }
 
-// SnapshotArgs is the paylod for Snapshot
-type SnapshotArgs struct {
-	Concurrency         int
-	ServerMode          bool
-	ForceMasterSnapshot bool
-}
-
-// SnapshotReply is the response for Snapshot
-type SnapshotReply struct {
-	ParentAlias  topo.TabletAlias
-	ManifestPath string
-
-	// these two are only used for ServerMode=true full snapshot
-	SlaveStartRequired bool
-	ReadOnly           bool
-}
-
-// SnapshotSourceEndArgs is the payload for SnapshotSourceEnd
-type SnapshotSourceEndArgs struct {
-	SlaveStartRequired bool
-	ReadOnly           bool
-	OriginalType       topo.TabletType
-}
-
-// ReserveForRestoreArgs is the payload for ReserveForRestore
-type ReserveForRestoreArgs struct {
-	SrcTabletAlias topo.TabletAlias
-}
-
-// RestoreArgs is the payload for Restore
-type RestoreArgs struct {
-	SrcTabletAlias        topo.TabletAlias
-	SrcFilePath           string
-	ParentAlias           topo.TabletAlias
-	FetchConcurrency      int
-	FetchRetryCount       int
-	WasReserved           bool
-	DontWaitForSlaveStart bool
-}
-
 // shard action node structures
 
 // ApplySchemaShardArgs is the payload for ApplySchemaShard

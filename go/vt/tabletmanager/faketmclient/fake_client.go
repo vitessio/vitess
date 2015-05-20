@@ -302,32 +302,6 @@ func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topo.
 	}, nil
 }
 
-// Snapshot is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
-	logstream := make(chan *logutil.LoggerEvent, 10)
-	return logstream, func() (*actionnode.SnapshotReply, error) {
-		return &actionnode.SnapshotReply{}, nil
-	}, nil
-}
-
-// SnapshotSourceEnd is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) SnapshotSourceEnd(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs) error {
-	return nil
-}
-
-// ReserveForRestore is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ReserveForRestore(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.ReserveForRestoreArgs) error {
-	return nil
-}
-
-// Restore is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
-	logstream := make(chan *logutil.LoggerEvent, 10)
-	return logstream, func() error {
-		return nil
-	}, nil
-}
-
 //
 // RPC related methods
 //

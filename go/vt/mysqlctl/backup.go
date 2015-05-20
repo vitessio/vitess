@@ -39,6 +39,11 @@ const (
 	backupManifest = "MANIFEST"
 )
 
+const (
+	// slaveStartDeadline is the deadline for starting a slave
+	slaveStartDeadline = 30
+)
+
 var (
 	// ErrNoBackup is returned when there is no backup
 	ErrNoBackup = errors.New("no available backup")
