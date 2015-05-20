@@ -140,15 +140,6 @@ func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
 }
 
-// GetMasterAddr returns master address
-func (mysqld *Mysqld) GetMasterAddr() (string, error) {
-	slaveStatus, err := mysqld.SlaveStatus()
-	if err != nil {
-		return "", err
-	}
-	return slaveStatus.MasterAddr(), nil
-}
-
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")

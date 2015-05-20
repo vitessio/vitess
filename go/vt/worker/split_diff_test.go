@@ -156,20 +156,16 @@ func TestSplitDiff(t *testing.T) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wr)

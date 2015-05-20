@@ -27,10 +27,6 @@ type MysqlDaemon interface {
 	Start(mysqlWaitTime time.Duration) error
 	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
 
-	// GetMasterAddr returns the mysql master address, as shown by
-	// 'show slave status'.
-	GetMasterAddr() (string, error)
-
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
 
@@ -84,10 +80,6 @@ type FakeMysqlDaemon struct {
 
 	// Running is used by Start / Shutdown
 	Running bool
-
-	// MasterAddr will be returned by GetMasterAddr(). Set to "" to return
-	// ErrNotSlave, or to "ERROR" to return an error.
-	MasterAddr string
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
@@ -200,17 +192,6 @@ func (fmd *FakeMysqlDaemon) Shutdown(waitForMysqld bool, mysqlWaitTime time.Dura
 	}
 	fmd.Running = false
 	return nil
-}
-
-// GetMasterAddr is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetMasterAddr() (string, error) {
-	if fmd.MasterAddr == "" {
-		return "", ErrNotSlave
-	}
-	if fmd.MasterAddr == "ERROR" {
-		return "", fmt.Errorf("FakeMysqlDaemon.GetMasterAddr returns an error")
-	}
-	return fmd.MasterAddr, nil
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface

@@ -132,8 +132,7 @@ func TestCopySchemaShard(t *testing.T) {
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-80"),
-		TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-80"))
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-40"))
