@@ -178,6 +178,12 @@ const (
 	// lagging in replication.
 	TYPE_CHECKER = TabletType("checker")
 
+	// FIXME(szopa): Make TYPE_EXPORT a truly separate type.
+
+	// TYPE_EXPORT is tablet that is running an export process. It
+	// is probably lagging in replication.
+	TYPE_EXPORT = TYPE_CHECKER
+
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
 )
