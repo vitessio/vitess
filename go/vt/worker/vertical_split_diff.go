@@ -231,8 +231,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 1 - stop the master binlog replication, get its current position
 	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
-	ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(ctx, masterInfo)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
@@ -257,8 +257,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, sourceTablet, pos.Position, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, pos.Position, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
@@ -278,8 +278,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
 	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
-	ctx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(ctx, masterInfo, &stopPositionList, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
@@ -292,8 +292,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err != nil {
 		return err
 	}
-	ctx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(ctx, destinationTablet, masterPos, *remoteActionsTimeout)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
@@ -307,8 +307,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// 5 - restart filtered replication on destination master
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
-	ctx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = vsdw.wr.TabletManagerClient().StartBlp(ctx, masterInfo)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
 	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
 		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
 	}
@@ -334,9 +334,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
-			ctx, vsdw.destinationAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
+			shortCtx, vsdw.destinationAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
@@ -345,9 +345,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		var err error
-		ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
-			ctx, vsdw.sourceAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
+			shortCtx, vsdw.sourceAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
 		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
