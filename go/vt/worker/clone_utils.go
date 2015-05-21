@@ -258,14 +258,14 @@ func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shar
 	return nil
 }
 
-// findChunks returns an array of chunks to use for splitting up a table
+// FindChunks returns an array of chunks to use for splitting up a table
 // into multiple data chunks. It only works for tables with a primary key
 // (and the primary key first column is an integer type).
 // The array will always look like:
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for

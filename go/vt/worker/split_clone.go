@@ -273,7 +273,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// find an appropriate endpoint in the source shards
 	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
-		scw.sourceAliases[i], err = findChecker(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
+		scw.sourceAliases[i], err = FindChecker(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
@@ -476,7 +476,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 
 			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
 
-			chunks, err := findChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
+			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {
 				return err
 			}
