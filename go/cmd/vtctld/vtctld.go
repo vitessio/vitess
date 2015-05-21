@@ -5,25 +5,26 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	schmgr "github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/schemamanager/uihandler"
+	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	// register gorpc vtgate client
-	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
 )
 
 var (
-	templateDir = flag.String("templates", "", "directory containing templates")
-	debug       = flag.Bool("debug", false, "recompile templates for every request")
+	templateDir            = flag.String("templates", "", "directory containing templates")
+	debug                  = flag.Bool("debug", false, "recompile templates for every request")
+	schemaChangeDir        = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
+	schemaChangeController = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
 )
 
 func init() {
@@ -484,16 +485,39 @@ func main() {
 		}
 		sqlStr := r.FormValue("data")
 		keyspace := r.FormValue("keyspace")
-		executor := schmgr.NewTabletExecutor(
+		executor := schemamanager.NewTabletExecutor(
 			tmclient.NewTabletManagerClient(),
-			ts,
-			keyspace)
+			ts)
 
-		schmgr.Run(
-			schmgr.NewSimpleDataSourcer(sqlStr),
+		schemamanager.Run(
+			schemamanager.NewUIController(sqlStr, keyspace, w),
 			executor,
-			uihandler.NewUIEventHandler(w),
 		)
 	})
+	if *schemaChangeDir != "" {
+		timer := timer.NewTimer(1 * time.Minute)
+		controllerFactory, err :=
+			schemamanager.GetControllerFactory(*schemaChangeController)
+		if err != nil {
+			log.Fatalf("unable to get a controller factory, error: %v", err)
+		}
+
+		timer.Start(func() {
+			controller, err := controllerFactory(map[string]string{
+				schemamanager.SchemaChangeDirName: *schemaChangeDir,
+			})
+			if err != nil {
+				log.Errorf("failed to get controller, error: %v", err)
+				return
+			}
+
+			schemamanager.Run(
+				controller,
+				schemamanager.NewTabletExecutor(
+					tmclient.NewTabletManagerClient(), ts),
+			)
+		})
+		servenv.OnClose(func() { timer.Stop() })
+	}
 	servenv.RunDefault()
 }

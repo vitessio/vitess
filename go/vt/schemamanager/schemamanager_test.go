@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"testing"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
@@ -18,76 +19,71 @@ import (
 )
 
 var (
-	errDataSourcerOpen  = errors.New("Open Fail")
-	errDataSourcerRead  = errors.New("Read Fail")
-	errDataSourcerClose = errors.New("Close Fail")
+	errControllerOpen = errors.New("Open Fail")
+	errControllerRead = errors.New("Read Fail")
 )
 
-func TestRunSchemaChangesDataSourcerOpenFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, true, false, false)
-	handler := newFakeHandler()
-	exec := newFakeExecutor()
-	err := Run(dataSourcer, exec, handler)
-	if err != errDataSourcerOpen {
-		t.Fatalf("data sourcer open fail, shoud get error: %v, but get error: %v",
-			errDataSourcerOpen, err)
+func TestSchemaManagerControllerOpenFail(t *testing.T) {
+	controller := newFakeController(
+		[]string{"select * from test_db"}, true, false, false)
+	err := Run(controller, newFakeExecutor())
+	if err != errControllerOpen {
+		t.Fatalf("controller.Open fail, shoud get error: %v, but get error: %v",
+			errControllerOpen, err)
 	}
 }
 
-func TestRunSchemaChangesDataSourcerReadFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"select * from test_db"}, false, true, false)
-	handler := newFakeHandler()
-	exec := newFakeExecutor()
-	err := Run(dataSourcer, exec, handler)
-	if err != errDataSourcerRead {
-		t.Fatalf("data sourcer read fail, shoud get error: %v, but get error: %v",
-			errDataSourcerRead, err)
+func TestSchemaManagerControllerReadFail(t *testing.T) {
+	controller := newFakeController(
+		[]string{"select * from test_db"}, false, true, false)
+	err := Run(controller, newFakeExecutor())
+	if err != errControllerRead {
+		t.Fatalf("controller.Read fail, shoud get error: %v, but get error: %v",
+			errControllerRead, err)
 	}
-	if !handler.onDataSourcerReadFailTriggered {
-		t.Fatalf("event handler should call OnDataSourcerReadFail but it didn't")
+	if !controller.onReadFailTriggered {
+		t.Fatalf("OnReadFail should be called")
 	}
 }
 
-func TestRunSchemaChangesValidationFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"invalid sql"}, false, false, false)
-	handler := newFakeHandler()
-	exec := newFakeExecutor()
-	err := Run(dataSourcer, exec, handler)
+func TestSchemaManagerValidationFail(t *testing.T) {
+	controller := newFakeController(
+		[]string{"invalid sql"}, false, false, false)
+	err := Run(controller, newFakeExecutor())
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Validate fail")
 	}
 }
 
-func TestRunSchemaChangesExecutorOpenFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"create table test_table (pk int);"}, false, false, false)
-	handler := newFakeHandler()
-	exec := NewTabletExecutor(
+func TestSchemaManagerExecutorOpenFail(t *testing.T) {
+	controller := newFakeController(
+		[]string{"create table test_table (pk int);"}, false, false, false)
+	controller.SetKeyspace("unknown_keyspace")
+	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"unknown_keyspace")
-	err := Run(dataSourcer, exec, handler)
+		newFakeTopo())
+	err := Run(controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
 	}
 }
 
-func TestRunSchemaChangesExecutorExecuteFail(t *testing.T) {
-	dataSourcer := newFakeDataSourcer([]string{"create table test_table (pk int);"}, false, false, false)
-	handler := newFakeHandler()
-	exec := NewTabletExecutor(
+func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
+	controller := newFakeController(
+		[]string{"create table test_table (pk int);"}, false, false, false)
+	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"test_keyspace")
-	err := Run(dataSourcer, exec, handler)
+		newFakeTopo())
+	err := Run(controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Execute fail")
 	}
 }
 
-func TestRunSchemaChanges(t *testing.T) {
+func TestSchemaManagerRun(t *testing.T) {
 	sql := "create table test_table (pk int)"
-	dataSourcer := NewSimpleDataSourcer(sql)
-	handler := newFakeHandler()
+	controller := newFakeController(
+		[]string{sql}, false, false, false)
 	fakeTmc := newFakeTabletManagerClient()
 	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
 		BeforeSchema: &proto.SchemaDefinition{},
@@ -105,37 +101,96 @@ func TestRunSchemaChanges(t *testing.T) {
 
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
 
-	exec := NewTabletExecutor(
+	executor := NewTabletExecutor(
 		fakeTmc,
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 
-	err := Run(dataSourcer, exec, handler)
+	err := Run(controller, executor)
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
 	}
-	if !handler.onDataSourcerReadSuccessTriggered {
-		t.Fatalf("event handler should call OnDataSourcerReadSuccess but it didn't")
+	if !controller.onReadSuccessTriggered {
+		t.Fatalf("OnReadSuccess should be called")
 	}
-	if handler.onDataSourcerReadFailTriggered {
-		t.Fatalf("event handler should not call OnDataSourcerReadFail but it did")
+	if controller.onReadFailTriggered {
+		t.Fatalf("OnReadFail should not be called")
 	}
-	if !handler.onValidationSuccessTriggered {
-		t.Fatalf("event handler should call OnDataSourcerValidateSuccess but it didn't")
+	if !controller.onValidationSuccessTriggered {
+		t.Fatalf("OnValidateSuccess should be called")
 	}
-	if handler.onValidationFailTriggered {
-		t.Fatalf("event handler should not call OnValidationFail but it did")
+	if controller.onValidationFailTriggered {
+		t.Fatalf("OnValidationFail should not be called")
 	}
-	if !handler.onExecutorCompleteTriggered {
-		t.Fatalf("event handler should call OnExecutorComplete but it didn't")
+	if !controller.onExecutorCompleteTriggered {
+		t.Fatalf("OnExecutorComplete should be called")
 	}
+}
+
+func TestSchemaManagerExecutorFail(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	controller := newFakeController([]string{sql}, false, false, false)
+	fakeTmc := newFakeTabletManagerClient()
+	fakeTmc.AddSchemaChange(sql, &proto.SchemaChangeResult{
+		BeforeSchema: &proto.SchemaDefinition{},
+		AfterSchema: &proto.SchemaDefinition{
+			DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
+			TableDefinitions: []*proto.TableDefinition{
+				&proto.TableDefinition{
+					Name:   "test_table",
+					Schema: sql,
+					Type:   proto.TableBaseTable,
+				},
+			},
+		},
+	})
+
+	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &proto.SchemaDefinition{})
+	fakeTmc.EnableExecuteFetchAsDbaError = true
+	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
+
+	err := Run(controller, executor)
+	if err == nil {
+		t.Fatalf("schema change should fail")
+	}
+}
+
+func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
+	sql := "create table test_table (pk int)"
+	RegisterControllerFactory(
+		"test_controller",
+		func(params map[string]string) (Controller, error) {
+			return newFakeController([]string{sql}, false, false, false), nil
+
+		})
+
+	_, err := GetControllerFactory("unknown")
+	if err == nil {
+		t.Fatalf("controller factory is not registered, GetControllerFactory should return an error")
+	}
+	_, err = GetControllerFactory("test_controller")
+	if err != nil {
+		t.Fatalf("GetControllerFactory should succeed, but get an error: %v", err)
+	}
+	func() {
+		defer func() {
+			err := recover()
+			if err == nil {
+				t.Fatalf("RegisterControllerFactory should fail, it registers a registered ControllerFactory")
+			}
+		}()
+		RegisterControllerFactory(
+			"test_controller",
+			func(params map[string]string) (Controller, error) {
+				return newFakeController([]string{sql}, false, false, false), nil
+
+			})
+	}()
 }
 
 func newFakeExecutor() *TabletExecutor {
 	return NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
@@ -148,8 +203,9 @@ func newFakeTabletManagerClient() *fakeTabletManagerClient {
 
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
-	preflightSchemas  map[string]*proto.SchemaChangeResult
-	schemaDefinitions map[string]*proto.SchemaDefinition
+	EnableExecuteFetchAsDbaError bool
+	preflightSchemas             map[string]*proto.SchemaChangeResult
+	schemaDefinitions            map[string]*proto.SchemaDefinition
 }
 
 func (client *fakeTabletManagerClient) AddSchemaChange(
@@ -177,6 +233,14 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 		return nil, fmt.Errorf("unknown database: %s", tablet.DbName())
 	}
 	return result, nil
+}
+
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topo.TabletInfo, query string, maxRows int, wantFields, disableBinlogs, reloadSchema bool) (*mproto.QueryResult, error) {
+	if client.EnableExecuteFetchAsDbaError {
+		var result mproto.QueryResult
+		return &result, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
+	}
+	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, wantFields, disableBinlogs, reloadSchema)
 }
 
 type fakeTopo struct{}
@@ -358,74 +422,78 @@ func (topoServer *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, resu
 	return fmt.Errorf("not implemented")
 }
 
-type fakeDataSourcer struct {
-	sqls      []string
-	openFail  bool
-	readFail  bool
-	closeFail bool
+type fakeController struct {
+	sqls                         []string
+	keyspace                     string
+	openFail                     bool
+	readFail                     bool
+	closeFail                    bool
+	onReadSuccessTriggered       bool
+	onReadFailTriggered          bool
+	onValidationSuccessTriggered bool
+	onValidationFailTriggered    bool
+	onExecutorCompleteTriggered  bool
 }
 
-func newFakeDataSourcer(sqls []string, openFail bool, readFail bool, closeFail bool) *fakeDataSourcer {
-	return &fakeDataSourcer{sqls, openFail, readFail, closeFail}
+func newFakeController(
+	sqls []string, openFail bool, readFail bool, closeFail bool) *fakeController {
+	return &fakeController{
+		sqls:      sqls,
+		keyspace:  "test_keyspace",
+		openFail:  openFail,
+		readFail:  readFail,
+		closeFail: closeFail,
+	}
 }
 
-func (sourcer fakeDataSourcer) Open() error {
-	if sourcer.openFail {
-		return errDataSourcerOpen
+func (controller *fakeController) SetKeyspace(keyspace string) {
+	controller.keyspace = keyspace
+}
+
+func (controller *fakeController) Open() error {
+	if controller.openFail {
+		return errControllerOpen
 	}
 	return nil
 }
 
-func (sourcer fakeDataSourcer) Read() ([]string, error) {
-	if sourcer.readFail {
-		return nil, errDataSourcerRead
+func (controller *fakeController) Read() ([]string, error) {
+	if controller.readFail {
+		return nil, errControllerRead
 	}
-	return sourcer.sqls, nil
+	return controller.sqls, nil
 }
 
-func (sourcer fakeDataSourcer) Close() error {
-	if sourcer.closeFail {
-		return errDataSourcerClose
-	}
+func (controller *fakeController) Close() {
+}
+
+func (controller *fakeController) GetKeyspace() string {
+	return controller.keyspace
+}
+
+func (controller *fakeController) OnReadSuccess() error {
+	controller.onReadSuccessTriggered = true
 	return nil
 }
 
-type fakeEventHandler struct {
-	onDataSourcerReadSuccessTriggered bool
-	onDataSourcerReadFailTriggered    bool
-	onValidationSuccessTriggered      bool
-	onValidationFailTriggered         bool
-	onExecutorCompleteTriggered       bool
-}
-
-func newFakeHandler() *fakeEventHandler {
-	return &fakeEventHandler{}
-}
-
-func (handler *fakeEventHandler) OnDataSourcerReadSuccess([]string) error {
-	handler.onDataSourcerReadSuccessTriggered = true
-	return nil
-}
-
-func (handler *fakeEventHandler) OnDataSourcerReadFail(err error) error {
-	handler.onDataSourcerReadFailTriggered = true
+func (controller *fakeController) OnReadFail(err error) error {
+	controller.onReadFailTriggered = true
 	return err
 }
 
-func (handler *fakeEventHandler) OnValidationSuccess([]string) error {
-	handler.onValidationSuccessTriggered = true
+func (controller *fakeController) OnValidationSuccess() error {
+	controller.onValidationSuccessTriggered = true
 	return nil
 }
 
-func (handler *fakeEventHandler) OnValidationFail(err error) error {
-	handler.onValidationFailTriggered = true
+func (controller *fakeController) OnValidationFail(err error) error {
+	controller.onValidationFailTriggered = true
 	return err
 }
 
-func (handler *fakeEventHandler) OnExecutorComplete(*ExecuteResult) error {
-	handler.onExecutorCompleteTriggered = true
+func (controller *fakeController) OnExecutorComplete(*ExecuteResult) error {
+	controller.onExecutorCompleteTriggered = true
 	return nil
 }
 
-var _ EventHandler = (*fakeEventHandler)(nil)
-var _ DataSourcer = (*fakeDataSourcer)(nil)
+var _ Controller = (*fakeController)(nil)
