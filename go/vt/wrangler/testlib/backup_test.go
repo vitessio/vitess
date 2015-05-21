@@ -40,7 +40,6 @@ func TestBackupRestore(t *testing.T) {
 	fbsRoot := path.Join(root, "fbs")
 	*backupstorage.FileBackupStorageRoot = fbsRoot
 	*backupstorage.BackupStorageImplementation = "file"
-	backupstorage.RegisterFileBackupStorage()
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")

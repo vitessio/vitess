@@ -4,10 +4,6 @@
 
 package main
 
-import "github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
-
-func init() {
-	initFuncs = append(initFuncs, func() {
-		backupstorage.RegisterFileBackupStorage()
-	})
-}
+import (
+	_ "github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
+)

@@ -25,14 +25,13 @@ func setupFileBackupStorage(t *testing.T) *FileBackupStorage {
 	if err != nil {
 		t.Fatalf("os.TempDir failed: %v", err)
 	}
-	return &FileBackupStorage{
-		root: root,
-	}
+	*FileBackupStorageRoot = root
+	return &FileBackupStorage{}
 }
 
 // cleanupFileBackupStorage removes the entire directory
 func cleanupFileBackupStorage(fbs *FileBackupStorage) {
-	os.RemoveAll(fbs.root)
+	os.RemoveAll(*FileBackupStorageRoot)
 }
 
 func TestListBackups(t *testing.T) {

@@ -45,7 +45,7 @@ func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
-	p := path.Join(fbh.fbs.root, fbh.bucket, fbh.name, filename)
+	p := path.Join(*FileBackupStorageRoot, fbh.bucket, fbh.name, filename)
 	return os.Create(p)
 }
 
@@ -70,19 +70,17 @@ func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
-	p := path.Join(fbh.fbs.root, fbh.bucket, fbh.name, filename)
+	p := path.Join(*FileBackupStorageRoot, fbh.bucket, fbh.name, filename)
 	return os.Open(p)
 }
 
 // FileBackupStorage implements BackupStorage for local file system.
-type FileBackupStorage struct {
-	root string
-}
+type FileBackupStorage struct{}
 
 // ListBackups is part of the BackupStorage interface
 func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error) {
 	// ReadDir already sorts the results
-	p := path.Join(fbs.root, bucket)
+	p := path.Join(*FileBackupStorageRoot, bucket)
 	fi, err := ioutil.ReadDir(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -112,7 +110,7 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 // StartBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) StartBackup(bucket, name string) (BackupHandle, error) {
 	// make sure the bucket directory exists
-	p := path.Join(fbs.root, bucket)
+	p := path.Join(*FileBackupStorageRoot, bucket)
 	if err := os.MkdirAll(p, os.ModePerm); err != nil {
 		return nil, err
 	}
@@ -133,16 +131,10 @@ func (fbs *FileBackupStorage) StartBackup(bucket, name string) (BackupHandle, er
 
 // RemoveBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) RemoveBackup(bucket, name string) error {
-	p := path.Join(fbs.root, bucket, name)
+	p := path.Join(*FileBackupStorageRoot, bucket, name)
 	return os.RemoveAll(p)
 }
 
-// RegisterFileBackupStorage should be called after Flags has been
-// initialized, to register the FileBackupStorage implementation
-func RegisterFileBackupStorage() {
-	if *FileBackupStorageRoot != "" {
-		BackupStorageMap["file"] = &FileBackupStorage{
-			root: *FileBackupStorageRoot,
-		}
-	}
+func init() {
+	BackupStorageMap["file"] = &FileBackupStorage{}
 }
