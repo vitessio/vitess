@@ -8,9 +8,8 @@ package backupstorage
 
 import (
 	"flag"
+	"fmt"
 	"io"
-
-	log "github.com/golang/glog"
 )
 
 var (
@@ -75,10 +74,10 @@ var BackupStorageMap = make(map[string]BackupStorage)
 
 // GetBackupStorage returns the current BackupStorage implementation.
 // Should be called after flags have been initialized.
-func GetBackupStorage() BackupStorage {
+func GetBackupStorage() (BackupStorage, error) {
 	bs, ok := BackupStorageMap[*BackupStorageImplementation]
 	if !ok {
-		log.Fatalf("no registered implementation of BackupStorage")
+		return nil, fmt.Errorf("no registered implementation of BackupStorage")
 	}
-	return bs
+	return bs, nil
 }

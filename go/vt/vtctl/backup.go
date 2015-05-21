@@ -41,7 +41,10 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	bucket := fmt.Sprintf("%v/%v", keyspace, shard)
 
-	bs := backupstorage.GetBackupStorage()
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return err
+	}
 	bhs, err := bs.ListBackups(bucket)
 	if err != nil {
 		return err
@@ -67,6 +70,9 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	bucket := fmt.Sprintf("%v/%v", keyspace, shard)
 	name := subFlags.Arg(1)
 
-	bs := backupstorage.GetBackupStorage()
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return err
+	}
 	return bs.RemoveBackup(bucket, name)
 }

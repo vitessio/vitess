@@ -183,7 +183,10 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// start the backup with the BackupStorage
-	bs := backupstorage.GetBackupStorage()
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return err
+	}
 	bh, err := bs.StartBackup(bucket, name)
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
@@ -494,7 +497,10 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
-	bs := backupstorage.GetBackupStorage()
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return proto.ReplicationPosition{}, err
+	}
 	bhs, err := bs.ListBackups(bucket)
 	if err != nil {
 		return proto.ReplicationPosition{}, fmt.Errorf("ListBackups failed: %v", err)
