@@ -48,7 +48,6 @@ func main() {
 	defer topo.CloseServers()
 
 	var schema *planbuilder.Schema
-	log.Info(*cell, *schemaFile)
 	if *schemaFile != "" {
 		var err error
 		if schema, err = planbuilder.LoadFile(*schemaFile); err != nil {
