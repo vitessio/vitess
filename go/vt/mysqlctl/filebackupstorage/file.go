@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package backupstorage
+// Package filebackupstorage implements the BacksupStorage interface
+// for a local filesystem (which can be an NFS mount).
+package filebackupstorage
 
 import (
 	"flag"
@@ -11,10 +13,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-)
 
-// This file contains the flocal file system implementation of the
-// BackupStorage interface.
+	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
+)
 
 var (
 	// FileBackupStorageRoot is where the backups will go.
@@ -78,7 +79,7 @@ func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 type FileBackupStorage struct{}
 
 // ListBackups is part of the BackupStorage interface
-func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error) {
+func (fbs *FileBackupStorage) ListBackups(bucket string) ([]backupstorage.BackupHandle, error) {
 	// ReadDir already sorts the results
 	p := path.Join(*FileBackupStorageRoot, bucket)
 	fi, err := ioutil.ReadDir(p)
@@ -89,7 +90,7 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 		return nil, err
 	}
 
-	result := make([]BackupHandle, 0, len(fi))
+	result := make([]backupstorage.BackupHandle, 0, len(fi))
 	for _, info := range fi {
 		if !info.IsDir() {
 			continue
@@ -108,7 +109,7 @@ func (fbs *FileBackupStorage) ListBackups(bucket string) ([]BackupHandle, error)
 }
 
 // StartBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) StartBackup(bucket, name string) (BackupHandle, error) {
+func (fbs *FileBackupStorage) StartBackup(bucket, name string) (backupstorage.BackupHandle, error) {
 	// make sure the bucket directory exists
 	p := path.Join(*FileBackupStorageRoot, bucket)
 	if err := os.MkdirAll(p, os.ModePerm); err != nil {
@@ -136,5 +137,5 @@ func (fbs *FileBackupStorage) RemoveBackup(bucket, name string) error {
 }
 
 func init() {
-	BackupStorageMap["file"] = &FileBackupStorage{}
+	backupstorage.BackupStorageMap["file"] = &FileBackupStorage{}
 }

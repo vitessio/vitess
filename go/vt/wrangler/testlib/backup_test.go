@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
+	"github.com/youtube/vitess/go/vt/mysqlctl/filebackupstorage"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -38,7 +39,7 @@ func TestBackupRestore(t *testing.T) {
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
-	*backupstorage.FileBackupStorageRoot = fbsRoot
+	*filebackupstorage.FileBackupStorageRoot = fbsRoot
 	*backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
