@@ -763,7 +763,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		if err != nil {
 			return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
 		}
-		if !topo.IsTrivialTypeChange(ti.Type, newType) || !topo.IsValidTypeChange(ti.Type, newType) {
+		if !topo.IsTrivialTypeChange(ti.Type, newType) {
 			return fmt.Errorf("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
 		wr.Logger().Printf("- %v\n", fmtTabletAwkable(ti))

@@ -146,13 +146,13 @@ func (worker *SQLDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in superset
 	var err error
-	worker.superset.alias, err = FindChecker(ctx, worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
+	worker.superset.alias, err = FindWorkerTablet(ctx, worker.wr, worker.cleaner, worker.cell, worker.superset.Keyspace, worker.superset.Shard)
 	if err != nil {
 		return err
 	}
 
 	// find an appropriate endpoint in subset
-	worker.subset.alias, err = FindChecker(ctx, worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
+	worker.subset.alias, err = FindWorkerTablet(ctx, worker.wr, worker.cleaner, worker.cell, worker.subset.Keyspace, worker.subset.Shard)
 	if err != nil {
 		return err
 	}
