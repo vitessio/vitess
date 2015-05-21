@@ -54,7 +54,9 @@ type BackupHandle interface {
 type BackupStorage interface {
 	// ListBackups returns all the backups in a bucket.  The
 	// returned backups are read-only (ReadFile can be called, but
-	// AddFile/EndBackup/AbortBackup cannot)
+	// AddFile/EndBackup/AbortBackup cannot).
+	// The backups are string-sorted by Name(), ascending (ends up
+	// being the oldest backup first).
 	ListBackups(bucket string) ([]BackupHandle, error)
 
 	// StartBackup creates a new backup with the given name.  If a
