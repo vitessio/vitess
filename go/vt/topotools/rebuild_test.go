@@ -32,8 +32,8 @@ func TestRebuildShardRace(t *testing.T) {
 
 	keyspace := faketopo.TestKeyspace
 	shard := faketopo.TestShard
-	master := f.AddTablet(1, "test_cell", topo.TYPE_MASTER, nil)
-	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA, master)
+	f.AddTablet(1, "test_cell", topo.TYPE_MASTER)
+	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA)
 
 	// Do an initial rebuild.
 	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {

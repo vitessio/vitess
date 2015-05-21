@@ -12,8 +12,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 	"text/template"
@@ -89,8 +87,9 @@ func parseSlaveStatus(fields map[string]string) proto.ReplicationStatus {
 	return status
 }
 
-// WaitForSlaveStart waits a slave until given deadline passed
-func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
+// WaitForSlaveStart waits until the deadline for replication to start.
+// This validates the current master is correct and can be connected to.
+func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 	var rowMap map[string]string
 	for slaveWait := 0; slaveWait < slaveStartDeadline; slaveWait++ {
 		status, err := mysqld.SlaveStatus()
@@ -139,18 +138,9 @@ func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
 }
 
-// GetMasterAddr returns master address
-func (mysqld *Mysqld) GetMasterAddr() (string, error) {
-	slaveStatus, err := mysqld.SlaveStatus()
-	if err != nil {
-		return "", err
-	}
-	return slaveStatus.MasterAddr(), nil
-}
-
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'port'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +156,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
@@ -255,43 +245,6 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]st
 	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 }
 
-// WaitForSlave waits for a slave if its lag is larger than given maxLag
-func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
-	// FIXME(msolomon) verify that slave started based on show slave status;
-	var rowMap map[string]string
-	for {
-		rowMap, err = mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
-		if err != nil {
-			return
-		}
-
-		if rowMap["Seconds_Behind_Master"] == "NULL" {
-			break
-		} else {
-			lag, err := strconv.Atoi(rowMap["Seconds_Behind_Master"])
-			if err != nil {
-				break
-			}
-			if lag < maxLag {
-				return nil
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
-	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
-	errs := make([]string, 0, len(errorKeys))
-	for _, key := range errorKeys {
-		if rowMap[key] != "" {
-			errs = append(errs, key+": "+rowMap[key])
-		}
-	}
-	if len(errs) != 0 {
-		return errors.New(strings.Join(errs, ", "))
-	}
-	return errors.New("replication stopped, it will never catch up")
-}
-
 // ResetReplicationCommands returns the commands to run to reset all
 // replication for this host.
 func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
@@ -325,7 +278,7 @@ const (
 
 // FindSlaves gets IP addresses for all currently connected slaves.
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	qr, err := mysqld.FetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
@@ -344,22 +297,6 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	return addrs, nil
 }
 
-// ValidateSnapshotPath is a helper function to make sure we can write to the local snapshot area, before we actually do any action
-// (can be used for both partial and full snapshots)
-func (mysqld *Mysqld) ValidateSnapshotPath() error {
-	_path := path.Join(mysqld.SnapshotDir, "validate_test")
-	if err := os.RemoveAll(_path); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	if err := os.MkdirAll(_path, 0775); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	if err := os.RemoveAll(_path); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	return nil
-}
-
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
 func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
@@ -370,7 +307,7 @@ func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.
 		}
 
 		cmd := binlogplayer.QueryBlpCheckpoint(bp.Uid)
-		qr, err := mysqld.fetchSuperQuery(cmd)
+		qr, err := mysqld.FetchSuperQuery(cmd)
 		if err != nil {
 			return err
 		}

@@ -259,7 +259,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	// check which kind of replication we're doing, tables or keyrange
 	if len(bpc.sourceShard.Tables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := bpc.mysqld.ResolveTables(bpc.dbName, bpc.sourceShard.Tables)
+		tables, err := mysqlctl.ResolveTables(bpc.mysqld, bpc.dbName, bpc.sourceShard.Tables)
 		if err != nil {
 			return fmt.Errorf("failed to resolve table names: %v", err)
 		}

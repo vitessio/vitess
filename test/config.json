@@ -38,7 +38,7 @@
       "File": "binlog.py"
     },
     {
-      "File": "clone.py"
+      "File": "backup.py"
     },
     {
       "File": "update_stream.py"

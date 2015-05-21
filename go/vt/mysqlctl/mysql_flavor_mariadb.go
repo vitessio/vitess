@@ -29,7 +29,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
+	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
 	}
@@ -69,7 +69,7 @@ func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosit
 	}
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return fmt.Errorf("MASTER_GTID_WAIT() failed: %v", err)
 	}

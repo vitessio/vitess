@@ -250,23 +250,19 @@ func testSplitClone(t *testing.T, strategy string) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wr, "cell1", 20,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly := testlib.NewFakeTablet(t, wr, "cell1", 21,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"),
-		testlib.TabletParent(rightMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wr)

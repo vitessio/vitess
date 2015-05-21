@@ -24,10 +24,7 @@ var (
 )
 
 // Wrangler manages complex actions on the topology, like reparents,
-// snapshots, restores, ...
-//
-// FIXME(alainjobart) take the context out of this structure.
-// We want the context to come from the outside on every call.
+// backups, resharding, ...
 //
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.

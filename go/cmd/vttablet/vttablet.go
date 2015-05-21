@@ -108,7 +108,6 @@ func main() {
 		exit.Return(1)
 	}
 
-	tabletmanager.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 	servenv.OnRun(func() {
 		addStatusParts(qsc)
 	})

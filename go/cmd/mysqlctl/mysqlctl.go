@@ -42,76 +42,12 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) err
 	return nil
 }
 
-func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	dontWaitForSlaveStart := subFlags.Bool("dont_wait_for_slave_start", false, "won't wait for replication to start (useful when restoring from master server)")
-	fetchConcurrency := subFlags.Int("fetch_concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch_retry_count", 3, "how many times to retry a failed transfer")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("Command restore requires <snapshot manifest file>")
-	}
-
-	rs, err := mysqlctl.ReadSnapshotManifest(subFlags.Arg(0))
-	if err != nil {
-		return fmt.Errorf("restore failed: ReadSnapshotManifest: %v", err)
-	}
-	err = mysqld.RestoreFromSnapshot(logutil.NewConsoleLogger(), rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart, nil)
-	if err != nil {
-		return fmt.Errorf("restore failed: RestoreFromSnapshot: %v", err)
-	}
-	return nil
-}
-
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
 	if err := mysqld.Shutdown(true, *waitTime); err != nil {
 		return fmt.Errorf("failed shutdown mysql: %v", err)
-	}
-	return nil
-}
-
-func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("Command snapshot requires <db name>")
-	}
-
-	filename, _, _, err := mysqld.CreateSnapshot(logutil.NewConsoleLogger(), subFlags.Arg(0), tabletAddr, false, *concurrency, false, nil)
-	if err != nil {
-		return fmt.Errorf("snapshot failed: %v", err)
-	}
-	log.Infof("manifest location: %v", filename)
-	return nil
-}
-
-func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	concurrency := subFlags.Int("concurrency", 4, "how many checksum jobs to run simultaneously")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("Command snapshotsourcestart requires <db name>")
-	}
-
-	filename, slaveStartRequired, readOnly, err := mysqld.CreateSnapshot(logutil.NewConsoleLogger(), subFlags.Arg(0), tabletAddr, false, *concurrency, true, nil)
-	if err != nil {
-		return fmt.Errorf("snapshot failed: %v", err)
-	}
-	log.Infof("manifest location: %v", filename)
-	log.Infof("slave start required: %v", slaveStartRequired)
-	log.Infof("read only: %v", readOnly)
-	return nil
-}
-
-func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	slaveStartRequired := subFlags.Bool("slave_start", false, "will restart replication")
-	readWrite := subFlags.Bool("read_write", false, "will make the server read-write")
-	subFlags.Parse(args)
-
-	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite), true, map[string]string{})
-	if err != nil {
-		return fmt.Errorf("snapshotsourceend failed: %v", err)
 	}
 	return nil
 }
@@ -187,19 +123,6 @@ var commands = []command{
 		"Starts mysqld on an already 'init'-ed directory"},
 	command{"shutdown", shutdownCmd, "[-wait_time=20s]",
 		"Shuts down mysqld, does not remove any file"},
-
-	command{"snapshot", snapshotCmd,
-		"[-concurrency=4] <db name>",
-		"Takes a full snapshot, copying the innodb data files"},
-	command{"snapshotsourcestart", snapshotSourceStartCmd,
-		"[-concurrency=4] <db name>",
-		"Enters snapshot server mode (mysqld stopped, serving innodb data files)"},
-	command{"snapshotsourceend", snapshotSourceEndCmd,
-		"[-slave_start] [-read_write]",
-		"Gets out of snapshot server mode"},
-	command{"restore", restoreCmd,
-		"[-fetch_concurrency=3] [-fetch_retry_count=3] [-dont_wait_for_slave_start] <snapshot manifest file>",
-		"Restores a full snapshot"},
 
 	command{"position", positionCmd,
 		"<operation> <pos1> <pos2 | gtid>",

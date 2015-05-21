@@ -24,9 +24,6 @@ var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the 
 // ErrFunc is used by streaming RPCs that don't return a specific result
 type ErrFunc func() error
 
-// SnapshotReplyFunc is used by Snapshot to return result and error
-type SnapshotReplyFunc func() (*actionnode.SnapshotReply, error)
-
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
 	//
@@ -187,17 +184,8 @@ type TabletManagerClient interface {
 	// Backup / restore related methods
 	//
 
-	// Snapshot takes a database snapshot
-	Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, SnapshotReplyFunc, error)
-
-	// SnapshotSourceEnd restarts the mysql server
-	SnapshotSourceEnd(ctx context.Context, tablet *topo.TabletInfo, ssea *actionnode.SnapshotSourceEndArgs) error
-
-	// ReserveForRestore will prepare a server for restore
-	ReserveForRestore(ctx context.Context, tablet *topo.TabletInfo, rfra *actionnode.ReserveForRestoreArgs) error
-
-	// Restore restores a database snapshot
-	Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, ErrFunc, error)
+	// Backup creates a database backup
+	Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 
 	//
 	// RPC related methods

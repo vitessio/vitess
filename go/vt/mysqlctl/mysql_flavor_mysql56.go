@@ -30,7 +30,7 @@ func (*mysql56) VersionMatch(version string) bool {
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
+	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
 	if err != nil {
 		return rp, err
 	}
@@ -62,7 +62,7 @@ func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPositio
 	query = fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", targetPos, int(waitTimeout.Seconds()))
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return fmt.Errorf("WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS() failed: %v", err)
 	}

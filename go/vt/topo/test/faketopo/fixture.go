@@ -66,25 +66,9 @@ func (fix *Fixture) TearDown() {
 	close(fix.done)
 }
 
-// MakeMySQLMaster makes the (fake) MySQL used by tablet identified by
-// uid the master.
-func (fix *Fixture) MakeMySQLMaster(uid int) {
-	newMaster, ok := fix.tablets[uid]
-	if !ok {
-		fix.Fatalf("bad tablet uid: %v", uid)
-	}
-	for id, tablet := range fix.tablets {
-		if id == uid {
-			tablet.mysql.MasterAddr = ""
-		} else {
-			tablet.mysql.MasterAddr = newMaster.MysqlIPAddr()
-		}
-	}
-}
-
 // AddTablet adds a new tablet to the topology and starts its event
 // loop.
-func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, master *topo.Tablet) *topo.Tablet {
+func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType) *topo.Tablet {
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: cell, Uid: uint32(uid)},
 		Hostname: fmt.Sprintf("%vbsr%v", cell, uid),
@@ -103,9 +87,6 @@ func (fix *Fixture) AddTablet(uid int, cell string, tabletType topo.TabletType, 
 		fix.Fatalf("CreateTablet: %v", err)
 	}
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if master != nil {
-		mysqlDaemon.MasterAddr = master.MysqlIPAddr()
-	}
 	mysqlDaemon.MysqlPort = 3334 + 10*uid
 
 	pack := &tabletPack{Tablet: tablet, mysql: mysqlDaemon}

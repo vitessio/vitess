@@ -120,7 +120,7 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 
 	// If no environment variable set, fall back to auto-detect.
 	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
-	qr, err := mysqld.fetchSuperQuery("SELECT VERSION()")
+	qr, err := mysqld.FetchSuperQuery("SELECT VERSION()")
 	if err != nil {
 		return nil, fmt.Errorf("couldn't SELECT VERSION(): %v", err)
 	}

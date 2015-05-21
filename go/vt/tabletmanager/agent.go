@@ -188,8 +188,26 @@ func NewActionAgent(
 	// register the RPC services from the agent
 	agent.registerQueryService()
 
-	// start health check if needed
-	agent.initHeathCheck()
+	// two cases then:
+	// - restoreFromBackup is set: we restore, then initHealthCheck, all
+	//   in the background
+	// - restoreFromBackup is not set: we initHealthCheck right away
+	if *restoreFromBackup {
+		go func() {
+			// restoreFromBackup wil just be a regular action
+			// (same as if it was triggered remotely)
+			if err := agent.RestoreFromBackup(); err != nil {
+				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+				log.Fatalf("RestoreFromBackup failed: %v", err)
+			}
+
+			// after the restore is done, start health check
+			agent.initHeathCheck()
+		}()
+	} else {
+		// synchronously start health check if needed
+		agent.initHeathCheck()
+	}
 
 	return agent, nil
 }
@@ -442,8 +460,8 @@ func (agent *ActionAgent) Stop() {
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
-	if agent.Mysqld != nil {
-		agent.Mysqld.Close()
+	if agent.MysqlDaemon != nil {
+		agent.MysqlDaemon.Close()
 	}
 }
 

@@ -165,17 +165,8 @@ const (
 	// replication slaves.
 	TabletActionGetSlaves = "GetSlaves"
 
-	// TabletActionSnapshot takes a db snapshot
-	TabletActionSnapshot = "Snapshot"
-
-	// TabletActionSnapshotSourceEnd restarts the mysql server
-	TabletActionSnapshotSourceEnd = "SnapshotSourceEnd"
-
-	// TabletActionReserveForRestore will prepare a server for restore
-	TabletActionReserveForRestore = "ReserveForRestore"
-
-	// TabletActionRestore will restore a backup
-	TabletActionRestore = "Restore"
+	// TabletActionBackup takes a db backup and stores it into BackupStorage
+	TabletActionBackup = "Backup"
 
 	//
 	// Shard actions - involve all tablets in a shard.

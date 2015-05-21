@@ -33,8 +33,8 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(queryList []string) error {
 	return nil
 }
 
-// fetchSuperQuery returns the results of executing a query as a super user.
-func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
+// FetchSuperQuery returns the results of executing a query as a super user.
+func (mysqld *Mysqld) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
 	conn, connErr := mysqld.dbaPool.Get(0)
 	if connErr != nil {
 		return nil, connErr
@@ -51,7 +51,7 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error)
 // fetchSuperQueryMap returns a map from column names to cell data for a query
 // that should return exactly 1 row.
 func (mysqld *Mysqld) fetchSuperQueryMap(query string) (map[string]string, error) {
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return nil, err
 	}

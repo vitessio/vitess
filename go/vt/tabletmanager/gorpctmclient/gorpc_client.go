@@ -457,78 +457,14 @@ func (client *GoRPCTabletManagerClient) PromoteSlave(ctx context.Context, tablet
 // Backup related methods
 //
 
-// Snapshot is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) Snapshot(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.SnapshotArgs) (<-chan *logutil.LoggerEvent, tmclient.SnapshotReplyFunc, error) {
+// Backup is part of the tmclient.TabletManagerClient interface
+func (client *GoRPCTabletManagerClient) Backup(ctx context.Context, tablet *topo.TabletInfo, concurrency int) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
 	var connectTimeout time.Duration
 	deadline, ok := ctx.Deadline()
 	if ok {
 		connectTimeout = deadline.Sub(time.Now())
 		if connectTimeout < 0 {
-			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Snapshot on %v", tablet.Alias)}
-		}
-	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logstream := make(chan *logutil.LoggerEvent, 10)
-	rpcstream := make(chan *gorpcproto.SnapshotStreamingReply, 10)
-	result := &actionnode.SnapshotReply{}
-
-	c := rpcClient.StreamGo("TabletManager.Snapshot", sa, rpcstream)
-	interrupted := false
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// context is done
-				interrupted = true
-				close(logstream)
-				rpcClient.Close()
-				return
-			case ssr, ok := <-rpcstream:
-				if !ok {
-					close(logstream)
-					rpcClient.Close()
-					return
-				}
-				if ssr.Log != nil {
-					logstream <- ssr.Log
-				}
-				if ssr.Result != nil {
-					*result = *ssr.Result
-				}
-			}
-		}
-	}()
-	return logstream, func() (*actionnode.SnapshotReply, error) {
-		// this is only called after streaming is done
-		if interrupted {
-			return nil, fmt.Errorf("TabletManager.Snapshot interrupted by context")
-		}
-		return result, c.Error
-	}, nil
-}
-
-// SnapshotSourceEnd is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) SnapshotSourceEnd(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SnapshotSourceEndArgs) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSnapshotSourceEnd, args, &rpc.Unused{})
-}
-
-// ReserveForRestore is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) ReserveForRestore(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.ReserveForRestoreArgs) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionReserveForRestore, args, &rpc.Unused{})
-}
-
-// Restore is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) Restore(ctx context.Context, tablet *topo.TabletInfo, sa *actionnode.RestoreArgs) (<-chan *logutil.LoggerEvent, tmclient.ErrFunc, error) {
-	var connectTimeout time.Duration
-	deadline, ok := ctx.Deadline()
-	if ok {
-		connectTimeout = deadline.Sub(time.Now())
-		if connectTimeout < 0 {
-			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Restore on %v", tablet.Alias)}
+			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Backup on %v", tablet.Alias)}
 		}
 	}
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
@@ -538,7 +474,9 @@ func (client *GoRPCTabletManagerClient) Restore(ctx context.Context, tablet *top
 
 	logstream := make(chan *logutil.LoggerEvent, 10)
 	rpcstream := make(chan *logutil.LoggerEvent, 10)
-	c := rpcClient.StreamGo("TabletManager.Restore", sa, rpcstream)
+	c := rpcClient.StreamGo("TabletManager.Backup", &gorpcproto.BackupArgs{
+		Concurrency: concurrency,
+	}, rpcstream)
 	interrupted := false
 	go func() {
 		for {
@@ -562,7 +500,7 @@ func (client *GoRPCTabletManagerClient) Restore(ctx context.Context, tablet *top
 	return logstream, func() error {
 		// this is only called after streaming is done
 		if interrupted {
-			return fmt.Errorf("TabletManager.Restore interrupted by context")
+			return fmt.Errorf("TabletManager.Backup interrupted by context")
 		}
 		return c.Error
 	}, nil
