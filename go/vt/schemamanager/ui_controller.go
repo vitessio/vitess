@@ -15,15 +15,18 @@ import (
 
 // UIController handles schema events.
 type UIController struct {
-	sqls   []string
-	writer http.ResponseWriter
+	sqls     []string
+	keyspace string
+	writer   http.ResponseWriter
 }
 
 // NewUIController creates a UIController instance
-func NewUIController(sqlStr string, writer http.ResponseWriter) *UIController {
+func NewUIController(
+	sqlStr string, keyspace string, writer http.ResponseWriter) *UIController {
 	controller := &UIController{
-		sqls:   make([]string, 0, 32),
-		writer: writer,
+		sqls:     make([]string, 0, 32),
+		keyspace: keyspace,
+		writer:   writer,
 	}
 	for _, sql := range strings.Split(sqlStr, ";") {
 		s := strings.TrimSpace(sql)
@@ -47,6 +50,11 @@ func (controller *UIController) Read() ([]string, error) {
 
 // Close is a no-op.
 func (controller *UIController) Close() {
+}
+
+// GetKeyspace returns keyspace to apply schema.
+func (controller *UIController) GetKeyspace() string {
+	return controller.keyspace
 }
 
 // OnReadSuccess is no-op

@@ -14,11 +14,17 @@ import (
 func TestUIController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	response := httptest.NewRecorder()
-	controller := NewUIController(sql, response)
+	controller := NewUIController(sql, "test_keyspace", response)
 	err := controller.Open()
 	if err != nil {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
+
+	keyspace := controller.GetKeyspace()
+	if keyspace != "test_keyspace" {
+		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)
+	}
+
 	sqls, err := controller.Read()
 	if err != nil {
 		t.Fatalf("controller.Read should succeed, but got error: %v", err)

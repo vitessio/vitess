@@ -57,10 +57,10 @@ func TestSchemaManagerValidationFail(t *testing.T) {
 func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
+	controller.SetKeyspace("unknown_keyspace")
 	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"unknown_keyspace")
+		newFakeTopo())
 	err := Run(controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
@@ -72,8 +72,7 @@ func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 	err := Run(controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Execute fail")
@@ -103,8 +102,7 @@ func TestSchemaManagerRun(t *testing.T) {
 
 	executor := NewTabletExecutor(
 		fakeTmc,
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 
 	err := Run(controller, executor)
 	if err != nil {
@@ -130,8 +128,7 @@ func TestSchemaManagerRun(t *testing.T) {
 func newFakeExecutor() *TabletExecutor {
 	return NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
@@ -356,6 +353,7 @@ func (topoServer *fakeTopo) UnlockShardForAction(keyspace, shard, lockPath, resu
 
 type fakeController struct {
 	sqls                         []string
+	keyspace                     string
 	openFail                     bool
 	readFail                     bool
 	closeFail                    bool
@@ -370,10 +368,15 @@ func newFakeController(
 	sqls []string, openFail bool, readFail bool, closeFail bool) *fakeController {
 	return &fakeController{
 		sqls:      sqls,
+		keyspace:  "test_keyspace",
 		openFail:  openFail,
 		readFail:  readFail,
 		closeFail: closeFail,
 	}
+}
+
+func (controller *fakeController) SetKeyspace(keyspace string) {
+	controller.keyspace = keyspace
 }
 
 func (controller *fakeController) Open() error {
@@ -391,6 +394,10 @@ func (controller *fakeController) Read() ([]string, error) {
 }
 
 func (controller *fakeController) Close() {
+}
+
+func (controller *fakeController) GetKeyspace() string {
+	return controller.keyspace
 }
 
 func (controller *fakeController) OnReadSuccess() error {

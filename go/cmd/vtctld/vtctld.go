@@ -483,11 +483,10 @@ func main() {
 		keyspace := r.FormValue("keyspace")
 		executor := schemamanager.NewTabletExecutor(
 			tmclient.NewTabletManagerClient(),
-			ts,
-			keyspace)
+			ts)
 
 		schemamanager.Run(
-			schemamanager.NewUIController(sqlStr, w),
+			schemamanager.NewUIController(sqlStr, keyspace, w),
 			executor,
 		)
 	})

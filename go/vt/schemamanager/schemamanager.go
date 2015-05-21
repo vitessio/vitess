@@ -19,6 +19,7 @@ type Controller interface {
 	Open() error
 	Read() (sqls []string, err error)
 	Close()
+	GetKeyspace() string
 	OnReadSuccess() error
 	OnReadFail(err error) error
 	OnValidationSuccess() error
@@ -28,7 +29,7 @@ type Controller interface {
 
 // Executor applies schema changes to underlying system
 type Executor interface {
-	Open() error
+	Open(keyspace string) error
 	Validate(sqls []string) error
 	Execute(sqls []string) *ExecuteResult
 	Close()
@@ -69,7 +70,8 @@ func Run(controller Controller, executor Executor) error {
 		return err
 	}
 	controller.OnReadSuccess()
-	if err := executor.Open(); err != nil {
+	keyspace := controller.GetKeyspace()
+	if err := executor.Open(keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
 		return err
 	}

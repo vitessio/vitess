@@ -12,13 +12,15 @@ import (
 
 // PlainController implements Controller interface.
 type PlainController struct {
-	sqls []string
+	sqls     []string
+	keyspace string
 }
 
 // NewPlainController creates a new PlainController instance.
-func NewPlainController(sqlStr string) *PlainController {
+func NewPlainController(sqlStr string, keyspace string) *PlainController {
 	controller := &PlainController{
-		sqls: make([]string, 0, 32),
+		sqls:     make([]string, 0, 32),
+		keyspace: keyspace,
 	}
 	for _, sql := range strings.Split(sqlStr, ";") {
 		s := strings.TrimSpace(sql)
@@ -41,6 +43,11 @@ func (controller *PlainController) Read() ([]string, error) {
 
 // Close is a no-op.
 func (controller *PlainController) Close() {
+}
+
+// GetKeyspace returns keyspace to apply schema.
+func (controller *PlainController) GetKeyspace() string {
+	return controller.keyspace
 }
 
 // OnReadSuccess is called when schemamanager successfully

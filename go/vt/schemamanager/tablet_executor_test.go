@@ -12,13 +12,13 @@ import (
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor()
-	if err := executor.Open(); err != nil {
+	if err := executor.Open("test_keyspace"); err != nil {
 		t.Fatalf("executor.Open() should succeed")
 	}
 
 	defer executor.Close()
 
-	if err := executor.Open(); err != nil {
+	if err := executor.Open("test_keyspace"); err != nil {
 		t.Fatalf("open an opened executor should also succeed")
 	}
 }
@@ -51,8 +51,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 
 	executor := NewTabletExecutor(
 		fakeTmc,
-		newFakeTopo(),
-		"test_keyspace")
+		newFakeTopo())
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
@@ -63,7 +62,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		t.Fatalf("validate should fail because executor is closed")
 	}
 
-	executor.Open()
+	executor.Open("test_keyspace")
 	defer executor.Close()
 
 	// schema changes with DMLs should fail
@@ -108,7 +107,7 @@ func TestTabletExecutorExecute(t *testing.T) {
 		t.Fatalf("execute should fail, call execute.Open first")
 	}
 
-	executor.Open()
+	executor.Open("test_keyspace")
 	defer executor.Close()
 
 	result = executor.Execute(sqls)

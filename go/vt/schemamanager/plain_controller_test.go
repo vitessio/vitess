@@ -11,11 +11,17 @@ import (
 
 func TestPlainController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
-	controller := NewPlainController(sql)
+	controller := NewPlainController(sql, "test_keyspace")
 	err := controller.Open()
 	if err != nil {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
+
+	keyspace := controller.GetKeyspace()
+	if keyspace != "test_keyspace" {
+		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)
+	}
+
 	sqls, err := controller.Read()
 	if err != nil {
 		t.Fatalf("controller.Read should succeed, but got error: %v", err)

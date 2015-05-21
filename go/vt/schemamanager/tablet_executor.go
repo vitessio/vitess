@@ -18,7 +18,6 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	keyspace    string
 	tmClient    tmclient.TabletManagerClient
 	topoServer  topo.Server
 	tabletInfos []*topo.TabletInfo
@@ -29,10 +28,8 @@ type TabletExecutor struct {
 // NewTabletExecutor creates a new TabletExecutor instance
 func NewTabletExecutor(
 	tmClient tmclient.TabletManagerClient,
-	topoServer topo.Server,
-	keyspace string) *TabletExecutor {
+	topoServer topo.Server) *TabletExecutor {
 	return &TabletExecutor{
-		keyspace:   keyspace,
 		tmClient:   tmClient,
 		topoServer: topoServer,
 		isClosed:   true,
@@ -40,32 +37,32 @@ func NewTabletExecutor(
 }
 
 // Open opens a connection to the master for every shard
-func (exec *TabletExecutor) Open() error {
+func (exec *TabletExecutor) Open(keyspace string) error {
 	if !exec.isClosed {
 		return nil
 	}
-	shardNames, err := exec.topoServer.GetShardNames(exec.keyspace)
+	shardNames, err := exec.topoServer.GetShardNames(keyspace)
 	if err != nil {
-		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", exec.keyspace, err)
+		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", keyspace, err)
 	}
-	log.Infof("Keyspace: %v, Shards: %v\n", exec.keyspace, shardNames)
+	log.Infof("Keyspace: %v, Shards: %v\n", keyspace, shardNames)
 	exec.tabletInfos = make([]*topo.TabletInfo, len(shardNames))
 	for i, shardName := range shardNames {
-		shardInfo, err := exec.topoServer.GetShard(exec.keyspace, shardName)
+		shardInfo, err := exec.topoServer.GetShard(keyspace, shardName)
 		log.Infof("\tShard: %s, ShardInfo: %v\n", shardName, shardInfo)
 		if err != nil {
-			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", exec.keyspace, shardName, err)
+			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		tabletInfo, err := exec.topoServer.GetTablet(shardInfo.MasterAlias)
 		if err != nil {
-			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", exec.keyspace, shardName, err)
+			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
 		exec.tabletInfos[i] = tabletInfo
 		log.Infof("\t\tTabletInfo: %+v\n", tabletInfo)
 	}
 
 	if len(exec.tabletInfos) == 0 {
-		return fmt.Errorf("keyspace: %s does not contain any master tablets", exec.keyspace)
+		return fmt.Errorf("keyspace: %s does not contain any master tablets", keyspace)
 	}
 	exec.isClosed = false
 	return nil
