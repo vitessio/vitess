@@ -75,8 +75,8 @@ func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.C
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
-	ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.ChangeType(ctx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	err = wr.ChangeType(shortCtx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
 	cancel()
 	if err != nil {
 		return topo.TabletAlias{}, err
