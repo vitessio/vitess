@@ -243,7 +243,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in the source shard
 	var err error
-	vscw.sourceAlias, err = findChecker(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
+	vscw.sourceAlias, err = FindChecker(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
@@ -410,7 +410,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			continue
 		}
 
-		chunks, err := findChunks(ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
+		chunks, err := FindChunks(ctx, vscw.wr, vscw.sourceTablet, td, vscw.minTableSizeForSplit, vscw.sourceReaderCount)
 		if err != nil {
 			return err
 		}

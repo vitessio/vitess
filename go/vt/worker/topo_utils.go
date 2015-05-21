@@ -20,10 +20,10 @@ var (
 	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
 )
 
-// findHealthyRdonlyEndPoint returns a random healthy endpoint.
+// FindHealthyRdonlyEndPoint returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
-func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+func FindHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
 	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
@@ -46,12 +46,12 @@ func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard stri
 	}, nil
 }
 
-// findChecker:
+// FindChecker will:
 // - find a rdonly instance in the keyspace / shard
 // - mark it as checker
 // - tag it with our worker process
-func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	tabletAlias, err := findHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
+func FindChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	tabletAlias, err := FindHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
 	}

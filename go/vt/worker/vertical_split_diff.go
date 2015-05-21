@@ -189,13 +189,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	vsdw.destinationAlias, err = findChecker(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
+	vsdw.destinationAlias, err = FindChecker(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
-	vsdw.sourceAlias, err = findChecker(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
+	vsdw.sourceAlias, err = FindChecker(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
 	if err != nil {
 		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
