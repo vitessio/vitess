@@ -409,9 +409,8 @@ func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, ch
 	}
 
 	err = schemamanager.Run(
-		schemamanager.NewSimpleDataSourcer(change),
+		schemamanager.NewPlainController(change),
 		schemamanager.NewTabletExecutor(wr.tmc, wr.ts, keyspace),
-		schemamanager.NewConsoleEventHandler(),
 	)
 
 	return nil, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)

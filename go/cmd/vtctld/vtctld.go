@@ -10,15 +10,12 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	schmgr "github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/schemamanager/uihandler"
+	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	// register gorpc vtgate client
-	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
 )
 
 var (
@@ -484,15 +481,14 @@ func main() {
 		}
 		sqlStr := r.FormValue("data")
 		keyspace := r.FormValue("keyspace")
-		executor := schmgr.NewTabletExecutor(
+		executor := schemamanager.NewTabletExecutor(
 			tmclient.NewTabletManagerClient(),
 			ts,
 			keyspace)
 
-		schmgr.Run(
-			schmgr.NewSimpleDataSourcer(sqlStr),
+		schemamanager.Run(
+			schemamanager.NewUIController(sqlStr, w),
 			executor,
-			uihandler.NewUIEventHandler(w),
 		)
 	})
 	servenv.RunDefault()

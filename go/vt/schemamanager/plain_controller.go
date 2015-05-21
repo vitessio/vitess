@@ -17,16 +17,16 @@ type PlainController struct {
 
 // NewPlainController creates a new PlainController instance.
 func NewPlainController(sqlStr string) *PlainController {
-	result := &PlainController{
+	controller := &PlainController{
 		sqls: make([]string, 0, 32),
 	}
 	for _, sql := range strings.Split(sqlStr, ";") {
 		s := strings.TrimSpace(sql)
 		if s != "" {
-			result.sqls = append(result.sqls, s)
+			controller.sqls = append(controller.sqls, s)
 		}
 	}
-	return result
+	return controller
 }
 
 // Open is a no-op.
