@@ -213,12 +213,11 @@ func (exec *TabletExecutor) executeOneTablet(
 }
 
 // Close clears tablet executor states
-func (exec *TabletExecutor) Close() error {
+func (exec *TabletExecutor) Close() {
 	if !exec.isClosed {
 		exec.tabletInfos = nil
 		exec.isClosed = true
 	}
-	return nil
 }
 
 var _ Executor = (*TabletExecutor)(nil)

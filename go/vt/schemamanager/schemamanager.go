@@ -12,19 +12,17 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
-// DataSourcer defines how the autoschema system get schema change commands
-type DataSourcer interface {
+// Controller is responsible for getting schema change for a
+// certain keyspace and also handling various events happened during schema
+// change.
+type Controller interface {
 	Open() error
-	Read() ([]string, error)
-	Close() error
-}
-
-// EventHandler defines callbacks for events happen during schema management
-type EventHandler interface {
-	OnDataSourcerReadSuccess([]string) error
-	OnDataSourcerReadFail(error) error
-	OnValidationSuccess([]string) error
-	OnValidationFail(error) error
+	Read() (sqls []string, err error)
+	Close()
+	OnReadSuccess() error
+	OnReadFail(err error) error
+	OnValidationSuccess() error
+	OnValidationFail(err error) error
 	OnExecutorComplete(*ExecuteResult) error
 }
 
@@ -33,7 +31,7 @@ type Executor interface {
 	Open() error
 	Validate(sqls []string) error
 	Execute(sqls []string) *ExecuteResult
-	Close() error
+	Close()
 }
 
 // ExecuteResult contains information about schema management state
@@ -58,34 +56,32 @@ type ShardResult struct {
 }
 
 // Run schema changes on Vitess through VtGate
-func Run(sourcer DataSourcer,
-	exec Executor,
-	handler EventHandler) error {
-	if err := sourcer.Open(); err != nil {
+func Run(controller Controller, executor Executor) error {
+	if err := controller.Open(); err != nil {
 		log.Errorf("failed to open data sourcer: %v", err)
 		return err
 	}
-	defer sourcer.Close()
-	sqls, err := sourcer.Read()
+	defer controller.Close()
+	sqls, err := controller.Read()
 	if err != nil {
 		log.Errorf("failed to read data from data sourcer: %v", err)
-		handler.OnDataSourcerReadFail(err)
+		controller.OnReadFail(err)
 		return err
 	}
-	handler.OnDataSourcerReadSuccess(sqls)
-	if err := exec.Open(); err != nil {
+	controller.OnReadSuccess()
+	if err := executor.Open(); err != nil {
 		log.Errorf("failed to open executor: %v", err)
 		return err
 	}
-	defer exec.Close()
-	if err := exec.Validate(sqls); err != nil {
+	defer executor.Close()
+	if err := executor.Validate(sqls); err != nil {
 		log.Errorf("validation fail: %v", err)
-		handler.OnValidationFail(err)
+		controller.OnValidationFail(err)
 		return err
 	}
-	handler.OnValidationSuccess(sqls)
-	result := exec.Execute(sqls)
-	handler.OnExecutorComplete(result)
+	controller.OnValidationSuccess()
+	result := executor.Execute(sqls)
+	controller.OnExecutorComplete(result)
 	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {
 		out, _ := json.MarshalIndent(result, "", "  ")
 		return fmt.Errorf("Schema change failed, ExecuteResult: %v\n", string(out))
