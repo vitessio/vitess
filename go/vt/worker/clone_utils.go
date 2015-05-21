@@ -30,8 +30,8 @@ import (
 // Does a topo lookup for a single shard, and returns the tablet record of the master tablet.
 func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
 	var ti *topo.TabletInfo
-	newCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	si, err := topo.GetShard(newCtx, wr.TopoServer(), keyspace, shard)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	si, err := topo.GetShard(shortCtx, wr.TopoServer(), keyspace, shard)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)
@@ -43,8 +43,8 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 
 	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
 
-	newCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err = topo.GetTablet(newCtx, wr.TopoServer(), si.MasterAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), si.MasterAlias)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
@@ -58,16 +58,16 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 //	2. Map of tablet alias : tablet record for all tablets.
 func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []topo.TabletAlias, reloadTablets map[topo.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
-	newCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	reloadAliases, err = topo.FindAllTabletAliasesInShard(newCtx, wr.TopoServer(), keyspace, shard)
+	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	reloadAliases, err = topo.FindAllTabletAliasesInShard(shortCtx, wr.TopoServer(), keyspace, shard)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
 	}
 	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
 
-	newCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	reloadTablets, err = topo.GetTabletMap(newCtx, wr.TopoServer(), reloadAliases)
+	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+	reloadTablets, err = topo.GetTabletMap(shortCtx, wr.TopoServer(), reloadAliases)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
@@ -280,8 +280,8 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	ctx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1, true)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
