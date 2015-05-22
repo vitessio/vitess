@@ -299,7 +299,7 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
+func WaitBlpPosition(mysqld MysqlDaemon, bp *blproto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {
