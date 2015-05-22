@@ -212,7 +212,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// update stream needs to be started or stopped too
 	if agent.DBConfigs != nil {
 		if topo.IsRunningUpdateStream(newTablet.Type) {
-			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
 		} else {
 			binlog.DisableUpdateStreamService()
 		}

@@ -37,7 +37,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(mysqld *Mysqld) (*SlaveConnection, error) {
+func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 	params, err := dbconfigs.MysqlParams(mysqld.dba)
 	if err != nil {
 		return nil, err

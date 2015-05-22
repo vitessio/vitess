@@ -69,6 +69,9 @@ type MysqlDaemon interface {
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(query string) (*mproto.QueryResult, error)
 
+	// NewSlaveConnection returns a SlaveConnection to the database.
+	NewSlaveConnection() (*SlaveConnection, error)
+
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.
 	Close()
@@ -330,6 +333,11 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, 
 		return nil, fmt.Errorf("unexpected query: %v", query)
 	}
 	return qr, nil
+}
+
+// NewSlaveConnection is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) NewSlaveConnection() (*SlaveConnection, error) {
+	panic(fmt.Errorf("not implemented on FakeMysqlDaemon"))
 }
 
 // Close is part of the MysqlDaemon interface
