@@ -35,7 +35,6 @@ func TestInitTablet(t *testing.T) {
 	agent := &ActionAgent{
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
-		Mysqld:             nil,
 		MysqlDaemon:        mysqlDaemon,
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
