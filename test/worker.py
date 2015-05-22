@@ -8,6 +8,7 @@ Tests the robustness and resiliency of vtworkers.
 """
 
 import logging
+import signal
 import unittest
 from collections import namedtuple
 
@@ -363,11 +364,19 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
         condition_fn=lambda v: v.get('WorkerDestinationActualResolves') >= 1)
       logging.debug("Worker has resolved at least once, starting reparent now")
 
+      worker_proc.send_signal(signal.SIGSTOP)
+      logging.debug("Paused worker while reparent is ongoing, to prevent the "
+        "worker from finishing before the reparent does")
+
       utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/-80',
         shard_0_replica.tablet_alias], auto_log=True)
       utils.run_vtctl(['PlannedReparentShard', 'test_keyspace/80-',
         shard_1_replica.tablet_alias], auto_log=True)
 
+      # Resume the worker now that the reparent is done, it should be trying to
+      # write to the old master at this point.
+      logging.debug("Resuming worker")
+      worker_proc.send_signal(signal.SIGCONT)
     logging.debug("Polling for worker state")
     # There are a couple of race conditions around this, that we need to be careful of:
     # 1. It's possible for the reparent step to take so long that the worker will
@@ -445,7 +454,7 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
     self.verify_successful_worker_copy_with_reparent(mysql_down=True)
 
 def add_test_options(parser):
-  parser.add_option('--num_insert_rows', type="int", default=3000,
+  parser.add_option('--num_insert_rows', type="int", default=100,
     help="The number of rows, per shard, that we should insert before resharding for this test.")
 
 if __name__ == '__main__':
