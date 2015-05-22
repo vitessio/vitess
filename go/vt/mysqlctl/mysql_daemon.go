@@ -72,6 +72,12 @@ type MysqlDaemon interface {
 	// NewSlaveConnection returns a SlaveConnection to the database.
 	NewSlaveConnection() (*SlaveConnection, error)
 
+	// EnableBinlogPlayback enables playback of binlog events
+	EnableBinlogPlayback() error
+
+	// DisableBinlogPlayback disable playback of binlog events
+	DisableBinlogPlayback() error
+
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.
 	Close()
@@ -174,6 +180,9 @@ type FakeMysqlDaemon struct {
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
 	FetchSuperQueryMap map[string]*mproto.QueryResult
+
+	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
+	BinlogPlayerEnabled bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -338,6 +347,24 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, 
 // NewSlaveConnection is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) NewSlaveConnection() (*SlaveConnection, error) {
 	panic(fmt.Errorf("not implemented on FakeMysqlDaemon"))
+}
+
+// EnableBinlogPlayback is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already enabled")
+	}
+	fmd.BinlogPlayerEnabled = true
+	return nil
+}
+
+// DisableBinlogPlayback disable playback of binlog events
+func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already disabled")
+	}
+	fmd.BinlogPlayerEnabled = false
+	return nil
 }
 
 // Close is part of the MysqlDaemon interface
