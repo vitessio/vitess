@@ -63,7 +63,7 @@ type MysqlFlavor interface {
 	// SendBinlogDumpCommand sends the flavor-specific version of
 	// the COM_BINLOG_DUMP command to start dumping raw binlog
 	// events over a slave connection, starting at a given GTID.
-	SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error
+	SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error
 
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which

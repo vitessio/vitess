@@ -37,7 +37,7 @@ type BinlogPlayerController struct {
 	// Configuration parameters (set at construction, immutable).
 	ts       topo.Server
 	dbConfig *sqldb.ConnParams
-	mysqld   *mysqlctl.Mysqld
+	mysqld   mysqlctl.MysqlDaemon
 
 	// Information about us (set at construction, immutable).
 	cell           string
@@ -72,7 +72,7 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld *mysqlctl.Mysqld, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		dbConfig:          dbConfig,
@@ -283,7 +283,7 @@ type BinlogPlayerMap struct {
 	// Immutable, set at construction time.
 	ts       topo.Server
 	dbConfig *sqldb.ConnParams
-	mysqld   *mysqlctl.Mysqld
+	mysqld   mysqlctl.MysqlDaemon
 
 	// This mutex protects the map and the state.
 	mu      sync.Mutex
@@ -299,7 +299,7 @@ const (
 )
 
 // NewBinlogPlayerMap creates a new map of players.
-func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
