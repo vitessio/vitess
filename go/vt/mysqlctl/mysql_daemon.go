@@ -55,6 +55,8 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
+	PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error)
+	ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection() (dbconnpool.PoolConnection, error)
@@ -137,9 +139,17 @@ type FakeMysqlDaemon struct {
 	// PromoteSlaveResult is returned by PromoteSlave
 	PromoteSlaveResult proto.ReplicationPosition
 
-	// Schema that will be returned by GetSchema. If nil we'll
+	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
+
+	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
+	// If nil we'll return an error.
+	PreflightSchemaChangeResult *proto.SchemaChangeResult
+
+	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
+	// If nil we'll return an error.
+	ApplySchemaChangeResult *proto.SchemaChangeResult
 
 	// DbaConnectionFactory is the factory for making fake dba connections
 	DbaConnectionFactory func() (dbconnpool.PoolConnection, error)
@@ -341,6 +351,22 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 		return nil, fmt.Errorf("no schema defined")
 	}
 	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
+}
+
+// PreflightSchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
+	if fmd.PreflightSchemaChangeResult == nil {
+		return nil, fmt.Errorf("no preflight result defined")
+	}
+	return fmd.PreflightSchemaChangeResult, nil
+}
+
+// ApplySchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
+	if fmd.ApplySchemaChangeResult == nil {
+		return nil, fmt.Errorf("no apply schema defined")
+	}
+	return fmd.ApplySchemaChangeResult, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface
