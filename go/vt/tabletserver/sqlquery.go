@@ -126,7 +126,7 @@ func (sq *SqlQuery) setState(state int64) {
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) (err error) {
+func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
 	sq.mu.Lock()
 	if sq.state == StateServing {
 		sq.mu.Unlock()

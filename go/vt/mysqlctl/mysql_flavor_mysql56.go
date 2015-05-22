@@ -134,7 +134,7 @@ func (*mysql56) ParseReplicationPosition(s string) (proto.ReplicationPosition, e
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const ComBinlogDumpGTID = 0x1E // COM_BINLOG_DUMP_GTID
 
 	gtidSet, ok := startPos.GTIDSet.(proto.Mysql56GTIDSet)

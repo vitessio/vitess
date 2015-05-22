@@ -9,7 +9,7 @@ import (
 )
 
 // GetPermissions lists the permissions on the mysqld
-func (mysqld *Mysqld) GetPermissions() (*proto.Permissions, error) {
+func GetPermissions(mysqld MysqlDaemon) (*proto.Permissions, error) {
 	permissions := &proto.Permissions{}
 
 	// get Users

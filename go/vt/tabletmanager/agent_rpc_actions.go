@@ -145,7 +145,7 @@ func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables [
 // GetPermissions returns the db permissions.
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
-	return agent.Mysqld.GetPermissions()
+	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write
@@ -231,7 +231,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*
 	tablet := agent.Tablet()
 
 	// and preflight the change
-	return agent.Mysqld.PreflightSchemaChange(tablet.DbName(), change)
+	return agent.MysqlDaemon.PreflightSchemaChange(tablet.DbName(), change)
 }
 
 // ApplySchema will apply a schema change
@@ -241,7 +241,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 	tablet := agent.Tablet()
 
 	// apply the change
-	scr, err := agent.Mysqld.ApplySchemaChange(tablet.DbName(), change)
+	scr, err := agent.MysqlDaemon.ApplySchemaChange(tablet.DbName(), change)
 	if err != nil {
 		return nil, err
 	}
@@ -348,14 +348,14 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 // GetSlaves returns the address of all the slaves
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
-	return agent.Mysqld.FindSlaves()
+	return mysqlctl.FindSlaves(agent.MysqlDaemon)
 }
 
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
-	return agent.Mysqld.WaitBlpPosition(blpPosition, waitTime)
+	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.

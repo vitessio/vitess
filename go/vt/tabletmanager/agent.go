@@ -60,7 +60,6 @@ type ActionAgent struct {
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         topo.TabletAlias
-	Mysqld              *mysqlctl.Mysqld
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
@@ -126,7 +125,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
-	mysqld *mysqlctl.Mysqld,
+	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.QueryServiceControl,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
@@ -145,7 +144,6 @@ func NewActionAgent(
 		batchCtx:            batchCtx,
 		TopoServer:          topoServer,
 		TabletAlias:         tabletAlias,
-		Mysqld:              mysqld,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     schemaOverrides,
@@ -221,7 +219,6 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
-		Mysqld:              nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           nil,
 		SchemaOverrides:     nil,

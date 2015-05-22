@@ -39,7 +39,7 @@ type EventStreamer struct {
 	sendEvent sendEventFunc
 }
 
-func NewEventStreamer(dbname string, mysqld *mysqlctl.Mysqld, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos myproto.ReplicationPosition, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}

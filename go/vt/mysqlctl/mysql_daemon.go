@@ -55,6 +55,8 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
+	PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error)
+	ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection() (dbconnpool.PoolConnection, error)
@@ -66,6 +68,15 @@ type MysqlDaemon interface {
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+
+	// NewSlaveConnection returns a SlaveConnection to the database.
+	NewSlaveConnection() (*SlaveConnection, error)
+
+	// EnableBinlogPlayback enables playback of binlog events
+	EnableBinlogPlayback() error
+
+	// DisableBinlogPlayback disable playback of binlog events
+	DisableBinlogPlayback() error
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.
@@ -137,9 +148,17 @@ type FakeMysqlDaemon struct {
 	// PromoteSlaveResult is returned by PromoteSlave
 	PromoteSlaveResult proto.ReplicationPosition
 
-	// Schema that will be returned by GetSchema. If nil we'll
+	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
+
+	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
+	// If nil we'll return an error.
+	PreflightSchemaChangeResult *proto.SchemaChangeResult
+
+	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
+	// If nil we'll return an error.
+	ApplySchemaChangeResult *proto.SchemaChangeResult
 
 	// DbaConnectionFactory is the factory for making fake dba connections
 	DbaConnectionFactory func() (dbconnpool.PoolConnection, error)
@@ -161,6 +180,9 @@ type FakeMysqlDaemon struct {
 
 	// FetchSuperQueryResults is used by FetchSuperQuery
 	FetchSuperQueryMap map[string]*mproto.QueryResult
+
+	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
+	BinlogPlayerEnabled bool
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
@@ -322,6 +344,29 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, 
 	return qr, nil
 }
 
+// NewSlaveConnection is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) NewSlaveConnection() (*SlaveConnection, error) {
+	panic(fmt.Errorf("not implemented on FakeMysqlDaemon"))
+}
+
+// EnableBinlogPlayback is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already enabled")
+	}
+	fmd.BinlogPlayerEnabled = true
+	return nil
+}
+
+// DisableBinlogPlayback disable playback of binlog events
+func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already disabled")
+	}
+	fmd.BinlogPlayerEnabled = false
+	return nil
+}
+
 // Close is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) Close() {
 }
@@ -341,6 +386,22 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 		return nil, fmt.Errorf("no schema defined")
 	}
 	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
+}
+
+// PreflightSchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
+	if fmd.PreflightSchemaChangeResult == nil {
+		return nil, fmt.Errorf("no preflight result defined")
+	}
+	return fmd.PreflightSchemaChangeResult, nil
+}
+
+// ApplySchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
+	if fmd.ApplySchemaChangeResult == nil {
+		return nil, fmt.Errorf("no apply schema defined")
+	}
+	return fmd.ApplySchemaChangeResult, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface

@@ -24,7 +24,7 @@ func (fakeMysqlFlavor) MakeBinlogEvent(buf []byte) blproto.BinlogEvent { return 
 func (fakeMysqlFlavor) ParseReplicationPosition(string) (proto.ReplicationPosition, error) {
 	return proto.ReplicationPosition{}, nil
 }
-func (fakeMysqlFlavor) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (fakeMysqlFlavor) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	return nil
 }
 func (fakeMysqlFlavor) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosition, waitTimeout time.Duration) error {

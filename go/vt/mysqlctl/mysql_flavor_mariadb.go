@@ -138,7 +138,7 @@ func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition,
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const ComBinlogDump = 0x12
 
 	// Tell the server that we understand GTIDs by setting our slave capability

@@ -168,7 +168,7 @@ type QueryServiceControl interface {
 	AddStatusPart()
 
 	// AllowQueries enables queries.
-	AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, *mysqlctl.Mysqld) error
+	AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
 	// DisallowQueries shuts down the query service.
 	DisallowQueries()
@@ -225,7 +225,7 @@ func (tqsc *TestQueryServiceControl) AddStatusPart() {
 }
 
 // AllowQueries is part of the QueryServiceControl interface
-func (tqsc *TestQueryServiceControl) AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, *mysqlctl.Mysqld) error {
+func (tqsc *TestQueryServiceControl) AllowQueries(*dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error {
 	tqsc.QueryServiceEnabled = tqsc.AllowQueriesError == nil
 	return tqsc.AllowQueriesError
 }
@@ -296,7 +296,7 @@ func (rqsc *realQueryServiceControl) Register() {
 }
 
 // AllowQueries starts the query service.
-func (rqsc *realQueryServiceControl) AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) error {
+func (rqsc *realQueryServiceControl) AllowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	return rqsc.sqlQueryRPCService.allowQueries(dbconfigs, schemaOverrides, mysqld)
 }
 

@@ -90,7 +90,7 @@ func (util *testUtils) getTabletErrorString(tabletErrorType int) string {
 	return ""
 }
 
-func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) *mysqlctl.Mysqld {
+func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlDaemon {
 	return mysqlctl.NewMysqld(
 		"",
 		"",

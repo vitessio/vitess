@@ -45,7 +45,7 @@ type UpdateStream struct {
 
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
-	mysqld         *mysqlctl.Mysqld
+	mysqld         mysqlctl.MysqlDaemon
 	stateWaitGroup sync.WaitGroup
 	dbname         string
 	streams        streamList
@@ -121,7 +121,7 @@ func logError() {
 }
 
 // EnableUpdateStreamService enables the RPC service for UpdateStream
-func EnableUpdateStreamService(dbname string, mysqld *mysqlctl.Mysqld) {
+func EnableUpdateStreamService(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	defer logError()
 	UpdateStreamRpcService.enable(dbname, mysqld)
 }
@@ -148,7 +148,7 @@ func GetReplicationPosition() (myproto.ReplicationPosition, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func (updateStream *UpdateStream) enable(dbname string, mysqld *mysqlctl.Mysqld) {
+func (updateStream *UpdateStream) enable(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if updateStream.isEnabled() {
