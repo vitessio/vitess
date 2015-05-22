@@ -210,13 +210,6 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 	}()
 
-	// Apply any special settings necessary for playback of binlogs.
-	// We do it on every iteration to be sure, in case MySQL was restarted.
-	if err := bpc.mysqld.EnableBinlogPlayback(); err != nil {
-		// We failed to apply the required settings, so we shouldn't keep going.
-		return err
-	}
-
 	// create the db connection, connect it
 	vtClient := binlogplayer.NewDbClient(bpc.dbConfig)
 	if err := vtClient.Connect(); err != nil {
@@ -388,21 +381,14 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceId
 
 // StopAllPlayersAndReset stops all the binlog players, and reset the map of players.
 func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
-	hadPlayers := false
 	blm.mu.Lock()
 	for _, bpc := range blm.players {
 		if blm.state == BpmStateRunning {
 			bpc.Stop()
 		}
-		hadPlayers = true
 	}
 	blm.players = make(map[uint32]*BinlogPlayerController)
 	blm.mu.Unlock()
-
-	if hadPlayers {
-		// We're done streaming, so turn off special playback settings.
-		blm.mysqld.DisableBinlogPlayback()
-	}
 }
 
 // RefreshMap reads the right data from topo.Server and makes sure
@@ -426,10 +412,8 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.K
 
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[uint32]bool)
-	hadPlayers := false
 	for source := range blm.players {
 		toRemove[source] = true
-		hadPlayers = true
 	}
 
 	// for each source, add it if not there, and delete from toRemove
@@ -437,7 +421,6 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.K
 		blm.addPlayer(tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, tablet.DbName())
 		delete(toRemove, sourceShard.Uid)
 	}
-	hasPlayers := len(shardInfo.SourceShards) > 0
 
 	// remove all entries from toRemove
 	for source := range toRemove {
@@ -446,11 +429,6 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.K
 	}
 
 	blm.mu.Unlock()
-
-	if hadPlayers && !hasPlayers {
-		// We're done streaming, so turn off special playback settings.
-		blm.mysqld.DisableBinlogPlayback()
-	}
 }
 
 // Stop stops the current players, but does not remove them from the map.

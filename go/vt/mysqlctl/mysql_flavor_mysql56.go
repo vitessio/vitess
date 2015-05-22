@@ -158,16 +158,6 @@ func (*mysql56) MakeBinlogEvent(buf []byte) blproto.BinlogEvent {
 	return NewMysql56BinlogEvent(buf)
 }
 
-// EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
-func (*mysql56) EnableBinlogPlayback(mysqld *Mysqld) error {
-	return nil
-}
-
-// DisableBinlogPlayback implements MysqlFlavor.DisableBinlogPlayback().
-func (*mysql56) DisableBinlogPlayback(mysqld *Mysqld) error {
-	return nil
-}
-
 // mysql56BinlogEvent wraps a raw packet buffer and provides methods to examine
 // it by implementing blproto.BinlogEvent. Some methods are pulled in from
 // binlogEvent.
