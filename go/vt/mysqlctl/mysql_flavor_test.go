@@ -42,6 +42,8 @@ func (fakeMysqlFlavor) StartReplicationCommands(params *sqldb.ConnParams, status
 func (fakeMysqlFlavor) SetMasterCommands(params *sqldb.ConnParams, masterHost string, masterPort int, masterConnectRetry int) ([]string, error) {
 	return nil, nil
 }
+func (fakeMysqlFlavor) EnableBinlogPlayback(mysqld *Mysqld) error  { return nil }
+func (fakeMysqlFlavor) DisableBinlogPlayback(mysqld *Mysqld) error { return nil }
 
 func TestMysqlFlavorEnvironmentVariable(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "fake flavor")
