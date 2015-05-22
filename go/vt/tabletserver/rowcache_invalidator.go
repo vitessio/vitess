@@ -29,7 +29,7 @@ import (
 type RowcacheInvalidator struct {
 	qe     *QueryEngine
 	dbname string
-	mysqld *mysqlctl.Mysqld
+	mysqld mysqlctl.MysqlDaemon
 
 	svm sync2.ServiceManager
 
@@ -79,7 +79,7 @@ func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine, enablePublishSt
 }
 
 // Open runs the invalidation loop.
-func (rci *RowcacheInvalidator) Open(dbname string, mysqld *mysqlctl.Mysqld) {
+func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
 		panic(NewTabletError(ErrFatal, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
