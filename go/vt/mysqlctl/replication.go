@@ -277,7 +277,7 @@ const (
 )
 
 // FindSlaves gets IP addresses for all currently connected slaves.
-func (mysqld *Mysqld) FindSlaves() ([]string, error) {
+func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
 	qr, err := mysqld.FetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err

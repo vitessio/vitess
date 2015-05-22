@@ -348,7 +348,7 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 // GetSlaves returns the address of all the slaves
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
-	return agent.Mysqld.FindSlaves()
+	return mysqlctl.FindSlaves(agent.MysqlDaemon)
 }
 
 // WaitBlpPosition waits until a specific filtered replication position is
