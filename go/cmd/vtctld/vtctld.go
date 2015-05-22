@@ -21,10 +21,11 @@ import (
 )
 
 var (
-	templateDir            = flag.String("templates", "", "directory containing templates")
-	debug                  = flag.Bool("debug", false, "recompile templates for every request")
-	schemaChangeDir        = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
-	schemaChangeController = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
+	templateDir               = flag.String("templates", "", "directory containing templates")
+	debug                     = flag.Bool("debug", false, "recompile templates for every request")
+	schemaChangeDir           = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
+	schemaChangeController    = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
+	schemaChangeCheckInterval = flag.Int("schema-change-check-interval", 60, "this value decides how often we check schema change dir, in seconds")
 )
 
 func init() {
@@ -504,7 +505,11 @@ func main() {
 		)
 	})
 	if *schemaChangeDir != "" {
-		timer := timer.NewTimer(1 * time.Minute)
+		interval := 60
+		if *schemaChangeCheckInterval > 0 {
+			interval = *schemaChangeCheckInterval
+		}
+		timer := timer.NewTimer(time.Duration(interval) * time.Second)
 		controllerFactory, err :=
 			schemamanager.GetControllerFactory(*schemaChangeController)
 		if err != nil {
@@ -520,11 +525,12 @@ func main() {
 				return
 			}
 
-			schemamanager.Run(
+			err = schemamanager.Run(
 				controller,
 				schemamanager.NewTabletExecutor(
 					tmclient.NewTabletManagerClient(), ts),
 			)
+			log.Errorf("Schema change failed, error: %v", err)
 		})
 		servenv.OnClose(func() { timer.Stop() })
 	}
