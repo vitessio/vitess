@@ -246,9 +246,15 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     """
     select_query = 'select * from worker_test where msg="msg-shard-%s" order by id asc' % shard_num
 
+    # Make sure all the right rows made it from the source to the destination
     source_rows = source_tablet.mquery('vt_test_keyspace', select_query)
     destination_rows = destination_tablet.mquery('vt_test_keyspace', select_query)
     self.assertEqual(source_rows, destination_rows)
+
+    # Make sure that there are no extra rows on the destination
+    count_query = 'select count(*) from worker_test'
+    destination_count = destination_tablet.mquery('vt_test_keyspace', count_query)[0][0]
+    self.assertEqual(destination_count, len(destination_rows))
 
   def run_split_diff(self, keyspace_shard, source_tablets, destination_tablets):
     """Runs a vtworker SplitDiff on the given keyspace/shard, and then sets all
