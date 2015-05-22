@@ -164,19 +164,13 @@ const (
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
 
-	// a slaved copy of the data, where mysqld is *not* running,
-	// and we are serving our data files to clone slaves
-	// use 'vtctl Snapshot -server-mode ...' to get in this mode
-	// use 'vtctl SnapshotSourceEnd ...' to get out of this mode
-	TYPE_SNAPSHOT_SOURCE = TabletType("snapshot_source")
-
 	// A tablet that has not been in the replication graph and is restoring
-	// from a snapshot.  idle -> restore -> spare
+	// from a snapshot.
 	TYPE_RESTORE = TabletType("restore")
 
-	// A tablet that is running a checker process. It is probably
+	// A tablet that is used by a worker process. It is probably
 	// lagging in replication.
-	TYPE_CHECKER = TabletType("checker")
+	TYPE_WORKER = TabletType("worker")
 
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
@@ -192,9 +186,8 @@ var AllTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_EXPERIMENTAL,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
-	TYPE_CHECKER,
+	TYPE_WORKER,
 	TYPE_SCRAP,
 }
 
@@ -207,9 +200,8 @@ var SlaveTabletTypes = []TabletType{
 	TYPE_EXPERIMENTAL,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
-	TYPE_CHECKER,
+	TYPE_WORKER,
 }
 
 // IsTypeInList returns true if the given type is in the list.
@@ -242,9 +234,9 @@ func MakeStringTypeList(types []TabletType) []string {
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_WORKER:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_WORKER:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -256,22 +248,6 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 		}
 	}
 	return false
-}
-
-// IsValidTypeChange returns if we should we allow this transition at
-// all.  Most transitions are allowed, but some don't make sense under
-// any circumstances. If a transition could be forced, don't disallow
-// it here.
-func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
-	switch oldTabletType {
-	case TYPE_SNAPSHOT_SOURCE:
-		switch newTabletType {
-		case TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE:
-			return false
-		}
-	}
-
-	return true
 }
 
 // IsInServingGraph returns if a tablet appears in the serving graph
@@ -286,7 +262,7 @@ func IsInServingGraph(tt TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_CHECKER:
+	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_WORKER:
 		return true
 	}
 	return false
@@ -319,10 +295,10 @@ func IsInReplicationGraph(tt TabletType) bool {
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // IDLE and SCRAP are not either
-// BACKUP, RESTORE, TYPE_CHECKER may or may not be, but we don't know for sure
+// BACKUP, RESTORE, TYPE_WORKER may or may not be, but we don't know for sure
 func IsSlaveType(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_CHECKER:
+	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_WORKER:
 		return false
 	}
 	return true

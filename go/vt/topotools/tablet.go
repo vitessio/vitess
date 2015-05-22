@@ -105,7 +105,7 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlia
 		return err
 	}
 
-	if !topo.IsTrivialTypeChange(tablet.Type, newType) || !topo.IsValidTypeChange(tablet.Type, newType) {
+	if !topo.IsTrivialTypeChange(tablet.Type, newType) {
 		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
 	}
 
