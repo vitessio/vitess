@@ -192,8 +192,8 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
                        'test_keyspace'],
                       auto_log=True)
 
-  def _insert_value(self, tablet, id, msg, keyspace_id):
-    """Inserts a value in the MySQL database along with the required routing comments.
+  def _insert_values(self, tablet, id_offset, msg, keyspace_id, num_values):
+    """Inserts values in the MySQL database along with the required routing comments.
 
     Args:
       tablet - the Tablet instance to insert into
@@ -202,9 +202,14 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
       keyspace_id - the value of `keyspace_id` column
     """
     k = "%u" % keyspace_id
+    values_str = ''
+    for i in xrange(num_values):
+      if i != 0:
+        values_str += ','
+      values_str += '(%u, "%s", 0x%x)' % (id_offset + i, msg, keyspace_id)
     tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into worker_test(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%u */' % (id, msg, keyspace_id, k, id),
+        'insert into worker_test(id, msg, keyspace_id) values%s /* EMD keyspace_id:%s*/' % (values_str, k),
         'commit'
         ], write=True)
 
@@ -224,11 +229,12 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     """
     shard_width = keyspace_id_range / num_shards
     shard_offsets = [i * shard_width for i in xrange(num_shards)]
-    for i in xrange(num_values):
-      for shard_num in xrange(num_shards):
-        self._insert_value(tablet, shard_offsets[shard_num] + offset + i,
+    for shard_num in xrange(num_shards):
+        self._insert_values(tablet,
+                            shard_offsets[shard_num] + offset,
                             'msg-shard-%u' % shard_num,
-                            shard_offsets[shard_num] + i)
+                            shard_offsets[shard_num],
+                            num_values)
 
   def assert_shard_data_equal(self, shard_num, source_tablet, destination_tablet):
     """Asserts that a shard's data is identical on source and destination tablets.
@@ -240,9 +246,15 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     """
     select_query = 'select * from worker_test where msg="msg-shard-%s" order by id asc' % shard_num
 
+    # Make sure all the right rows made it from the source to the destination
     source_rows = source_tablet.mquery('vt_test_keyspace', select_query)
     destination_rows = destination_tablet.mquery('vt_test_keyspace', select_query)
     self.assertEqual(source_rows, destination_rows)
+
+    # Make sure that there are no extra rows on the destination
+    count_query = 'select count(*) from worker_test'
+    destination_count = destination_tablet.mquery('vt_test_keyspace', count_query)[0][0]
+    self.assertEqual(destination_count, len(destination_rows))
 
   def run_split_diff(self, keyspace_shard, source_tablets, destination_tablets):
     """Runs a vtworker SplitDiff on the given keyspace/shard, and then sets all
@@ -369,7 +381,9 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     # for your environment (trial-and-error...)
     worker_vars = utils.poll_for_vars('vtworker', worker_port,
       'WorkerState == cleaning up',
-      condition_fn=lambda v: v.get('WorkerState') == 'cleaning up')
+      condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
+      # We know that vars should already be ready, since we read them earlier
+      require_vars=True)
 
     # Verify that we were forced to reresolve and retry.
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)

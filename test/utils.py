@@ -328,7 +328,7 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
-def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None):
+def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, require_vars=False):
   """Polls for debug variables to exist, or match specific conditions, within a timeout.
 
   This function polls in a tight loop, with no sleeps. This is useful for
@@ -343,9 +343,14 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None):
     timeout - number of seconds that we should attempt to poll for.
     condition_fn - a function that takes the debug vars dict as input, and
       returns a truthy value if it matches the success conditions.
+    require_vars - True iff we expect the vars to always exist. If True, and the
+      vars don't exist, we'll raise a TestError. This can be used to differentiate
+      between a timeout waiting for a particular condition vs if the process that
+      you're polling has already exited.
 
   Raises:
     TestError, if the conditions aren't met within the given timeout
+    TestError, if vars are required and don't exist
 
   Returns:
     dict of debug variables
@@ -356,6 +361,8 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None):
       raise TestError('Timed out polling for vars from %s; condition "%s" not met' % (name, condition_msg))
     _vars = get_vars(port)
     if _vars is None:
+      if require_vars:
+        raise TestError('Expected vars to exist on %s, but they do not; process probably exited earlier than expected.' % (name,))
       continue
     if condition_fn is None:
       return _vars
@@ -396,7 +403,7 @@ def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
     timeout = wait_step(
       "%s's replication position to catch up %s's; currently at: %s, waiting to catch up to: %s" % (
         tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b, replication_pos_a),
-      timeout
+      timeout, sleep_time=0.1
     )
 
 # vtgate helpers, assuming it always restarts on the same port
