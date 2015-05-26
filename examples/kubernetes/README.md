@@ -24,22 +24,6 @@ You'll need [Go 1.3+](http://golang.org/doc/install) in order to build the
 $ go get github.com/youtube/vitess/go/cmd/vtctlclient
 ```
 
-### Set the path to kubectl
-
-If you're running in Container Engine, set the `KUBECTL` environment variable
-to point to the `gcloud` command:
-
-```
-$ export KUBECTL='gcloud alpha container kubectl'
-```
-
-If you're running Kubernetes manually, set the `KUBECTL` environment variable
-to point to the location of `kubectl.sh`. For example:
-
-```
-$ export KUBECTL=$HOME/kubernetes/cluster/kubectl.sh
-```
-
 ### Create a Container Engine cluster
 
 Follow the steps to
@@ -76,7 +60,7 @@ vitess/examples/kubernetes$ ./etcd-up.sh
 
 This will create two clusters: one for the 'global' cell, and one for the
 'test' cell.
-You can check the status of the pods with `$KUBECTL get pods`.
+You can check the status of the pods with `kubectl get pods`.
 Note that it may take a while for each minion to download the Docker images the
 first time it needs them, during which time the pod status will be `Pending`.
 
@@ -151,7 +135,7 @@ for three replicas.
 vitess/examples/kubernetes$ ./vttablet-up.sh
 ```
 
-Wait for the pods to enter Running state (`$KUBECTL get pods`).
+Wait for the pods to enter Running state (`kubectl get pods`).
 Again, this may take a while if a pod was scheduled on a minion that needs to
 download the Vitess Docker image. Eventually you should see the tablets show up
 in the *DB topology* summary page of vtctld (`http://12.34.56.78:15000/dbtopo`).
@@ -282,10 +266,10 @@ try checking the pod output with the `kubectl log` command:
 
 ```
 # show logs for container 'vttablet' within pod 'vttablet-100'
-$ $KUBECTL log vttablet-100 vttablet
+$ kubectl log vttablet-100 vttablet
 
 # show logs for container 'mysql' within pod 'vttablet-100'
-$ $KUBECTL log vttablet-100 mysql
+$ kubectl log vttablet-100 mysql
 ```
 
 You can post the logs somewhere and send a link to the

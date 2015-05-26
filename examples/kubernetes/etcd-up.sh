@@ -10,9 +10,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 for cell in 'global' 'test'; do
   # Generate a discovery token.
   echo "Generating discovery token for $cell cell..."
@@ -22,12 +19,12 @@ for cell in 'global' 'test'; do
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" | \
-    $KUBECTL create -f -
+    kubectl create -f -
 
   # Create the replication controller.
   echo "Creating etcd replicationController for $cell cell..."
   cat etcd-controller-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" -e "s,{{discovery}},$discovery,g" | \
-    $KUBECTL create -f -
+    kubectl create -f -
 done
 

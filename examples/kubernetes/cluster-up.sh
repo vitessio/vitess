@@ -66,7 +66,7 @@ function wait_for_running_tasks () {
   while [ $counter -lt $MAX_TASK_WAIT_RETRIES ]; do
     # Get status column of pods with name starting with $task_name,
     # count how many are in state Running
-    statuses=`$KUBECTL get pods | awk '$1 ~ /^'"$task_name"'/ {print $7}'`
+    statuses=`kubectl get pods | awk '$1 ~ /^'"$task_name"'/ {print $5}'`
     num_running=`grep -o "Running" <<< "$statuses" | wc -l`
 
     echo -en "\r$task_name: $num_running out of $num_tasks in state Running..."
@@ -89,7 +89,6 @@ if [ -z "$GOPATH" ]; then
   exit -1
 fi
 
-export KUBECTL='gcloud alpha container kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
@@ -119,8 +118,8 @@ gcloud config set container/cluster $GKE_CLUSTER_NAME
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
 for i in `seq 1 $num_nodes`; do
   for j in `seq 0 2`; do
-    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i} id=$i
-    result=`$KUBECTL get nodes | grep id=$i`
+    kubectl label nodes k8s-$GKE_CLUSTER_NAME-node-${i} id=$i
+    result=`kubectl get nodes | grep id=$i`
     if [ -n "$result" ]; then
       break
     fi

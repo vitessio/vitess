@@ -4,9 +4,6 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 # Create the pods for shard-0
 cell='test'
 keyspace='test_keyspace'
@@ -53,7 +50,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
     fi
 
     # Instantiate template and send to kubectl.
-    cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -
+    cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | kubectl create -f -
 
     let index=index+1
   done

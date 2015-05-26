@@ -4,11 +4,8 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 echo "Stopping guestbook replicationController..."
-$KUBECTL stop replicationController guestbook
+kubectl stop replicationController guestbook
 
 echo "Deleting guestbook service..."
-$KUBECTL delete service guestbook
+kubectl delete service guestbook

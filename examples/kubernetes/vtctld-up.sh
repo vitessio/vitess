@@ -4,11 +4,8 @@
 
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
 echo "Creating vtctld service..."
-$KUBECTL create -f vtctld-service.yaml
+kubectl create -f vtctld-service.yaml
 
 echo "Creating vtctld pod..."
-$KUBECTL create -f vtctld-pod.yaml
+kubectl create -f vtctld-pod.yaml
