@@ -30,7 +30,7 @@ If you're running in Container Engine, set the `KUBECTL` environment variable
 to point to the `gcloud` command:
 
 ```
-$ export KUBECTL='gcloud alpha container kubectl'
+$ export KUBECTL='kubectl'
 ```
 
 If you're running Kubernetes manually, set the `KUBECTL` environment variable
