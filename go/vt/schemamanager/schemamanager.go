@@ -36,7 +36,7 @@ type Controller interface {
 	Open() error
 	Read() (sqls []string, err error)
 	Close()
-	GetKeyspace() string
+	Keyspace() string
 	OnReadSuccess() error
 	OnReadFail(err error) error
 	OnValidationSuccess() error
@@ -89,7 +89,7 @@ func Run(controller Controller, executor Executor) error {
 	}
 
 	controller.OnReadSuccess()
-	keyspace := controller.GetKeyspace()
+	keyspace := controller.Keyspace()
 	if err := executor.Open(keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
 		return err

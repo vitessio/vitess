@@ -112,8 +112,8 @@ func (controller *LocalController) Read() ([]string, error) {
 	return strings.Split(string(data), ";"), nil
 }
 
-// GetKeyspace returns current keyspace that is ready for applying schema change.
-func (controller *LocalController) GetKeyspace() string {
+// Keyspace returns current keyspace that is ready for applying schema change.
+func (controller *LocalController) Keyspace() string {
 	return controller.keyspace
 }
 

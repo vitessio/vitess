@@ -125,9 +125,9 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 		t.Fatalf("expect to get sqls: %v, but got: %v", sqls, data)
 	}
 
-	if controller.GetKeyspace() != "test_keyspace" {
+	if controller.Keyspace() != "test_keyspace" {
 		t.Fatalf("expect to get keyspace: 'test_keyspace', but got: '%s'",
-			controller.GetKeyspace())
+			controller.Keyspace())
 	}
 
 	// test various callbacks

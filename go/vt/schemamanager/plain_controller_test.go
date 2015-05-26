@@ -17,7 +17,7 @@ func TestPlainController(t *testing.T) {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
 
-	keyspace := controller.GetKeyspace()
+	keyspace := controller.Keyspace()
 	if keyspace != "test_keyspace" {
 		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)
 	}

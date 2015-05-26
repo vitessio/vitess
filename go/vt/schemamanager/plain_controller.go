@@ -45,8 +45,8 @@ func (controller *PlainController) Read() ([]string, error) {
 func (controller *PlainController) Close() {
 }
 
-// GetKeyspace returns keyspace to apply schema.
-func (controller *PlainController) GetKeyspace() string {
+// Keyspace returns keyspace to apply schema.
+func (controller *PlainController) Keyspace() string {
 	return controller.keyspace
 }
 
