@@ -10,13 +10,13 @@ import org.joda.time.DateTime;
 
 import java.math.BigDecimal;
 import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.List;
 
 public class Row implements Iterator<Cell>, Iterable<Cell> {
   private ImmutableMap<String, Cell> contents;
   private Iterator<String> iterator;
 
-  public Row(LinkedList<Cell> cells) {
+  public Row(List<Cell> cells) {
     ImmutableMap.Builder<String, Cell> builder = new ImmutableMap.Builder<>();
     for (Cell cell : cells) {
       builder.put(cell.getName(), cell);
