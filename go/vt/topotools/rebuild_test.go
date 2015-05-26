@@ -41,14 +41,14 @@ func TestRebuildShardRace(t *testing.T) {
 	}
 
 	// Check initial state.
-	ep, err := ts.GetEndPoints(cells[0], keyspace, shard, topo.TYPE_MASTER)
+	ep, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
 	if got, want := len(ep.Entries), 1; got != want {
 		t.Fatalf("len(Entries) = %v, want %v", got, want)
 	}
-	ep, err = ts.GetEndPoints(cells[0], keyspace, shard, topo.TYPE_REPLICA)
+	ep, err = ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
@@ -104,10 +104,10 @@ func TestRebuildShardRace(t *testing.T) {
 	<-done
 
 	// Check that the rebuild picked up both changes.
-	if _, err := ts.GetEndPoints(cells[0], keyspace, shard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("first change wasn't picked up by second rebuild")
 	}
-	if _, err := ts.GetEndPoints(cells[0], keyspace, shard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("second change was overwritten by first rebuild finishing late")
 	}
 }

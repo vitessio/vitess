@@ -14,10 +14,11 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
+	"golang.org/x/net/context"
 )
 
 // CreateKeyspace implements topo.Server.
-func (s *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
+func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
 	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
@@ -44,7 +45,7 @@ func (s *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 }
 
 // UpdateKeyspace implements topo.Server.
-func (s *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
+func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	data := jscfg.ToJSON(ki.Keyspace)
 
 	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(ki.KeyspaceName()),
@@ -64,7 +65,7 @@ func (s *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (i
 }
 
 // GetKeyspace implements topo.Server.
-func (s *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
 	resp, err := s.getGlobal().Get(keyspaceFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, convertError(err)
@@ -82,7 +83,7 @@ func (s *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 }
 
 // GetKeyspaces implements topo.Server.
-func (s *Server) GetKeyspaces() ([]string, error) {
+func (s *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	resp, err := s.getGlobal().Get(keyspacesDirPath, true /* sort */, false /* recursive */)
 	if err != nil {
 		err = convertError(err)
@@ -95,8 +96,8 @@ func (s *Server) GetKeyspaces() ([]string, error) {
 }
 
 // DeleteKeyspaceShards implements topo.Server.
-func (s *Server) DeleteKeyspaceShards(keyspace string) error {
-	shards, err := s.GetShardNames(keyspace)
+func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
+	shards, err := s.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}

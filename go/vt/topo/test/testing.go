@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func newKeyRange(value string) key.KeyRange {
@@ -19,8 +20,8 @@ func newKeyRange(value string) key.KeyRange {
 	return result
 }
 
-func getLocalCell(t *testing.T, ts topo.Server) string {
-	cells, err := ts.GetKnownCells()
+func getLocalCell(ctx context.Context, t *testing.T, ts topo.Server) string {
+	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("GetKnownCells: %v", err)
 	}

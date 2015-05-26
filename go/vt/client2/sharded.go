@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 )
 
 // The sharded client handles writing to multiple shards across the
@@ -117,9 +118,10 @@ func (sc *ShardedConn) Close() error {
 }
 
 func (sc *ShardedConn) readKeyspace() error {
+	ctx := context.TODO()
 	sc.Close()
 	var err error
-	sc.srvKeyspace, err = sc.ts.GetSrvKeyspace(sc.cell, sc.keyspace)
+	sc.srvKeyspace, err = sc.ts.GetSrvKeyspace(ctx, sc.cell, sc.keyspace)
 	if err != nil {
 		return fmt.Errorf("vt: GetSrvKeyspace failed %v", err)
 	}
@@ -526,8 +528,9 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 */
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
+	ctx := context.TODO()
 	shardReference := &(sc.srvKeyspace.Partitions[sc.tabletType].ShardReferences[shardIdx])
-	addrs, err := sc.ts.GetEndPoints(sc.cell, sc.keyspace, shardReference.Name, sc.tabletType)
+	addrs, err := sc.ts.GetEndPoints(ctx, sc.cell, sc.keyspace, shardReference.Name, sc.tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("vt: GetEndPoints failed %v", err)
 	}

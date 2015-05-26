@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const splitCloneHTML = `
@@ -107,8 +108,8 @@ func commandSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	return worker, nil
 }
 
-func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces()
+func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string,
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			osList, err := topotools.FindOverlappingShards(wr.TopoServer(), keyspace)
+			osList, err := topotools.FindOverlappingShards(ctx, wr.TopoServer(), keyspace)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -147,7 +148,7 @@ func keyspacesWithOverlappingShards(wr *wrangler.Wrangler) ([]map[string]string,
 	return result, nil
 }
 
-func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitClone(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -159,7 +160,7 @@ func interactiveSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http
 		// display the list of possible splits to choose from
 		// (just find all the overlapping guys)
 		result := make(map[string]interface{})
-		choices, err := keyspacesWithOverlappingShards(wr)
+		choices, err := keyspacesWithOverlappingShards(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {

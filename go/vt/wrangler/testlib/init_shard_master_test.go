@@ -98,7 +98,7 @@ func TestInitMasterShard(t *testing.T) {
 	if master.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("master was not turned read-write")
 	}
-	si, err := ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
+	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 
 	// also change the master alias in the Shard object, to make sure it
 	// is set back.
-	si, err := ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
+	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if master.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("master was not turned read-write")
 	}
-	si, err = ts.GetShard(master.Tablet.Keyspace, master.Tablet.Shard)
+	si, err = ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}

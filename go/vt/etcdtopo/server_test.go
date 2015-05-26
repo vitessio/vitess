@@ -31,73 +31,83 @@ func newTestServer(t *testing.T, cells []string) *Server {
 }
 
 func TestKeyspace(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckKeyspace(t, ts)
+	test.CheckKeyspace(ctx, t, ts)
 }
 
 func TestShard(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShard(context.Background(), t, ts)
+	test.CheckShard(ctx, t, ts)
 }
 
 func TestTablet(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckTablet(context.Background(), t, ts)
+	test.CheckTablet(ctx, t, ts)
 }
 
 func TestShardReplication(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShardReplication(t, ts)
+	test.CheckShardReplication(ctx, t, ts)
 }
 
 func TestServingGraph(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckServingGraph(context.Background(), t, ts)
+	test.CheckServingGraph(ctx, t, ts)
 }
 
 func TestWatchEndPoints(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckWatchEndPoints(context.Background(), t, ts)
+	test.CheckWatchEndPoints(ctx, t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {
+	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckKeyspaceLock(t, ts)
+	test.CheckKeyspaceLock(ctx, t, ts)
 }
 
 func TestShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShardLock(t, ts)
+	test.CheckShardLock(ctx, t, ts)
 }
 
 func TestSrvShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckSrvShardLock(t, ts)
+	test.CheckSrvShardLock(ctx, t, ts)
 }
 
 func TestVSchema(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckVSchema(t, ts)
+	test.CheckVSchema(ctx, t, ts)
 }

@@ -103,7 +103,7 @@ func commandExportZkns(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		return err
 	}
-	return wr.ExportZkns(cell)
+	return wr.ExportZkns(ctx, cell)
 }
 
 func commandExportZknsForKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

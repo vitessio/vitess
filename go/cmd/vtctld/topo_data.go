@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // This file includes the support for serving topo data to an ajax-based
@@ -47,7 +48,7 @@ func (bvo *BaseVersionedObject) SetVersion(version int) {
 
 // GetVersionedObjectFunc is the function the cache will call to get
 // the object itself.
-type GetVersionedObjectFunc func() (VersionedObject, error)
+type GetVersionedObjectFunc func(ctx context.Context) (VersionedObject, error)
 
 // VersionedObjectCache is the main cache object. Just needs a method to get
 // the content.
@@ -68,7 +69,7 @@ func NewVersionedObjectCache(getObject GetVersionedObjectFunc) *VersionedObjectC
 }
 
 // Get returns the versioned value from the cache.
-func (voc *VersionedObjectCache) Get() ([]byte, error) {
+func (voc *VersionedObjectCache) Get(ctx context.Context) ([]byte, error) {
 	voc.mu.Lock()
 	defer voc.mu.Unlock()
 
@@ -77,7 +78,7 @@ func (voc *VersionedObjectCache) Get() ([]byte, error) {
 		return voc.result, nil
 	}
 
-	newObject, err := voc.getObject()
+	newObject, err := voc.getObject(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +143,7 @@ func NewVersionedObjectCacheMap(factory VersionedObjectCacheFactory) *VersionedO
 }
 
 // Get finds the right VersionedObjectCache and returns its value
-func (vocm *VersionedObjectCacheMap) Get(key string) ([]byte, error) {
+func (vocm *VersionedObjectCacheMap) Get(ctx context.Context, key string) ([]byte, error) {
 	vocm.mu.Lock()
 	voc, ok := vocm.cacheMap[key]
 	if !ok {
@@ -151,7 +152,7 @@ func (vocm *VersionedObjectCacheMap) Get(key string) ([]byte, error) {
 	}
 	vocm.mu.Unlock()
 
-	return voc.Get()
+	return voc.Get(ctx)
 }
 
 // Flush will flush the entire cache
@@ -177,8 +178,8 @@ func (kc *KnownCells) Reset() {
 }
 
 func newKnownCellsCache(ts topo.Server) *VersionedObjectCache {
-	return NewVersionedObjectCache(func() (VersionedObject, error) {
-		cells, err := ts.GetKnownCells()
+	return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
+		cells, err := ts.GetKnownCells(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -202,8 +203,8 @@ func (k *Keyspaces) Reset() {
 }
 
 func newKeyspacesCache(ts topo.Server) *VersionedObjectCache {
-	return NewVersionedObjectCache(func() (VersionedObject, error) {
-		keyspaces, err := ts.GetKeyspaces()
+	return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
+		keyspaces, err := ts.GetKeyspaces(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -232,8 +233,8 @@ func (k *Keyspace) Reset() {
 
 func newKeyspaceCache(ts topo.Server) *VersionedObjectCacheMap {
 	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
-		return NewVersionedObjectCache(func() (VersionedObject, error) {
-			k, err := ts.GetKeyspace(key)
+		return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
+			k, err := ts.GetKeyspace(ctx, key)
 			if err != nil {
 				return nil, err
 			}
@@ -264,8 +265,8 @@ func (s *ShardNames) Reset() {
 
 func newShardNamesCache(ts topo.Server) *VersionedObjectCacheMap {
 	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
-		return NewVersionedObjectCache(func() (VersionedObject, error) {
-			sn, err := ts.GetShardNames(key)
+		return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
+			sn, err := ts.GetShardNames(ctx, key)
 			if err != nil {
 				return nil, err
 			}
@@ -301,13 +302,13 @@ func (s *Shard) Reset() {
 
 func newShardCache(ts topo.Server) *VersionedObjectCacheMap {
 	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
-		return NewVersionedObjectCache(func() (VersionedObject, error) {
+		return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
 
 			keyspace, shard, err := topo.ParseKeyspaceShardString(key)
 			if err != nil {
 				return nil, err
 			}
-			s, err := ts.GetShard(keyspace, shard)
+			s, err := ts.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				return nil, err
 			}
@@ -349,12 +350,12 @@ func (cst *CellShardTablets) Reset() {
 
 func newCellShardTabletsCache(ts topo.Server) *VersionedObjectCacheMap {
 	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
-		return NewVersionedObjectCache(func() (VersionedObject, error) {
+		return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
 			parts := strings.Split(key, "/")
 			if len(parts) != 3 {
 				return nil, fmt.Errorf("Invalid shard tablets path: %v", key)
 			}
-			sr, err := ts.GetShardReplication(parts[0], parts[1], parts[2])
+			sr, err := ts.GetShardReplication(ctx, parts[0], parts[1], parts[2])
 			if err != nil {
 				return nil, err
 			}

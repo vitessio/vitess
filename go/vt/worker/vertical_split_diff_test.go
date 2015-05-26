@@ -101,7 +101,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 		topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 		topo.TYPE_RDONLY:  &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 	}
-	wr.TopoServer().CreateKeyspace("destination_ks", ki)
+	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))

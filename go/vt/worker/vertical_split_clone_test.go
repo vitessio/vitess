@@ -245,7 +245,8 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 		topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 		topo.TYPE_RDONLY:  &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 	}
-	wr.TopoServer().CreateKeyspace("destination_ks", ki)
+	ctx := context.Background()
+	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
@@ -258,7 +259,6 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	}
 
 	// add the topo and schema data we'll need
-	ctx := context.Background()
 	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -114,8 +115,8 @@ func commandVerticalSplitClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 
 // keyspacesWithServedFrom returns all the keyspaces that have ServedFrom set
 // to one value.
-func keyspacesWithServedFrom(wr *wrangler.Wrangler) ([]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces()
+func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]string, error) {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func keyspacesWithServedFrom(wr *wrangler.Wrangler) ([]string, error) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			ki, err := wr.TopoServer().GetKeyspace(keyspace)
+			ki, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -151,7 +152,7 @@ func keyspacesWithServedFrom(wr *wrangler.Wrangler) ([]string, error) {
 	return result, nil
 }
 
-func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -161,7 +162,7 @@ func interactiveVerticalSplitClone(wr *wrangler.Wrangler, w http.ResponseWriter,
 	if keyspace == "" {
 		// display the list of possible keyspaces to choose from
 		result := make(map[string]interface{})
-		keyspaces, err := keyspacesWithServedFrom(wr)
+		keyspaces, err := keyspacesWithServedFrom(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {

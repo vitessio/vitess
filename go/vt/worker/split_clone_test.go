@@ -271,7 +271,7 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	// add the topo and schema data we'll need
 	ctx := context.Background()
-	if err := topo.CreateShard(ts, "ks", "80-"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {

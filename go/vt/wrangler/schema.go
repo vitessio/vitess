@@ -26,7 +26,7 @@ import (
 
 // GetSchema uses an RPC to get the schema from a remote tablet
 func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias topo.TabletAlias,
 
 // ReloadSchema forces the remote tablet to reload its schema.
 func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias topo.TabletAlias) error {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *myproto.Schema
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
 func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard string, excludeTables []string, includeViews bool) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 // the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews bool) error {
 	// find all the shards
-	shards, err := wr.ts.GetShardNames(keyspace)
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	}
 
 	// find the reference schema using the first shard's master
-	si, err := wr.ts.GetShard(keyspace, shards[0])
+	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 
 	// then diffs all tablets in the other shards
 	for _, shard := range shards[1:] {
-		si, err := wr.ts.GetShard(keyspace, shard)
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -185,7 +185,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 
 // PreflightSchema will try a schema change on the remote tablet.
 func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias topo.TabletAlias, change string) (*myproto.SchemaChangeResult, error) {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias topo.Tablet
 
 // ApplySchema will apply a schema change on the remote tablet.
 func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias topo.TabletAlia
 // very quickly.
 func (wr *Wrangler) ApplySchemaShard(ctx context.Context, keyspace, shard, change string, newParentTabletAlias topo.TabletAlias, simple, force bool, waitSlaveTimeout time.Duration) (*myproto.SchemaChangeResult, error) {
 	// read the shard
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 			continue
 		}
 
-		ti, err := wr.ts.GetTablet(alias)
+		ti, err := wr.ts.GetTablet(ctx, alias)
 		if err != nil {
 			return nil, err
 		}
@@ -342,7 +342,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := wr.ts.GetTablet(status.ti.Alias)
+		ti, err := wr.ts.GetTablet(ctx, status.ti.Alias)
 		if err != nil {
 			return nil, err
 		}
@@ -425,11 +425,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.Tab
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.ts.GetTablet(shardInfo.MasterAlias)
+	tabletInfo, err := wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}

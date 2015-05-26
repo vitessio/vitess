@@ -26,6 +26,8 @@ func CreateTopoServer(t *testing.T) topo.Server {
 
 // TestSuite runs the test suite on the given topo server and client
 func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
+	ctx := context.Background()
+
 	// Create a fake tablet
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: "cell1", Uid: 1},
@@ -40,12 +42,11 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 	}
-	if err := ts.CreateTablet(tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}
 
 	// run a command that's gonna return something on the log channel
-	ctx := context.Background()
 	logs, errFunc := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
 	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)

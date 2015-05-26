@@ -41,7 +41,7 @@ type rpcContext struct {
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
 func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*myproto.ReplicationStatus, error) {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,12 +115,12 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletA
 	// Get current shard master tablet.
 	// Sanity check they are in the same keyspace/shard.
 	// Issue a SetMaster to the tablet.
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	shardInfo, err := wr.ts.GetShard(ti.Keyspace, ti.Shard)
+	shardInfo, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias topo.TabletA
 		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
 	}
 
-	masterTi, err := wr.ts.GetTablet(shardInfo.MasterAlias)
+	masterTi, err := wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (wr *Wrangler) InitShardMaster(ctx context.Context, keyspace, shard string,
 }
 
 func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, force bool, waitSlaveTimeout time.Duration) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 }
 
 func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -467,7 +467,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 }
 
 func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias topo.TabletAlias, waitSlaveTimeout time.Duration) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -497,7 +497,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if ok {
 			delete(tabletMap, shardInfo.MasterAlias)
 		} else {
-			oldMasterTabletInfo, err = wr.ts.GetTablet(shardInfo.MasterAlias)
+			oldMasterTabletInfo, err = wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
 			if err != nil {
 				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", shardInfo.MasterAlias, err)
 				scrapOldMaster = false

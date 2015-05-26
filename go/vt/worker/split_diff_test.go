@@ -173,7 +173,7 @@ func TestSplitDiff(t *testing.T) {
 	}
 
 	// add the topo and schema data we'll need
-	if err := topo.CreateShard(ts, "ks", "80-"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	wr.SetSourceShards(ctx, "ks", "-40", []topo.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)

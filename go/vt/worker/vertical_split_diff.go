@@ -115,7 +115,7 @@ func (vsdw *VerticalSplitDiffWorker) Run(ctx context.Context) error {
 
 func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
-	if err := vsdw.init(); err != nil {
+	if err := vsdw.init(ctx); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -148,13 +148,13 @@ func (vsdw *VerticalSplitDiffWorker) run(ctx context.Context) error {
 
 // init phase:
 // - read the shard info, make sure it has sources
-func (vsdw *VerticalSplitDiffWorker) init() error {
+func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 	vsdw.SetState(WorkerStateInit)
 
 	var err error
 
 	// read the keyspace and validate it
-	vsdw.keyspaceInfo, err = vsdw.wr.TopoServer().GetKeyspace(vsdw.keyspace)
+	vsdw.keyspaceInfo, err = vsdw.wr.TopoServer().GetKeyspace(ctx, vsdw.keyspace)
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", vsdw.keyspace, err)
 	}
@@ -163,7 +163,7 @@ func (vsdw *VerticalSplitDiffWorker) init() error {
 	}
 
 	// read the shardinfo and validate it
-	vsdw.shardInfo, err = vsdw.wr.TopoServer().GetShard(vsdw.keyspace, vsdw.shard)
+	vsdw.shardInfo, err = vsdw.wr.TopoServer().GetShard(ctx, vsdw.keyspace, vsdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot read shard %v/%v: %v", vsdw.keyspace, vsdw.shard, err)
 	}
@@ -224,7 +224,7 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := vsdw.wr.TopoServer().GetTablet(vsdw.shardInfo.MasterAlias)
+	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.shardInfo.MasterAlias)
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", vsdw.shardInfo.MasterAlias, err)
 	}
@@ -253,7 +253,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 
 	// stop replication
 	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.Position)
-	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(vsdw.sourceAlias)
+	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.sourceAlias)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
 	vsdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos)
-	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(vsdw.destinationAlias)
+	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.destinationAlias)
 	if err != nil {
 		return err
 	}

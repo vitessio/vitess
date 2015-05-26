@@ -114,7 +114,7 @@ func main() {
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -124,7 +124,7 @@ func main() {
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -137,7 +137,7 @@ func main() {
 	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -149,7 +149,7 @@ func main() {
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			return "", wr.DeleteTablet(tabletAlias)
+			return "", wr.DeleteTablet(ctx, tabletAlias)
 		})
 
 	// keyspace actions
@@ -254,7 +254,8 @@ func main() {
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
-			cells, err := ts.GetKnownCells()
+			ctx := context.Background()
+			cells, err := ts.GetKnownCells(ctx)
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
 				return
@@ -263,7 +264,8 @@ func main() {
 			return
 		}
 
-		servingGraph := topotools.DbServingGraph(ts, cell)
+		ctx := context.Background()
+		servingGraph := topotools.DbServingGraph(ctx, ts, cell)
 		if modifyDbServingGraph != nil {
 			modifyDbServingGraph(ts, servingGraph)
 		}
@@ -292,12 +294,13 @@ func main() {
 			Error         error
 			Input, Output string
 		}
+		ctx := context.Background()
 		switch r.Method {
 		case "POST":
 			data.Input = r.FormValue("vschema")
-			data.Error = schemafier.SaveVSchema(data.Input)
+			data.Error = schemafier.SaveVSchema(ctx, data.Input)
 		}
-		vschema, err := schemafier.GetVSchema()
+		vschema, err := schemafier.GetVSchema(ctx)
 		if err != nil {
 			if data.Error == nil {
 				data.Error = fmt.Errorf("Error fetching schema: %s", err)
@@ -330,7 +333,8 @@ func main() {
 	// serve some data
 	knownCellsCache := newKnownCellsCache(ts)
 	http.HandleFunc("/json/KnownCells", func(w http.ResponseWriter, r *http.Request) {
-		result, err := knownCellsCache.Get()
+		ctx := context.Background()
+		result, err := knownCellsCache.Get(ctx)
 		if err != nil {
 			httpError(w, "error getting known cells: %v", err)
 			return
@@ -340,7 +344,8 @@ func main() {
 
 	keyspacesCache := newKeyspacesCache(ts)
 	http.HandleFunc("/json/Keyspaces", func(w http.ResponseWriter, r *http.Request) {
-		result, err := keyspacesCache.Get()
+		ctx := context.Background()
+		result, err := keyspacesCache.Get(ctx)
 		if err != nil {
 			httpError(w, "error getting keyspaces: %v", err)
 			return
@@ -359,7 +364,8 @@ func main() {
 			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result, err := keyspaceCache.Get(keyspace)
+		ctx := context.Background()
+		result, err := keyspaceCache.Get(ctx, keyspace)
 		if err != nil {
 			httpError(w, "error getting keyspace: %v", err)
 			return
@@ -378,7 +384,8 @@ func main() {
 			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result, err := shardNamesCache.Get(keyspace)
+		ctx := context.Background()
+		result, err := shardNamesCache.Get(ctx, keyspace)
 		if err != nil {
 			httpError(w, "error getting shardNames: %v", err)
 			return
@@ -402,7 +409,8 @@ func main() {
 			http.Error(w, "no shard provided", http.StatusBadRequest)
 			return
 		}
-		result, err := shardCache.Get(keyspace + "/" + shard)
+		ctx := context.Background()
+		result, err := shardCache.Get(ctx, keyspace+"/"+shard)
 		if err != nil {
 			httpError(w, "error getting shard: %v", err)
 			return
@@ -431,7 +439,8 @@ func main() {
 			http.Error(w, "no shard provided", http.StatusBadRequest)
 			return
 		}
-		result, err := cellShardTabletsCache.Get(cell + "/" + keyspace + "/" + shard)
+		ctx := context.Background()
+		result, err := cellShardTabletsCache.Get(ctx, cell+"/"+keyspace+"/"+shard)
 		if err != nil {
 			httpError(w, "error getting shard: %v", err)
 			return

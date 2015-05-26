@@ -27,30 +27,30 @@ func shardEqual(left, right *topo.Shard) (bool, error) {
 
 // CheckShard verifies the Shard operations work correctly
 func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
-	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
-	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
 	// Delete shard and see if we can re-create it.
-	if err := ts.DeleteShard("test_keyspace", "b0-c0"); err != nil {
+	if err := ts.DeleteShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("DeleteShard: %v", err)
 	}
-	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
 	// Delete ALL shards.
-	if err := ts.DeleteKeyspaceShards("test_keyspace"); err != nil {
+	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteKeyspaceShards: %v", err)
 	}
-	if err := topo.CreateShard(ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	// test GetShardNames
-	shards, err := ts.GetShardNames("test_keyspace")
+	shards, err := ts.GetShardNames(ctx, "test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
@@ -138,12 +138,12 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shards)
 	}
 
-	if _, err := ts.GetShardNames("test_keyspace666"); err != topo.ErrNoNode {
+	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetShardNames(666): %v", err)
 	}
 
 	// test ValidateShard
-	if err := ts.ValidateShard("test_keyspace", "b0-c0"); err != nil {
+	if err := ts.ValidateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Errorf("ValidateShard(test_keyspace, b0-c0) failed: %v", err)
 	}
 }

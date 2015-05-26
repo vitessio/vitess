@@ -259,7 +259,7 @@ func GetShard(ctx context.Context, ts Server, keyspace, shard string) (*ShardInf
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.GetShard(keyspace, shard)
+	return ts.GetShard(ctx, keyspace, shard)
 }
 
 // UpdateShard updates the shard data, with the right version
@@ -275,7 +275,7 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 		version = si.version
 	}
 
-	newVersion, err := ts.UpdateShard(si, version)
+	newVersion, err := ts.UpdateShard(ctx, si, version)
 	if err == nil {
 		si.version = newVersion
 	}
@@ -305,7 +305,7 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 // This should be called while holding the keyspace lock for the shard.
 // (call topotools.CreateShard to do that for you).
 // In unit tests (that are not parallel), this function can be called directly.
-func CreateShard(ts Server, keyspace, shard string) error {
+func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
@@ -323,7 +323,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 		},
 	}
 
-	sis, err := FindAllShardsInKeyspace(ts, keyspace)
+	sis, err := FindAllShardsInKeyspace(ctx, ts, keyspace)
 	if err != nil && err != ErrNoNode {
 		return err
 	}
@@ -338,7 +338,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 		s.ServedTypesMap = nil
 	}
 
-	return ts.CreateShard(keyspace, name, s)
+	return ts.CreateShard(ctx, keyspace, name, s)
 }
 
 // UpdateSourceBlacklistedTables will add or remove the listed tables
@@ -588,7 +588,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			sri, err := ts.GetShardReplication(cell, keyspace, shard)
+			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 				return

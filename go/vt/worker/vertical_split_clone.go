@@ -173,7 +173,7 @@ func (vscw *VerticalSplitCloneWorker) Run(ctx context.Context) error {
 
 func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
-	if err := vscw.init(); err != nil {
+	if err := vscw.init(ctx); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -201,11 +201,11 @@ func (vscw *VerticalSplitCloneWorker) run(ctx context.Context) error {
 
 // init phase:
 // - read the destination keyspace, make sure it has 'servedFrom' values
-func (vscw *VerticalSplitCloneWorker) init() error {
+func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 	vscw.setState(WorkerStateInit)
 
 	// read the keyspace and validate it
-	destinationKeyspaceInfo, err := vscw.wr.TopoServer().GetKeyspace(vscw.destinationKeyspace)
+	destinationKeyspaceInfo, err := vscw.wr.TopoServer().GetKeyspace(ctx, vscw.destinationKeyspace)
 	if err != nil {
 		return fmt.Errorf("cannot read destination keyspace %v: %v", vscw.destinationKeyspace, err)
 	}
@@ -250,7 +250,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.wr.Logger().Infof("Using tablet %v as the source", vscw.sourceAlias)
 
 	// get the tablet info for it
-	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(vscw.sourceAlias)
+	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(ctx, vscw.sourceAlias)
 	if err != nil {
 		return fmt.Errorf("cannot read tablet %v: %v", vscw.sourceTablet, err)
 	}

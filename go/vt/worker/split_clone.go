@@ -186,7 +186,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 
 func (scw *SplitCloneWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
-	if err := scw.init(); err != nil {
+	if err := scw.init(ctx); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -211,18 +211,18 @@ func (scw *SplitCloneWorker) run(ctx context.Context) error {
 
 // init phase:
 // - read the destination keyspace, make sure it has 'servedFrom' values
-func (scw *SplitCloneWorker) init() error {
+func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	scw.setState(WorkerStateInit)
 	var err error
 
 	// read the keyspace and validate it
-	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(scw.keyspace)
+	scw.keyspaceInfo, err = scw.wr.TopoServer().GetKeyspace(ctx, scw.keyspace)
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", scw.keyspace, err)
 	}
 
 	// find the OverlappingShards in the keyspace
-	osList, err := topotools.FindOverlappingShards(scw.wr.TopoServer(), scw.keyspace)
+	osList, err := topotools.FindOverlappingShards(ctx, scw.wr.TopoServer(), scw.keyspace)
 	if err != nil {
 		return fmt.Errorf("cannot FindOverlappingShards in %v: %v", scw.keyspace, err)
 	}
@@ -283,7 +283,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	// get the tablet info for them, and stop their replication
 	scw.sourceTablets = make([]*topo.TabletInfo, len(scw.sourceAliases))
 	for i, alias := range scw.sourceAliases {
-		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(alias)
+		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
 		if err != nil {
 			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
 		}

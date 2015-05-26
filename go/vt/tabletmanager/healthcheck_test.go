@@ -111,14 +111,14 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 	return template.HTML("fakeHealthCheck")
 }
 
-func createTestAgent(t *testing.T) *ActionAgent {
+func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 	ts := zktopo.NewTestServer(t, []string{cell})
 
-	if err := ts.CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	if err := topo.CreateShard(ts, keyspace, shard); err != nil {
+	if err := topo.CreateShard(ctx, ts, keyspace, shard); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 
@@ -134,12 +134,12 @@ func createTestAgent(t *testing.T) *ActionAgent {
 		Shard:    shard,
 		Type:     topo.TYPE_SPARE,
 	}
-	if err := topo.CreateTablet(context.Background(), ts, tablet); err != nil {
+	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
-	agent := NewTestActionAgent(context.Background(), ts, tabletAlias, port, mysqlDaemon)
+	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, mysqlDaemon)
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, nil, nil)
 	agent.HealthReporter = &fakeHealthCheck{}
 
@@ -149,14 +149,15 @@ func createTestAgent(t *testing.T) *ActionAgent {
 // TestHealthCheckControlsQueryService verifies that a tablet going healthy
 // starts the query service, and going unhealthy stops it.
 func TestHealthCheckControlsQueryService(t *testing.T) {
-	agent := createTestAgent(t)
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t)
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica, and update the
 	// mysql port to 3306
 	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -195,13 +196,14 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 // TestQueryServiceNotStarting verifies that if a tablet cannot start the
 // query service, it should not go healthy
 func TestQueryServiceNotStarting(t *testing.T) {
-	agent := createTestAgent(t)
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t)
 	targetTabletType := topo.TYPE_REPLICA
 	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
 
 	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -219,13 +221,14 @@ func TestQueryServiceNotStarting(t *testing.T) {
 // TestQueryServiceStopped verifies that if a healthy tablet's query
 // service is shut down, the tablet does unhealthy
 func TestQueryServiceStopped(t *testing.T) {
-	agent := createTestAgent(t)
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t)
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica
 	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -246,7 +249,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	// health check should now fail
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -264,13 +267,14 @@ func TestQueryServiceStopped(t *testing.T) {
 // TestTabletControl verifies the shard's TabletControl record can disable
 // query service in a tablet.
 func TestTabletControl(t *testing.T) {
-	agent := createTestAgent(t)
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t)
 	targetTabletType := topo.TYPE_REPLICA
 
 	// first health check, should change us to replica
 	before := time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err := agent.TopoServer.GetTablet(tabletAlias)
+	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -285,7 +289,7 @@ func TestTabletControl(t *testing.T) {
 	}
 
 	// now update the shard
-	si, err := agent.TopoServer.GetShard(keyspace, shard)
+	si, err := agent.TopoServer.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -294,12 +298,11 @@ func TestTabletControl(t *testing.T) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(context.Background(), agent.TopoServer, si); err != nil {
+	if err := topo.UpdateShard(ctx, agent.TopoServer, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 
 	// now refresh the tablet state, as the resharding process would do
-	ctx := context.Background()
 	agent.RPCWrapLockAction(ctx, actionnode.TabletActionRefreshState, "", "", true, func() error {
 		agent.RefreshState(ctx)
 		return nil
@@ -313,7 +316,7 @@ func TestTabletControl(t *testing.T) {
 	// check running a health check will not start it again
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -331,7 +334,7 @@ func TestTabletControl(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportError = fmt.Errorf("tablet is unhealthy")
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -349,7 +352,7 @@ func TestTabletControl(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportError = nil
 	before = time.Now()
 	agent.runHealthCheck(targetTabletType)
-	ti, err = agent.TopoServer.GetTablet(tabletAlias)
+	ti, err = agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -367,7 +370,8 @@ func TestTabletControl(t *testing.T) {
 // TestOldHealthCheck verifies that a healthcheck that is too old will
 // return an error
 func TestOldHealthCheck(t *testing.T) {
-	agent := createTestAgent(t)
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t)
 	*healthCheckInterval = 20 * time.Second
 	agent._healthy = nil
 
