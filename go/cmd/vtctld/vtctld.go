@@ -26,6 +26,7 @@ var (
 	schemaChangeDir           = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
 	schemaChangeController    = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
 	schemaChangeCheckInterval = flag.Int("schema-change-check-interval", 60, "this value decides how often we check schema change dir, in seconds")
+	schemaChangeUser          = flag.String("schema-change-user", "", "The user who submits this schema change.")
 )
 
 func init() {
@@ -519,6 +520,7 @@ func main() {
 		timer.Start(func() {
 			controller, err := controllerFactory(map[string]string{
 				schemamanager.SchemaChangeDirName: *schemaChangeDir,
+				schemamanager.SchemaChangeUser:    *schemaChangeUser,
 			})
 			if err != nil {
 				log.Errorf("failed to get controller, error: %v", err)
