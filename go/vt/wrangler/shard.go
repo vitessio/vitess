@@ -51,7 +51,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 	}
 
 	// re-read the shard with the lock
-	si, err = wr.ts.GetShard(keyspace, shard)
+	si, err = wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 	}
@@ -96,7 +96,7 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 }
 
 func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topo.TabletType, remove bool) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 }
 
 func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topo.TabletType, cells []string, remove, disableQueryService bool, tables []string) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard s
 // to entirely remove a shard. It can only work if there are no tablets
 // in that shard.
 func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) err
 
 	// remove the replication graph and serving graph in each cell
 	for _, cell := range shardInfo.Cells {
-		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 
@@ -177,17 +177,17 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) err
 				continue
 			}
 
-			if err := wr.ts.DeleteEndPoints(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
+			if err := wr.ts.DeleteEndPoints(ctx, cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
 				wr.Logger().Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
 			}
 		}
 
-		if err := wr.ts.DeleteSrvShard(cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
+		if err := wr.ts.DeleteSrvShard(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 	}
 
-	return wr.ts.DeleteShard(keyspace, shard)
+	return wr.ts.DeleteShard(ctx, keyspace, shard)
 }
 
 // RemoveShardCell will remove a cell from the Cells list in a shard.
@@ -207,7 +207,7 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 }
 
 func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell string, force bool) error {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 
 	// get the ShardReplication object in the cell
-	sri, err := wr.ts.GetShardReplication(cell, keyspace, shard)
+	sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
 	switch err {
 	case nil:
 		if len(sri.ReplicationLinks) > 0 {
@@ -231,7 +231,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 		}
 
 		// ShardReplication object is now useless, remove it
-		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
 			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
 		}
 
@@ -273,7 +273,7 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 }
 
 func (wr *Wrangler) sourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, 
 }
 
 func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange key.KeyRange, tables []string) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}

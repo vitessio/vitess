@@ -185,7 +185,7 @@ func (s *Server) LockSrvShardForAction(ctx context.Context, cellName, keyspace, 
 }
 
 // UnlockSrvShardForAction implements topo.Server.
-func (s *Server) UnlockSrvShardForAction(cellName, keyspace, shard, actionPath, results string) error {
+func (s *Server) UnlockSrvShardForAction(ctx context.Context, cellName, keyspace, shard, actionPath, results string) error {
 	log.Infof("results of %v: %v", actionPath, results)
 
 	cell, err := s.getCell(cellName)
@@ -204,7 +204,7 @@ func (s *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents s
 }
 
 // UnlockKeyspaceForAction implements topo.Server.
-func (s *Server) UnlockKeyspaceForAction(keyspace, actionPath, results string) error {
+func (s *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, actionPath, results string) error {
 	log.Infof("results of %v: %v", actionPath, results)
 
 	return unlock(s.getGlobal(), keyspaceDirPath(keyspace), actionPath,
@@ -218,7 +218,7 @@ func (s *Server) LockShardForAction(ctx context.Context, keyspace, shard, conten
 }
 
 // UnlockShardForAction implements topo.Server.
-func (s *Server) UnlockShardForAction(keyspace, shard, actionPath, results string) error {
+func (s *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, actionPath, results string) error {
 	log.Infof("results of %v: %v", actionPath, results)
 
 	return unlock(s.getGlobal(), shardDirPath(keyspace, shard), actionPath,

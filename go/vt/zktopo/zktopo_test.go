@@ -14,27 +14,31 @@ import (
 )
 
 func TestKeyspace(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckKeyspace(t, ts)
+	test.CheckKeyspace(ctx, t, ts)
 }
 
 func TestShard(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShard(context.Background(), t, ts)
+	test.CheckShard(ctx, t, ts)
 }
 
 func TestTablet(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckTablet(context.Background(), t, ts)
+	test.CheckTablet(ctx, t, ts)
 }
 
 func TestShardReplication(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShardReplication(t, ts)
+	test.CheckShardReplication(ctx, t, ts)
 }
 
 func TestServingGraph(t *testing.T) {
@@ -51,43 +55,48 @@ func TestWatchEndPoints(t *testing.T) {
 }
 
 func TestKeyspaceLock(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckKeyspaceLock(t, ts)
+	test.CheckKeyspaceLock(ctx, t, ts)
 }
 
 func TestShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckShardLock(t, ts)
+	test.CheckShardLock(ctx, t, ts)
 }
 
 func TestSrvShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckSrvShardLock(t, ts)
+	test.CheckSrvShardLock(ctx, t, ts)
 }
 
 func TestVSchema(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckVSchema(t, ts)
+	test.CheckVSchema(ctx, t, ts)
 }
 
 // TestPurgeActions is a ZK specific unit test
 func TestPurgeActions(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -115,10 +124,11 @@ func TestPurgeActions(t *testing.T) {
 
 // TestPruneActionLogs is a ZK specific unit test
 func TestPruneActionLogs(t *testing.T) {
+	ctx := context.Background()
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 

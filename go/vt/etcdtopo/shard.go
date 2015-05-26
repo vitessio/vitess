@@ -12,10 +12,11 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
+	"golang.org/x/net/context"
 )
 
 // CreateShard implements topo.Server.
-func (s *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
+func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
 	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
@@ -42,7 +43,7 @@ func (s *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 }
 
 // UpdateShard implements topo.Server.
-func (s *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, error) {
+func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
 	data := jscfg.ToJSON(si.Shard)
 
 	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(si.Keyspace(), si.ShardName()),
@@ -62,13 +63,13 @@ func (s *Server) UpdateShard(si *topo.ShardInfo, existingVersion int64) (int64, 
 }
 
 // ValidateShard implements topo.Server.
-func (s *Server) ValidateShard(keyspace, shard string) error {
-	_, err := s.GetShard(keyspace, shard)
+func (s *Server) ValidateShard(ctx context.Context, keyspace, shard string) error {
+	_, err := s.GetShard(ctx, keyspace, shard)
 	return err
 }
 
 // GetShard implements topo.Server.
-func (s *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
+func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
 	resp, err := s.getGlobal().Get(shardFilePath(keyspace, shard), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, convertError(err)
@@ -86,7 +87,7 @@ func (s *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 }
 
 // GetShardNames implements topo.Server.
-func (s *Server) GetShardNames(keyspace string) ([]string, error) {
+func (s *Server) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
 	resp, err := s.getGlobal().Get(shardsDirPath(keyspace), true /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, convertError(err)
@@ -95,7 +96,7 @@ func (s *Server) GetShardNames(keyspace string) ([]string, error) {
 }
 
 // DeleteShard implements topo.Server.
-func (s *Server) DeleteShard(keyspace, shard string) error {
+func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
 	_, err := s.getGlobal().Delete(shardDirPath(keyspace, shard), true /* recursive */)
 	if err != nil {
 		return convertError(err)

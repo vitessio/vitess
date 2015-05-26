@@ -80,7 +80,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	span.Annotate("tablet", tabletAlias.String())
 	defer span.Finish()
 
-	return ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
+	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
 		// not very efficient, but easy to read
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
 		found := false
@@ -104,8 +104,8 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 
 // RemoveShardReplicationRecord is a low level function to remove an
 // entry from the ShardReplication object.
-func RemoveShardReplicationRecord(ts Server, cell, keyspace, shard string, tabletAlias TabletAlias) error {
-	err := ts.UpdateShardReplicationFields(cell, keyspace, shard, func(sr *ShardReplication) error {
+func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias TabletAlias) error {
+	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *ShardReplication) error {
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
 		for _, link := range sr.ReplicationLinks {
 			if link.TabletAlias != tabletAlias {
@@ -120,17 +120,17 @@ func RemoveShardReplicationRecord(ts Server, cell, keyspace, shard string, table
 
 // FixShardReplication will fix the first problem it encounters within
 // a ShardReplication object
-func FixShardReplication(ts Server, logger logutil.Logger, cell, keyspace, shard string) error {
-	sri, err := ts.GetShardReplication(cell, keyspace, shard)
+func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, cell, keyspace, shard string) error {
+	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {
 		return err
 	}
 
 	for _, rl := range sri.ReplicationLinks {
-		ti, err := ts.GetTablet(rl.TabletAlias)
+		ti, err := ts.GetTablet(ctx, rl.TabletAlias)
 		if err == ErrNoNode {
 			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 		if err != nil {
 			// unknown error, we probably don't want to continue
@@ -139,7 +139,7 @@ func FixShardReplication(ts Server, logger logutil.Logger, cell, keyspace, shard
 
 		if ti.Type == TYPE_SCRAP {
 			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ts, cell, keyspace, shard, rl.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, rl.TabletAlias)
 		}
 
 		logger.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)

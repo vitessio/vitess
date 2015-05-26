@@ -15,7 +15,7 @@ import (
 // on a Shard.
 func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []topo.TabletAlias, tables []string) error {
 	// read the shard
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}

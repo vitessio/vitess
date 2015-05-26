@@ -44,13 +44,13 @@ func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error
 func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, results chan<- error) {
 	cellSet := make(map[string]bool, 16)
 
-	keyspaces, err := wr.ts.GetKeyspaces()
+	keyspaces, err := wr.ts.GetKeyspaces(ctx)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.GetKeyspaces failed: %v", err)
 		return
 	}
 	for _, keyspace := range keyspaces {
-		shards, err := wr.ts.GetShardNames(keyspace)
+		shards, err := wr.ts.GetShardNames(ctx, keyspace)
 		if err != nil {
 			results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
 			return
@@ -69,7 +69,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 	}
 
 	for cell := range cellSet {
-		aliases, err := wr.ts.GetTabletsByCell(cell)
+		aliases, err := wr.ts.GetTabletsByCell(ctx, cell)
 		if err != nil {
 			results <- fmt.Errorf("TopologyServer.GetTabletsByCell(%v) failed: %v", cell, err)
 			continue
@@ -79,7 +79,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 			wg.Add(1)
 			go func(alias topo.TabletAlias) {
 				defer wg.Done()
-				if err := topo.Validate(wr.ts, alias); err != nil {
+				if err := topo.Validate(ctx, wr.ts, alias); err != nil {
 					results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
 				} else {
 					wr.Logger().Infof("tablet %v is valid", alias)
@@ -91,7 +91,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 
 func (wr *Wrangler) validateKeyspace(ctx context.Context, keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
 	// Validate replication graph by traversing each shard.
-	shards, err := wr.ts.GetShardNames(keyspace)
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
 		return
@@ -108,7 +108,7 @@ func (wr *Wrangler) validateKeyspace(ctx context.Context, keyspace string, pingT
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.GetShard(%v, %v) failed: %v", keyspace, shard, err)
 		return
@@ -148,7 +148,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		wg.Add(1)
 		go func(alias topo.TabletAlias) {
 			defer wg.Done()
-			if err := topo.Validate(wr.ts, alias); err != nil {
+			if err := topo.Validate(ctx, wr.ts, alias); err != nil {
 				results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
 			} else {
 				wr.Logger().Infof("tablet %v is valid", alias)
@@ -243,7 +243,7 @@ func (wr *Wrangler) Validate(ctx context.Context, pingTablets bool) error {
 	}()
 
 	// Validate replication graph by traversing each keyspace and then each shard.
-	keyspaces, err := wr.ts.GetKeyspaces()
+	keyspaces, err := wr.ts.GetKeyspaces(ctx)
 	if err != nil {
 		results <- fmt.Errorf("GetKeyspaces failed: %v", err)
 	} else {

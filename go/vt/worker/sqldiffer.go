@@ -170,7 +170,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// stop replication on subset slave
 	worker.wr.Logger().Infof("Stopping replication on subset slave %v", worker.subset.alias)
-	subsetTablet, err := worker.wr.TopoServer().GetTablet(worker.subset.alias)
+	subsetTablet, err := worker.wr.TopoServer().GetTablet(ctx, worker.subset.alias)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 
 	// stop replication on superset slave
 	worker.wr.Logger().Infof("Stopping replication on superset slave %v", worker.superset.alias)
-	supersetTablet, err := worker.wr.TopoServer().GetTablet(worker.superset.alias)
+	supersetTablet, err := worker.wr.TopoServer().GetTablet(ctx, worker.superset.alias)
 	if err != nil {
 		return err
 	}

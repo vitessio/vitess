@@ -48,12 +48,12 @@ func newTabletHealth(thc *tabletHealthCache, tabletAlias topo.TabletAlias) (*Tab
 func (th *TabletHealth) update(thc *tabletHealthCache, tabletAlias topo.TabletAlias) {
 	defer thc.delete(tabletAlias)
 
-	ti, err := thc.ts.GetTablet(tabletAlias)
+	ctx := context.Background()
+	ti, err := thc.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return
 	}
 
-	ctx := context.Background()
 	c, errFunc, err := thc.tmc.HealthStream(ctx, ti)
 	if err != nil {
 		return

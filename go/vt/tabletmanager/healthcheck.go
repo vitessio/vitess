@@ -208,7 +208,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 			agent.mutex.Unlock()
 		} else {
 			log.Infof("Updating tablet mysql port to %v", mysqlPort)
-			if err := agent.TopoServer.UpdateTabletFields(tablet.Alias, func(tablet *topo.Tablet) error {
+			if err := agent.TopoServer.UpdateTabletFields(agent.batchCtx, tablet.Alias, func(tablet *topo.Tablet) error {
 				tablet.Portmap["mysql"] = mysqlPort
 				return nil
 			}); err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -44,7 +45,7 @@ func zkPathForVtName(cell, keyspace, shard string, tabletType topo.TabletType) s
 }
 
 // GetSrvTabletTypesPerShard is part of the topo.Server interface
-func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
+func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topo.TabletType, error) {
 	zkSgShardPath := zkPathForVtShard(cell, keyspace, shard)
 	children, _, err := zkts.zconn.Children(zkSgShardPath)
 	if err != nil {
@@ -65,7 +66,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]t
 }
 
 // UpdateEndPoints is part of the topo.Server interface
-func (zkts *Server) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJSON(addrs)
 	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -83,7 +84,7 @@ func (zkts *Server) UpdateEndPoints(cell, keyspace, shard string, tabletType top
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (zkts *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -102,7 +103,7 @@ func (zkts *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.T
 }
 
 // DeleteEndPoints is part of the topo.Server interface
-func (zkts *Server) DeleteEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) error {
+func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	err := zkts.zconn.Delete(path, -1)
 	if err != nil {
@@ -115,7 +116,7 @@ func (zkts *Server) DeleteEndPoints(cell, keyspace, shard string, tabletType top
 }
 
 // UpdateSrvShard is part of the topo.Server interface
-func (zkts *Server) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data := jscfg.ToJSON(srvShard)
 	_, err := zkts.zconn.Set(path, data, -1)
@@ -123,7 +124,7 @@ func (zkts *Server) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.
 }
 
 // GetSrvShard is part of the topo.Server interface
-func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (zkts *Server) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -142,7 +143,7 @@ func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, e
 }
 
 // DeleteSrvShard is part of the topo.Server interface
-func (zkts *Server) DeleteSrvShard(cell, keyspace, shard string) error {
+func (zkts *Server) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	err := zkts.zconn.Delete(path, -1)
 	if err != nil {
@@ -155,7 +156,7 @@ func (zkts *Server) DeleteSrvShard(cell, keyspace, shard string) error {
 }
 
 // UpdateSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJSON(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
@@ -166,7 +167,7 @@ func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.S
 }
 
 // GetSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -185,7 +186,7 @@ func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 }
 
 // GetSrvKeyspaceNames is part of the topo.Server interface
-func (zkts *Server) GetSrvKeyspaceNames(cell string) ([]string, error) {
+func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	children, _, err := zkts.zconn.Children(zkPathForCell(cell))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -239,7 +240,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 }
 
 // UpdateTabletEndpoint is part of the topo.Server interface
-func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
+func (zkts *Server) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
@@ -252,7 +253,7 @@ func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletTyp
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (zkts *Server) WatchEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
 	filePath := zkPathForVtName(cell, keyspace, shard, tabletType)
 
 	notifications := make(chan *topo.EndPoints, 10)

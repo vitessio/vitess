@@ -37,7 +37,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 			// create the parent keyspace and shard if needed
 			si, err = topotools.GetOrCreateShard(ctx, wr.ts, tablet.Keyspace, tablet.Shard)
 		} else {
-			si, err = wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
+			si, err = wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 			if err == topo.ErrNoNode {
 				return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 			}
@@ -64,7 +64,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update || force {
-			oldTablet, err := wr.ts.GetTablet(tablet.Alias)
+			oldTablet, err := wr.ts.GetTablet(ctx, tablet.Alias)
 			if err != nil {
 				wr.Logger().Warningf("failed reading tablet %v: %v", tablet.Alias, err)
 			} else {
@@ -93,7 +93,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 				wr.Logger().Errorf("failed scrapping tablet %v: %v", tablet.Alias, err)
 				return err
 			}
-			if err := wr.ts.DeleteTablet(tablet.Alias); err != nil {
+			if err := wr.ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 				// we ignore this
 				wr.Logger().Errorf("failed deleting tablet %v: %v", tablet.Alias, err)
 			}
@@ -110,7 +110,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 // from the Shard object (only if that was the right master)
 func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, force, skipRebuild bool) error {
 	// load the tablet, see if we'll need to rebuild
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, for
 		}
 
 		// read the shard with the lock
-		si, err := wr.ts.GetShard(ti.Keyspace, ti.Shard)
+		si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
 		if err != nil {
 			return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 		}
@@ -203,7 +203,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.Ta
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return false, "", "", "", err
 	}
@@ -220,7 +220,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.Ta
 
 	if !ti.Tablet.IsInServingGraph() {
 		// re-read the tablet, see if we become serving
-		ti, err = wr.ts.GetTablet(tabletAlias)
+		ti, err = wr.ts.GetTablet(ctx, tabletAlias)
 		if err != nil {
 			return false, "", "", "", err
 		}
@@ -235,7 +235,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.Ta
 // same as ChangeType, but assume we already have the shard lock,
 // and do not have the option to force anything.
 func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias topo.TabletAlias, dbType topo.TabletType) error {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -258,8 +258,8 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias topo.Tab
 
 // DeleteTablet will get the tablet record, and if it's scrapped, will
 // delete the record from the topology.
-func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias topo.TabletAlias) error {
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -267,12 +267,12 @@ func (wr *Wrangler) DeleteTablet(tabletAlias topo.TabletAlias) error {
 	if ti.Type != topo.TYPE_SCRAP {
 		return fmt.Errorf("Can only delete scrapped tablets")
 	}
-	return wr.TopoServer().DeleteTablet(tabletAlias)
+	return wr.TopoServer().DeleteTablet(ctx, tabletAlias)
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
 func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias topo.TabletAlias, query string, maxRows int, wantFields, disableBinlogs bool, reloadSchema bool) (*mproto.QueryResult, error) {
-	ti, err := wr.ts.GetTablet(tabletAlias)
+	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}

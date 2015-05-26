@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/helpers"
+	"golang.org/x/net/context"
 )
 
 var fromTopo = flag.String("from", "", "topology to copy data from")
@@ -41,19 +42,20 @@ func main() {
 		exit.Return(1)
 	}
 
+	ctx := context.Background()
 	fromTS := topo.GetServerByName(*fromTopo)
 	toTS := topo.GetServerByName(*toTopo)
 
 	if *doKeyspaces {
-		helpers.CopyKeyspaces(fromTS, toTS)
+		helpers.CopyKeyspaces(ctx, fromTS, toTS)
 	}
 	if *doShards {
-		helpers.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
+		helpers.CopyShards(ctx, fromTS, toTS, *deleteKeyspaceShards)
 	}
 	if *doShardReplications {
-		helpers.CopyShardReplications(fromTS, toTS)
+		helpers.CopyShardReplications(ctx, fromTS, toTS)
 	}
 	if *doTablets {
-		helpers.CopyTablets(fromTS, toTS)
+		helpers.CopyTablets(ctx, fromTS, toTS)
 	}
 }

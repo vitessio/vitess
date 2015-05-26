@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -25,7 +26,7 @@ var (
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (agent *ActionAgent) RestoreFromBackup() error {
+func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	agent.actionMutex.Lock()
 	defer agent.actionMutex.Unlock()
 
@@ -33,7 +34,7 @@ func (agent *ActionAgent) RestoreFromBackup() error {
 	// always authorized)
 	tablet := agent.Tablet()
 	originalType := tablet.Type
-	if err := agent.TopoServer.UpdateTabletFields(tablet.Alias, func(tablet *topo.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topo.Tablet) error {
 		tablet.Type = topo.TYPE_RESTORE
 		return nil
 	}); err != nil {
@@ -50,11 +51,11 @@ func (agent *ActionAgent) RestoreFromBackup() error {
 
 	if err == nil {
 		// now read the shard to find the current master, and its location
-		si, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
+		si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return fmt.Errorf("Cannot read shard: %v", err)
 		}
-		ti, err := agent.TopoServer.GetTablet(si.MasterAlias)
+		ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
 			return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
 		}
@@ -75,7 +76,7 @@ func (agent *ActionAgent) RestoreFromBackup() error {
 	}
 
 	// change type back to original type
-	if err := agent.TopoServer.UpdateTabletFields(tablet.Alias, func(tablet *topo.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topo.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {

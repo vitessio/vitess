@@ -18,7 +18,7 @@ import (
 
 // ExportZkns exports addresses from the VT serving graph to a legacy zkns server.
 // Note these functions only work with a zktopo.
-func (wr *Wrangler) ExportZkns(cell string) error {
+func (wr *Wrangler) ExportZkns(ctx context.Context, cell string) error {
 	zkTopo, ok := wr.ts.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZkns only works with zktopo")
@@ -45,7 +45,7 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 			continue
 		}
 
-		if _, err = wr.exportVtnsToZkns(zconn, addrPath, zknsAddrPath); err != nil {
+		if _, err = wr.exportVtnsToZkns(ctx, zconn, addrPath, zknsAddrPath); err != nil {
 			return err
 		}
 	}
@@ -60,7 +60,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 	}
 	zconn := zkTopo.GetZConn()
 
-	shardNames, err := wr.ts.GetShardNames(keyspace)
+	shardNames, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 			if stat.NumChildren() > 0 {
 				continue
 			}
-			zknsPathsWritten, err := wr.exportVtnsToZkns(zconn, vtnsAddrPath, zknsAddrPath)
+			zknsPathsWritten, err := wr.exportVtnsToZkns(ctx, zconn, vtnsAddrPath, zknsAddrPath)
 			if err != nil {
 				return err
 			}
@@ -141,7 +141,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 	return nil
 }
 
-func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath string) ([]string, error) {
+func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAddrPath, zknsAddrPath string) ([]string, error) {
 	zknsPaths := make([]string, 0, 32)
 	parts := strings.Split(vtnsAddrPath, "/")
 	if len(parts) != 8 && len(parts) != 9 {
@@ -154,7 +154,7 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	if tabletType == "action" || tabletType == "actionlog" {
 		return nil, nil
 	}
-	addrs, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
+	addrs, err := wr.ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err
 	}

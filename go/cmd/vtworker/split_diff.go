@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const splitDiffHTML = `
@@ -76,8 +77,8 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 
 // shardsWithSources returns all the shards that have SourceShards set
 // with no Tables list.
-func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces()
+func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := wr.TopoServer().GetShardNames(keyspace)
+			shards, err := wr.TopoServer().GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -99,7 +100,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					si, err := wr.TopoServer().GetShard(keyspace, shard)
+					si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(err)
 						return
@@ -128,7 +129,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 	return result, nil
 }
 
-func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -139,7 +140,7 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 	if keyspace == "" || shard == "" {
 		// display the list of possible shards to chose from
 		result := make(map[string]interface{})
-		shards, err := shardsWithSources(wr)
+		shards, err := shardsWithSources(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {

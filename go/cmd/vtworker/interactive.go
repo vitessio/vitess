@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 const indexHTML = `
@@ -83,7 +84,8 @@ func initInteractiveMode() {
 			// closure.
 			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
-				pc.interactive(wr, w, r)
+				ctx := context.Background()
+				pc.interactive(ctx, wr, w, r)
 			})
 		}
 	}

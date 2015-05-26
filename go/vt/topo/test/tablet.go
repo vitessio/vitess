@@ -27,7 +27,7 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
-	cell := getLocalCell(t, ts)
+	cell := getLocalCell(ctx, t, ts)
 	tablet := &topo.Tablet{
 		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
@@ -42,18 +42,18 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		Type:     topo.TYPE_MASTER,
 		KeyRange: newKeyRange("-10"),
 	}
-	if err := ts.CreateTablet(tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
 	}
-	if err := ts.CreateTablet(tablet); err != topo.ErrNodeExists {
+	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(topo.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(ctx, topo.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
-	ti, err := ts.GetTablet(tablet.Alias)
+	ti, err := ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
@@ -63,11 +63,11 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, ti.Tablet)
 	}
 
-	if _, err := ts.GetTabletsByCell("666"); err != topo.ErrNoNode {
+	if _, err := ts.GetTabletsByCell(ctx, "666"); err != topo.ErrNoNode {
 		t.Errorf("GetTabletsByCell(666): %v", err)
 	}
 
-	inCell, err := ts.GetTabletsByCell(cell)
+	inCell, err := ts.GetTabletsByCell(ctx, cell)
 	if err != nil {
 		t.Errorf("GetTabletsByCell: %v", err)
 	}
@@ -80,7 +80,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
-	ti, err = ts.GetTablet(tablet.Alias)
+	ti, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
@@ -94,7 +94,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
-	ti, err = ts.GetTablet(tablet.Alias)
+	ti, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
@@ -103,14 +103,14 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
-	if err := ts.DeleteTablet(tablet.Alias); err != nil {
+	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 		t.Errorf("DeleteTablet: %v", err)
 	}
-	if err := ts.DeleteTablet(tablet.Alias); err != topo.ErrNoNode {
+	if err := ts.DeleteTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(tablet.Alias); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 

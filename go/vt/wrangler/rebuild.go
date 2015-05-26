@@ -65,14 +65,14 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells []string, rebuildSrvShards bool) error {
 	wr.logger.Infof("rebuildKeyspace %v", keyspace)
 
-	ki, err := wr.ts.GetKeyspace(keyspace)
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
 
 	var shardCache map[string]*topo.ShardInfo
 	if rebuildSrvShards {
-		shards, err := wr.ts.GetShardNames(keyspace)
+		shards, err := wr.ts.GetShardNames(ctx, keyspace)
 		if err != nil {
 			return nil
 		}
@@ -101,7 +101,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 		}
 
 	} else {
-		shardCache, err = topo.FindAllShardsInKeyspace(wr.ts, keyspace)
+		shardCache, err = topo.FindAllShardsInKeyspace(ctx, wr.ts, keyspace)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
 	for _, ksf := range ki.ServedFromMap {
-		servedFromShards, err := topo.FindAllShardsInKeyspace(wr.ts, ksf.Keyspace)
+		servedFromShards, err := topo.FindAllShardsInKeyspace(ctx, wr.ts, ksf.Keyspace)
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	// and then finally save the keyspace objects
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		wr.logger.Infof("updating keyspace serving graph in cell %v for %v", cell, keyspace)
-		if err := wr.ts.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
+		if err := wr.ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
@@ -225,7 +225,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 
 	for _, keyspace := range keyspaces {
 		wr.logger.Infof("delete keyspace shards: %v", keyspace)
-		if err := wr.ts.DeleteKeyspaceShards(keyspace); err != nil {
+		if err := wr.ts.DeleteKeyspaceShards(ctx, keyspace); err != nil {
 			return err
 		}
 	}
@@ -249,7 +249,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 			keyspacesToRebuild[ti.Keyspace] = true
 			shardPath := ti.Keyspace + "/" + ti.Shard
 			if !shardsCreated[shardPath] {
-				if err := topo.CreateShard(wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
+				if err := topo.CreateShard(ctx, wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
 					wr.logger.Warningf("failed re-creating shard %v: %v", shardPath, err)
 					hasErr = true
 				} else {

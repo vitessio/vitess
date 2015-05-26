@@ -23,8 +23,8 @@ var (
 // FindHealthyRdonlyEndPoint returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
-func FindHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
+func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	endPoints, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 	}
@@ -51,7 +51,7 @@ func FindHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard stri
 // - mark it as worker
 // - tag it with our worker process
 func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	tabletAlias, err := FindHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
+	tabletAlias, err := FindHealthyRdonlyEndPoint(ctx, wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
 	}
@@ -60,7 +60,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
-	if err := wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+	if err := wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topo.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}

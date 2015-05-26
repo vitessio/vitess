@@ -49,7 +49,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 // remote actions.  And if 'force' is false, we also run an optional
 // hook.
 func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
-	tablet, err := ts.GetTablet(tabletAlias)
+	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 	}
 
 	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
+		err = topo.DeleteTabletReplicationData(ctx, ts, tablet.Tablet)
 		if err != nil {
 			if err == topo.ErrNoNode {
 				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
@@ -100,7 +100,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
 func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string) error {
-	tablet, err := ts.GetTablet(tabletAlias)
+	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}

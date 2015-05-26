@@ -101,7 +101,7 @@ func (fix *Fixture) GetTablet(uid int) *topo.TabletInfo {
 	if !ok {
 		panic("bad tablet uid")
 	}
-	ti, err := fix.Topo.GetTablet(tablet.Alias)
+	ti, err := fix.Topo.GetTablet(context.Background(), tablet.Alias)
 	if err != nil {
 		fix.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
