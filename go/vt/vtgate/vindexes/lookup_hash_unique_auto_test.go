@@ -81,7 +81,7 @@ func TestLookupHashUniqueAutoMapBadData(t *testing.T) {
 	}
 	vc := &vcursor{result: result}
 	_, err := lhua.(planbuilder.Unique).Map(vc, []interface{}{1, int32(2)})
-	want := `lookup.Map: strconv.ParseUint: parsing "1.1": invalid syntax`
+	want := `lookup.Map: strconv.ParseInt: parsing "1.1": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("lhua.Map: %v, want %v", err, want)
 	}

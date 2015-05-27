@@ -257,7 +257,7 @@ func (result *Result) Next() (row []interface{}) {
 	row = make([]interface{}, len(result.qr.Rows[result.index]))
 	for i, v := range result.qr.Rows[result.index] {
 		var err error
-		row[i], err = mproto.Convert(result.qr.Fields[i].Type, v)
+		row[i], err = mproto.Convert(result.qr.Fields[i], v)
 		if err != nil {
 			panic(err) // unexpected
 		}
@@ -311,7 +311,7 @@ func (sr *StreamResult) Next() (row []interface{}) {
 	row = make([]interface{}, len(sr.qr.Rows[sr.index]))
 	for i, v := range sr.qr.Rows[sr.index] {
 		var err error
-		row[i], err = mproto.Convert(sr.columns.Fields[i].Type, v)
+		row[i], err = mproto.Convert(sr.columns.Fields[i], v)
 		if err != nil {
 			panic(err) // unexpected
 		}
