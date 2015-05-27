@@ -122,7 +122,6 @@ public class FailuresIT {
     }
   }
 
-
   /**
    * Create env with two shards each having a master and replica
    */
