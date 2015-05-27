@@ -5,6 +5,7 @@
 package topotools_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -13,12 +14,40 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	. "github.com/youtube/vitess/go/vt/topotools"
 )
+
+const (
+	testShard    = "0"
+	testKeyspace = "test_keyspace"
+)
+
+func addTablet(ctx context.Context, t *testing.T, ts topo.Server, uid int, cell string, tabletType topo.TabletType) *topo.TabletInfo {
+	tablet := &topo.Tablet{
+		Alias:    topo.TabletAlias{Cell: cell, Uid: uint32(uid)},
+		Hostname: fmt.Sprintf("%vbsr%v", cell, uid),
+		IPAddr:   fmt.Sprintf("212.244.218.%v", uid),
+		Portmap: map[string]int{
+			"vt":    3333 + 10*uid,
+			"mysql": 3334 + 10*uid,
+		},
+		Keyspace: testKeyspace,
+		Type:     tabletType,
+		Shard:    testShard,
+	}
+	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
+		t.Fatalf("CreateTablet: %v", err)
+	}
+
+	ti, err := ts.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet: %v", err)
+	}
+	return ti
+}
 
 func TestRebuildShardRace(t *testing.T) {
 	ctx := context.Background()
@@ -27,28 +56,32 @@ func TestRebuildShardRace(t *testing.T) {
 
 	// Set up topology.
 	ts := zktopo.NewTestServer(t, cells)
-	f := faketopo.New(t, logger, ts, cells)
-	defer f.TearDown()
+	si, err := GetOrCreateShard(ctx, ts, testKeyspace, testShard)
+	if err != nil {
+		t.Fatalf("GetOrCreateShard: %v", err)
+	}
+	si.Cells = append(si.Cells, cells[0])
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+		t.Fatalf("UpdateShard: %v", err)
+	}
 
-	keyspace := faketopo.TestKeyspace
-	shard := faketopo.TestShard
-	f.AddTablet(1, "test_cell", topo.TYPE_MASTER)
-	f.AddTablet(2, "test_cell", topo.TYPE_REPLICA)
+	masterInfo := addTablet(ctx, t, ts, 1, cells[0], topo.TYPE_MASTER)
+	replicaInfo := addTablet(ctx, t, ts, 2, cells[0], topo.TYPE_REPLICA)
 
 	// Do an initial rebuild.
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
 	// Check initial state.
-	ep, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_MASTER)
+	ep, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
 	if got, want := len(ep.Entries), 1; got != want {
 		t.Fatalf("len(Entries) = %v, want %v", got, want)
 	}
-	ep, err = ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_REPLICA)
+	ep, err = ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
@@ -70,15 +103,14 @@ func TestRebuildShardRace(t *testing.T) {
 		}
 	}
 
-	// Make a change and start a rebuild that will stall when it tries to get
-	// the SrvShard lock.
-	masterInfo := f.GetTablet(1)
+	// Make a change and start a rebuild that will stall when it
+	// tries to get the SrvShard lock.
 	masterInfo.Type = topo.TYPE_SPARE
 	if err := topo.UpdateTablet(ctx, ts, masterInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	go func() {
-		if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
+		if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
 			t.Fatalf("RebuildShard: %v", err)
 		}
 		close(done)
@@ -89,12 +121,11 @@ func TestRebuildShardRace(t *testing.T) {
 
 	// While the first rebuild is stalled, make another change and start a rebuild
 	// that doesn't stall.
-	replicaInfo := f.GetTablet(2)
 	replicaInfo.Type = topo.TYPE_SPARE
 	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	if _, err := RebuildShard(ctx, logger, f.Topo, keyspace, shard, cells, time.Minute); err != nil {
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
 
@@ -104,10 +135,10 @@ func TestRebuildShardRace(t *testing.T) {
 	<-done
 
 	// Check that the rebuild picked up both changes.
-	if _, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("first change wasn't picked up by second rebuild")
 	}
-	if _, err := ts.GetEndPoints(ctx, cells[0], keyspace, shard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("second change was overwritten by first rebuild finishing late")
 	}
 }

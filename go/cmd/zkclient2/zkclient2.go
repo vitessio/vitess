@@ -50,12 +50,12 @@ func connect() *rpcplus.Client {
 	return rpcClient
 }
 
-func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
+func getSrvKeyspaceNames(ctx context.Context, rpcClient *rpcplus.Client, cell string, verbose bool) {
 	req := &topo.GetSrvKeyspaceNamesArgs{
 		Cell: cell,
 	}
 	reply := &topo.SrvKeyspaceNames{}
-	if err := rpcClient.Call(context.TODO(), "TopoReader.GetSrvKeyspaceNames", req, reply); err != nil {
+	if err := rpcClient.Call(ctx, "TopoReader.GetSrvKeyspaceNames", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetSrvKeyspaceNames error: %v", err)
 	}
 	if verbose {
@@ -65,13 +65,13 @@ func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
 	}
 }
 
-func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bool) {
+func getSrvKeyspace(ctx context.Context, rpcClient *rpcplus.Client, cell, keyspace string, verbose bool) {
 	req := &topo.GetSrvKeyspaceArgs{
 		Cell:     cell,
 		Keyspace: keyspace,
 	}
 	reply := &topo.SrvKeyspace{}
-	if err := rpcClient.Call(context.TODO(), "TopoReader.GetSrvKeyspace", req, reply); err != nil {
+	if err := rpcClient.Call(ctx, "TopoReader.GetSrvKeyspace", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetSrvKeyspace error: %v", err)
 	}
 	if verbose {
@@ -89,7 +89,7 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 	}
 }
 
-func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType string, verbose bool) {
+func getEndPoints(ctx context.Context, rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType string, verbose bool) {
 	req := &topo.GetEndPointsArgs{
 		Cell:       cell,
 		Keyspace:   keyspace,
@@ -97,7 +97,7 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 		TabletType: topo.TabletType(tabletType),
 	}
 	reply := &topo.EndPoints{}
-	if err := rpcClient.Call(context.TODO(), "TopoReader.GetEndPoints", req, reply); err != nil {
+	if err := rpcClient.Call(ctx, "TopoReader.GetEndPoints", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetEndPoints error: %v", err)
 	}
 	if verbose {
@@ -109,14 +109,14 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 
 // qps is a function used by tests to run a vtgate load check.
 // It will get the same srvKeyspaces as fast as possible and display the QPS.
-func qps(cell string, keyspaces []string) {
+func qps(ctx context.Context, cell string, keyspaces []string) {
 	var count sync2.AtomicInt32
 	for _, keyspace := range keyspaces {
 		for i := 0; i < 10; i++ {
 			go func() {
 				rpcClient := connect()
 				for true {
-					getSrvKeyspace(rpcClient, cell, keyspace, false)
+					getSrvKeyspace(ctx, rpcClient, cell, keyspace, false)
 					count.Add(1)
 				}
 			}()
@@ -157,10 +157,11 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	ctx := context.Background()
 	if *mode == "getSrvKeyspaceNames" {
 		rpcClient := connect()
 		if len(args) == 1 {
-			getSrvKeyspaceNames(rpcClient, args[0], true)
+			getSrvKeyspaceNames(ctx, rpcClient, args[0], true)
 		} else {
 			log.Errorf("getSrvKeyspaceNames only takes one argument")
 			exit.Return(1)
@@ -169,7 +170,7 @@ func main() {
 	} else if *mode == "getSrvKeyspace" {
 		rpcClient := connect()
 		if len(args) == 2 {
-			getSrvKeyspace(rpcClient, args[0], args[1], true)
+			getSrvKeyspace(ctx, rpcClient, args[0], args[1], true)
 		} else {
 			log.Errorf("getSrvKeyspace only takes two arguments")
 			exit.Return(1)
@@ -178,14 +179,14 @@ func main() {
 	} else if *mode == "getEndPoints" {
 		rpcClient := connect()
 		if len(args) == 4 {
-			getEndPoints(rpcClient, args[0], args[1], args[2], args[3], true)
+			getEndPoints(ctx, rpcClient, args[0], args[1], args[2], args[3], true)
 		} else {
 			log.Errorf("getEndPoints only takes four arguments")
 			exit.Return(1)
 		}
 
 	} else if *mode == "qps" {
-		qps(args[0], args[1:])
+		qps(ctx, args[0], args[1:])
 
 	} else {
 		flag.Usage()

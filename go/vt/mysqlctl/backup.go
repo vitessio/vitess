@@ -297,8 +297,7 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	return nil
 }
 
-func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) error {
-
+func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition proto.ReplicationPosition, backupConcurrency int) (err error) {
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -330,7 +329,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 				rec.RecordError(fmt.Errorf("cannot add file: %v", err))
 				return
 			}
-			defer wc.Close()
+			defer func() { rec.RecordError(wc.Close()) }()
 			dst := bufio.NewWriterSize(wc, 2*1024*1024)
 
 			// create the hasher and the tee on top
@@ -358,7 +357,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 			}
 
 			// flush the buffer to finish writing, save the hash
-			dst.Flush()
+			rec.RecordError(dst.Flush())
 			fes[i].Hash = hasher.HashString()
 		}(i, fe)
 	}
@@ -373,7 +372,11 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 	if err != nil {
 		return fmt.Errorf("cannot add %v to backup: %v", backupManifest, err)
 	}
-	defer wc.Close()
+	defer func() {
+		if closeErr := wc.Close(); err == nil {
+			err = closeErr
+		}
+	}()
 
 	// JSON-encode and write the MANIFEST
 	bm := &BackupManifest{
@@ -450,7 +453,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 				rec.RecordError(err)
 				return
 			}
-			defer dstFile.Close()
+			defer func() { rec.RecordError(dstFile.Close()) }()
 
 			// create a buffering output
 			dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
@@ -468,7 +471,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 				rec.RecordError(err)
 				return
 			}
-			defer gz.Close()
+			defer func() { rec.RecordError(gz.Close()) }()
 
 			// copy the data. Will also write to the hasher
 			if _, err = io.Copy(dst, gz); err != nil {
@@ -484,7 +487,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 			}
 
 			// flush the buffer
-			dst.Flush()
+			rec.RecordError(dst.Flush())
 		}(i, fe)
 	}
 	wg.Wait()
