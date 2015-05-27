@@ -7,6 +7,7 @@ package schemamanager
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -38,22 +39,23 @@ func NewTabletExecutor(
 
 // Open opens a connection to the master for every shard
 func (exec *TabletExecutor) Open(keyspace string) error {
+	ctx := context.TODO()
 	if !exec.isClosed {
 		return nil
 	}
-	shardNames, err := exec.topoServer.GetShardNames(keyspace)
+	shardNames, err := exec.topoServer.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", keyspace, err)
 	}
 	log.Infof("Keyspace: %v, Shards: %v\n", keyspace, shardNames)
 	exec.tabletInfos = make([]*topo.TabletInfo, len(shardNames))
 	for i, shardName := range shardNames {
-		shardInfo, err := exec.topoServer.GetShard(keyspace, shardName)
+		shardInfo, err := exec.topoServer.GetShard(ctx, keyspace, shardName)
 		log.Infof("\tShard: %s, ShardInfo: %v\n", shardName, shardInfo)
 		if err != nil {
 			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
-		tabletInfo, err := exec.topoServer.GetTablet(shardInfo.MasterAlias)
+		tabletInfo, err := exec.topoServer.GetTablet(ctx, shardInfo.MasterAlias)
 		if err != nil {
 			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
@@ -154,6 +156,8 @@ func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
 		execResult.ExecutorErr = "executor is closed"
 		return &execResult
 	}
+	startTime := time.Now()
+	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
 
 	// make sure every schema change introduces a table definition change
 	if err := exec.preflightSchemaChanges(sqls); err != nil {

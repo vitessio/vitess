@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -24,7 +25,7 @@ func shardReplicationPath(cell, keyspace, shard string) string {
 }
 
 // UpdateShardReplicationFields is part of the topo.Server interface
-func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
 	// create the parent directory to be sure it's here
 	zkDir := path.Join("/zk", cell, "vt", "replication", keyspace)
 	if _, err := zk.CreateRecursive(zkts.zconn, zkDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -57,7 +58,7 @@ func (zkts *Server) UpdateShardReplicationFields(cell, keyspace, shard string, u
 }
 
 // GetShardReplication is part of the topo.Server interface
-func (zkts *Server) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+func (zkts *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	data, _, err := zkts.zconn.Get(zkPath)
 	if err != nil {
@@ -76,7 +77,7 @@ func (zkts *Server) GetShardReplication(cell, keyspace, shard string) (*topo.Sha
 }
 
 // DeleteShardReplication is part of the topo.Server interface
-func (zkts *Server) DeleteShardReplication(cell, keyspace, shard string) error {
+func (zkts *Server) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
 	zkPath := shardReplicationPath(cell, keyspace, shard)
 	err := zkts.zconn.Delete(zkPath, -1)
 	if err != nil {

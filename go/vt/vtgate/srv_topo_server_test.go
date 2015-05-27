@@ -195,11 +195,11 @@ type fakeTopo struct {
 	callCount int
 }
 
-func (ft *fakeTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
+func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	return []string{ft.keyspace}, nil
 }
 
-func (ft *fakeTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	ft.callCount++
 	if keyspace == ft.keyspace {
 		return &topo.SrvKeyspace{}, nil
@@ -207,7 +207,7 @@ func (ft *fakeTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 	return nil, fmt.Errorf("Unknown keyspace")
 }
 
-func (ft *fakeTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	return nil, fmt.Errorf("No endpoints")
 }
 
@@ -217,14 +217,14 @@ type fakeTopoRemoteMaster struct {
 	remoteCell string
 }
 
-func (ft *fakeTopoRemoteMaster) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (ft *fakeTopoRemoteMaster) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
 	return &topo.SrvShard{
 		Name:       shard,
 		MasterCell: ft.remoteCell,
 	}, nil
 }
 
-func (ft *fakeTopoRemoteMaster) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	if cell != ft.cell && cell != ft.remoteCell {
 		return nil, fmt.Errorf("GetEndPoints: invalid cell: %v", cell)
 	}

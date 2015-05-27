@@ -106,6 +106,7 @@ func (zkts *Server) unlockForAction(lockPath, results string) error {
 	return zk.DeleteRecursive(zkts.zconn, lockPath, -1)
 }
 
+// LockKeyspaceForAction is part of topo.Server interface
 func (zkts *Server) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
@@ -113,10 +114,12 @@ func (zkts *Server) LockKeyspaceForAction(ctx context.Context, keyspace, content
 	return zkts.lockForAction(ctx, actionDir, contents)
 }
 
-func (zkts *Server) UnlockKeyspaceForAction(keyspace, lockPath, results string) error {
+// UnlockKeyspaceForAction is part of topo.Server interface
+func (zkts *Server) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }
 
+// LockShardForAction is part of topo.Server interface
 func (zkts *Server) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
@@ -124,10 +127,12 @@ func (zkts *Server) LockShardForAction(ctx context.Context, keyspace, shard, con
 	return zkts.lockForAction(ctx, actionDir, contents)
 }
 
-func (zkts *Server) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
+// UnlockShardForAction is part of topo.Server interface
+func (zkts *Server) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }
 
+// LockSrvShardForAction is part of topo.Server interface
 func (zkts *Server) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
@@ -146,6 +151,7 @@ func (zkts *Server) LockSrvShardForAction(ctx context.Context, cell, keyspace, s
 	return p, err
 }
 
-func (zkts *Server) UnlockSrvShardForAction(cell, keyspace, shard, lockPath, results string) error {
+// UnlockSrvShardForAction is part of topo.Server interface
+func (zkts *Server) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error {
 	return zkts.unlockForAction(lockPath, results)
 }

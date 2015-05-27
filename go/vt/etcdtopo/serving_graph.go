@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // WatchSleepDuration is how many seconds interval to poll for in case
@@ -22,7 +23,7 @@ import (
 var WatchSleepDuration = 30 * time.Second
 
 // GetSrvTabletTypesPerShard implements topo.Server.
-func (s *Server) GetSrvTabletTypesPerShard(cellName, keyspace, shard string) ([]topo.TabletType, error) {
+func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]topo.TabletType, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func (s *Server) GetSrvTabletTypesPerShard(cellName, keyspace, shard string) ([]
 }
 
 // UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType to
 }
 
 // GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (s *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	value, _, err := s.getEndPoints(cell, keyspace, shard, tabletType)
 	return value, err
 }
@@ -100,7 +101,7 @@ func (s *Server) getEndPoints(cellName, keyspace, shard string, tabletType topo.
 }
 
 // DeleteEndPoints implements topo.Server.
-func (s *Server) DeleteEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType) error {
+func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -111,7 +112,7 @@ func (s *Server) DeleteEndPoints(cellName, keyspace, shard string, tabletType to
 }
 
 // UpdateSrvShard implements topo.Server.
-func (s *Server) UpdateSrvShard(cellName, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *topo.SrvShard) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -124,7 +125,7 @@ func (s *Server) UpdateSrvShard(cellName, keyspace, shard string, srvShard *topo
 }
 
 // GetSrvShard implements topo.Server.
-func (s *Server) GetSrvShard(cellName, keyspace, shard string) (*topo.SrvShard, error) {
+func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*topo.SrvShard, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -146,7 +147,7 @@ func (s *Server) GetSrvShard(cellName, keyspace, shard string) (*topo.SrvShard, 
 }
 
 // DeleteSrvShard implements topo.Server.
-func (s *Server) DeleteSrvShard(cellName, keyspace, shard string) error {
+func (s *Server) DeleteSrvShard(ctx context.Context, cellName, keyspace, shard string) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -157,7 +158,7 @@ func (s *Server) DeleteSrvShard(cellName, keyspace, shard string) error {
 }
 
 // UpdateSrvKeyspace implements topo.Server.
-func (s *Server) UpdateSrvKeyspace(cellName, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -170,7 +171,7 @@ func (s *Server) UpdateSrvKeyspace(cellName, keyspace string, srvKeyspace *topo.
 }
 
 // GetSrvKeyspace implements topo.Server.
-func (s *Server) GetSrvKeyspace(cellName, keyspace string) (*topo.SrvKeyspace, error) {
+func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*topo.SrvKeyspace, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -192,7 +193,7 @@ func (s *Server) GetSrvKeyspace(cellName, keyspace string) (*topo.SrvKeyspace, e
 }
 
 // GetSrvKeyspaceNames implements topo.Server.
-func (s *Server) GetSrvKeyspaceNames(cellName string) ([]string, error) {
+func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]string, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -206,7 +207,7 @@ func (s *Server) GetSrvKeyspaceNames(cellName string) ([]string, error) {
 }
 
 // UpdateTabletEndpoint implements topo.Server.
-func (s *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
+func (s *Server) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	for {
 		addrs, version, err := s.getEndPoints(cell, keyspace, shard, tabletType)
 		if err == topo.ErrNoNode {
@@ -239,7 +240,7 @@ func (s *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType t
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (s *Server) WatchEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("WatchEndPoints cannot get cell: %v", err)

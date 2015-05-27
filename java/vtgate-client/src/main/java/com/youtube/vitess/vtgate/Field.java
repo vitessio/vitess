@@ -3,7 +3,6 @@ package com.youtube.vitess.vtgate;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 
-import com.youtube.vitess.vtgate.Field.Flag;
 import com.youtube.vitess.vtgate.Row.Cell;
 
 import org.apache.commons.lang.CharEncoding;
@@ -40,9 +39,9 @@ public class Field {
     VT_ON_UPDATE_NOW_FLAG(8192),         /* Field is set to NOW on UPDATE */
     VT_NUM_FLAG(32768);       /* Field is num (for clients) */
     
-    public int mysqlFlag;
+    public long mysqlFlag;
     
-    Flag(int mysqlFlag) {
+    Flag(long mysqlFlag) {
       this.mysqlFlag = mysqlFlag;
     }
   }
@@ -100,9 +99,9 @@ public class Field {
   
   private String name;
   private FieldType type;
-  private int mysqlFlags;
+  private long mysqlFlags;
   
-  public static Field newFieldFromMysql(String name, int mysqlTypeId, int mysqlFlags) {
+  public static Field newFieldFromMysql(String name, int mysqlTypeId, long mysqlFlags) {
     for (FieldType ft : FieldType.values()) {
       if (ft.mysqlType == mysqlTypeId) {
         return new Field(name, ft, mysqlFlags);
@@ -117,7 +116,7 @@ public class Field {
     return new Field("dummyField", fieldType, flag.mysqlFlag);
   }
 
-  private Field(String name, FieldType type, int mysqlFlags) {
+  private Field(String name, FieldType type, long mysqlFlags) {
     this.name = name;
     this.type = type;
     this.mysqlFlags = mysqlFlags;

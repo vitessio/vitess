@@ -36,7 +36,7 @@ public class Exceptions {
    * Exception raised due to fetching a non-existent field or with the wrong type
    */
   @SuppressWarnings("serial")
-  public static class InvalidFieldException extends Exception {
+  public static class InvalidFieldException extends RuntimeException {
     public InvalidFieldException(String message) {
       super(message);
     }

@@ -234,14 +234,14 @@ type ServingGraph struct {
 }
 
 // DbServingGraph returns the ServingGraph for the given cell.
-func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
+func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGraph *ServingGraph) {
 	servingGraph = &ServingGraph{
 		Cell:      cell,
 		Keyspaces: make(map[string]*KeyspaceNodes),
 	}
 	rec := concurrency.AllErrorRecorder{}
 
-	keyspaces, err := ts.GetSrvKeyspaceNames(cell)
+	keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
 		servingGraph.Errors = append(servingGraph.Errors, fmt.Sprintf("GetSrvKeyspaceNames failed: %v", err))
 		return
@@ -255,7 +255,7 @@ func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 		go func(keyspace string, kn *KeyspaceNodes) {
 			defer wg.Done()
 
-			ks, err := ts.GetSrvKeyspace(cell, keyspace)
+			ks, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err))
 				return
@@ -283,13 +283,13 @@ func DbServingGraph(ts topo.Server, cell string) (servingGraph *ServingGraph) {
 					wg.Add(1)
 					go func(shard string, sn *ShardNodes) {
 						defer wg.Done()
-						tabletTypes, err := ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+						tabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetSrvTabletTypesPerShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 							return
 						}
 						for _, tabletType := range tabletTypes {
-							endPoints, err := ts.GetEndPoints(cell, keyspace, shard, tabletType)
+							endPoints, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 							if err != nil {
 								rec.RecordError(fmt.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err))
 								continue

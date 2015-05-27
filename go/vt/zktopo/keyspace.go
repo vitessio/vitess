@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -27,7 +28,7 @@ const (
 )
 
 // CreateKeyspace is part of the topo.Server interface
-func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
+func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
@@ -63,7 +64,7 @@ func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error 
 }
 
 // UpdateKeyspace is part of the topo.Server interface
-func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
 	data := jscfg.ToJSON(ki.Keyspace)
 	stat, err := zkts.zconn.Set(keyspacePath, data, int(existingVersion))
@@ -82,7 +83,7 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo, existingVersion int64)
 }
 
 // GetKeyspace is part of the topo.Server interface
-func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
@@ -101,7 +102,7 @@ func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
 }
 
 // GetKeyspaces is part of the topo.Server interface
-func (zkts *Server) GetKeyspaces() ([]string, error) {
+func (zkts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -115,7 +116,7 @@ func (zkts *Server) GetKeyspaces() ([]string, error) {
 }
 
 // DeleteKeyspaceShards is part of the topo.Server interface
-func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
+func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err

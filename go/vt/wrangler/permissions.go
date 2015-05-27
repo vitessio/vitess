@@ -18,7 +18,7 @@ import (
 
 // GetPermissions returns the permissions set on a remote tablet
 func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
-	tablet, err := wr.ts.GetTablet(tabletAlias)
+	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *mypr
 // ValidatePermissionsShard validates all the permissions are the same
 // in a shard
 func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shard string) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 // in a keyspace
 func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace string) error {
 	// find all the shards
-	shards, err := wr.ts.GetShardNames(keyspace)
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	}
 
 	// find the reference permissions using the first shard's master
-	si, err := wr.ts.GetShard(keyspace, shards[0])
+	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
 	if err != nil {
 		return err
 	}

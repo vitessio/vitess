@@ -88,7 +88,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
-	ti, err := ts.GetTablet(sourceTablet.Tablet.Alias)
+	ti, err := ts.GetTablet(ctx, sourceTablet.Tablet.Alias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
 
-	if err := destTablet.Agent.RestoreFromBackup(); err != nil {
+	if err := destTablet.Agent.RestoreFromBackup(ctx); err != nil {
 		t.Fatalf("RestoreFromBackup failed: %v", err)
 	}
 

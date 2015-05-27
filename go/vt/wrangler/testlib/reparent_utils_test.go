@@ -24,14 +24,14 @@ func TestShardReplicationStatuses(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ts, "test_keyspace", "0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
 	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// mark the master inside the shard
-	si, err := ts.GetShard("test_keyspace", "0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -92,14 +92,14 @@ func TestReparentTablet(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ts, "test_keyspace", "0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
 	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// mark the master inside the shard
-	si, err := ts.GetShard("test_keyspace", "0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}

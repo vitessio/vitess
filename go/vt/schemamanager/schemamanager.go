@@ -7,13 +7,19 @@ package schemamanager
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
 const (
+	// SchemaChangeDirName is the key name in the ControllerFactory params.
+	// It specifies the schema change directory.
 	SchemaChangeDirName = "schema_change_dir"
+	// SchemaChangeUser is the key name in the ControllerFactory params.
+	// It specifies the user who submits this schema change.
+	SchemaChangeUser = "schema_change_user"
 )
 
 // ControllerFactory takes a set params and construct a Controller instance.
@@ -30,7 +36,7 @@ type Controller interface {
 	Open() error
 	Read() (sqls []string, err error)
 	Close()
-	GetKeyspace() string
+	Keyspace() string
 	OnReadSuccess() error
 	OnReadFail(err error) error
 	OnValidationSuccess() error
@@ -48,11 +54,12 @@ type Executor interface {
 
 // ExecuteResult contains information about schema management state
 type ExecuteResult struct {
-	FailedShards  []ShardWithError
-	SuccessShards []ShardResult
-	CurSqlIndex   int
-	Sqls          []string
-	ExecutorErr   string
+	FailedShards   []ShardWithError
+	SuccessShards  []ShardResult
+	CurSqlIndex    int
+	Sqls           []string
+	ExecutorErr    string
+	TotalTimeSpent time.Duration
 }
 
 // ShardWithError contains information why a shard failed to execute given sql
@@ -82,7 +89,7 @@ func Run(controller Controller, executor Executor) error {
 	}
 
 	controller.OnReadSuccess()
-	keyspace := controller.GetKeyspace()
+	keyspace := controller.Keyspace()
 	if err := executor.Open(keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
 		return err
@@ -93,9 +100,16 @@ func Run(controller Controller, executor Executor) error {
 		controller.OnValidationFail(err)
 		return err
 	}
-	controller.OnValidationSuccess()
+
+	if err := controller.OnValidationSuccess(); err != nil {
+		return err
+	}
+
 	result := executor.Execute(sqls)
-	controller.OnExecutorComplete(result)
+
+	if err := controller.OnExecutorComplete(result); err != nil {
+		return err
+	}
 	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {
 		out, _ := json.MarshalIndent(result, "", "  ")
 		return fmt.Errorf("Schema change failed, ExecuteResult: %v\n", string(out))

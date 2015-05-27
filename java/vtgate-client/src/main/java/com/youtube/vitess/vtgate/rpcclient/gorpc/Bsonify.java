@@ -156,10 +156,10 @@ public class Bsonify {
       BSONObject fieldBson = (BSONObject) field;
       String fieldName = new String((byte[]) fieldBson.get("Name"));
       int mysqlType = Ints.checkedCast((Long) fieldBson.get("Type"));
-      int mysqlFlags = Flag.VT_ZEROVALUE_FLAG.mysqlFlag;
+      long mysqlFlags = Flag.VT_ZEROVALUE_FLAG.mysqlFlag;
       Object flags = fieldBson.get("Flags");
       if (flags != null) {
-        mysqlFlags = Ints.checkedCast((Long) flags);
+        mysqlFlags = (Long) flags;
       }
       fieldList.add(Field.newFieldFromMysql(fieldName, mysqlType, mysqlFlags));
     }

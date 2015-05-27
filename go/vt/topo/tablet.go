@@ -479,7 +479,7 @@ func GetTablet(ctx context.Context, ts Server, alias TabletAlias) (*TabletInfo, 
 	span.Annotate("tablet", alias.String())
 	defer span.Finish()
 
-	return ts.GetTablet(alias)
+	return ts.GetTablet(ctx, alias)
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
@@ -494,7 +494,7 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(tablet, version)
+	newVersion, err := ts.UpdateTablet(ctx, tablet, version)
 	if err == nil {
 		tablet.version = newVersion
 	}
@@ -509,13 +509,13 @@ func UpdateTabletFields(ctx context.Context, ts Server, alias TabletAlias, updat
 	span.Annotate("tablet", alias.String())
 	defer span.Finish()
 
-	return ts.UpdateTabletFields(alias, update)
+	return ts.UpdateTabletFields(ctx, alias, update)
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
-func Validate(ts Server, tabletAlias TabletAlias) error {
+func Validate(ctx context.Context, ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
-	tablet, err := ts.GetTablet(tabletAlias)
+	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -529,11 +529,11 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
 	if tablet.IsInReplicationGraph() {
-		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
+		if err = ts.ValidateShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
 
-		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -548,7 +548,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -566,7 +566,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // replication graph.
 func CreateTablet(ctx context.Context, ts Server, tablet *Tablet) error {
 	// Have the Server create the tablet
-	err := ts.CreateTablet(tablet)
+	err := ts.CreateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -586,8 +586,8 @@ func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet)
 }
 
 // DeleteTabletReplicationData deletes replication data.
-func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	return RemoveShardReplicationRecord(ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
+func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet) error {
+	return RemoveShardReplicationRecord(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,
@@ -610,7 +610,7 @@ func GetTabletMap(ctx context.Context, ts Server, tabletAliases []TabletAlias) (
 		wg.Add(1)
 		go func(tabletAlias TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := ts.GetTablet(tabletAlias)
+			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
 			mutex.Lock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)

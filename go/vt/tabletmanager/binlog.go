@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func init() {
@@ -92,7 +93,7 @@ func (bpc *BinlogPlayerController) String() string {
 }
 
 // Start will start the player in the background and run forever.
-func (bpc *BinlogPlayerController) Start() {
+func (bpc *BinlogPlayerController) Start(ctx context.Context) {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
 	if bpc.interrupted != nil {
@@ -103,11 +104,11 @@ func (bpc *BinlogPlayerController) Start() {
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
 	bpc.stopPosition = myproto.ReplicationPosition{} // run forever
-	go bpc.Loop()
+	go bpc.Loop(ctx)
 }
 
 // StartUntil will start the Player until we reach the given position.
-func (bpc *BinlogPlayerController) StartUntil(stopPos myproto.ReplicationPosition) error {
+func (bpc *BinlogPlayerController) StartUntil(ctx context.Context, stopPos myproto.ReplicationPosition) error {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
 	if bpc.interrupted != nil {
@@ -117,7 +118,7 @@ func (bpc *BinlogPlayerController) StartUntil(stopPos myproto.ReplicationPositio
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
 	bpc.stopPosition = stopPos
-	go bpc.Loop()
+	go bpc.Loop(ctx)
 	return nil
 }
 
@@ -177,9 +178,9 @@ func (bpc *BinlogPlayerController) Stop() {
 
 // Loop runs the main player loop: try to play, and in case of error,
 // sleep for 5 seconds and try again.
-func (bpc *BinlogPlayerController) Loop() {
+func (bpc *BinlogPlayerController) Loop(ctx context.Context) {
 	for {
-		err := bpc.Iteration()
+		err := bpc.Iteration(ctx)
 		if err == nil {
 			// this happens when we get interrupted
 			break
@@ -202,7 +203,7 @@ func (bpc *BinlogPlayerController) Loop() {
 
 // Iteration is a single iteration for the player: get the current status,
 // try to play, and plays until interrupted, or until an error occurs.
-func (bpc *BinlogPlayerController) Iteration() (err error) {
+func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("%v: caught panic: %v", bpc, x)
@@ -236,7 +237,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Find the server list for the source shard in our cell
-	addrs, err := bpc.ts.GetEndPoints(bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
+	addrs, err := bpc.ts.GetEndPoints(ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	if err != nil {
 		return fmt.Errorf("can't find any source tablet for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA, err)
 	}
@@ -372,7 +373,7 @@ func (blm *BinlogPlayerMap) size() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
+func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
@@ -382,7 +383,7 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyspaceIdType key.KeyspaceId
 	bpc = newBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyspaceIdType, keyRange, sourceShard, dbName)
 	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BpmStateRunning {
-		bpc.Start()
+		bpc.Start(ctx)
 	}
 }
 
@@ -407,7 +408,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs.
-func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
+func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 	if shardInfo == nil {
 		log.Warningf("Could not read shardInfo, not changing anything")
@@ -434,7 +435,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet *topo.Tablet, keyspaceInfo *topo.K
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, tablet.DbName())
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, tablet.DbName())
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
@@ -470,7 +471,7 @@ func (blm *BinlogPlayerMap) Stop() {
 }
 
 // Start restarts the current players.
-func (blm *BinlogPlayerMap) Start() {
+func (blm *BinlogPlayerMap) Start(ctx context.Context) {
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	if blm.state == BpmStateRunning {
@@ -479,7 +480,7 @@ func (blm *BinlogPlayerMap) Start() {
 	}
 	log.Infof("Starting map of binlog players")
 	for _, bpc := range blm.players {
-		bpc.Start()
+		bpc.Start(ctx)
 	}
 	blm.state = BpmStateRunning
 }
@@ -509,7 +510,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*blproto.BlpPositionList, error) 
 
 // RunUntil will run all the players until they reach the given position.
 // Holds the map lock during that exercise, shouldn't take long at all.
-func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, waitTimeout time.Duration) error {
+func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList *blproto.BlpPositionList, waitTimeout time.Duration) error {
 	// lock and check state
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
@@ -531,7 +532,7 @@ func (blm *BinlogPlayerMap) RunUntil(blpPositionList *blproto.BlpPositionList, w
 
 	// start all the players giving them where to stop
 	for _, bpc := range blm.players {
-		if err := bpc.StartUntil(posMap[bpc.sourceShard.Uid]); err != nil {
+		if err := bpc.StartUntil(ctx, posMap[bpc.sourceShard.Uid]); err != nil {
 			return err
 		}
 	}

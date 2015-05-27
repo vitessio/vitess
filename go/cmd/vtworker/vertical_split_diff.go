@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 const verticalSplitDiffHTML = `
@@ -75,8 +76,8 @@ func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
 // to one value, with an array of Tables.
-func shardsWithTablesSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
-	keyspaces, err := wr.TopoServer().GetKeyspaces()
+func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
+	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func shardsWithTablesSources(wr *wrangler.Wrangler) ([]map[string]string, error)
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			shards, err := wr.TopoServer().GetShardNames(keyspace)
+			shards, err := wr.TopoServer().GetShardNames(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -98,7 +99,7 @@ func shardsWithTablesSources(wr *wrangler.Wrangler) ([]map[string]string, error)
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					si, err := wr.TopoServer().GetShard(keyspace, shard)
+					si, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(err)
 						return
@@ -127,7 +128,7 @@ func shardsWithTablesSources(wr *wrangler.Wrangler) ([]map[string]string, error)
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -138,7 +139,7 @@ func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, 
 	if keyspace == "" || shard == "" {
 		// display the list of possible shards to chose from
 		result := make(map[string]interface{})
-		shards, err := shardsWithTablesSources(wr)
+		shards, err := shardsWithTablesSources(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {

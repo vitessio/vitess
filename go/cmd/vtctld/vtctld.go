@@ -21,10 +21,12 @@ import (
 )
 
 var (
-	templateDir            = flag.String("templates", "", "directory containing templates")
-	debug                  = flag.Bool("debug", false, "recompile templates for every request")
-	schemaChangeDir        = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
-	schemaChangeController = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
+	templateDir               = flag.String("templates", "", "directory containing templates")
+	debug                     = flag.Bool("debug", false, "recompile templates for every request")
+	schemaChangeDir           = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
+	schemaChangeController    = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
+	schemaChangeCheckInterval = flag.Int("schema-change-check-interval", 60, "this value decides how often we check schema change dir, in seconds")
+	schemaChangeUser          = flag.String("schema-change-user", "", "The user who submits this schema change.")
 )
 
 func init() {
@@ -114,7 +116,7 @@ func main() {
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -124,7 +126,7 @@ func main() {
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -137,7 +139,7 @@ func main() {
 	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
-			ti, err := wr.TopoServer().GetTablet(tabletAlias)
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
@@ -149,7 +151,7 @@ func main() {
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
-			return "", wr.DeleteTablet(tabletAlias)
+			return "", wr.DeleteTablet(ctx, tabletAlias)
 		})
 
 	// keyspace actions
@@ -254,7 +256,8 @@ func main() {
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
-			cells, err := ts.GetKnownCells()
+			ctx := context.Background()
+			cells, err := ts.GetKnownCells(ctx)
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
 				return
@@ -263,7 +266,8 @@ func main() {
 			return
 		}
 
-		servingGraph := topotools.DbServingGraph(ts, cell)
+		ctx := context.Background()
+		servingGraph := topotools.DbServingGraph(ctx, ts, cell)
 		if modifyDbServingGraph != nil {
 			modifyDbServingGraph(ts, servingGraph)
 		}
@@ -292,12 +296,13 @@ func main() {
 			Error         error
 			Input, Output string
 		}
+		ctx := context.Background()
 		switch r.Method {
 		case "POST":
 			data.Input = r.FormValue("vschema")
-			data.Error = schemafier.SaveVSchema(data.Input)
+			data.Error = schemafier.SaveVSchema(ctx, data.Input)
 		}
-		vschema, err := schemafier.GetVSchema()
+		vschema, err := schemafier.GetVSchema(ctx)
 		if err != nil {
 			if data.Error == nil {
 				data.Error = fmt.Errorf("Error fetching schema: %s", err)
@@ -330,7 +335,8 @@ func main() {
 	// serve some data
 	knownCellsCache := newKnownCellsCache(ts)
 	http.HandleFunc("/json/KnownCells", func(w http.ResponseWriter, r *http.Request) {
-		result, err := knownCellsCache.Get()
+		ctx := context.Background()
+		result, err := knownCellsCache.Get(ctx)
 		if err != nil {
 			httpError(w, "error getting known cells: %v", err)
 			return
@@ -340,7 +346,8 @@ func main() {
 
 	keyspacesCache := newKeyspacesCache(ts)
 	http.HandleFunc("/json/Keyspaces", func(w http.ResponseWriter, r *http.Request) {
-		result, err := keyspacesCache.Get()
+		ctx := context.Background()
+		result, err := keyspacesCache.Get(ctx)
 		if err != nil {
 			httpError(w, "error getting keyspaces: %v", err)
 			return
@@ -359,7 +366,8 @@ func main() {
 			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result, err := keyspaceCache.Get(keyspace)
+		ctx := context.Background()
+		result, err := keyspaceCache.Get(ctx, keyspace)
 		if err != nil {
 			httpError(w, "error getting keyspace: %v", err)
 			return
@@ -378,7 +386,8 @@ func main() {
 			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result, err := shardNamesCache.Get(keyspace)
+		ctx := context.Background()
+		result, err := shardNamesCache.Get(ctx, keyspace)
 		if err != nil {
 			httpError(w, "error getting shardNames: %v", err)
 			return
@@ -402,7 +411,8 @@ func main() {
 			http.Error(w, "no shard provided", http.StatusBadRequest)
 			return
 		}
-		result, err := shardCache.Get(keyspace + "/" + shard)
+		ctx := context.Background()
+		result, err := shardCache.Get(ctx, keyspace+"/"+shard)
 		if err != nil {
 			httpError(w, "error getting shard: %v", err)
 			return
@@ -431,7 +441,8 @@ func main() {
 			http.Error(w, "no shard provided", http.StatusBadRequest)
 			return
 		}
-		result, err := cellShardTabletsCache.Get(cell + "/" + keyspace + "/" + shard)
+		ctx := context.Background()
+		result, err := cellShardTabletsCache.Get(ctx, cell+"/"+keyspace+"/"+shard)
 		if err != nil {
 			httpError(w, "error getting shard: %v", err)
 			return
@@ -495,7 +506,11 @@ func main() {
 		)
 	})
 	if *schemaChangeDir != "" {
-		timer := timer.NewTimer(1 * time.Minute)
+		interval := 60
+		if *schemaChangeCheckInterval > 0 {
+			interval = *schemaChangeCheckInterval
+		}
+		timer := timer.NewTimer(time.Duration(interval) * time.Second)
 		controllerFactory, err :=
 			schemamanager.GetControllerFactory(*schemaChangeController)
 		if err != nil {
@@ -505,17 +520,19 @@ func main() {
 		timer.Start(func() {
 			controller, err := controllerFactory(map[string]string{
 				schemamanager.SchemaChangeDirName: *schemaChangeDir,
+				schemamanager.SchemaChangeUser:    *schemaChangeUser,
 			})
 			if err != nil {
 				log.Errorf("failed to get controller, error: %v", err)
 				return
 			}
 
-			schemamanager.Run(
+			err = schemamanager.Run(
 				controller,
 				schemamanager.NewTabletExecutor(
 					tmclient.NewTabletManagerClient(), ts),
 			)
+			log.Errorf("Schema change failed, error: %v", err)
 		})
 		servenv.OnClose(func() { timer.Stop() })
 	}

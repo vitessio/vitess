@@ -54,7 +54,7 @@ func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspac
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockKeyspaceForAction(keyspace, lockPath, n.ToJSON())
+	err := ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, n.ToJSON())
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -99,7 +99,7 @@ func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, 
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockShardForAction(keyspace, shard, lockPath, n.ToJSON())
+	err := ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, n.ToJSON())
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -146,7 +146,7 @@ func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, k
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockSrvShardForAction(cell, keyspace, shard, lockPath, n.ToJSON())
+	err := ts.UnlockSrvShardForAction(ctx, cell, keyspace, shard, lockPath, n.ToJSON())
 	if actionError != nil {
 		if err != nil {
 			// this will be masked

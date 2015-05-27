@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
@@ -175,13 +176,13 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) map[TabletType]string
 }
 
 // UpdateKeyspace updates the keyspace data, with the right version
-func UpdateKeyspace(ts Server, ki *KeyspaceInfo) error {
+func UpdateKeyspace(ctx context.Context, ts Server, ki *KeyspaceInfo) error {
 	var version int64 = -1
 	if ki.version != 0 {
 		version = ki.version
 	}
 
-	newVersion, err := ts.UpdateKeyspace(ki, version)
+	newVersion, err := ts.UpdateKeyspace(ctx, ki, version)
 	if err == nil {
 		ki.version = newVersion
 	}
@@ -190,8 +191,8 @@ func UpdateKeyspace(ts Server, ki *KeyspaceInfo) error {
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in
 // a keyspace. It doesn't take any lock.
-func FindAllShardsInKeyspace(ts Server, keyspace string) (map[string]*ShardInfo, error) {
-	shards, err := ts.GetShardNames(keyspace)
+func FindAllShardsInKeyspace(ctx context.Context, ts Server, keyspace string) (map[string]*ShardInfo, error) {
+	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +205,7 @@ func FindAllShardsInKeyspace(ts Server, keyspace string) (map[string]*ShardInfo,
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			si, err := ts.GetShard(keyspace, shard)
+			si, err := ts.GetShard(ctx, keyspace, shard)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShard(%v,%v) failed: %v", keyspace, shard, err))
 				return

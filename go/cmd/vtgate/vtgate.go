@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -61,7 +62,8 @@ func main() {
 			log.Infof("Skipping v3 initialization: topo does not suppurt schemafier interface")
 			goto startServer
 		}
-		schemaJSON, err := schemafier.GetVSchema()
+		ctx := context.Background()
+		schemaJSON, err := schemafier.GetVSchema(ctx)
 		if err != nil {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer

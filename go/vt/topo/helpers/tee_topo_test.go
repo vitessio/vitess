@@ -24,7 +24,7 @@ type fakeServer struct {
 	localCells []string
 }
 
-func (s fakeServer) GetKnownCells() ([]string, error) {
+func (s fakeServer) GetKnownCells(ctx context.Context) ([]string, error) {
 	return s.localCells, nil
 }
 
@@ -49,23 +49,27 @@ func newFakeTeeServer(t *testing.T) topo.Server {
 }
 
 func TestKeyspace(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckKeyspace(t, ts)
+	test.CheckKeyspace(ctx, t, ts)
 }
 
 func TestShard(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckShard(context.Background(), t, ts)
+	test.CheckShard(ctx, t, ts)
 }
 
 func TestTablet(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckTablet(context.Background(), t, ts)
+	test.CheckTablet(ctx, t, ts)
 }
 
 func TestServingGraph(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckServingGraph(context.Background(), t, ts)
+	test.CheckServingGraph(ctx, t, ts)
 }
 
 func TestWatchEndPoints(t *testing.T) {
@@ -75,29 +79,33 @@ func TestWatchEndPoints(t *testing.T) {
 }
 
 func TestShardReplication(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckShardReplication(t, ts)
+	test.CheckShardReplication(ctx, t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {
+	ctx := context.Background()
 	ts := newFakeTeeServer(t)
-	test.CheckKeyspaceLock(t, ts)
+	test.CheckKeyspaceLock(ctx, t, ts)
 }
 
 func TestShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := newFakeTeeServer(t)
-	test.CheckShardLock(t, ts)
+	test.CheckShardLock(ctx, t, ts)
 }
 
 func TestSrvShardLock(t *testing.T) {
+	ctx := context.Background()
 	if testing.Short() {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
 	ts := newFakeTeeServer(t)
-	test.CheckSrvShardLock(t, ts)
+	test.CheckSrvShardLock(ctx, t, ts)
 }

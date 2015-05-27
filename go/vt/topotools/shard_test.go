@@ -40,7 +40,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create keyspace
-	if err := ts.CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 

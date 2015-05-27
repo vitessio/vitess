@@ -374,7 +374,7 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
 	}
-	agent.BinlogPlayerMap.Start()
+	agent.BinlogPlayerMap.Start(agent.batchCtx)
 	return nil
 }
 
@@ -384,7 +384,7 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
-	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
+	if err := agent.BinlogPlayerMap.RunUntil(ctx, bpl, waitTime); err != nil {
 		return nil, err
 	}
 	rp, err := agent.MysqlDaemon.MasterPosition()
@@ -454,7 +454,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
-	ti, err := agent.TopoServer.GetTablet(parent)
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -503,7 +503,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 // replication up to the provided point, and then makes the slave the
 // shard master.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -536,7 +536,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -547,7 +547,7 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
-	ti, err := agent.TopoServer.GetTablet(parent)
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -582,7 +582,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 	}
 
 	// change our type to spare if we used to be the master
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -605,7 +605,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -654,7 +654,7 @@ func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (mypr
 
 // PromoteSlave makes the current tablet the master
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -705,7 +705,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
 	// update our type to TYPE_BACKUP
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}

@@ -115,7 +115,7 @@ func (sdw *SplitDiffWorker) Run(ctx context.Context) error {
 
 func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 	// first state: read what we need to do
-	if err := sdw.init(); err != nil {
+	if err := sdw.init(ctx); err != nil {
 		return fmt.Errorf("init() failed: %v", err)
 	}
 	if err := checkDone(ctx); err != nil {
@@ -148,15 +148,15 @@ func (sdw *SplitDiffWorker) run(ctx context.Context) error {
 
 // init phase:
 // - read the shard info, make sure it has sources
-func (sdw *SplitDiffWorker) init() error {
+func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 	sdw.SetState(WorkerStateInit)
 
 	var err error
-	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(sdw.keyspace)
+	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(ctx, sdw.keyspace)
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", sdw.keyspace, err)
 	}
-	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(sdw.keyspace, sdw.shard)
+	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(ctx, sdw.keyspace, sdw.shard)
 	if err != nil {
 		return fmt.Errorf("cannot read shard %v/%v: %v", sdw.keyspace, sdw.shard, err)
 	}
@@ -218,7 +218,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := sdw.wr.TopoServer().GetTablet(sdw.shardInfo.MasterAlias)
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.shardInfo.MasterAlias)
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
@@ -246,7 +246,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		}
 
 		// read the tablet
-		sourceTablet, err := sdw.wr.TopoServer().GetTablet(sdw.sourceAliases[i])
+		sourceTablet, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.sourceAliases[i])
 		if err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	// 4 - wait until the destination checker is equal or passed
 	//     that master binlog position, and stop its replication.
 	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos)
-	destinationTablet, err := sdw.wr.TopoServer().GetTablet(sdw.destinationAlias)
+	destinationTablet, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.destinationAlias)
 	if err != nil {
 		return err
 	}
