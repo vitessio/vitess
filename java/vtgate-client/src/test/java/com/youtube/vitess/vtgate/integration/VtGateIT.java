@@ -1,4 +1,4 @@
-  package com.youtube.vitess.vtgate.integration;
+package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
