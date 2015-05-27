@@ -764,6 +764,7 @@ class Vtctld(object):
 
   def __init__(self):
     self.port = environment.reserve_ports(1)
+    self.schema_change_dir = os.path.join(environment.tmproot, 'schema_change_test')
     if protocols_flavor().vtctl_client_protocol() == "grpc":
       self.grpc_port = environment.reserve_ports(1)
 
@@ -786,6 +787,9 @@ class Vtctld(object):
             '-templates', environment.vttop + '/go/cmd/vtctld/templates',
             '-log_dir', environment.vtlogroot,
             '-port', str(self.port),
+            '-schema-change-dir', self.schema_change_dir,
+            '-schema-change-controller', 'local',
+            '-schema-change-check-interval', '1',
             ] + \
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags()

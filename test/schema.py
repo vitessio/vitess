@@ -2,6 +2,8 @@
 
 import logging
 import unittest
+import os
+import time
 
 import environment
 import utils
@@ -89,6 +91,9 @@ class TestSchema(unittest.TestCase):
 
     # run checks now before we start the tablets
     utils.validate_topology()
+
+    utils.Vtctld().start()
+
     # create databases, start the tablets
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
            shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1,
@@ -211,6 +216,26 @@ class TestSchema(unittest.TestCase):
     # all shards should have the same schema
     self.assertEqual(shard_0_schema, shard_1_schema)
     self.assertEqual(shard_0_schema, shard_2_schema)
+
+    # test schema changes
+    os.makedirs(os.path.join(utils.vtctld.schema_change_dir, test_keyspace))
+    input_path = os.path.join(utils.vtctld.schema_change_dir, test_keyspace, "input")
+    os.makedirs(input_path)
+    sql_path = os.path.join(input_path, "create_test_table_x.sql")
+    with open(sql_path, 'w') as handler:
+      handler.write("create table test_table_x (id int)")
+
+    timeout = 10
+    # wait until this sql file being consumed by autoschema
+    while os.path.isfile(sql_path):
+        timeout = utils.wait_step('waiting for vtctld to pick up schema changes',
+                                  timeout,
+                                  sleep_time=0.2)
+
+    # check number of tables
+    self._check_tables(shard_0_master, 5)
+    self._check_tables(shard_1_master, 5)
+    self._check_tables(shard_2_master, 5)
 
 if __name__ == '__main__':
   utils.main()

@@ -467,7 +467,7 @@ func (controller *fakeController) Read() ([]string, error) {
 func (controller *fakeController) Close() {
 }
 
-func (controller *fakeController) GetKeyspace() string {
+func (controller *fakeController) Keyspace() string {
 	return controller.keyspace
 }
 

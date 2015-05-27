@@ -7,6 +7,7 @@ package schemamanager
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -155,6 +156,8 @@ func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
 		execResult.ExecutorErr = "executor is closed"
 		return &execResult
 	}
+	startTime := time.Now()
+	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
 
 	// make sure every schema change introduces a table definition change
 	if err := exec.preflightSchemaChanges(sqls); err != nil {
