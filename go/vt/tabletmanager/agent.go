@@ -390,7 +390,7 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 // the initial state change callback to start tablet services.
 func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort int) error {
 	var err error
-	if _, err = agent.readTablet(context.TODO()); err != nil {
+	if _, err = agent.readTablet(ctx); err != nil {
 		return err
 	}
 
