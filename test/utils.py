@@ -571,38 +571,6 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
   cmd = args + clargs
   return cmd, port
 
-# vtclient2 helpers
-# driver is one of:
-# - vttablet (default), vttablet-streaming
-# - vtdb, vtdb-streaming (default topo server)
-# - vtdb-zk, vtdb-zk-streaming (forced zk topo server)
-# path is either: keyspace/shard for vttablet* or zk path for vtdb*
-def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
-              verbose=False, raise_on_error=True):
-  if (user is None) != (password is None):
-    raise TypeError("you should provide either both or none of user and password")
-
-  # for ZK paths to not have // in the path, that confuses things
-  if path.startswith('/'):
-    path = path[1:]
-  server = "localhost:%u/%s" % (uid, path)
-
-  cmdline = environment.binary_args('vtclient2') + ['-server', server]
-  cmdline += environment.topo_server().flags()
-  cmdline += protocols_flavor().tabletconn_protocol_flags()
-  if user is not None:
-    cmdline.extend(['-tablet-bson-username', user,
-                    '-tablet-bson-password', password])
-  if bindvars:
-    cmdline.extend(['-bindvars', bindvars])
-  if driver:
-    cmdline.extend(['-driver', driver])
-  if verbose:
-    cmdline.extend(['-alsologtostderr', '-verbose'])
-  cmdline.append(query)
-
-  return run(cmdline, raise_on_error=raise_on_error, trap_output=True)
-
 # mysql helpers
 def mysql_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
