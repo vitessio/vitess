@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 // LocalController listens to the specified schema change dir and applies schema changes.
@@ -61,7 +62,7 @@ func NewLocalController(schemaChangeDir string) *LocalController {
 
 // Open goes through the schema change dir and find a keyspace with a pending
 // schema change.
-func (controller *LocalController) Open() error {
+func (controller *LocalController) Open(ctx context.Context) error {
 	// find all keyspace directories.
 	fileInfos, err := ioutil.ReadDir(controller.schemaChangeDir)
 	if err != nil {
@@ -101,7 +102,7 @@ func (controller *LocalController) Open() error {
 }
 
 // Read reads schema changes.
-func (controller *LocalController) Read() ([]string, error) {
+func (controller *LocalController) Read(ctx context.Context) ([]string, error) {
 	if controller.keyspace == "" || controller.sqlPath == "" {
 		return []string{}, nil
 	}
@@ -128,30 +129,30 @@ func (controller *LocalController) Close() {
 }
 
 // OnReadSuccess is no-op
-func (controller *LocalController) OnReadSuccess() error {
+func (controller *LocalController) OnReadSuccess(ctx context.Context) error {
 	return nil
 }
 
 // OnReadFail is no-op
-func (controller *LocalController) OnReadFail(err error) error {
+func (controller *LocalController) OnReadFail(ctx context.Context, err error) error {
 	log.Errorf("failed to read file: %s, error: %v", controller.sqlPath, err)
 	return nil
 }
 
 // OnValidationSuccess is no-op
-func (controller *LocalController) OnValidationSuccess() error {
+func (controller *LocalController) OnValidationSuccess(ctx context.Context) error {
 	return nil
 }
 
 // OnValidationFail is no-op
-func (controller *LocalController) OnValidationFail(err error) error {
-	return controller.moveToErrorDir()
+func (controller *LocalController) OnValidationFail(ctx context.Context, err error) error {
+	return controller.moveToErrorDir(ctx)
 }
 
 // OnExecutorComplete is no-op
-func (controller *LocalController) OnExecutorComplete(result *ExecuteResult) error {
+func (controller *LocalController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	if len(result.FailedShards) > 0 || result.ExecutorErr != "" {
-		return controller.moveToErrorDir()
+		return controller.moveToErrorDir(ctx)
 	}
 	if err := os.MkdirAll(controller.completeDir, os.ModePerm); err != nil {
 		return err
@@ -160,7 +161,7 @@ func (controller *LocalController) OnExecutorComplete(result *ExecuteResult) err
 		return err
 	}
 
-	if err := controller.writeToLogDir(result); err != nil {
+	if err := controller.writeToLogDir(ctx, result); err != nil {
 		return err
 	}
 
@@ -169,7 +170,7 @@ func (controller *LocalController) OnExecutorComplete(result *ExecuteResult) err
 		path.Join(controller.completeDir, controller.sqlFilename))
 }
 
-func (controller *LocalController) moveToErrorDir() error {
+func (controller *LocalController) moveToErrorDir(ctx context.Context) error {
 	if err := os.MkdirAll(controller.errorDir, os.ModePerm); err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func (controller *LocalController) moveToErrorDir() error {
 		path.Join(controller.errorDir, controller.sqlFilename))
 }
 
-func (controller *LocalController) writeToLogDir(result *ExecuteResult) error {
+func (controller *LocalController) writeToLogDir(ctx context.Context, result *ExecuteResult) error {
 	logFile, err := os.Create(path.Join(controller.logDir, controller.sqlFilename))
 	if err != nil {
 		return err

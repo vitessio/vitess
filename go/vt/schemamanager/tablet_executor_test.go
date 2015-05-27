@@ -8,17 +8,20 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"golang.org/x/net/context"
 )
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor()
-	if err := executor.Open("test_keyspace"); err != nil {
+	ctx := context.Background()
+
+	if err := executor.Open(ctx, "test_keyspace"); err != nil {
 		t.Fatalf("executor.Open should succeed")
 	}
 
 	defer executor.Close()
 
-	if err := executor.Open("test_keyspace"); err != nil {
+	if err := executor.Open(ctx, "test_keyspace"); err != nil {
 		t.Fatalf("open an opened executor should also succeed")
 	}
 }
@@ -52,45 +55,46 @@ func TestTabletExecutorValidate(t *testing.T) {
 	executor := NewTabletExecutor(
 		fakeTmc,
 		newFakeTopo())
+	ctx := context.Background()
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
 		"CREATE TABLE test_table_02 (pk int)",
 	}
 
-	if err := executor.Validate(sqls); err == nil {
+	if err := executor.Validate(ctx, sqls); err == nil {
 		t.Fatalf("validate should fail because executor is closed")
 	}
 
-	executor.Open("test_keyspace")
+	executor.Open(ctx, "test_keyspace")
 	defer executor.Close()
 
 	// schema changes with DMLs should fail
-	if err := executor.Validate([]string{
+	if err := executor.Validate(ctx, []string{
 		"INSERT INTO test_table VALUES(1)"}); err == nil {
 		t.Fatalf("schema changes are for DDLs")
 	}
 
 	// validates valid ddls
-	if err := executor.Validate(sqls); err != nil {
+	if err := executor.Validate(ctx, sqls); err != nil {
 		t.Fatalf("executor.Validate should succeed, but got error: %v", err)
 	}
 
 	// alter a table with more than 100,000 rows
-	if err := executor.Validate([]string{
+	if err := executor.Validate(ctx, []string{
 		"ALTER TABLE test_table_03 ADD COLUMN new_id bigint(20)",
 	}); err == nil {
 		t.Fatalf("executor.Validate should fail, alter a table more than 100,000 rows")
 	}
 
 	// change a table with more than 2,000,000 rows
-	if err := executor.Validate([]string{
+	if err := executor.Validate(ctx, []string{
 		"RENAME TABLE test_table_04 TO test_table_05",
 	}); err == nil {
 		t.Fatalf("executor.Validate should fail, change a table more than 2,000,000 rows")
 	}
 
-	if err := executor.Validate([]string{
+	if err := executor.Validate(ctx, []string{
 		"DROP TABLE test_table_04",
 	}); err != nil {
 		t.Fatalf("executor.Validate should succeed, drop a table with more than 2,000,000 rows is allowed")
@@ -99,18 +103,19 @@ func TestTabletExecutorValidate(t *testing.T) {
 
 func TestTabletExecutorExecute(t *testing.T) {
 	executor := newFakeExecutor()
+	ctx := context.Background()
 
 	sqls := []string{"DROP TABLE unknown_table"}
 
-	result := executor.Execute(sqls)
+	result := executor.Execute(ctx, sqls)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, call execute.Open first")
 	}
 
-	executor.Open("test_keyspace")
+	executor.Open(ctx, "test_keyspace")
 	defer executor.Close()
 
-	result = executor.Execute(sqls)
+	result = executor.Execute(ctx, sqls)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, ddl does not introduce any table schema change")
 	}

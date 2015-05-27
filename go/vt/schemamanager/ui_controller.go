@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
 // UIController handles schema events.
@@ -39,12 +40,12 @@ func NewUIController(
 }
 
 // Open is a no-op.
-func (controller *UIController) Open() error {
+func (controller *UIController) Open(ctx context.Context) error {
 	return nil
 }
 
 // Read reads schema changes
-func (controller *UIController) Read() ([]string, error) {
+func (controller *UIController) Read(ctx context.Context) ([]string, error) {
 	return controller.sqls, nil
 }
 
@@ -58,35 +59,35 @@ func (controller *UIController) Keyspace() string {
 }
 
 // OnReadSuccess is no-op
-func (controller *UIController) OnReadSuccess() error {
+func (controller *UIController) OnReadSuccess(ctx context.Context) error {
 	controller.writer.Write(
 		[]byte(fmt.Sprintf("OnReadSuccess, sqls: %v\n", controller.sqls)))
 	return nil
 }
 
 // OnReadFail is no-op
-func (controller *UIController) OnReadFail(err error) error {
+func (controller *UIController) OnReadFail(ctx context.Context, err error) error {
 	controller.writer.Write(
 		[]byte(fmt.Sprintf("OnReadFail, error: %v\n", err)))
 	return err
 }
 
 // OnValidationSuccess is no-op
-func (controller *UIController) OnValidationSuccess() error {
+func (controller *UIController) OnValidationSuccess(ctx context.Context) error {
 	controller.writer.Write(
 		[]byte(fmt.Sprintf("OnValidationSuccess, sqls: %v\n", controller.sqls)))
 	return nil
 }
 
 // OnValidationFail is no-op
-func (controller *UIController) OnValidationFail(err error) error {
+func (controller *UIController) OnValidationFail(ctx context.Context, err error) error {
 	controller.writer.Write(
 		[]byte(fmt.Sprintf("OnValidationFail, error: %v\n", err)))
 	return err
 }
 
 // OnExecutorComplete is no-op
-func (controller *UIController) OnExecutorComplete(result *ExecuteResult) error {
+func (controller *UIController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	data, err := json.Marshal(result)
 	if err != nil {
 		log.Errorf("Failed to serialize ExecuteResult: %v", err)

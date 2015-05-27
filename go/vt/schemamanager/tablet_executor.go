@@ -38,8 +38,7 @@ func NewTabletExecutor(
 }
 
 // Open opens a connection to the master for every shard
-func (exec *TabletExecutor) Open(keyspace string) error {
-	ctx := context.TODO()
+func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 	if !exec.isClosed {
 		return nil
 	}
@@ -71,7 +70,7 @@ func (exec *TabletExecutor) Open(keyspace string) error {
 }
 
 // Validate validates a list of sql statements
-func (exec *TabletExecutor) Validate(sqls []string) error {
+func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
@@ -87,20 +86,20 @@ func (exec *TabletExecutor) Validate(sqls []string) error {
 		}
 		parsedDDLs[i] = ddl
 	}
-	return exec.detectBigSchemaChanges(parsedDDLs)
+	return exec.detectBigSchemaChanges(ctx, parsedDDLs)
 }
 
 // a schema change that satisfies any following condition is considered
 // to be a big schema change and will be rejected.
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(parsedDDLs []*sqlparser.DDL) error {
+func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) error {
 	// exec.tabletInfos is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
 	masterTabletInfo := exec.tabletInfos[0]
 	// get database schema, excluding views.
 	dbSchema, err := exec.tmClient.GetSchema(
-		context.Background(), masterTabletInfo, []string{}, []string{}, false)
+		ctx, masterTabletInfo, []string{}, []string{}, false)
 	if err != nil {
 		return fmt.Errorf("unable to get database schema, error: %v", err)
 	}
@@ -127,11 +126,11 @@ func (exec *TabletExecutor) detectBigSchemaChanges(parsedDDLs []*sqlparser.DDL) 
 	return nil
 }
 
-func (exec *TabletExecutor) preflightSchemaChanges(sqls []string) error {
+func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
 	exec.schemaDiffs = make([]*proto.SchemaChangeResult, len(sqls))
 	for i := range sqls {
 		schemaDiff, err := exec.tmClient.PreflightSchema(
-			context.Background(), exec.tabletInfos[0], sqls[i])
+			ctx, exec.tabletInfos[0], sqls[i])
 		if err != nil {
 			return err
 		}
@@ -149,7 +148,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(sqls []string) error {
 }
 
 // Execute applies schema changes
-func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
+func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *ExecuteResult {
 	execResult := ExecuteResult{}
 	execResult.Sqls = sqls
 	if exec.isClosed {
@@ -160,14 +159,14 @@ func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
 	defer func() { execResult.TotalTimeSpent = time.Since(startTime) }()
 
 	// make sure every schema change introduces a table definition change
-	if err := exec.preflightSchemaChanges(sqls); err != nil {
+	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
 	}
 
 	for index, sql := range sqls {
 		execResult.CurSqlIndex = index
-		exec.executeOnAllTablets(&execResult, sql)
+		exec.executeOnAllTablets(ctx, &execResult, sql)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -175,14 +174,14 @@ func (exec *TabletExecutor) Execute(sqls []string) *ExecuteResult {
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(execResult *ExecuteResult, sql string) {
+func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tabletInfos)
 	wg.Add(numOfMasterTablets)
 	errChan := make(chan ShardWithError, numOfMasterTablets)
 	successChan := make(chan ShardResult, numOfMasterTablets)
 	for i := range exec.tabletInfos {
-		go exec.executeOneTablet(&wg, exec.tabletInfos[i], sql, errChan, successChan)
+		go exec.executeOneTablet(ctx, &wg, exec.tabletInfos[i], sql, errChan, successChan)
 	}
 	wg.Wait()
 	close(errChan)
@@ -198,13 +197,13 @@ func (exec *TabletExecutor) executeOnAllTablets(execResult *ExecuteResult, sql s
 }
 
 func (exec *TabletExecutor) executeOneTablet(
+	ctx context.Context,
 	wg *sync.WaitGroup,
 	tabletInfo *topo.TabletInfo,
 	sql string,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
 	defer wg.Done()
-	ctx := context.Background()
 	result, err := exec.tmClient.ExecuteFetchAsDba(ctx, tabletInfo, sql, 10, false, false, true)
 	if err != nil {
 		errChan <- ShardWithError{Shard: tabletInfo.Shard, Err: err.Error()}

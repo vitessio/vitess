@@ -11,6 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -33,22 +34,22 @@ var (
 // certain keyspace and also handling various events happened during schema
 // change.
 type Controller interface {
-	Open() error
-	Read() (sqls []string, err error)
+	Open(ctx context.Context) error
+	Read(ctx context.Context) (sqls []string, err error)
 	Close()
 	Keyspace() string
-	OnReadSuccess() error
-	OnReadFail(err error) error
-	OnValidationSuccess() error
-	OnValidationFail(err error) error
-	OnExecutorComplete(*ExecuteResult) error
+	OnReadSuccess(ctx context.Context) error
+	OnReadFail(ctx context.Context, err error) error
+	OnValidationSuccess(ctx context.Context) error
+	OnValidationFail(ctx context.Context, err error) error
+	OnExecutorComplete(ctx context.Context, result *ExecuteResult) error
 }
 
 // Executor applies schema changes to underlying system
 type Executor interface {
-	Open(keyspace string) error
-	Validate(sqls []string) error
-	Execute(sqls []string) *ExecuteResult
+	Open(ctx context.Context, keyspace string) error
+	Validate(ctx context.Context, sqls []string) error
+	Execute(ctx context.Context, sqls []string) *ExecuteResult
 	Close()
 }
 
@@ -75,39 +76,39 @@ type ShardResult struct {
 }
 
 // Run schema changes on Vitess through VtGate
-func Run(controller Controller, executor Executor) error {
-	if err := controller.Open(); err != nil {
+func Run(ctx context.Context, controller Controller, executor Executor) error {
+	if err := controller.Open(ctx); err != nil {
 		log.Errorf("failed to open data sourcer: %v", err)
 		return err
 	}
 	defer controller.Close()
-	sqls, err := controller.Read()
+	sqls, err := controller.Read(ctx)
 	if err != nil {
 		log.Errorf("failed to read data from data sourcer: %v", err)
-		controller.OnReadFail(err)
+		controller.OnReadFail(ctx, err)
 		return err
 	}
 
-	controller.OnReadSuccess()
+	controller.OnReadSuccess(ctx)
 	keyspace := controller.Keyspace()
-	if err := executor.Open(keyspace); err != nil {
+	if err := executor.Open(ctx, keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
 		return err
 	}
 	defer executor.Close()
-	if err := executor.Validate(sqls); err != nil {
+	if err := executor.Validate(ctx, sqls); err != nil {
 		log.Errorf("validation fail: %v", err)
-		controller.OnValidationFail(err)
+		controller.OnValidationFail(ctx, err)
 		return err
 	}
 
-	if err := controller.OnValidationSuccess(); err != nil {
+	if err := controller.OnValidationSuccess(ctx); err != nil {
 		return err
 	}
 
-	result := executor.Execute(sqls)
+	result := executor.Execute(ctx, sqls)
 
-	if err := controller.OnExecutorComplete(result); err != nil {
+	if err := controller.OnExecutorComplete(ctx, result); err != nil {
 		return err
 	}
 	if result.ExecutorErr != "" || len(result.FailedShards) > 0 {

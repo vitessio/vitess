@@ -409,6 +409,7 @@ func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, ch
 	}
 
 	err = schemamanager.Run(
+		ctx,
 		schemamanager.NewPlainController(change, keyspace),
 		schemamanager.NewTabletExecutor(wr.tmc, wr.ts),
 	)

@@ -501,6 +501,7 @@ func main() {
 			ts)
 
 		schemamanager.Run(
+			context.Background(),
 			schemamanager.NewUIController(sqlStr, keyspace, w),
 			executor,
 		)
@@ -528,6 +529,7 @@ func main() {
 			}
 
 			err = schemamanager.Run(
+				context.Background(),
 				controller,
 				schemamanager.NewTabletExecutor(
 					tmclient.NewTabletManagerClient(), ts),
