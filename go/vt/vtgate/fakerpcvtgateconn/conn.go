@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Package fakerpcvtgateconn provides a fake implementation of
+// vtgateconn.Impl that doesn't do any RPC, but uses a local
+// map to return results.
 package fakerpcvtgateconn
 
 import (
@@ -35,15 +38,25 @@ type splitQueryResponse struct {
 	err        error
 }
 
-// FakeVTGateConn provides a fake implementation of vtgateconn.VTGateConn
+// FakeVTGateConn provides a fake implementation of vtgateconn.Impl
 type FakeVTGateConn struct {
 	execMap       map[string]*queryResponse
 	splitQueryMap map[string]*splitQueryResponse
 }
 
-// NewFakeVTGateConn creates a new FakeVTConn instance
-func NewFakeVTGateConn(ctx context.Context, address string, timeout time.Duration) *FakeVTGateConn {
-	return &FakeVTGateConn{execMap: make(map[string]*queryResponse)}
+// RegisterFakeVTGateConnDialer registers the proper dialer for this fake,
+// and returns the underlying instance that will be returned by the dialer,
+// and the protocol to use to get this fake.
+func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
+	protocol := "fake"
+	impl := &FakeVTGateConn{
+		execMap:       make(map[string]*queryResponse),
+		splitQueryMap: make(map[string]*splitQueryResponse),
+	}
+	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+		return impl, nil
+	})
+	return impl, protocol
 }
 
 // AddQuery adds a query and expected result.
@@ -78,65 +91,65 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 	}
 }
 
-// Execute please see vtgateconn.VTGateConn.Execute
-func (conn *FakeVTGateConn) Execute(
-	ctx context.Context,
-	query string,
-	bindVars map[string]interface{},
-	tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	return conn.execute(
-		ctx,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TabletType:    tabletType,
-			Session:       nil,
-		})
-}
-
-func (conn *FakeVTGateConn) execute(ctx context.Context, query *proto.Query) (*mproto.QueryResult, error) {
+// Execute please see vtgateconn.Impl.Execute
+func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	query := &proto.Query{
+		Sql:           sql,
+		BindVariables: bindVars,
+		TabletType:    tabletType,
+		Session:       s,
+	}
 	response, ok := conn.execMap[query.Sql]
 	if !ok {
-		return nil, fmt.Errorf("no match for: %s", query.Sql)
+		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"Execute: %+v, want %+v", query, response.execQuery)
 	}
 	var reply mproto.QueryResult
 	reply = *response.reply
-	return &reply, nil
+	if s != nil {
+		s = newSession(true, "test_keyspace", []string{}, topo.TYPE_MASTER)
+	}
+	return &reply, s, nil
 }
 
-// ExecuteShard please see vtgateconn.VTGateConn.ExecuteShard
-func (conn *FakeVTGateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	return conn.executeShard(
-		ctx,
-		&proto.QueryShard{
-			Sql:           query,
-			BindVariables: bindVars,
-			TabletType:    tabletType,
-			Keyspace:      keyspace,
-			Shards:        shards,
-			Session:       nil,
-		})
-}
-
-func (conn *FakeVTGateConn) executeShard(ctx context.Context, query *proto.QueryShard) (*mproto.QueryResult, error) {
+// ExecuteShard please see vtgateconn.Impl.ExecuteShard
+func (conn *FakeVTGateConn) ExecuteShard(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	query := &proto.QueryShard{
+		Sql:           sql,
+		BindVariables: bindVars,
+		TabletType:    tabletType,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		Session:       s,
+	}
 	response, ok := conn.execMap[getShardQueryKey(query)]
 	if !ok {
-		return nil, fmt.Errorf("no match for: %s", query.Sql)
+		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
 	}
 	if !reflect.DeepEqual(query, response.shardQuery) {
-		return nil, fmt.Errorf(
-			"Execute: %+v, want %+v", query, response.shardQuery)
+		return nil, nil, fmt.Errorf(
+			"ExecuteShard: %+v, want %+v", query, response.shardQuery)
 	}
 	var reply mproto.QueryResult
 	reply = *response.reply
-	return &reply, nil
+	if s != nil {
+		s = newSession(true, keyspace, shards, tabletType)
+	}
+	return &reply, s, nil
 }
 
-// StreamExecute please see vtgateconn.VTGateConn.StreamExecute
+// StreamExecute please see vtgateconn.Impl.StreamExecute
 func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 
 	resultChan := make(chan *mproto.QueryResult)
@@ -152,7 +165,7 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bin
 		Session:       nil,
 	}
 	if !reflect.DeepEqual(queryProto, response.execQuery) {
-		err := fmt.Errorf("Execute: %+v, want %+v", query, response.execQuery)
+		err := fmt.Errorf("StreamExecute: %+v, want %+v", query, response.execQuery)
 		return resultChan, func() error { return err }
 	}
 	if response.err != nil {
@@ -171,17 +184,27 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bin
 	return resultChan, nil
 }
 
-// Begin please see vtgateconn.VTGateConn.Begin
-func (conn *FakeVTGateConn) Begin(ctx context.Context) (vtgateconn.VTGateTx, error) {
-	tx := &fakeVTGateTx{
-		conn: conn,
-		session: &proto.Session{
-			InTransaction: true,
-		}}
-	return tx, nil
+// Begin please see vtgateconn.Impl.Begin
+func (conn *FakeVTGateConn) Begin(ctx context.Context) (interface{}, error) {
+	return &proto.Session{
+		InTransaction: true,
+	}, nil
 }
 
-// SplitQuery please see vtgateconn.VTGateConn.SplitQuery
+// Commit please see vtgateconn.Impl.Commit
+func (conn *FakeVTGateConn) Commit(ctx context.Context, session interface{}) error {
+	if session == nil {
+		return errors.New("commit: not in transaction")
+	}
+	return nil
+}
+
+// Rollback please see vtgateconn.Impl.Rollback
+func (conn *FakeVTGateConn) Rollback(ctx context.Context, session interface{}) error {
+	return nil
+}
+
+// SplitQuery please see vtgateconn.Impl.SplitQuery
 func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
 	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, &query, splitCount)]
 	if !ok {
@@ -194,66 +217,8 @@ func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, que
 	return reply, nil
 }
 
-// Close please see vtgateconn.VTGateConn.Close
+// Close please see vtgateconn.Impl.Close
 func (conn *FakeVTGateConn) Close() {
-}
-
-type fakeVTGateTx struct {
-	conn    *FakeVTGateConn
-	session *proto.Session
-}
-
-// fakeVtgateTx has to implement vtgateconn.VTGateTx interface
-var _ vtgateconn.VTGateTx = (*fakeVTGateTx)(nil)
-
-func (tx *fakeVTGateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	if tx.session == nil {
-		return nil, errors.New("execute: not in transaction")
-	}
-	r, err := tx.conn.execute(
-		ctx,
-		&proto.Query{
-			Sql:           query,
-			BindVariables: bindVars,
-			TabletType:    tabletType,
-			Session:       tx.session,
-		})
-	tx.session = newSession(true, "test_keyspace", []string{}, topo.TYPE_MASTER)
-	return r, err
-}
-
-func (tx *fakeVTGateTx) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	if tx.session == nil {
-		return nil, errors.New("executeShard: not in transaction")
-	}
-	r, err := tx.conn.executeShard(
-		ctx,
-		&proto.QueryShard{
-			Sql:           query,
-			BindVariables: bindVars,
-			TabletType:    tabletType,
-			Keyspace:      keyspace,
-			Shards:        shards,
-			Session:       tx.session,
-		})
-	tx.session = newSession(true, keyspace, shards, tabletType)
-	return r, err
-}
-
-func (tx *fakeVTGateTx) Commit(ctx context.Context) error {
-	if tx.session == nil {
-		return errors.New("commit: not in transaction")
-	}
-	defer func() { tx.session = nil }()
-	return nil
-}
-
-func (tx *fakeVTGateTx) Rollback(ctx context.Context) error {
-	if tx.session == nil {
-		return nil
-	}
-	defer func() { tx.session = nil }()
-	return nil
 }
 
 func getShardQueryKey(request *proto.QueryShard) string {
@@ -285,8 +250,5 @@ func newSession(
 	}
 }
 
-// Make sure FakeVTGateConn implements vtgateconn.VTGateConn
-var _ (vtgateconn.VTGateConn) = (*FakeVTGateConn)(nil)
-
-// Make sure fakeVTGateTx implements vtgateconn.VtGateTx
-var _ (vtgateconn.VTGateTx) = (*fakeVTGateTx)(nil)
+// Make sure FakeVTGateConn implements vtgateconn.Impl
+var _ (vtgateconn.Impl) = (*FakeVTGateConn)(nil)

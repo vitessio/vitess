@@ -52,17 +52,13 @@ type conn struct {
 	TabletType topo.TabletType `json:"tablet_type"`
 	Streaming  bool
 	Timeout    time.Duration
-	vtgateConn vtgateconn.VTGateConn
-	tx         vtgateconn.VTGateTx
+	vtgateConn *vtgateconn.VTGateConn
+	tx         *vtgateconn.VTGateTx
 }
 
 func (c *conn) dial() error {
-	dialer := vtgateconn.GetDialerWithProtocol(c.Protocol)
-	if dialer == nil {
-		return fmt.Errorf("could not find dialer for protocol %s", c.Protocol)
-	}
 	var err error
-	c.vtgateConn, err = dialer(context.Background(), c.Address, c.Timeout)
+	c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
 	return err
 }
 

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -220,7 +221,12 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, conn vtgateconn.VTGateConn, fakeServer vtgateservice.VTGateService) {
+func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+		return impl, nil
+	})
+	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+
 	testExecute(t, conn)
 	testExecuteShard(t, conn)
 	testStreamExecute(t, conn)
@@ -245,7 +251,7 @@ func expectPanic(t *testing.T, err error) {
 	}
 }
 
-func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
+func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	qr, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
@@ -269,14 +275,14 @@ func testExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testExecutePanic(t *testing.T, conn vtgateconn.VTGateConn) {
+func testExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	_, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	expectPanic(t, err)
 }
 
-func testExecuteShard(t *testing.T, conn vtgateconn.VTGateConn) {
+func testExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteShard(ctx, execCase.execQuery.Sql, "ks", []string{"1", "2"}, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
@@ -300,14 +306,14 @@ func testExecuteShard(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testExecuteShardPanic(t *testing.T, conn vtgateconn.VTGateConn) {
+func testExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	_, err := conn.ExecuteShard(ctx, execCase.execQuery.Sql, "ks", []string{"1", "2"}, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	expectPanic(t, err)
 }
 
-func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
+func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	packets, errFunc := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
@@ -352,7 +358,7 @@ func testStreamExecute(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testStreamExecutePanic(t *testing.T, conn vtgateconn.VTGateConn) {
+func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
 	packets, errFunc := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
@@ -363,7 +369,7 @@ func testStreamExecutePanic(t *testing.T, conn vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
-func testTxPass(t *testing.T, conn vtgateconn.VTGateConn) {
+func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	tx, err := conn.Begin(ctx)
 	if err != nil {
@@ -394,13 +400,13 @@ func testTxPass(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testBeginPanic(t *testing.T, conn vtgateconn.VTGateConn) {
+func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	_, err := conn.Begin(ctx)
 	expectPanic(t, err)
 }
 
-func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
+func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	tx, err := conn.Begin(ctx)
 	if err != nil {
@@ -446,7 +452,7 @@ func testTxFail(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testSplitQuery(t *testing.T, conn vtgateconn.VTGateConn) {
+func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
 	if err != nil {
@@ -457,7 +463,7 @@ func testSplitQuery(t *testing.T, conn vtgateconn.VTGateConn) {
 	}
 }
 
-func testSplitQueryPanic(t *testing.T, conn vtgateconn.VTGateConn) {
+func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
 	expectPanic(t, err)
