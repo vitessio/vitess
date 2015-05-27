@@ -227,7 +227,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
 		if newTablet.Type == topo.TYPE_MASTER {
-			agent.BinlogPlayerMap.RefreshMap(ctx, newTablet, keyspaceInfo, shardInfo)
+			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, keyspaceInfo, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}
