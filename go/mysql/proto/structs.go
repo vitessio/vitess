@@ -99,27 +99,28 @@ type Charset struct {
 
 // Convert takes a type and a value, and returns the type:
 // - nil for NULL value
-// - int64 if possible, otherwise, uint64
+// - uint64 for unsigned BIGINT values
+// - int64 for all other integer values (signed and unsigned)
 // - float64 for floating point values that fit in a float
 // - []byte for everything else
-// TODO(mberlin): Make this a method of "Field" and consider VT_UNSIGNED_FLAG in "Flags" as well.
-func Convert(mysqlType int64, val sqltypes.Value) (interface{}, error) {
+func Convert(field Field, val sqltypes.Value) (interface{}, error) {
 	if val.IsNull() {
 		return nil, nil
 	}
 
-	switch mysqlType {
-	case VT_TINY, VT_SHORT, VT_LONG, VT_LONGLONG, VT_INT24:
-		val := val.String()
-		signed, err := strconv.ParseInt(val, 0, 64)
-		if err == nil {
-			return signed, nil
+	switch field.Type {
+	case VT_LONGLONG:
+		if field.Flags&VT_UNSIGNED_FLAG == VT_UNSIGNED_FLAG {
+			return strconv.ParseUint(val.String(), 0, 64)
 		}
-		unsigned, err := strconv.ParseUint(val, 0, 64)
-		if err == nil {
-			return unsigned, nil
-		}
-		return nil, err
+		return strconv.ParseInt(val.String(), 0, 64)
+	case VT_TINY, VT_SHORT, VT_LONG, VT_INT24:
+		// Regardless of whether UNSIGNED_FLAG is set in field.Flags, we map all
+		// signed and unsigned values to a signed Go type because
+		// - Go doesn't officially support uint64 in their SQL interface
+		// - there is no loss of the value
+		// The only exception we make are for unsigned BIGINTs, see VT_LONGLONG above.
+		return strconv.ParseInt(val.String(), 0, 64)
 	case VT_FLOAT, VT_DOUBLE:
 		return strconv.ParseFloat(val.String(), 64)
 	}

@@ -263,12 +263,11 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		fieldType := fields[i].Type
-		lv, err := mproto.Convert(fieldType, left[i])
+		lv, err := mproto.Convert(fields[i], left[i])
 		if err != nil {
 			return 0, err
 		}
-		rv, err := mproto.Convert(fieldType, right[i])
+		rv, err := mproto.Convert(fields[i], right[i])
 		if err != nil {
 			return 0, err
 		}

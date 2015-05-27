@@ -243,7 +243,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([]key.K
 		if len(result.Rows) != 1 {
 			return nil, fmt.Errorf("lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, id)
 		}
-		inum, err := mproto.Convert(result.Fields[0].Type, result.Rows[0][0])
+		inum, err := mproto.Convert(result.Fields[0], result.Rows[0][0])
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -272,7 +272,7 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key
 		}
 		var ksids []key.KeyspaceId
 		for _, row := range result.Rows {
-			inum, err := mproto.Convert(result.Fields[0].Type, row[0])
+			inum, err := mproto.Convert(result.Fields[0], row[0])
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
