@@ -235,7 +235,7 @@ func (loader *TemplateLoader) ServeTemplate(templateName string, data interface{
 
 var (
 	modifyDbTopology     func(context.Context, topo.Server, *topotools.Topology) error
-	modifyDbServingGraph func(topo.Server, *topotools.ServingGraph)
+	modifyDbServingGraph func(context.Context, topo.Server, *topotools.ServingGraph)
 )
 
 // SetDbTopologyPostprocessor installs a hook that can modify
@@ -249,7 +249,7 @@ func SetDbTopologyPostprocessor(f func(context.Context, topo.Server, *topotools.
 
 // SetDbServingGraphPostprocessor installs a hook that can modify
 // topotools.ServingGraph struct before it's displayed.
-func SetDbServingGraphPostprocessor(f func(topo.Server, *topotools.ServingGraph)) {
+func SetDbServingGraphPostprocessor(f func(context.Context, topo.Server, *topotools.ServingGraph)) {
 	if modifyDbServingGraph != nil {
 		panic("Cannot set multiple DbServingGraph postprocessors")
 	}

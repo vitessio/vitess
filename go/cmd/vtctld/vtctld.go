@@ -269,7 +269,7 @@ func main() {
 		ctx := context.Background()
 		servingGraph := topotools.DbServingGraph(ctx, ts, cell)
 		if modifyDbServingGraph != nil {
-			modifyDbServingGraph(ts, servingGraph)
+			modifyDbServingGraph(ctx, ts, servingGraph)
 		}
 		templateLoader.ServeTemplate("serving_graph.html", servingGraph, w, r)
 	})
