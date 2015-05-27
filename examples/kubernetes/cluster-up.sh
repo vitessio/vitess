@@ -89,7 +89,7 @@ if [ -z "$GOPATH" ]; then
   exit -1
 fi
 
-export KUBECTL='gcloud alpha container kubectl'
+export KUBECTL='kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 gcloud config set compute/zone $GKE_ZONE
 project_id=`gcloud config list project | sed -n 2p | cut -d " " -f 3`
