@@ -15,6 +15,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 )
 
@@ -243,7 +244,9 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, query, maxRows, wantFields, disableBinlogs, reloadSchema)
 }
 
-type fakeTopo struct{}
+type fakeTopo struct {
+	faketopo.FakeTopo
+}
 
 func newFakeTopo() *fakeTopo {
 	return &fakeTopo{}
@@ -274,152 +277,6 @@ func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias topo.Tabl
 			Keyspace: "test_keyspace",
 		},
 	}, nil
-}
-
-func (topoServer *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) Close() {}
-
-func (topoServer *fakeTopo) GetKnownCells(ctx context.Context) ([]string, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetKeyspaces(ctx context.Context) ([]string, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) CreateTablet(ctx context.Context, tablet *topo.Tablet) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
-	return 0, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateTabletFields(ctx context.Context, tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteTablet(ctx context.Context, alias topo.TabletAlias) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]topo.TabletAlias, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, shard, lockPath, results string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topo.TabletType, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
-	return nil, nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) DeleteSrvShard(ctx context.Context, cell, keyspace, shard string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UnlockKeyspaceForAction(ctx context.Context, keyspace, lockPath, results string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, contents string) (string, error) {
-	return "", fmt.Errorf("not implemented")
-}
-
-func (topoServer *fakeTopo) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
-	return fmt.Errorf("not implemented")
 }
 
 type fakeController struct {
