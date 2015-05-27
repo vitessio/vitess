@@ -107,25 +107,11 @@ func (cp *ConnectionPool) Get(timeout time.Duration) (PoolConnection, error) {
 	ctx := context.Background()
 	if timeout != 0 {
 		var cancel func()
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	r, err := p.Get(ctx)
 	if err != nil {
-		return nil, err
-	}
-	return r.(PoolConnection), nil
-}
-
-// TryGet returns a connection, or nil.
-// You must call Recycle on the PoolConnection once done.
-func (cp *ConnectionPool) TryGet() (PoolConnection, error) {
-	p := cp.pool()
-	if p == nil {
-		return nil, ErrConnPoolClosed
-	}
-	r, err := p.TryGet()
-	if err != nil || r == nil {
 		return nil, err
 	}
 	return r.(PoolConnection), nil
