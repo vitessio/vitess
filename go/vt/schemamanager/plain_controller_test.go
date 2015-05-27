@@ -7,12 +7,15 @@ package schemamanager
 import (
 	"fmt"
 	"testing"
+
+	"golang.org/x/net/context"
 )
 
 func TestPlainController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	controller := NewPlainController(sql, "test_keyspace")
-	err := controller.Open()
+	ctx := context.Background()
+	err := controller.Open(ctx)
 	if err != nil {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
@@ -22,7 +25,7 @@ func TestPlainController(t *testing.T) {
 		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)
 	}
 
-	sqls, err := controller.Read()
+	sqls, err := controller.Read(ctx)
 	if err != nil {
 		t.Fatalf("controller.Read should succeed, but got error: %v", err)
 	}
@@ -33,29 +36,29 @@ func TestPlainController(t *testing.T) {
 		t.Fatalf("expect to get sql: '%s', but got: '%s'", sql, sqls[0])
 	}
 	defer controller.Close()
-	err = controller.OnReadSuccess()
+	err = controller.OnReadSuccess(ctx)
 	if err != nil {
 		t.Fatalf("OnDataSourcerReadSuccess should succeed")
 	}
 
 	errReadFail := fmt.Errorf("read fail")
-	err = controller.OnReadFail(errReadFail)
+	err = controller.OnReadFail(ctx, errReadFail)
 	if err != errReadFail {
 		t.Fatalf("should get error:%v, but get: %v", errReadFail, err)
 	}
 
-	err = controller.OnValidationSuccess()
+	err = controller.OnValidationSuccess(ctx)
 	if err != nil {
 		t.Fatalf("OnValidationSuccess should succeed")
 	}
 
 	errValidationFail := fmt.Errorf("validation fail")
-	err = controller.OnValidationFail(errValidationFail)
+	err = controller.OnValidationFail(ctx, errValidationFail)
 	if err != errValidationFail {
 		t.Fatalf("should get error:%v, but get: %v", errValidationFail, err)
 	}
 
-	err = controller.OnExecutorComplete(&ExecuteResult{})
+	err = controller.OnExecutorComplete(ctx, &ExecuteResult{})
 	if err != nil {
 		t.Fatalf("OnExecutorComplete should succeed")
 	}

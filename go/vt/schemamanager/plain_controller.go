@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"golang.org/x/net/context"
 )
 
 // PlainController implements Controller interface.
@@ -32,12 +34,12 @@ func NewPlainController(sqlStr string, keyspace string) *PlainController {
 }
 
 // Open is a no-op.
-func (controller *PlainController) Open() error {
+func (controller *PlainController) Open(ctx context.Context) error {
 	return nil
 }
 
 // Read reads schema changes
-func (controller *PlainController) Read() ([]string, error) {
+func (controller *PlainController) Read(ctx context.Context) ([]string, error) {
 	return controller.sqls, nil
 }
 
@@ -52,31 +54,31 @@ func (controller *PlainController) Keyspace() string {
 
 // OnReadSuccess is called when schemamanager successfully
 // reads all sql statements.
-func (controller *PlainController) OnReadSuccess() error {
+func (controller *PlainController) OnReadSuccess(ctx context.Context) error {
 	fmt.Println("Successfully read all schema changes.")
 	return nil
 }
 
 // OnReadFail is called when schemamanager fails to read all sql statements.
-func (controller *PlainController) OnReadFail(err error) error {
+func (controller *PlainController) OnReadFail(ctx context.Context, err error) error {
 	fmt.Printf("Failed to read schema changes, error: %v\n", err)
 	return err
 }
 
 // OnValidationSuccess is called when schemamanager successfully validates all sql statements.
-func (controller *PlainController) OnValidationSuccess() error {
+func (controller *PlainController) OnValidationSuccess(ctx context.Context) error {
 	fmt.Println("Successfully validate all sqls.")
 	return nil
 }
 
 // OnValidationFail is called when schemamanager fails to validate sql statements.
-func (controller *PlainController) OnValidationFail(err error) error {
+func (controller *PlainController) OnValidationFail(ctx context.Context, err error) error {
 	fmt.Printf("Failed to validate sqls, error: %v\n", err)
 	return err
 }
 
 // OnExecutorComplete  is called when schemamanager finishes applying schema changes.
-func (controller *PlainController) OnExecutorComplete(result *ExecuteResult) error {
+func (controller *PlainController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	out, _ := json.MarshalIndent(result, "", "  ")
 	fmt.Printf("Executor finished, result: %s\n", string(out))
 	return nil

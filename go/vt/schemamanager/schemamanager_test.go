@@ -27,7 +27,9 @@ var (
 func TestSchemaManagerControllerOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, true, false, false)
-	err := Run(controller, newFakeExecutor())
+	ctx := context.Background()
+
+	err := Run(ctx, controller, newFakeExecutor())
 	if err != errControllerOpen {
 		t.Fatalf("controller.Open fail, shoud get error: %v, but get error: %v",
 			errControllerOpen, err)
@@ -37,7 +39,8 @@ func TestSchemaManagerControllerOpenFail(t *testing.T) {
 func TestSchemaManagerControllerReadFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, false, true, false)
-	err := Run(controller, newFakeExecutor())
+	ctx := context.Background()
+	err := Run(ctx, controller, newFakeExecutor())
 	if err != errControllerRead {
 		t.Fatalf("controller.Read fail, shoud get error: %v, but get error: %v",
 			errControllerRead, err)
@@ -50,7 +53,9 @@ func TestSchemaManagerControllerReadFail(t *testing.T) {
 func TestSchemaManagerValidationFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"invalid sql"}, false, false, false)
-	err := Run(controller, newFakeExecutor())
+	ctx := context.Background()
+
+	err := Run(ctx, controller, newFakeExecutor())
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Validate fail")
 	}
@@ -63,7 +68,9 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
 		newFakeTopo())
-	err := Run(controller, executor)
+	ctx := context.Background()
+
+	err := Run(ctx, controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Open fail")
 	}
@@ -75,7 +82,9 @@ func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
 		newFakeTopo())
-	err := Run(controller, executor)
+	ctx := context.Background()
+
+	err := Run(ctx, controller, executor)
 	if err == nil {
 		t.Fatalf("run schema change should fail due to executor.Execute fail")
 	}
@@ -106,7 +115,9 @@ func TestSchemaManagerRun(t *testing.T) {
 		fakeTmc,
 		newFakeTopo())
 
-	err := Run(controller, executor)
+	ctx := context.Background()
+	err := Run(ctx, controller, executor)
+
 	if err != nil {
 		t.Fatalf("schema change should success but get error: %v", err)
 	}
@@ -149,7 +160,9 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	fakeTmc.EnableExecuteFetchAsDbaError = true
 	executor := NewTabletExecutor(fakeTmc, newFakeTopo())
 
-	err := Run(controller, executor)
+	ctx := context.Background()
+	err := Run(ctx, controller, executor)
+
 	if err == nil {
 		t.Fatalf("schema change should fail")
 	}
@@ -307,14 +320,14 @@ func (controller *fakeController) SetKeyspace(keyspace string) {
 	controller.keyspace = keyspace
 }
 
-func (controller *fakeController) Open() error {
+func (controller *fakeController) Open(ctx context.Context) error {
 	if controller.openFail {
 		return errControllerOpen
 	}
 	return nil
 }
 
-func (controller *fakeController) Read() ([]string, error) {
+func (controller *fakeController) Read(ctx context.Context) ([]string, error) {
 	if controller.readFail {
 		return nil, errControllerRead
 	}
@@ -328,27 +341,27 @@ func (controller *fakeController) Keyspace() string {
 	return controller.keyspace
 }
 
-func (controller *fakeController) OnReadSuccess() error {
+func (controller *fakeController) OnReadSuccess(ctx context.Context) error {
 	controller.onReadSuccessTriggered = true
 	return nil
 }
 
-func (controller *fakeController) OnReadFail(err error) error {
+func (controller *fakeController) OnReadFail(ctx context.Context, err error) error {
 	controller.onReadFailTriggered = true
 	return err
 }
 
-func (controller *fakeController) OnValidationSuccess() error {
+func (controller *fakeController) OnValidationSuccess(ctx context.Context) error {
 	controller.onValidationSuccessTriggered = true
 	return nil
 }
 
-func (controller *fakeController) OnValidationFail(err error) error {
+func (controller *fakeController) OnValidationFail(ctx context.Context, err error) error {
 	controller.onValidationFailTriggered = true
 	return err
 }
 
-func (controller *fakeController) OnExecutorComplete(*ExecuteResult) error {
+func (controller *fakeController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	controller.onExecutorCompleteTriggered = true
 	return nil
 }

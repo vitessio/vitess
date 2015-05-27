@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"golang.org/x/net/context"
 )
 
 func TestLocalControllerNoSchemaChanges(t *testing.T) {
@@ -23,11 +24,12 @@ func TestLocalControllerNoSchemaChanges(t *testing.T) {
 		t.Fatalf("failed to create temp schema change dir, error: %v", err)
 	}
 	controller := NewLocalController(schemaChangeDir)
-	if err := controller.Open(); err != nil {
+	ctx := context.Background()
+	if err := controller.Open(ctx); err != nil {
 		t.Fatalf("Open should succeed, but got error: %v", err)
 	}
 	defer controller.Close()
-	data, err := controller.Read()
+	data, err := controller.Read(ctx)
 	if err != nil {
 		t.Fatalf("Read should succeed, but got error: %v", err)
 	}
@@ -38,8 +40,9 @@ func TestLocalControllerNoSchemaChanges(t *testing.T) {
 
 func TestLocalControllerOpen(t *testing.T) {
 	controller := NewLocalController("")
+	ctx := context.Background()
 
-	if err := controller.Open(); err == nil {
+	if err := controller.Open(ctx); err == nil {
 		t.Fatalf("Open should fail, no such dir")
 	}
 
@@ -53,10 +56,10 @@ func TestLocalControllerOpen(t *testing.T) {
 	}
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(); err != nil {
+	if err := controller.Open(ctx); err != nil {
 		t.Fatalf("Open should succeed")
 	}
-	data, err := controller.Read()
+	data, err := controller.Read(ctx)
 	if err != nil {
 		t.Fatalf("Read should succeed, but got error: %v", err)
 	}
@@ -71,10 +74,10 @@ func TestLocalControllerOpen(t *testing.T) {
 	}
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(); err != nil {
+	if err := controller.Open(ctx); err != nil {
 		t.Fatalf("Open should succeed")
 	}
-	data, err = controller.Read()
+	data, err = controller.Read(ctx)
 	if err != nil {
 		t.Fatalf("Read should succeed, but got error: %v", err)
 	}
@@ -110,13 +113,15 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	file.Close()
 
 	controller := NewLocalController(schemaChangeDir)
-	if err := controller.Open(); err != nil {
+	ctx := context.Background()
+
+	if err := controller.Open(ctx); err != nil {
 		t.Fatalf("Open should succeed, but got error: %v", err)
 	}
 
 	defer controller.Close()
 
-	data, err := controller.Read()
+	data, err := controller.Read(ctx)
 	if err != nil {
 		t.Fatalf("Read should succeed, but got error: %v", err)
 	}
@@ -131,24 +136,24 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	}
 
 	// test various callbacks
-	if err := controller.OnReadSuccess(); err != nil {
+	if err := controller.OnReadSuccess(ctx); err != nil {
 		t.Fatalf("OnReadSuccess should succeed, but got error: %v", err)
 	}
 
-	if err := controller.OnReadFail(fmt.Errorf("read fail")); err != nil {
+	if err := controller.OnReadFail(ctx, fmt.Errorf("read fail")); err != nil {
 		t.Fatalf("OnReadFail should succeed, but got error: %v", err)
 	}
 
 	errorPath := path.Join(controller.errorDir, controller.sqlFilename)
 
-	if err := controller.OnValidationSuccess(); err != nil {
+	if err := controller.OnValidationSuccess(ctx); err != nil {
 		t.Fatalf("OnReadSuccess should succeed, but got error: %v", err)
 	}
 
 	// move sql file from error dir to input dir for OnValidationFail test
 	os.Rename(errorPath, controller.sqlPath)
 
-	if err := controller.OnValidationFail(fmt.Errorf("validation fail")); err != nil {
+	if err := controller.OnValidationFail(ctx, fmt.Errorf("validation fail")); err != nil {
 		t.Fatalf("OnValidationFail should succeed, but got error: %v", err)
 	}
 
@@ -161,16 +166,14 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 
 	result := &ExecuteResult{
 		Sqls: []string{"create table test_table (id int)"},
-		SuccessShards: []ShardResult{
-			ShardResult{
-				Shard:  "0",
-				Result: &mproto.QueryResult{},
-			},
-		},
+		SuccessShards: []ShardResult{{
+			Shard:  "0",
+			Result: &mproto.QueryResult{},
+		}},
 	}
 	logPath := path.Join(controller.logDir, controller.sqlFilename)
 	completePath := path.Join(controller.completeDir, controller.sqlFilename)
-	if err := controller.OnExecutorComplete(result); err != nil {
+	if err := controller.OnExecutorComplete(ctx, result); err != nil {
 		t.Fatalf("OnExecutorComplete should succeed, but got error: %v", err)
 	}
 	if _, err := os.Stat(completePath); os.IsNotExist(err) {
@@ -186,15 +189,13 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 
 	result = &ExecuteResult{
 		Sqls: []string{"create table test_table (id int)"},
-		FailedShards: []ShardWithError{
-			ShardWithError{
-				Shard: "0",
-				Err:   "execute error",
-			},
-		},
+		FailedShards: []ShardWithError{{
+			Shard: "0",
+			Err:   "execute error",
+		}},
 	}
 
-	if err := controller.OnExecutorComplete(result); err != nil {
+	if err := controller.OnExecutorComplete(ctx, result); err != nil {
 		t.Fatalf("OnExecutorComplete should succeed, but got error: %v", err)
 	}
 
