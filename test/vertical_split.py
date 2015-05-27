@@ -11,6 +11,7 @@ import time
 import unittest
 
 from zk import zkocc
+from vtdb import dbexceptions
 from vtdb import topology
 from vtdb import vtclient
 
@@ -206,16 +207,20 @@ index by_msg (msg)
 
     # check we can or cannot access the tables
     utils.run_vtctl(['ReloadSchema', tablet.tablet_alias])
+    conn = tablet.conn()
     for t in ["moving1", "moving2"]:
       if expected and "moving.*" in expected:
         # table is blacklisted, should get the error
-        out, err = tablet.vquery("select count(1) from %s" % t,
-                                 path='source_keyspace/0', raise_on_error=False)
-        self.assertTrue(err.find("retry: Query disallowed due to rule: enforce blacklisted tables") != -1, "Cannot find the right error message in query for blacklisted table: out=\n%serr=\n%s" % (out, err))
+        try:
+          results, rowcount, lastrowid, fields = conn._execute("select count(1) from %s" % t, {})
+          self.fail("blacklisted query execution worked")
+        except dbexceptions.RetryError as e:
+          self.assertTrue(str(e).find("retry: Query disallowed due to rule: enforce blacklisted tables") != -1, "Cannot find the right error message in query for blacklisted table: %s" % e)
       else:
         # table is not blacklisted, should just work
-        tablet.vquery("select count(1) from %s" % t, path='source_keyspace/0')
-
+        results, rowcount, lastrowid, fields = conn._execute("select count(1) from %s" % t, {})
+        logging.debug("Got %d rows from table %s on tablet %s", results[0][0], t, tablet.tablet_alias)
+    conn.close()
 
   def _populate_topo_cache(self):
     topology.read_topology(self.vtgate_client)

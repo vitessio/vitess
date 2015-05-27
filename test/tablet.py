@@ -329,7 +329,7 @@ class Tablet(object):
         expected_state = 'NOT_SERVING'
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
 
-  def conn(self):
+  def conn(self, user=None, password=None):
     conn = tablet.TabletConnection(
         'localhost:%d' % self.port, self.tablet_type, self.keyspace,
         self.shard, 30)
