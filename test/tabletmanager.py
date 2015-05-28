@@ -95,12 +95,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet()
 
     # make sure the query service is started right away
-    result, _ = utils.run_vtctl(['Query', 'test_nj', 'test_keyspace',
-                                 'select * from vt_select_test'],
-                                mode=utils.VTCTL_VTCTL, trap_output=True)
-    rows = result.splitlines()
-    self.assertEqual(len(rows), 5, "expected 5 rows in vt_select_test: %s %s" %
-                     (str(rows), result))
+    conn = tablet_62344.conn()
+    results, rowcount, lastrowid, fields = conn._execute('select * from vt_select_test', {})
+    self.assertEqual(len(results), 4, "expected 4 rows in vt_select_test: %s %s" %
+                     (str(results), str(fields)))
+    conn.close()
 
     # make sure direct dba queries work
     query_result = utils.run_vtctl_json(['ExecuteFetchAsDba', '-want_fields', tablet_62344.tablet_alias, 'select * from vt_test_keyspace.vt_select_test'])
