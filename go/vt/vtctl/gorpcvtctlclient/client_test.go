@@ -5,7 +5,6 @@
 package gorpcvtctlclient
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
@@ -27,13 +26,12 @@ func TestVtctlServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
 	server.Register(gorpcvtctlserver.NewVtctlServer(ts))
 
-	// create the HTTP server, serve the server from it
+	// Create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
 	bsonrpc.ServeCustomRPC(handler, server, false)
 	httpServer := http.Server{
@@ -42,7 +40,7 @@ func TestVtctlServer(t *testing.T) {
 	go httpServer.Serve(listener)
 
 	// Create a VtctlClient Go Rpc client to talk to the fake server
-	client, err := goRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	client, err := goRPCVtctlClientFactory(listener.Addr().String(), 30*time.Second)
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}

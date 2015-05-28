@@ -29,6 +29,8 @@ func TestBackupRestore(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Initialize our temp dirs
 	root, err := ioutil.TempDir("", "backuptest")
@@ -88,21 +90,9 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
 
-	ti, err := ts.GetTablet(ctx, sourceTablet.Tablet.Alias)
-	if err != nil {
-		t.Fatalf("GetTablet failed: %v", err)
-	}
-
 	// run the backup
-	logStream, errFunc, err := wr.TabletManagerClient().Backup(ctx, ti, 4)
-	if err != nil {
+	if err := vp.Run([]string{"Backup", sourceTablet.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("Backup failed: %v", err)
-	}
-	for e := range logStream {
-		t.Logf("%v", e)
-	}
-	if err := errFunc(); err != nil {
-		t.Fatalf("Backup errFunc failed: %v", err)
 	}
 
 	// verify the full status
