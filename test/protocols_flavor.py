@@ -22,6 +22,10 @@ class ProtocolsFlavor(object):
     """Returns the flags to use for specifying the query service protocol."""
     return ['-tablet_protocol', 'gorpc']
 
+  def vtgate_protocol_flags(self):
+    """Returns the flags to use for specifying the vtgate protocol."""
+    return ['-vtgate_protocol', 'gorpc']
+
   def rpc_timeout_message(self):
     """Returns the error message used by the protocol to indicate a timeout."""
     raise NotImplementedError('Implementations need to overwrite this')
@@ -41,6 +45,9 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def tabletconn_protocol_flags(self):
     return ['-tablet_protocol', 'gorpc']
 
+  def vtgate_protocol_flags(self):
+    return ['-vtgate_protocol', 'gorpc']
+
   def rpc_timeout_message(self):
     return 'timeout waiting for'
 
@@ -59,6 +66,9 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
 
   def tabletconn_protocol_flags(self):
     return ['-tablet_protocol', 'gorpc']
+
+  def vtgate_protocol_flags(self):
+    return ['-vtgate_protocol', 'gorpc']
 
   def rpc_timeout_message(self):
     return 'timeout waiting for'

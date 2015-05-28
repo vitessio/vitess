@@ -58,7 +58,11 @@ type conn struct {
 
 func (c *conn) dial() error {
 	var err error
-	c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
+	if c.Protocol == "" {
+		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
+	} else {
+		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
+	}
 	return err
 }
 
