@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -98,9 +97,6 @@ var commands = []commandGroup{
 			command{"HealthStream", commandHealthStream,
 				"<tablet alias>",
 				"Streams the health status out of a tablet."},
-			command{"Query", commandQuery,
-				"<cell> <keyspace> <query>",
-				"Send a SQL query to a tablet."},
 			command{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Block the action queue for the specified duration (mostly for testing)."},
@@ -374,34 +370,6 @@ func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []top
 		} else {
 			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
 		}
-	}
-	return nil
-}
-
-func kquery(wr *wrangler.Wrangler, cell, keyspace, query string) error {
-	sconn, err := client2.Dial(wr.TopoServer(), cell, keyspace, "master", false, 5*time.Second)
-	if err != nil {
-		return err
-	}
-	rows, err := sconn.Exec(query, nil)
-	if err != nil {
-		return err
-	}
-	cols := rows.Columns()
-	wr.Logger().Printf("%v\n", strings.Join(cols, "\t"))
-
-	rowStrs := make([]string, len(cols)+1)
-	for row := rows.Next(); row != nil; row = rows.Next() {
-		for i, value := range row {
-			switch value.(type) {
-			case []byte:
-				rowStrs[i] = fmt.Sprintf("%q", value)
-			default:
-				rowStrs[i] = fmt.Sprintf("%v", value)
-			}
-		}
-
-		wr.Logger().Printf("%v\n", strings.Join(rowStrs, "\t"))
 	}
 	return nil
 }
@@ -855,16 +823,6 @@ func commandHealthStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		wr.Logger().Printf("%v\n", jscfg.ToJSON(hsr))
 	}
 	return errFunc()
-}
-
-func commandQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("action Query requires 3")
-	}
-	return kquery(wr, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2))
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
