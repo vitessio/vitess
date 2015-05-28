@@ -160,9 +160,6 @@ type FakeMysqlDaemon struct {
 	// If nil we'll return an error.
 	ApplySchemaChangeResult *proto.SchemaChangeResult
 
-	// DbaConnectionFactory is the factory for making fake dba connections
-	DbaConnectionFactory func() (dbconnpool.PoolConnection, error)
-
 	// DbAppConnectionFactory is the factory for making fake db app connections
 	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
 
