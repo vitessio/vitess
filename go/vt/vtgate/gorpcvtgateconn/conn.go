@@ -29,7 +29,7 @@ type vtgateConn struct {
 	rpcConn *rpcplus.Client
 }
 
-func dial(ctx context.Context, address string, timeout time.Duration) (vtgateconn.VTGateConn, error) {
+func dial(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
 	network := "tcp"
 	if strings.Contains(address, "/") {
 		network = "unix"
@@ -41,17 +41,16 @@ func dial(ctx context.Context, address string, timeout time.Duration) (vtgatecon
 	return &vtgateConn{rpcConn: rpcConn}, nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	r, _, err := conn.execute(ctx, query, bindVars, tabletType, nil)
-	return r, err
-}
-
-func (conn *vtgateConn) execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, session *proto.Session) (*mproto.QueryResult, *proto.Session, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
 	request := proto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
 		TabletType:    tabletType,
-		Session:       session,
+		Session:       s,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.Execute", request, &result); err != nil {
@@ -63,19 +62,18 @@ func (conn *vtgateConn) execute(ctx context.Context, query string, bindVars map[
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	r, _, err := conn.executeShard(ctx, query, keyspace, shards, bindVars, tabletType, nil)
-	return r, err
-}
-
-func (conn *vtgateConn) executeShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, session *proto.Session) (*mproto.QueryResult, *proto.Session, error) {
+func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
 	request := proto.QueryShard{
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
 		TabletType:    tabletType,
-		Session:       session,
+		Session:       s,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteShard", request, &result); err != nil {
@@ -106,12 +104,22 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	return srout, func() error { return c.Error }
 }
 
-func (conn *vtgateConn) Begin(ctx context.Context) (vtgateconn.VTGateTx, error) {
-	tx := &vtgateTx{conn: conn, session: &proto.Session{}}
-	if err := conn.rpcConn.Call(ctx, "VTGate.Begin", &rpc.Unused{}, tx.session); err != nil {
+func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
+	session := &proto.Session{}
+	if err := conn.rpcConn.Call(ctx, "VTGate.Begin", &rpc.Unused{}, session); err != nil {
 		return nil, err
 	}
-	return tx, nil
+	return session, nil
+}
+
+func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	return conn.rpcConn.Call(ctx, "VTGate.Commit", s, &rpc.Unused{})
+}
+
+func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	return conn.rpcConn.Call(ctx, "VTGate.Rollback", s, &rpc.Unused{})
 }
 
 func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
@@ -129,43 +137,4 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query t
 
 func (conn *vtgateConn) Close() {
 	conn.rpcConn.Close()
-}
-
-type vtgateTx struct {
-	conn    *vtgateConn
-	session *proto.Session
-}
-
-func (tx *vtgateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	if tx.session == nil {
-		return nil, errors.New("execute: not in transaction")
-	}
-	r, session, err := tx.conn.execute(ctx, query, bindVars, tabletType, tx.session)
-	tx.session = session
-	return r, err
-}
-
-func (tx *vtgateTx) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	if tx.session == nil {
-		return nil, errors.New("executeShard: not in transaction")
-	}
-	r, session, err := tx.conn.executeShard(ctx, query, keyspace, shards, bindVars, tabletType, tx.session)
-	tx.session = session
-	return r, err
-}
-
-func (tx *vtgateTx) Commit(ctx context.Context) error {
-	if tx.session == nil {
-		return errors.New("commit: not in transaction")
-	}
-	defer func() { tx.session = nil }()
-	return tx.conn.rpcConn.Call(ctx, "VTGate.Commit", tx.session, &rpc.Unused{})
-}
-
-func (tx *vtgateTx) Rollback(ctx context.Context) error {
-	if tx.session == nil {
-		return nil
-	}
-	defer func() { tx.session = nil }()
-	return tx.conn.rpcConn.Call(ctx, "VTGate.Rollback", tx.session, &rpc.Unused{})
 }

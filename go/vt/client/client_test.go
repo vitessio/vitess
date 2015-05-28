@@ -94,7 +94,7 @@ func TestDial(t *testing.T) {
 	_ = c.Close()
 
 	_, err = drv{}.Open(`{"protocol": "none"}`)
-	want := "could not find dialer for protocol none"
+	want := "no dialer registered for VTGate protocol none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, want %s", err, want)
 	}
