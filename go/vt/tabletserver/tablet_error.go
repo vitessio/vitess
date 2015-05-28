@@ -13,8 +13,10 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
@@ -43,7 +45,7 @@ var ErrConnPoolClosed = NewTabletError(ErrFatal, "connection pool is closed")
 
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
-// TabletError is the erro type we use in this library
+// TabletError is the error type we use in this library
 type TabletError struct {
 	ErrorType int
 	Message   string
@@ -208,4 +210,30 @@ func logError(queryServiceStats *QueryServiceStats) {
 			log.Errorf("%v", terr)
 		}
 	}
+}
+
+// AddTabletErrorToQueryResult will mutate a QueryResult struct to fill in the Err
+// field with details from the TabletError.
+func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
+	if err == nil {
+		return
+	}
+	var rpcErr mproto.RPCError
+	terr, ok := err.(*TabletError)
+	if ok {
+		rpcErr = mproto.RPCError{
+			// Transform TabletError code to VitessError code
+			Code: terr.ErrorType + vterrors.TabletError,
+			// Make sure the the VitessError message is identical to the TabletError
+			// err, so that downstream consumers will see identical messages no matter
+			// which endpoint they're using.
+			Message: terr.Error(),
+		}
+	} else {
+		rpcErr = mproto.RPCError{
+			Code:    vterrors.UnknownTabletError,
+			Message: err.Error(),
+		}
+	}
+	reply.Err = rpcErr
 }

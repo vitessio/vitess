@@ -48,6 +48,7 @@ func (queryResult *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 		}
 		lenWriter.Close()
 	}
+	queryResult.Err.MarshalBson(buf, "Err")
 
 	lenWriter.Close()
 }
@@ -113,6 +114,8 @@ func (queryResult *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 					queryResult.Rows = append(queryResult.Rows, _v2)
 				}
 			}
+		case "Err":
+			queryResult.Err.UnmarshalBson(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

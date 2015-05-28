@@ -83,9 +83,19 @@ type QueryResult struct {
 	RowsAffected uint64
 	InsertId     uint64
 	Rows         [][]sqltypes.Value
+	Err          RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
+
+// RPCError is the structure that is returned by each RPC call, which contains
+// the error information for that call.
+type RPCError struct {
+	Code    int
+	Message string
+}
+
+//go:generate bsongen -file $GOFILE -type RPCError -o rpcerror_bson.go
 
 // Charset contains the per-statement character set settings that accompany
 // binlog QUERY_EVENT entries.

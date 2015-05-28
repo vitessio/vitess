@@ -161,6 +161,22 @@ class TabletConnection(object):
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
+  def rpc_call_and_extract_error(self, method_name, request):
+    """Makes an RPC call, and extracts any app error that's embedded in the reply. 
+
+    Args:
+      method_name - RPC method name, as a string, to call
+      request - request to send to the RPC method call
+
+    Raises:
+      gorpc.AppError if there is an app error embedded in the reply
+    """
+    response = self.client.call(method_name, request)
+    reply = response.reply
+    if reply['Err']['Code'] or reply['Err']['Message']:
+      raise gorpc.AppError(reply['Err']['Message'], method_name)
+    return response
+
   def _execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
     req = self._make_req()
@@ -171,7 +187,7 @@ class TabletConnection(object):
     conversions = []
     results = []
     try:
-      response = self.client.call('SqlQuery.Execute', req)
+      response = self.rpc_call_and_extract_error('SqlQuery.Execute', req)
       reply = response.reply
 
       for field in reply['Fields']:
