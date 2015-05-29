@@ -25,6 +25,8 @@ func TestInitMasterShard(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Create a master, a couple good slaves
 	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -90,7 +92,7 @@ func TestInitMasterShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run InitShardMaster
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, master.Tablet.Alias, false /*force*/, 10*time.Second); err != nil {
+	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, master.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("InitShardMaster failed: %v", err)
 	}
 
