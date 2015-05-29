@@ -460,6 +460,25 @@ def vtgate_kill(sp):
   kill_sub_process(sp, soft=True)
   sp.wait()
 
+def vtgate_vtclient(vtgate_port, sql, tablet_type='master', bindvars=None,
+                    streaming=False, verbose=False, raise_on_error=False):
+  """vtgate_vtclient uses the vtclient binary to send a query to vtgate.
+  """
+  args = environment.binary_args('vtclient') + [
+    '-server', 'localhost:%u' % vtgate_port,
+    '-tablet_type', tablet_type] + protocols_flavor().vtgate_protocol_flags()
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  if streaming:
+    args.append('-streaming')
+  if verbose:
+    args.append('-alsologtostderr')
+  args.append(sql)
+
+  out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
+  out = out.splitlines()
+  return out, err
+
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make

@@ -630,6 +630,23 @@ class TestVTGateFunctions(unittest.TestCase):
     finally:
       vtgate_conn.rollback()
 
+  def test_vtclient(self):
+    """This test uses vtclient to send and receive various queries.
+    """
+    utils.vtgate_vtclient(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:v1, :v2)', bindvars=[10, "test 10"])
+
+    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+    self.assertEqual(out, ["Index\tuser_id\temail","0\t10\ttest 10"])
+
+    utils.vtgate_vtclient(vtgate_port, 'update vt_user_extra set email=:v2 where user_id = :v1', bindvars=[10, "test 1000"])
+
+    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10], streaming=True)
+    self.assertEqual(out, ["Index\tuser_id\temail","0\t10\ttest 1000"])
+
+    utils.vtgate_vtclient(vtgate_port, 'delete from vt_user_extra where user_id = :v1', bindvars=[10])
+
+    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+    self.assertEqual(out, ["Index\tuser_id\temail"])
 
 if __name__ == '__main__':
   utils.main()
