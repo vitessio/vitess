@@ -24,10 +24,9 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
 ### Using Vitess
 
- * [Getting Started](http://vitess.io/getting-started/):
-     running Vitess on Kubernetes.
- * [Building](http://vitess.io/doc/GettingStarted):
-     how to manually build Vitess.
+ * Getting Started
+  * [On Kubernetes](http://vitess.io/getting-started/).
+  * [From the ground up](http://vitess.io/doc/GettingStarted).
  * [Tools](http://vitess.io/doc/Tools):
      all Vitess tools and servers.
  * [vttablet/vtocc](http://vitess.io/doc/vtocc):
