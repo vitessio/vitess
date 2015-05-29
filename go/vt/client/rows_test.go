@@ -1,4 +1,4 @@
-package vtgateconn
+package client
 
 import (
 	"database/sql/driver"
@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-var result1 = mproto.QueryResult{
+var rowsResult1 = mproto.QueryResult{
 	Fields: []mproto.Field{
 		mproto.Field{
 			Name: "field1",
@@ -70,7 +70,7 @@ func logMismatchedTypes(t *testing.T, gotRow, wantRow []driver.Value) {
 }
 
 func TestRows(t *testing.T) {
-	ri := NewRows(&result1)
+	ri := newRows(&rowsResult1)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -148,7 +148,7 @@ var badResult2 = mproto.QueryResult{
 }
 
 func TestRowsFail(t *testing.T) {
-	ri := NewRows(&badResult1)
+	ri := newRows(&badResult1)
 	var dest []driver.Value
 	err := ri.Next(dest)
 	want := "length mismatch: dest is 0, fields are 1"
@@ -156,7 +156,7 @@ func TestRowsFail(t *testing.T) {
 		t.Errorf("Next: %v, want %s", err, want)
 	}
 
-	ri = NewRows(&badResult1)
+	ri = newRows(&badResult1)
 	dest = make([]driver.Value, 1)
 	err = ri.Next(dest)
 	want = "internal error: length mismatch: dest is 1, fields are 0"
@@ -164,7 +164,7 @@ func TestRowsFail(t *testing.T) {
 		t.Errorf("Next: %v, want %s", err, want)
 	}
 
-	ri = NewRows(&badResult2)
+	ri = newRows(&badResult2)
 	dest = make([]driver.Value, 1)
 	err = ri.Next(dest)
 	want = `conversion error: field: {field1 3 0}, val: value: strconv.ParseInt: parsing "value": invalid syntax`

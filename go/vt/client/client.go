@@ -150,7 +150,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	defer cancel()
 	if s.c.Streaming {
 		qrc, errFunc := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.TabletType)
-		return vtgateconn.NewStreamingRows(qrc, errFunc), nil
+		return newStreamingRows(qrc, errFunc), nil
 	}
 	var qr *mproto.QueryResult
 	var err error
@@ -162,7 +162,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return vtgateconn.NewRows(qr), nil
+	return newRows(qr), nil
 }
 
 func makeBindVars(args []driver.Value) map[string]interface{} {
