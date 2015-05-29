@@ -16,10 +16,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestExecuteCommit(t *testing.T) {
+func TestTxPoolExecuteCommit(t *testing.T) {
 	tableName := "test_table"
-	sql := fmt.Sprintf("ALTER TABLE %s ADD test_column INT", tableName)
-	fakesqldb.Register()
+	sql := fmt.Sprintf("alter table %s add test_column int", tableName)
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery(sql, &proto.QueryResult{})
+
 	txPool := newTxPool(true)
 	txPool.SetTimeout(1 * time.Second)
 	txPool.SetPoolTimeout(1 * time.Second)
@@ -47,9 +50,13 @@ func TestExecuteCommit(t *testing.T) {
 	_ = txPool.Begin(ctx)
 }
 
-func TestExecuteRollback(t *testing.T) {
-	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register()
+func TestTxPoolExecuteRollback(t *testing.T) {
+	sql := "alter table test_table add test_column int"
+	db := fakesqldb.Register()
+	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddQuery("begin", &proto.QueryResult{})
+	db.AddQuery("rollback", &proto.QueryResult{})
+
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -67,9 +74,12 @@ func TestExecuteRollback(t *testing.T) {
 	}
 }
 
-func TestTransactionKiller(t *testing.T) {
-	sql := "ALTER TABLE test_table ADD test_column INT"
-	fakesqldb.Register()
+func TestTxPoolTransactionKiller(t *testing.T) {
+	sql := "alter table test_table add test_column int"
+	db := fakesqldb.Register()
+	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddQuery("begin", &proto.QueryResult{})
+
 	txPool := newTxPool(false)
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(time.Duration(10))
@@ -91,7 +101,7 @@ func TestTransactionKiller(t *testing.T) {
 	}
 }
 
-func TestBeginAfterConnPoolClosed(t *testing.T) {
+func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	fakesqldb.Register()
 	txPool := newTxPool(false)
 	txPool.SetTimeout(time.Duration(10))
@@ -113,8 +123,10 @@ func TestBeginAfterConnPoolClosed(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func TestBeginWithPoolTimeout(t *testing.T) {
-	fakesqldb.Register()
+func TestTxPoolBeginWithPoolTimeout(t *testing.T) {
+	db := fakesqldb.Register()
+	db.AddQuery("begin", &proto.QueryResult{})
+
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -131,7 +143,7 @@ func TestBeginWithPoolTimeout(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func TestBeginWithShortDeadline(t *testing.T) {
+func TestTxPoolBeginWithShortDeadline(t *testing.T) {
 	fakesqldb.Register()
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
@@ -147,7 +159,7 @@ func TestBeginWithShortDeadline(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func TestBeginWithPoolConnectionError(t *testing.T) {
+func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 	db := fakesqldb.Register()
 	db.EnableConnFail()
 	txPool := newTxPool(false)
@@ -160,7 +172,7 @@ func TestBeginWithPoolConnectionError(t *testing.T) {
 	txPool.Begin(ctx)
 }
 
-func TestBeginWithExecError(t *testing.T) {
+func TestTxPoolBeginWithExecError(t *testing.T) {
 	db := fakesqldb.Register()
 	db.AddRejectedQuery("begin")
 	txPool := newTxPool(false)
@@ -199,9 +211,12 @@ func TestTxPoolSafeCommitFail(t *testing.T) {
 }
 
 func TestTxPoolRollbackFail(t *testing.T) {
+	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
+	db.AddQuery(sql, &proto.QueryResult{})
+	db.AddQuery("begin", &proto.QueryResult{})
 	db.AddRejectedQuery("rollback")
-	sql := "ALTER TABLE test_table ADD test_column INT"
+
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -233,6 +248,8 @@ func TestTxPoolGetConnFail(t *testing.T) {
 
 func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	db := fakesqldb.Register()
+	db.AddQuery("begin", &proto.QueryResult{})
+
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
