@@ -1,0 +1,175 @@
+// Copyright 2015, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package testlib
+
+import (
+	"reflect"
+	"testing"
+	"time"
+
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/logutil"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
+)
+
+func TestMigrateServedFrom(t *testing.T) {
+	ctx := context.Background()
+	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
+
+	// create the source keyspace tablets
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topo.TYPE_MASTER,
+		TabletKeyspaceShard(t, "source", "0"))
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topo.TYPE_REPLICA,
+		TabletKeyspaceShard(t, "source", "0"))
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topo.TYPE_RDONLY,
+		TabletKeyspaceShard(t, "source", "0"))
+
+	// create the destination keyspace, served form source
+	// double check it has all entries in map
+	if err := vp.Run([]string{"CreateKeyspace", "-served_from", "master:source,replica:source,rdonly:source", "dest"}); err != nil {
+		t.Fatalf("CreateKeyspace(dest) failed: %v", err)
+	}
+	ki, err := ts.GetKeyspace(ctx, "dest")
+	if err != nil {
+		t.Fatalf("GetKeyspace failed: %v", err)
+	}
+	if len(ki.ServedFromMap) != 3 {
+		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	}
+
+	// create the destination keyspace tablets
+	destMaster := NewFakeTablet(t, wr, "cell1", 20, topo.TYPE_MASTER,
+		TabletKeyspaceShard(t, "dest", "0"))
+	destReplica := NewFakeTablet(t, wr, "cell1", 21, topo.TYPE_REPLICA,
+		TabletKeyspaceShard(t, "dest", "0"))
+	destRdonly := NewFakeTablet(t, wr, "cell1", 22, topo.TYPE_RDONLY,
+		TabletKeyspaceShard(t, "dest", "0"))
+
+	// sourceRdonly will see the refresh
+	sourceRdonly.StartActionLoop(t, wr)
+	defer sourceRdonly.StopActionLoop(t)
+
+	// sourceReplica will see the refresh
+	sourceReplica.StartActionLoop(t, wr)
+	defer sourceReplica.StopActionLoop(t)
+
+	// sourceMaster will see the refresh, and has to respond to it
+	// also will be asked about its replication position.
+	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
+		GTIDSet: myproto.MariadbGTID{
+			Domain:   5,
+			Server:   456,
+			Sequence: 892,
+		},
+	}
+	sourceMaster.StartActionLoop(t, wr)
+	defer sourceMaster.StopActionLoop(t)
+
+	// destRdonly will see the refresh
+	destRdonly.StartActionLoop(t, wr)
+	defer destRdonly.StopActionLoop(t)
+
+	// destReplica will see the refresh
+	destReplica.StartActionLoop(t, wr)
+	defer destReplica.StopActionLoop(t)
+
+	// destMaster will see the refresh, and has to respond to it.
+	// It will also need to respond to WaitBlpPosition, saying it's already caught up.
+	destMaster.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*mproto.QueryResult{
+		"SELECT pos, flags FROM _vt.blp_checkpoint WHERE source_shard_uid=0": &mproto.QueryResult{
+			Rows: [][]sqltypes.Value{
+				[]sqltypes.Value{
+					sqltypes.MakeString([]byte(myproto.EncodeReplicationPosition(sourceMaster.FakeMysqlDaemon.CurrentMasterPosition))),
+					sqltypes.MakeString([]byte("")),
+				},
+			},
+		},
+	}
+	destMaster.StartActionLoop(t, wr)
+	defer destMaster.StopActionLoop(t)
+
+	// simulate the clone, by fixing the dest shard record
+	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "0", "source/0"}); err != nil {
+		t.Fatalf("SourceShardAdd failed: %v", err)
+	}
+
+	// migrate rdonly over
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "rdonly"}); err != nil {
+		t.Fatalf("MigrateServedFrom(rdonly) failed: %v", err)
+	}
+
+	// check it's gone from keyspace
+	ki, err = ts.GetKeyspace(ctx, "dest")
+	if err != nil {
+		t.Fatalf("GetKeyspace failed: %v", err)
+	}
+	if _, ok := ki.ServedFromMap[topo.TYPE_RDONLY]; len(ki.ServedFromMap) != 2 || ok {
+		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	}
+
+	// check the source shard has the right blacklisted tables
+	si, err := ts.GetShard(ctx, "source", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	if len(si.TabletControlMap) != 1 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_RDONLY].BlacklistedTables, []string{"gone1", "gone2"}) {
+		t.Fatalf("rdonly type doesn't have right blacklisted tables")
+	}
+
+	// migrate replica over
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "replica"}); err != nil {
+		t.Fatalf("MigrateServedFrom(replica) failed: %v", err)
+	}
+
+	// check it's gone from keyspace
+	ki, err = ts.GetKeyspace(ctx, "dest")
+	if err != nil {
+		t.Fatalf("GetKeyspace failed: %v", err)
+	}
+	if _, ok := ki.ServedFromMap[topo.TYPE_REPLICA]; len(ki.ServedFromMap) != 1 || ok {
+		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	}
+
+	// check the source shard has the right blacklisted tables
+	si, err = ts.GetShard(ctx, "source", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	if len(si.TabletControlMap) != 2 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_REPLICA].BlacklistedTables, []string{"gone1", "gone2"}) {
+		t.Fatalf("replica type doesn't have right blacklisted tables")
+	}
+
+	// migrate master over
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}); err != nil {
+		t.Fatalf("MigrateServedFrom(master) failed: %v", err)
+	}
+
+	// make sure ServedFromMap is empty
+	ki, err = ts.GetKeyspace(ctx, "dest")
+	if err != nil {
+		t.Fatalf("GetKeyspace failed: %v", err)
+	}
+	if len(ki.ServedFromMap) > 0 {
+		t.Fatalf("dest keyspace still is ServedFrom: %v", ki.ServedFromMap)
+	}
+
+	// check the source shard has the right blacklisted tables
+	si, err = ts.GetShard(ctx, "source", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	if len(si.TabletControlMap) != 3 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_MASTER].BlacklistedTables, []string{"gone1", "gone2"}) {
+		t.Fatalf("master type doesn't have right blacklisted tables")
+	}
+}
