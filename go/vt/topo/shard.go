@@ -475,7 +475,7 @@ func (si *ShardInfo) CheckServedTypesMigration(tabletType TabletType, cells []st
 
 	// we can't remove a type we don't have
 	if _, ok := si.ServedTypesMap[tabletType]; !ok && remove {
-		return fmt.Errorf("supplied type cannot be migrated")
+		return fmt.Errorf("supplied type %v cannot be migrated out of %#v", tabletType, si)
 	}
 
 	return nil
