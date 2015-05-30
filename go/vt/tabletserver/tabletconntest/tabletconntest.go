@@ -22,6 +22,7 @@ import (
 // FakeQueryService has the server side of this fake
 type FakeQueryService struct {
 	t                        *testing.T
+	hasError                 bool
 	panics                   bool
 	streamExecutePanicsEarly bool
 }
@@ -170,7 +171,11 @@ func (f *FakeQueryService) Execute(ctx context.Context, query *proto.Query, repl
 	if query.TransactionId != executeTransactionId {
 		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionId)
 	}
-	*reply = executeQueryResult
+	if f.hasError {
+		*reply = executeQueryResultError
+	} else {
+		*reply = executeQueryResult
+	}
 	return nil
 }
 
@@ -207,6 +212,13 @@ var executeQueryResult = mproto.QueryResult{
 	},
 }
 
+var executeQueryResultError = mproto.QueryResult{
+	Err: mproto.RPCError{
+		Code:    1000,
+		Message: "succeeded despite err",
+	},
+}
+
 func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecute")
 	ctx := context.Background()
@@ -216,6 +228,19 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 	if !reflect.DeepEqual(*qr, executeQueryResult) {
 		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, executeQueryResult)
+	}
+}
+
+func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecuteError")
+	ctx := context.Background()
+	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionId)
+	if err == nil {
+		t.Fatalf("Execute was expecting an error, didn't get one")
+	}
+	expectedErr := "vttablet: succeeded despite err"
+	if err.Error() != expectedErr {
+		t.Errorf("Unexpected error from Execute: got %v wanted %v", err, expectedErr)
 	}
 }
 
@@ -530,6 +555,11 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testStreamExecute(t, conn)
 	testExecuteBatch(t, conn)
 	testSplitQuery(t, conn)
+
+	// fake should return an error, make sure errors are handled properly
+	fake.hasError = true
+	testExecuteError(t, conn)
+	fake.hasError = false
 
 	// force panics, make sure they're caught
 	fake.panics = true

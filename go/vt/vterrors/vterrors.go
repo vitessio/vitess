@@ -26,7 +26,7 @@ const (
 // VitessError is the error type that we use internally for passing structured errors
 type VitessError struct {
 	// Error code of the Vitess error
-	Code int
+	Code int64
 	// Additional context string, distinct from the error message. For example, if
 	// you wanted an error like "foo error: original error", the Message string
 	// should be "foo error: "
@@ -53,7 +53,6 @@ func (e *VitessError) AsString() string {
 // FromRPCError recovers a VitessError from an RPCError (which is how VitessErrors
 // are transmitted across RPC boundaries).
 func FromRPCError(rpcErr mproto.RPCError) error {
-	fmt.Printf("RPCError: %v\n", rpcErr)
 	if rpcErr.Code == 0 && rpcErr.Message == "" {
 		return nil
 	}
@@ -63,8 +62,8 @@ func FromRPCError(rpcErr mproto.RPCError) error {
 	}
 }
 
-// AddPrefix allows a string to be prefixed to an error, without nesting a new VitessError.
-func AddPrefix(prefix string, in error) error {
+// WithPrefix allows a string to be prefixed to an error, without nesting a new VitessError.
+func WithPrefix(prefix string, in error) error {
 	vtErr, ok := in.(*VitessError)
 	if !ok {
 		return fmt.Errorf("%s: %s", prefix, in)

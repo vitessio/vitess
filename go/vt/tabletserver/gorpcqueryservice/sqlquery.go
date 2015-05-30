@@ -5,6 +5,8 @@
 package gorpcqueryservice
 
 import (
+	"flag"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -12,6 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
+)
+
+var (
+	rpcErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", false, "if true, supported RPC calls will only return errors as part of the RPC server response")
 )
 
 // SqlQuery is the server object for gorpc SqlQuery
@@ -48,7 +54,10 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 	defer sq.server.HandlePanic(&err)
 	execErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), query, reply)
 	tabletserver.AddTabletErrorToQueryResult(execErr, reply)
-	return nil
+	if *rpcErrorOnlyInReply {
+		return nil
+	}
+	return execErr
 }
 
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute

@@ -19,7 +19,7 @@ func (rPCError *RPCError) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodeInt(buf, "Code", rPCError.Code)
+	bson.EncodeInt64(buf, "Code", rPCError.Code)
 	bson.EncodeString(buf, "Message", rPCError.Message)
 
 	lenWriter.Close()
@@ -40,7 +40,7 @@ func (rPCError *RPCError) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
 		case "Code":
-			rPCError.Code = bson.DecodeInt(buf, kind)
+			rPCError.Code = bson.DecodeInt64(buf, kind)
 		case "Message":
 			rPCError.Message = bson.DecodeString(buf, kind)
 		default:

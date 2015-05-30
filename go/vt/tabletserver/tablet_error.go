@@ -223,7 +223,7 @@ func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
 	if ok {
 		rpcErr = mproto.RPCError{
 			// Transform TabletError code to VitessError code
-			Code: terr.ErrorType + vterrors.TabletError,
+			Code: int64(terr.ErrorType) + vterrors.TabletError,
 			// Make sure the the VitessError message is identical to the TabletError
 			// err, so that downstream consumers will see identical messages no matter
 			// which endpoint they're using.

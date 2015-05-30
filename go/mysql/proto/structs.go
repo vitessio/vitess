@@ -91,7 +91,7 @@ type QueryResult struct {
 // RPCError is the structure that is returned by each RPC call, which contains
 // the error information for that call.
 type RPCError struct {
-	Code    int
+	Code    int64
 	Message string
 }
 
