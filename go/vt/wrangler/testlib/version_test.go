@@ -43,6 +43,10 @@ func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
 }
 
 func TestVersion(t *testing.T) {
+	// We need to run this test with the /debug/vars version of the
+	// plugin.
+	wrangler.ResetDebugVarsGetVersion()
+
 	// Initialize our environment
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
