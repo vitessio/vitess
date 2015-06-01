@@ -42,16 +42,17 @@ func dial(ctx context.Context, address string, timeout time.Duration) (vtgatecon
 	return &vtgateConn{rpcConn: rpcConn}, nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TabletType:    tabletType,
-		Session:       s,
+		Sql:              query,
+		BindVariables:    bindVars,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.Execute", request, &result); err != nil {
@@ -63,18 +64,19 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.QueryShard{
-		Sql:           query,
-		BindVariables: bindVars,
-		Keyspace:      keyspace,
-		Shards:        shards,
-		TabletType:    tabletType,
-		Session:       s,
+		Sql:              query,
+		BindVariables:    bindVars,
+		Keyspace:         keyspace,
+		Shards:           shards,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteShard", request, &result); err != nil {
@@ -86,18 +88,19 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.KeyspaceIdQuery{
-		Sql:           query,
-		BindVariables: bindVars,
-		Keyspace:      keyspace,
-		KeyspaceIds:   keyspaceIds,
-		TabletType:    tabletType,
-		Session:       s,
+		Sql:              query,
+		BindVariables:    bindVars,
+		Keyspace:         keyspace,
+		KeyspaceIds:      keyspaceIds,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyspaceIds", request, &result); err != nil {
@@ -109,18 +112,19 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.KeyRangeQuery{
-		Sql:           query,
-		BindVariables: bindVars,
-		Keyspace:      keyspace,
-		KeyRanges:     keyRanges,
-		TabletType:    tabletType,
-		Session:       s,
+		Sql:              query,
+		BindVariables:    bindVars,
+		Keyspace:         keyspace,
+		KeyRanges:        keyRanges,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyRanges", request, &result); err != nil {
@@ -132,7 +136,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -145,6 +149,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		EntityKeyspaceIDs: entityKeyspaceIDs,
 		TabletType:        tabletType,
 		Session:           s,
+		NotInTransaction:  notInTransaction,
 	}
 	var result proto.QueryResult
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteEntityIds", request, &result); err != nil {
@@ -156,17 +161,18 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.BatchQueryShard{
-		Queries:    queries,
-		Keyspace:   keyspace,
-		Shards:     shards,
-		TabletType: tabletType,
-		Session:    s,
+		Queries:          queries,
+		Keyspace:         keyspace,
+		Shards:           shards,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {
@@ -178,17 +184,18 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.KeyspaceIdBatchQuery{
-		Queries:     queries,
-		Keyspace:    keyspace,
-		KeyspaceIds: keyspaceIds,
-		TabletType:  tabletType,
-		Session:     s,
+		Queries:          queries,
+		Keyspace:         keyspace,
+		KeyspaceIds:      keyspaceIds,
+		TabletType:       tabletType,
+		Session:          s,
+		NotInTransaction: notInTransaction,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchKeyspaceIds", request, &result); err != nil {
