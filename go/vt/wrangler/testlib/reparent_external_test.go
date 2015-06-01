@@ -37,6 +37,8 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -121,7 +123,7 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := tmc.TabletExternallyReparented(context.Background(), ti, ""); err != nil {
+	if err := vp.Run([]string{"TabletExternallyReparented", oldMaster.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("TabletExternallyReparented(same master) should have worked")
 	}
 

@@ -20,9 +20,10 @@ import (
 )
 
 func TestEmergencyReparentShard(t *testing.T) {
-	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Create a master, a couple good slaves
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -93,7 +94,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	if err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second); err != nil {
+	if err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, newMaster.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("EmergencyReparentShard failed: %v", err)
 	}
 
