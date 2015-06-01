@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/youtube/vitess/go/jscfg"
@@ -27,7 +28,12 @@ func init() {
 		"VtGateExecute",
 		commandVtGateExecute,
 		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
-		"Executes the given SQL query with the provided bound variables aganst the vtgate server."})
+		"Executes the given SQL query with the provided bound variables against the vtgate server."})
+	addCommand(queriesGroundName, command{
+		"VtGateExecuteShard",
+		commandVtGateExecuteShard,
+		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
+		"Executes the given SQL query with the provided bound variables against the vtgate server."})
 }
 
 type bindvars map[string]interface{}
@@ -92,6 +98,41 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 	defer vtgateConn.Close()
 	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t)
+	if err != nil {
+		return fmt.Errorf("Execute failed: %v", err)
+	}
+	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
+	return nil
+}
+
+func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "VtGate server to connect to")
+	bindVariables := newBindvars(subFlags)
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
+	tabletType := subFlags.String("tablet_type", "master", "tablet type to query")
+	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
+	shardsStr := subFlags.String("shards", "", "comma-separated list of shards to send query to")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <sql> argument is required for the VtGateExecuteShard command")
+	}
+	t, err := parseTabletType(*tabletType, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	if err != nil {
+		return err
+	}
+	var shards []string
+	if *shardsStr != "" {
+		shards = strings.Split(*shardsStr, ",")
+	}
+
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
+	}
+	defer vtgateConn.Close()
+	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

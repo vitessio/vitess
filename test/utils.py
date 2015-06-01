@@ -490,6 +490,19 @@ def vtgate_execute(vtgate_port, sql, tablet_type='master', bindvars=None):
   args.append(sql)
   return run_vtctl_json(args)
 
+def vtgate_execute_shard(vtgate_port, sql, keyspace, shards, tablet_type='master', bindvars=None):
+  """vtgate_execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
+  """
+  args = ['VtGateExecuteShard',
+          '-server', 'localhost:%u' % vtgate_port,
+          '-keyspace', keyspace,
+          '-shards', shards,
+          '-tablet_type', tablet_type]
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  args.append(sql)
+  return run_vtctl_json(args)
+
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make
