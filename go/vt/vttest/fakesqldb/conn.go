@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -144,8 +143,7 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
-		log.Warningf("unexpected query: %s, will return an empty result", query)
-		return &proto.QueryResult{}, nil
+		return nil, fmt.Errorf("query: %s is not supported", query)
 	}
 	qr := &proto.QueryResult{}
 	qr.RowsAffected = result.RowsAffected
@@ -211,8 +209,7 @@ func (conn *Conn) ExecuteStreamFetch(query string) error {
 	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
-		log.Warningf("unexpected query: %s, will return an empty result", query)
-		result = &proto.QueryResult{}
+		return fmt.Errorf("query: %s is not supported", query)
 	}
 	conn.curQueryResult = result
 	conn.curQueryRow = 0

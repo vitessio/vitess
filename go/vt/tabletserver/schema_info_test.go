@@ -416,6 +416,12 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+
+	firstSqlQuery := "select * from test_table_01"
+	secondSqlQuery := "select * from test_table_02"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
+	db.AddQuery("select * from test_table_02 where 1 != 1", &mproto.QueryResult{})
+
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -429,13 +435,11 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := newSqlQueryStats("GetPlanStats", ctx)
-	firstSqlQuery := "select * from test_table_01"
 	schemaInfo.SetQueryCacheSize(1)
 	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstSqlQuery)
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondSqlQuery := "select * from test_table_02"
 	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondSqlQuery)
 	if secondPlan == nil {
 		t.Fatalf("plan should not be nil")
@@ -471,6 +475,8 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	sqlQuery := "select * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -482,7 +488,6 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	// warm up cache
 	ctx := context.Background()
 	logStats := newSqlQueryStats("GetPlanStats", ctx)
-	sqlQuery := "select * from test_table_01"
 	schemaInfo.GetPlan(ctx, logStats, sqlQuery)
 
 	request, _ := http.NewRequest("GET", schemaInfo.endpoints[debugQueryPlansKey], nil)
@@ -787,6 +792,8 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				},
 			},
 		},
+		"begin":  &mproto.QueryResult{},
+		"commit": &mproto.QueryResult{},
 	}
 }
 
