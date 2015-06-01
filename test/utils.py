@@ -538,6 +538,7 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
   args.extend(protocols_flavor().tabletconn_protocol_flags())
+  args.extend(protocols_flavor().vtgate_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -803,7 +804,8 @@ class Vtctld(object):
             '-schema-change-check-interval', '1',
             ] + \
             environment.topo_server().flags() + \
-            protocols_flavor().tablet_manager_protocol_flags()
+            protocols_flavor().tablet_manager_protocol_flags() + \
+            protocols_flavor().vtgate_protocol_flags()
     if protocols_flavor().vtctl_client_protocol() == "grpc":
       args += ['-grpc_port', str(self.grpc_port),
               '-service_map', 'grpc-vtctl']
