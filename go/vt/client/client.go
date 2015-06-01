@@ -52,17 +52,17 @@ type conn struct {
 	TabletType topo.TabletType `json:"tablet_type"`
 	Streaming  bool
 	Timeout    time.Duration
-	vtgateConn vtgateconn.VTGateConn
-	tx         vtgateconn.VTGateTx
+	vtgateConn *vtgateconn.VTGateConn
+	tx         *vtgateconn.VTGateTx
 }
 
 func (c *conn) dial() error {
-	dialer := vtgateconn.GetDialerWithProtocol(c.Protocol)
-	if dialer == nil {
-		return fmt.Errorf("could not find dialer for protocol %s", c.Protocol)
-	}
 	var err error
-	c.vtgateConn, err = dialer(context.Background(), c.Address, c.Timeout)
+	if c.Protocol == "" {
+		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
+	} else {
+		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
+	}
 	return err
 }
 
@@ -150,7 +150,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	defer cancel()
 	if s.c.Streaming {
 		qrc, errFunc := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.TabletType)
-		return vtgateconn.NewStreamingRows(qrc, errFunc), nil
+		return newStreamingRows(qrc, errFunc), nil
 	}
 	var qr *mproto.QueryResult
 	var err error
@@ -162,7 +162,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
-	return vtgateconn.NewRows(qr), nil
+	return newRows(qr), nil
 }
 
 func makeBindVars(args []driver.Value) map[string]interface{} {

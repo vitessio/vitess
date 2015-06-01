@@ -44,6 +44,7 @@ class TestEnv(object):
     self.schema = options.schema
     self.vschema = options.vschema
     self.vtgate_port = options.vtgate_port
+    self.dbname_override = options.dbname_override
     self.tablets = []
     tablet_config = json.loads(options.tablet_config)
     for shard in options.shards.split(','):
@@ -62,10 +63,16 @@ class TestEnv(object):
         t.init_tablet(t.type, keyspace=self.keyspace, shard=t.shard)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       for t in self.tablets:
-        t.create_db('vt_' + self.keyspace)
+        dbname = 'vt_' + self.keyspace
+
+        if self.dbname_override:
+          dbname = self.dbname_override
+
+        t.create_db(dbname)
         t.start_vttablet(
           wait_for_state=None,
-          extra_args=['-queryserver-config-schema-reload-time', '1'],
+          extra_args=['-queryserver-config-schema-reload-time', '1',
+                      '-init_db_name_override', dbname],
         )
       for t in self.tablets:
         t.wait_for_vttablet_state('SERVING')
@@ -74,7 +81,7 @@ class TestEnv(object):
           utils.run_vtctl(['InitShardMaster', self.keyspace+'/'+t.shard, t.tablet_alias], auto_log=True)
       utils.run_vtctl(['RebuildKeyspaceGraph', self.keyspace], auto_log=True)
       if self.schema:
-        utils.run_vtctl(['ApplySchemaKeyspace', '-simple', '-sql', self.schema, self.keyspace])
+        utils.run_vtctl(['ApplySchema', '-sql', self.schema, self.keyspace])
       if self.vschema:
         if self.vschema[0] == '{':
           utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
@@ -107,6 +114,7 @@ def parse_args():
   parser.add_option("--tablet-config", action="store", type="string",
                     help="json config for for non-master tablets. e.g {'replica':2, 'rdonly':1}")
   parser.add_option("--keyspace", action="store", type="string")
+  parser.add_option("--dbname-override", action="store", type="string")
   parser.add_option("--schema", action="store", type="string")
   parser.add_option("--vschema", action="store", type="string")
   parser.add_option("--vtgate-port", action="store", type="int")

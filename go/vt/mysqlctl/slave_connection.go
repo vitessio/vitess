@@ -37,7 +37,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(mysqld *Mysqld) (*SlaveConnection, error) {
+func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 	params, err := dbconfigs.MysqlParams(mysqld.dba)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 	}
 
 	log.Infof("sending binlog dump command: startPos=%v, slaveID=%v", startPos, sc.slaveID)
-	if err = flavor.SendBinlogDumpCommand(sc.mysqld, sc, startPos); err != nil {
+	if err = flavor.SendBinlogDumpCommand(sc, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}

@@ -6,6 +6,7 @@ package proto
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -13,12 +14,12 @@ import (
 var basicTable1 = &TableDefinition{
 	Name:   "table1",
 	Schema: "table schema 1",
-	Type:   TABLE_BASE_TABLE,
+	Type:   TableBaseTable,
 }
 var basicTable2 = &TableDefinition{
 	Name:   "table2",
 	Schema: "table schema 2",
-	Type:   TABLE_BASE_TABLE,
+	Type:   TableBaseTable,
 }
 
 var table3 = &TableDefinition{
@@ -26,19 +27,19 @@ var table3 = &TableDefinition{
 	Schema: "CREATE TABLE `table3` (\n" +
 		"id bigint not null,\n" +
 		") Engine=InnoDB",
-	Type: TABLE_BASE_TABLE,
+	Type: TableBaseTable,
 }
 
 var view1 = &TableDefinition{
 	Name:   "view1",
 	Schema: "view schema 1",
-	Type:   TABLE_VIEW,
+	Type:   TableView,
 }
 
 var view2 = &TableDefinition{
 	Name:   "view2",
 	Schema: "view schema 2",
-	Type:   TABLE_VIEW,
+	Type:   TableView,
 }
 
 func TestToSQLStrings(t *testing.T) {
@@ -152,19 +153,78 @@ func TestSchemaDiff(t *testing.T) {
 			&TableDefinition{
 				Name:   "table1",
 				Schema: "schema1",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 			&TableDefinition{
 				Name:   "table2",
 				Schema: "schema2",
-				Type:   TABLE_BASE_TABLE,
+				Type:   TableBaseTable,
 			},
 		},
 	}
-	testDiff(t, sd1, sd1, "sd1", "sd2", []string{})
 
 	sd2 := &SchemaDefinition{TableDefinitions: make([]*TableDefinition, 0, 2)}
+
+	sd3 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "schema2",
+				Type:   TableBaseTable,
+			},
+		},
+	}
+
+	sd4 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "table2",
+				Type:   TableView,
+			},
+		},
+	}
+
+	sd5 := &SchemaDefinition{
+		TableDefinitions: []*TableDefinition{
+			&TableDefinition{
+				Name:   "table2",
+				Schema: "table2",
+				Type:   TableBaseTable,
+			},
+		},
+	}
+
+	testDiff(t, sd1, sd1, "sd1", "sd2", []string{})
+
 	testDiff(t, sd2, sd2, "sd2", "sd2", []string{})
+
+	// two schemas are considered the same if both nil
+	testDiff(t, nil, nil, "sd1", "sd2", nil)
+
+	testDiff(t, sd1, nil, "sd1", "sd2", []string{
+		fmt.Sprintf("sd1 and sd2 are different, sd1: %v, sd2: null", sd1),
+	})
+
+	testDiff(t, sd1, sd3, "sd1", "sd3", []string{
+		"sd1 has an extra table named table1",
+	})
+
+	testDiff(t, sd3, sd1, "sd3", "sd1", []string{
+		"sd1 has an extra table named table1",
+	})
+
+	testDiff(t, sd2, sd4, "sd2", "sd4", []string{
+		"sd4 has an extra view named table2",
+	})
+
+	testDiff(t, sd4, sd2, "sd4", "sd2", []string{
+		"sd4 has an extra view named table2",
+	})
+
+	testDiff(t, sd4, sd5, "sd4", "sd5", []string{
+		fmt.Sprintf("sd4 and sd5 disagree on table type for table table2:\nVIEW\n differs from:\nBASE TABLE"),
+	})
 
 	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	sd2.DatabaseSchema = "DONT CREATE DATABASE {{.DatabaseName}}"
@@ -172,10 +232,10 @@ func TestSchemaDiff(t *testing.T) {
 	sd2.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	testDiff(t, sd2, sd1, "sd2", "sd1", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table1", Schema: "schema1", Type: TABLE_BASE_TABLE})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table1", Schema: "schema1", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table2"})
 
-	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TABLE_BASE_TABLE})
+	sd2.TableDefinitions = append(sd2.TableDefinitions, &TableDefinition{Name: "table2", Schema: "schema3", Type: TableBaseTable})
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
 }
 

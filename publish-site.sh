@@ -55,6 +55,19 @@ git mv vitess.io/LICENSE .
 
 rm -rf vitess.io
 
+# pre-commit checks
+set +e
+list=$(find . -name '*.html' | xargs grep -lE '^\s*([\-\*]|\d\.) ')
+if [ -n "$list" ]; then
+  echo
+  echo "ERROR: The following pages appear to contain bulleted lists that weren't properly converted."
+  echo "Make sure all bulleted lists have a blank line before them."
+  echo
+  echo "$list"
+  exit 1
+fi
+set -e
+
 git add -u
 
 git commit -m "publish site `date`"

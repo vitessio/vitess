@@ -60,7 +60,6 @@ type ActionAgent struct {
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
 	TabletAlias         topo.TabletAlias
-	Mysqld              *mysqlctl.Mysqld
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
@@ -126,7 +125,7 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
-	mysqld *mysqlctl.Mysqld,
+	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.QueryServiceControl,
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
@@ -145,7 +144,6 @@ func NewActionAgent(
 		batchCtx:            batchCtx,
 		TopoServer:          topoServer,
 		TabletAlias:         tabletAlias,
-		Mysqld:              mysqld,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		SchemaOverrides:     schemaOverrides,
@@ -181,15 +179,33 @@ func NewActionAgent(
 		}
 	}
 
-	if err := agent.Start(mysqlPort, port, securePort); err != nil {
+	if err := agent.Start(batchCtx, mysqlPort, port, securePort); err != nil {
 		return nil, err
 	}
 
 	// register the RPC services from the agent
 	agent.registerQueryService()
 
-	// start health check if needed
-	agent.initHeathCheck()
+	// two cases then:
+	// - restoreFromBackup is set: we restore, then initHealthCheck, all
+	//   in the background
+	// - restoreFromBackup is not set: we initHealthCheck right away
+	if *restoreFromBackup {
+		go func() {
+			// restoreFromBackup wil just be a regular action
+			// (same as if it was triggered remotely)
+			if err := agent.RestoreFromBackup(batchCtx); err != nil {
+				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+				log.Fatalf("RestoreFromBackup failed: %v", err)
+			}
+
+			// after the restore is done, start health check
+			agent.initHeathCheck()
+		}()
+	} else {
+		// synchronously start health check if needed
+		agent.initHeathCheck()
+	}
 
 	return agent, nil
 }
@@ -203,7 +219,6 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		batchCtx:            batchCtx,
 		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
-		Mysqld:              nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           nil,
 		SchemaOverrides:     nil,
@@ -213,7 +228,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
-	if err := agent.Start(0, port, 0); err != nil {
+	if err := agent.Start(batchCtx, 0, port, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -344,13 +359,13 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	return nil
 }
 
-func (agent *ActionAgent) verifyTopology() error {
+func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 	tablet := agent.Tablet()
 	if tablet == nil {
 		return fmt.Errorf("agent._tablet is nil")
 	}
 
-	if err := topo.Validate(agent.TopoServer, agent.TabletAlias); err != nil {
+	if err := topo.Validate(ctx, agent.TopoServer, agent.TabletAlias); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
 		log.Warningf("tablet validate failed: %v %v", agent.TabletAlias, err)
 	}
@@ -358,7 +373,7 @@ func (agent *ActionAgent) verifyTopology() error {
 	return nil
 }
 
-func (agent *ActionAgent) verifyServingAddrs() error {
+func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 	if !agent.Tablet().IsRunningQueryService() {
 		return nil
 	}
@@ -368,14 +383,14 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	if err != nil {
 		return err
 	}
-	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
+	return agent.TopoServer.UpdateTabletEndpoint(ctx, agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
-func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
+func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort int) error {
 	var err error
-	if _, err = agent.readTablet(context.TODO()); err != nil {
+	if _, err = agent.readTablet(ctx); err != nil {
 		return err
 	}
 
@@ -413,25 +428,25 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		}
 		return nil
 	}
-	if err := agent.TopoServer.UpdateTabletFields(agent.Tablet().Alias, f); err != nil {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.Tablet().Alias, f); err != nil {
 		return err
 	}
 
 	// Reread to get the changes we just made
-	if _, err := agent.readTablet(context.TODO()); err != nil {
+	if _, err := agent.readTablet(ctx); err != nil {
 		return err
 	}
 
-	if err = agent.verifyTopology(); err != nil {
+	if err = agent.verifyTopology(ctx); err != nil {
 		return err
 	}
 
-	if err = agent.verifyServingAddrs(); err != nil {
+	if err = agent.verifyServingAddrs(ctx); err != nil {
 		return err
 	}
 
 	oldTablet := &topo.Tablet{}
-	if err = agent.updateState(context.TODO(), oldTablet, "Start"); err != nil {
+	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
 	return nil
@@ -442,8 +457,8 @@ func (agent *ActionAgent) Stop() {
 	if agent.BinlogPlayerMap != nil {
 		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
-	if agent.Mysqld != nil {
-		agent.Mysqld.Close()
+	if agent.MysqlDaemon != nil {
+		agent.MysqlDaemon.Close()
 	}
 }
 

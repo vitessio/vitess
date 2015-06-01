@@ -3,6 +3,7 @@ package tabletserver
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -18,8 +19,14 @@ func getSchemaInfo() *SchemaInfo {
 	}
 	zero, _ := sqltypes.BuildValue(0)
 	table.AddColumn("id", "int", zero, "")
+	table.AddColumn("id2", "int", zero, "")
 	table.AddColumn("count", "int", zero, "")
 	table.PKColumns = []int{0}
+	primaryIndex := table.AddIndex("PRIMARY")
+	primaryIndex.AddColumn("id", 12345)
+
+	id2Index := table.AddIndex("idx_id2")
+	id2Index.AddColumn("id2", 1234)
 
 	tables := make(map[string]*TableInfo, 1)
 	tables["test_table"] = &TableInfo{Table: table}
@@ -37,7 +44,7 @@ func getSchemaInfo() *SchemaInfo {
 func TestValidateQuery(t *testing.T) {
 	schemaInfo := getSchemaInfo()
 	query := &proto.BoundQuery{}
-	splitter := NewQuerySplitter(query, 3, schemaInfo)
+	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
 
 	query.Sql = "delete from test_table"
 	got := splitter.validateQuery()
@@ -94,6 +101,31 @@ func TestValidateQuery(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
+
+	// column id2 is indexed
+	splitter = NewQuerySplitter(query, "id2", 3, schemaInfo)
+	query.Sql = "select * from test_table where count > :count"
+	got = splitter.validateQuery()
+	want = nil
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
+	}
+
+	// column does not exist
+	splitter = NewQuerySplitter(query, "unknown_column", 3, schemaInfo)
+	got = splitter.validateQuery()
+	wantStr := "split column is not indexed or does not exist in table schema"
+	if !strings.Contains(got.Error(), wantStr) {
+		t.Errorf("unknown table validation failed, got:%v, want:%v", got, wantStr)
+	}
+
+	// column is not indexed
+	splitter = NewQuerySplitter(query, "count", 3, schemaInfo)
+	got = splitter.validateQuery()
+	wantStr = "split column is not indexed or does not exist in table schema"
+	if !strings.Contains(got.Error(), wantStr) {
+		t.Errorf("unknown table validation failed, got:%v, want:%v", got, wantStr)
+	}
 }
 
 func TestGetWhereClause(t *testing.T) {
@@ -101,7 +133,7 @@ func TestGetWhereClause(t *testing.T) {
 	sql := "select * from test_table where count > :count"
 	statement, _ := sqlparser.Parse(sql)
 	splitter.sel, _ = statement.(*sqlparser.Select)
-	splitter.pkCol = "id"
+	splitter.splitColumn = "id"
 
 	// no boundary case, start = end = nil, should not change the where clause
 	nilValue := sqltypes.Value{}
@@ -238,7 +270,7 @@ func TestSplitQuery(t *testing.T) {
 	query := &proto.BoundQuery{
 		Sql: "select * from test_table where count > :count",
 	}
-	splitter := NewQuerySplitter(query, 3, schemaInfo)
+	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)

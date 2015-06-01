@@ -20,6 +20,7 @@ import environment
 
 from vtctl import vtctl_client
 from mysql_flavor import set_mysql_flavor
+from mysql_flavor import mysql_flavor
 from protocols_flavor import set_protocols_flavor, protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
 
@@ -79,7 +80,13 @@ def set_options(opts):
 
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
-def main(mod=None):
+def main(mod=None, test_options=None):
+  """The replacement main method, which parses args and runs tests.
+
+  Args:
+    test_options - a function which adds OptionParser options that are specific
+      to a test file.
+  """
   if mod == None:
     mod = sys.modules['__main__']
 
@@ -87,6 +94,8 @@ def main(mod=None):
 
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   add_options(parser)
+  if test_options:
+    test_options(parser)
   (options, args) = parser.parse_args()
 
   if options.verbose == 0:
@@ -256,12 +265,6 @@ def wait_procs(proc_list, raise_on_error=True):
       if raise_on_error:
         raise CalledProcessError(proc.returncode, ' '.join(proc.args))
 
-def run_procs(cmds, raise_on_error=True):
-  procs = []
-  for cmd in cmds:
-    procs.append(run_bg(cmd))
-  wait_procs(procs, raise_on_error=raise_on_error)
-
 def validate_topology(ping_tablets=False):
   if ping_tablets:
     run_vtctl(['Validate', '-ping-tablets'])
@@ -325,6 +328,47 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
+def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, require_vars=False):
+  """Polls for debug variables to exist, or match specific conditions, within a timeout.
+
+  This function polls in a tight loop, with no sleeps. This is useful for
+  variables that are expected to be short-lived (e.g., a 'Done' state
+  immediately before a process exits).
+
+  Args:
+    name - the name of the process that we're trying to poll vars from.
+    port - the port number that we should poll for variables.
+    condition_msg - string describing the conditions that we're polling for,
+      used for error messaging.
+    timeout - number of seconds that we should attempt to poll for.
+    condition_fn - a function that takes the debug vars dict as input, and
+      returns a truthy value if it matches the success conditions.
+    require_vars - True iff we expect the vars to always exist. If True, and the
+      vars don't exist, we'll raise a TestError. This can be used to differentiate
+      between a timeout waiting for a particular condition vs if the process that
+      you're polling has already exited.
+
+  Raises:
+    TestError, if the conditions aren't met within the given timeout
+    TestError, if vars are required and don't exist
+
+  Returns:
+    dict of debug variables
+  """
+  start_time = time.time()
+  while True:
+    if (time.time() - start_time) >= timeout:
+      raise TestError('Timed out polling for vars from %s; condition "%s" not met' % (name, condition_msg))
+    _vars = get_vars(port)
+    if _vars is None:
+      if require_vars:
+        raise TestError('Expected vars to exist on %s, but they do not; process probably exited earlier than expected.' % (name,))
+      continue
+    if condition_fn is None:
+      return _vars
+    elif condition_fn(_vars):
+      return _vars
+
 def apply_vschema(vschema):
   fname = os.path.join(environment.tmproot, "vschema.json")
   with open(fname, "w") as f:
@@ -343,6 +387,23 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
     timeout = wait_step(
       "%s's SlaveType to be %s" % (tablet_alias, expected_type),
       timeout
+    )
+
+def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
+  """Waits for tablet B to catch up to the replication position of tablet A.
+
+  If the replication position does not catch up within timeout seconds, it will
+  raise a TestError.
+  """
+  replication_pos_a = mysql_flavor().master_position(tablet_a)
+  while True:
+    replication_pos_b = mysql_flavor().master_position(tablet_b)
+    if mysql_flavor().position_at_least(replication_pos_b, replication_pos_a):
+      break
+    timeout = wait_step(
+      "%s's replication position to catch up %s's; currently at: %s, waiting to catch up to: %s" % (
+        tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b, replication_pos_a),
+      timeout, sleep_time=0.1
     )
 
 # vtgate helpers, assuming it always restarts on the same port
@@ -398,6 +459,25 @@ def vtgate_kill(sp):
     return
   kill_sub_process(sp, soft=True)
   sp.wait()
+
+def vtgate_vtclient(vtgate_port, sql, tablet_type='master', bindvars=None,
+                    streaming=False, verbose=False, raise_on_error=False):
+  """vtgate_vtclient uses the vtclient binary to send a query to vtgate.
+  """
+  args = environment.binary_args('vtclient') + [
+    '-server', 'localhost:%u' % vtgate_port,
+    '-tablet_type', tablet_type] + protocols_flavor().vtgate_protocol_flags()
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  if streaming:
+    args.append('-streaming')
+  if verbose:
+    args.append('-alsologtostderr')
+  args.append(sql)
+
+  out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
+  out = out.splitlines()
+  return out, err
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
@@ -463,10 +543,37 @@ def run_vtctl_json(clargs):
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
+  """Runs a vtworker process, returning the stdout and stderr"""
+  cmd, _ = _get_vtworker_cmd(clargs, log_level, auto_log)
+  if expect_fail:
+    return run_fail(cmd, **kwargs)
+  return run(cmd, **kwargs)
+
+def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
+  """Starts a background vtworker process.
+
+  Returns:
+    proc - process returned by subprocess.Popen
+    port - int with the port number that the vtworker is running with
+  """
+  cmd, port = _get_vtworker_cmd(clargs, log_level, auto_log)
+  return run_bg(cmd, **kwargs), port
+
+def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
+  """Assembles the command that is needed to run a vtworker.
+
+  Returns:
+    cmd - list of cmd arguments, can be passed to any `run`-like functions
+    port - int with the port number that the vtworker is running with
+  """
+  port = environment.reserve_ports(1)
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-min_healthy_rdonly_endpoints', '1',
-          '-port', str(environment.reserve_ports(1))]
+          '-port', str(port),
+          '-resolve_ttl', '2s',
+          '-executefetch_retry_time', '1s',
+          ]
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
 
@@ -481,41 +588,7 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
     args.append('--stderrthreshold=%s' % log_level)
 
   cmd = args + clargs
-  if expect_fail:
-    return run_fail(cmd, **kwargs)
-  return run(cmd, **kwargs)
-
-# vtclient2 helpers
-# driver is one of:
-# - vttablet (default), vttablet-streaming
-# - vtdb, vtdb-streaming (default topo server)
-# - vtdb-zk, vtdb-zk-streaming (forced zk topo server)
-# path is either: keyspace/shard for vttablet* or zk path for vtdb*
-def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
-              verbose=False, raise_on_error=True):
-  if (user is None) != (password is None):
-    raise TypeError("you should provide either both or none of user and password")
-
-  # for ZK paths to not have // in the path, that confuses things
-  if path.startswith('/'):
-    path = path[1:]
-  server = "localhost:%u/%s" % (uid, path)
-
-  cmdline = environment.binary_args('vtclient2') + ['-server', server]
-  cmdline += environment.topo_server().flags()
-  cmdline += protocols_flavor().tabletconn_protocol_flags()
-  if user is not None:
-    cmdline.extend(['-tablet-bson-username', user,
-                    '-tablet-bson-password', password])
-  if bindvars:
-    cmdline.extend(['-bindvars', bindvars])
-  if driver:
-    cmdline.extend(['-driver', driver])
-  if verbose:
-    cmdline.extend(['-alsologtostderr', '-verbose'])
-  cmdline.append(query)
-
-  return run(cmdline, raise_on_error=raise_on_error, trap_output=True)
+  return cmd, port
 
 # mysql helpers
 def mysql_query(uid, dbname, query):
@@ -678,6 +751,7 @@ class Vtctld(object):
 
   def __init__(self):
     self.port = environment.reserve_ports(1)
+    self.schema_change_dir = os.path.join(environment.tmproot, 'schema_change_test')
     if protocols_flavor().vtctl_client_protocol() == "grpc":
       self.grpc_port = environment.reserve_ports(1)
 
@@ -700,6 +774,9 @@ class Vtctld(object):
             '-templates', environment.vttop + '/go/cmd/vtctld/templates',
             '-log_dir', environment.vtlogroot,
             '-port', str(self.port),
+            '-schema-change-dir', self.schema_change_dir,
+            '-schema-change-controller', 'local',
+            '-schema-change-check-interval', '1',
             ] + \
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags()

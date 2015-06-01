@@ -27,10 +27,11 @@ $ go get github.com/youtube/vitess/go/cmd/vtctlclient
 ### Set the path to kubectl
 
 If you're running in Container Engine, set the `KUBECTL` environment variable
-to point to the `gcloud` command:
+to point to the `kubectl` command provided by the Google Cloud SDK (if you've
+already added gcloud to your PATH, you likely have kubectl):
 
 ```
-$ export KUBECTL='gcloud alpha container kubectl'
+$ export KUBECTL='kubectl'
 ```
 
 If you're running Kubernetes manually, set the `KUBECTL` environment variable

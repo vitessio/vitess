@@ -250,23 +250,19 @@ func testSplitClone(t *testing.T, strategy string) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	rightMaster := testlib.NewFakeTablet(t, wr, "cell1", 20,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 	rightRdonly := testlib.NewFakeTablet(t, wr, "cell1", 21,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"),
-		testlib.TabletParent(rightMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "40-80"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly, rightMaster, rightRdonly} {
 		ft.StartActionLoop(t, wr)
@@ -275,7 +271,7 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	// add the topo and schema data we'll need
 	ctx := context.Background()
-	if err := topo.CreateShard(ts, "ks", "80-"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", key.KIT_UINT64, 4, false); err != nil {
@@ -299,17 +295,19 @@ func testSplitClone(t *testing.T, strategy string) {
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = SourceRdonlyFactory(t)
-		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-			Position: myproto.ReplicationPosition{
-				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
-			},
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
+			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		}
+		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP SLAVE",
+			"START SLAVE",
 		}
 		sourceRdonly.RPCServer.Register(gorpcqueryservice.New(&testQueryService{t: t}))
 	}
@@ -327,12 +325,12 @@ func testSplitClone(t *testing.T, strategy string) {
 	rightRdonly.FakeMysqlDaemon.DbAppConnectionFactory = DestinationsFactory(t, 30)
 
 	// Only wait 1 ms between retries, so that the test passes faster
-	executeFetchRetryTime = (1 * time.Millisecond)
+	*executeFetchRetryTime = (1 * time.Millisecond)
 
-	wrk.Run()
+	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
-	if wrk.err != nil || wrk.state != stateSCDone {
+	if err != nil || wrk.State != WorkerStateDone {
 		t.Errorf("Worker run failed")
 	}
 

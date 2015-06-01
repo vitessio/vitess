@@ -19,7 +19,6 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -52,7 +51,6 @@ public class FailuresIT {
   }
 
   @Test
-  @Ignore("causing other tests to fail")
   public void testIntegrityException() throws Exception {
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
     String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
@@ -123,7 +121,6 @@ public class FailuresIT {
       Assert.fail("failed to raise tx_pool_full exception");
     }
   }
-
 
   /**
    * Create env with two shards each having a master and replica

@@ -6,12 +6,10 @@ package testlib
 
 import (
 	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
@@ -21,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
-	"golang.org/x/net/context"
 )
 
 type ExpectedExecuteFetch struct {
@@ -93,47 +90,17 @@ func (fpc *FakePoolConnection) Reconnect() error {
 	return nil
 }
 
-// on the destinations
-func DestinationsFactory(t *testing.T) func() (dbconnpool.PoolConnection, error) {
-	var queryIndex int64 = -1
-
-	return func() (dbconnpool.PoolConnection, error) {
-		qi := atomic.AddInt64(&queryIndex, 1)
-		switch {
-		case qi == 0:
-			return NewFakePoolConnectionQuery(t, "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"), nil
-		case qi == 1:
-			return NewFakePoolConnectionQuery(t, "CREATE TABLE `vt_ks`.`resharding1` (\n"+
-				"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
-				"  `msg` varchar(64) DEFAULT NULL,\n"+
-				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-				"  PRIMARY KEY (`id`),\n"+
-				"  KEY `by_msg` (`msg`)\n"+
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
-		case qi == 2:
-			return NewFakePoolConnectionQuery(t, "CREATE TABLE `view1` (\n"+
-				"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
-				"  `msg` varchar(64) DEFAULT NULL,\n"+
-				"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-				"  PRIMARY KEY (`id`),\n"+
-				"  KEY `by_msg` (`msg`)\n"+
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8"), nil
-		}
-
-		return nil, fmt.Errorf("Unexpected connection")
-	}
-}
-
 func TestCopySchemaShard(t *testing.T) {
-	fakesqldb.Register()
+	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-80"),
-		TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-80"))
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-40"))
@@ -149,20 +116,34 @@ func TestCopySchemaShard(t *testing.T) {
 			&myproto.TableDefinition{
 				Name:   "table1",
 				Schema: "CREATE TABLE `resharding1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TABLE_BASE_TABLE,
+				Type:   myproto.TableBaseTable,
 			},
 			&myproto.TableDefinition{
 				Name:   "view1",
 				Schema: "CREATE TABLE `view1` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(64) DEFAULT NULL,\n  `keyspace_id` bigint(20) unsigned NOT NULL,\n  PRIMARY KEY (`id`),\n  KEY `by_msg` (`msg`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
-				Type:   myproto.TABLE_VIEW,
+				Type:   myproto.TableView,
 			},
 		},
 	}
 
-	destinationMaster.FakeMysqlDaemon.DbaConnectionFactory = DestinationsFactory(t)
+	db.AddQuery("USE vt_ks", &mproto.QueryResult{})
+	db.AddQuery("CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */", &mproto.QueryResult{})
+	db.AddQuery("CREATE TABLE `vt_ks`.`resharding1` (\n"+
+		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
+		"  `msg` varchar(64) DEFAULT NULL,\n"+
+		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
+		"  PRIMARY KEY (`id`),\n"+
+		"  KEY `by_msg` (`msg`)\n"+
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8", &mproto.QueryResult{})
+	db.AddQuery("CREATE TABLE `view1` (\n"+
+		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
+		"  `msg` varchar(64) DEFAULT NULL,\n"+
+		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
+		"  PRIMARY KEY (`id`),\n"+
+		"  KEY `by_msg` (`msg`)\n"+
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8", &mproto.QueryResult{})
 
-	if err := wr.CopySchemaShard(context.Background(), sourceRdonly.Tablet.Alias, nil, nil, true, "ks", "-40"); err != nil {
+	if err := vp.Run([]string{"CopySchemaShard", "-include-views", sourceRdonly.Tablet.Alias.String(), "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
-
 }

@@ -9,25 +9,27 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func TestTee(t *testing.T) {
+	ctx := context.Background()
 
 	// create the setup, copy the data
-	fromTS, toTS := createSetup(t)
-	CopyKeyspaces(fromTS, toTS)
-	CopyShards(fromTS, toTS, true)
-	CopyTablets(fromTS, toTS)
+	fromTS, toTS := createSetup(ctx, t)
+	CopyKeyspaces(ctx, fromTS, toTS)
+	CopyShards(ctx, fromTS, toTS, true)
+	CopyTablets(ctx, fromTS, toTS)
 
 	// create a tee and check it implements the interface
 	tee := NewTee(fromTS, toTS, true)
 	var _ topo.Server = tee
 
 	// create a keyspace, make sure it is on both sides
-	if err := tee.CreateKeyspace("keyspace2", &topo.Keyspace{}); err != nil {
+	if err := tee.CreateKeyspace(ctx, "keyspace2", &topo.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
-	teeKeyspaces, err := tee.GetKeyspaces()
+	teeKeyspaces, err := tee.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("tee.GetKeyspaces() failed: %v", err)
 	}
@@ -35,7 +37,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, teeKeyspaces) {
 		t.Errorf("teeKeyspaces mismatch, got %+v, want %+v", teeKeyspaces, expected)
 	}
-	fromKeyspaces, err := fromTS.GetKeyspaces()
+	fromKeyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("fromTS.GetKeyspaces() failed: %v", err)
 	}
@@ -43,7 +45,7 @@ func TestTee(t *testing.T) {
 	if !reflect.DeepEqual(expected, fromKeyspaces) {
 		t.Errorf("fromKeyspaces mismatch, got %+v, want %+v", fromKeyspaces, expected)
 	}
-	toKeyspaces, err := toTS.GetKeyspaces()
+	toKeyspaces, err := toTS.GetKeyspaces(ctx)
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces() failed: %v", err)
 	}

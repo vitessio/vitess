@@ -20,11 +20,11 @@ var (
 	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
 )
 
-// findHealthyRdonlyEndPoint returns a random healthy endpoint.
+// FindHealthyRdonlyEndPoint returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
-func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	endPoints, err := wr.TopoServer().GetEndPoints(cell, keyspace, shard, topo.TYPE_RDONLY)
+func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	endPoints, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 	}
@@ -46,12 +46,12 @@ func findHealthyRdonlyEndPoint(wr *wrangler.Wrangler, cell, keyspace, shard stri
 	}, nil
 }
 
-// findChecker:
+// FindWorkerTablet will:
 // - find a rdonly instance in the keyspace / shard
-// - mark it as checker
+// - mark it as worker
 // - tag it with our worker process
-func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	tabletAlias, err := findHealthyRdonlyEndPoint(wr, cell, keyspace, shard)
+func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, cell, keyspace, shard string) (topo.TabletAlias, error) {
+	tabletAlias, err := FindHealthyRdonlyEndPoint(ctx, wr, cell, keyspace, shard)
 	if err != nil {
 		return topo.TabletAlias{}, err
 	}
@@ -60,7 +60,7 @@ func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.C
 	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
 	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
-	if err := wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+	if err := wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *topo.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}
@@ -75,8 +75,8 @@ func findChecker(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.C
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
 	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	err = wr.ChangeType(ctx, tabletAlias, topo.TYPE_CHECKER, false /*force*/)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	err = wr.ChangeType(shortCtx, tabletAlias, topo.TYPE_WORKER, false /*force*/)
 	cancel()
 	if err != nil {
 		return topo.TabletAlias{}, err

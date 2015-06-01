@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -66,7 +67,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		return err
 	}
 
-	return agent.QueryServiceControl.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.Mysqld)
+	return agent.QueryServiceControl.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:
@@ -106,7 +107,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := agent.Mysqld.ResolveTables(tablet.DbName(), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, tablet.DbName(), blacklistedTables)
 		if err != nil {
 			return err
 		}
@@ -173,7 +174,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// for binlog replication, only if source shards are set.
 	var keyspaceInfo *topo.KeyspaceInfo
 	if newTablet.Type == topo.TYPE_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
-		keyspaceInfo, err = agent.TopoServer.GetKeyspace(newTablet.Keyspace)
+		keyspaceInfo, err = agent.TopoServer.GetKeyspace(ctx, newTablet.Keyspace)
 		if err != nil {
 			log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
 			keyspaceInfo = nil
@@ -211,7 +212,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// update stream needs to be started or stopped too
 	if agent.DBConfigs != nil {
 		if topo.IsRunningUpdateStream(newTablet.Type) {
-			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.Mysqld)
+			binlog.EnableUpdateStreamService(agent.DBConfigs.App.DbName, agent.MysqlDaemon)
 		} else {
 			binlog.DisableUpdateStreamService()
 		}
@@ -226,7 +227,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
 		if newTablet.Type == topo.TYPE_MASTER {
-			agent.BinlogPlayerMap.RefreshMap(newTablet, keyspaceInfo, shardInfo)
+			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, keyspaceInfo, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}

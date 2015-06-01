@@ -107,20 +107,6 @@ func (cp *ConnPool) Get(ctx context.Context) (*DBConn, error) {
 	return r.(*DBConn), nil
 }
 
-// TryGet returns a connection, or nil.
-// You must call Recycle on the DBConn once done.
-func (cp *ConnPool) TryGet() (*DBConn, error) {
-	p := cp.pool()
-	if p == nil {
-		return nil, ErrConnPoolClosed
-	}
-	r, err := p.TryGet()
-	if err != nil || r == nil {
-		return nil, err
-	}
-	return r.(*DBConn), nil
-}
-
 // Put puts a connection into the pool.
 func (cp *ConnPool) Put(conn *DBConn) {
 	p := cp.pool()

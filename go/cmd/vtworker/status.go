@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -68,17 +69,20 @@ func initStatusHandling() {
 		currentWorkerMutex.Lock()
 		wrk := currentWorker
 		logger := currentMemoryLogger
-		done := currentDone
+		ctx := currentContext
+		err := lastRunError
 		currentWorkerMutex.Unlock()
 
 		data := make(map[string]interface{})
 		if wrk != nil {
-			data["Status"] = wrk.StatusAsHTML()
-			select {
-			case <-done:
+			status := template.HTML("Current worker:<br>\n") + wrk.StatusAsHTML()
+			if ctx == nil {
 				data["Done"] = true
-			default:
+				if err != nil {
+					status += template.HTML(fmt.Sprintf("<br>\nEnded with an error: %v<br>\n", err))
+				}
 			}
+			data["Status"] = status
 			if logger != nil {
 				data["Logs"] = template.HTML(strings.Replace(logger.String(), "\n", "</br>\n", -1))
 			} else {
@@ -99,29 +103,27 @@ func initStatusHandling() {
 			acl.SendError(w, err)
 			return
 		}
+
 		currentWorkerMutex.Lock()
-		wrk := currentWorker
-		done := currentDone
-		currentWorkerMutex.Unlock()
 
 		// no worker, we go to the menu
-		if wrk == nil {
+		if currentWorker == nil {
+			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
 
 		// check the worker is really done
-		select {
-		case <-done:
-			currentWorkerMutex.Lock()
+		if currentContext == nil {
 			currentWorker = nil
 			currentMemoryLogger = nil
-			currentDone = nil
 			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		default:
-			httpError(w, "worker still executing", nil)
+			return
 		}
+
+		currentWorkerMutex.Unlock()
+		httpError(w, "worker still executing", nil)
 	})
 
 	// cancel handler
@@ -130,18 +132,20 @@ func initStatusHandling() {
 			acl.SendError(w, err)
 			return
 		}
-		currentWorkerMutex.Lock()
-		wrk := currentWorker
-		currentWorkerMutex.Unlock()
 
-		// no worker, we go to the menu
-		if wrk == nil {
+		currentWorkerMutex.Lock()
+
+		// no worker, or not running, we go to the menu
+		if currentWorker == nil || currentCancelFunc == nil {
+			currentWorkerMutex.Unlock()
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
 
 		// otherwise, cancel the running worker and go back to the status page
-		wrk.Cancel()
+		cancel := currentCancelFunc
+		currentWorkerMutex.Unlock()
+		cancel()
 		http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 
 	})

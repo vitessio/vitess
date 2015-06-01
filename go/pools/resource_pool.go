@@ -77,7 +77,7 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 // Close empties the pool calling Close on all its resources.
 // You can call Close while there are outstanding resources.
 // It waits for all resources to be returned (Put).
-// After a Close, Get and TryGet are not allowed.
+// After a Close, Get is not allowed.
 func (rp *ResourcePool) Close() {
 	_ = rp.SetCapacity(0)
 }
@@ -93,13 +93,6 @@ func (rp *ResourcePool) IsClosed() (closed bool) {
 // A timeout of 0 is an indefinite wait.
 func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
 	return rp.get(ctx, true)
-}
-
-// TryGet will return the next available resource. If none is available, and capacity
-// has not been reached, it will create a new one using the factory. Otherwise,
-// it will return nil with no error.
-func (rp *ResourcePool) TryGet() (resource Resource, err error) {
-	return rp.get(context.TODO(), false)
 }
 
 func (rp *ResourcePool) get(ctx context.Context, wait bool) (resource Resource, err error) {

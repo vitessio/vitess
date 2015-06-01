@@ -30,8 +30,8 @@ import (
 // Does a topo lookup for a single shard, and returns the tablet record of the master tablet.
 func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
 	var ti *topo.TabletInfo
-	newCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	si, err := topo.GetShard(newCtx, wr.TopoServer(), keyspace, shard)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	si, err := topo.GetShard(shortCtx, wr.TopoServer(), keyspace, shard)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)
@@ -43,8 +43,8 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 
 	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
 
-	newCtx, cancel = context.WithTimeout(ctx, 60*time.Second)
-	ti, err = topo.GetTablet(newCtx, wr.TopoServer(), si.MasterAlias)
+	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
+	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), si.MasterAlias)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
@@ -58,16 +58,16 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 //	2. Map of tablet alias : tablet record for all tablets.
 func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []topo.TabletAlias, reloadTablets map[topo.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
-	newCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	reloadAliases, err = topo.FindAllTabletAliasesInShard(newCtx, wr.TopoServer(), keyspace, shard)
+	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	reloadAliases, err = topo.FindAllTabletAliasesInShard(shortCtx, wr.TopoServer(), keyspace, shard)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
 	}
 	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
 
-	newCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	reloadTablets, err = topo.GetTabletMap(newCtx, wr.TopoServer(), reloadAliases)
+	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+	reloadTablets, err = topo.GetTabletMap(shortCtx, wr.TopoServer(), reloadAliases)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",
@@ -151,9 +151,6 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 
 var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
 
-// The amount of time we should wait before retrying ExecuteFetch calls
-var executeFetchRetryTime = (30 * time.Second)
-
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
@@ -190,6 +187,9 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 		case errNo == "1290":
 			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL read-only error: %v", ti, err)
 			statsRetryCounters.Add("ReadOnly", 1)
+		case errNo == "2002" || errNo == "2006":
+			wr.Logger().Warningf("ExecuteFetch failed on %v; will reresolve and retry because it's due to a MySQL connection error: %v", ti, err)
+			statsRetryCounters.Add("ConnectionError", 1)
 		case errNo == "1062":
 			if !isRetry {
 				return ti, fmt.Errorf("ExecuteFetch failed on %v on the first attempt; not retrying as this is not a recoverable error: %v", ti, err)
@@ -200,7 +200,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			// Unknown error
 			return ti, err
 		}
-		t := time.NewTimer(executeFetchRetryTime)
+		t := time.NewTimer(*executeFetchRetryTime)
 		// don't leak memory if the timer isn't triggered
 		defer t.Stop()
 
@@ -212,7 +212,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			return ti, fmt.Errorf("interrupted while trying to run %v on tablet %v", command, ti)
 		case <-t.C:
 			// Re-resolve and retry 30s after the failure
-			err = r.ResolveDestinationMasters()
+			err = r.ResolveDestinationMasters(ctx)
 			if err != nil {
 				return ti, fmt.Errorf("unable to re-resolve masters for ExecuteFetch, due to: %v", err)
 			}
@@ -258,14 +258,14 @@ func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shar
 	return nil
 }
 
-// findChunks returns an array of chunks to use for splitting up a table
+// FindChunks returns an array of chunks to use for splitting up a table
 // into multiple data chunks. It only works for tables with a primary key
 // (and the primary key first column is an integer type).
 // The array will always look like:
 // "", "value1", "value2", ""
 // A non-split tablet will just return:
 // "", ""
-func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
+func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, td *myproto.TableDefinition, minTableSizeForSplit uint64, sourceReaderCount int) ([]string, error) {
 	result := []string{"", ""}
 
 	// eliminate a few cases we don't split tables for
@@ -280,12 +280,11 @@ func findChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 
 	// get the min and max of the leading column of the primary key
 	query := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v.%v", td.PrimaryKeyColumns[0], td.PrimaryKeyColumns[0], ti.DbName(), td.Name)
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(ctx, ti, query, 1, true)
+	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+	qr, err := wr.TabletManagerClient().ExecuteFetchAsApp(shortCtx, ti, query, 1, true)
 	cancel()
 	if err != nil {
-		wr.Logger().Infof("Not splitting table %v into multiple chunks: %v", td.Name, err)
-		return result, nil
+		return nil, fmt.Errorf("ExecuteFetchAsApp: %v", err)
 	}
 	if len(qr.Rows) != 1 {
 		wr.Logger().Infof("Not splitting table %v into multiple chunks, cannot get min and max", td.Name)

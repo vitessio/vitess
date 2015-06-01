@@ -268,7 +268,7 @@ func TestDeleteVindexFail(t *testing.T) {
 		}},
 	}})
 	_, err = routerExec(router, "delete from user where id = 1", nil)
-	want = `execDeleteEqual: strconv.ParseUint: parsing "foo": invalid syntax`
+	want = `execDeleteEqual: strconv.ParseInt: parsing "foo": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}

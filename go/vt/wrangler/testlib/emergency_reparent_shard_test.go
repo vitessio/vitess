@@ -20,9 +20,10 @@ import (
 )
 
 func TestEmergencyReparentShard(t *testing.T) {
-	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Create a master, a couple good slaves
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -32,6 +33,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
+	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -40,6 +42,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -54,16 +57,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
+	goodSlave1.FakeMysqlDaemon.Replicating = true
 	goodSlave1.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 455,
 		},
-	}
-	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: true,
 	}
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
@@ -77,6 +77,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// good slave 2 is not replicating
 	goodSlave2.FakeMysqlDaemon.ReadOnly = true
+	goodSlave2.FakeMysqlDaemon.Replicating = false
 	goodSlave2.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
@@ -93,7 +94,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	if err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second); err != nil {
+	if err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, newMaster.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("EmergencyReparentShard failed: %v", err)
 	}
 
@@ -120,7 +121,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 	if !goodSlave2.FakeMysqlDaemon.ReadOnly {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.ReadOnly not set")
 	}
-
+	if !goodSlave1.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.Replicating not set")
+	}
+	if goodSlave2.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")
+	}
 }
 
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent
@@ -136,12 +142,16 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// new master
+	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 456,
 		},
+	}
+	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 	}
 	newMaster.StartActionLoop(t, wr)
 	defer newMaster.StopActionLoop(t)
@@ -151,12 +161,16 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	defer oldMaster.StopActionLoop(t)
 
 	// more advanced slave
+	moreAdvancedSlave.FakeMysqlDaemon.Replicating = true
 	moreAdvancedSlave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   2,
 			Server:   123,
 			Sequence: 457,
 		},
+	}
+	moreAdvancedSlave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 	}
 	moreAdvancedSlave.StartActionLoop(t, wr)
 	defer moreAdvancedSlave.StopActionLoop(t)

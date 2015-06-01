@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -26,11 +25,11 @@ func init() {
 type Reporter interface {
 	// Report returns the replication delay gathered by this
 	// module (or 0 if it thinks it's not behind), assuming that
-	// its tablet type is TabletType, and that its query service
+	// it is a slave type or not, and that its query service
 	// should be running or not. If Report returns an error it
 	// implies that the tablet is in a bad shape and not able to
 	// handle queries.
-	Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error)
+	Report(isSlaveType, shouldQueryServiceBeRunning bool) (replicationDelay time.Duration, err error)
 
 	// HTMLName returns a displayable name for the module.
 	// Can be used to be displayed in the status page.
@@ -38,11 +37,11 @@ type Reporter interface {
 }
 
 // FunctionReporter is a function that may act as a Reporter.
-type FunctionReporter func(topo.TabletType, bool) (time.Duration, error)
+type FunctionReporter func(bool, bool) (time.Duration, error)
 
 // Report implements Reporter.Report
-func (fc FunctionReporter) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	return fc(tabletType, shouldQueryServiceBeRunning)
+func (fc FunctionReporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+	return fc(isSlaveType, shouldQueryServiceBeRunning)
 }
 
 // HTMLName implements Reporter.HTMLName
@@ -71,7 +70,7 @@ func NewAggregator() *Aggregator {
 // The returned replication delay will be the highest of all the replication
 // delays returned by the Reporter implementations (although typically
 // only one implementation will actually return a meaningful one).
-func (ag *Aggregator) Report(tabletType topo.TabletType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+func (ag *Aggregator) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	var (
 		wg  sync.WaitGroup
 		rec concurrency.AllErrorRecorder
@@ -83,7 +82,7 @@ func (ag *Aggregator) Report(tabletType topo.TabletType, shouldQueryServiceBeRun
 		wg.Add(1)
 		go func(name string, rep Reporter) {
 			defer wg.Done()
-			replicationDelay, err := rep.Report(tabletType, shouldQueryServiceBeRunning)
+			replicationDelay, err := rep.Report(isSlaveType, shouldQueryServiceBeRunning)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("%v: %v", name, err))
 				return

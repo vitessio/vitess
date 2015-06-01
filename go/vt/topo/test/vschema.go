@@ -9,15 +9,17 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
-func CheckVSchema(t *testing.T, ts topo.Server) {
+// CheckVSchema runs the tests on the VSchema part of the API
+func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
 	schemafier, ok := ts.(topo.Schemafier)
 	if !ok {
 		t.Errorf("%T is not a Schemafier", ts)
 		return
 	}
-	got, err := schemafier.GetVSchema()
+	got, err := schemafier.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -26,12 +28,12 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema(`{ "Keyspaces": {}}`)
+	err = schemafier.SaveVSchema(ctx, `{ "Keyspaces": {}}`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = schemafier.GetVSchema()
+	got, err = schemafier.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -40,12 +42,12 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema(`{ "Keyspaces": { "aa": { "Sharded": false}}}`)
+	err = schemafier.SaveVSchema(ctx, `{ "Keyspaces": { "aa": { "Sharded": false}}}`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = schemafier.GetVSchema()
+	got, err = schemafier.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,7 +56,7 @@ func CheckVSchema(t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema("invalid")
+	err = schemafier.SaveVSchema(ctx, "invalid")
 	want = "Unmarshal failed:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("SaveVSchema: %v, must start with %s", err, want)

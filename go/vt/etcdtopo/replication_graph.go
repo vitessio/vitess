@@ -10,10 +10,11 @@ import (
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // UpdateShardReplicationFields implements topo.Server.
-func (s *Server) UpdateShardReplicationFields(cell, keyspace, shard string, updateFunc func(*topo.ShardReplication) error) error {
+func (s *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, updateFunc func(*topo.ShardReplication) error) error {
 	var sri *topo.ShardReplicationInfo
 	var version int64
 	var err error
@@ -82,7 +83,7 @@ func (s *Server) createShardReplication(sri *topo.ShardReplicationInfo) (int64, 
 }
 
 // GetShardReplication implements topo.Server.
-func (s *Server) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+func (s *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
 	sri, _, err := s.getShardReplication(cell, keyspace, shard)
 	return sri, err
 }
@@ -110,7 +111,7 @@ func (s *Server) getShardReplication(cellName, keyspace, shard string) (*topo.Sh
 }
 
 // DeleteShardReplication implements topo.Server.
-func (s *Server) DeleteShardReplication(cellName, keyspace, shard string) error {
+func (s *Server) DeleteShardReplication(ctx context.Context, cellName, keyspace, shard string) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err

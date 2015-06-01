@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 func TestSplitCellPath(t *testing.T) {
@@ -78,14 +79,15 @@ func TestHandlePathKeyspace(t *testing.T) {
 	shard := &topo.Shard{}
 	want := jscfg.ToJSON(keyspace)
 
+	ctx := context.Background()
 	ts := newTestServer(t, cells)
-	if err := ts.CreateKeyspace("test_keyspace", keyspace); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard("test_keyspace", "10-20", shard); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", shard); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
-	if err := ts.CreateShard("test_keyspace", "20-30", shard); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "20-30", shard); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
@@ -114,11 +116,12 @@ func TestHandlePathShard(t *testing.T) {
 	shard := &topo.Shard{}
 	want := jscfg.ToJSON(shard)
 
+	ctx := context.Background()
 	ts := newTestServer(t, cells)
-	if err := ts.CreateKeyspace("test_keyspace", keyspace); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard("test_keyspace", "-80", shard); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "-80", shard); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
@@ -150,8 +153,9 @@ func TestHandlePathTablet(t *testing.T) {
 	}
 	want := jscfg.ToJSON(tablet)
 
+	ctx := context.Background()
 	ts := newTestServer(t, cells)
-	if err := ts.CreateTablet(tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet error: %v", err)
 	}
 

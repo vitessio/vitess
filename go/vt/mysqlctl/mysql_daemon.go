@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
@@ -19,21 +20,23 @@ import (
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.
 type MysqlDaemon interface {
-	// GetMasterAddr returns the mysql master address, as shown by
-	// 'show slave status'.
-	GetMasterAddr() (string, error)
+	// Cnf returns the underlying mycnf
+	Cnf() *Mycnf
+
+	// methods related to mysql running or not
+	Start(mysqlWaitTime time.Duration) error
+	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
 
 	// replication related methods
-	StartSlave(hookExtraEnv map[string]string) error
-	StopSlave(hookExtraEnv map[string]string) error
-	SlaveStatus() (*proto.ReplicationStatus, error)
+	SlaveStatus() (proto.ReplicationStatus, error)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
 	MasterPosition() (proto.ReplicationPosition, error)
+	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
 	StartReplicationCommands(status *proto.ReplicationStatus) ([]string, error)
 	SetMasterCommands(masterHost string, masterPort int) ([]string, error)
@@ -52,21 +55,42 @@ type MysqlDaemon interface {
 
 	// Schema related methods
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*proto.SchemaDefinition, error)
+	PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error)
+	ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error)
 
 	// GetAppConnection returns a app connection to be able to talk to the database.
 	GetAppConnection() (dbconnpool.PoolConnection, error)
 	// GetDbaConnection returns a dba connection.
 	GetDbaConnection() (*dbconnpool.DBConnection, error)
-	// query execution methods
+
+	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(queryList []string) error
+
+	// FetchSuperQuery executes one query, returns the result
+	FetchSuperQuery(query string) (*mproto.QueryResult, error)
+
+	// NewSlaveConnection returns a SlaveConnection to the database.
+	NewSlaveConnection() (*SlaveConnection, error)
+
+	// EnableBinlogPlayback enables playback of binlog events
+	EnableBinlogPlayback() error
+
+	// DisableBinlogPlayback disable playback of binlog events
+	DisableBinlogPlayback() error
+
+	// Close will close this instance of Mysqld. It will wait for all dba
+	// queries to be finished.
+	Close()
 }
 
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
-	// MasterAddr will be returned by GetMasterAddr(). Set to "" to return
-	// ErrNotSlave, or to "ERROR" to return an error.
-	MasterAddr string
+	// Mycnf will be returned by Cnf()
+	Mycnf *Mycnf
+
+	// Running is used by Start / Shutdown
+	Running bool
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
@@ -77,9 +101,6 @@ type FakeMysqlDaemon struct {
 	// test owner responsability to have these two match)
 	Replicating bool
 
-	// CurrentSlaveStatus is returned by SlaveStatus
-	CurrentSlaveStatus *proto.ReplicationStatus
-
 	// ResetReplicationResult is returned by ResetReplication
 	ResetReplicationResult []string
 
@@ -87,7 +108,14 @@ type FakeMysqlDaemon struct {
 	ResetReplicationError error
 
 	// CurrentMasterPosition is returned by MasterPosition
+	// and SlaveStatus
 	CurrentMasterPosition proto.ReplicationPosition
+
+	// CurrentMasterHost is returned by SlaveStatus
+	CurrentMasterHost string
+
+	// CurrentMasterport is returned by SlaveStatus
+	CurrentMasterPort int
 
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
@@ -120,12 +148,17 @@ type FakeMysqlDaemon struct {
 	// PromoteSlaveResult is returned by PromoteSlave
 	PromoteSlaveResult proto.ReplicationPosition
 
-	// Schema that will be returned by GetSchema. If nil we'll
+	// Schema will be returned by GetSchema. If nil we'll
 	// return an error.
 	Schema *proto.SchemaDefinition
 
-	// DbaConnectionFactory is the factory for making fake dba connections
-	DbaConnectionFactory func() (dbconnpool.PoolConnection, error)
+	// PreflightSchemaChangeResult will be returned by PreflightSchemaChange.
+	// If nil we'll return an error.
+	PreflightSchemaChangeResult *proto.SchemaChangeResult
+
+	// ApplySchemaChangeResult will be returned by ApplySchemaChange.
+	// If nil we'll return an error.
+	ApplySchemaChangeResult *proto.SchemaChangeResult
 
 	// DbAppConnectionFactory is the factory for making fake db app connections
 	DbAppConnectionFactory func() (dbconnpool.PoolConnection, error)
@@ -141,17 +174,43 @@ type FakeMysqlDaemon struct {
 	// ExpectedExecuteSuperQueryCurrent is the current index of the queries
 	// we expect
 	ExpectedExecuteSuperQueryCurrent int
+
+	// FetchSuperQueryResults is used by FetchSuperQuery
+	FetchSuperQueryMap map[string]*mproto.QueryResult
+
+	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
+	BinlogPlayerEnabled bool
 }
 
-// GetMasterAddr is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetMasterAddr() (string, error) {
-	if fmd.MasterAddr == "" {
-		return "", ErrNotSlave
+// NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
+// to be running
+func NewFakeMysqlDaemon() *FakeMysqlDaemon {
+	return &FakeMysqlDaemon{
+		Running: true,
 	}
-	if fmd.MasterAddr == "ERROR" {
-		return "", fmt.Errorf("FakeMysqlDaemon.GetMasterAddr returns an error")
+}
+
+// Cnf is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Cnf() *Mycnf {
+	return fmd.Mycnf
+}
+
+// Start is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Start(mysqlWaitTime time.Duration) error {
+	if fmd.Running {
+		return fmt.Errorf("fake mysql daemon already running")
 	}
-	return fmd.MasterAddr, nil
+	fmd.Running = true
+	return nil
+}
+
+// Shutdown is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
+	if !fmd.Running {
+		return fmt.Errorf("fake mysql daemon not running")
+	}
+	fmd.Running = false
+	return nil
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface
@@ -162,24 +221,15 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int, error) {
 	return fmd.MysqlPort, nil
 }
 
-// StartSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
-	fmd.Replicating = true
-	return nil
-}
-
-// StopSlave is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) StopSlave(hookExtraEnv map[string]string) error {
-	fmd.Replicating = false
-	return nil
-}
-
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (*proto.ReplicationStatus, error) {
-	if fmd.CurrentSlaveStatus == nil {
-		return nil, fmt.Errorf("no slave status defined")
-	}
-	return fmd.CurrentSlaveStatus, nil
+func (fmd *FakeMysqlDaemon) SlaveStatus() (proto.ReplicationStatus, error) {
+	return proto.ReplicationStatus{
+		Position:        fmd.CurrentMasterPosition,
+		SlaveIORunning:  fmd.Replicating,
+		SlaveSQLRunning: fmd.Replicating,
+		MasterHost:      fmd.CurrentMasterHost,
+		MasterPort:      fmd.CurrentMasterPort,
+	}, nil
 }
 
 // ResetReplicationCommands is part of the MysqlDaemon interface
@@ -190,6 +240,11 @@ func (fmd *FakeMysqlDaemon) ResetReplicationCommands() ([]string, error) {
 // MasterPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) MasterPosition() (proto.ReplicationPosition, error) {
 	return fmd.CurrentMasterPosition, nil
+}
+
+// IsReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
+	return fmd.ReadOnly, nil
 }
 
 // SetReadOnly is part of the MysqlDaemon interface
@@ -261,8 +316,56 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 		if expected != query {
 			return fmt.Errorf("wrong query for ExecuteSuperQueryList: expected %v got %v", expected, query)
 		}
+
+		// intercept some queries to update our status
+		switch query {
+		case SqlStartSlave:
+			fmd.Replicating = true
+		case SqlStopSlave:
+			fmd.Replicating = false
+		}
 	}
 	return nil
+}
+
+// FetchSuperQuery returns the results from the map, if any
+func (fmd *FakeMysqlDaemon) FetchSuperQuery(query string) (*mproto.QueryResult, error) {
+	if fmd.FetchSuperQueryMap == nil {
+		return nil, fmt.Errorf("unexpected query: %v", query)
+	}
+
+	qr, ok := fmd.FetchSuperQueryMap[query]
+	if !ok {
+		return nil, fmt.Errorf("unexpected query: %v", query)
+	}
+	return qr, nil
+}
+
+// NewSlaveConnection is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) NewSlaveConnection() (*SlaveConnection, error) {
+	panic(fmt.Errorf("not implemented on FakeMysqlDaemon"))
+}
+
+// EnableBinlogPlayback is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already enabled")
+	}
+	fmd.BinlogPlayerEnabled = true
+	return nil
+}
+
+// DisableBinlogPlayback disable playback of binlog events
+func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
+	if fmd.BinlogPlayerEnabled {
+		return fmt.Errorf("binlog player already disabled")
+	}
+	fmd.BinlogPlayerEnabled = false
+	return nil
+}
+
+// Close is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) Close() {
 }
 
 // CheckSuperQueryList returns an error if all the queries we expected
@@ -280,6 +383,22 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 		return nil, fmt.Errorf("no schema defined")
 	}
 	return fmd.Schema.FilterTables(tables, excludeTables, includeViews)
+}
+
+// PreflightSchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
+	if fmd.PreflightSchemaChangeResult == nil {
+		return nil, fmt.Errorf("no preflight result defined")
+	}
+	return fmd.PreflightSchemaChangeResult, nil
+}
+
+// ApplySchemaChange is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
+	if fmd.ApplySchemaChangeResult == nil {
+		return nil, fmt.Errorf("no apply schema defined")
+	}
+	return fmd.ApplySchemaChangeResult, nil
 }
 
 // GetAppConnection is part of the MysqlDaemon interface

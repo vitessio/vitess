@@ -12,10 +12,11 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
+	"golang.org/x/net/context"
 )
 
 // CreateTablet implements topo.Server.
-func (s *Server) CreateTablet(tablet *topo.Tablet) error {
+func (s *Server) CreateTablet(ctx context.Context, tablet *topo.Tablet) error {
 	cell, err := s.getCell(tablet.Alias.Cell)
 	if err != nil {
 		return err
@@ -35,7 +36,7 @@ func (s *Server) CreateTablet(tablet *topo.Tablet) error {
 }
 
 // UpdateTablet implements topo.Server.
-func (s *Server) UpdateTablet(ti *topo.TabletInfo, existingVersion int64) (int64, error) {
+func (s *Server) UpdateTablet(ctx context.Context, ti *topo.TabletInfo, existingVersion int64) (int64, error) {
 	cell, err := s.getCell(ti.Alias.Cell)
 	if err != nil {
 		return -1, err
@@ -59,18 +60,18 @@ func (s *Server) UpdateTablet(ti *topo.TabletInfo, existingVersion int64) (int64
 }
 
 // UpdateTabletFields implements topo.Server.
-func (s *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, updateFunc func(*topo.Tablet) error) error {
+func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias topo.TabletAlias, updateFunc func(*topo.Tablet) error) error {
 	var ti *topo.TabletInfo
 	var err error
 
 	for {
-		if ti, err = s.GetTablet(tabletAlias); err != nil {
+		if ti, err = s.GetTablet(ctx, tabletAlias); err != nil {
 			return err
 		}
 		if err = updateFunc(ti.Tablet); err != nil {
 			return err
 		}
-		if _, err = s.UpdateTablet(ti, ti.Version()); err != topo.ErrBadVersion {
+		if _, err = s.UpdateTablet(ctx, ti, ti.Version()); err != topo.ErrBadVersion {
 			break
 		}
 	}
@@ -86,14 +87,14 @@ func (s *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, updateFunc fun
 }
 
 // DeleteTablet implements topo.Server.
-func (s *Server) DeleteTablet(tabletAlias topo.TabletAlias) error {
+func (s *Server) DeleteTablet(ctx context.Context, tabletAlias topo.TabletAlias) error {
 	cell, err := s.getCell(tabletAlias.Cell)
 	if err != nil {
 		return err
 	}
 
 	// Get the keyspace and shard names for the TabletChange event.
-	ti, tiErr := s.GetTablet(tabletAlias)
+	ti, tiErr := s.GetTablet(ctx, tabletAlias)
 
 	_, err = cell.Delete(tabletDirPath(tabletAlias.String()), true /* recursive */)
 	if err != nil {
@@ -116,13 +117,13 @@ func (s *Server) DeleteTablet(tabletAlias topo.TabletAlias) error {
 }
 
 // ValidateTablet implements topo.Server.
-func (s *Server) ValidateTablet(tabletAlias topo.TabletAlias) error {
-	_, err := s.GetTablet(tabletAlias)
+func (s *Server) ValidateTablet(ctx context.Context, tabletAlias topo.TabletAlias) error {
+	_, err := s.GetTablet(ctx, tabletAlias)
 	return err
 }
 
 // GetTablet implements topo.Server.
-func (s *Server) GetTablet(tabletAlias topo.TabletAlias) (*topo.TabletInfo, error) {
+func (s *Server) GetTablet(ctx context.Context, tabletAlias topo.TabletAlias) (*topo.TabletInfo, error) {
 	cell, err := s.getCell(tabletAlias.Cell)
 	if err != nil {
 		return nil, err
@@ -145,7 +146,7 @@ func (s *Server) GetTablet(tabletAlias topo.TabletAlias) (*topo.TabletInfo, erro
 }
 
 // GetTabletsByCell implements topo.Server.
-func (s *Server) GetTabletsByCell(cellName string) ([]topo.TabletAlias, error) {
+func (s *Server) GetTabletsByCell(ctx context.Context, cellName string) ([]topo.TabletAlias, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err

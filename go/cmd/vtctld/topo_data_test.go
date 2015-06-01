@@ -8,10 +8,12 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"golang.org/x/net/context"
 )
 
 func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo VersionedObject, expectedVO VersionedObject) {
-	result, err := voc.Get()
+	ctx := context.Background()
+	result, err := voc.Get(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -26,7 +28,7 @@ func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo Versio
 		t.Fatalf("Got bad result: %#v expected: %#v", vo, expectedVO)
 	}
 
-	result2, err := voc.Get()
+	result2, err := voc.Get(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -36,7 +38,7 @@ func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo Versio
 
 	// force a re-get with same content, version shouldn't change
 	voc.timestamp = time.Time{}
-	result2, err = voc.Get()
+	result2, err = voc.Get(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -47,7 +49,7 @@ func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo Versio
 	// force a reget with different content, version should change
 	voc.timestamp = time.Time{}
 	voc.versionedObject.Reset() // poking inside the object here
-	result, err = voc.Get()
+	result, err = voc.Get(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -64,7 +66,7 @@ func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo Versio
 
 	// force a flush and see the version increase again
 	voc.Flush()
-	result, err = voc.Get()
+	result, err = voc.Get(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +83,8 @@ func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo Versio
 }
 
 func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, key string, vo VersionedObject, expectedVO VersionedObject) {
-	result, err := vocm.Get(key)
+	ctx := context.Background()
+	result, err := vocm.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +99,7 @@ func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, ke
 		t.Fatalf("Got bad result: %#v expected: %#v", vo, expectedVO)
 	}
 
-	result2, err := vocm.Get(key)
+	result2, err := vocm.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,7 +109,7 @@ func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, ke
 
 	// force a re-get with same content, version shouldn't change
 	vocm.cacheMap[key].timestamp = time.Time{}
-	result2, err = vocm.Get(key)
+	result2, err = vocm.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +120,7 @@ func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, ke
 	// force a reget with different content, version should change
 	vocm.cacheMap[key].timestamp = time.Time{}
 	vocm.cacheMap[key].versionedObject.Reset() // poking inside the object here
-	result, err = vocm.Get(key)
+	result, err = vocm.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +137,7 @@ func testVersionedObjectCacheMap(t *testing.T, vocm *VersionedObjectCacheMap, ke
 
 	// force a flush and see the version increase again
 	vocm.Flush()
-	result, err = vocm.Get(key)
+	result, err = vocm.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,11 +165,12 @@ func TestKnownCellsCache(t *testing.T) {
 }
 
 func TestKeyspacesCache(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "ks1", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "ks2", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 	kc := newKeyspacesCache(ts)
@@ -179,13 +183,14 @@ func TestKeyspacesCache(t *testing.T) {
 }
 
 func TestKeyspaceCache(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topo.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateKeyspace("ks2", &topo.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks2", &topo.Keyspace{
 		SplitShardCount: 10,
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
@@ -211,18 +216,19 @@ func TestKeyspaceCache(t *testing.T) {
 }
 
 func TestShardNamesCache(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topo.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s1", &topo.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s2", &topo.Shard{
 		MasterAlias: topo.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
@@ -241,18 +247,19 @@ func TestShardNamesCache(t *testing.T) {
 }
 
 func TestShardCache(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.CreateKeyspace("ks1", &topo.Keyspace{
+	if err := ts.CreateKeyspace(ctx, "ks1", &topo.Keyspace{
 		ShardingColumnName: "sharding_key",
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard("ks1", "s1", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s1", &topo.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard("ks1", "s2", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s2", &topo.Shard{
 		MasterAlias: topo.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
@@ -286,8 +293,9 @@ func TestShardCache(t *testing.T) {
 }
 
 func TestCellShardTabletsCache(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.UpdateShardReplicationFields("cell1", "ks1", "s1", func(sr *topo.ShardReplication) error {
+	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *topo.ShardReplication) error {
 		sr.ReplicationLinks = []topo.ReplicationLink{
 			topo.ReplicationLink{
 				TabletAlias: topo.TabletAlias{

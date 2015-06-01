@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
+	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -48,7 +49,7 @@ func tabletInfoFromJSON(data string, version int64) (*topo.TabletInfo, error) {
 }
 
 // CreateTablet is part of the topo.Server interface
-func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
+func (zkts *Server) CreateTablet(ctx context.Context, tablet *topo.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 
 	// Create /zk/<cell>/vt/tablets/<uid>
@@ -68,7 +69,7 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 }
 
 // UpdateTablet is part of the topo.Server interface
-func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 	stat, err := zkts.zconn.Set(zkTabletPath, tablet.JSON(), int(existingVersion))
 	if err != nil {
@@ -89,7 +90,7 @@ func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64)
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
+func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
 	// Store the last tablet value so we can log it if the change succeeds.
 	var lastTablet *topo.Tablet
 
@@ -127,10 +128,10 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 }
 
 // DeleteTablet is part of the topo.Server interface
-func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
-	// We need to find out the keyspace and shard names because those are required
-	// in the TabletChange event.
-	ti, tiErr := zkts.GetTablet(alias)
+func (zkts *Server) DeleteTablet(ctx context.Context, alias topo.TabletAlias) error {
+	// We need to find out the keyspace and shard names because
+	// those are required in the TabletChange event.
+	ti, tiErr := zkts.GetTablet(ctx, alias)
 
 	zkTabletPath := TabletPathForAlias(alias)
 	err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
@@ -158,7 +159,7 @@ func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 }
 
 // GetTablet is part of the topo.Server interface
-func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
+func (zkts *Server) GetTablet(ctx context.Context, alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
@@ -171,7 +172,7 @@ func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) 
 }
 
 // GetTabletsByCell is part of the topo.Server interface
-func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
+func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]topo.TabletAlias, error) {
 	zkTabletsPath := tabletDirectoryForCell(cell)
 	children, _, err := zkts.zconn.Children(zkTabletsPath)
 	if err != nil {

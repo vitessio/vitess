@@ -30,7 +30,7 @@ func (*mysql56) VersionMatch(version string) bool {
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
+	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_executed")
 	if err != nil {
 		return rp, err
 	}
@@ -41,16 +41,16 @@ func (flavor *mysql56) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosit
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
+func (flavor *mysql56) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
 	if err != nil {
-		return nil, ErrNotSlave
+		return proto.ReplicationStatus{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Executed_Gtid_Set"])
 	if err != nil {
-		return nil, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
+		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v): %v", fields["Executed_Gtid_Set"], err)
 	}
 	return status, nil
 }
@@ -62,7 +62,7 @@ func (*mysql56) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPositio
 	query = fmt.Sprintf("SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('%s', %v)", targetPos, int(waitTimeout.Seconds()))
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return fmt.Errorf("WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS() failed: %v", err)
 	}
@@ -134,7 +134,7 @@ func (*mysql56) ParseReplicationPosition(s string) (proto.ReplicationPosition, e
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (flavor *mysql56) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const ComBinlogDumpGTID = 0x1E // COM_BINLOG_DUMP_GTID
 
 	gtidSet, ok := startPos.GTIDSet.(proto.Mysql56GTIDSet)

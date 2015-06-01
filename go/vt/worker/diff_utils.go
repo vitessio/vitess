@@ -32,7 +32,7 @@ type QueryResultReader struct {
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
 // the provided tablet / sql query
 func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, sql string) (*QueryResultReader, error) {
-	tablet, err := ts.GetTablet(tabletAlias)
+	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, *endPoint, tablet.Keyspace, tablet.Shard, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, *endPoint, tablet.Keyspace, tablet.Shard, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +153,7 @@ func (qrr *QueryResultReader) Error() error {
 	return qrr.clientErrFn()
 }
 
+// Close closes the connection to the tablet.
 func (qrr *QueryResultReader) Close() {
 	qrr.conn.Close()
 }
@@ -262,12 +263,11 @@ func RowsEqual(left, right []sqltypes.Value) int {
 // TODO: This can panic if types for left and right don't match.
 func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
 	for i := 0; i < compareCount; i++ {
-		fieldType := fields[i].Type
-		lv, err := mproto.Convert(fieldType, left[i])
+		lv, err := mproto.Convert(fields[i], left[i])
 		if err != nil {
 			return 0, err
 		}
-		rv, err := mproto.Convert(fieldType, right[i])
+		rv, err := mproto.Convert(fields[i], right[i])
 		if err != nil {
 			return 0, err
 		}

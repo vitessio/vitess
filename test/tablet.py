@@ -26,6 +26,10 @@ tablet_cell_map = {
     31981: 'ny',
 }
 
+def get_backup_storage_flags():
+  return ['-backup_storage_implementation', 'file',
+          '-file_backup_storage_root',
+          os.path.join(environment.tmproot, 'backupstorage')]
 
 def get_all_extra_my_cnf(extra_my_cnf):
   all_extra_my_cnf = [environment.vttop + "/config/mycnf/default-fast.cnf"]
@@ -189,15 +193,6 @@ class Tablet(object):
     finally:
       conn.close()
 
-  # path is either:
-  # - keyspace/shard for vttablet and vttablet-streaming
-  # - zk path for vtdb, vtdb-streaming
-  def vquery(self, query, path='', user=None, password=None, driver=None,
-             verbose=False, raise_on_error=True):
-    return utils.vtclient2(self.port, path, query, user=user,
-                           password=password, driver=driver,
-                           verbose=verbose, raise_on_error=raise_on_error)
-
   def assert_table_count(self, dbname, table, n, where=''):
     result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
     if result[0][0] != n:
@@ -240,7 +235,7 @@ class Tablet(object):
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', '_vt', 'mysql']:
+      if dbname in ['information_schema', 'mysql']:
         continue
       self.drop_db(dbname)
 
@@ -325,7 +320,7 @@ class Tablet(object):
         expected_state = 'NOT_SERVING'
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
 
-  def conn(self):
+  def conn(self, user=None, password=None):
     conn = tablet.TabletConnection(
         'localhost:%d' % self.port, self.tablet_type, self.keyspace,
         self.shard, 30)
@@ -418,7 +413,8 @@ class Tablet(object):
                      target_tablet_type=None, full_mycnf_args=False,
                      extra_args=None, extra_env=None, include_mysql_port=True,
                      init_tablet_type=None, init_keyspace=None,
-                     init_shard=None, init_db_name_override=None):
+                     init_shard=None, init_db_name_override=None,
+                     supports_backups=False):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -484,6 +480,9 @@ class Tablet(object):
         args.extend(['-init_db_name_override', init_db_name_override])
       else:
         self.dbname = 'vt_' + init_keyspace
+
+    if supports_backups:
+      args.extend(['-restore_from_backup'] + get_backup_storage_flags())
 
     if extra_args:
       args.extend(extra_args)

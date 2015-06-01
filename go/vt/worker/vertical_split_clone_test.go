@@ -234,11 +234,9 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topo.Keyspace{}
@@ -247,13 +245,13 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 		topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 		topo.TYPE_RDONLY:  &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 	}
-	wr.TopoServer().CreateKeyspace("destination_ks", ki)
+	ctx := context.Background()
+	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"),
-		testlib.TabletParent(destMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly} {
 		ft.StartActionLoop(t, wr)
@@ -261,7 +259,6 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	}
 
 	// add the topo and schema data we'll need
-	ctx := context.Background()
 	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
@@ -283,21 +280,23 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 					// This informs how many rows we can pack into a single insert
 					DataLength: 2048,
 				},
 				&myproto.TableDefinition{
 					Name: "view1",
-					Type: myproto.TABLE_VIEW,
+					Type: myproto.TableView,
 				},
 			},
 		}
 		sourceRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalSourceRdonlyFactory(t)
-		sourceRdonly.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-			Position: myproto.ReplicationPosition{
-				GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
-			},
+		sourceRdonly.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
+			GTIDSet: myproto.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678},
+		}
+		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			"STOP SLAVE",
+			"START SLAVE",
 		}
 		sourceRdonly.RPCServer.Register(gorpcqueryservice.New(&verticalSqlQuery{t: t}))
 	}
@@ -312,12 +311,12 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 	destRdonly.FakeMysqlDaemon.DbAppConnectionFactory = VerticalDestinationsFactory(t, 30)
 
 	// Only wait 1 ms between retries, so that the test passes faster
-	executeFetchRetryTime = (1 * time.Millisecond)
+	*executeFetchRetryTime = (1 * time.Millisecond)
 
-	wrk.Run()
+	err = wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
-	if wrk.err != nil || wrk.state != stateSCDone {
+	if err != nil || wrk.State != WorkerStateDone {
 		t.Errorf("Worker run failed")
 	}
 

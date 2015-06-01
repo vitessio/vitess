@@ -71,22 +71,6 @@ primary key (id)
 
 class TestSharded(unittest.TestCase):
 
-  def _check_rows(self, to_look_for, driver="vtdb"):
-    out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
-    for pattern in to_look_for:
-      if pattern not in err:
-        logging.error("vtclient2 returned:\n%s\n%s", out, err)
-        self.fail('wrong vtclient2 output, missing: ' + pattern)
-    logging.debug("_check_rows:\n%s\n%s", out, err)
-
-  def _check_rows_schema_diff(self, driver):
-    out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
-    if "column[0] name mismatch: id != msg" not in err and \
-      "column[0] name mismatch: msg != id" not in err:
-      logging.error("vtclient2 returned:\n%s\n%s", out, err)
-      self.fail('wrong vtclient2 output, missing "name mismatch" of some kind')
-    logging.debug("_check_rows_schema_diff:\n%s\n%s", out, err)
-
   def test_sharding(self):
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
@@ -107,16 +91,20 @@ class TestSharded(unittest.TestCase):
       t.wait_for_vttablet_state('SERVING')
 
     # apply the schema on the first shard through vtctl, so all tablets
-    # are the same (replication is not enabled yet, so allow_replication=false
-    # is just there to be tested)
-    utils.run_vtctl(['ApplySchema',
-                     '-stop-replication',
-                     '-sql=' + create_vt_select_test.replace("\n", ""),
-                     shard_0_master.tablet_alias])
-    utils.run_vtctl(['ApplySchema',
-                     '-stop-replication',
-                     '-sql=' + create_vt_select_test.replace("\n", ""),
-                     shard_0_replica.tablet_alias])
+    # are the same.
+    shard_0_master.mquery('vt_test_keyspace',
+                          create_vt_select_test.replace("\n", ""), write=True)
+    shard_0_replica.mquery('vt_test_keyspace',
+                           create_vt_select_test.replace("\n", ""), write=True)
+
+    # apply the schema on the second shard.
+    shard_1_master.mquery('vt_test_keyspace',
+                          create_vt_select_test_reverse.replace("\n", ""), write=True)
+    shard_1_replica.mquery('vt_test_keyspace',
+                           create_vt_select_test_reverse.replace("\n", ""), write=True)
+
+    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+      utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
     # start vtgate, we'll use it later
     vtgate_server, vtgate_port = utils.vtgate_start()
@@ -127,12 +115,6 @@ class TestSharded(unittest.TestCase):
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
-
-    # apply the schema on the second shard using a simple schema upgrade
-    utils.run_vtctl(['ApplySchemaShard',
-                     '-simple',
-                     '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
-                     'test_keyspace/80-'])
 
     # insert some values directly (db is RO after minority reparent)
     # FIXME(alainjobart) these values don't match the shard map
@@ -145,48 +127,12 @@ class TestSharded(unittest.TestCase):
 
     utils.pause("Before the sql scatter query")
 
-    # note the order of the rows is not guaranteed, as the go routines
-    # doing the work can go out of order
-    self._check_rows(["Index\tid\tmsg",
-                      "1\ttest 1",
-                      "10\ttest 10"])
-
-    # write a value, re-read them all
-    utils.vtclient2(3803, "/test_nj/test_keyspace/master", "insert into vt_select_test (id, msg) values (:keyspace_id, 'test 2')", bindvars='{"keyspace_id": 2}', driver="vtdb", verbose=True)
-    self._check_rows(["Index\tid\tmsg",
-                      "1\ttest 1",
-                      "2\ttest 2",
-                      "10\ttest 10"])
-
-    # make sure the '2' value was written on first shard
+    # make sure the '1' value was written on first shard
     rows = shard_0_master.mquery('vt_test_keyspace', "select id, msg from vt_select_test order by id")
-    self.assertEqual(rows, ((1, 'test 1'), (2, 'test 2'), ),
+    self.assertEqual(rows, ((1, 'test 1'), ),
                      'wrong mysql_query output: %s' % str(rows))
 
     utils.pause("After db writes")
-
-    # now use various topo servers and streaming or both for the same query
-    self._check_rows(["Index\tid\tmsg",
-                      "1\ttest 1",
-                      "2\ttest 2",
-                      "10\ttest 10"],
-                     driver="vtdb-streaming")
-    if environment.topo_server().flavor() == 'zookeeper':
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zk")
-      self._check_rows(["Index\tid\tmsg",
-                        "1\ttest 1",
-                        "2\ttest 2",
-                        "10\ttest 10"],
-                       driver="vtdb-zk-streaming")
-
-    # make sure the schema checking works
-    self._check_rows_schema_diff("vtdb")
-    if environment.topo_server().flavor() == 'zookeeper':
-      self._check_rows_schema_diff("vtdb-zk")
 
     # throw in some schema validation step
     # we created the schema differently, so it should show
@@ -240,7 +186,7 @@ class TestSharded(unittest.TestCase):
                                     "", "test_keyspace", "-80", 10.0)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
-    self.assertEqual(results, [(1, 'test 1'), (2, 'test 2'), ],
+    self.assertEqual(results, [(1, 'test 1'), ],
                      'wrong conn._execute output: %s' % str(results))
 
     # connect to shard 80-

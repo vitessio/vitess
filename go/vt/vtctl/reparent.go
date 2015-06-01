@@ -61,7 +61,7 @@ func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}

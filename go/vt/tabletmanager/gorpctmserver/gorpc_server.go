@@ -234,7 +234,7 @@ func (tm *TabletManager) SlaveStatus(ctx context.Context, args *rpc.Unused, repl
 	return tm.agent.RPCWrap(ctx, actionnode.TabletActionSlaveStatus, args, reply, func() error {
 		status, err := tm.agent.SlaveStatus(ctx)
 		if err == nil {
-			*reply = *status
+			*reply = status
 		}
 		return err
 	})
@@ -429,7 +429,7 @@ func (tm *TabletManager) SetMaster(ctx context.Context, args *gorpcproto.SetMast
 			ctx, cancel = context.WithTimeout(ctx, args.WaitTimeout)
 			defer cancel()
 		}
-		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS)
+		return tm.agent.SetMaster(ctx, args.Parent, args.TimeCreatedNS, args.ForceStartSlave)
 	})
 }
 
@@ -441,13 +441,13 @@ func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, args *actionnode
 	})
 }
 
-// StopReplicationAndGetPosition wraps RPCAgent.StopReplicationAndGetPosition
-func (tm *TabletManager) StopReplicationAndGetPosition(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationPosition) error {
+// StopReplicationAndGetStatus wraps RPCAgent.StopReplicationAndGetStatus
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, args *rpc.Unused, reply *myproto.ReplicationStatus) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionStopReplicationAndGetPosition, args, reply, true, func() error {
-		position, err := tm.agent.StopReplicationAndGetPosition(ctx)
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionStopReplicationAndGetStatus, args, reply, true, func() error {
+		status, err := tm.agent.StopReplicationAndGetStatus(ctx)
 		if err == nil {
-			*reply = position
+			*reply = status
 		}
 		return err
 	})
@@ -467,62 +467,10 @@ func (tm *TabletManager) PromoteSlave(ctx context.Context, args *rpc.Unused, rep
 
 // backup related methods
 
-// Snapshot wraps RPCAgent.Snapshot
-func (tm *TabletManager) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, sendReply func(interface{}) error) error {
+// Backup wraps RPCAgent.Backup
+func (tm *TabletManager) Backup(ctx context.Context, args *gorpcproto.BackupArgs, sendReply func(interface{}) error) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSnapshot, args, nil, true, func() error {
-		// create a logger, send the result back to the caller
-		logger := logutil.NewChannelLogger(10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			for e := range logger {
-				ssr := &gorpcproto.SnapshotStreamingReply{
-					Log: &e,
-				}
-				// Note we don't interrupt the loop here, as
-				// we still need to flush and finish the
-				// command, even if the channel to the client
-				// has been broken. We'll just keep trying to send.
-				sendReply(ssr)
-			}
-			wg.Done()
-		}()
-
-		sr, err := tm.agent.Snapshot(ctx, args, logger)
-		close(logger)
-		wg.Wait()
-		if err != nil {
-			return err
-		}
-		ssr := &gorpcproto.SnapshotStreamingReply{
-			Result: sr,
-		}
-		sendReply(ssr)
-		return nil
-	})
-}
-
-// SnapshotSourceEnd wraps RPCAgent.
-func (tm *TabletManager) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs, reply *rpc.Unused) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSnapshotSourceEnd, args, reply, true, func() error {
-		return tm.agent.SnapshotSourceEnd(ctx, args)
-	})
-}
-
-// ReserveForRestore wraps RPCAgent.ReserveForRestore
-func (tm *TabletManager) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs, reply *rpc.Unused) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionReserveForRestore, args, reply, true, func() error {
-		return tm.agent.ReserveForRestore(ctx, args)
-	})
-}
-
-// Restore wraps RPCAgent.Restore
-func (tm *TabletManager) Restore(ctx context.Context, args *actionnode.RestoreArgs, sendReply func(interface{}) error) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionRestore, args, nil, true, func() error {
+	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionBackup, args, nil, true, func() error {
 		// create a logger, send the result back to the caller
 		logger := logutil.NewChannelLogger(10)
 		wg := sync.WaitGroup{}
@@ -532,13 +480,14 @@ func (tm *TabletManager) Restore(ctx context.Context, args *actionnode.RestoreAr
 				// Note we don't interrupt the loop here, as
 				// we still need to flush and finish the
 				// command, even if the channel to the client
-				// has been broken. We'll just keep trying to send.
+				// has been broken. We'll just keep trying
+				// to send.
 				sendReply(&e)
 			}
 			wg.Done()
 		}()
 
-		err := tm.agent.Restore(ctx, args, logger)
+		err := tm.agent.Backup(ctx, args.Concurrency, logger)
 		close(logger)
 		wg.Wait()
 		return err

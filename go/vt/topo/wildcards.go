@@ -10,21 +10,22 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/fileutil"
+	"golang.org/x/net/context"
 )
 
 // WildcardBackend is a subset of Server for the methods used by the
 // wildcard code. This lets us test with a very simple fake topo server.
 type WildcardBackend interface {
 	// GetKeyspaces returns the known keyspaces. They shall be sorted.
-	GetKeyspaces() ([]string, error)
+	GetKeyspaces(ctx context.Context) ([]string, error)
 
 	// GetShard reads a shard and returns it.
 	// Can return ErrNoNode
-	GetShard(keyspace, shard string) (*ShardInfo, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode
-	GetShardNames(keyspace string) ([]string, error)
+	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
 }
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.
@@ -32,14 +33,14 @@ type WildcardBackend interface {
 //   doesn't exist, it is still returned).
 // - If the param is a wildcard, it will get all keyspaces and returns
 //   the ones which match the wildcard (which may be an empty list).
-func ResolveKeyspaceWildcard(server WildcardBackend, param string) ([]string, error) {
+func ResolveKeyspaceWildcard(ctx context.Context, server WildcardBackend, param string) ([]string, error) {
 	if !fileutil.HasWildcard(param) {
 		return []string{param}, nil
 	}
 
-	result := make([]string, 0)
+	var result []string
 
-	keyspaces, err := server.GetKeyspaces()
+	keyspaces, err := server.GetKeyspaces(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read keyspaces from topo: %v", err)
 	}
@@ -69,7 +70,7 @@ type KeyspaceShard struct {
 //   doesn't exist)
 // - us*/* returns all shards in all keyspaces that start with 'us'. If no such
 //   keyspace exists, list is empty (it is not an error).
-func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard, error) {
+func ResolveShardWildcard(ctx context.Context, server WildcardBackend, param string) ([]KeyspaceShard, error) {
 	parts := strings.Split(param, "/")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid shard path: %v", param)
@@ -78,7 +79,7 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 
 	// get all the matched keyspaces first, remember if it was a wildcard
 	keyspaceHasWildcards := fileutil.HasWildcard(parts[0])
-	matchedKeyspaces, err := ResolveKeyspaceWildcard(server, parts[0])
+	matchedKeyspaces, err := ResolveKeyspaceWildcard(ctx, server, parts[0])
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 		shard := parts[1]
 		if fileutil.HasWildcard(shard) {
 			// get all the shards for the keyspace
-			shardNames, err := server.GetShardNames(matchedKeyspace)
+			shardNames, err := server.GetShardNames(ctx, matchedKeyspace)
 			switch err {
 			case nil:
 				// got all the shards, we can keep going
@@ -119,7 +120,7 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 			}
 			if keyspaceHasWildcards {
 				// keyspace was a wildcard, shard is not, just try it
-				_, err := server.GetShard(matchedKeyspace, shard)
+				_, err := server.GetShard(ctx, matchedKeyspace, shard)
 				switch err {
 				case nil:
 					// shard exists, add it

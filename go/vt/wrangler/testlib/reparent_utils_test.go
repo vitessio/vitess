@@ -24,14 +24,14 @@ func TestShardReplicationStatuses(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ts, "test_keyspace", "0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
 	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// mark the master inside the shard
-	si, err := ts.GetShard("test_keyspace", "0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
@@ -52,18 +52,15 @@ func TestShardReplicationStatuses(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		Position: myproto.ReplicationPosition{
-			GTIDSet: myproto.MariadbGTID{
-				Domain:   5,
-				Server:   456,
-				Sequence: 890,
-			},
+	slave.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
+		GTIDSet: myproto.MariadbGTID{
+			Domain:   5,
+			Server:   456,
+			Sequence: 890,
 		},
-		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         master.Tablet.Portmap["mysql"],
-		MasterConnectRetry: 10,
 	}
+	slave.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.Hostname
+	slave.FakeMysqlDaemon.CurrentMasterPort = master.Tablet.Portmap["mysql"]
 	slave.StartActionLoop(t, wr)
 	defer slave.StopActionLoop(t)
 
@@ -75,7 +72,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 	// check result (make master first in the array)
 	if len(ti) != 2 || len(rs) != 2 {
-		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
+		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	}
 	if ti[0].Alias == slave.Tablet.Alias {
 		ti[0], ti[1] = ti[1], ti[0]
@@ -95,14 +92,14 @@ func TestReparentTablet(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ts, "test_keyspace", "0"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
 	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
 
 	// mark the master inside the shard
-	si, err := ts.GetShard("test_keyspace", "0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}

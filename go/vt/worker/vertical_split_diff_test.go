@@ -90,11 +90,9 @@ func TestVerticalSplitDiff(t *testing.T) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &topo.Keyspace{}
@@ -103,16 +101,14 @@ func TestVerticalSplitDiff(t *testing.T) {
 		topo.TYPE_REPLICA: &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 		topo.TYPE_RDONLY:  &topo.KeyspaceServedFrom{Keyspace: "source_ks"},
 	}
-	wr.TopoServer().CreateKeyspace("destination_ks", ki)
+	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"),
-		testlib.TabletParent(destMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"),
-		testlib.TabletParent(destMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly1, destRdonly2} {
 		ft.StartActionLoop(t, wr)
@@ -142,27 +138,27 @@ func TestVerticalSplitDiff(t *testing.T) {
 					Name:              "moving1",
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name: "view1",
-					Type: myproto.TABLE_VIEW,
+					Type: myproto.TableView,
 				},
 			},
 		}
 		rdonly.RPCServer.Register(gorpcqueryservice.New(&verticalDiffSqlQuery{t: t, excludedTable: excludedTable}))
 	}
 
-	wrk.Run()
+	err := wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
-	if wrk.err != nil || wrk.state != stateSCDone {
+	if err != nil || wrk.State != WorkerStateDone {
 		t.Errorf("Worker run failed")
 	}
 }

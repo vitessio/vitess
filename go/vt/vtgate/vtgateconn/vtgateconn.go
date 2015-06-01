@@ -6,10 +6,12 @@ package vtgateconn
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -40,50 +42,270 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
-// DialerFunc represents a function that will return a VTGateConn object that can communicate with a VTGate.
-type DialerFunc func(ctx context.Context, address string, timeout time.Duration) (VTGateConn, error)
-
 // VTGateConn defines the interface for a vtgate client.
 // It can be used concurrently across goroutines.
-type VTGateConn interface {
-	// Execute executes a non-streaming query on vtgate.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-	// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
-	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-
-	// StreamExecute executes a streaming query on vtgate. It returns a channel, ErrFunc and error.
-	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
-	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
-	// to see if the stream ended normally or due to a failure.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
-
-	// Begin starts a transaction and returns a VTGateTX.
-	Begin(ctx context.Context) (VTGateTx, error)
-
-	// Close must be called for releasing resources.
-	Close()
-
-	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
+type VTGateConn struct {
+	impl Impl
 }
 
-// VTGateTx defines the interface for the transaction object created by Begin.
-// It should not be concurrently used across goroutines.
-type VTGateTx interface {
-	// Execute executes a query on vtgate within the current transaction.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
-	// ExecuteShard executes a query for multiple shards on vtgate within the current transaction.
-	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error)
+// Execute executes a non-streaming query on vtgate.
+// This is using v3 API.
+func (conn *VTGateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.Execute(ctx, query, bindVars, tabletType, nil)
+	return res, err
+}
 
-	// Commit commits the current transaction.
-	Commit(ctx context.Context) error
-	// Rollback rolls back the current transaction.
-	Rollback(ctx context.Context) error
+// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
+func (conn *VTGateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType, nil)
+	return res, err
+}
+
+// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
+func (conn *VTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, nil)
+	return res, err
+}
+
+// ExecuteKeyRanges executes a non-streaming query on a key range.
+func (conn *VTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil)
+	return res, err
+}
+
+// ExecuteEntityIds executes a non-streaming query for multiple entities.
+func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, nil)
+	return res, err
+}
+
+// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
+func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, nil)
+	return res, err
+}
+
+// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
+func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, nil)
+	return res, err
+}
+
+// StreamExecute executes a streaming query on vtgate. It returns a channel, and ErrFunc.
+// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
+// to see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+	return conn.impl.StreamExecute(ctx, query, bindVars, tabletType)
+}
+
+// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
+// It returns a channel, and ErrFunc.
+// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
+// to see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+	return conn.impl.StreamExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType)
+}
+
+// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
+// It returns a channel, and ErrFunc.
+// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
+// to see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+	return conn.impl.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
+}
+
+// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
+// It returns a channel, and ErrFunc.
+// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
+// to see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
+}
+
+// Begin starts a transaction and returns a VTGateTX.
+func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
+	session, err := conn.impl.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &VTGateTx{
+		impl:    conn.impl,
+		session: session,
+	}, nil
+}
+
+// Close must be called for releasing resources.
+func (conn *VTGateConn) Close() {
+	conn.impl.Close()
+	conn.impl = nil
+}
+
+// SplitQuery splits a query into equally sized smaller queries by
+// appending primary key range clauses to the original query
+func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
+	return conn.impl.SplitQuery(ctx, keyspace, query, splitCount)
+}
+
+// VTGateTx defines an ongoing transaction.
+// It should not be concurrently used across goroutines.
+type VTGateTx struct {
+	impl    Impl
+	session interface{}
+}
+
+// Execute executes a query on vtgate within the current transaction.
+func (tx *VTGateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("execute: not in transaction")
+	}
+	res, session, err := tx.impl.Execute(ctx, query, bindVars, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteShard executes a query for multiple shards on vtgate within the current transaction.
+func (tx *VTGateTx) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeShard: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
+func (tx *VTGateTx) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeKeyspaceIds: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteKeyRanges executes a non-streaming query on a key range.
+func (tx *VTGateTx) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeKeyRanges: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteEntityIds executes a non-streaming query for multiple entities.
+func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeEntityIds: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
+func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeBatchShard: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
+	}
+	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, tx.session)
+	tx.session = session
+	return res, err
+}
+
+// Commit commits the current transaction.
+func (tx *VTGateTx) Commit(ctx context.Context) error {
+	if tx.session == nil {
+		return fmt.Errorf("commit: not in transaction")
+	}
+	err := tx.impl.Commit(ctx, tx.session)
+	tx.session = nil
+	return err
+}
+
+// Rollback rolls back the current transaction.
+func (tx *VTGateTx) Rollback(ctx context.Context) error {
+	if tx.session == nil {
+		return nil
+	}
+	err := tx.impl.Rollback(ctx, tx.session)
+	tx.session = nil
+	return err
 }
 
 // ErrFunc is used to check for streaming errors.
 type ErrFunc func() error
+
+//
+// The rest of this file is for the protocol implementations.
+//
+
+// Impl defines the interface for a vtgate client protocol
+// implementation. It can be used concurrently across goroutines.
+type Impl interface {
+	// Execute executes a non-streaming query on vtgate.
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error)
+
+	// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
+	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error)
+
+	// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
+	ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error)
+
+	// ExecuteKeyRanges executes a non-streaming query on a key range.
+	ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error)
+
+	// ExecuteEntityIds executes a non-streaming query for multiple entities.
+	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error)
+
+	// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
+	ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
+
+	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
+	ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
+
+	// StreamExecute executes a streaming query on vtgate.
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+
+	// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
+	StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+
+	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
+	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+
+	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
+	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+
+	// Begin starts a transaction and returns a VTGateTX.
+	Begin(ctx context.Context) (interface{}, error)
+
+	// Commit commits the current transaction.
+	Commit(ctx context.Context, session interface{}) error
+
+	// Rollback rolls back the current transaction.
+	Rollback(ctx context.Context, session interface{}) error
+
+	// SplitQuery splits a query into equally sized smaller queries by
+	// appending primary key range clauses to the original query
+	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
+
+	// Close must be called for releasing resources.
+	Close()
+}
+
+// DialerFunc represents a function that will return a VTGateConn object that can communicate with a VTGate.
+type DialerFunc func(ctx context.Context, address string, timeout time.Duration) (Impl, error)
 
 var dialers = make(map[string]DialerFunc)
 
@@ -97,17 +319,23 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	dialers[name] = dialer
 }
 
-// GetDialer returns the dialer to use, described by the command line flag
-func GetDialer() DialerFunc {
-	return GetDialerWithProtocol(*vtgateProtocol)
+// DialProtocol dials a specific protocol, and returns the *VTGateConn
+func DialProtocol(ctx context.Context, protocol string, address string, timeout time.Duration) (*VTGateConn, error) {
+	dialer, ok := dialers[protocol]
+	if !ok {
+		return nil, fmt.Errorf("no dialer registered for VTGate protocol %s", protocol)
+	}
+	impl, err := dialer(ctx, address, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return &VTGateConn{
+		impl: impl,
+	}, nil
 }
 
-// GetDialerWithProtocol returns the dialer to use, described by the given protocol
-func GetDialerWithProtocol(protocol string) DialerFunc {
-	td, ok := dialers[protocol]
-	if !ok {
-		log.Warningf("No dialer registered for VTGate protocol %s", protocol)
-		return nil
-	}
-	return td
+// Dial dials using the command-line specified protocol, and returns
+// the *VTGateConn.
+func Dial(ctx context.Context, address string, timeout time.Duration) (*VTGateConn, error) {
+	return DialProtocol(ctx, *vtgateProtocol, address, timeout)
 }

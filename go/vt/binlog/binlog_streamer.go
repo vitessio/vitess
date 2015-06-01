@@ -64,7 +64,7 @@ func getStatementCategory(sql []byte) int {
 type BinlogStreamer struct {
 	// dbname and mysqld are set at creation.
 	dbname          string
-	mysqld          *mysqlctl.Mysqld
+	mysqld          mysqlctl.MysqlDaemon
 	clientCharset   *mproto.Charset
 	startPos        myproto.ReplicationPosition
 	sendTransaction sendTransactionFunc
@@ -79,7 +79,7 @@ type BinlogStreamer struct {
 // charset is the default character set on the BinlogPlayer side.
 // startPos is the position to start streaming at.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewBinlogStreamer(dbname string, mysqld *mysqlctl.Mysqld, clientCharset *mproto.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *BinlogStreamer {
+func NewBinlogStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *mproto.Charset, startPos myproto.ReplicationPosition, sendTransaction sendTransactionFunc) *BinlogStreamer {
 	return &BinlogStreamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
@@ -99,7 +99,7 @@ func (bls *BinlogStreamer) Stream(ctx *sync2.ServiceContext) (err error) {
 		log.Infof("stream ended @ %v, err = %v", stopPos, err)
 	}()
 
-	if bls.conn, err = mysqlctl.NewSlaveConnection(bls.mysqld); err != nil {
+	if bls.conn, err = bls.mysqld.NewSlaveConnection(); err != nil {
 		return err
 	}
 	defer bls.conn.Close()

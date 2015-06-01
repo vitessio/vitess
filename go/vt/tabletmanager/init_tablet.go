@@ -111,7 +111,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 			}
 
 			// re-read the shard with the lock
-			si, err = agent.TopoServer.GetShard(*initKeyspace, shard)
+			si, err = agent.TopoServer.GetShard(ctx, *initKeyspace, shard)
 			if err != nil {
 				return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
 			}
@@ -179,7 +179,7 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 	case topo.ErrNodeExists:
 		// The node already exists, will just try to update
 		// it. So we read it first.
-		oldTablet, err := agent.TopoServer.GetTablet(tablet.Alias)
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
 			fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
 		}

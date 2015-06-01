@@ -5,19 +5,12 @@
 package tabletmanager
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"path"
-	"strings"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -74,7 +67,7 @@ type RPCAgent interface {
 
 	// Replication related methods
 
-	SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error)
+	SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error)
 
 	MasterPosition(ctx context.Context) (myproto.ReplicationPosition, error)
 
@@ -112,23 +105,17 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error
+	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
-	StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error)
+	StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error)
 
 	PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error)
 
 	// Backup / restore related methods
 
-	Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error)
-
-	SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs) error
-
-	ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs) error
-
-	Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger) error
 
 	// RPC helpers
 	RPCWrap(ctx context.Context, name string, args, reply interface{}, f func() error) error
@@ -158,13 +145,13 @@ func (agent *ActionAgent) GetSchema(ctx context.Context, tables, excludeTables [
 // GetPermissions returns the db permissions.
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetPermissions(ctx context.Context) (*myproto.Permissions, error) {
-	return agent.Mysqld.GetPermissions()
+	return mysqlctl.GetPermissions(agent.MysqlDaemon)
 }
 
 // SetReadOnly makes the mysql instance read-only or read-write
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
-	return agent.Mysqld.SetReadOnly(rdonly)
+	return agent.MysqlDaemon.SetReadOnly(rdonly)
 }
 
 // ChangeType changes the tablet type
@@ -244,7 +231,7 @@ func (agent *ActionAgent) PreflightSchema(ctx context.Context, change string) (*
 	tablet := agent.Tablet()
 
 	// and preflight the change
-	return agent.Mysqld.PreflightSchemaChange(tablet.DbName(), change)
+	return agent.MysqlDaemon.PreflightSchemaChange(tablet.DbName(), change)
 }
 
 // ApplySchema will apply a schema change
@@ -254,7 +241,7 @@ func (agent *ActionAgent) ApplySchema(ctx context.Context, change *myproto.Schem
 	tablet := agent.Tablet()
 
 	// apply the change
-	scr, err := agent.Mysqld.ApplySchemaChange(tablet.DbName(), change)
+	scr, err := agent.MysqlDaemon.ApplySchemaChange(tablet.DbName(), change)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +308,7 @@ func (agent *ActionAgent) ExecuteFetchAsApp(ctx context.Context, query string, m
 
 // SlaveStatus returns the replication status
 // Should be called under RPCWrap.
-func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error) {
+func (agent *ActionAgent) SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
 	return agent.MysqlDaemon.SlaveStatus()
 }
 
@@ -331,41 +318,44 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (myproto.Replicati
 	return agent.MysqlDaemon.MasterPosition()
 }
 
-// StopSlave will stop the replication
+// StopSlave will stop the replication. Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
+	return mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // StopSlaveMinimum will stop the slave after it reaches at least the
-// provided position.
+// provided position. Works both when Vitess manages
+// replication or not (using hook if not).
 func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position myproto.ReplicationPosition, waitTime time.Duration) (myproto.ReplicationPosition, error) {
-	if err := agent.Mysqld.WaitMasterPos(position, waitTime); err != nil {
+	if err := agent.MysqlDaemon.WaitMasterPos(position, waitTime); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	if err := agent.Mysqld.StopSlave(agent.hookExtraEnv()); err != nil {
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return agent.Mysqld.MasterPosition()
+	return agent.MysqlDaemon.MasterPosition()
 }
 
-// StartSlave will start the replication
+// StartSlave will start the replication. Works both when Vitess manages
+// replication or not (using hook if not).
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
+	return mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
 
 // GetSlaves returns the address of all the slaves
 // Should be called under RPCWrap.
 func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
-	return agent.Mysqld.FindSlaves()
+	return mysqlctl.FindSlaves(agent.MysqlDaemon)
 }
 
 // WaitBlpPosition waits until a specific filtered replication position is
 // reached.
 // Should be called under RPCWrapLock.
 func (agent *ActionAgent) WaitBlpPosition(ctx context.Context, blpPosition *blproto.BlpPosition, waitTime time.Duration) error {
-	return agent.Mysqld.WaitBlpPosition(blpPosition, waitTime)
+	return mysqlctl.WaitBlpPosition(agent.MysqlDaemon, blpPosition, waitTime)
 }
 
 // StopBlp stops the binlog players, and return their positions.
@@ -384,7 +374,7 @@ func (agent *ActionAgent) StartBlp(ctx context.Context) error {
 	if agent.BinlogPlayerMap == nil {
 		return fmt.Errorf("No BinlogPlayerMap configured")
 	}
-	agent.BinlogPlayerMap.Start()
+	agent.BinlogPlayerMap.Start(agent.batchCtx)
 	return nil
 }
 
@@ -394,10 +384,10 @@ func (agent *ActionAgent) RunBlpUntil(ctx context.Context, bpl *blproto.BlpPosit
 	if agent.BinlogPlayerMap == nil {
 		return nil, fmt.Errorf("No BinlogPlayerMap configured")
 	}
-	if err := agent.BinlogPlayerMap.RunUntil(bpl, waitTime); err != nil {
+	if err := agent.BinlogPlayerMap.RunUntil(ctx, bpl, waitTime); err != nil {
 		return nil, err
 	}
-	rp, err := agent.Mysqld.MasterPosition()
+	rp, err := agent.MysqlDaemon.MasterPosition()
 	return &rp, err
 }
 
@@ -464,7 +454,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
-	ti, err := agent.TopoServer.GetTablet(parent)
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -513,7 +503,7 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (myproto.Replication
 // replication up to the provided point, and then makes the slave the
 // shard master.
 func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos myproto.ReplicationPosition) (myproto.ReplicationPosition, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -546,7 +536,7 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, pos mypr
 // SlaveWasPromoted promotes a slave to master, no questions asked.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -556,37 +546,43 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
-	ti, err := agent.TopoServer.GetTablet(parent)
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
 
-	// See if we are replicating at all
-	replicating := false
+	// See if we were replicating at all, and should be replicating
+	wasReplicating := false
+	shouldbeReplicating := false
 	rs, err := agent.MysqlDaemon.SlaveStatus()
 	if err == nil && (rs.SlaveIORunning || rs.SlaveSQLRunning) {
-		replicating = true
+		wasReplicating = true
+		shouldbeReplicating = true
+	}
+	if forceStartSlave {
+		shouldbeReplicating = true
 	}
 
 	// Create the list of commands to set the master
-	cmds, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
+	cmds := []string{}
+	if wasReplicating {
+		cmds = append(cmds, mysqlctl.SqlStopSlave)
+	}
+	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
 	if err != nil {
 		return err
 	}
-	if replicating {
-		newCmds := []string{"STOP SLAVE"}
-		newCmds = append(newCmds, cmds...)
-		newCmds = append(newCmds, "START SLAVE")
-		cmds = newCmds
+	cmds = append(cmds, smc...)
+	if shouldbeReplicating {
+		cmds = append(cmds, mysqlctl.SqlStartSlave)
 	}
-
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
 
 	// change our type to spare if we used to be the master
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -600,7 +596,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 
 	// if needed, wait until we get the replicated row, or our
 	// context times out
-	if !replicating || timeCreatedNS == 0 {
+	if !shouldbeReplicating || timeCreatedNS == 0 {
 		return nil
 	}
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
@@ -609,7 +605,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 // SlaveWasRestarted updates the parent record for a tablet.
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -633,19 +629,32 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	return nil
 }
 
-// StopReplicationAndGetPosition stops MySQL replication, and returns the
-// current position
-func (agent *ActionAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
-	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
-		return myproto.ReplicationPosition{}, err
+// StopReplicationAndGetStatus stops MySQL replication, and returns the
+// current status
+func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
+	// get the status before we stop replication
+	rs, err := agent.MysqlDaemon.SlaveStatus()
+	if err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("before status failed: %v", err)
 	}
-
-	return agent.MysqlDaemon.MasterPosition()
+	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
+		// no replication is running, just return what we got
+		return rs, nil
+	}
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("stop slave failed: %v", err)
+	}
+	// now patch in the current position
+	rs.Position, err = agent.MysqlDaemon.MasterPosition()
+	if err != nil {
+		return myproto.ReplicationStatus{}, fmt.Errorf("after position failed: %v", err)
+	}
+	return rs, nil
 }
 
 // PromoteSlave makes the current tablet the master
 func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.ReplicationPosition, error) {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
@@ -692,269 +701,50 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 // Backup / restore related methods
 //
 
-// Snapshot takes a db snapshot
+// Backup takes a db backup and sends it to the BackupStorage
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
+func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
 	// update our type to TYPE_BACKUP
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	if tablet.Type == topo.TYPE_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
-
-	// ForceMasterSnapshot: Normally a master is not a viable tablet
-	// to snapshot.  However, there are degenerate cases where you need
-	// to override this, for instance the initial clone of a new master.
-	if tablet.Type == topo.TYPE_MASTER && args.ForceMasterSnapshot {
-		// In this case, we don't bother recomputing the serving graph.
-		// All queries will have to fail anyway.
-		log.Infof("force change type master -> backup")
-		// There is a legitimate reason to force in the case of a single
-		// master.
-		tablet.Tablet.Type = topo.TYPE_BACKUP
-		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string))
-	}
-	if err != nil {
-		return nil, err
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string)); err != nil {
+		return err
 	}
 
 	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "snapshotStart"); err != nil {
-		return nil, fmt.Errorf("failed to update state before snaphost: %v", err)
+	if err := agent.refreshTablet(ctx, "backup"); err != nil {
+		return fmt.Errorf("failed to update state before backup: %v", err)
 	}
 
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
-	filename, slaveStartRequired, readOnly, returnErr := agent.Mysqld.CreateSnapshot(l, tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, agent.hookExtraEnv())
+	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+	name := fmt.Sprintf("%v.%v", tablet.Alias, time.Now().UTC().Format("2006-01-02.150405"))
+	returnErr := mysqlctl.Backup(agent.MysqlDaemon, l, bucket, name, concurrency, agent.hookExtraEnv())
 
-	// and change our type to the appropriate value
-	newType := originalType
-	if returnErr != nil {
-		log.Errorf("snapshot failed, restoring tablet type back to %v: %v", newType, returnErr)
-	} else {
-		if args.ServerMode {
-			log.Infof("server mode specified, switching tablet to snapshot_source mode")
-			newType = topo.TYPE_SNAPSHOT_SOURCE
-		} else {
-			log.Infof("change type back after snapshot: %v", newType)
-		}
+	// and change our type back to the appropriate value:
+	// - if healthcheck is enabled, go to spare
+	// - if not, go back to original type
+	if agent.IsRunningHealthCheck() {
+		originalType = topo.TYPE_SPARE
 	}
-	if originalType == topo.TYPE_MASTER && args.ForceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
-		log.Infof("force change type backup -> master: %v", tablet.Alias)
-		tablet.Tablet.Type = topo.TYPE_MASTER
-		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, newType, nil)
-	}
+	err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
 	if err != nil {
 		// failure in changing the topology type is probably worse,
 		// so returning that (we logged the snapshot error anyway)
+		if returnErr != nil {
+			l.Errorf("mysql backup command returned error: %v", returnErr)
+		}
 		returnErr = err
 	}
 
-	// if anything failed, don't return anything
-	if returnErr != nil {
-		return nil, returnErr
-	}
-
-	// it all worked, return the required information
-	sr := &actionnode.SnapshotReply{
-		ManifestPath:       filename,
-		SlaveStartRequired: slaveStartRequired,
-		ReadOnly:           readOnly,
-	}
-	if tablet.Type == topo.TYPE_MASTER {
-		// If this is a master, this will be the new parent.
-		sr.ParentAlias = tablet.Alias
-	} else {
-		// Otherwise get the master from the shard record
-		si, err := agent.TopoServer.GetShard(tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return nil, err
-		}
-		sr.ParentAlias = si.MasterAlias
-	}
-	return sr, nil
-}
-
-// SnapshotSourceEnd restores the state of the server after a
-// Snapshot(server_mode =true)
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs) error {
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
-		return fmt.Errorf("expected snapshot_source type, not %v", tablet.Type)
-	}
-
-	if err := agent.Mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, agent.hookExtraEnv()); err != nil {
-		log.Errorf("SnapshotSourceEnd failed, leaving tablet type alone: %v", err)
-		return err
-	}
-
-	// change the type back
-	if args.OriginalType == topo.TYPE_MASTER {
-		// force the master update
-		tablet.Tablet.Type = topo.TYPE_MASTER
-		err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
-	} else {
-		err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, args.OriginalType, make(map[string]string))
-	}
-
-	return err
-}
-
-// change a tablet type to RESTORE and set all the other arguments.
-// from now on, we can go to:
-// - back to IDLE if we don't use the tablet at all (after for instance
-//   a successful ReserveForRestore but a failed Snapshot)
-// - to SCRAP if something in the process on the target host fails
-// - to SPARE if the clone works
-func (agent *ActionAgent) changeTypeToRestore(ctx context.Context, tablet, sourceTablet *topo.TabletInfo, keyRange key.KeyRange) error {
-	// run the optional preflight_assigned hook
-	hk := hook.NewSimpleHook("preflight_assigned")
-	topotools.ConfigureTabletHook(hk, agent.TabletAlias)
-	if err := hk.ExecuteOptional(); err != nil {
-		return err
-	}
-
-	// change the type
-	tablet.Keyspace = sourceTablet.Keyspace
-	tablet.Shard = sourceTablet.Shard
-	tablet.Type = topo.TYPE_RESTORE
-	tablet.KeyRange = keyRange
-	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
-		return err
-	}
-
-	// and create the replication graph items
-	return topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet.Tablet)
-}
-
-// ReserveForRestore reserves the current tablet for an upcoming
-// restore operation.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs) error {
-	// first check mysql, no need to go further if we can't restore
-	if err := agent.Mysqld.ValidateCloneTarget(agent.hookExtraEnv()); err != nil {
-		return err
-	}
-
-	// read our current tablet, verify its state
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topo.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v", tablet.Type)
-	}
-
-	// read the source tablet
-	sourceTablet, err := agent.TopoServer.GetTablet(args.SrcTabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return agent.changeTypeToRestore(ctx, tablet, sourceTablet, sourceTablet.KeyRange)
-}
-
-func fetchAndParseJSONFile(addr, filename string, result interface{}) error {
-	// read the manifest
-	murl := "http://" + addr + filename
-	resp, err := http.Get(murl)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Error fetching url %v: %v", murl, resp.Status)
-	}
-	data, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return err
-	}
-
-	// unpack it
-	return json.Unmarshal(data, result)
-}
-
-// Restore stops the tablet's mysqld, replaces its data folder with a snapshot,
-// and then restarts it.
-//
-// Check that the SnapshotManifest is valid and the master has not changed.
-// Shutdown mysqld.
-// Load the snapshot from source tablet.
-// Restart mysqld and replication.
-// Put tablet into the replication graph as a spare.
-// Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error {
-	// read our current tablet, verify its state
-	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if args.WasReserved {
-		if tablet.Type != topo.TYPE_RESTORE {
-			return fmt.Errorf("expected restore type, not %v", tablet.Type)
-		}
-	} else {
-		if tablet.Type != topo.TYPE_IDLE {
-			return fmt.Errorf("expected idle type, not %v", tablet.Type)
-		}
-	}
-	// read the source tablet, compute args.SrcFilePath if default
-	sourceTablet, err := agent.TopoServer.GetTablet(args.SrcTabletAlias)
-	if err != nil {
-		return err
-	}
-	if strings.ToLower(args.SrcFilePath) == "default" {
-		args.SrcFilePath = path.Join(mysqlctl.SnapshotURLPath, mysqlctl.SnapshotManifestFile)
-	}
-
-	// read the parent tablet, verify its state
-	parentTablet, err := agent.TopoServer.GetTablet(args.ParentAlias)
-	if err != nil {
-		return err
-	}
-	if parentTablet.Type != topo.TYPE_MASTER && parentTablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
-		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ParentAlias)
-	}
-
-	// read & unpack the manifest
-	sm := new(mysqlctl.SnapshotManifest)
-	if err := fetchAndParseJSONFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
-		return err
-	}
-
-	if !args.WasReserved {
-		if err := agent.changeTypeToRestore(ctx, tablet, sourceTablet, sourceTablet.KeyRange); err != nil {
-			return err
-		}
-	}
-
-	// create the loggers: tee to console and source
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
-
-	// do the work
-	if err := agent.Mysqld.RestoreFromSnapshot(l, sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, agent.hookExtraEnv()); err != nil {
-		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := topotools.Scrap(ctx, agent.TopoServer, agent.TabletAlias, false); err != nil {
-			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
-		}
-
-		return err
-	}
-
-	// reload the schema
-	agent.ReloadSchema(ctx)
-
-	// change to TYPE_SPARE, we're done!
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TYPE_SPARE, nil)
+	return returnErr
 }

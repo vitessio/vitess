@@ -33,7 +33,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 	ctx = trace.NewContext(ctx, span)
 
 	// read the existing shard info. It has to exist.
-	shardInfo, err := ts.GetShard(keyspace, shard)
+	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			}
 
 			// read the ShardReplication object to find tablets
-			sri, err := ts.GetShardReplication(cell, keyspace, shard)
+			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 				return
@@ -119,7 +119,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 
 	// Get all existing db types so they can be removed if nothing
 	// had been edited.
-	existingTabletTypes, err := ts.GetSrvTabletTypesPerShard(cell, shardInfo.Keyspace(), shardInfo.ShardName())
+	existingTabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		if err != topo.ErrNoNode {
 			return err
@@ -180,7 +180,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 			span := trace.NewSpanFromContext(ctx)
 			span.StartClient("TopoServer.UpdateEndPoints")
 			span.Annotate("tablet_type", string(tabletType))
-			if err := ts.UpdateEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
+			if err := ts.UpdateEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, err))
 			}
 			span.Finish()
@@ -198,7 +198,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 				span := trace.NewSpanFromContext(ctx)
 				span.StartClient("TopoServer.DeleteEndPoints")
 				span.Annotate("tablet_type", string(tabletType))
-				if err := ts.DeleteEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
+				if err := ts.DeleteEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
 					log.Warningf("unable to remove stale db type %v from serving graph: %v", tabletType, err)
 				}
 				span.Finish()
@@ -222,7 +222,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		span.Annotate("keyspace", shardInfo.Keyspace())
 		span.Annotate("shard", shardInfo.ShardName())
 		span.Annotate("cell", cell)
-		if err := ts.UpdateSrvShard(cell, shardInfo.Keyspace(), shardInfo.ShardName(), srvShard); err != nil {
+		if err := ts.UpdateSrvShard(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), srvShard); err != nil {
 			rec.RecordError(fmt.Errorf("writing serving data in cell %v for %v/%v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), err))
 		}
 		span.Finish()

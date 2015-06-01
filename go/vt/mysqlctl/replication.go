@@ -12,8 +12,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 	"text/template"
@@ -30,8 +28,13 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-var masterPasswordStart = "  MASTER_PASSWORD = '"
-var masterPasswordEnd = "',\n"
+const (
+	// SqlStartSlave is the SQl command issued to start MySQL replication
+	SqlStartSlave = "START SLAVE"
+
+	// SqlStopSlave is the SQl command issued to stop MySQL replication
+	SqlStopSlave = "STOP SLAVE"
+)
 
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
@@ -69,8 +72,8 @@ func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort in
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) *proto.ReplicationStatus {
-	status := &proto.ReplicationStatus{
+func parseSlaveStatus(fields map[string]string) proto.ReplicationStatus {
+	status := proto.ReplicationStatus{
 		MasterHost:      fields["Master_Host"],
 		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
 		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
@@ -84,8 +87,9 @@ func parseSlaveStatus(fields map[string]string) *proto.ReplicationStatus {
 	return status
 }
 
-// WaitForSlaveStart waits a slave until given deadline passed
-func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
+// WaitForSlaveStart waits until the deadline for replication to start.
+// This validates the current master is correct and can be connected to.
+func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 	var rowMap map[string]string
 	for slaveWait := 0; slaveWait < slaveStartDeadline; slaveWait++ {
 		status, err := mysqld.SlaveStatus()
@@ -112,9 +116,9 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) error {
 	return nil
 }
 
-// StartSlave starts a slave
-func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
-	if err := mysqld.ExecuteSuperQuery("START SLAVE"); err != nil {
+// StartSlave starts a slave on the provided MysqldDaemon
+func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
+	if err := md.ExecuteSuperQueryList([]string{SqlStartSlave}); err != nil {
 		return err
 	}
 
@@ -123,29 +127,20 @@ func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
 	return h.ExecuteOptional()
 }
 
-// StopSlave stops a slave
-func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
+// StopSlave stops a slave on the provided MysqldDaemon
+func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
 	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 
-	return mysqld.ExecuteSuperQuery("STOP SLAVE")
-}
-
-// GetMasterAddr returns master address
-func (mysqld *Mysqld) GetMasterAddr() (string, error) {
-	slaveStatus, err := mysqld.SlaveStatus()
-	if err != nil {
-		return "", err
-	}
-	return slaveStatus.MasterAddr(), nil
+	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
 }
 
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'port'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")
 	if err != nil {
 		return 0, err
 	}
@@ -161,7 +156,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
+	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
@@ -202,10 +197,10 @@ func (mysqld *Mysqld) WaitMasterPos(targetPos proto.ReplicationPosition, waitTim
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationStatus, error) {
+func (mysqld *Mysqld) SlaveStatus() (proto.ReplicationStatus, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
-		return nil, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
 	}
 	return flavor.SlaveStatus(mysqld)
 }
@@ -250,43 +245,6 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]st
 	return flavor.SetMasterCommands(&params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
 }
 
-// WaitForSlave waits for a slave if its lag is larger than given maxLag
-func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
-	// FIXME(msolomon) verify that slave started based on show slave status;
-	var rowMap map[string]string
-	for {
-		rowMap, err = mysqld.fetchSuperQueryMap("SHOW SLAVE STATUS")
-		if err != nil {
-			return
-		}
-
-		if rowMap["Seconds_Behind_Master"] == "NULL" {
-			break
-		} else {
-			lag, err := strconv.Atoi(rowMap["Seconds_Behind_Master"])
-			if err != nil {
-				break
-			}
-			if lag < maxLag {
-				return nil
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
-	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
-	errs := make([]string, 0, len(errorKeys))
-	for _, key := range errorKeys {
-		if rowMap[key] != "" {
-			errs = append(errs, key+": "+rowMap[key])
-		}
-	}
-	if len(errs) != 0 {
-		return errors.New(strings.Join(errs, ", "))
-	}
-	return errors.New("replication stopped, it will never catch up")
-}
-
 // ResetReplicationCommands returns the commands to run to reset all
 // replication for this host.
 func (mysqld *Mysqld) ResetReplicationCommands() ([]string, error) {
@@ -319,8 +277,8 @@ const (
 )
 
 // FindSlaves gets IP addresses for all currently connected slaves.
-func (mysqld *Mysqld) FindSlaves() ([]string, error) {
-	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+func FindSlaves(mysqld MysqlDaemon) ([]string, error) {
+	qr, err := mysqld.FetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
@@ -339,25 +297,9 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	return addrs, nil
 }
 
-// ValidateSnapshotPath is a helper function to make sure we can write to the local snapshot area, before we actually do any action
-// (can be used for both partial and full snapshots)
-func (mysqld *Mysqld) ValidateSnapshotPath() error {
-	_path := path.Join(mysqld.SnapshotDir, "validate_test")
-	if err := os.RemoveAll(_path); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	if err := os.MkdirAll(_path, 0775); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	if err := os.RemoveAll(_path); err != nil {
-		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
-	}
-	return nil
-}
-
 // WaitBlpPosition will wait for the filtered replication to reach at least
 // the provided position.
-func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.Duration) error {
+func WaitBlpPosition(mysqld MysqlDaemon, bp *blproto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {
@@ -365,7 +307,7 @@ func (mysqld *Mysqld) WaitBlpPosition(bp *blproto.BlpPosition, waitTimeout time.
 		}
 
 		cmd := binlogplayer.QueryBlpCheckpoint(bp.Uid)
-		qr, err := mysqld.fetchSuperQuery(cmd)
+		qr, err := mysqld.FetchSuperQuery(cmd)
 		if err != nil {
 			return err
 		}

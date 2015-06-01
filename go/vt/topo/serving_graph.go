@@ -21,5 +21,5 @@ func UpdateEndPoints(ctx context.Context, ts Server, cell, keyspace, shard strin
 	span.Annotate("tablet_type", string(tabletType))
 	defer span.Finish()
 
-	return ts.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs)
+	return ts.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs)
 }

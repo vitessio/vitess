@@ -29,6 +29,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -44,10 +45,20 @@ var (
 	wr *wrangler.Wrangler
 
 	// mutex is protecting all the following variables
+	// 3 states here:
+	// - no job ever ran (or reset was run): currentWorker is nil,
+	// currentContext/currentCancelFunc is nil, lastRunError is nil
+	// - one worker running: currentWorker is set,
+	//   currentContext/currentCancelFunc is set, lastRunError is nil
+	// - (at least) one worker already ran, none is running atm:
+	//   currentWorker is set, currentContext is nil, lastRunError
+	//   has the error returned by the worker.
 	currentWorkerMutex  sync.Mutex
 	currentWorker       worker.Worker
 	currentMemoryLogger *logutil.MemoryLogger
-	currentDone         chan struct{}
+	currentContext      context.Context
+	currentCancelFunc   context.CancelFunc
+	lastRunError        error
 )
 
 // signal handling, centralized here
@@ -59,7 +70,9 @@ func installSignalHandlers() {
 		// we got a signal, notify our modules
 		currentWorkerMutex.Lock()
 		defer currentWorkerMutex.Unlock()
-		currentWorker.Cancel()
+		if currentCancelFunc != nil {
+			currentCancelFunc()
+		}
 	}()
 }
 
@@ -75,17 +88,27 @@ func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
 
 	currentWorker = wrk
 	currentMemoryLogger = logutil.NewMemoryLogger()
-	currentDone = make(chan struct{})
+	currentContext, currentCancelFunc = context.WithCancel(context.Background())
+	lastRunError = nil
+	done := make(chan struct{})
 	wr.SetLogger(logutil.NewTeeLogger(currentMemoryLogger, logutil.NewConsoleLogger()))
 
-	// one go function runs the worker, closes 'done' when done
+	// one go function runs the worker, changes state when done
 	go func() {
+		// run will take a long time
 		log.Infof("Starting worker...")
-		wrk.Run()
-		close(currentDone)
+		err := wrk.Run(currentContext)
+
+		// it's done, let's save our state
+		currentWorkerMutex.Lock()
+		currentContext = nil
+		currentCancelFunc = nil
+		lastRunError = err
+		currentWorkerMutex.Unlock()
+		close(done)
 	}()
 
-	return currentDone, nil
+	return done, nil
 }
 
 func main() {

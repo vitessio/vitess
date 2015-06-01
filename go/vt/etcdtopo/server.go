@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"golang.org/x/net/context"
 )
 
 // Server is the implementation of topo.Server for etcd.
@@ -52,7 +53,7 @@ func (s *Server) Close() {
 }
 
 // GetKnownCells implements topo.Server.
-func (s *Server) GetKnownCells() ([]string, error) {
+func (s *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	resp, err := s.getGlobal().Get(cellsDirPath, true /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, convertError(err)

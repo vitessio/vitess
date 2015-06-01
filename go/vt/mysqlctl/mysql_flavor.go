@@ -30,7 +30,7 @@ type MysqlFlavor interface {
 	MasterPosition(mysqld *Mysqld) (proto.ReplicationPosition, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error)
+	SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error)
 
 	// ResetReplicationCommands returns the commands to completely reset
 	// replication on the host.
@@ -63,7 +63,7 @@ type MysqlFlavor interface {
 	// SendBinlogDumpCommand sends the flavor-specific version of
 	// the COM_BINLOG_DUMP command to start dumping raw binlog
 	// events over a slave connection, starting at a given GTID.
-	SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error
+	SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error
 
 	// MakeBinlogEvent takes a raw packet from the MySQL binlog
 	// stream connection and returns a BinlogEvent through which
@@ -120,7 +120,7 @@ func (mysqld *Mysqld) detectFlavor() (MysqlFlavor, error) {
 
 	// If no environment variable set, fall back to auto-detect.
 	log.Infof("MYSQL_FLAVOR empty or unset, attempting to auto-detect...")
-	qr, err := mysqld.fetchSuperQuery("SELECT VERSION()")
+	qr, err := mysqld.FetchSuperQuery("SELECT VERSION()")
 	if err != nil {
 		return nil, fmt.Errorf("couldn't SELECT VERSION(): %v", err)
 	}

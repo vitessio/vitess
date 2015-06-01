@@ -50,15 +50,15 @@ func TestCompareRows(t *testing.T) {
 		want        int
 	}{
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_LONG}},
+			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Numeric("123")}},
 			right:  []sqltypes.Value{{sqltypes.Numeric("14")}},
 			want:   1,
 		},
 		{
 			fields: []mproto.Field{
-				{Name: "a", Type: mproto.VT_LONG},
-				{Name: "b", Type: mproto.VT_LONG},
+				{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
+				{"b", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG},
 			},
 			left: []sqltypes.Value{
 				{sqltypes.Numeric("555")},
@@ -71,43 +71,43 @@ func TestCompareRows(t *testing.T) {
 			want: -1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_LONG}},
+			fields: []mproto.Field{{"a", mproto.VT_LONG, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Numeric("144")}},
 			right:  []sqltypes.Value{{sqltypes.Numeric("144")}},
 			want:   0,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_LONGLONG}},
+			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Numeric("9223372036854775809")}},
 			right:  []sqltypes.Value{{sqltypes.Numeric("9223372036854775810")}},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_LONGLONG}},
+			fields: []mproto.Field{{"a", mproto.VT_LONGLONG, mproto.VT_UNSIGNED_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Numeric("9223372036854775819")}},
 			right:  []sqltypes.Value{{sqltypes.Numeric("9223372036854775810")}},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_DOUBLE}},
+			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Fractional("3.14")}},
 			right:  []sqltypes.Value{{sqltypes.Fractional("3.2")}},
 			want:   -1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_DOUBLE}},
+			fields: []mproto.Field{{"a", mproto.VT_DOUBLE, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.Fractional("123.4")}},
 			right:  []sqltypes.Value{{sqltypes.Fractional("123.2")}},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_STRING}},
+			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.String("abc")}},
 			right:  []sqltypes.Value{{sqltypes.String("abb")}},
 			want:   1,
 		},
 		{
-			fields: []mproto.Field{{Name: "a", Type: mproto.VT_STRING}},
+			fields: []mproto.Field{{"a", mproto.VT_STRING, mproto.VT_ZEROVALUE_FLAG}},
 			left:   []sqltypes.Value{{sqltypes.String("abc")}},
 			right:  []sqltypes.Value{{sqltypes.String("abd")}},
 			want:   -1,

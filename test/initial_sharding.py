@@ -110,8 +110,7 @@ primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
 
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + create_table_template % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
@@ -122,8 +121,7 @@ index by_msg (msg)
     else:
       t = 'bigint(20) unsigned'
     sql = 'alter table %s add keyspace_id ' + t
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + sql % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
@@ -134,8 +132,7 @@ index by_msg (msg)
     else:
       t = 'bigint(20) unsigned'
     sql = 'alter table %s modify keyspace_id ' + t + ' not null'
-    utils.run_vtctl(['ApplySchemaKeyspace',
-                     '-simple',
+    utils.run_vtctl(['ApplySchema',
                      '-sql=' + sql % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)

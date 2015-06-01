@@ -42,13 +42,13 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 		return err
 	}
 
-	err = wr.setKeyspaceShardingInfo(keyspace, shardingColumnName, shardingColumnType, splitShardCount, force)
+	err = wr.setKeyspaceShardingInfo(ctx, keyspace, shardingColumnName, shardingColumnType, splitShardCount, force)
 	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 
 }
 
-func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, splitShardCount int32, force bool) error {
-	ki, err := wr.ts.GetKeyspace(keyspace)
+func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, splitShardCount int32, force bool) error {
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	ki.SplitShardCount = splitShardCount
-	return topo.UpdateKeyspace(wr.ts, ki)
+	return topo.UpdateKeyspace(ctx, wr.ts, ki)
 }
 
 // MigrateServedTypes is used during horizontal splits to migrate a
@@ -92,7 +92,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 
 	// find overlapping shards in this keyspace
 	wr.Logger().Infof("Finding the overlapping shards in keyspace %v", keyspace)
-	osList, err := topotools.FindOverlappingShards(wr.ts, keyspace)
+	osList, err := topotools.FindOverlappingShards(ctx, wr.ts, keyspace)
 	if err != nil {
 		return fmt.Errorf("FindOverlappingShards failed: %v", err)
 	}
@@ -216,7 +216,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 			wr.Logger().Infof("Gathering master position for %v", si.MasterAlias)
-			ti, err := wr.ts.GetTablet(si.MasterAlias)
+			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -260,7 +260,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 
 				// and wait for it
 				wr.Logger().Infof("Waiting for %v to catch up", si.MasterAlias)
-				tablet, err := wr.ts.GetTablet(si.MasterAlias)
+				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -287,7 +287,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 			wr.Logger().Infof("RefreshState master %v", si.MasterAlias)
-			ti, err := wr.ts.GetTablet(si.MasterAlias)
+			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -310,12 +310,12 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	// re-read all the shards so we are up to date
 	wr.Logger().Infof("Re-reading all shards")
 	for i, si := range sourceShards {
-		if sourceShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
+		if sourceShards[i], err = wr.ts.GetShard(ctx, si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
 	}
 	for i, si := range destinationShards {
-		if destinationShards[i], err = wr.ts.GetShard(si.Keyspace(), si.ShardName()); err != nil {
+		if destinationShards[i], err = wr.ts.GetShard(ctx, si.Keyspace(), si.ShardName()); err != nil {
 			return err
 		}
 	}
@@ -465,7 +465,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 // served type from a keyspace to another.
 func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard string, servedType topo.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) error {
 	// read the destination keyspace, check it
-	ki, err := wr.ts.GetKeyspace(keyspace)
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -474,7 +474,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 	}
 
 	// read the destination shard, check it
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -532,7 +532,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
 
 	// re-read and update keyspace info record
-	ki, err = wr.ts.GetKeyspace(ki.KeyspaceName())
+	ki, err = wr.ts.GetKeyspace(ctx, ki.KeyspaceName())
 	if err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo
 	}
 
 	// re-read and check the destination shard
-	destinationShard, err = wr.ts.GetShard(destinationShard.Keyspace(), destinationShard.ShardName())
+	destinationShard, err = wr.ts.GetShard(ctx, destinationShard.Keyspace(), destinationShard.ShardName())
 	if err != nil {
 		return err
 	}
@@ -555,7 +555,7 @@ func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo
 	// read the source shard, we'll need its master, and we'll need to
 	// update the blacklisted tables.
 	var sourceShard *topo.ShardInfo
-	sourceShard, err = wr.ts.GetShard(destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
+	sourceShard, err = wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
 	if err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo
 func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType topo.TabletType, cells []string, reverse bool, tables []string, ev *events.MigrateServedFrom) error {
 	// Save the destination keyspace (its ServedFrom has been changed)
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err := topo.UpdateKeyspace(wr.ts, ki); err != nil {
+	if err := topo.UpdateKeyspace(ctx, wr.ts, ki); err != nil {
 		return err
 	}
 
@@ -622,11 +622,11 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 //   replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom, filteredReplicationWaitTime time.Duration) error {
 	// Read the data we need
-	sourceMasterTabletInfo, err := wr.ts.GetTablet(sourceShard.MasterAlias)
+	sourceMasterTabletInfo, err := wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
 	if err != nil {
 		return err
 	}
-	destinationMasterTabletInfo, err := wr.ts.GetTablet(destinationShard.MasterAlias)
+	destinationMasterTabletInfo, err := wr.ts.GetTablet(ctx, destinationShard.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -664,7 +664,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Update the destination keyspace (its ServedFrom has changed)
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err = topo.UpdateKeyspace(wr.ts, ki); err != nil {
+	if err = topo.UpdateKeyspace(ctx, wr.ts, ki); err != nil {
 		return err
 	}
 
@@ -694,19 +694,19 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 		return err
 	}
 
-	err = wr.setKeyspaceServedFrom(keyspace, servedType, cells, sourceKeyspace, remove)
+	err = wr.setKeyspaceServedFrom(ctx, keyspace, servedType, cells, sourceKeyspace, remove)
 	return wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) setKeyspaceServedFrom(keyspace string, servedType topo.TabletType, cells []string, sourceKeyspace string, remove bool) error {
-	ki, err := wr.ts.GetKeyspace(keyspace)
+func (wr *Wrangler) setKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topo.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
 	if err := ki.UpdateServedFromMap(servedType, cells, sourceKeyspace, remove, nil); err != nil {
 		return err
 	}
-	return topo.UpdateKeyspace(wr.ts, ki)
+	return topo.UpdateKeyspace(ctx, wr.ts, ki)
 }
 
 // RefreshTablesByShard calls RefreshState on all the tables of a

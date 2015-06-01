@@ -29,7 +29,7 @@ func (*mariaDB10) VersionMatch(version string) bool {
 
 // MasterPosition implements MysqlFlavor.MasterPosition().
 func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
+	qr, err := mysqld.FetchSuperQuery("SELECT @@GLOBAL.gtid_binlog_pos")
 	if err != nil {
 		return rp, err
 	}
@@ -40,16 +40,16 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp proto.ReplicationPos
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (*proto.ReplicationStatus, error) {
+func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (proto.ReplicationStatus, error) {
 	fields, err := mysqld.fetchSuperQueryMap("SHOW ALL SLAVES STATUS")
 	if err != nil {
-		return nil, ErrNotSlave
+		return proto.ReplicationStatus{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
 	if err != nil {
-		return nil, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
+		return proto.ReplicationStatus{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
 	}
 	return status, nil
 }
@@ -69,7 +69,7 @@ func (*mariaDB10) WaitMasterPos(mysqld *Mysqld, targetPos proto.ReplicationPosit
 	}
 
 	log.Infof("Waiting for minimum replication position with query: %v", query)
-	qr, err := mysqld.fetchSuperQuery(query)
+	qr, err := mysqld.FetchSuperQuery(query)
 	if err != nil {
 		return fmt.Errorf("MASTER_GTID_WAIT() failed: %v", err)
 	}
@@ -138,7 +138,7 @@ func (*mariaDB10) ParseReplicationPosition(s string) (proto.ReplicationPosition,
 }
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
-func (*mariaDB10) SendBinlogDumpCommand(mysqld *Mysqld, conn *SlaveConnection, startPos proto.ReplicationPosition) error {
+func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos proto.ReplicationPosition) error {
 	const ComBinlogDump = 0x12
 
 	// Tell the server that we understand GTIDs by setting our slave capability

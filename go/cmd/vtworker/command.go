@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -23,7 +24,7 @@ var (
 type command struct {
 	Name        string
 	method      func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error)
-	interactive func(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
+	interactive func(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
 	params      string
 	Help        string // if help is empty, won't list the command
 }
@@ -112,7 +113,11 @@ func runCommand(args []string) error {
 			case <-done:
 				log.Infof("Command is done:")
 				log.Info(wrk.StatusAsText())
-				if wrk.Error() != nil {
+				currentWorkerMutex.Lock()
+				err := lastRunError
+				currentWorkerMutex.Unlock()
+				if err != nil {
+					log.Errorf("Ended with an error: %v", err)
 					os.Exit(1)
 				}
 				os.Exit(0)

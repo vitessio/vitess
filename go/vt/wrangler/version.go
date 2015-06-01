@@ -45,8 +45,8 @@ var getVersionFromTablet = func(tabletAddr string) (string, error) {
 }
 
 // GetVersion returns the version string from a tablet
-func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
-	tablet, err := wr.ts.GetTablet(tabletAlias)
+func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias topo.TabletAlias) (string, error) {
+	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return "", err
 	}
@@ -60,10 +60,10 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(masterVersion string, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(ctx context.Context, masterVersion string, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering version for %v", alias)
-	slaveVersion, err := wr.GetVersion(alias)
+	slaveVersion, err := wr.GetVersion(ctx, alias)
 	if err != nil {
 		er.RecordError(err)
 		return
@@ -77,7 +77,7 @@ func (wr *Wrangler) diffVersion(masterVersion string, masterAlias topo.TabletAli
 // ValidateVersionShard validates all versions are the same in all
 // tablets in a shard
 func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard string) error {
-	si, err := wr.ts.GetShard(keyspace, shard)
+	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering version for master %v", si.MasterAlias)
-	masterVersion, err := wr.GetVersion(si.MasterAlias)
+	masterVersion, err := wr.GetVersion(ctx, si.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 		}
 
 		wg.Add(1)
-		go wr.diffVersion(masterVersion, si.MasterAlias, alias, &wg, &er)
+		go wr.diffVersion(ctx, masterVersion, si.MasterAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -121,7 +121,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 // tablets in a keyspace
 func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string) error {
 	// find all the shards
-	shards, err := wr.ts.GetShardNames(keyspace)
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	}
 
 	// find the reference version using the first shard's master
-	si, err := wr.ts.GetShard(keyspace, shards[0])
+	si, err := wr.ts.GetShard(ctx, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	}
 	referenceAlias := si.MasterAlias
 	log.Infof("Gathering version for reference master %v", referenceAlias)
-	referenceVersion, err := wr.GetVersion(referenceAlias)
+	referenceVersion, err := wr.GetVersion(ctx, referenceAlias)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 			}
 
 			wg.Add(1)
-			go wr.diffVersion(referenceVersion, referenceAlias, alias, &wg, &er)
+			go wr.diffVersion(ctx, referenceVersion, referenceAlias, alias, &wg, &er)
 		}
 	}
 	wg.Wait()

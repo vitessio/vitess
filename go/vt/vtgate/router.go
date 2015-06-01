@@ -437,7 +437,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, plan *planbuilde
 	for i, colVindex := range plan.Table.Owned {
 		keys := make(map[interface{}]bool)
 		for _, row := range result.Rows {
-			k, err := mproto.Convert(result.Fields[i].Type, row[i])
+			k, err := mproto.Convert(result.Fields[i], row[i])
 			if err != nil {
 				return err
 			}

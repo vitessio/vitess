@@ -141,17 +141,17 @@ class RowCacheInvalidator(unittest.TestCase):
     logging.debug("vt_insert_test stats %s" % stats_dict)
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id),
-                          path='test_keyspace/0')
+    conn = replica_tablet.conn()
+    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id),
-                          path='test_keyspace/0')
+    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1,
                      "This should have hit the cache")
+    conn.close()
 
   def test_outofband_statements(self):
     start = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
@@ -267,16 +267,16 @@ class RowCacheInvalidator(unittest.TestCase):
     stats_dict = self.replica_stats()['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id),
-                          path='test_keyspace/0')
+    conn = replica_tablet.conn()
+    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id),
-                          path='test_keyspace/0')
+    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, "This should have hit the cache")
+    conn.close()
 
   def test_service_disabled(self):
     # perform some inserts, then change state to stop the invalidator

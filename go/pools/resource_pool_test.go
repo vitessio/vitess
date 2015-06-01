@@ -74,38 +74,6 @@ func TestOpen(t *testing.T) {
 		}
 	}
 
-	// Test TryGet
-	r, err := p.TryGet()
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if r != nil {
-		t.Errorf("Expecting nil")
-	}
-	for i := 0; i < 5; i++ {
-		p.Put(resources[i])
-		_, available, _, _, _, _ := p.Stats()
-		if available != int64(i+1) {
-			t.Errorf("expecting %d, received %d", 5-i-1, available)
-		}
-	}
-	for i := 0; i < 5; i++ {
-		r, err := p.TryGet()
-		resources[i] = r
-		if err != nil {
-			t.Errorf("Unexpected error %v", err)
-		}
-		if r == nil {
-			t.Errorf("Expecting non-nil")
-		}
-		if lastID.Get() != 5 {
-			t.Errorf("Expecting 5, received %d", lastID.Get())
-		}
-		if count.Get() != 5 {
-			t.Errorf("Expecting 5, received %d", count.Get())
-		}
-	}
-
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
@@ -139,7 +107,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// Test Close resource
-	r, err = p.Get(ctx)
+	r, err := p.Get(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
@@ -241,15 +209,6 @@ func TestShrinking(t *testing.T) {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
 
-	// TryGet is allowed when shrinking
-	r, err := p.TryGet()
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if r != nil {
-		t.Errorf("Expecting nil")
-	}
-
 	// Get is allowed when shrinking, but it will wait
 	getdone := make(chan bool)
 	go func() {
@@ -278,6 +237,7 @@ func TestShrinking(t *testing.T) {
 
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
+	var err error
 	for i := 0; i < 3; i++ {
 		resources[i], err = p.Get(ctx)
 		if err != nil {

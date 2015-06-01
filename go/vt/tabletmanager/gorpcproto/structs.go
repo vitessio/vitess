@@ -8,9 +8,7 @@ import (
 	"time"
 
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
-	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -48,9 +46,10 @@ type InitSlaveArgs struct {
 
 // SetMasterArgs has arguments for SetMaster
 type SetMasterArgs struct {
-	Parent        topo.TabletAlias
-	TimeCreatedNS int64
-	WaitTimeout   time.Duration // pass in zero to wait indefinitely
+	Parent          topo.TabletAlias
+	TimeCreatedNS   int64
+	ForceStartSlave bool
+	WaitTimeout     time.Duration // pass in zero to wait indefinitely
 }
 
 // GetSchemaArgs has arguments for GetSchema
@@ -93,13 +92,9 @@ type ExecuteFetchArgs struct {
 	ReloadSchema   bool
 }
 
-// gorpc doesn't support returning a streaming type during streaming
-// and a final return value, so using structures with either one set.
-
-// SnapshotStreamingReply has the two possible replies for Snapshot
-type SnapshotStreamingReply struct {
-	Log    *logutil.LoggerEvent
-	Result *actionnode.SnapshotReply
+// BackupArgs has arguments for Backup
+type BackupArgs struct {
+	Concurrency int
 }
 
 // TabletExternallyReparentedArgs has arguments for TabletExternallyReparented

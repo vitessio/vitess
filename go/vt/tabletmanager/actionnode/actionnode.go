@@ -87,9 +87,9 @@ const (
 	// case, and update its own topology record.
 	TabletActionSlaveWasRestarted = "SlaveWasRestarted"
 
-	// TabletActionStopReplicationAndGetPosition will stop replication,
-	// and return the current position.
-	TabletActionStopReplicationAndGetPosition = "StopReplicationAndGetPosition"
+	// TabletActionStopReplicationAndGetStatus will stop replication,
+	// and return the current replication status.
+	TabletActionStopReplicationAndGetStatus = "StopReplicationAndGetStatus"
 
 	// TabletActionPromoteSlave will make this tablet the master
 	TabletActionPromoteSlave = "PromoteSlave"
@@ -165,17 +165,8 @@ const (
 	// replication slaves.
 	TabletActionGetSlaves = "GetSlaves"
 
-	// TabletActionSnapshot takes a db snapshot
-	TabletActionSnapshot = "Snapshot"
-
-	// TabletActionSnapshotSourceEnd restarts the mysql server
-	TabletActionSnapshotSourceEnd = "SnapshotSourceEnd"
-
-	// TabletActionReserveForRestore will prepare a server for restore
-	TabletActionReserveForRestore = "ReserveForRestore"
-
-	// TabletActionRestore will restore a backup
-	TabletActionRestore = "Restore"
+	// TabletActionBackup takes a db backup and stores it into BackupStorage
+	TabletActionBackup = "Backup"
 
 	//
 	// Shard actions - involve all tablets in a shard.

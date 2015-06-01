@@ -11,6 +11,7 @@ public class VitessConf {
   public static final String INPUT_KEYSPACE = "vitess.vtgate.hadoop.keyspace";
   public static final String INPUT_QUERY = "vitess.vtgate.hadoop.input_query";
   public static final String SPLITS = "vitess.vtgate.hadoop.splits";
+  public static final String SPLIT_COLUMN = "vitess.vtgate.hadoop.splitcolumn";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;
@@ -57,5 +58,13 @@ public class VitessConf {
 
   public void setSplits(int splits) {
     conf.setInt(SPLITS, splits);
+  }
+
+  public String getSplitColumn() {
+    return conf.get(SPLIT_COLUMN);
+  }
+
+  public void setSplitColumn(String splitColumn) {
+    conf.set(SPLIT_COLUMN, splitColumn);
   }
 }

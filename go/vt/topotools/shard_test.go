@@ -11,9 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -24,12 +22,9 @@ import (
 func TestCreateShard(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"test_cell"}
-	logger := logutil.NewMemoryLogger()
 
 	// Set up topology.
 	ts := zktopo.NewTestServer(t, cells)
-	f := faketopo.New(t, logger, ts, cells)
-	defer f.TearDown()
 
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -40,7 +35,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create keyspace
-	if err := ts.CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
@@ -56,12 +51,9 @@ func TestCreateShard(t *testing.T) {
 func TestGetOrCreateShard(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"test_cell"}
-	logger := logutil.NewMemoryLogger()
 
 	// Set up topology.
 	ts := zktopo.NewTestServer(t, cells)
-	f := faketopo.New(t, logger, ts, cells)
-	defer f.TearDown()
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"

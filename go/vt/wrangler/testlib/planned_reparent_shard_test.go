@@ -15,15 +15,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
-	"golang.org/x/net/context"
 
 	"time"
 )
 
 func TestPlannedReparentShard(t *testing.T) {
-	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
 
 	// Create a master, a couple good slaves
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
@@ -64,6 +64,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",
+		"START SLAVE",
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
@@ -72,10 +73,6 @@ func TestPlannedReparentShard(t *testing.T) {
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.Replicating = true
-	goodSlave1.FakeMysqlDaemon.CurrentSlaveStatus = &myproto.ReplicationStatus{
-		SlaveIORunning:  true,
-		SlaveSQLRunning: true,
-	}
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -98,7 +95,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	if err := wr.PlannedReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second); err != nil {
+	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, newMaster.Tablet.Alias.String()}); err != nil {
 		t.Fatalf("PlannedReparentShard failed: %v", err)
 	}
 
@@ -135,6 +132,9 @@ func TestPlannedReparentShard(t *testing.T) {
 	// the slave that wasn't replicating in the first place)
 	if !oldMaster.FakeMysqlDaemon.Replicating {
 		t.Errorf("oldMaster.FakeMysqlDaemon.Replicating not set")
+	}
+	if !goodSlave1.FakeMysqlDaemon.Replicating {
+		t.Errorf("goodSlave1.FakeMysqlDaemon.Replicating not set")
 	}
 	if goodSlave2.FakeMysqlDaemon.Replicating {
 		t.Errorf("goodSlave2.FakeMysqlDaemon.Replicating set")

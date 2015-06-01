@@ -186,7 +186,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld *mysqlctl.Mysqld) {
+func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) {
 	qe.dbconfigs = dbconfigs
 	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params

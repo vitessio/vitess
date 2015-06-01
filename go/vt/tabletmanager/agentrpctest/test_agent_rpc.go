@@ -145,7 +145,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 			Schema:            "create table_name",
 			Columns:           []string{"col1", "col2"},
 			PrimaryKeyColumns: []string{"col1"},
-			Type:              myproto.TABLE_VIEW,
+			Type:              myproto.TableView,
 			DataLength:        12,
 			RowCount:          6,
 		},
@@ -154,7 +154,7 @@ var testGetSchemaReply = &myproto.SchemaDefinition{
 			Schema:            "create table_name2",
 			Columns:           []string{"col1"},
 			PrimaryKeyColumns: []string{"col1"},
-			Type:              myproto.TABLE_BASE_TABLE,
+			Type:              myproto.TableBaseTable,
 			DataLength:        12,
 			RowCount:          6,
 		},
@@ -632,7 +632,7 @@ func agentRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmc
 // Replication related methods
 //
 
-var testReplicationStatus = &myproto.ReplicationStatus{
+var testReplicationStatus = myproto.ReplicationStatus{
 	Position: myproto.ReplicationPosition{
 		GTIDSet: myproto.MariadbGTID{
 			Domain:   1,
@@ -648,7 +648,7 @@ var testReplicationStatus = &myproto.ReplicationStatus{
 	MasterConnectRetry:  12,
 }
 
-func (fra *fakeRPCAgent) SlaveStatus(ctx context.Context) (*myproto.ReplicationStatus, error) {
+func (fra *fakeRPCAgent) SlaveStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1039,24 +1039,26 @@ func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client
 }
 
 var testSetMasterCalled = false
+var testForceStartSlave = true
 
-func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64) error {
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "SetMaster parent", parent, testMasterAlias)
 	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	compare(fra.t, "SetMaster forceStartSlave", forceStartSlave, testForceStartSlave)
 	testSetMasterCalled = true
 	return nil
 }
 
 func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS, testForceStartSlave)
 	compareError(t, "SetMaster", err, true, testSetMasterCalled)
 }
 
 func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS)
+	err := client.SetMaster(ctx, ti, testMasterAlias, testTimeCreatedNS, testForceStartSlave)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1087,20 +1089,20 @@ func agentRPCTestSlaveWasRestartedPanic(ctx context.Context, t *testing.T, clien
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-func (fra *fakeRPCAgent) StopReplicationAndGetPosition(ctx context.Context) (myproto.ReplicationPosition, error) {
+func (fra *fakeRPCAgent) StopReplicationAndGetStatus(ctx context.Context) (myproto.ReplicationStatus, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	return testReplicationPosition, nil
+	return testReplicationStatus, nil
 }
 
-func agentRPCTestStopReplicationAndGetPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	rp, err := client.StopReplicationAndGetPosition(ctx, ti)
-	compareError(t, "StopReplicationAndGetPosition", err, rp, testReplicationPosition)
+func agentRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	rp, err := client.StopReplicationAndGetStatus(ctx, ti)
+	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
-func agentRPCTestStopReplicationAndGetPositionPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	_, err := client.StopReplicationAndGetPosition(ctx, ti)
+func agentRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	_, err := client.StopReplicationAndGetStatus(ctx, ti)
 	expectRPCWrapLockActionPanic(t, err)
 }
 
@@ -1125,149 +1127,36 @@ func agentRPCTestPromoteSlavePanic(ctx context.Context, t *testing.T, client tmc
 // Backup / restore related methods
 //
 
-var testSnapshotArgs = &actionnode.SnapshotArgs{
-	Concurrency:         42,
-	ServerMode:          true,
-	ForceMasterSnapshot: true,
-}
-var testSnapshotReply = &actionnode.SnapshotReply{
-	ParentAlias: topo.TabletAlias{
-		Cell: "test",
-		Uid:  456,
-	},
-	ManifestPath:       "path",
-	SlaveStartRequired: true,
-	ReadOnly:           true,
-}
+var testBackupConcurrency = 24
+var testBackupCalled = false
 
-func (fra *fakeRPCAgent) Snapshot(ctx context.Context, args *actionnode.SnapshotArgs, logger logutil.Logger) (*actionnode.SnapshotReply, error) {
+func (fra *fakeRPCAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "Snapshot args", args, testSnapshotArgs)
-	logStuff(logger, 0)
-	return testSnapshotReply, nil
-}
-
-func agentRPCTestSnapshot(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Snapshot(ctx, ti, testSnapshotArgs)
-	if err != nil {
-		t.Fatalf("Snapshot failed: %v", err)
-	}
-	compareLoggedStuff(t, "Snapshot", logChannel, 0)
-	sr, err := errFunc()
-	compareError(t, "Snapshot", err, sr, testSnapshotReply)
-}
-
-func agentRPCTestSnapshotPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Snapshot(ctx, ti, testSnapshotArgs)
-	if err != nil {
-		t.Fatalf("Snapshot failed: %v", err)
-	}
-	if e, ok := <-logChannel; ok {
-		t.Fatalf("Unexpected Snapshot logs: %v", e)
-	}
-	_, err = errFunc()
-	expectRPCWrapLockActionPanic(t, err)
-}
-
-var testSnapshotSourceEndArgs = &actionnode.SnapshotSourceEndArgs{
-	SlaveStartRequired: true,
-	ReadOnly:           true,
-	OriginalType:       topo.TYPE_RDONLY,
-}
-var testSnapshotSourceEndCalled = false
-
-func (fra *fakeRPCAgent) SnapshotSourceEnd(ctx context.Context, args *actionnode.SnapshotSourceEndArgs) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "SnapshotSourceEnd args", args, testSnapshotSourceEndArgs)
-	testSnapshotSourceEndCalled = true
-	return nil
-}
-
-func agentRPCTestSnapshotSourceEnd(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.SnapshotSourceEnd(ctx, ti, testSnapshotSourceEndArgs)
-	compareError(t, "SnapshotSourceEnd", err, true, testSnapshotSourceEndCalled)
-}
-
-func agentRPCTestSnapshotSourceEndPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.SnapshotSourceEnd(ctx, ti, testSnapshotSourceEndArgs)
-	expectRPCWrapLockActionPanic(t, err)
-}
-
-var testReserveForRestoreArgs = &actionnode.ReserveForRestoreArgs{
-	SrcTabletAlias: topo.TabletAlias{
-		Cell: "test",
-		Uid:  456,
-	},
-}
-var testReserveForRestoreCalled = false
-
-func (fra *fakeRPCAgent) ReserveForRestore(ctx context.Context, args *actionnode.ReserveForRestoreArgs) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "ReserveForRestore args", args, testReserveForRestoreArgs)
-	testReserveForRestoreCalled = true
-	return nil
-}
-
-func agentRPCTestReserveForRestore(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.ReserveForRestore(ctx, ti, testReserveForRestoreArgs)
-	compareError(t, "ReserveForRestore", err, true, testReserveForRestoreCalled)
-}
-
-func agentRPCTestReserveForRestorePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	err := client.ReserveForRestore(ctx, ti, testReserveForRestoreArgs)
-	expectRPCWrapLockActionPanic(t, err)
-}
-
-var testRestoreArgs = &actionnode.RestoreArgs{
-	SrcTabletAlias: topo.TabletAlias{
-		Cell: "jail1",
-		Uid:  890,
-	},
-	SrcFilePath: "source",
-	ParentAlias: topo.TabletAlias{
-		Cell: "jail2",
-		Uid:  901,
-	},
-	FetchConcurrency:      12,
-	FetchRetryCount:       678,
-	WasReserved:           true,
-	DontWaitForSlaveStart: true,
-}
-var testRestoreCalled = false
-
-func (fra *fakeRPCAgent) Restore(ctx context.Context, args *actionnode.RestoreArgs, logger logutil.Logger) error {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "Restore args", args, testRestoreArgs)
+	compare(fra.t, "Backup args", concurrency, testBackupConcurrency)
 	logStuff(logger, 10)
-	testRestoreCalled = true
+	testBackupCalled = true
 	return nil
 }
 
-func agentRPCTestRestore(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Restore(ctx, ti, testRestoreArgs)
+func agentRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
 	if err != nil {
-		t.Fatalf("Restore failed: %v", err)
+		t.Fatalf("Backup failed: %v", err)
 	}
-	compareLoggedStuff(t, "Restore", logChannel, 10)
+	compareLoggedStuff(t, "Backup", logChannel, 10)
 	err = errFunc()
-	compareError(t, "Restore", err, true, testRestoreCalled)
+	compareError(t, "Backup", err, true, testBackupCalled)
 }
 
-func agentRPCTestRestorePanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
-	logChannel, errFunc, err := client.Restore(ctx, ti, testRestoreArgs)
+func agentRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
+	logChannel, errFunc, err := client.Backup(ctx, ti, testBackupConcurrency)
 	if err != nil {
-		t.Fatalf("Snapshot failed: %v", err)
+		t.Fatalf("Backup failed: %v", err)
 	}
 	if e, ok := <-logChannel; ok {
-		t.Fatalf("Unexpected Snapshot logs: %v", e)
+		t.Fatalf("Unexpected Backup logs: %v", e)
 	}
 	err = errFunc()
 	expectRPCWrapLockActionPanic(t, err)
@@ -1358,14 +1247,11 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveWasPromoted(ctx, t, client, ti)
 	agentRPCTestSetMaster(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestarted(ctx, t, client, ti)
-	agentRPCTestStopReplicationAndGetPosition(ctx, t, client, ti)
+	agentRPCTestStopReplicationAndGetStatus(ctx, t, client, ti)
 	agentRPCTestPromoteSlave(ctx, t, client, ti)
 
 	// Backup / restore related methods
-	agentRPCTestSnapshot(ctx, t, client, ti)
-	agentRPCTestSnapshotSourceEnd(ctx, t, client, ti)
-	agentRPCTestReserveForRestore(ctx, t, client, ti)
-	agentRPCTestRestore(ctx, t, client, ti)
+	agentRPCTestBackup(ctx, t, client, ti)
 
 	//
 	// Tests panic handling everywhere now
@@ -1414,12 +1300,9 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo,
 	agentRPCTestSlaveWasPromotedPanic(ctx, t, client, ti)
 	agentRPCTestSetMasterPanic(ctx, t, client, ti)
 	agentRPCTestSlaveWasRestartedPanic(ctx, t, client, ti)
-	agentRPCTestStopReplicationAndGetPositionPanic(ctx, t, client, ti)
+	agentRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, ti)
 	agentRPCTestPromoteSlavePanic(ctx, t, client, ti)
 
 	// Backup / restore related methods
-	agentRPCTestSnapshotPanic(ctx, t, client, ti)
-	agentRPCTestSnapshotSourceEndPanic(ctx, t, client, ti)
-	agentRPCTestReserveForRestorePanic(ctx, t, client, ti)
-	agentRPCTestRestorePanic(ctx, t, client, ti)
+	agentRPCTestBackupPanic(ctx, t, client, ti)
 }

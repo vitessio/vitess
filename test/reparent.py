@@ -75,6 +75,30 @@ class TestReparent(unittest.TestCase):
       t.clean_dbs()
     super(TestReparent, self).tearDown()
 
+  _create_vt_insert_test = '''create table vt_insert_test (
+  id bigint,
+  msg varchar(64),
+  primary key (id)
+  ) Engine=InnoDB'''
+
+  def _populate_vt_insert_test(self, master_tablet, index):
+    q = "insert into vt_insert_test(id, msg) values (%d, 'test %d')" % \
+        (index, index)
+    master_tablet.mquery('vt_test_keyspace', q, write=True)
+
+  def _check_vt_insert_test(self, tablet, index):
+    # wait until it gets the data
+    timeout = 10.0
+    while True:
+      result = tablet.mquery('vt_test_keyspace',
+                             'select msg from vt_insert_test where id=%d' %
+                             index)
+      if len(result) == 1:
+        break
+      timeout = utils.wait_step('waiting for replication to catch up on %s' %
+                                tablet.tablet_alias,
+                                timeout, sleep_time=0.1)
+
   def _check_db_addr(self, shard, db_type, expected_port, cell='test_nj'):
     ep = utils.run_vtctl_json(['GetEndPoints', cell, 'test_keyspace/' + shard,
                                db_type])
@@ -140,6 +164,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology()
+    tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
     # Make the current master agent and database unavailable.
     tablet_62344.kill_vttablet()
@@ -177,6 +202,11 @@ class TestReparent(unittest.TestCase):
 
     utils.validate_topology()
     self._check_db_addr('0', 'master', tablet_62044.port)
+
+    # insert data into the new master, check the connected slaves work
+    self._populate_vt_insert_test(tablet_62044, 2)
+    self._check_vt_insert_test(tablet_41983, 2)
+    self._check_vt_insert_test(tablet_31981, 2)
 
     utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias,
                      'idle'])
@@ -311,6 +341,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
+    tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
     self._check_db_addr(shard_id, 'master', tablet_62344.port)
 
@@ -340,6 +371,11 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology()
 
     self._check_db_addr(shard_id, 'master', tablet_62044.port)
+
+    # insert data into the new master, check the connected slaves work
+    self._populate_vt_insert_test(tablet_62044, 1)
+    self._check_vt_insert_test(tablet_41983, 1)
+    self._check_vt_insert_test(tablet_62344, 1)
 
     # Verify MasterCell is set to new cell.
     srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
@@ -540,16 +576,6 @@ class TestReparent(unittest.TestCase):
     tablet_62044_master_status = tablet_62044.get_status()
     self.assertIn('Serving graph: test_keyspace 0 master', tablet_62044_master_status)
 
-  _create_vt_insert_test = '''create table vt_insert_test (
-  id bigint auto_increment,
-  msg varchar(64),
-  primary key (id)
-  ) Engine=InnoDB'''
-
-  _populate_vt_insert_test = [
-      "insert into vt_insert_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
-
   # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -588,7 +614,6 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
-
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
 
     utils.wait_procs([tablet_41983.shutdown_mysql()])
@@ -603,9 +628,10 @@ class TestReparent(unittest.TestCase):
           "didn't find the right error strings in failed PlannedReparentShard: " +
           stderr)
 
-    # insert data into the new master
-    for q in self._populate_vt_insert_test:
-      tablet_62044.mquery('vt_test_keyspace', q, write=True)
+    # insert data into the new master, check the connected slaves work
+    self._populate_vt_insert_test(tablet_62044, 3)
+    self._check_vt_insert_test(tablet_31981, 3)
+    self._check_vt_insert_test(tablet_62344, 3)
 
     # restart mysql on the old slave, should still be connecting to the
     # old master
@@ -619,14 +645,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['StartSlave', tablet_41983.tablet_alias])
 
     # wait until it gets the data
-    timeout = 10.0
-    while True:
-      result = tablet_41983.mquery('vt_test_keyspace',
-                                   'select msg from vt_insert_test where id=1')
-      if len(result) == 1:
-        break
-      timeout = utils.wait_step('waiting for replication to catch up',
-                                timeout, sleep_time=0.1)
+    self._check_vt_insert_test(tablet_41983, 3)
 
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])

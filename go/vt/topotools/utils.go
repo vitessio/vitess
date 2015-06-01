@@ -27,7 +27,7 @@ func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, 
 
 // GetAllTablets returns a sorted list of tablets.
 func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(cell)
+	aliases, err := ts.GetTabletsByCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 // GetAllTabletsAcrossCells returns all tablets from known cells.
 // If it returns topo.ErrPartialResult, then the list is valid, but partial.
 func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.TabletInfo, error) {
-	cells, err := ts.GetKnownCells()
+	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		return nil, err
 	}

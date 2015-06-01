@@ -13,49 +13,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestConnPoolTryGetWhilePoolIsClosed(t *testing.T) {
-	fakesqldb.Register()
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
-	_, err := connPool.TryGet()
-	if err != ErrConnPoolClosed {
-		t.Fatalf("pool is closed, should get ErrConnPoolClosed")
-	}
-}
-
-func TestConnPoolTryGetWhenFailedToConnectToDB(t *testing.T) {
-	db := fakesqldb.Register()
-	testUtils := newTestUtils()
-	db.EnableConnFail()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
-	connPool := testUtils.newConnPool()
-	connPool.Open(appParams, dbaParams)
-	defer connPool.Close()
-	_, err := connPool.TryGet()
-	if err == nil {
-		t.Fatalf("should get a connection error")
-	}
-}
-
-func TestConnPoolTryGet(t *testing.T) {
-	fakesqldb.Register()
-	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{}
-	dbaParams := &sqldb.ConnParams{}
-	connPool := testUtils.newConnPool()
-	connPool.Open(appParams, dbaParams)
-	defer connPool.Close()
-	dbConn, err := connPool.TryGet()
-	if err != nil {
-		t.Fatalf("should get an error, but got: %v", err)
-	}
-	if dbConn == nil {
-		t.Fatalf("db conn should not be nil")
-	}
-	dbConn.Recycle()
-}
-
 func TestConnPoolGet(t *testing.T) {
 	fakesqldb.Register()
 	testUtils := newTestUtils()

@@ -92,7 +92,7 @@ small_integration_test_files = \
 	sharded.py \
 	secure.py \
 	binlog.py \
-	clone.py \
+	backup.py \
 	update_stream.py
 
 medium_integration_test_files = \
@@ -100,7 +100,8 @@ medium_integration_test_files = \
 	reparent.py \
 	vtdb_test.py \
 	vtgate_utils_test.py \
-	rowcache_invalidator.py
+	rowcache_invalidator.py \
+	worker.py
 
 large_integration_test_files = \
 	vtgatev2_test.py \
@@ -122,7 +123,8 @@ worker_integration_test_files = \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	initial_sharding.py \
-	initial_sharding_bytes.py
+	initial_sharding_bytes.py \
+	worker.py
 
 .ONESHELL:
 SHELL = /bin/bash
@@ -183,6 +185,7 @@ proto:
 	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanager && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,"([a-z0-9_]+).pb","github.com/youtube/vitess/go/vt/proto/\1",g'
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctl.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 

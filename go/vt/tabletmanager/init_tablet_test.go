@@ -22,6 +22,7 @@ import (
 // tablet node correctly. Note we modify global parameters (the flags)
 // so this has to be in one test.
 func TestInitTablet(t *testing.T) {
+	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	tabletAlias := topo.TabletAlias{
 		Cell: "cell1",
@@ -31,17 +32,16 @@ func TestInitTablet(t *testing.T) {
 	// start with idle, and a tablet record that doesn't exist
 	port := 1234
 	securePort := 2345
-	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
+	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	agent := &ActionAgent{
 		TopoServer:         ts,
 		TabletAlias:        tabletAlias,
-		Mysqld:             nil,
 		MysqlDaemon:        mysqlDaemon,
 		DBConfigs:          nil,
 		SchemaOverrides:    nil,
 		BinlogPlayerMap:    nil,
 		LockTimeout:        10 * time.Second,
-		batchCtx:           context.Background(),
+		batchCtx:           ctx,
 		History:            history.New(historyLength),
 		lastHealthMapCount: new(stats.Int),
 		_healthy:           fmt.Errorf("healthcheck not run yet"),
@@ -51,7 +51,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("NewTestActionAgent(idle) failed: %v", err)
 	}
-	ti, err := ts.GetTablet(tabletAlias)
+	ti, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("NewTestActionAgent(idle again) failed: %v", err)
 	}
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -104,14 +104,14 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("InitTablet(type) failed: %v", err)
 	}
-	si, err := ts.GetShard("test_keyspace", "-80")
+	si, err := ts.GetShard(ctx, "test_keyspace", "-80")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	if len(si.Cells) != 1 || si.Cells[0] != "cell1" {
 		t.Errorf("shard.Cells not updated properly: %v", si)
 	}
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -134,18 +134,18 @@ func TestInitTablet(t *testing.T) {
 	}
 
 	// update shard's master to our alias, then try to init again
-	si, err = ts.GetShard("test_keyspace", "-80")
+	si, err = ts.GetShard(ctx, "test_keyspace", "-80")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.MasterAlias = tabletAlias
-	if err := topo.UpdateShard(context.Background(), ts, si); err != nil {
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestInitTablet(t *testing.T) {
 	if err := agent.InitTablet(port, securePort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
-	ti, err = ts.GetTablet(tabletAlias)
+	ti, err = ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}

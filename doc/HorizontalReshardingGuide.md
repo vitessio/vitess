@@ -9,7 +9,7 @@ Let’s assume that you’ve already got a keyspace up and running, with a singl
 
 The first thing that we need to do is add a column to the soon-to-be-sharded keyspace which will be used as the "sharding key". This column will tell Vitess which shard a particular row of data should go to. You can add the column by running an alter on the unsharded keyspace - probably by running something like:
 
-`vtctl ApplySchemaKeyspace -simple -sql="alter table <table name> add keyspace_id" test_keyspace`
+`vtctl ApplySchema -sql="alter table <table name> add keyspace_id" test_keyspace`
 
 for each table in the keyspace. Once the column is added everywhere, each row needs to be backfilled with the appropriate keyspace ID.
 

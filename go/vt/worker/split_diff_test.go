@@ -156,20 +156,16 @@ func TestSplitDiff(t *testing.T) {
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"),
-		testlib.TabletParent(sourceMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
 		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"),
-		testlib.TabletParent(leftMaster.Tablet.Alias))
+		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wr)
@@ -177,7 +173,7 @@ func TestSplitDiff(t *testing.T) {
 	}
 
 	// add the topo and schema data we'll need
-	if err := topo.CreateShard(ts, "ks", "80-"); err != nil {
+	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	wr.SetSourceShards(ctx, "ks", "-40", []topo.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
@@ -204,17 +200,17 @@ func TestSplitDiff(t *testing.T) {
 					Name:              "table1",
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name:              excludedTable,
 					Columns:           []string{"id", "msg", "keyspace_id"},
 					PrimaryKeyColumns: []string{"id"},
-					Type:              myproto.TABLE_BASE_TABLE,
+					Type:              myproto.TableBaseTable,
 				},
 				&myproto.TableDefinition{
 					Name: "view1",
-					Type: myproto.TABLE_VIEW,
+					Type: myproto.TableView,
 				},
 			},
 		}
@@ -225,10 +221,10 @@ func TestSplitDiff(t *testing.T) {
 	sourceRdonly1.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
 	sourceRdonly2.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
 
-	wrk.Run()
+	err := wrk.Run(ctx)
 	status := wrk.StatusAsText()
 	t.Logf("Got status: %v", status)
-	if wrk.err != nil || wrk.state != stateSCDone {
+	if err != nil || wrk.State != WorkerStateDone {
 		t.Errorf("Worker run failed")
 	}
 }

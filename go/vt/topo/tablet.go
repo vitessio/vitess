@@ -164,19 +164,13 @@ const (
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
 
-	// a slaved copy of the data, where mysqld is *not* running,
-	// and we are serving our data files to clone slaves
-	// use 'vtctl Snapshot -server-mode ...' to get in this mode
-	// use 'vtctl SnapshotSourceEnd ...' to get out of this mode
-	TYPE_SNAPSHOT_SOURCE = TabletType("snapshot_source")
-
 	// A tablet that has not been in the replication graph and is restoring
-	// from a snapshot.  idle -> restore -> spare
+	// from a snapshot.
 	TYPE_RESTORE = TabletType("restore")
 
-	// A tablet that is running a checker process. It is probably
+	// A tablet that is used by a worker process. It is probably
 	// lagging in replication.
-	TYPE_CHECKER = TabletType("checker")
+	TYPE_WORKER = TabletType("worker")
 
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
@@ -192,9 +186,8 @@ var AllTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_EXPERIMENTAL,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
-	TYPE_CHECKER,
+	TYPE_WORKER,
 	TYPE_SCRAP,
 }
 
@@ -207,9 +200,8 @@ var SlaveTabletTypes = []TabletType{
 	TYPE_EXPERIMENTAL,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
-	TYPE_CHECKER,
+	TYPE_WORKER,
 }
 
 // IsTypeInList returns true if the given type is in the list.
@@ -242,9 +234,9 @@ func MakeStringTypeList(types []TabletType) []string {
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_WORKER:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_WORKER:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -256,22 +248,6 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 		}
 	}
 	return false
-}
-
-// IsValidTypeChange returns if we should we allow this transition at
-// all.  Most transitions are allowed, but some don't make sense under
-// any circumstances. If a transition could be forced, don't disallow
-// it here.
-func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
-	switch oldTabletType {
-	case TYPE_SNAPSHOT_SOURCE:
-		switch newTabletType {
-		case TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE:
-			return false
-		}
-	}
-
-	return true
 }
 
 // IsInServingGraph returns if a tablet appears in the serving graph
@@ -286,7 +262,7 @@ func IsInServingGraph(tt TabletType) bool {
 // IsRunningQueryService returns if a tablet is running the query service
 func IsRunningQueryService(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_CHECKER:
+	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_WORKER:
 		return true
 	}
 	return false
@@ -319,10 +295,10 @@ func IsInReplicationGraph(tt TabletType) bool {
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // IDLE and SCRAP are not either
-// BACKUP, RESTORE, TYPE_CHECKER may or may not be, but we don't know for sure
+// BACKUP, RESTORE, TYPE_WORKER may or may not be, but we don't know for sure
 func IsSlaveType(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_CHECKER:
+	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_WORKER:
 		return false
 	}
 	return true
@@ -503,7 +479,7 @@ func GetTablet(ctx context.Context, ts Server, alias TabletAlias) (*TabletInfo, 
 	span.Annotate("tablet", alias.String())
 	defer span.Finish()
 
-	return ts.GetTablet(alias)
+	return ts.GetTablet(ctx, alias)
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
@@ -518,7 +494,7 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(tablet, version)
+	newVersion, err := ts.UpdateTablet(ctx, tablet, version)
 	if err == nil {
 		tablet.version = newVersion
 	}
@@ -533,13 +509,13 @@ func UpdateTabletFields(ctx context.Context, ts Server, alias TabletAlias, updat
 	span.Annotate("tablet", alias.String())
 	defer span.Finish()
 
-	return ts.UpdateTabletFields(alias, update)
+	return ts.UpdateTabletFields(ctx, alias, update)
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
-func Validate(ts Server, tabletAlias TabletAlias) error {
+func Validate(ctx context.Context, ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
-	tablet, err := ts.GetTablet(tabletAlias)
+	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -553,11 +529,11 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
 	if tablet.IsInReplicationGraph() {
-		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
+		if err = ts.ValidateShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
 
-		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -572,7 +548,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -590,7 +566,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // replication graph.
 func CreateTablet(ctx context.Context, ts Server, tablet *Tablet) error {
 	// Have the Server create the tablet
-	err := ts.CreateTablet(tablet)
+	err := ts.CreateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -610,8 +586,8 @@ func UpdateTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet)
 }
 
 // DeleteTabletReplicationData deletes replication data.
-func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	return RemoveShardReplicationRecord(ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
+func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *Tablet) error {
+	return RemoveShardReplicationRecord(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }
 
 // GetTabletMap tries to read all the tablets in the provided list,
@@ -634,7 +610,7 @@ func GetTabletMap(ctx context.Context, ts Server, tabletAliases []TabletAlias) (
 		wg.Add(1)
 		go func(tabletAlias TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := ts.GetTablet(tabletAlias)
+			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
 			mutex.Lock()
 			if err != nil {
 				log.Warningf("%v: %v", tabletAlias, err)

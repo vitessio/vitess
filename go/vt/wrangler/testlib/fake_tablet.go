@@ -49,14 +49,6 @@ type FakeTablet struct {
 // making it too cumbersome.
 type TabletOption func(tablet *topo.Tablet)
 
-// TabletParent is the tablet option to set the parent alias
-func TabletParent(parent topo.TabletAlias) TabletOption {
-	return func(tablet *topo.Tablet) {
-		// save the parent alias uid into the portmap as a hack
-		tablet.Portmap["parent_uid"] = int(parent.Uid)
-	}
-}
-
 // TabletKeyspaceShard is the option to set the tablet keyspace and shard
 func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	return func(tablet *topo.Tablet) {
@@ -101,7 +93,6 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	for _, option := range options {
 		option(tablet)
 	}
-	puid, ok := tablet.Portmap["parent_uid"]
 	delete(tablet.Portmap, "parent_uid")
 	_, force := tablet.Portmap["force_init"]
 	delete(tablet.Portmap, "force_init")
@@ -110,10 +101,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := &mysqlctl.FakeMysqlDaemon{}
-	if ok {
-		fakeMysqlDaemon.MasterAddr = fmt.Sprintf("%v.0.0.1:%v", 100+puid, 3300+puid)
-	}
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	fakeMysqlDaemon.MysqlPort = 3300 + int(uid)
 
 	return &FakeTablet{
@@ -139,7 +127,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(context.TODO(), wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
 	// create the RPC server
