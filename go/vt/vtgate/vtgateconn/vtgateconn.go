@@ -42,7 +42,8 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
-// VTGateConn defines the interface for a vtgate client.
+// VTGateConn is the client API object to talk to vtgate.
+// It is constructed using the Dial method.
 // It can be used concurrently across goroutines.
 type VTGateConn struct {
 	impl Impl
