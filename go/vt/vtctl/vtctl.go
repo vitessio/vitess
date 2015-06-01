@@ -387,6 +387,12 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
+func addCommandGroup(groupName string) {
+	commands = append(commands, commandGroup{
+		name: groupName,
+	})
+}
+
 func fmtMapAwkable(m map[string]string) string {
 	pairs := make([]string, len(m))
 	i := 0

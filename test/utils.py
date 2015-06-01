@@ -479,6 +479,17 @@ def vtgate_vtclient(vtgate_port, sql, tablet_type='master', bindvars=None,
   out = out.splitlines()
   return out, err
 
+def vtgate_execute(vtgate_port, sql, tablet_type='master', bindvars=None):
+  """vtgate_execute uses 'vtctl VtGateExecute' to execute a command.
+  """
+  args = ['VtGateExecute',
+          '-server', 'localhost:%u' % vtgate_port,
+          '-tablet_type', tablet_type]
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  args.append(sql)
+  return run_vtctl_json(args)
+
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make

@@ -648,5 +648,25 @@ class TestVTGateFunctions(unittest.TestCase):
     out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
     self.assertEqual(out, ["Index\tuser_id\temail"])
 
+  def test_vtctl_vtgate_execute(self):
+    """This test uses 'vtctl VtGateExecute' to send and receive various queries.
+    """
+    utils.vtgate_execute(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:user_id, :email)', bindvars={"user_id": 11, "email":"test 11"})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select * from vt_user_extra where user_id = :user_id', bindvars={"user_id": 11})
+    logging.debug("Original row: %s", str(qr))
+    self.assertEqual(len(qr['Rows']), 1)
+
+    utils.vtgate_execute(vtgate_port, 'update vt_user_extra set email=:email where user_id = :user_id', bindvars={"user_id": 11, "email":"test 1100"})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select * from vt_user_extra where user_id = :user_id', bindvars={"user_id": 11})
+    logging.debug("Modified row: %s", str(qr))
+    self.assertEqual(len(qr['Rows']), 1)
+
+    utils.vtgate_execute(vtgate_port, 'delete from vt_user_extra where user_id = :user_id', bindvars={"user_id": 11})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select * from vt_user_extra where user_id = :user_id', bindvars={"user_id": 11})
+    self.assertEqual(len(qr['Rows']), 0)
+
 if __name__ == '__main__':
   utils.main()
