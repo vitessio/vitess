@@ -18,7 +18,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-var getVersionFromTablet = func(tabletAddr string) (string, error) {
+var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
 	if err != nil {
 		return "", err
@@ -42,6 +42,16 @@ var getVersionFromTablet = func(tabletAddr string) (string, error) {
 
 	version := fmt.Sprintf("%v", vars)
 	return version, nil
+}
+
+var getVersionFromTablet = getVersionFromTabletDebugVars
+
+// ResetDebugVarsGetVersion is used by tests to reset the
+// getVersionFromTablet variable to the default one. That way we can
+// run the unit tests in testlib/ even when another implementation of
+// getVersionFromTablet is used.
+func ResetDebugVarsGetVersion() {
+	getVersionFromTablet = getVersionFromTabletDebugVars
 }
 
 // GetVersion returns the version string from a tablet

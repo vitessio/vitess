@@ -41,6 +41,9 @@
       "File": "backup.py"
     },
     {
+      "File": "custom_sharding.py"
+    },
+    {
       "File": "update_stream.py"
     },
     {

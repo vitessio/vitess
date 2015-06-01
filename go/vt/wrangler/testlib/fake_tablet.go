@@ -39,9 +39,10 @@ type FakeTablet struct {
 
 	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
-	Agent     *tabletmanager.ActionAgent
-	Listener  net.Listener
-	RPCServer *rpcplus.Server
+	Agent      *tabletmanager.ActionAgent
+	Listener   net.Listener
+	HTTPServer http.Server
+	RPCServer  *rpcplus.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -137,10 +138,10 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
 	bsonrpc.ServeCustomRPC(handler, ft.RPCServer, false)
-	httpServer := http.Server{
+	ft.HTTPServer = http.Server{
 		Handler: handler,
 	}
-	go httpServer.Serve(ft.Listener)
+	go ft.HTTPServer.Serve(ft.Listener)
 }
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
