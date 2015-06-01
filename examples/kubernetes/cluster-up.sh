@@ -66,8 +66,7 @@ function wait_for_running_tasks () {
   while [ $counter -lt $MAX_TASK_WAIT_RETRIES ]; do
     # Get status column of pods with name starting with $task_name,
     # count how many are in state Running
-    statuses=`$KUBECTL get pods | awk '$1 ~ /^'"$task_name"'/ {print $7}'`
-    num_running=`grep -o "Running" <<< "$statuses" | wc -l`
+    num_running=`$KUBECTL get pods | grep ^$task_name | grep Running | wc -l`
 
     echo -en "\r$task_name: $num_running out of $num_tasks in state Running..."
     if [ $num_running -eq $num_tasks ]
@@ -143,7 +142,8 @@ then
 fi
 
 run_script etcd-up.sh
-wait_for_running_tasks etcd 6
+wait_for_running_tasks etcd-global 3
+wait_for_running_tasks etcd-test 3
 
 run_script vtctld-up.sh
 run_script vttablet-up.sh FORCE_NODE=true VTTABLET_TEMPLATE=$vttablet_template
