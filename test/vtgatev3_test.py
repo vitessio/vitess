@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import base64
 import hmac
 import json
 import logging
@@ -633,20 +634,44 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.
     """
-    utils.vtgate_vtclient(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:v1, :v2)', bindvars=[10, "test 10"])
+    utils.vtgate_vtclient(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:v1, :v2)', bindvars=[10, 'test 10'])
 
     out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
-    self.assertEqual(out, ["Index\tuser_id\temail","0\t10\ttest 10"])
+    self.assertEqual(out, ['Index\tuser_id\temail','0\t10\ttest 10'])
 
-    utils.vtgate_vtclient(vtgate_port, 'update vt_user_extra set email=:v2 where user_id = :v1', bindvars=[10, "test 1000"])
+    utils.vtgate_vtclient(vtgate_port, 'update vt_user_extra set email=:v2 where user_id = :v1', bindvars=[10, 'test 1000'])
 
     out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10], streaming=True)
-    self.assertEqual(out, ["Index\tuser_id\temail","0\t10\ttest 1000"])
+    self.assertEqual(out, ['Index\tuser_id\temail','0\t10\ttest 1000'])
 
     utils.vtgate_vtclient(vtgate_port, 'delete from vt_user_extra where user_id = :v1', bindvars=[10])
 
     out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
-    self.assertEqual(out, ["Index\tuser_id\temail"])
+    self.assertEqual(out, ['Index\tuser_id\temail'])
+
+  def test_vtctl_vtgate_execute(self):
+    """This test uses 'vtctl VtGateExecute' to send and receive various queries.
+    """
+    utils.vtgate_execute(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:user_id, :email)', bindvars={'user_id': 11, 'email':'test 11'})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    logging.debug('Original row: %s', str(qr))
+    self.assertEqual(len(qr['Rows']), 1)
+    v = base64.b64decode(qr['Rows'][0][1])
+    self.assertEqual(v, 'test 11')
+
+    utils.vtgate_execute(vtgate_port, 'update vt_user_extra set email=:email where user_id = :user_id', bindvars={'user_id': 11, 'email':'test 1100'})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    logging.debug('Modified row: %s', str(qr))
+    self.assertEqual(len(qr['Rows']), 1)
+    v = base64.b64decode(qr['Rows'][0][1])
+    self.assertEqual(v, 'test 1100')
+
+    utils.vtgate_execute(vtgate_port, 'delete from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+
+    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    self.assertEqual(len(qr['Rows']), 0)
 
 if __name__ == '__main__':
   utils.main()

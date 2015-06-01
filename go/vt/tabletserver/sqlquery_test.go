@@ -826,7 +826,20 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 }
 
 func TestSqlQuerySplitQuery(t *testing.T) {
-	setUpSqlQueryTest()
+	db := setUpSqlQueryTest()
+	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeNumeric([]byte("100")),
+			},
+		},
+	})
+
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
