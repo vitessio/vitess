@@ -93,7 +93,8 @@ small_integration_test_files = \
 	secure.py \
 	binlog.py \
 	backup.py \
-	update_stream.py
+	update_stream.py \
+	custom_sharding.py
 
 medium_integration_test_files = \
 	tabletmanager.py \
