@@ -137,7 +137,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if s.c.tx == nil {
 		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
 	} else {
-		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType, false)
 	}
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	if s.c.tx == nil {
 		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
 	} else {
-		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType, false)
 	}
 	if err != nil {
 		return nil, err

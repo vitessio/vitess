@@ -479,6 +479,30 @@ def vtgate_vtclient(vtgate_port, sql, tablet_type='master', bindvars=None,
   out = out.splitlines()
   return out, err
 
+def vtgate_execute(vtgate_port, sql, tablet_type='master', bindvars=None):
+  """vtgate_execute uses 'vtctl VtGateExecute' to execute a command.
+  """
+  args = ['VtGateExecute',
+          '-server', 'localhost:%u' % vtgate_port,
+          '-tablet_type', tablet_type]
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  args.append(sql)
+  return run_vtctl_json(args)
+
+def vtgate_execute_shard(vtgate_port, sql, keyspace, shards, tablet_type='master', bindvars=None):
+  """vtgate_execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
+  """
+  args = ['VtGateExecuteShard',
+          '-server', 'localhost:%u' % vtgate_port,
+          '-keyspace', keyspace,
+          '-shards', shards,
+          '-tablet_type', tablet_type]
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  args.append(sql)
+  return run_vtctl_json(args)
+
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make
@@ -514,6 +538,7 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
   args.extend(protocols_flavor().tabletconn_protocol_flags())
+  args.extend(protocols_flavor().vtgate_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -779,7 +804,8 @@ class Vtctld(object):
             '-schema-change-check-interval', '1',
             ] + \
             environment.topo_server().flags() + \
-            protocols_flavor().tablet_manager_protocol_flags()
+            protocols_flavor().tablet_manager_protocol_flags() + \
+            protocols_flavor().vtgate_protocol_flags()
     if protocols_flavor().vtctl_client_protocol() == "grpc":
       args += ['-grpc_port', str(self.grpc_port),
               '-service_map', 'grpc-vtctl']
