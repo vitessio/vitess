@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgateconn
+package client
 
 import (
 	"database/sql/driver"
@@ -10,21 +10,22 @@ import (
 	"io"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 // streamingRows creates a database/sql/driver compliant Row iterator
 // for a streaming query.
 type streamingRows struct {
 	qrc     <-chan *mproto.QueryResult
-	errFunc ErrFunc
+	errFunc vtgateconn.ErrFunc
 	failed  error
 	fields  []mproto.Field
 	qr      *mproto.QueryResult
 	index   int
 }
 
-// NewStreamingRows creates a new streamingRows from qrc and errFunc.
-func NewStreamingRows(qrc <-chan *mproto.QueryResult, errFunc ErrFunc) driver.Rows {
+// newStreamingRows creates a new streamingRows from qrc and errFunc.
+func newStreamingRows(qrc <-chan *mproto.QueryResult, errFunc vtgateconn.ErrFunc) driver.Rows {
 	return &streamingRows{qrc: qrc, errFunc: errFunc}
 }
 

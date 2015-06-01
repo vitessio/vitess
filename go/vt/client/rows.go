@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgateconn
+package client
 
 import (
 	"database/sql/driver"
@@ -20,8 +20,8 @@ type rows struct {
 	index int
 }
 
-// NewRows creates a new rows from qr.
-func NewRows(qr *mproto.QueryResult) driver.Rows {
+// newRows creates a new rows from qr.
+func newRows(qr *mproto.QueryResult) driver.Rows {
 	return &rows{qr: qr}
 }
 

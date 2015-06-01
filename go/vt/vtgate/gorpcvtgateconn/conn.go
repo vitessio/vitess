@@ -13,6 +13,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -85,6 +86,120 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	return result.Result, result.Session, nil
 }
 
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	request := proto.KeyspaceIdQuery{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    tabletType,
+		Session:       s,
+	}
+	var result proto.QueryResult
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyspaceIds", request, &result); err != nil {
+		return nil, session, err
+	}
+	if result.Error != "" {
+		return nil, result.Session, errors.New(result.Error)
+	}
+	return result.Result, result.Session, nil
+}
+
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	request := proto.KeyRangeQuery{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyRanges:     keyRanges,
+		TabletType:    tabletType,
+		Session:       s,
+	}
+	var result proto.QueryResult
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteKeyRanges", request, &result); err != nil {
+		return nil, session, err
+	}
+	if result.Error != "" {
+		return nil, result.Session, errors.New(result.Error)
+	}
+	return result.Result, result.Session, nil
+}
+
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, session interface{}) (*mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	request := proto.EntityIdsQuery{
+		Sql:               query,
+		BindVariables:     bindVars,
+		Keyspace:          keyspace,
+		EntityColumnName:  entityColumnName,
+		EntityKeyspaceIDs: entityKeyspaceIDs,
+		TabletType:        tabletType,
+		Session:           s,
+	}
+	var result proto.QueryResult
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteEntityIds", request, &result); err != nil {
+		return nil, session, err
+	}
+	if result.Error != "" {
+		return nil, result.Session, errors.New(result.Error)
+	}
+	return result.Result, result.Session, nil
+}
+
+func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	request := proto.BatchQueryShard{
+		Queries:    queries,
+		Keyspace:   keyspace,
+		Shards:     shards,
+		TabletType: tabletType,
+		Session:    s,
+	}
+	var result proto.QueryResultList
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {
+		return nil, session, err
+	}
+	if result.Error != "" {
+		return nil, result.Session, errors.New(result.Error)
+	}
+	return result.List, result.Session, nil
+}
+
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+	var s *proto.Session
+	if session != nil {
+		s = session.(*proto.Session)
+	}
+	request := proto.KeyspaceIdBatchQuery{
+		Queries:     queries,
+		Keyspace:    keyspace,
+		KeyspaceIds: keyspaceIds,
+		TabletType:  tabletType,
+		Session:     s,
+	}
+	var result proto.QueryResultList
+	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchKeyspaceIds", request, &result); err != nil {
+		return nil, session, err
+	}
+	if result.Error != "" {
+		return nil, result.Session, errors.New(result.Error)
+	}
+	return result.List, result.Session, nil
+}
+
 func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 	req := &proto.Query{
 		Sql:           query,
@@ -94,6 +209,52 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	}
 	sr := make(chan *proto.QueryResult, 10)
 	c := conn.rpcConn.StreamGo("VTGate.StreamExecute", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+	req := &proto.QueryShard{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteShard", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+	req := &proto.KeyRangeQuery{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyRanges:     keyRanges,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyRanges", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+	req := &proto.KeyspaceIdQuery{
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyspaceIds", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 	srout := make(chan *mproto.QueryResult, 1)
 	go func() {
 		defer close(srout)

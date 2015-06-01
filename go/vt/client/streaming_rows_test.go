@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgateconn
+package client
 
 import (
 	"database/sql/driver"
@@ -14,6 +14,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var packet1 = mproto.QueryResult{
@@ -54,7 +55,7 @@ var packet3 = mproto.QueryResult{
 }
 
 func TestStreamingRows(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			ch <- &packet1
@@ -64,7 +65,7 @@ func TestStreamingRows(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri := NewStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -111,7 +112,7 @@ func TestStreamingRows(t *testing.T) {
 }
 
 func TestStreamingRowsReversed(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			ch <- &packet1
@@ -121,7 +122,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri := NewStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc)
 
 	wantRow := []driver.Value{
 		int64(1),
@@ -151,14 +152,14 @@ func TestStreamingRowsReversed(t *testing.T) {
 }
 
 func TestStreamingRowsError(t *testing.T) {
-	qrc, errFunc := func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc := func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			close(ch)
 		}()
 		return ch, func() error { return errors.New("error before fields") }
 	}()
-	ri := NewStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc)
 	gotCols := ri.Columns()
 	if gotCols != nil {
 		t.Errorf("cols: %v, want nil", gotCols)
@@ -171,7 +172,7 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			ch <- &packet1
@@ -179,7 +180,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return errors.New("error after fields") }
 	}()
-	ri = NewStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -202,7 +203,7 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			ch <- &packet1
@@ -211,7 +212,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return errors.New("error after rows") }
 	}()
-	ri = NewStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	if err != nil {
@@ -224,7 +225,7 @@ func TestStreamingRowsError(t *testing.T) {
 	}
 	_ = ri.Close()
 
-	qrc, errFunc = func() (<-chan *mproto.QueryResult, ErrFunc) {
+	qrc, errFunc = func() (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
 		ch := make(chan *mproto.QueryResult)
 		go func() {
 			ch <- &packet2
@@ -232,7 +233,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri = NewStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	wantErr = "first packet did not return fields"
