@@ -503,6 +503,19 @@ def vtgate_execute_shard(vtgate_port, sql, keyspace, shards, tablet_type='master
   args.append(sql)
   return run_vtctl_json(args)
 
+def vtgate_split_query(vtgate_port, sql, keyspace, split_count, bindvars=None):
+  """vtgate_split_query uses 'vtctl VtGateSplitQuery' to cut a query up
+  in chunks.
+  """
+  args = ['VtGateSplitQuery',
+          '-server', 'localhost:%u' % vtgate_port,
+          '-keyspace', keyspace,
+          '-split_count', str(split_count)]
+  if bindvars:
+    args.extend(['-bind_variables', json.dumps(bindvars)])
+  args.append(sql)
+  return run_vtctl_json(args)
+
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make
