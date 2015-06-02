@@ -166,9 +166,11 @@ type SplitQueryRequest struct {
 }
 
 // SplitQueryPart is a sub query of SplitQueryRequest.Query
+// Only one of Query or QueryShard will be set.
 type SplitQueryPart struct {
-	Query *KeyRangeQuery
-	Size  int64
+	Query      *KeyRangeQuery
+	QueryShard *QueryShard
+	Size       int64
 }
 
 // SplitQueryResult is the result for SplitQueryRequest

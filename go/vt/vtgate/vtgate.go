@@ -526,16 +526,33 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error
 // number of shards.
 func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	sc := vtg.resolver.scatterConn
-	keyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, req.Keyspace, topo.TYPE_RDONLY)
+	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, req.Keyspace, topo.TYPE_RDONLY)
 	if err != nil {
 		return err
 	}
-	keyRangeByShard := map[string]kproto.KeyRange{}
-	for _, shard := range shards {
-		keyRangeByShard[shard.Name] = shard.KeyRange
-	}
 	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
-	splits, err := vtg.resolver.scatterConn.SplitQuery(ctx, req.Query, perShardSplitCount, keyRangeByShard, keyspace)
+	if srvKeyspace.ShardingColumnName != "" {
+		// we are using range-based sharding, so the result
+		// will be a list of Splits with KeyRange clauses
+		keyRangeByShard := map[string]kproto.KeyRange{}
+		for _, shard := range shards {
+			keyRangeByShard[shard.Name] = shard.KeyRange
+		}
+		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, req.Query, perShardSplitCount, keyRangeByShard, keyspace)
+		if err != nil {
+			return err
+		}
+		reply.Splits = splits
+		return nil
+	}
+
+	// we are using custom sharding, so the result
+	// will be a list of Splits with Shard clauses
+	shardNames := make([]string, len(shards))
+	for i, shard := range shards {
+		shardNames[i] = shard.Name
+	}
+	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, req.Query, perShardSplitCount, shardNames, keyspace)
 	if err != nil {
 		return err
 	}

@@ -146,7 +146,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 }
 
 func (rtr *Router) paramsUnsharded(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
-	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, fmt.Errorf("paramsUnsharded: %v", err)
 	}
@@ -220,7 +220,7 @@ func getKeyRange(keys []interface{}) (key.KeyRange, error) {
 }
 
 func (rtr *Router) paramsSelectScatter(vcursor *requestContext, plan *planbuilder.Plan) (*scatterParams, error) {
-	ks, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectScatter: %v", err)
 	}
@@ -356,7 +356,7 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 }
 
 func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface{}, plan *planbuilder.Plan) (newKeyspace string, routing routingMap, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	newKeyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -398,7 +398,7 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 }
 
 func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interface{}, plan *planbuilder.Plan) (newKeyspace, shard string, ksid key.KeyspaceId, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
+	newKeyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, plan.Table.Keyspace.Name, vcursor.query.TabletType)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -549,7 +549,7 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 }
 
 func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topo.TabletType, ksid key.KeyspaceId) (newKeyspace, shard string, err error) {
-	newKeyspace, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
+	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
 	if err != nil {
 		return "", "", err
 	}
