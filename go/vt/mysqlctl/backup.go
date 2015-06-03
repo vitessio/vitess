@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
@@ -254,7 +255,10 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	if err = mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), MysqlWaitTime)
+	err = mysqld.Shutdown(ctx, true)
+	cancel()
+	if err != nil {
 		return fmt.Errorf("cannot shutdown mysqld: %v", err)
 	}
 
@@ -271,7 +275,10 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	}
 
 	// Try to restart mysqld
-	if err := mysqld.Start(MysqlWaitTime); err != nil {
+	ctx, cancel = context.WithTimeout(context.TODO(), MysqlWaitTime)
+	err = mysqld.Start(ctx)
+	cancel()
+	if err != nil {
 		return fmt.Errorf("cannot restart mysqld: %v", err)
 	}
 
@@ -539,7 +546,10 @@ func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtr
 	}
 
 	log.Infof("Restore: shutdown mysqld")
-	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+	ctx, cancel := context.WithTimeout(context.TODO(), MysqlWaitTime)
+	err = mysqld.Shutdown(ctx, true)
+	cancel()
+	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
@@ -554,7 +564,10 @@ func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtr
 	}
 
 	log.Infof("Restore: restart mysqld")
-	if err := mysqld.Start(MysqlWaitTime); err != nil {
+	ctx, cancel = context.WithTimeout(context.TODO(), MysqlWaitTime)
+	err = mysqld.Start(ctx)
+	cancel()
+	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 

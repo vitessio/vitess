@@ -34,6 +34,7 @@ import (
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -126,12 +127,12 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile, 30*time.Second)
+		client, err := mysqlctlclient.New("unix", *socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.RunMysqlUpgrade()
+		return client.RunMysqlUpgrade(context.TODO())
 	}
 
 	// find mysql_upgrade. If not there, we do nothing.
@@ -175,16 +176,16 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 // Start will start the mysql daemon, either by running the 'mysqld_start'
 // hook, or by running mysqld_safe in the background.
 // If a mysqlctld address is provided in a flag, Start will run remotely.
-func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
+func (mysqld *Mysqld) Start(ctx context.Context) error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile, mysqlWaitTime)
+		client, err := mysqlctlclient.New("unix", *socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Start(mysqlWaitTime)
+		return client.Start(ctx)
 	}
 
 	var name string
@@ -210,7 +211,7 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		cmd := exec.Command(name, arg...)
 		cmd.Dir = dir
 		cmd.Env = env
-		log.Infof("%v mysqlWaitTime:%v %#v", ts, mysqlWaitTime, cmd)
+		log.Infof("%v %#v", ts, cmd)
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
 			return nil
@@ -262,7 +263,13 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 
 	// give it some time to succeed - usually by the time the socket emerges
 	// we are in good shape
-	for i := mysqlWaitTime; i >= 0; i -= time.Second {
+	for {
+		select {
+		case <-ctx.Done():
+			return errors.New(name + ": deadline exceeded waiting for " + mysqld.config.SocketFile)
+		default:
+		}
+
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
@@ -277,7 +284,6 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 		log.Infof("%v: sleeping for 1s waiting for socket file %v", ts, mysqld.config.SocketFile)
 		time.Sleep(time.Second)
 	}
-	return errors.New(name + ": deadline exceeded waiting for " + mysqld.config.SocketFile)
 }
 
 // Shutdown will stop the mysqld daemon that is running in the background.
@@ -287,18 +293,18 @@ func (mysqld *Mysqld) Start(mysqlWaitTime time.Duration) error {
 // flushed - on the order of 20-30 minutes.
 //
 // If a mysqlctld address is provided in a flag, Shutdown will run remotely.
-func (mysqld *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
+func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 	log.Infof("Mysqld.Shutdown")
 
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.Shutdown() remotely via mysqlctld server: %v", *socketFile)
-		client, err := mysqlctlclient.New("unix", *socketFile, mysqlWaitTime)
+		client, err := mysqlctlclient.New("unix", *socketFile)
 		if err != nil {
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Shutdown(waitForMysqld, mysqlWaitTime)
+		return client.Shutdown(ctx, waitForMysqld)
 	}
 
 	// We're shutting down on purpose. We no longer want to be notified when
@@ -347,10 +353,17 @@ func (mysqld *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) 
 		return fmt.Errorf("mysqld_shutdown hook failed: %v", hr.String())
 	}
 
-	// wait for mysqld to really stop. use the sock file as a proxy for that since
-	// we can't call wait() in a process we didn't start.
+	// Wait for mysqld to really stop. Use the sock file as a
+	// proxy for that since we can't call wait() in a process we
+	// didn't start.
 	if waitForMysqld {
-		for i := mysqlWaitTime; i >= 0; i -= time.Second {
+		for {
+			select {
+			case <-ctx.Done():
+				return errors.New("gave up waiting for mysqld to stop")
+			default:
+			}
+
 			_, statErr := os.Stat(mysqld.config.SocketFile)
 			if statErr != nil && os.IsNotExist(statErr) {
 				return nil
@@ -358,7 +371,6 @@ func (mysqld *Mysqld) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) 
 			log.Infof("Mysqld.Shutdown: sleeping for 1s waiting for socket file %v", mysqld.config.SocketFile)
 			time.Sleep(time.Second)
 		}
-		return errors.New("gave up waiting for mysqld to stop")
 	}
 	return nil
 }
@@ -382,7 +394,7 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 // Init will create the default directory structure for the mysqld process,
 // generate / configure a my.cnf file, unpack a skeleton database,
 // and create some management tables.
-func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string) error {
+func (mysqld *Mysqld) Init(ctx context.Context, bootstrapArchive string) error {
 	log.Infof("mysqlctl.Init")
 	err := mysqld.createDirs()
 	if err != nil {
@@ -411,7 +423,7 @@ func (mysqld *Mysqld) Init(mysqlWaitTime time.Duration, bootstrapArchive string)
 	}
 
 	// Start mysqld.
-	if err = mysqld.Start(mysqlWaitTime); err != nil {
+	if err = mysqld.Start(ctx); err != nil {
 		log.Errorf("failed starting, check %v", mysqld.config.ErrorLogPath)
 		return err
 	}
@@ -501,9 +513,9 @@ func (mysqld *Mysqld) createTopDir(dir string) error {
 }
 
 // Teardown will shutdown the running daemon, and delete the root directory.
-func (mysqld *Mysqld) Teardown(force bool) error {
+func (mysqld *Mysqld) Teardown(ctx context.Context, force bool) error {
 	log.Infof("mysqlctl.Teardown")
-	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+	if err := mysqld.Shutdown(ctx, true); err != nil {
 		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err

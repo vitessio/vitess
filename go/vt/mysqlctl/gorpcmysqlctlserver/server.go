@@ -24,12 +24,26 @@ type MysqlctlServer struct {
 
 // Start implements the server side of the MysqlctlClient interface.
 func (s *MysqlctlServer) Start(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
-	return s.mysqld.Start(*args)
+	if *args != 0 {
+		// if a duration was passed in, add it to the Context.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *args)
+		defer cancel()
+	}
+	return s.mysqld.Start(ctx)
 }
 
 // Shutdown implements the server side of the MysqlctlClient interface.
 func (s *MysqlctlServer) Shutdown(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
-	return s.mysqld.Shutdown(*args > 0, *args)
+	waitForMysqld := false
+	if *args != 0 {
+		// if a duration was passed in, add it to the Context.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *args)
+		defer cancel()
+		waitForMysqld = true
+	}
+	return s.mysqld.Shutdown(ctx, waitForMysqld)
 }
 
 // RunMysqlUpgrade implements the server side of the MysqlctlClient interface.

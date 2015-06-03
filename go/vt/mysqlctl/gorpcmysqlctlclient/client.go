@@ -4,6 +4,7 @@
 
 // Package gorpcmysqlctlclient contains the go rpc version of the mysqlctl
 // client protocol.
+// Since gorpc doesn't forward context deadline, we forward them manually.
 package gorpcmysqlctlclient
 
 import (
@@ -33,21 +34,34 @@ func goRPCMysqlctlClientFactory(network, addr string, dialTimeout time.Duration)
 }
 
 // Start is part of the MysqlctlClient interface.
-func (c *goRPCMysqlctlClient) Start(mysqlWaitTime time.Duration) error {
-	return c.rpcClient.Call(context.TODO(), "MysqlctlServer.Start", &mysqlWaitTime, &rpc.Unused{})
+func (c *goRPCMysqlctlClient) Start(ctx context.Context) error {
+	var timeout time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = deadline.Sub(time.Now())
+		if timeout <= 0 {
+			return fmt.Errorf("deadline exceeded")
+		}
+	}
+	return c.rpcClient.Call(ctx, "MysqlctlServer.Start", &timeout, &rpc.Unused{})
 }
 
 // Shutdown is part of the MysqlctlClient interface.
-func (c *goRPCMysqlctlClient) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
-	if !waitForMysqld {
-		mysqlWaitTime = 0
+func (c *goRPCMysqlctlClient) Shutdown(ctx context.Context, waitForMysqld bool) error {
+	var timeout time.Duration
+	if waitForMysqld {
+		if deadline, ok := ctx.Deadline(); ok {
+			timeout = deadline.Sub(time.Now())
+			if timeout <= 0 {
+				return fmt.Errorf("deadline exceeded")
+			}
+		}
 	}
-	return c.rpcClient.Call(context.TODO(), "MysqlctlServer.Shutdown", &mysqlWaitTime, &rpc.Unused{})
+	return c.rpcClient.Call(ctx, "MysqlctlServer.Shutdown", &timeout, &rpc.Unused{})
 }
 
 // RunMysqlUpgrade is part of the MysqlctlClient interface.
-func (c *goRPCMysqlctlClient) RunMysqlUpgrade() error {
-	return c.rpcClient.Call(context.TODO(), "MysqlctlServer.RunMysqlUpgrade", &rpc.Unused{}, &rpc.Unused{})
+func (c *goRPCMysqlctlClient) RunMysqlUpgrade(ctx context.Context) error {
+	return c.rpcClient.Call(ctx, "MysqlctlServer.RunMysqlUpgrade", &rpc.Unused{}, &rpc.Unused{})
 }
 
 // Close is part of the MysqlctlClient interface.

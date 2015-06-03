@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
@@ -72,13 +73,15 @@ func main() {
 	})
 
 	// Start or Init mysqld as needed.
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	if _, err = os.Stat(mycnf.DataDir); os.IsNotExist(err) {
 		log.Infof("mysql data dir (%s) doesn't exist, initializing", mycnf.DataDir)
-		mysqld.Init(*waitTime, *bootstrapArchive)
+		mysqld.Init(ctx, *bootstrapArchive)
 	} else {
 		log.Infof("mysql data dir (%s) already exists, starting without init", mycnf.DataDir)
-		mysqld.Start(*waitTime)
+		mysqld.Start(ctx)
 	}
+	cancel()
 
 	servenv.Init()
 	defer servenv.Close()
@@ -86,7 +89,8 @@ func main() {
 	// Take mysqld down with us on SIGTERM before entering lame duck.
 	servenv.OnTerm(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
-		mysqld.Shutdown(false, 0)
+		ctx := context.Background()
+		mysqld.Shutdown(ctx, false)
 	})
 
 	// Start RPC server and wait for SIGTERM.
