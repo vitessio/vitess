@@ -228,6 +228,9 @@ main {
   margin-left: 30%;
   width: 100%;
 }
+main.clear-home {
+  margin: 0 auto;
+}
 
 footer {
   padding: 16px;
