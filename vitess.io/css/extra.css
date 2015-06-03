@@ -56,6 +56,11 @@ a:hover {
 table thead {
   background-color: #4E5A92;
 }
+table tr th {
+  color: #444;
+  font-weight: 400;
+  text-align: left;
+}
 
 table.comparison td {
   background: #fff;
@@ -220,6 +225,8 @@ div.highlight {
 
 main {
   padding-top: 60px;
+  margin-left: 30%;
+  width: 100%;
 }
 
 footer {
@@ -295,7 +302,7 @@ footer {
     display: none;
   }
   footer {
-    max-width: 864px;
+    #max-width: 864px;
   }
 }
 
@@ -584,6 +591,10 @@ main nav {
 }
 .api .container li p {
   padding-top: 0;
+}
+
+h5 {
+  padding-top: 1.3em;
 }
 
 

@@ -1,170 +1,226 @@
-# Sharding in Vitess
+Sharding is a method of horizontally partitioning a database to store
+data across two or more database servers. This document explains how
+sharding works in Vitess and the types of sharding that Vitess supports.
 
-This document describes the various options for sharding in Vitess.
+**Contents:**
+
+* [Overview](#overview)
+* [Range-based Sharding](#range-based-sharding)
+* [Resharding](#resharding)
+* [Custom Sharding](#custom-sharding)
+
+## Overview
+
+In Vitess, a shard is a partition of a keyspace. In turn, the keyspace
+might be a partition of the whole database. For example, a database might
+have one keyspace for product data and another for user data. The shard
+contains a subset of records within its keyspace.
+
+For example, if an application's "user" keyspace is split into two
+shards, each shard contains records for approximately half of the
+application's users. Similarly, each user's information is stored
+in only one shard.
+
+A Vitess shard typically contains one MySQL master and many MySQL
+slaves. The master handles write operations, while slaves handle
+read-only traffic, batch processing operations, and other tasks.
+Each MySQL instance within the shard should have the same data,
+excepting some replication lag.
+
+### Supported Operations
+
+Vitess supports the following types of sharding operations:
+
+* **Horizontal sharding:** Splitting or merging shards in a sharded keyspace
+* **Vertical sharding:** Moving tables from an unsharded keyspace to
+    a different keyspace.
+
+With these features, you can start with a single keyspace that contains
+all of your data (in multiple tables). As your database grows, you can
+move tables to different keyspaces and shard some or all of those keyspaces
+without any real downtime for your application.
 
 ## Range-based Sharding
 
-This is the out-of-the-box sharding solution for Vitess. Each record
-in the database has a Sharding Key value associated with it (and
-stored in that row). Two records with the same Sharding Key are always
-collocated on the same shard (allowing joins for instance). Two
-records with different sharding keys are not necessarily on the same
-shard.
+Vitess uses range-based sharding to manage data across multiple shards.
+(Vitess can also support a [custom sharding](#custom-sharding) scheme.
 
-In a Keyspace, each Shard then contains a range of Sharding Key
-values. The full set of Shards covers the entire range.
+In range-based sharding, each record in a keyspace is associated with
+a sharding key that is stored with the record. The sharding key value
+is also the primary key for sharded data. Records with the same sharding
+key are always collocated on the same shard.
 
-In this environment, query routing needs to figure out the Sharding
-Key or Keys for each query, and then route it properly to the
-appropriate shard(s). We achieve this by providing either a sharding
-key value (known as KeyspaceID in the API), or a sharding key range
-(KeyRange). We are also developing more ways to route queries
-automatically with [version 3 or our API](VTGateV3.md), where we store
-more metadata in our topology to understand where to route queries.
+**Note:** The API uses the term "keyspace ID" to refer to the sharding key.
 
-### Sharding Key
+The full set of shards covers the range of possible sharding key values.
+To guarantee a balanced use of shards, the sharding scheme should
+ensure an even distribution of sharding keys across the keyspace's
+shards. That distribution makes it easier to reshard the keyspace
+at a later time using a more granular division of sharding keys.
 
-Sharding Keys need to be compared to each other to enable range-based
-sharding, as we need to figure out if a value is within a Shard's
-range.
+Vitess calculates the sharding key or keys for each query and then
+routes that query to the appropriate shards. For example, a query
+that updates information about a particular user might be directed to
+a single shard in the application's "user" keyspace. On the other hand,
+a query that retrieves information about several products might be
+directed to one or more shards in the application's "product" keyspace.
 
-Vitess was designed to allow two types of sharding keys:
+### Sharding Keys
 
-* Binary data: just an array of bytes. We use regular byte array
-  comparison here. Can be used for strings. MySQL representation is a
-  VARBINARY field.
-* 64 bits unsigned integer: we first convert the 64 bits integer into
-  a byte array (by just copying the bytes, most significant byte
-  first, into 8 bytes). Then we apply the same byte array
-  comparison. MySQL representation is an bigint(20) UNSIGNED .
+As discussed above, Vitess calculates the sharding keys associated
+with any particular query and then routes the query to the appropriate
+shards.
+
+Vitess supports two types of sharding keys:
+
+* **Binary data:** The key is an array of bytes. Vitess uses regular
+    byte-array comparison to determine which shard should handle the
+    query. The MySQL representation for this type of sharding key is
+    a <code>VARBINARY</code> field.
+
+* **64-bit unsigned integer:** Vitess converts the 64-bit integer into
+    a byte array by copying the bytes, most significant byte first,
+    into 8 bytes. Vitess then uses byte-array comparison to identify the
+    right shards to handle the query. The MySQL representation for this
+    type of sharding key is a <code>bigint(20) UNSIGNED</code> field.
 
 A sharded keyspace contains information about the type of sharding key
-(binary data or 64 bits unsigned integer), and the column name for the
-Sharding Key (that is in every table).
+that the keyspace uses. Each database table in the shard has a column
+that stores the sharding key associated with each row in the table. The
+sharding key column in each table has the same name and column type.
 
-To guarantee a balanced use of the shards, the Sharding Keys should be
-evenly distributed in their space (if half the records of a Keyspace
-map to a single sharding key, all these records will always be on the
-same shard, making it impossible to split).
+A common example of a sharding key is the 64-bit hash of a user ID. The
+hashing function ensures that the sharding keys are evenly distributed
+in the space.
 
-A common example of a sharding key in a web site that serves millions
-of users is the 64 bit hash of a User Id. By using a hashing function
-the Sharding Keys are evenly distributed in the space. By using a very
-granular sharding key, one could shard all the way to one user per
-shard.
+### Key Ranges and Partitions
 
-Comparison of Sharding Keys can be a bit tricky, but if one remembers
-they are always converted to byte arrays, and then converted, it
-becomes easier. For instance, the value [ 0x80 ] is the mid value for
-Sharding Keys. All byte sharding keys that start with numbers strictly
-lower than 0x80 are lower, and all byte sharding keys that start with
-number equal or greater than 0x80 are higher. Note that [ 0x80 ] can
-also be compared to 64 bits unsigned integer values: any value that is
-smaller than 0x8000000000000000 will be smaller, any value equal or
-greater will be greater.
+Vitess uses key ranges to determine which shards should handle any
+particular query.
 
-### Key Range
+* A **key range** is a series of consecutive sharding key values. It
+    has starting and ending values. A key falls inside the range if
+    it is equal to or greater than the start value and strictly less
+    than the end value.
+* A **partition** represents a set of key ranges that covers the entire
+    space.
 
-A Key Range has a Start and an End value. A value is inside the Key
-Range if it is greater or equal to the Start, and strictly less than
-the End.
+When building the serving graph for a keyspace that uses range-based
+sharding, Vitess ensures that each shard is valid and that the shards
+collectively constitute a full partition. In each keyspace, one shard
+must have a key range with an empty start value and one shard, which
+could be the same shard, must have a key range with an empty end value.
 
-Two Key Ranges are consecutive if the End of the first one is equal to
-the Start of the next one.
+* An empty start value represents the lowest value, and all values are
+    greater than it.
+* An empty end value represents a value larger than the highest possible
+    value, and all values are strictly lower than it.
 
-Two special values exist:
+Vitess always converts sharding keys to byte arrays before routing
+queries. The value [ 0x80 ] is the middle value for sharding keys.
+So, in a keyspace with two shards, sharding keys that have a byte-array
+value lower than 0x80 are assigned to one shard. Keys with a byte-array
+value equal to or higher than 0x80 are assigned to the other shard.
 
-* if a Start is empty, it represents the lowest value, and all values
-  are greater than it.
-* if an End is empty, it represents the biggest value, and all values
-  are strictly lower than it.
+Several sample key ranges are shown below:
 
-Examples:
+``` sh
+Start=[], End=[]: Full Key Range
+Start=[], End=[0x80]: Lower half of the Key Range.
+Start=[0x80], End=[]: Upper half of the Key Range.
+Start=[0x40], End=[0x80]: Second quarter of the Key Range.
+```
 
-* Start=[], End=[]: full Key Range
-* Start=[], End=[0x80]: Lower half of the Key Range.
-* Start=[0x80], End=[]: Upper half of the Key Range.
-* Start=[0x40], End=[0x80]: Second quarter of the Key Range.
+Two key ranges are consecutive if the end value of one range equals the
+start value of the other range.
 
-As noted previously, this can be used for both binary and uint64
-Sharding Keys. For uint64 Sharding Keys, the single byte number
-represents the most significant 8 bits of the value.
+### Shard Names in Range-Based Keyspaces
 
-### Range-based Shard Name
+In range-based, sharded keyspaces, a shard's name identifies the start
+and end of the shard's key range, printed in hexadecimal and separated
+by a hyphen. For instance, if a shard's key range is the array of bytes
+beginning with [ 0x80 ] and ending, noninclusively, with [ 0xc0], then
+the shard's name is <code>80-c0</code>.
 
-The Name of a Shard when it is part of a Range-based sharded keyspace
-is the Start and End of its keyrange, printed in hexadecimal, and
-separated by a hyphen.
-
-For instance, if Start is the array of bytes [ 0x80 ] and End is the
-array of bytes [ 0xc0 ], then the name of the Shard will be: 80-c0
-
-We will use this convention in the rest of this document.
-
-### Sharding Key Partition
-
-A partition represent a set of Key Ranges that cover the entire space. For instance, the following four shards are a valid full partition:
+Using this naming convention, the following four shards would be a valid
+full partition:
 
 * -40
 * 40-80
 * 80-c0
 * c0-
 
-When we build the serving graph for a given Range-based Sharded
-Keyspace, we ensure the Shards are valid and cover the full space.
+## Resharding
 
-During resharding, we can split or merge consecutive Shards with very
-minimal downtime.
+In Vitess, resharding describes the process of updating the sharding
+scheme for a keyspace and dynamically reorganizing data to match the
+new scheme. During resharding, Vitess can split or merge consecutive
+shards very quickly, completing most data transitions with less than
+five seconds of read-only downtime. During that time, existing data
+can be read, but new data cannot be written.
 
-### Resharding
+The table below lists the sharding (or resharding) processes that you
+would typically perform for different types of requirements:
 
-Vitess provides a set of tools and processes to deal with Range Based Shards:
+Requirement | Action
+----------- | ------
+Uniformly increase read capacity | Add replicas or split shards
+Uniformly increase write capacity | Split shards
+Reclaim free space | Merge shards and/or keyspaces
+Increase geo-diversity | Add new cells and replicas
+Cool a hot tablet | For read access, add replicas or split shards. For write access, split shards.
 
-* [Dynamic resharding](Resharding.md) allows splitting or merging of shards with no
-  read downtime, and very minimal master unavailability (<5s).
-* Client APIs are designed to take sharding into account.
-* [Map-reduce framework](https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md) fully utilizes the Key Ranges to read data as
-  fast as possible, concurrently from all shards and all replicas.
+### Filtered Replication
 
-### Cross-Shard Indexes
+The cornerstone of resharding is replicating the right data. Vitess
+implements the following functions to support filtered replication,
+the process that ensures that the correct source tablet data is
+transferred to the proper destination tablets. Since MySQL does not
+support any filtering, this functionality is all specific to Vitess.
 
-The 'primary key' for sharded data is the Sharding Key value. In order
-to look up data with another index, it is very straightforward to
-create a lookup table in a different Keyspace that maps that other
-index to the Sharding Key.
+1. The source tablet tags transactions with comments so that MySQL binlogs
+    contain the filtering data needed during the resharding process. The
+    comments describe the scope of each transaction (its keyspace ID,
+    table, etc.).
+1. A server process uses the comments to filter the MySQL binlogs and
+    stream the correct data to the destination tablet.
+1. A client process on the destination tablet applies the filtered logs,
+    which are just regular SQL statements at this point.
 
-For instance, if User ID is hashed as Sharding Key in a User keyspace,
-adding a User Name to User Id lookup table in a different Lookup
-keyspace allows the user to also route queries the right way.
+### Additional Tools and Processes
 
-With the current version of the API, Cross-Shard indexes have to be
-handled at the application layer. However, [version 3 or our API](VTGateV3.md)
-will provide multiple ways to solve this without application layer changes.
+Vitess provides the following tools to help manage range-based shards:
+
+* The [vtctl](/reference/vtctl.html) command-line tool supports
+    functions for managing keyspaces, shards, tablets, and more.
+* Client APIs account for sharding operations.
+* The [MapReduce framework](https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md)
+    fully utilizes key ranges to read data as quickly as possible,
+    concurrently from all shards and all replicas.
 
 ## Custom Sharding
 
-This is designed to be used if your application already has support
-for sharding, or if you want to control exactly which shard the data
-goes to. In that use case, each Keyspace just has a collection of
-shards, and the client code always specifies which shard to talk to.
+If your application already supports sharding or if you want to control
+exactly which shard handles each query, Vitess can support your custom
+sharding scheme. In that use case, each keyspace has a collection of
+shards, and the client code always specifies the shard to which it is
+directing a query.
 
-The shards can just use any name, and they are always addressed by
-name. The API calls to vtgate are ExecuteShard, ExecuteBatchShard and
-StreamExecuteShard. None of the *KeyspaceIds, *KeyRanges or *EntityIds
-API calls can be used.
+One example of a custom sharding scheme is lookup-based sharding. In
+lookup-based sharding, one keyspace is used as a lookup keyspace, and
+it contains the mapping between a record's identifying key and the name
+of the record's shard. To execute a query, the client first checks the
+lookup table to locate the correct shard name and then routes the query
+to that shard.
 
-The Map-Reduce framework can still iterate over the data across multiple shards.
+In a custom sharding scheme, shards can use any name you choose, and
+they are always addressed by name. The vtgate API calls to use are
+<code>ExecuteShard</code>, <code>ExecuteBatchShard</code>, and
+<code>StreamExecuteShard</code>. None of the API calls for
+**KeyspaceIds**, **KeyRanges**, or **EntityIds** are compatible with
+a custom sharding scheme. Vitess' tools and processes for automated
+resharding also do not support custom sharding schemes.
 
-Also, none of the automated resharding tools and processes that Vitess
-provides for Range-Based sharding can be used here.
-
-Note: the *Shard API calls are not exposed by all clients at the
-moment. This is going to be fixed soon.
-
-### Custom Sharding Example: Lookup-Based Sharding
-
-One example of Custom Sharding is Lookup based: one keyspace is used
-as a lookup keyspace, and contains the mapping between the identifying
-key of a record, and the shard name it is on. When accessing the
-records, the client first needs to find the shard name by looking it
-up in the lookup table, and then knows where to route queries.
+If you use a custom sharding scheme, you can still use the
+[MapReduce framework](https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md)
+to iterate over the data on multiple shards.
