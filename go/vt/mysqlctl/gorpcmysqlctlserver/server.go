@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
 )
@@ -22,13 +23,18 @@ type MysqlctlServer struct {
 }
 
 // Start implements the server side of the MysqlctlClient interface.
-func (s *MysqlctlServer) Start(ctx context.Context, args *time.Duration, reply *int) error {
+func (s *MysqlctlServer) Start(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
 	return s.mysqld.Start(*args)
 }
 
 // Shutdown implements the server side of the MysqlctlClient interface.
-func (s *MysqlctlServer) Shutdown(ctx context.Context, args *time.Duration, reply *int) error {
+func (s *MysqlctlServer) Shutdown(ctx context.Context, args *time.Duration, reply *rpc.Unused) error {
 	return s.mysqld.Shutdown(*args > 0, *args)
+}
+
+// RunMysqlUpgrade implements the server side of the MysqlctlClient interface.
+func (s *MysqlctlServer) RunMysqlUpgrade(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
+	return s.mysqld.RunMysqlUpgrade()
 }
 
 // StartServer registers the Server for RPCs.

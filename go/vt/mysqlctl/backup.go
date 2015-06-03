@@ -548,6 +548,11 @@ func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtr
 		return proto.ReplicationPosition{}, err
 	}
 
+	log.Infof("Restore: running mysql_upgrade if necessary")
+	if err := mysqld.RunMysqlUpgrade(); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
 	log.Infof("Restore: restart mysqld")
 	if err := mysqld.Start(MysqlWaitTime); err != nil {
 		return proto.ReplicationPosition{}, err

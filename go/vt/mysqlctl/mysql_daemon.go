@@ -26,6 +26,7 @@ type MysqlDaemon interface {
 	// methods related to mysql running or not
 	Start(mysqlWaitTime time.Duration) error
 	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
+	RunMysqlUpgrade() error
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
@@ -210,6 +211,11 @@ func (fmd *FakeMysqlDaemon) Shutdown(waitForMysqld bool, mysqlWaitTime time.Dura
 		return fmt.Errorf("fake mysql daemon not running")
 	}
 	fmd.Running = false
+	return nil
+}
+
+// RunMysqlUpgrade is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 	return nil
 }
 

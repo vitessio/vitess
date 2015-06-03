@@ -120,6 +120,58 @@ func (mysqld *Mysqld) Cnf() *Mycnf {
 	return mysqld.config
 }
 
+// RunMysqlUpgrade will run the mysql_upgrade program on the current install.
+// Will not be called when mysqld is running.
+func (mysqld *Mysqld) RunMysqlUpgrade() error {
+	// Execute as remote action on mysqlctld if requested.
+	if *socketFile != "" {
+		log.Infof("executing Mysqld.RunMysqlUpgrade() remotely via mysqlctld server: %v", *socketFile)
+		client, err := mysqlctlclient.New("unix", *socketFile, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("can't dial mysqlctld: %v", err)
+		}
+		defer client.Close()
+		return client.RunMysqlUpgrade()
+	}
+
+	// find mysql_upgrade. If not there, we do nothing.
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+	name := path.Join(dir, "bin/mysql_upgrade")
+	if _, err := os.Stat(name); err != nil {
+		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
+		return nil
+	}
+
+	// run the program, if it fails, we fail
+	cmd := exec.Command(name, "--defaults-file="+mysqld.config.path)
+	cmd.Env = []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil
+	}
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			log.Infof("mysql_upgrade stderr: %v", scanner.Text())
+		}
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			log.Infof("mysql_upgrade stdout: %v", scanner.Text())
+		}
+	}()
+	return cmd.Run()
+}
+
 // Start will start the mysql daemon, either by running the 'mysqld_start'
 // hook, or by running mysqld_safe in the background.
 // If a mysqlctld address is provided in a flag, Start will run remotely.
