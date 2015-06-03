@@ -37,11 +37,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	// MysqlWaitTime is the default number of seconds to wait for mysql
-	MysqlWaitTime = 120 * time.Second
-)
-
 var (
 	dbaPoolSize    = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
 	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")

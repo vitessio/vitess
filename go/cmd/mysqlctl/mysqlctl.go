@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -33,7 +34,7 @@ var (
 )
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
 	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
 	subFlags.Parse(args)
 
@@ -46,7 +47,7 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) err
 }
 
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
@@ -58,7 +59,7 @@ func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
 	subFlags.Parse(args)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
@@ -70,7 +71,7 @@ func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) er
 }
 
 func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 

@@ -10,6 +10,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -32,7 +33,7 @@ var (
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
-	waitTime         = flag.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for mysqld startup or shutdown")
+	waitTime         = flag.Duration("wait_time", 2*time.Minute, "how long to wait for mysqld startup or shutdown")
 	bootstrapArchive = flag.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
 )
 
