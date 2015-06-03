@@ -18,7 +18,7 @@
     html.className = html.className + ' no-touch';
   }
 
-/*
+
   function closeMenu() {
     body.classList.remove('open');
     appbar.classList.remove('open');
@@ -36,7 +36,7 @@
       closeMenu();
     }
   }
-*/
+
 
   var previous = -1;
   function handleScroll(event) {
@@ -50,8 +50,8 @@
   }
 
   // Menu
-  // main.addEventListener('click', closeMenu);
-  // menu.addEventListener('click', toggleMenu);
-  // nav.addEventListener('click', handleNavClick);
+  main.addEventListener('click', closeMenu);
+  menu.addEventListener('click', toggleMenu);
+  nav.addEventListener('click', handleNavClick);
   window.addEventListener('scroll', handleScroll);
 })();
