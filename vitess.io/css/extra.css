@@ -56,6 +56,7 @@ a:hover {
 table thead {
   background-color: #4E5A92;
 }
+
 table tr th {
   color: #444;
   font-weight: 400;
@@ -202,10 +203,6 @@ div.highlight {
 }
 .scrolled .app-bar .logo {
   color: #000000;
-  background-image: url(/images/logo-black-48x48.png);
-}
-.scrolled #menu {
-  background-image: url(/images/hamburger-black.svg);
 }
 .scrolled .app-bar-actions {
   visibility: visible;
@@ -225,8 +222,6 @@ div.highlight {
 
 main {
   padding-top: 60px;
-  margin-left: 30%;
-  width: 100%;
 }
 
 footer {
