@@ -22,7 +22,7 @@ if ! [ -z "$NEWRELIC_LICENSE_KEY" ]; then
 fi
 
 # Remove pre-installed mysql
-sudo apt-get purge mysql* mariadb*
+#sudo apt-get purge mysql* mariadb*
 
 # MariaDB
 sudo apt-get -f install libmariadbclient18 libmariadbclient-dev mariadb-client mariadb-server
