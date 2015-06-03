@@ -15,6 +15,7 @@ We have plans to implement a version of the Backup Storage service for Google Cl
 (The interface definition for the Backup Storage service is in [interface.go](https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go), see comments there for more details).
 
 Concretely, the following command line flags are used for Backup Storage:
+
 * -backup\_storage\_implementation: which implementation of the Backup Storage interface to use.
 * -file\_backup\_storage\_root: the root of the backups if 'file' is used as a Backup Storage.
 
@@ -29,6 +30,7 @@ Note for this to work correctly, the tablet must be started with the right param
 ### Life of a Shard
 
 To illustrate how backups are used in Vitess to bootstrap new instances, let's go through the creation and life of a Shard:
+
 * A shard is initially brought up with no existing backup. All instances are started as replicas. With health-check enabled (the recommended default), each instance will realize replication is not running, and just stay unhealthy as spare.
 * Once a few replicas are up, InitShardMaster is run, one host becomes the master, the others replicas. Master becomes healthy, replicas are not as no database exists.
 * Initial schema can then be applied to the Master. Either use the usual Schema change tools, or use CopySchemaShard for shards created as targets for resharding.
@@ -42,6 +44,7 @@ Restoring a backup is enabled by the --restore\_from\_backup command line option
 ### Backup Management
 
 Two vtctl commands exist to manage the backups:
+
 * 'vtctl ListBackups <keyspace/shard>' will display the existing backups for a keyspace/shard in the order they were taken (oldest first).
 * 'vtctl RemoveBackup <keyspace/shard> <backup name>' will remove a backup from Backup Storage.
 
