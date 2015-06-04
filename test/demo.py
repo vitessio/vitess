@@ -125,7 +125,6 @@ def main():
   options.debug = True
   utils.set_options(options)
   env = keyspace_util.TestEnv()
-  vtgate_server=None
   try:
     environment.topo_server().setup()
     env.launch(
@@ -147,13 +146,12 @@ def main():
             ],
         )
     utils.apply_vschema(vschema)
-    vtgate_server, vtgate_port = utils.vtgate_start(cache_ttl='500s')
+    utils.VtGate().start(cache_ttl='500s')
     utils.Vtctld().start()
-    print "vtgate:", vtgate_port
+    print "vtgate:", utils.vtgate.port
     print "vtctld:", utils.vtctld.port
     utils.pause("the cluster is up, press enter to shut it down...")
   finally:
-    utils.vtgate_kill(vtgate_server)
     env.teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()

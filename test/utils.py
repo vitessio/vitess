@@ -414,16 +414,17 @@ class VtGate(object):
   """VtGate object represents a vtgate process.
   """
 
-  def __init__(self, vtport=None, cert=None, key=None):
+  def __init__(self, port=None, cert=None, key=None):
     """Creates the Vtgate instance and reserve the ports if necessary.
     """
-    self.port = vtport or environment.reserve_ports(1)
+    self.port = port or environment.reserve_ports(1)
     self.secure_port = None
     if cert:
       self.secure_port = environment.reserve_ports(1)
       self.cert = cert
       self.key = key
     self.proc = None
+    self.socket_file = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
@@ -458,6 +459,7 @@ class VtGate(object):
                    '-cert', self.cert,
                    '-key', self.key])
     if socket_file:
+      self.socket_file = socket_file
       args.extend(['-socket_file', socket_file])
 
     if extra_args:
@@ -496,6 +498,21 @@ class VtGate(object):
     """addr returns the address of the vtgate process.
     """
     return 'localhost:%u' % self.port
+
+  def secure_addr(self):
+    """secure_addr returns the secure address of the vtgate process.
+    """
+    return 'localhost:%u' % self.secure_port
+
+  def get_status(self):
+    """get_status returns the status page for this process.
+    """
+    return get_status(self.port)
+
+  def get_vars(self):
+    """get_vars returns the vars for this process.
+    """
+    return get_vars(self.port)
 
   def vtclient(self, sql, tablet_type='master', bindvars=None,
                streaming=False, verbose=False, raise_on_error=False):
@@ -554,60 +571,6 @@ class VtGate(object):
     args.append(sql)
     return run_vtctl_json(args)
 
-
-# vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
-                 topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
-                 auth=False, timeout_total="4s", timeout_per_conn="2s",
-                 cert=None, key=None, ca_cert=None,
-                 socket_file=None, extra_args=None):
-  port = vtport or environment.reserve_ports(1)
-  secure_port = None
-  args = environment.binary_args('vtgate') + [
-          '-port', str(port),
-          '-cell', cell,
-          '-retry-delay', '%ss' % (str(retry_delay)),
-          '-retry-count', str(retry_count),
-          '-log_dir', environment.vtlogroot,
-          '-srv_topo_cache_ttl', cache_ttl,
-          '-conn-timeout-total', timeout_total,
-          '-conn-timeout-per-conn', timeout_per_conn,
-          '-bsonrpc_timeout', '5s',
-          ] + protocols_flavor().tabletconn_protocol_flags()
-  if topo_impl:
-    args.extend(['-topo_implementation', topo_impl])
-  else:
-    args.extend(environment.topo_server().flags())
-  if tablet_bson_encrypted:
-    args.append('-tablet-bson-encrypted')
-  if auth:
-    args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
-  if cert:
-    secure_port = environment.reserve_ports(1)
-    args.extend(['-secure-port', '%s' % secure_port,
-                 '-cert', cert,
-                 '-key', key])
-    if ca_cert:
-      args.extend(['-ca_cert', ca_cert])
-  if socket_file:
-    args.extend(['-socket_file', socket_file])
-
-  if extra_args:
-    args.extend(extra_args)
-
-  sp = run_bg(args)
-  if cert:
-    wait_for_vars("vtgate", port, "SecureConnections")
-    return sp, port, secure_port
-  else:
-    wait_for_vars("vtgate", port)
-    return sp, port
-
-def vtgate_kill(sp):
-  if sp is None:
-    return
-  kill_sub_process(sp, soft=True)
-  sp.wait()
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.

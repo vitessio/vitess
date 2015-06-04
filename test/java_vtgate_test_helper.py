@@ -37,8 +37,6 @@ class Tablet(tablet.Tablet):
     self.type = type
 
 class TestEnv(object):
-  vtgate_server = None
-  vtgate_port = None
   def __init__(self, options):
     self.keyspace = options.keyspace
     self.schema = options.schema
@@ -87,15 +85,15 @@ class TestEnv(object):
           utils.run_vtctl(['ApplyVSchema', "-vschema", self.vschema])
         else:
           utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
-      self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='500s', vtport=self.vtgate_port)
-      vtgate_client = zkocc.ZkOccConnection("localhost:%u" % self.vtgate_port, "test_nj", 30.0)
+      utils.VtGate(port=self.vtgate_port).start(cache_ttl='500s')
+      vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj",
+                                            30.0)
       topology.read_topology(vtgate_client)
     except:
       self.shutdown()
       raise
 
   def shutdown(self):
-    utils.vtgate_kill(self.vtgate_server)
     tablet.kill_tablets(self.tablets)
     teardown_procs = [t.teardown_mysql() for t in self.tablets]
     utils.wait_procs(teardown_procs, raise_on_error=False)
