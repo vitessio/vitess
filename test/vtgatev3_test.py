@@ -26,8 +26,6 @@ shard_0_master = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 lookup_master = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
 keyspace_env = None
 
 create_vt_user = '''create table vt_user (
@@ -193,8 +191,6 @@ def setUpModule():
   global shard_0_master
   global shard_1_master
   global lookup_master
-  global vtgate_server
-  global vtgate_port
   logging.debug("in setUpModule")
 
   try:
@@ -225,7 +221,7 @@ def setUpModule():
     lookup_master = keyspace_env.tablet_map["lookup.0.master"]
 
     utils.apply_vschema(schema)
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    utils.VtGate().start()
   except:
     tearDownModule()
     raise
@@ -235,7 +231,6 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
   logging.debug("Tearing down the servers and setup")
-  utils.vtgate_kill(vtgate_server)
   keyspace_env.teardown()
 
   environment.topo_server().teardown()
@@ -245,9 +240,8 @@ def tearDownModule():
 
 
 def get_connection(user=None, password=None):
-  global vtgate_port
   timeout = 10.0
-  return vtgatev3.connect("localhost:%s" % (vtgate_port), timeout,
+  return vtgatev3.connect(utils.vtgate.addr(), timeout,
                             user=user, password=password)
 
 
@@ -634,43 +628,43 @@ class TestVTGateFunctions(unittest.TestCase):
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.
     """
-    utils.vtgate_vtclient(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:v1, :v2)', bindvars=[10, 'test 10'])
+    utils.vtgate.vtclient('insert into vt_user_extra(user_id, email) values (:v1, :v2)', bindvars=[10, 'test 10'])
 
-    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+    out, err = utils.vtgate.vtclient('select * from vt_user_extra where user_id = :v1', bindvars=[10])
     self.assertEqual(out, ['Index\tuser_id\temail','0\t10\ttest 10'])
 
-    utils.vtgate_vtclient(vtgate_port, 'update vt_user_extra set email=:v2 where user_id = :v1', bindvars=[10, 'test 1000'])
+    utils.vtgate.vtclient('update vt_user_extra set email=:v2 where user_id = :v1', bindvars=[10, 'test 1000'])
 
-    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10], streaming=True)
+    out, err = utils.vtgate.vtclient('select * from vt_user_extra where user_id = :v1', bindvars=[10], streaming=True)
     self.assertEqual(out, ['Index\tuser_id\temail','0\t10\ttest 1000'])
 
-    utils.vtgate_vtclient(vtgate_port, 'delete from vt_user_extra where user_id = :v1', bindvars=[10])
+    utils.vtgate.vtclient('delete from vt_user_extra where user_id = :v1', bindvars=[10])
 
-    out, err = utils.vtgate_vtclient(vtgate_port, 'select * from vt_user_extra where user_id = :v1', bindvars=[10])
+    out, err = utils.vtgate.vtclient('select * from vt_user_extra where user_id = :v1', bindvars=[10])
     self.assertEqual(out, ['Index\tuser_id\temail'])
 
   def test_vtctl_vtgate_execute(self):
     """This test uses 'vtctl VtGateExecute' to send and receive various queries.
     """
-    utils.vtgate_execute(vtgate_port, 'insert into vt_user_extra(user_id, email) values (:user_id, :email)', bindvars={'user_id': 11, 'email':'test 11'})
+    utils.vtgate.execute('insert into vt_user_extra(user_id, email) values (:user_id, :email)', bindvars={'user_id': 11, 'email':'test 11'})
 
-    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
     logging.debug('Original row: %s', str(qr))
     self.assertEqual(len(qr['Rows']), 1)
     v = base64.b64decode(qr['Rows'][0][1])
     self.assertEqual(v, 'test 11')
 
-    utils.vtgate_execute(vtgate_port, 'update vt_user_extra set email=:email where user_id = :user_id', bindvars={'user_id': 11, 'email':'test 1100'})
+    utils.vtgate.execute('update vt_user_extra set email=:email where user_id = :user_id', bindvars={'user_id': 11, 'email':'test 1100'})
 
-    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
     logging.debug('Modified row: %s', str(qr))
     self.assertEqual(len(qr['Rows']), 1)
     v = base64.b64decode(qr['Rows'][0][1])
     self.assertEqual(v, 'test 1100')
 
-    utils.vtgate_execute(vtgate_port, 'delete from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    utils.vtgate.execute('delete from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
 
-    qr = utils.vtgate_execute(vtgate_port, 'select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
+    qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
     self.assertEqual(len(qr['Rows']), 0)
 
 if __name__ == '__main__':

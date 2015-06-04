@@ -37,9 +37,6 @@ from zk import zkocc
 conn_class = vtgatev2
 __tablets = None
 
-vtgate_server = None
-vtgate_port = None
-
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
                          345387386794260318, 332484755310826578,
@@ -56,7 +53,6 @@ shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
 pack_kid = struct.Struct('!Q').pack
 
 def setUpModule():
-  global vtgate_server, vtgate_port
   try:
     environment.topo_server().setup()
     setup_topology()
@@ -69,17 +65,15 @@ def setUpModule():
     utils.wait_procs(setup_procs)
     create_db()
     start_tablets()
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    utils.VtGate().start()
   except:
     tearDownModule()
     raise
 
 def tearDownModule():
-  global vtgate_server
   global __tablets
   if utils.options.skip_teardown:
     return
-  utils.vtgate_kill(vtgate_server)
   if __tablets is not None:
     tablet.kill_tablets(__tablets)
     teardown_procs = []
@@ -163,10 +157,9 @@ def start_tablets():
 
 
 def get_connection(user=None, password=None):
-  global vtgate_port
   timeout = 10.0
   conn = None
-  vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
+  vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
   conn = conn_class.connect(vtgate_addrs, timeout,
                             user=user, password=password)
   return conn
@@ -192,9 +185,9 @@ def _delete_all(keyspace, shard_name, table_name):
 
 
 def restart_vtgate(extra_args={}):
-  global vtgate_server, vtgate_port
-  utils.vtgate_kill(vtgate_server)
-  vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port, extra_args=extra_args)
+  port = utils.vtgate.port
+  utils.vtgate.kill()
+  utils.VtGate(port=port).start(extra_args=extra_args)
 
 def populate_table():
   keyspace = "KS_UNSHARDED"
@@ -210,7 +203,7 @@ def populate_table():
 class TestUnshardedTable(unittest.TestCase):
 
   def setUp(self):
-    self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
+    self.vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
     self.all_ids = []
     with database_context.WriteTransaction(self.dc) as context:
@@ -322,7 +315,7 @@ class TestRangeSharded(unittest.TestCase):
 
 
   def setUp(self):
-    self.vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
+    self.vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
     self.populate_tables()
 

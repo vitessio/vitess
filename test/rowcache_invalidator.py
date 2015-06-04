@@ -23,9 +23,6 @@ import utils
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
-
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
 msg varchar(64),
@@ -34,9 +31,6 @@ primary key (id)
 
 
 def setUpModule():
-  global vtgate_server
-  global vtgate_port
-
   try:
     environment.topo_server().setup()
 
@@ -56,7 +50,7 @@ def setUpModule():
     master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
     replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
 
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    utils.VtGate().start()
 
     master_tablet.start_vttablet(memcache=True, wait_for_state=None)
     replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
@@ -84,7 +78,6 @@ def tearDownModule():
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
-  utils.vtgate_kill(vtgate_server)
   utils.kill_sub_processes()
   utils.remove_tmp_files()
   master_tablet.remove_tree()
@@ -92,7 +85,7 @@ def tearDownModule():
 
 class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                                "test_nj", 30.0)
     topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
