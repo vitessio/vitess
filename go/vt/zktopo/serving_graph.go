@@ -65,50 +65,80 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 	return result, nil
 }
 
-// UpdateEndPoints is part of the topo.Server interface
-func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+// CreateEndPoints is part of the topo.Server interface
+func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJSON(addrs)
+
+	// Create only if it doesn't exist.
 	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			// Node already exists - just stomp away. Multiple writers shouldn't be here.
-			// We use RetryChange here because it won't update the node unnecessarily.
-			f := func(oldValue string, oldStat zk.Stat) (string, error) {
-				return data, nil
+	if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		err = topo.ErrNodeExists
+	}
+	return err
+}
+
+// UpdateEndPoints is part of the topo.Server interface
+func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+	path := zkPathForVtName(cell, keyspace, shard, tabletType)
+	data := jscfg.ToJSON(addrs)
+
+	if existingVersion == -1 {
+		// Update or create unconditionally.
+		_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil {
+			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+				// Node already exists - just stomp away. Multiple writers shouldn't be here.
+				// We use RetryChange here because it won't update the node unnecessarily.
+				f := func(oldValue string, oldStat zk.Stat) (string, error) {
+					return data, nil
+				}
+				err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 			}
-			err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
+		}
+		return err
+	}
+
+	// Compare And Set
+	_, err := zkts.zconn.Set(path, data, int(existingVersion))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
+			err = topo.ErrBadVersion
+		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
 		}
 	}
 	return err
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data, _, err := zkts.zconn.Get(path)
+	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return nil, err
+		return nil, 0, err
 	}
 	result := &topo.EndPoints{}
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), result); err != nil {
-			return nil, fmt.Errorf("EndPoints unmarshal failed: %v %v", data, err)
+			return nil, 0, fmt.Errorf("EndPoints unmarshal failed: %v %v", data, err)
 		}
 	}
-	return result, nil
+	return result, int64(stat.Version()), nil
 }
 
 // DeleteEndPoints is part of the topo.Server interface
-func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) error {
+func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	err := zkts.zconn.Delete(path, -1)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+	if err := zkts.zconn.Delete(path, int(existingVersion)); err != nil {
+		switch {
+		case zookeeper.IsError(err, zookeeper.ZNONODE):
 			err = topo.ErrNoNode
+		case zookeeper.IsError(err, zookeeper.ZBADVERSION):
+			err = topo.ErrBadVersion
 		}
 		return err
 	}

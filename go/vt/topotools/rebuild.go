@@ -180,7 +180,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 			span := trace.NewSpanFromContext(ctx)
 			span.StartClient("TopoServer.UpdateEndPoints")
 			span.Annotate("tablet_type", string(tabletType))
-			if err := ts.UpdateEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
+			if err := ts.UpdateEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs, -1); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, err))
 			}
 			span.Finish()
@@ -198,7 +198,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 				span := trace.NewSpanFromContext(ctx)
 				span.StartClient("TopoServer.DeleteEndPoints")
 				span.Annotate("tablet_type", string(tabletType))
-				if err := ts.DeleteEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType); err != nil {
+				if err := ts.DeleteEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, -1); err != nil {
 					log.Warningf("unable to remove stale db type %v from serving graph: %v", tabletType, err)
 				}
 				span.Finish()

@@ -202,19 +202,31 @@ type Server interface {
 	// Can return ErrNoNode.
 	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]TabletType, error)
 
+	// CreateEndPoints creates and sets the serving records for a cell,
+	// keyspace, shard, tabletType.
+	// It returns ErrNodeExists if the record already exists.
+	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints) error
+
 	// UpdateEndPoints updates the serving records for a cell,
 	// keyspace, shard, tabletType.
-	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints) error
+	// If existingVersion is -1, it will set the value unconditionally,
+	// creating it if necessary.
+	// Otherwise, it will Compare-And-Set only if the version matches.
+	// Can return ErrBadVersion.
+	// Can return ErrNoNode only if existingVersion is not -1.
+	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints, existingVersion int64) error
 
 	// GetEndPoints returns the EndPoints list of serving addresses
-	// for a TabletType inside a shard.
+	// for a TabletType inside a shard, as well as the node version.
 	// Can return ErrNoNode.
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (*EndPoints, error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (ep *EndPoints, version int64, err error)
 
 	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
-	// Can return ErrNoNode.
-	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) error
+	// If existingVersion is -1, it will delete the records unconditionally.
+	// Otherwise, it will Compare-And-Delete only if the version matches.
+	// Can return ErrNoNode or ErrBadVersion.
+	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, existingVersion int64) error
 
 	// WatchEndPoints returns a channel that receives notifications
 	// every time EndPoints for the given type changes.

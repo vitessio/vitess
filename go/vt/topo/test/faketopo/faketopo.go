@@ -22,8 +22,8 @@ func (ft FakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*
 	return nil, errNotImplemented
 }
 
-func (ft FakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	return nil, errNotImplemented
+func (ft FakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+	return nil, -1, errNotImplemented
 }
 
 func (ft FakeTopo) Close() {}
@@ -124,11 +124,15 @@ func (ft FakeTopo) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace
 	return nil, errNotImplemented
 }
 
-func (ft FakeTopo) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (ft FakeTopo) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	return errNotImplemented
 }
 
-func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) error {
+func (ft FakeTopo) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+	return errNotImplemented
+}
+
+func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
 	return errNotImplemented
 }
 

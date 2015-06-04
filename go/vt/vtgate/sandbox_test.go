@@ -268,7 +268,7 @@ func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard s
 	return nil, fmt.Errorf("Unsupported")
 }
 
-func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
 	sand := getSandbox(keyspace)
 	sand.EndPointCounter++
 	if sct.callbackGetEndPoints != nil {
@@ -276,14 +276,14 @@ func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard 
 	}
 	if sand.EndPointMustFail > 0 {
 		sand.EndPointMustFail--
-		return nil, fmt.Errorf("topo error")
+		return nil, -1, fmt.Errorf("topo error")
 	}
 	conns := sand.TestConns[shard]
 	ep := &topo.EndPoints{}
 	for _, conn := range conns {
 		ep.Entries = append(ep.Entries, conn.EndPoint())
 	}
-	return ep, nil
+	return ep, -1, nil
 }
 
 func sandboxDialer(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {

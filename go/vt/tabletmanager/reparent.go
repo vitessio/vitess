@@ -106,7 +106,7 @@ func (agent *ActionAgent) fastTabletExternallyReparented(ctx context.Context, ex
 	}
 	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
 		si.Keyspace(), si.ShardName(), topo.TYPE_MASTER,
-		&topo.EndPoints{Entries: []topo.EndPoint{*ep}})
+		&topo.EndPoints{Entries: []topo.EndPoint{*ep}}, -1)
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
 	}

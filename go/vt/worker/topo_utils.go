@@ -24,7 +24,7 @@ var (
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	endPoints, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
+	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
 		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 	}

@@ -156,7 +156,7 @@ func testTabletExternallyReparented(t *testing.T, fast bool) {
 
 	// Now double-check the serving graph is good.
 	// Should only have one good replica left.
-	addrs, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
+	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}
@@ -323,7 +323,7 @@ func testTabletExternallyReparentedFailedOldMaster(t *testing.T, fast bool) {
 
 	// Now double-check the serving graph is good.
 	// Should only have one good replica left.
-	addrs, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
+	addrs, _, err := ts.GetEndPoints(ctx, "cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints failed at the end: %v", err)
 	}

@@ -44,17 +44,32 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 	return tabletTypes, nil
 }
 
+// CreateEndPoints implements topo.Server.
+func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+	cell, err := s.getCell(cellName)
+	if err != nil {
+		return err
+	}
+	// Set only if it doesn't exist.
+	_, err = cell.Create(endPointsFilePath(keyspace, shard, string(tabletType)), jscfg.ToJSON(addrs), 0 /* ttl */)
+	return convertError(err)
+}
+
 // UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
 
-	data := jscfg.ToJSON(addrs)
+	if existingVersion == -1 {
+		// Set unconditionally.
+		_, err := cell.Set(endPointsFilePath(keyspace, shard, string(tabletType)), jscfg.ToJSON(addrs), 0 /* ttl */)
+		return convertError(err)
+	}
 
-	_, err = cell.Set(endPointsFilePath(keyspace, shard, string(tabletType)), data, 0 /* ttl */)
-	return convertError(err)
+	// Update only if version matches.
+	return s.updateEndPoints(cellName, keyspace, shard, tabletType, addrs, existingVersion)
 }
 
 // updateEndPoints updates the EndPoints file only if the version matches.
@@ -72,12 +87,7 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType to
 }
 
 // GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	value, _, err := s.getEndPoints(cell, keyspace, shard, tabletType)
-	return value, err
-}
-
-func (s *Server) getEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, -1, err
@@ -101,14 +111,34 @@ func (s *Server) getEndPoints(cellName, keyspace, shard string, tabletType topo.
 }
 
 // DeleteEndPoints implements topo.Server.
-func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) error {
+func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
+	dirPath := endPointsDirPath(keyspace, shard, string(tabletType))
 
-	_, err = cell.Delete(endPointsDirPath(keyspace, shard, string(tabletType)), true /* recursive */)
-	return convertError(err)
+	if existingVersion == -1 {
+		// Delete unconditionally.
+		_, err := cell.Delete(dirPath, true /* recursive */)
+		return convertError(err)
+	}
+
+	// Delete EndPoints file only if version matches.
+	if _, err := cell.CompareAndDelete(endPointsFilePath(keyspace, shard, string(tabletType)), "" /* prevValue */, uint64(existingVersion)); err != nil {
+		return convertError(err)
+	}
+	// Delete the parent dir only if it's empty.
+	_, err = cell.DeleteDir(dirPath)
+	err = convertError(err)
+	if err == topo.ErrNotEmpty {
+		// Someone else recreated the EndPoints file after we deleted it,
+		// but before we got around to removing the parent dir.
+		// This is fine, because whoever recreated it has already seen our delete,
+		// and we're not at risk of overwriting their change.
+		err = nil
+	}
+	return err
 }
 
 // UpdateSrvShard implements topo.Server.
@@ -209,7 +239,7 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 // UpdateTabletEndpoint implements topo.Server.
 func (s *Server) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	for {
-		addrs, version, err := s.getEndPoints(cell, keyspace, shard, tabletType)
+		addrs, version, err := s.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err == topo.ErrNoNode {
 			// It's ok if the EndPoints file doesn't exist yet. See topo.Server.
 			return nil
@@ -257,7 +287,7 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 	stop := make(chan bool)
 	go func() {
 		// get the current version of the file
-		ep, modifiedVersion, err := s.getEndPoints(cellName, keyspace, shard, tabletType)
+		ep, modifiedVersion, err := s.GetEndPoints(ctx, cellName, keyspace, shard, tabletType)
 		if err != nil {
 			// node doesn't exist
 			modifiedVersion = 0
