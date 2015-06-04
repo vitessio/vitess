@@ -223,6 +223,9 @@ div.highlight {
 main {
   padding-top: 60px;
 }
+main.clear-home {
+  margin: 0 auto;
+}
 
 footer {
   padding: 16px;
