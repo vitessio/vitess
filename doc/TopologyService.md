@@ -160,8 +160,8 @@ Note the paths used to store global and per-cell data do not overlap, so a singl
 
 We provide the 'zk' utility for easy access to the topology data in ZooKeeper. For instance:
 ```
-\# NOTE: You need to source zookeeper client config file, like so:
-\#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
+# NOTE: You need to source zookeeper client config file, like so:
+#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
 $ zk ls /zk/global/vt/keyspaces/user
 action
 actionlog
