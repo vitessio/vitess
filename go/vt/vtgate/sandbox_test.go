@@ -179,6 +179,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topo.SrvKe
 		shards = append(shards, shard)
 	}
 	shardedSrvKeyspace := &topo.SrvKeyspace{
+		ShardingColumnName: "user_id", // exact value is ignored
 		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
 				ShardReferences: shards,
