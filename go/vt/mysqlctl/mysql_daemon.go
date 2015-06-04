@@ -24,8 +24,9 @@ type MysqlDaemon interface {
 	Cnf() *Mycnf
 
 	// methods related to mysql running or not
-	Start(mysqlWaitTime time.Duration) error
-	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
+	Start(ctx context.Context) error
+	Shutdown(ctx context.Context, waitForMysqld bool) error
+	RunMysqlUpgrade() error
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int, error)
@@ -196,7 +197,7 @@ func (fmd *FakeMysqlDaemon) Cnf() *Mycnf {
 }
 
 // Start is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Start(mysqlWaitTime time.Duration) error {
+func (fmd *FakeMysqlDaemon) Start(ctx context.Context) error {
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
@@ -205,11 +206,16 @@ func (fmd *FakeMysqlDaemon) Start(mysqlWaitTime time.Duration) error {
 }
 
 // Shutdown is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, waitForMysqld bool) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
 	fmd.Running = false
+	return nil
+}
+
+// RunMysqlUpgrade is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 	return nil
 }
 

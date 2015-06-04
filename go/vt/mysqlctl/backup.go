@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
@@ -180,7 +181,7 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// start the backup with the BackupStorage
 	bs, err := backupstorage.GetBackupStorage()
@@ -192,7 +193,7 @@ func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, back
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
 
-	if err = backup(mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
+	if err = backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
 		if abortErr := bh.AbortBackup(); abortErr != nil {
 			logger.Errorf("failed to abort backup: %v", abortErr)
 		}
@@ -201,7 +202,7 @@ func Backup(mysqld MysqlDaemon, logger logutil.Logger, bucket, name string, back
 	return bh.EndBackup()
 }
 
-func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
+func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
 
 	// save initial state so we can restore
 	slaveStartRequired := false
@@ -254,7 +255,8 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	if err = mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+	err = mysqld.Shutdown(ctx, true)
+	if err != nil {
 		return fmt.Errorf("cannot shutdown mysqld: %v", err)
 	}
 
@@ -271,7 +273,8 @@ func backup(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHa
 	}
 
 	// Try to restart mysqld
-	if err := mysqld.Start(MysqlWaitTime); err != nil {
+	err = mysqld.Start(ctx)
+	if err != nil {
 		return fmt.Errorf("cannot restart mysqld: %v", err)
 	}
 
@@ -497,7 +500,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
+func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
 	// find the right backup handle: most recent one, with a MANIFEST
 	log.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
@@ -539,7 +542,8 @@ func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtr
 	}
 
 	log.Infof("Restore: shutdown mysqld")
-	if err := mysqld.Shutdown(true, MysqlWaitTime); err != nil {
+	err = mysqld.Shutdown(ctx, true)
+	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
@@ -548,8 +552,14 @@ func Restore(mysqld MysqlDaemon, bucket string, restoreConcurrency int, hookExtr
 		return proto.ReplicationPosition{}, err
 	}
 
+	log.Infof("Restore: running mysql_upgrade if necessary")
+	if err := mysqld.RunMysqlUpgrade(); err != nil {
+		return proto.ReplicationPosition{}, err
+	}
+
 	log.Infof("Restore: restart mysqld")
-	if err := mysqld.Start(MysqlWaitTime); err != nil {
+	err = mysqld.Start(ctx)
+	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
