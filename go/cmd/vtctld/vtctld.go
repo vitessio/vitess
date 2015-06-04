@@ -171,7 +171,8 @@ func main() {
 			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result := actionRepo.ApplyKeyspaceAction(action, keyspace, r)
+		ctx := context.Background()
+		result := actionRepo.ApplyKeyspaceAction(ctx, action, keyspace, r)
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
@@ -198,7 +199,8 @@ func main() {
 			http.Error(w, "no shard provided", http.StatusBadRequest)
 			return
 		}
-		result := actionRepo.ApplyShardAction(action, keyspace, shard, r)
+		ctx := context.Background()
+		result := actionRepo.ApplyShardAction(ctx, action, keyspace, shard, r)
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
@@ -225,7 +227,8 @@ func main() {
 			http.Error(w, "bad alias provided", http.StatusBadRequest)
 			return
 		}
-		result := actionRepo.ApplyTabletAction(action, tabletAlias, r)
+		ctx := context.Background()
+		result := actionRepo.ApplyTabletAction(ctx, action, tabletAlias, r)
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
@@ -252,11 +255,11 @@ func main() {
 
 	// serving graph
 	http.HandleFunc("/serving_graph/", func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
 		parts := strings.Split(r.URL.Path, "/")
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
-			ctx := context.Background()
 			cells, err := ts.GetKnownCells(ctx)
 			if err != nil {
 				httpError(w, "cannot get known cells: %v", err)
@@ -266,7 +269,6 @@ func main() {
 			return
 		}
 
-		ctx := context.Background()
 		servingGraph := topotools.DbServingGraph(ctx, ts, cell)
 		if modifyDbServingGraph != nil {
 			modifyDbServingGraph(ctx, ts, servingGraph)
@@ -500,8 +502,9 @@ func main() {
 			tmclient.NewTabletManagerClient(),
 			ts)
 
+		ctx := context.Background()
 		schemamanager.Run(
-			context.Background(),
+			ctx,
 			schemamanager.NewUIController(sqlStr, keyspace, w),
 			executor,
 		)
@@ -527,9 +530,9 @@ func main() {
 				log.Errorf("failed to get controller, error: %v", err)
 				return
 			}
-
+			ctx := context.Background()
 			err = schemamanager.Run(
-				context.Background(),
+				ctx,
 				controller,
 				schemamanager.NewTabletExecutor(
 					tmclient.NewTabletManagerClient(), ts),
