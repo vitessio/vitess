@@ -88,7 +88,7 @@ func (ar *ActionRepository) RegisterTabletAction(name, role string, method actio
 }
 
 // ApplyKeyspaceAction applies the provided action to the keyspace.
-func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName, keyspace string, r *http.Request) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: keyspace}
 
 	action, ok := ar.keyspaceActions[actionName]
@@ -97,8 +97,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 		return result
 	}
 
-	// FIXME(alainjobart) copy web context info
-	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action(ctx, wr, keyspace, r)
 	cancel()
@@ -111,7 +110,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *
 }
 
 // ApplyShardAction applies the provided action to the shard.
-func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, keyspace, shard string, r *http.Request) *ActionResult {
 	// if the shard name contains a '-', we assume it's the
 	// name for a ranged based shard, so we lower case it.
 	if strings.Contains(shard, "-") {
@@ -125,8 +124,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 		return result
 	}
 
-	// FIXME(alainjobart) copy web context info
-	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action(ctx, wr, keyspace, shard, r)
 	cancel()
@@ -139,7 +137,7 @@ func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string,
 }
 
 // ApplyTabletAction applies the provided action to the tablet.
-func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
 
 	action, ok := ar.tabletActions[actionName]
@@ -157,8 +155,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 	}
 
 	// run the action
-	// FIXME(alainjobart) copy web context info
-	ctx, cancel := context.WithTimeout(context.TODO(), *actionTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient(), *lockTimeout)
 	output, err := action.method(ctx, wr, tabletAlias, r)
 	cancel()
