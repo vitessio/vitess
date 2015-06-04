@@ -84,18 +84,18 @@ def setUpModule():
                      'test_keyspace'], auto_log=True)
 
     # Create destination shard.
-    dst_master.init_tablet('master', 'test_keyspace', '1')
-    dst_replica.init_tablet('replica', 'test_keyspace', '1')
+    dst_master.init_tablet('master', 'test_keyspace', '-')
+    dst_replica.init_tablet('replica', 'test_keyspace', '-')
     dst_master.start_vttablet(wait_for_state='NOT_SERVING')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/1',
+    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
                      dst_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # copy the schema
     utils.run_vtctl(['CopySchemaShard', src_replica.tablet_alias,
-                     'test_keyspace/1'], auto_log=True)
+                     'test_keyspace/-'], auto_log=True)
 
     # run the clone worked (this is a degenerate case, source and destination
     # both have the full keyrange. Happens to work correctly).
