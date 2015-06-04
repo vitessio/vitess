@@ -222,6 +222,8 @@ div.highlight {
 
 main {
   padding-top: 60px;
+  margin-left: 30%;
+  width: 100%;
 }
 main.clear-home {
   margin: 0 auto;
