@@ -291,6 +291,9 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	if len(node.children) > 0 {
 		return zkError(zookeeper.ZNOTEMPTY, "delete", zkPath)
 	}
+	if version != -1 && node.version != version {
+		return zkError(zookeeper.ZBADVERSION, "delete", zkPath)
+	}
 	delete(parent.children, node.name)
 	event := zookeeper.Event{
 		Type:  zookeeper.EVENT_DELETED,
