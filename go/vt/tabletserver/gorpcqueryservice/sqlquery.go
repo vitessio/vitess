@@ -46,7 +46,12 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutp
 // Execute is exposing tabletserver.SqlQuery.Execute
 func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	defer sq.server.HandlePanic(&err)
-	return sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), query, reply)
+	execErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), query, reply)
+	tabletserver.AddTabletErrorToQueryResult(execErr, reply)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return execErr
 }
 
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
