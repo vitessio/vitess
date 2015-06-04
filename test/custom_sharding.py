@@ -18,13 +18,7 @@ shard_0_rdonly = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_rdonly = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
-
 def setUpModule():
-  global vtgate_server
-  global vtgate_port
-
   try:
     environment.topo_server().setup()
 
@@ -35,19 +29,16 @@ def setUpModule():
         shard_1_rdonly.init_mysql(),
         ]
     utils.Vtctld().start()
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    utils.VtGate().start()
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
     raise
 
 def tearDownModule():
-  global vtgate_server
-
   if utils.options.skip_teardown:
     return
 
-  utils.vtgate_kill(vtgate_server)
   teardown_procs = [
       shard_0_master.teardown_mysql(),
       shard_0_rdonly.teardown_mysql(),
@@ -74,7 +65,7 @@ class TestCustomSharding(unittest.TestCase):
         'id':   start+x,
         'name': 'row %u' % (start+x),
         }
-      utils.vtgate_execute_shard(vtgate_port, sql, 'test_keyspace', shard,
+      utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                  bindvars=bindvars)
 
   def _check_data(self, shard, start, count, table='data'):
@@ -83,7 +74,7 @@ class TestCustomSharding(unittest.TestCase):
       bindvars = {
         'id':   start+x,
         }
-      qr = utils.vtgate_execute_shard(vtgate_port, sql, 'test_keyspace', shard,
+      qr = utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                       bindvars=bindvars)
       self.assertEqual(len(qr['Rows']), 1)
       # vtctl_json will print the JSON-encoded version of QueryResult,
@@ -189,7 +180,7 @@ primary key (id)
     # Now test SplitQuery API works (used in MapReduce usually, but bringing
     # up a full MR-capable cluster is too much for this test environment)
     sql = 'select id, name from data'
-    s = utils.vtgate_split_query(vtgate_port, sql, 'test_keyspace', 4)
+    s = utils.vtgate.split_query(sql, 'test_keyspace', 4)
     self.assertEqual(len(s), 4)
     shard0count = 0
     shard1count = 0
@@ -204,7 +195,7 @@ primary key (id)
     # run the queries, aggregate the results, make sure we have all rows
     rows = {}
     for q in s:
-      qr = utils.vtgate_execute_shard(vtgate_port, q['QueryShard']['Sql'],
+      qr = utils.vtgate.execute_shard(q['QueryShard']['Sql'],
                                       'test_keyspace', ",".join(q['QueryShard']['Shards']))
       for r in qr['Rows']:
         id = int(base64.b64decode(r[0]))
