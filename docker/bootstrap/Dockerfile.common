@@ -23,6 +23,14 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
+# Install etcd v0.4.6
+RUN mkdir -p /go/src/github.com/coreos && \
+    cd /go/src/github.com/coreos && \
+    curl -sL https://github.com/coreos/etcd/archive/v0.4.6.tar.gz | tar -xz && \
+    mv etcd-0.4.6 etcd && \
+    go install github.com/coreos/etcd && \
+    rm -rf /go/src/*
+
 # Install gRPC as root
 RUN cd /tmp && \
     git clone https://github.com/grpc/grpc.git && cd grpc && \
