@@ -213,7 +213,7 @@ var commands = []commandGroup{
 				"<keyspace/shard>",
 				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
 			command{"ListShardTablets", commandListShardTablets,
-				"<keyspace/shard>)",
+				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
 			command{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard> [<served tablet type1>,<served tablet type2>,...]",
