@@ -72,7 +72,7 @@ func (tr *TopoReader) GetSrvShard(ctx context.Context, req *topo.GetSrvShardArgs
 // in a keyspace.
 func (tr *TopoReader) GetEndPoints(ctx context.Context, req *topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
-	addrs, err := tr.ts.GetEndPoints(ctx, req.Cell, req.Keyspace, req.Shard, req.TabletType)
+	addrs, _, err := tr.ts.GetEndPoints(ctx, req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	if err != nil {
 		log.Warningf("GetEndPoints(%v,%v,%v,%v) failed: %v", req.Cell, req.Keyspace, req.Shard, req.TabletType, err)
 		tr.errorCount.Add(req.Cell, 1)

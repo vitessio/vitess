@@ -12,7 +12,7 @@ import (
 
 // UpdateEndPoints is a high level wrapper for TopoServer.UpdateEndPoints.
 // It generates trace spans.
-func UpdateEndPoints(ctx context.Context, ts Server, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints) error {
+func UpdateEndPoints(ctx context.Context, ts Server, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints, existingVersion int64) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateEndPoints")
 	span.Annotate("cell", cell)
@@ -21,5 +21,5 @@ func UpdateEndPoints(ctx context.Context, ts Server, cell, keyspace, shard strin
 	span.Annotate("tablet_type", string(tabletType))
 	defer span.Finish()
 
-	return ts.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs)
+	return ts.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion)
 }

@@ -2008,7 +2008,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	tabletType := topo.TabletType(subFlags.Arg(2))
-	endPoints, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
+	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
 	if err == nil {
 		wr.Logger().Printf("%v\n", jscfg.ToJSON(endPoints))
 	}

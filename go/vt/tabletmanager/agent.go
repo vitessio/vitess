@@ -45,6 +45,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topotools"
 )
 
 var (
@@ -374,16 +375,13 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 }
 
 func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
-	if !agent.Tablet().IsRunningQueryService() {
+	ti := agent.Tablet()
+	if !ti.IsRunningQueryService() {
 		return nil
 	}
 
 	// Check to see our address is registered in the right place.
-	addr, err := agent.Tablet().Tablet.EndPoint()
-	if err != nil {
-		return err
-	}
-	return agent.TopoServer.UpdateTabletEndpoint(ctx, agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
+	return topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, ti.Tablet)
 }
 
 // Start validates and updates the topology records for the tablet, and performs

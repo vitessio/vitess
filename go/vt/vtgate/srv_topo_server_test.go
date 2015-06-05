@@ -207,8 +207,8 @@ func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 	return nil, fmt.Errorf("Unknown keyspace")
 }
 
-func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	return nil, fmt.Errorf("No endpoints")
+func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+	return nil, -1, fmt.Errorf("No endpoints")
 }
 
 type fakeTopoRemoteMaster struct {
@@ -224,9 +224,9 @@ func (ft *fakeTopoRemoteMaster) GetSrvShard(ctx context.Context, cell, keyspace,
 	}, nil
 }
 
-func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
 	if cell != ft.cell && cell != ft.remoteCell {
-		return nil, fmt.Errorf("GetEndPoints: invalid cell: %v", cell)
+		return nil, -1, fmt.Errorf("GetEndPoints: invalid cell: %v", cell)
 	}
 	if cell == ft.cell || tabletType != topo.TYPE_MASTER {
 		return &topo.EndPoints{
@@ -236,7 +236,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 					Health: nil,
 				},
 			},
-		}, nil
+		}, -1, nil
 	}
 	return &topo.EndPoints{
 		Entries: []topo.EndPoint{
@@ -245,7 +245,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 				Health: nil,
 			},
 		},
-	}, nil
+	}, -1, nil
 }
 
 // TestRemoteMaster will test getting endpoints for remote master.
@@ -255,7 +255,7 @@ func TestRemoteMaster(t *testing.T) {
 	rsts.enableRemoteMaster = true
 
 	// remote cell for master
-	ep, err := rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	ep, _, err := rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints got unexpected error: %v", err)
 	}
@@ -268,23 +268,23 @@ func TestRemoteMaster(t *testing.T) {
 	}
 
 	// no remote cell for non-master
-	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "0", topo.TYPE_REPLICA)
+	ep, _, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "0", topo.TYPE_REPLICA)
 	if err == nil {
 		t.Fatalf("GetEndPoints did not return an error")
 	}
 
 	// no remote cell for master
 	rsts.enableRemoteMaster = false
-	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "2", topo.TYPE_MASTER)
+	ep, _, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "2", topo.TYPE_MASTER)
 	if err == nil {
 		t.Fatalf("GetEndPoints did not return an error")
 	}
 	// use cached value from above
-	ep, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
+	ep, _, err = rsts.GetEndPoints(context.Background(), "cell3", "test_ks", "1", topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints got unexpected error: %v", err)
 	}
-	ep, err = rsts.GetEndPoints(context.Background(), "cell1", "test_ks", "1", topo.TYPE_MASTER)
+	ep, _, err = rsts.GetEndPoints(context.Background(), "cell1", "test_ks", "1", topo.TYPE_MASTER)
 	if ep.Entries[0].Uid != 0 {
 		t.Fatalf("GetEndPoints got %v want 0", ep.Entries[0].Uid)
 	}

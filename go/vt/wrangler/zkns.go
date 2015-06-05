@@ -154,7 +154,7 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 	if tabletType == "action" || tabletType == "actionlog" {
 		return nil, nil
 	}
-	addrs, err := wr.ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+	addrs, _, err := wr.ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err
 	}

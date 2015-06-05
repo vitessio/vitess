@@ -74,14 +74,14 @@ func TestRebuildShardRace(t *testing.T) {
 	}
 
 	// Check initial state.
-	ep, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER)
+	ep, _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
 	if got, want := len(ep.Entries), 1; got != want {
 		t.Fatalf("len(Entries) = %v, want %v", got, want)
 	}
-	ep, err = ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA)
+	ep, _, err = ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA)
 	if err != nil {
 		t.Fatalf("GetEndPoints: %v", err)
 	}
@@ -135,10 +135,91 @@ func TestRebuildShardRace(t *testing.T) {
 	<-done
 
 	// Check that the rebuild picked up both changes.
-	if _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("first change wasn't picked up by second rebuild")
 	}
-	if _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
+	if _, _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_REPLICA); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
 		t.Errorf("second change was overwritten by first rebuild finishing late")
 	}
+}
+
+func TestUpdateTabletEndpoints(t *testing.T) {
+	ctx := context.Background()
+	cell := "test_cell"
+
+	// Set up topology.
+	ts := zktopo.NewTestServer(t, []string{cell})
+	si, err := GetOrCreateShard(ctx, ts, testKeyspace, testShard)
+	if err != nil {
+		t.Fatalf("GetOrCreateShard: %v", err)
+	}
+	si.Cells = append(si.Cells, cell)
+	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+		t.Fatalf("UpdateShard: %v", err)
+	}
+
+	tablet1 := addTablet(ctx, t, ts, 1, cell, topo.TYPE_MASTER).Tablet
+	tablet2 := addTablet(ctx, t, ts, 2, cell, topo.TYPE_REPLICA).Tablet
+
+	update := func(tablet *topo.Tablet) {
+		if err := UpdateTabletEndpoints(ctx, ts, tablet); err != nil {
+			t.Fatalf("UpdateTabletEndpoints(%v): %v", tablet, err)
+		}
+	}
+	expect := func(tabletType topo.TabletType, want int) {
+		eps, _, err := ts.GetEndPoints(ctx, cell, testKeyspace, testShard, tabletType)
+		if err != nil && err != topo.ErrNoNode {
+			t.Errorf("GetEndPoints(%v): %v", tabletType, err)
+			return
+		}
+		var got int
+		if err == nil {
+			got = len(eps.Entries)
+			if got == 0 {
+				t.Errorf("len(EndPoints) = 0, expected ErrNoNode instead")
+			}
+		}
+		if got != want {
+			t.Errorf("len(GetEndPoints(%v)) = %v, want %v. EndPoints = %v", tabletType, len(eps.Entries), want, eps)
+		}
+	}
+
+	// Update tablets. This should create the serving graph dirs too.
+	update(tablet1)
+	expect(topo.TYPE_MASTER, 1)
+	update(tablet2)
+	expect(topo.TYPE_REPLICA, 1)
+
+	// Re-update an identical tablet.
+	update(tablet1)
+	expect(topo.TYPE_MASTER, 1)
+
+	// Change a tablet, but keep it the same type.
+	tablet2.Hostname += "extra"
+	update(tablet2)
+	expect(topo.TYPE_REPLICA, 1)
+
+	// Move the master to replica.
+	tablet1.Type = topo.TYPE_REPLICA
+	update(tablet1)
+	expect(topo.TYPE_MASTER, 0)
+	expect(topo.TYPE_REPLICA, 2)
+
+	// Take a replica out of serving.
+	tablet1.Type = topo.TYPE_SPARE
+	update(tablet1)
+	expect(topo.TYPE_MASTER, 0)
+	expect(topo.TYPE_REPLICA, 1)
+
+	// Put it back to serving.
+	tablet1.Type = topo.TYPE_REPLICA
+	update(tablet1)
+	expect(topo.TYPE_MASTER, 0)
+	expect(topo.TYPE_REPLICA, 2)
+
+	// Move a replica to master.
+	tablet2.Type = topo.TYPE_MASTER
+	update(tablet2)
+	expect(topo.TYPE_MASTER, 1)
+	expect(topo.TYPE_REPLICA, 1)
 }

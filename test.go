@@ -43,6 +43,8 @@ var (
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
+
+	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
 
 // Config is the overall object serialized in test/config.json.
@@ -62,6 +64,9 @@ type Test struct {
 func (t *Test) run(dir string) error {
 	// Teardown is unnecessary since Docker kills everything.
 	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
+	if *extraArgs != "" {
+		testCmd += " " + *extraArgs
+	}
 	dockerCmd := exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
 	dockerCmd.Dir = dir
 	t.cmd = dockerCmd

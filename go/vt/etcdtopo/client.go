@@ -19,6 +19,7 @@ type Client interface {
 		prevValue string, prevIndex uint64) (*etcd.Response, error)
 	Create(key string, value string, ttl uint64) (*etcd.Response, error)
 	Delete(key string, recursive bool) (*etcd.Response, error)
+	DeleteDir(key string) (*etcd.Response, error)
 	Get(key string, sort, recursive bool) (*etcd.Response, error)
 	Set(key string, value string, ttl uint64) (*etcd.Response, error)
 	SetCluster(machines []string) bool
