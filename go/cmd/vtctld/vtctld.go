@@ -23,10 +23,10 @@ import (
 var (
 	templateDir               = flag.String("templates", "", "directory containing templates")
 	debug                     = flag.Bool("debug", false, "recompile templates for every request")
-	schemaChangeDir           = flag.String("schema-change-dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
-	schemaChangeController    = flag.String("schema-change-controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
-	schemaChangeCheckInterval = flag.Int("schema-change-check-interval", 60, "this value decides how often we check schema change dir, in seconds")
-	schemaChangeUser          = flag.String("schema-change-user", "", "The user who submits this schema change.")
+	schemaChangeDir           = flag.String("schema_change_dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
+	schemaChangeController    = flag.String("schema_change_controller", "", "schema change controller is responsible for finding schema changes and responsing schema change events")
+	schemaChangeCheckInterval = flag.Int("schema_change_check_interval", 60, "this value decides how often we check schema change dir, in seconds")
+	schemaChangeUser          = flag.String("schema_change_user", "", "The user who submits this schema change.")
 )
 
 func init() {
