@@ -139,22 +139,31 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	var errs concurrency.AllErrorRecorder
 	oldMasterAlias := si.MasterAlias
 
-	// Update the tablet records for the old and new master concurrently.
-	// We don't need a lock to update them because they are the source of truth,
-	// not derived values (like the serving graph).
+	// Update the tablet records and serving graph for the old and new master concurrently.
 	event.DispatchUpdate(ev, "updating old and new master tablet records")
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		// Update our own record to master.
+		var updatedTablet *topo.Tablet
 		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
 			func(tablet *topo.Tablet) error {
 				tablet.Type = topo.TYPE_MASTER
 				tablet.Health = nil
+				updatedTablet = tablet
 				return nil
 			})
-		errs.RecordError(err)
-		wg.Done()
+		if err != nil {
+			errs.RecordError(err)
+			return
+		}
+
+		// Update the serving graph for the tablet.
+		if updatedTablet != nil {
+			errs.RecordError(
+				topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, updatedTablet))
+		}
 	}()
 
 	if !oldMasterAlias.IsZero() {
@@ -168,14 +177,19 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 					oldMasterTablet = tablet
 					return nil
 				})
-			errs.RecordError(err)
-			wg.Done()
 			if err != nil {
+				errs.RecordError(err)
+				wg.Done()
 				return
 			}
 
-			// Tell the old master to refresh its state. We don't need to wait for it.
 			if oldMasterTablet != nil {
+				// Update the serving graph.
+				errs.RecordError(
+					topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, oldMasterTablet))
+				wg.Done()
+
+				// Tell the old master to refresh its state. We don't need to wait for it.
 				tmc := tmclient.NewTabletManagerClient()
 				tmc.RefreshState(ctx, topo.NewTabletInfo(oldMasterTablet, -1))
 			}
@@ -198,23 +212,23 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *topo.Shard) error {
+	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *topo.Shard) error {
 		shard.MasterAlias = tablet.Alias
 		return nil
 	})
-
-	// Rebuild the shard serving graph in the necessary cells.
-	// If it's a cross-cell reparent, rebuild all cells (by passing nil).
-	// If it's a same-cell reparent, we only need to rebuild the master cell.
-	event.DispatchUpdate(ev, "rebuilding shard serving graph")
-	var cells []string
-	if oldMasterAlias.Cell == tablet.Alias.Cell {
-		cells = []string{tablet.Alias.Cell}
-	}
-	logger := logutil.NewConsoleLogger()
-	log.Infof("finalizeTabletExternallyReparented: rebuilding shard")
-	if _, err = topotools.RebuildShard(ctx, logger, agent.TopoServer, tablet.Keyspace, tablet.Shard, cells, agent.LockTimeout); err != nil {
+	if err != nil {
 		return err
+	}
+
+	// We already took care of updating the serving graph for the old and new masters.
+	// All that's left now is in case of a cross-cell reparent, we need to update the
+	// master cell setting in the SrvShard records of all cells.
+	if oldMasterAlias.Cell != tablet.Alias.Cell {
+		event.DispatchUpdate(ev, "rebuilding shard serving graph")
+		log.Infof("finalizeTabletExternallyReparented: updating SrvShard in all cells for cross-cell reparent")
+		if err := topotools.UpdateAllSrvShards(ctx, agent.TopoServer, si); err != nil {
+			return err
+		}
 	}
 
 	event.DispatchUpdate(ev, "finished")

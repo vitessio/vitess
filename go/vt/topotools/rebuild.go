@@ -201,13 +201,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		go func() {
 			defer wg.Done()
 			log.Infof("updating shard serving graph in cell %v for %v/%v", cell, si.Keyspace(), si.ShardName())
-			srvShard := &topo.SrvShard{
-				Name:       si.ShardName(),
-				KeyRange:   si.KeyRange,
-				MasterCell: si.MasterAlias.Cell,
-			}
-
-			if err := ts.UpdateSrvShard(ctx, cell, si.Keyspace(), si.ShardName(), srvShard); err != nil {
+			if err := UpdateSrvShard(ctx, ts, cell, si); err != nil {
 				fatalErrs.RecordError(err)
 				log.Warningf("writing serving data in cell %v for %v/%v failed: %v", cell, si.Keyspace(), si.ShardName(), err)
 			}
@@ -427,6 +421,33 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 		}
 	}
 
+	wg.Wait()
+	return errs.Error()
+}
+
+// UpdateSrvShard creates the SrvShard object based on the global ShardInfo,
+// and writes it to the given cell.
+func UpdateSrvShard(ctx context.Context, ts topo.Server, cell string, si *topo.ShardInfo) error {
+	srvShard := &topo.SrvShard{
+		Name:       si.ShardName(),
+		KeyRange:   si.KeyRange,
+		MasterCell: si.MasterAlias.Cell,
+	}
+	return ts.UpdateSrvShard(ctx, cell, si.Keyspace(), si.ShardName(), srvShard)
+}
+
+// UpdateAllSrvShards calls UpdateSrvShard for all cells concurrently.
+func UpdateAllSrvShards(ctx context.Context, ts topo.Server, si *topo.ShardInfo) error {
+	wg := sync.WaitGroup{}
+	errs := concurrency.AllErrorRecorder{}
+
+	for _, cell := range si.Cells {
+		wg.Add(1)
+		go func(cell string) {
+			errs.RecordError(UpdateSrvShard(ctx, ts, cell, si))
+			wg.Done()
+		}(cell)
+	}
 	wg.Wait()
 	return errs.Error()
 }
