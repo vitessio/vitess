@@ -50,10 +50,10 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
-// FromRPCError recovers a VitessError from an RPCError (which is how VitessErrors
+// FromRPCError recovers a VitessError from a *RPCError (which is how VitessErrors
 // are transmitted across RPC boundaries).
-func FromRPCError(rpcErr mproto.RPCError) error {
-	if rpcErr.Code == 0 && rpcErr.Message == "" {
+func FromRPCError(rpcErr *mproto.RPCError) error {
+	if rpcErr == nil {
 		return nil
 	}
 	return &VitessError{
