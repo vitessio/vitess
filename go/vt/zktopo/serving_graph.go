@@ -269,19 +269,6 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 	return jscfg.ToJSON(addrs), nil
 }
 
-// UpdateTabletEndpoint is part of the topo.Server interface
-func (zkts *Server) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	f := func(oldValue string, oldStat zk.Stat) (string, error) {
-		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
-	}
-	err := zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err == errSkipUpdate || zookeeper.IsError(err, zookeeper.ZNONODE) {
-		err = nil
-	}
-	return err
-}
-
 // WatchEndPoints is part of the topo.Server interface
 func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
 	filePath := zkPathForVtName(cell, keyspace, shard, tabletType)

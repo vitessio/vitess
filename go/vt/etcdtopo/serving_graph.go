@@ -236,39 +236,6 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 	return getNodeNames(resp)
 }
 
-// UpdateTabletEndpoint implements topo.Server.
-func (s *Server) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	for {
-		addrs, version, err := s.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
-		if err == topo.ErrNoNode {
-			// It's ok if the EndPoints file doesn't exist yet. See topo.Server.
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		// Update or add the record for the specified tablet.
-		found := false
-		for i, ep := range addrs.Entries {
-			if ep.Uid == addr.Uid {
-				found = true
-				addrs.Entries[i] = *addr
-				break
-			}
-		}
-		if !found {
-			addrs.Entries = append(addrs.Entries, *addr)
-		}
-
-		// Update the record
-		err = s.updateEndPoints(cell, keyspace, shard, tabletType, addrs, version)
-		if err != topo.ErrBadVersion {
-			return err
-		}
-	}
-}
-
 // WatchEndPoints is part of the topo.Server interface
 func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)

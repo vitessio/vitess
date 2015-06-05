@@ -649,19 +649,6 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
 }
 
-// UpdateTabletEndpoint is part of the topo.Server interface
-func (tee *Tee) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	if err := tee.primary.UpdateTabletEndpoint(ctx, cell, keyspace, shard, tabletType, addr); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateTabletEndpoint(ctx, cell, keyspace, shard, tabletType, addr); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateTabletEndpoint(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return nil
-}
-
 // WatchEndPoints is part of the topo.Server interface.
 // We only watch for changes on the primary.
 func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {

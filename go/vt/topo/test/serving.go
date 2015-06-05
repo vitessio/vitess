@@ -118,22 +118,6 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
-	if err := ts.UpdateTabletEndpoint(ctx, cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.EndPoint{Uid: 2, Host: "host2"}); err != nil {
-		t.Fatalf("UpdateTabletEndpoint(invalid): %v", err)
-	}
-	if err := ts.UpdateTabletEndpoint(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 1, Host: "host2"}); err != nil {
-		t.Fatalf("UpdateTabletEndpoint(master): %v", err)
-	}
-	if addrs, _, err := ts.GetEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
-		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
-	}
-	if err := ts.UpdateTabletEndpoint(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 3, Host: "host3"}); err != nil {
-		t.Fatalf("UpdateTabletEndpoint(master): %v", err)
-	}
-	if addrs, _, err := ts.GetEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 2 {
-		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
-	}
-
 	if err := ts.DeleteEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_REPLICA, -1); err != topo.ErrNoNode {
 		t.Errorf("DeleteEndPoints(unknown): %v", err)
 	}

@@ -266,12 +266,6 @@ type Server interface {
 	// in this cell. They shall be sorted.
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 
-	// UpdateTabletEndpoint updates a single tablet record in the
-	// already computed serving graph. The update has to be somewhat
-	// atomic, so it requires Server intrisic knowledge.
-	// If the node doesn't exist, it is not updated, this is not an error.
-	UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addr *EndPoint) error
-
 	//
 	// Keyspace and Shard locks for actions, global.
 	//

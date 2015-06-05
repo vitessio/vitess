@@ -192,11 +192,6 @@ func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string,
 	return errNotImplemented
 }
 
-// UpdateTabletEndpoint implements topo.Server.
-func (ft FakeTopo) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	return errNotImplemented
-}
-
 // LockKeyspaceForAction implements topo.Server.
 func (ft FakeTopo) LockKeyspaceForAction(ctx context.Context, keyspace, contents string) (string, error) {
 	return "", errNotImplemented
