@@ -865,12 +865,12 @@ class Vtctld(object):
   def start(self):
     args = environment.binary_args('vtctld') + [
             '-debug',
-            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '-log_dir', environment.vtlogroot,
-            '-port', str(self.port),
-            '-schema-change-dir', self.schema_change_dir,
-            '-schema-change-controller', 'local',
-            '-schema-change-check-interval', '1',
+            '--templates', environment.vttop + '/go/cmd/vtctld/templates',
+            '--log_dir', environment.vtlogroot,
+            '--port', str(self.port),
+            '--schema_change_dir', self.schema_change_dir,
+            '--schema_change_controller', 'local',
+            '--schema_change_check_interval', '1',
             ] + \
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags() + \
