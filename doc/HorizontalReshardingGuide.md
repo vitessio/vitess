@@ -340,21 +340,7 @@ vtctl ScrapTablet <source tablet alias>`
 vtctl DeleteTablet <source tablet alias>`
 ```
 
-### Step 6.2: Rebuild the serving graph
-
-Run the following command:
-
-``` sh
-vtctl RebuildKeyspaceGraph <keyspace name>
-```
-
-For this example, the command is:
-
-``` sh
-vtctl RebuildKeyspaceGraph user_keyspace
-```
-
-### Step 6.3: Delete the source shard
+### Step 6.2: Delete the source shard
 
 Run the following command:
 
