@@ -25,8 +25,8 @@ var lockSrvShard = flag.Bool("lock_srvshard", true, "serialize serving graph upd
 // Re-read from TopologyServer to make sure we are using the side
 // effects of all actions.
 //
-// This function locks individual SvrShard paths, so it doesn't need a lock
-// on the shard.
+// This function will start each cell over from the beginning on ErrBadVersion,
+// so it doesn't need a lock on the shard.
 func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keyspace, shard string, cells []string, lockTimeout time.Duration) (*topo.ShardInfo, error) {
 	log.Infof("RebuildShard %v/%v", keyspace, shard)
 
@@ -50,64 +50,10 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 			continue
 		}
 
-		// start with the master if it's in the current cell
-		tabletsAsMap := make(map[topo.TabletAlias]bool)
-		if shardInfo.MasterAlias.Cell == cell {
-			tabletsAsMap[shardInfo.MasterAlias] = true
-		}
-
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-
-			// Lock the SrvShard so we don't race with other rebuilds of the same
-			// shard in the same cell (e.g. from our peer tablets).
-			actionNode := actionnode.RebuildSrvShard()
-			lockCtx, cancel := context.WithTimeout(ctx, lockTimeout)
-			lockPath, err := actionNode.LockSrvShard(lockCtx, ts, cell, keyspace, shard)
-			cancel()
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-
-			// read the ShardReplication object to find tablets
-			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
-				return
-			}
-
-			// add all relevant tablets to the map
-			for _, rl := range sri.ReplicationLinks {
-				tabletsAsMap[rl.TabletAlias] = true
-			}
-
-			// convert the map to a list
-			aliases := make([]topo.TabletAlias, 0, len(tabletsAsMap))
-			for a := range tabletsAsMap {
-				aliases = append(aliases, a)
-			}
-
-			// read all the Tablet records
-			tablets, err := topo.GetTabletMap(ctx, ts, aliases)
-			switch err {
-			case nil:
-				// keep going, we're good
-			case topo.ErrPartialResult:
-				log.Warningf("Got ErrPartialResult from topo.GetTabletMap in cell %v, some tablets may not be added properly to serving graph", cell)
-			default:
-				rec.RecordError(fmt.Errorf("GetTabletMap in cell %v failed: %v", cell, err))
-				return
-			}
-
-			// write the data we need to
-			rebuildErr := rebuildCellSrvShard(ctx, log, ts, shardInfo, cell, tablets)
-
-			// and unlock
-			if err := actionNode.UnlockSrvShard(ctx, ts, cell, keyspace, shard, lockPath, rebuildErr); err != nil {
-				rec.RecordError(err)
-			}
+			rec.RecordError(rebuildCellSrvShard(ctx, log, ts, shardInfo, cell))
 		}(cell)
 	}
 	wg.Wait()
@@ -117,123 +63,207 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 
 // rebuildCellSrvShard computes and writes the serving graph data to a
 // single cell
-func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server, shardInfo *topo.ShardInfo, cell string, tablets map[topo.TabletAlias]*topo.TabletInfo) error {
-	log.Infof("rebuildCellSrvShard %v/%v in cell %v", shardInfo.Keyspace(), shardInfo.ShardName(), cell)
+func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server, si *topo.ShardInfo, cell string) (err error) {
+	log.Infof("rebuildCellSrvShard %v/%v in cell %v", si.Keyspace(), si.ShardName(), cell)
 
-	// Get all existing db types so they can be removed if nothing
-	// had been edited.
-	existingTabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName())
-	if err != nil {
-		if err != topo.ErrNoNode {
-			return err
-		}
-	}
-
-	// Update db type addresses in the serving graph
-	//
-	// locationAddrsMap is a map:
-	//   key: tabletType
-	//   value: EndPoints (list of server records)
-	locationAddrsMap := make(map[topo.TabletType]*topo.EndPoints)
-	for _, tablet := range tablets {
-		if !tablet.IsInReplicationGraph() {
-			// only valid case is a scrapped master in the
-			// catastrophic reparent case
-			log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
-			continue
-		}
-
-		// Check IsInServingGraph, we don't want to add tablets that
-		// are not serving
-		if !tablet.IsInServingGraph() {
-			continue
-		}
-
-		// Check the Keyspace and Shard for the tablet are right
-		if tablet.Keyspace != shardInfo.Keyspace() || tablet.Shard != shardInfo.ShardName() {
-			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v", tablet.Alias, shardInfo.Keyspace(), shardInfo.ShardName(), tablet.Keyspace, tablet.Shard)
-		}
-
-		// Add the tablet to the list
-		addrs, ok := locationAddrsMap[tablet.Type]
-		if !ok {
-			addrs = topo.NewEndPoints()
-			locationAddrsMap[tablet.Type] = addrs
-		}
-		entry, err := tablet.Tablet.EndPoint()
+	if *lockSrvShard {
+		// This lock is only necessary until all tablets are upgraded to lock-free.
+		actionNode := actionnode.RebuildSrvShard()
+		lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, si.Keyspace(), si.ShardName())
 		if err != nil {
-			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
+			return fmt.Errorf("can't lock SrvShard for rebuild: %v", err)
+		}
+
+		defer func() {
+			actionNode.UnlockSrvShard(ctx, ts, cell, si.Keyspace(), si.ShardName(), lockPath, err)
+		}()
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Read existing EndPoints node versions, so we know if any
+		// changes sneak in after we read the tablets.
+		versions, err := getEndPointsVersions(ctx, ts, cell, si.Keyspace(), si.ShardName())
+
+		// Get all tablets in this cell/shard.
+		tablets, err := topo.GetTabletMapForShardByCell(ctx, ts, si.Keyspace(), si.ShardName(), []string{cell})
+		if err != nil {
+			if err != topo.ErrPartialResult {
+				return err
+			}
+			log.Warningf("Got ErrPartialResult from topo.GetTabletMapForShardByCell(%v), some tablets may not be added properly to serving graph", cell)
+		}
+
+		// Build up the serving graph from scratch.
+		serving := make(map[topo.TabletType]*topo.EndPoints)
+		for _, tablet := range tablets {
+			if !tablet.IsInReplicationGraph() {
+				// only valid case is a scrapped master in the
+				// catastrophic reparent case
+				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it is being ignored in the rebuild)", tablet.Alias)
+				continue
+			}
+
+			// Only add serving types.
+			if !tablet.IsInServingGraph() {
+				continue
+			}
+
+			// Check the Keyspace and Shard for the tablet are right.
+			if tablet.Keyspace != si.Keyspace() || tablet.Shard != si.ShardName() {
+				return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v", tablet.Alias, si.Keyspace(), si.ShardName(), tablet.Keyspace, tablet.Shard)
+			}
+
+			// Add the tablet to the list.
+			endpoints, ok := serving[tablet.Type]
+			if !ok {
+				endpoints = topo.NewEndPoints()
+				serving[tablet.Type] = endpoints
+			}
+			entry, err := tablet.EndPoint()
+			if err != nil {
+				log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
+				continue
+			}
+			endpoints.Entries = append(endpoints.Entries, *entry)
+		}
+
+		wg := sync.WaitGroup{}
+		fatalErrs := concurrency.AllErrorRecorder{}
+		retryErrs := concurrency.AllErrorRecorder{}
+
+		// Write nodes that should exist.
+		for tabletType, endpoints := range serving {
+			wg.Add(1)
+			go func(tabletType topo.TabletType, endpoints *topo.EndPoints) {
+				defer wg.Done()
+
+				log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, si.Keyspace(), si.ShardName(), tabletType)
+
+				version, ok := versions[tabletType]
+				if !ok {
+					// This type didn't exist when we first checked.
+					// Try to create, but only if it still doesn't exist.
+					if err := ts.CreateEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, endpoints); err != nil {
+						log.Warningf("CreateEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
+						switch err {
+						case topo.ErrNodeExists:
+							retryErrs.RecordError(err)
+						default:
+							fatalErrs.RecordError(err)
+						}
+					}
+					return
+				}
+
+				// Update only if the version matches.
+				if err := ts.UpdateEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, endpoints, version); err != nil {
+					log.Warningf("UpdateEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
+					switch err {
+					case topo.ErrBadVersion, topo.ErrNoNode:
+						retryErrs.RecordError(err)
+					default:
+						fatalErrs.RecordError(err)
+					}
+				}
+			}(tabletType, endpoints)
+		}
+
+		// Delete nodes that shouldn't exist.
+		for tabletType, version := range versions {
+			if _, ok := serving[tabletType]; !ok {
+				wg.Add(1)
+				go func(tabletType topo.TabletType, version int64) {
+					defer wg.Done()
+					log.Infof("removing stale db type from serving graph: %v", tabletType)
+					if err := ts.DeleteEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, version); err != nil && err != topo.ErrNoNode {
+						log.Warningf("DeleteEndPoints(%v, %v, %v) failed during rebuild: %v", cell, si, tabletType, err)
+						switch err {
+						case topo.ErrNoNode:
+							// Someone else deleted it, which is fine.
+						case topo.ErrBadVersion:
+							retryErrs.RecordError(err)
+						default:
+							fatalErrs.RecordError(err)
+						}
+					}
+				}(tabletType, version)
+			}
+		}
+
+		// Update srvShard object
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			log.Infof("updating shard serving graph in cell %v for %v/%v", cell, si.Keyspace(), si.ShardName())
+			srvShard := &topo.SrvShard{
+				Name:       si.ShardName(),
+				KeyRange:   si.KeyRange,
+				MasterCell: si.MasterAlias.Cell,
+			}
+
+			if err := ts.UpdateSrvShard(ctx, cell, si.Keyspace(), si.ShardName(), srvShard); err != nil {
+				fatalErrs.RecordError(err)
+				log.Warningf("writing serving data in cell %v for %v/%v failed: %v", cell, si.Keyspace(), si.ShardName(), err)
+			}
+		}()
+
+		wg.Wait()
+
+		// If there are any fatal errors, give up.
+		if fatalErrs.HasErrors() {
+			return fatalErrs.Error()
+		}
+		// If there are any retry errors, try again.
+		if retryErrs.HasErrors() {
 			continue
 		}
-		addrs.Entries = append(addrs.Entries, *entry)
+		// Otherwise, success!
+		return nil
+	}
+}
+
+func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (map[topo.TabletType]int64, error) {
+	// Get all existing tablet types.
+	tabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
+	if err != nil {
+		if err == topo.ErrNoNode {
+			// This just means there aren't any EndPoints lists yet.
+			return nil, nil
+		}
+		return nil, err
 	}
 
-	// we're gonna parallelize a lot here:
-	// - writing all the tabletTypes records
-	// - removing the unused records
-	// - writing SrvShard
-	rec := concurrency.AllErrorRecorder{}
+	// Get node versions.
 	wg := sync.WaitGroup{}
+	errs := concurrency.AllErrorRecorder{}
+	versions := make(map[topo.TabletType]int64)
+	mu := sync.Mutex{}
 
-	// write all the EndPoints nodes everywhere we want them
-	for tabletType, addrs := range locationAddrsMap {
+	for _, tabletType := range tabletTypes {
 		wg.Add(1)
-		go func(tabletType topo.TabletType, addrs *topo.EndPoints) {
-			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType)
-			span := trace.NewSpanFromContext(ctx)
-			span.StartClient("TopoServer.UpdateEndPoints")
-			span.Annotate("tablet_type", string(tabletType))
-			if err := ts.UpdateEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs, -1); err != nil {
-				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, err))
+		go func(tabletType topo.TabletType) {
+			defer wg.Done()
+
+			_, version, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+			if err != nil && err != topo.ErrNoNode {
+				errs.RecordError(err)
+				return
 			}
-			span.Finish()
-			wg.Done()
-		}(tabletType, addrs)
+
+			mu.Lock()
+			versions[tabletType] = version
+			mu.Unlock()
+		}(tabletType)
 	}
-
-	// Delete any pre-existing paths that were not updated by this process.
-	// That's the existingTabletTypes - locationAddrsMap
-	for _, tabletType := range existingTabletTypes {
-		if _, ok := locationAddrsMap[tabletType]; !ok {
-			wg.Add(1)
-			go func(tabletType topo.TabletType) {
-				log.Infof("removing stale db type from serving graph: %v", tabletType)
-				span := trace.NewSpanFromContext(ctx)
-				span.StartClient("TopoServer.DeleteEndPoints")
-				span.Annotate("tablet_type", string(tabletType))
-				if err := ts.DeleteEndPoints(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, -1); err != nil {
-					log.Warningf("unable to remove stale db type %v from serving graph: %v", tabletType, err)
-				}
-				span.Finish()
-				wg.Done()
-			}(tabletType)
-		}
-	}
-
-	// Update srvShard object
-	wg.Add(1)
-	go func() {
-		log.Infof("updating shard serving graph in cell %v for %v/%v", cell, shardInfo.Keyspace(), shardInfo.ShardName())
-		srvShard := &topo.SrvShard{
-			Name:       shardInfo.ShardName(),
-			KeyRange:   shardInfo.KeyRange,
-			MasterCell: shardInfo.MasterAlias.Cell,
-		}
-
-		span := trace.NewSpanFromContext(ctx)
-		span.StartClient("TopoServer.UpdateSrvShard")
-		span.Annotate("keyspace", shardInfo.Keyspace())
-		span.Annotate("shard", shardInfo.ShardName())
-		span.Annotate("cell", cell)
-		if err := ts.UpdateSrvShard(ctx, cell, shardInfo.Keyspace(), shardInfo.ShardName(), srvShard); err != nil {
-			rec.RecordError(fmt.Errorf("writing serving data in cell %v for %v/%v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), err))
-		}
-		span.Finish()
-		wg.Done()
-	}()
 
 	wg.Wait()
-	return rec.Error()
+	return versions, errs.Error()
 }
 
 func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, endpoint *topo.EndPoint) error {
