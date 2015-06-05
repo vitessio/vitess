@@ -70,6 +70,10 @@ table.comparison td {
   border-bottom: solid 1px #555;
 }
 
+table tbody td {
+  vertical-align: top;
+}
+
 @media screen and (min-width: 620px) {
   .article-nav-link::before,
   .article-nav-link:visited::before {
@@ -597,6 +601,13 @@ h5 {
   padding-top: 1.3em;
 }
 
+/* h2/h3/h4 scroll targets need to accommodate the navbar */
+article h2[id],
+article h3[id],
+article h4[id] {
+  padding-top: 80px;
+  margin-top: -40px;
+}
 
 /*** fonts ***/
 
