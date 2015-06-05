@@ -170,18 +170,6 @@ As vtctl performs operations, it updates the lockserver as needed. Other Vitess 
 
 vtworker also lets you easily add other validation procedures. You could do in-tablet integrity checks to verify foreign-key-like relationships or cross-shard integrity checks if, for example, an index table in one keyspace references data in another keyspace.
 
-### vtprimecache
-
-**vtprimecache** is a MySQL cache primer that enables faster replication.
-If the single MySQL replication thread falls behind, vtprimecache activates
-and reads the available relay logs. It then uses a few MySQL connections to
-execute modified statements and prime the MySQL buffer cache.
-
-For example, if vtprimecache determines that the replication thread will
-update a particular data set in a few seconds, vtprimecache selects the
-same data ahead of time to prime the MySQL buffer cache. In practice,
-vtprimecache improves replication speed by 30 percent to 40 percent.
-
 ### Other support tools
 
 Vitess also includes the following tools:
