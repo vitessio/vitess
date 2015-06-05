@@ -5,6 +5,7 @@
 package topotools
 
 import (
+	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -16,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
+
+var lockSrvShard = flag.Bool("lock_srvshard", true, "serialize serving graph updates by locking the SrvShard")
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
 //
@@ -339,7 +342,20 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 
 // UpdateTabletEndpoints fixes up any entries in the serving graph that relate
 // to a given tablet.
-func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tablet) error {
+func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tablet) (err error) {
+	if *lockSrvShard {
+		// This lock is only necessary until all tablets are upgraded to lock-free.
+		actionNode := actionnode.RebuildSrvShard()
+		lockPath, err := actionNode.LockSrvShard(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return fmt.Errorf("can't lock shard for UpdateTabletEndpoints(%v): %v", tablet, err)
+		}
+
+		defer func() {
+			actionNode.UnlockSrvShard(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, lockPath, err)
+		}()
+	}
+
 	srvTypes, err := ts.GetSrvTabletTypesPerShard(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		if err != topo.ErrNoNode {
