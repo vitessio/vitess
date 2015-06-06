@@ -96,10 +96,13 @@ class TestSchema(unittest.TestCase):
 
     # create databases, start the tablets
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
-           shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1,
-           shard_2_master, shard_2_replica1]:
+           shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1]:
       t.create_db(db_name)
       t.start_vttablet(wait_for_state=None)
+      
+    # we intentionally don't want to create db on these tablets
+    shard_2_master.start_vttablet(wait_for_state=None)
+    shard_2_replica1.start_vttablet(wait_for_state=None)
 
     # wait for the tablets to start
     shard_0_master.wait_for_vttablet_state('SERVING')
@@ -109,8 +112,9 @@ class TestSchema(unittest.TestCase):
     shard_0_backup.wait_for_vttablet_state('NOT_SERVING')
     shard_1_master.wait_for_vttablet_state('SERVING')
     shard_1_replica1.wait_for_vttablet_state('SERVING')
-    shard_2_master.wait_for_vttablet_state('SERVING')
-    shard_2_replica1.wait_for_vttablet_state('SERVING')
+    # shard_2 is only used to test vtctl CopySchemaShard.
+    shard_2_master.wait_for_vttablet_state('NOT_SERVING')
+    shard_2_replica1.wait_for_vttablet_state('NOT_SERVING')
 
     # make sure all replication is good
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
@@ -196,26 +200,21 @@ class TestSchema(unittest.TestCase):
     # check number of tables
     self._check_tables(shard_0_master, 4)
     self._check_tables(shard_1_master, 4)
-    self._check_tables(shard_2_master, 4)
 
     # get schema for each shard
     shard_0_schema = self._get_schema(shard_0_master.tablet_alias, tables)
     shard_1_schema = self._get_schema(shard_1_master.tablet_alias, tables)
-    shard_2_schema = self._get_schema(shard_2_master.tablet_alias, tables)
 
     # all shards should have the same schema
     self.assertEqual(shard_0_schema, shard_1_schema)
-    self.assertEqual(shard_0_schema, shard_2_schema)
 
     self._apply_schema(test_keyspace, self._alter_test_table_sql('vt_select_test03', 'msg'))
 
     shard_0_schema = self._get_schema(shard_0_master.tablet_alias, tables)
     shard_1_schema = self._get_schema(shard_1_master.tablet_alias, tables)
-    shard_2_schema = self._get_schema(shard_2_master.tablet_alias, tables)
 
     # all shards should have the same schema
     self.assertEqual(shard_0_schema, shard_1_schema)
-    self.assertEqual(shard_0_schema, shard_2_schema)
 
     # test schema changes
     os.makedirs(os.path.join(utils.vtctld.schema_change_dir, test_keyspace))
@@ -235,7 +234,6 @@ class TestSchema(unittest.TestCase):
     # check number of tables
     self._check_tables(shard_0_master, 5)
     self._check_tables(shard_1_master, 5)
-    self._check_tables(shard_2_master, 5)
 
 if __name__ == '__main__':
   utils.main()
