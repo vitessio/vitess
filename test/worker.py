@@ -283,7 +283,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     self.run_shard_tablets('80-', shard_1_tablets, create_db=False,
       create_table=False, wait_state='NOT_SERVING')
 
-    # Copy the schema to the destinattion shards
+    # Copy the schema to the destination shards
     for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
       utils.run_vtctl(['CopySchemaShard',
                        '--exclude_tables', 'unrelated',
@@ -313,11 +313,11 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
       utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
-    """Verifies that vtworker can succesfully copy data for a SplitClone.
+    """Verifies that vtworker can successfully copy data for a SplitClone.
 
     Order of operations:
     1. Run a background vtworker
-    2. Wait until the worker sucessfully resolves the destination masters.
+    2. Wait until the worker successfully resolves the destination masters.
     3. Reparent the destination tablets
     4. Wait until the vtworker copy is finished
     5. Verify that the worker was forced to reresolve topology and retry writes
