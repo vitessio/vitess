@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -67,6 +66,11 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 
 	var sessionInfo tproto.SessionInfo
 	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+		conn.rpcClient.Close()
+		return nil, tabletError(err)
+	}
+	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
 		conn.rpcClient.Close()
 		return nil, tabletError(err)
 	}
@@ -135,7 +139,12 @@ func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	}
 	qrs := new(tproto.QueryResultList)
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.ExecuteBatch might return an application error inside the QueryResultList
+		return vterrors.FromRPCError(qrs.Err)
 	}
 	if err := conn.withTimeout(ctx, action); err != nil {
 		return nil, tabletError(err)
@@ -187,7 +196,12 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 	}
 	var txInfo tproto.TransactionInfo
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Begin might return an application error inside the TransactionInfo
+		return vterrors.FromRPCError(txInfo.Err)
 	}
 	err = conn.withTimeout(ctx, action)
 	return txInfo.TransactionId, tabletError(err)
@@ -205,8 +219,14 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
+	var errReply tproto.ErrorOnly
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &rpc.Unused{})
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &errReply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Commit might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(errReply.Err)
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -224,8 +244,14 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
+	var errReply tproto.ErrorOnly
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &rpc.Unused{})
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &errReply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Rollback might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(errReply.Err)
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -246,7 +272,12 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	}
 	reply := new(tproto.SplitQueryResult)
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.SplitQuery might return an application error inside the SplitQueryRequest
+		return vterrors.FromRPCError(reply.Err)
 	}
 	if err := conn.withTimeout(ctx, action); err != nil {
 		return nil, tabletError(err)

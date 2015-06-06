@@ -27,6 +27,13 @@ type SessionInfo struct {
 
 //go:generate bsongen -file $GOFILE -type SessionInfo -o session_info_bson.go
 
+// ErrorOnly is the response from an RPC call that has no return value except an error..
+type ErrorOnly struct {
+	Err *mproto.RPCError
+}
+
+//go:generate bsongen -file $GOFILE -type ErrorOnly -o error_only_bson.go
+
 // Query is the payload to Execute.
 type Query struct {
 	Sql           string
@@ -84,6 +91,7 @@ type QueryList struct {
 // QueryResultList is the return type for ExecuteBatch.
 type QueryResultList struct {
 	List []mproto.QueryResult
+	Err  *mproto.RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResultList -o query_result_list_bson.go
@@ -128,4 +136,5 @@ type QuerySplit struct {
 // SplitQueryResult represents the result of a SplitQueryRequest
 type SplitQueryResult struct {
 	Queries []QuerySplit
+	Err     *mproto.RPCError
 }
