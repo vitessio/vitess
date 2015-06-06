@@ -162,7 +162,7 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def rpc_call_and_extract_error(self, method_name, request):
-    """Makes an RPC call, and extracts any app error that's embedded in the reply. 
+    """Makes an RPC call, and extracts any app error that's embedded in the reply.
 
     Args:
       method_name - RPC method name, as a string, to call
@@ -173,7 +173,8 @@ class TabletConnection(object):
     """
     response = self.client.call(method_name, request)
     reply = response.reply
-    if reply['Err']['Code'] or reply['Err']['Message']:
+    # Handle the case of new client => old server
+    if reply.get('Err', None):
       raise gorpc.AppError(reply['Err']['Message'], method_name)
     return response
 
