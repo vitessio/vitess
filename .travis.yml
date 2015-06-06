@@ -42,9 +42,8 @@ script:
   - ps -A -o pid,rss,vsz,cmd --sort -rss
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-# TODO(mberlin): Readd "travis_retry" before "make" when https://github.com/travis-ci/travis-ci/issues/4013 is resolved.
   - |
-      /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
+      travis_retry /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
   - free -m
   - ps -A -o pid,rss,vsz,cmd --sort -rss
   - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
