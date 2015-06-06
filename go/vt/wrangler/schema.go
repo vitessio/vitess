@@ -201,7 +201,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias topo.TabletAlia
 	return wr.tmc.ApplySchema(ctx, ti, sc)
 }
 
-// ApplySchemaShard applies a shcema change on a shard.
+// ApplySchemaShard applies a schema change on a shard.
 // Note for 'complex' mode (the 'simple' mode is easy enough that we
 // don't need to handle recovery that much): this method is able to
 // recover if interrupted in the middle, because it knows which server
@@ -449,7 +449,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.Tab
 // SQL statements, but doesn't return any results, so it's only useful for SQL statements
 // that would be run for their effects (e.g., CREATE).
 // It works by applying the SQL statement on the shard's master tablet with replication turned on.
-// Thus it should be used only for changes that can be applies on a live instance without causing issues;
+// Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
 func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
