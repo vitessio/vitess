@@ -145,14 +145,9 @@ message Field {
   int64 flags = 3;
 }
 
-// Cell is a single value, an array of Cell is a Row
-message Cell {
-  bytes value = 1;
-}
-
 // Row is a database row.
 message Row {
-  repeated Cell values = 1;
+  repeated bytes values = 1;
 }
 
 // QueryResult is returned by Execute and ExecuteStream.

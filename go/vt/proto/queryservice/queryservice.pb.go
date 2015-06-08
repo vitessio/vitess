@@ -18,7 +18,6 @@ It has these top-level messages:
 	BoundQuery
 	QueryList
 	Field
-	Cell
 	Row
 	QueryResult
 	QueryResultList
@@ -391,30 +390,14 @@ func (m *Field) Reset()         { *m = Field{} }
 func (m *Field) String() string { return proto.CompactTextString(m) }
 func (*Field) ProtoMessage()    {}
 
-// Cell is a single value, an array of Cell is a Row
-type Cell struct {
-	Value []byte `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
-}
-
-func (m *Cell) Reset()         { *m = Cell{} }
-func (m *Cell) String() string { return proto.CompactTextString(m) }
-func (*Cell) ProtoMessage()    {}
-
 // Row is a database row.
 type Row struct {
-	Values []*Cell `protobuf:"bytes,1,rep,name=values" json:"values,omitempty"`
+	Values [][]byte `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
 }
 
 func (m *Row) Reset()         { *m = Row{} }
 func (m *Row) String() string { return proto.CompactTextString(m) }
 func (*Row) ProtoMessage()    {}
-
-func (m *Row) GetValues() []*Cell {
-	if m != nil {
-		return m.Values
-	}
-	return nil
-}
 
 // QueryResult is returned by Execute and ExecuteStream.
 //
