@@ -83,7 +83,7 @@ type QueryResult struct {
 	RowsAffected uint64
 	InsertId     uint64
 	Rows         [][]sqltypes.Value
-	Err          RPCError
+	Err          *RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go

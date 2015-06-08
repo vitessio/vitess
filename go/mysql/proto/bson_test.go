@@ -34,7 +34,7 @@ func TestQueryResult(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			{{sqltypes.Numeric("1")}, {sqltypes.String("aa")}},
 		},
-		Err: RPCError{1000, "failed due to err"},
+		Err: &RPCError{1000, "failed due to err"},
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -50,8 +50,12 @@ func TestQueryResult(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if custom.Err != unmarshalled.Err {
+	if unmarshalled.Err == nil {
 		t.Errorf("want %#v, got %#v", custom.Err, unmarshalled.Err)
+	} else {
+		if *custom.Err != *unmarshalled.Err {
+			t.Errorf("want %#v, got %#v", custom.Err, unmarshalled.Err)
+		}
 	}
 	if custom.RowsAffected != unmarshalled.RowsAffected {
 		t.Errorf("want %v, got %#v", custom.RowsAffected, unmarshalled.RowsAffected)

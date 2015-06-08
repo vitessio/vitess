@@ -213,7 +213,7 @@ var executeQueryResult = mproto.QueryResult{
 }
 
 var executeQueryResultError = mproto.QueryResult{
-	Err: mproto.RPCError{
+	Err: &mproto.RPCError{
 		Code:    1000,
 		Message: "succeeded despite err",
 	},
