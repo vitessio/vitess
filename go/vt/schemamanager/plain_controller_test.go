@@ -15,11 +15,13 @@ func TestPlainController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	controller := NewPlainController(sql, "test_keyspace")
 	ctx := context.Background()
-	err := controller.Open(ctx)
+	status, err := controller.Open(ctx)
 	if err != nil {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
-
+	if status != StatusHasSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusHasSchemaChange)
+	}
 	keyspace := controller.Keyspace()
 	if keyspace != "test_keyspace" {
 		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)

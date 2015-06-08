@@ -23,6 +23,18 @@ const (
 	SchemaChangeUser = "schema_change_user"
 )
 
+// Status indicates status of schema changes.
+type Status int64
+
+const (
+	// StatusError status indicate there is an error in schema change.
+	StatusError Status = iota
+	// StatusNoSchemaChange means there are no schema changes.
+	StatusNoSchemaChange
+	// StatusHasSchemaChange means there is at least one schema change.
+	StatusHasSchemaChange
+)
+
 // ControllerFactory takes a set params and construct a Controller instance.
 type ControllerFactory func(params map[string]string) (Controller, error)
 
@@ -34,7 +46,7 @@ var (
 // certain keyspace and also handling various events happened during schema
 // change.
 type Controller interface {
-	Open(ctx context.Context) error
+	Open(ctx context.Context) (Status, error)
 	Read(ctx context.Context) (sqls []string, err error)
 	Close()
 	Keyspace() string
@@ -77,18 +89,21 @@ type ShardResult struct {
 
 // Run schema changes on Vitess through VtGate
 func Run(ctx context.Context, controller Controller, executor Executor) error {
-	if err := controller.Open(ctx); err != nil {
-		log.Errorf("failed to open data sourcer: %v", err)
+	status, err := controller.Open(ctx)
+	if err != nil {
+		log.Errorf("failed to open controller: %v", err)
 		return err
+	}
+	if status == StatusNoSchemaChange {
+		return nil
 	}
 	defer controller.Close()
 	sqls, err := controller.Read(ctx)
 	if err != nil {
-		log.Errorf("failed to read data from data sourcer: %v", err)
+		log.Errorf("failed to read data from controller: %v", err)
 		controller.OnReadFail(ctx, err)
 		return err
 	}
-
 	controller.OnReadSuccess(ctx)
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {

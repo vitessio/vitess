@@ -25,8 +25,12 @@ func TestLocalControllerNoSchemaChanges(t *testing.T) {
 	}
 	controller := NewLocalController(schemaChangeDir)
 	ctx := context.Background()
-	if err := controller.Open(ctx); err != nil {
+	status, err := controller.Open(ctx)
+	if err != nil {
 		t.Fatalf("Open should succeed, but got error: %v", err)
+	}
+	if status != StatusNoSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusNoSchemaChange)
 	}
 	defer controller.Close()
 	data, err := controller.Read(ctx)
@@ -42,10 +46,13 @@ func TestLocalControllerOpen(t *testing.T) {
 	controller := NewLocalController("")
 	ctx := context.Background()
 
-	if err := controller.Open(ctx); err == nil {
+	status, err := controller.Open(ctx)
+	if err == nil {
 		t.Fatalf("Open should fail, no such dir")
 	}
-
+	if status != StatusError {
+		t.Fatalf("got status code: %v, want: %v", status, StatusError)
+	}
 	schemaChangeDir, err := ioutil.TempDir("", "localcontroller-test")
 	defer os.RemoveAll(schemaChangeDir)
 
@@ -56,8 +63,12 @@ func TestLocalControllerOpen(t *testing.T) {
 	}
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(ctx); err != nil {
+	status, err = controller.Open(ctx)
+	if err != nil {
 		t.Fatalf("Open should succeed")
+	}
+	if status != StatusNoSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusNoSchemaChange)
 	}
 	data, err := controller.Read(ctx)
 	if err != nil {
@@ -74,8 +85,12 @@ func TestLocalControllerOpen(t *testing.T) {
 	}
 
 	controller = NewLocalController(schemaChangeDir)
-	if err := controller.Open(ctx); err != nil {
+	status, err = controller.Open(ctx)
+	if err != nil {
 		t.Fatalf("Open should succeed")
+	}
+	if status != StatusNoSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusNoSchemaChange)
 	}
 	data, err = controller.Read(ctx)
 	if err != nil {
@@ -115,10 +130,13 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	controller := NewLocalController(schemaChangeDir)
 	ctx := context.Background()
 
-	if err := controller.Open(ctx); err != nil {
-		t.Fatalf("Open should succeed, but got error: %v", err)
+	status, err := controller.Open(ctx)
+	if err != nil {
+		t.Fatalf("Open failed, got error : %v, want nil", err)
 	}
-
+	if status != StatusHasSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusHasSchemaChange)
+	}
 	defer controller.Close()
 
 	data, err := controller.Read(ctx)
