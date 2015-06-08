@@ -42,7 +42,7 @@ type SrvTopoServer interface {
 
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error)
 
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error)
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
@@ -361,7 +361,7 @@ func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, key
 }
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
-func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *topo.EndPoints, err error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *topo.EndPoints, version int64, err error) {
 	shard = strings.ToLower(shard)
 	key := []string{cell, keyspace, shard, string(tabletType)}
 
@@ -417,11 +417,11 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 	if time.Now().Sub(entry.insertionTime) < server.cacheTTL {
 		server.endPointCounters.cacheHits.Add(key, 1)
 		remote = entry.remote
-		return entry.value, entry.lastError
+		return entry.value, -1, entry.lastError
 	}
 
 	// not in cache or too old, get the real value
-	result, err = server.topoServer.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+	result, _, err = server.topoServer.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	// get remote endpoints for master if enabled
 	if err != nil && server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
 		remote = true
@@ -436,7 +436,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 				ctx, cell, keyspace, shard, tabletType, err)
 		} else {
 			if ss.MasterCell != "" && ss.MasterCell != cell {
-				result, err = server.topoServer.GetEndPoints(ctx, ss.MasterCell, keyspace, shard, tabletType)
+				result, _, err = server.topoServer.GetEndPoints(ctx, ss.MasterCell, keyspace, shard, tabletType)
 			}
 		}
 	}
@@ -449,7 +449,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 			server.counts.Add(cachedCategory, 1)
 			server.endPointCounters.staleCacheFallbacks.Add(key, 1)
 			log.Warningf("GetEndPoints(%v, %v, %v, %v, %v) failed: %v (returning cached value: %v %v)", ctx, cell, keyspace, shard, tabletType, err, entry.value, entry.lastError)
-			return entry.value, entry.lastError
+			return entry.value, -1, entry.lastError
 		}
 	}
 
@@ -460,7 +460,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 	entry.lastError = err
 	entry.lastErrorCtx = ctx
 	entry.remote = remote
-	return entry.value, err
+	return entry.value, -1, err
 }
 
 // The next few structures and methods are used to get a displayable

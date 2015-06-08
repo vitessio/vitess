@@ -177,7 +177,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) err
 				continue
 			}
 
-			if err := wr.ts.DeleteEndPoints(ctx, cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
+			if err := wr.ts.DeleteEndPoints(ctx, cell, keyspace, shard, t, -1); err != nil && err != topo.ErrNoNode {
 				wr.Logger().Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
 			}
 		}

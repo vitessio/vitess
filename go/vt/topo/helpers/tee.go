@@ -549,13 +549,26 @@ func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, s
 	return tee.readFrom.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 }
 
-// UpdateEndPoints is part of the topo.Server interface
-func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
-	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
+// CreateEndPoints is part of the topo.Server interface
+func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+	if err := tee.primary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
 
-	if err := tee.secondary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
+	if err := tee.secondary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.CreateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+	}
+	return nil
+}
+
+// UpdateEndPoints is part of the topo.Server interface
+func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, -1); err != nil {
 		// not critical enough to fail
 		log.Warningf("secondary.UpdateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
@@ -563,18 +576,18 @@ func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
 	return tee.readFrom.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 
 // DeleteEndPoints is part of the topo.Server interface
-func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) error {
-	err := tee.primary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType)
+func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
+	err := tee.primary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, existingVersion)
 	if err != nil && err != topo.ErrNoNode {
 		return err
 	}
 
-	if err := tee.secondary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType); err != nil {
+	if err := tee.secondary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, -1); err != nil {
 		// not critical enough to fail
 		log.Warningf("secondary.DeleteEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
@@ -634,19 +647,6 @@ func (tee *Tee) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*top
 // GetSrvKeyspaceNames is part of the topo.Server interface
 func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
 	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
-}
-
-// UpdateTabletEndpoint is part of the topo.Server interface
-func (tee *Tee) UpdateTabletEndpoint(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
-	if err := tee.primary.UpdateTabletEndpoint(ctx, cell, keyspace, shard, tabletType, addr); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.UpdateTabletEndpoint(ctx, cell, keyspace, shard, tabletType, addr); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.UpdateTabletEndpoint(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
-	}
-	return nil
 }
 
 // WatchEndPoints is part of the topo.Server interface.

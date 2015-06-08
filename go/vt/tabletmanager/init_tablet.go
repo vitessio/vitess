@@ -15,7 +15,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -202,11 +201,11 @@ func (agent *ActionAgent) InitTablet(port, securePort int) error {
 		return fmt.Errorf("CreateTablet failed: %v", err)
 	}
 
-	// and now rebuild the serving graph. Note we do that in any case,
+	// and now update the serving graph. Note we do that in any case,
 	// to clean any inaccurate record from any part of the serving graph.
 	if tabletType != topo.TYPE_IDLE {
-		if _, err := topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
-			return fmt.Errorf("RebuildShard failed: %v", err)
+		if err := topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet); err != nil {
+			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
 		}
 	}
 

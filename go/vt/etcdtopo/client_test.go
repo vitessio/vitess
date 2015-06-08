@@ -184,6 +184,32 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 	return &etcd.Response{}, nil
 }
 
+func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
+	c.Lock()
+
+	n, ok := c.nodes[key]
+	if !ok || n.node == nil {
+		c.Unlock()
+		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
+	}
+
+	if n.node.Dir {
+		// If it's a dir, it must be empty.
+		for k := range c.nodes {
+			if strings.HasPrefix(k, key+"/") {
+				c.Unlock()
+				return nil, &etcd.EtcdError{ErrorCode: EcodeDirNotEmpty}
+			}
+		}
+	}
+
+	n.node = nil
+	c.Unlock()
+	n.notify("delete")
+
+	return &etcd.Response{}, nil
+}
+
 func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response, error) {
 	c.Lock()
 	defer c.Unlock()

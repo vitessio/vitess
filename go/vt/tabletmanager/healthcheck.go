@@ -17,7 +17,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -294,8 +293,8 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 
 	// Rebuild the serving graph in our cell, only if we're dealing with
 	// a serving type
-	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
-		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
+	if err := agent.updateServingGraph(tablet, targetTabletType); err != nil {
+		log.Warningf("updateServingGraph failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
 	// run the post action callbacks, not much we can do with returned error
@@ -327,10 +326,10 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 		return
 	}
 
-	// Rebuild the serving graph in our cell, only if we're dealing with
+	// Update the serving graph in our cell, only if we're dealing with
 	// a serving type
-	if err := agent.rebuildShardIfNeeded(tablet, targetTabletType); err != nil {
-		log.Warningf("rebuildShardIfNeeded failed (will still run post action callbacks, serving graph might be out of date): %v", err)
+	if err := agent.updateServingGraph(tablet, targetTabletType); err != nil {
+		log.Warningf("updateServingGraph failed (will still run post action callbacks, serving graph might be out of date): %v", err)
 	}
 
 	// We've already rebuilt the shard, which is the only reason we registered
@@ -343,12 +342,11 @@ func (agent *ActionAgent) terminateHealthChecks(targetTabletType topo.TabletType
 	}()
 }
 
-// rebuildShardIfNeeded will rebuild the serving graph if we need to
-func (agent *ActionAgent) rebuildShardIfNeeded(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
+// updateServingGraph will update the serving graph if we need to.
+func (agent *ActionAgent) updateServingGraph(tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
 	if topo.IsInServingGraph(targetTabletType) {
-		// no need to take the shard lock in this case
-		if _, err := topotools.RebuildShard(agent.batchCtx, logutil.NewConsoleLogger(), agent.TopoServer, tablet.Keyspace, tablet.Shard, []string{tablet.Alias.Cell}, agent.LockTimeout); err != nil {
-			return fmt.Errorf("topotools.RebuildShard returned an error: %v", err)
+		if err := topotools.UpdateTabletEndpoints(agent.batchCtx, agent.TopoServer, tablet.Tablet); err != nil {
+			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
 		}
 	}
 	return nil
