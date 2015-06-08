@@ -7,13 +7,10 @@ package tabletmanager;
 
 import "vtctl.proto";
 
-message SnapshotArgs {
+message BackupArgs {
   int64 concurrency = 1;
-  bool server_mode = 2;
-  bool force_master_snapshot = 3;
 }
 
 service TabletManager {
-  // FIXME(alainjobart) need to also return SnapshotReply
-  rpc Snapshot(SnapshotArgs) returns (stream vtctl.LoggerEvent) {};
+  rpc Backup(BackupArgs) returns (stream vtctl.LoggerEvent) {};
 }

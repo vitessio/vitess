@@ -9,7 +9,7 @@ It is generated from these files:
 	tabletmanager.proto
 
 It has these top-level messages:
-	SnapshotArgs
+	BackupArgs
 */
 package tabletmanager
 
@@ -28,15 +28,13 @@ var _ grpc.ClientConn
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-type SnapshotArgs struct {
-	Concurrency         int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
-	ServerMode          bool  `protobuf:"varint,2,opt,name=server_mode" json:"server_mode,omitempty"`
-	ForceMasterSnapshot bool  `protobuf:"varint,3,opt,name=force_master_snapshot" json:"force_master_snapshot,omitempty"`
+type BackupArgs struct {
+	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
 }
 
-func (m *SnapshotArgs) Reset()         { *m = SnapshotArgs{} }
-func (m *SnapshotArgs) String() string { return proto.CompactTextString(m) }
-func (*SnapshotArgs) ProtoMessage()    {}
+func (m *BackupArgs) Reset()         { *m = BackupArgs{} }
+func (m *BackupArgs) String() string { return proto.CompactTextString(m) }
+func (*BackupArgs) ProtoMessage()    {}
 
 func init() {
 }
@@ -44,8 +42,7 @@ func init() {
 // Client API for TabletManager service
 
 type TabletManagerClient interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error)
+	Backup(ctx context.Context, in *BackupArgs, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 }
 
 type tabletManagerClient struct {
@@ -56,12 +53,12 @@ func NewTabletManagerClient(cc *grpc.ClientConn) TabletManagerClient {
 	return &tabletManagerClient{cc}
 }
 
-func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanager.TabletManager/Snapshot", opts...)
+func (c *tabletManagerClient) Backup(ctx context.Context, in *BackupArgs, opts ...grpc.CallOption) (TabletManager_BackupClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanager.TabletManager/Backup", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &tabletManagerSnapshotClient{stream}
+	x := &tabletManagerBackupClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -71,16 +68,16 @@ func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, op
 	return x, nil
 }
 
-type TabletManager_SnapshotClient interface {
+type TabletManager_BackupClient interface {
 	Recv() (*vtctl.LoggerEvent, error)
 	grpc.ClientStream
 }
 
-type tabletManagerSnapshotClient struct {
+type tabletManagerBackupClient struct {
 	grpc.ClientStream
 }
 
-func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
+func (x *tabletManagerBackupClient) Recv() (*vtctl.LoggerEvent, error) {
 	m := new(vtctl.LoggerEvent)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -91,32 +88,31 @@ func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
 // Server API for TabletManager service
 
 type TabletManagerServer interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(*SnapshotArgs, TabletManager_SnapshotServer) error
+	Backup(*BackupArgs, TabletManager_BackupServer) error
 }
 
 func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
 	s.RegisterService(&_TabletManager_serviceDesc, srv)
 }
 
-func _TabletManager_Snapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SnapshotArgs)
+func _TabletManager_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BackupArgs)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(TabletManagerServer).Snapshot(m, &tabletManagerSnapshotServer{stream})
+	return srv.(TabletManagerServer).Backup(m, &tabletManagerBackupServer{stream})
 }
 
-type TabletManager_SnapshotServer interface {
+type TabletManager_BackupServer interface {
 	Send(*vtctl.LoggerEvent) error
 	grpc.ServerStream
 }
 
-type tabletManagerSnapshotServer struct {
+type tabletManagerBackupServer struct {
 	grpc.ServerStream
 }
 
-func (x *tabletManagerSnapshotServer) Send(m *vtctl.LoggerEvent) error {
+func (x *tabletManagerBackupServer) Send(m *vtctl.LoggerEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -126,8 +122,8 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Snapshot",
-			Handler:       _TabletManager_Snapshot_Handler,
+			StreamName:    "Backup",
+			Handler:       _TabletManager_Backup_Handler,
 			ServerStreams: true,
 		},
 	},
