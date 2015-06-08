@@ -218,10 +218,10 @@ func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
 	if err == nil {
 		return
 	}
-	var rpcErr mproto.RPCError
+	var rpcErr *mproto.RPCError
 	terr, ok := err.(*TabletError)
 	if ok {
-		rpcErr = mproto.RPCError{
+		rpcErr = &mproto.RPCError{
 			// Transform TabletError code to VitessError code
 			Code: int64(terr.ErrorType) + vterrors.TabletError,
 			// Make sure the the VitessError message is identical to the TabletError
@@ -230,7 +230,7 @@ func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
 			Message: terr.Error(),
 		}
 	} else {
-		rpcErr = mproto.RPCError{
+		rpcErr = &mproto.RPCError{
 			Code:    vterrors.UnknownTabletError,
 			Message: err.Error(),
 		}
