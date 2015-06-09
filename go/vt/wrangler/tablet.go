@@ -167,7 +167,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, for
 		}
 	}
 
-	// and rebuild the original shard / keyspace
+	// and rebuild the original shard
 	_, err = wr.RebuildShardGraph(ctx, ti.Keyspace, ti.Shard, []string{ti.Alias.Cell})
 	return err
 }

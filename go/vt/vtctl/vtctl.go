@@ -682,7 +682,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Changes the tablet type to <code>scrap</code> in ZooKeeper or etcd if a tablet is offline")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard and keyspace graph after scrapping the tablet")
+	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard graph after scrapping the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
