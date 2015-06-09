@@ -174,7 +174,10 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     # Reparent to choose an initial master
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/%s' % shard_name,
                      shard_tablets.master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    if wait_state == 'SERVING':
+      # Update the cell-local SrvKeyspace node, which tells VTGate which set of shards to use for a given type (master, replica, rdonly).
+      utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
 
     create_table_sql = (
       'create table worker_test('
@@ -283,7 +286,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     self.run_shard_tablets('80-', shard_1_tablets, create_db=False,
       create_table=False, wait_state='NOT_SERVING')
 
-    # Copy the schema to the destinattion shards
+    # Copy the schema to the destination shards
     for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
       utils.run_vtctl(['CopySchemaShard',
                        '--exclude_tables', 'unrelated',
@@ -309,16 +312,15 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
         tablet.scrap(force=True, skip_rebuild=True)
         utils.run_vtctl(['DeleteTablet', tablet.tablet_alias], auto_log=True)
         tablet.kill_vttablet()
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
       utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
-    """Verifies that vtworker can succesfully copy data for a SplitClone.
+    """Verifies that vtworker can successfully copy data for a SplitClone.
 
     Order of operations:
     1. Run a background vtworker
-    2. Wait until the worker sucessfully resolves the destination masters.
+    2. Wait until the worker successfully resolves the destination masters.
     3. Reparent the destination tablets
     4. Wait until the vtworker copy is finished
     5. Verify that the worker was forced to reresolve topology and retry writes
