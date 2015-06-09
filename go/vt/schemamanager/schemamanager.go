@@ -88,8 +88,10 @@ func Run(ctx context.Context, controller Controller, executor Executor) error {
 		controller.OnReadFail(ctx, err)
 		return err
 	}
-
 	controller.OnReadSuccess(ctx)
+	if len(sqls) == 0 {
+		return nil
+	}
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {
 		log.Errorf("failed to open executor: %v", err)
