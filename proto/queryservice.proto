@@ -6,6 +6,7 @@ syntax = "proto3";
 package queryservice;
 
 import "topo.proto";
+import "vtrpc.proto";
 
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
@@ -136,86 +137,87 @@ message QueryResult {
 
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
-  Target target = 1;
-  BoundQuery query = 2;
-  int64 transaction_id = 3;
-  // CallerId caller_id = 4;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
+  int64 transaction_id = 4;
 }
 
 // ExecuteResponse is the returned value from Execute
 message ExecuteResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
   QueryResult result = 2;
 }
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 message ExecuteBatchRequest {
-  Target target = 1;
-  repeated BoundQuery queries = 2;
-  int64 transaction_id = 3;
-  // CallerId caller_id = 4;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  repeated BoundQuery queries = 3;
+  int64 transaction_id = 4;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 message ExecuteBatchResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
   repeated QueryResult results = 2;
 }
 
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
-  Target target = 1;
-  BoundQuery query = 2;
-  // CallerId caller_id = 4;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
 message StreamExecuteResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
   QueryResult result = 2;
 }
 
 // BeginRequest is the payload to Begin
 message BeginRequest {
-  Target target = 1;
-  // CallerId caller_id = 2;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
 }
 
 // BeginResponse is the returned value from Begin
 message BeginResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
   int64 transaction_id = 2;
 }
 
 // CommitRequest is the payload to Commit
 message CommitRequest {
-  Target target = 1;
-  int64 transaction_id = 2;
-  // CallerId caller_id = 3;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  int64 transaction_id = 3;
 }
 
 // CommitResponse is the returned value from Commit
 message CommitResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
 }
 
 // RollbackRequest is the payload to Rollback
 message RollbackRequest {
-  Target target = 1;
-  int64 transaction_id = 2;
-  // CallerId caller_id = 3;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  int64 transaction_id = 3;
 }
 
 // RollbackResponse is the returned value from Rollback
 message RollbackResponse {
-  //  RPCError error = 1;
+  vtrpc.RPCError error = 1;
 }
 
 // SplitQueryRequest is the payload for SplitQuery
 message SplitQueryRequest {
-  Target target = 1;
-  BoundQuery query = 2;
-  int64 split_count = 3;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
+  int64 split_count = 4;
 }
 
 // QuerySplit represents one query to execute on the tablet
@@ -230,7 +232,8 @@ message QuerySplit {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 message SplitQueryResponse {
-  repeated QuerySplit queries = 1;
+  vtrpc.RPCError error = 1;
+  repeated QuerySplit queries = 2;
 }
 
 // SqlQuery defines the tablet SQL query, implemented by vttablet.

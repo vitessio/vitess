@@ -35,6 +35,7 @@ package queryservice
 
 import proto "github.com/golang/protobuf/proto"
 import topo "github.com/youtube/vitess/go/vt/proto/topo"
+import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
 
 import (
 	context "golang.org/x/net/context"
@@ -358,14 +359,22 @@ func (m *QueryResult) GetRows() []*Row {
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
-	Target        *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	Query         *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	TransactionId int64       `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	Query         *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	TransactionId int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
 func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteRequest) ProtoMessage()    {}
+
+func (m *ExecuteRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *ExecuteRequest) GetTarget() *Target {
 	if m != nil {
@@ -383,13 +392,20 @@ func (m *ExecuteRequest) GetQuery() *BoundQuery {
 
 // ExecuteResponse is the returned value from Execute
 type ExecuteResponse struct {
-	//  RPCError error = 1;
-	Result *QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Result *QueryResult    `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
 func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteResponse) ProtoMessage()    {}
+
+func (m *ExecuteResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
 
 func (m *ExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -400,14 +416,22 @@ func (m *ExecuteResponse) GetResult() *QueryResult {
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 type ExecuteBatchRequest struct {
-	Target        *Target       `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	Queries       []*BoundQuery `protobuf:"bytes,2,rep,name=queries" json:"queries,omitempty"`
-	TransactionId int64         `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	Queries       []*BoundQuery   `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	TransactionId int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
 func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchRequest) ProtoMessage()    {}
+
+func (m *ExecuteBatchRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *ExecuteBatchRequest) GetTarget() *Target {
 	if m != nil {
@@ -425,13 +449,20 @@ func (m *ExecuteBatchRequest) GetQueries() []*BoundQuery {
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 type ExecuteBatchResponse struct {
-	//  RPCError error = 1;
-	Results []*QueryResult `protobuf:"bytes,2,rep,name=results" json:"results,omitempty"`
+	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Results []*QueryResult  `protobuf:"bytes,2,rep,name=results" json:"results,omitempty"`
 }
 
 func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
 func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchResponse) ProtoMessage()    {}
+
+func (m *ExecuteBatchResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
 
 func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 	if m != nil {
@@ -442,13 +473,21 @@ func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 
 // StreamExecuteRequest is the payload to StreamExecute
 type StreamExecuteRequest struct {
-	Target *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	Query  *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target   *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	Query    *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 }
 
 func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
 func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteRequest) ProtoMessage()    {}
+
+func (m *StreamExecuteRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *StreamExecuteRequest) GetTarget() *Target {
 	if m != nil {
@@ -466,13 +505,20 @@ func (m *StreamExecuteRequest) GetQuery() *BoundQuery {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 type StreamExecuteResponse struct {
-	//  RPCError error = 1;
-	Result *QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Result *QueryResult    `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
 func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteResponse) ProtoMessage()    {}
+
+func (m *StreamExecuteResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
 
 func (m *StreamExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -483,12 +529,20 @@ func (m *StreamExecuteResponse) GetResult() *QueryResult {
 
 // BeginRequest is the payload to Begin
 type BeginRequest struct {
-	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target   *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
 }
 
 func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
 func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
 func (*BeginRequest) ProtoMessage()    {}
+
+func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *BeginRequest) GetTarget() *Target {
 	if m != nil {
@@ -499,23 +553,38 @@ func (m *BeginRequest) GetTarget() *Target {
 
 // BeginResponse is the returned value from Begin
 type BeginResponse struct {
-	//  RPCError error = 1;
-	TransactionId int64 `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	Error         *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	TransactionId int64           `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
 func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginResponse) ProtoMessage()    {}
 
+func (m *BeginResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
-	Target        *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	TransactionId int64   `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	TransactionId int64           `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
 func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitRequest) ProtoMessage()    {}
+
+func (m *CommitRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *CommitRequest) GetTarget() *Target {
 	if m != nil {
@@ -526,21 +595,37 @@ func (m *CommitRequest) GetTarget() *Target {
 
 // CommitResponse is the returned value from Commit
 type CommitResponse struct {
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
 
+func (m *CommitResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
-	Target        *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	TransactionId int64   `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	TransactionId int64           `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
 func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
 func (*RollbackRequest) ProtoMessage()    {}
+
+func (m *RollbackRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *RollbackRequest) GetTarget() *Target {
 	if m != nil {
@@ -551,22 +636,38 @@ func (m *RollbackRequest) GetTarget() *Target {
 
 // RollbackResponse is the returned value from Rollback
 type RollbackResponse struct {
+	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
 func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
 func (*RollbackResponse) ProtoMessage()    {}
 
+func (m *RollbackResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // SplitQueryRequest is the payload for SplitQuery
 type SplitQueryRequest struct {
-	Target     *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	Query      *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	SplitCount int64       `protobuf:"varint,3,opt,name=split_count" json:"split_count,omitempty"`
+	CallerId   *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Target     *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	Query      *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	SplitCount int64           `protobuf:"varint,4,opt,name=split_count" json:"split_count,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
 func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryRequest) ProtoMessage()    {}
+
+func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
 
 func (m *SplitQueryRequest) GetTarget() *Target {
 	if m != nil {
@@ -604,12 +705,20 @@ func (m *QuerySplit) GetQuery() *BoundQuery {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 type SplitQueryResponse struct {
-	Queries []*QuerySplit `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
+	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	Queries []*QuerySplit   `protobuf:"bytes,2,rep,name=queries" json:"queries,omitempty"`
 }
 
 func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
 func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse) ProtoMessage()    {}
+
+func (m *SplitQueryResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
 
 func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
