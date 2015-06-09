@@ -9,27 +9,32 @@ It is generated from these files:
 	queryservice.proto
 
 It has these top-level messages:
-	SessionParams
-	SessionInfo
-	TransactionInfo
-	Session
+	Target
 	BindVariable
-	Query
 	BoundQuery
-	QueryList
 	Field
 	Row
 	QueryResult
-	QueryResultList
+	ExecuteRequest
+	ExecuteResponse
+	ExecuteBatchRequest
+	ExecuteBatchResponse
+	StreamExecuteRequest
+	StreamExecuteResponse
+	BeginRequest
+	BeginResponse
+	CommitRequest
+	CommitResponse
+	RollbackRequest
+	RollbackResponse
 	SplitQueryRequest
 	QuerySplit
-	SplitQueryResult
-	CommitResponse
-	RollbackResponse
+	SplitQueryResponse
 */
 package queryservice
 
 import proto "github.com/golang/protobuf/proto"
+import topo "github.com/youtube/vitess/go/vt/proto/topo"
 
 import (
 	context "golang.org/x/net/context"
@@ -248,131 +253,49 @@ func (x Field_Flag) String() string {
 	return proto.EnumName(Field_Flag_name, int32(x))
 }
 
-// SessionParams is passed to GetSessionId. The server will
-// double-check the keyspace and shard are what the tablet is serving.
-type SessionParams struct {
-	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shard    string `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+// Target describes what the client expects the tablet is.
+// If the tablet does not match, an error is returned.
+type Target struct {
+	Keyspace   string          `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shard      string          `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	TabletType topo.TabletType `protobuf:"varint,3,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
 }
 
-func (m *SessionParams) Reset()         { *m = SessionParams{} }
-func (m *SessionParams) String() string { return proto.CompactTextString(m) }
-func (*SessionParams) ProtoMessage()    {}
-
-// SessionInfo is returned by GetSessionId. Use the provided
-// session_id in the Session object for any subsequent call.
-type SessionInfo struct {
-	SessionId int64 `protobuf:"varint,1,opt,name=session_id" json:"session_id,omitempty"`
-}
-
-func (m *SessionInfo) Reset()         { *m = SessionInfo{} }
-func (m *SessionInfo) String() string { return proto.CompactTextString(m) }
-func (*SessionInfo) ProtoMessage()    {}
-
-// TransactionInfo is returned by Begin. Use the provided
-// transaction_id in the Session object for any subsequent call to be inside
-// the transaction.
-type TransactionInfo struct {
-	TransactionId int64 `protobuf:"varint,1,opt,name=transaction_id" json:"transaction_id,omitempty"`
-}
-
-func (m *TransactionInfo) Reset()         { *m = TransactionInfo{} }
-func (m *TransactionInfo) String() string { return proto.CompactTextString(m) }
-func (*TransactionInfo) ProtoMessage()    {}
-
-// Session is passed to all calls.
-type Session struct {
-	// session_id comes from SessionInfo and is required.
-	SessionId int64 `protobuf:"varint,1,opt,name=session_id" json:"session_id,omitempty"`
-	// transaction_id comes from TransactionInfo and is required for queries
-	// inside a transaction.
-	TransactionId int64 `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
-}
-
-func (m *Session) Reset()         { *m = Session{} }
-func (m *Session) String() string { return proto.CompactTextString(m) }
-func (*Session) ProtoMessage()    {}
+func (m *Target) Reset()         { *m = Target{} }
+func (m *Target) String() string { return proto.CompactTextString(m) }
+func (*Target) ProtoMessage()    {}
 
 // BindVariable represents a single bind variable in a Query
 type BindVariable struct {
-	Name           string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Type           BindVariable_Type `protobuf:"varint,2,opt,name=type,enum=queryservice.BindVariable_Type" json:"type,omitempty"`
-	ValueBytes     []byte            `protobuf:"bytes,3,opt,name=value_bytes,proto3" json:"value_bytes,omitempty"`
-	ValueInt       int64             `protobuf:"varint,4,opt,name=value_int" json:"value_int,omitempty"`
-	ValueUint      uint64            `protobuf:"varint,5,opt,name=value_uint" json:"value_uint,omitempty"`
-	ValueFloat     float64           `protobuf:"fixed64,6,opt,name=value_float" json:"value_float,omitempty"`
-	ValueBytesList [][]byte          `protobuf:"bytes,7,rep,name=value_bytes_list,proto3" json:"value_bytes_list,omitempty"`
-	ValueIntList   []int64           `protobuf:"varint,8,rep,name=value_int_list" json:"value_int_list,omitempty"`
-	ValueUintList  []uint64          `protobuf:"varint,9,rep,name=value_uint_list" json:"value_uint_list,omitempty"`
-	ValueFloatList []float64         `protobuf:"fixed64,10,rep,name=value_float_list" json:"value_float_list,omitempty"`
+	Type BindVariable_Type `protobuf:"varint,1,opt,name=type,enum=queryservice.BindVariable_Type" json:"type,omitempty"`
+	// Depending on type, only one value below is set.
+	ValueBytes     []byte    `protobuf:"bytes,2,opt,name=value_bytes,proto3" json:"value_bytes,omitempty"`
+	ValueInt       int64     `protobuf:"varint,3,opt,name=value_int" json:"value_int,omitempty"`
+	ValueUint      uint64    `protobuf:"varint,4,opt,name=value_uint" json:"value_uint,omitempty"`
+	ValueFloat     float64   `protobuf:"fixed64,5,opt,name=value_float" json:"value_float,omitempty"`
+	ValueBytesList [][]byte  `protobuf:"bytes,6,rep,name=value_bytes_list,proto3" json:"value_bytes_list,omitempty"`
+	ValueIntList   []int64   `protobuf:"varint,7,rep,name=value_int_list" json:"value_int_list,omitempty"`
+	ValueUintList  []uint64  `protobuf:"varint,8,rep,name=value_uint_list" json:"value_uint_list,omitempty"`
+	ValueFloatList []float64 `protobuf:"fixed64,9,rep,name=value_float_list" json:"value_float_list,omitempty"`
 }
 
 func (m *BindVariable) Reset()         { *m = BindVariable{} }
 func (m *BindVariable) String() string { return proto.CompactTextString(m) }
 func (*BindVariable) ProtoMessage()    {}
 
-// Query is the payload to Execute
-type Query struct {
-	Sql           []byte          `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
-	BindVariables []*BindVariable `protobuf:"bytes,2,rep,name=bind_variables" json:"bind_variables,omitempty"`
-	Session       *Session        `protobuf:"bytes,3,opt,name=session" json:"session,omitempty"`
-}
-
-func (m *Query) Reset()         { *m = Query{} }
-func (m *Query) String() string { return proto.CompactTextString(m) }
-func (*Query) ProtoMessage()    {}
-
-func (m *Query) GetBindVariables() []*BindVariable {
-	if m != nil {
-		return m.BindVariables
-	}
-	return nil
-}
-
-func (m *Query) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-// BoundQuery is one query in a QueryList
+// BoundQuery is a query with its bind variables
 type BoundQuery struct {
-	Sql           []byte          `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
-	BindVariables []*BindVariable `protobuf:"bytes,2,rep,name=bind_variables" json:"bind_variables,omitempty"`
+	Sql           []byte                   `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	BindVariables map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *BoundQuery) Reset()         { *m = BoundQuery{} }
 func (m *BoundQuery) String() string { return proto.CompactTextString(m) }
 func (*BoundQuery) ProtoMessage()    {}
 
-func (m *BoundQuery) GetBindVariables() []*BindVariable {
+func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 	if m != nil {
 		return m.BindVariables
-	}
-	return nil
-}
-
-// QueryList is the payload to ExecuteBatch
-type QueryList struct {
-	Queries []*BoundQuery `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
-	Session *Session      `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-}
-
-func (m *QueryList) Reset()         { *m = QueryList{} }
-func (m *QueryList) String() string { return proto.CompactTextString(m) }
-func (*QueryList) ProtoMessage()    {}
-
-func (m *QueryList) GetQueries() []*BoundQuery {
-	if m != nil {
-		return m.Queries
-	}
-	return nil
-}
-
-func (m *QueryList) GetSession() *Session {
-	if m != nil {
-		return m.Session
 	}
 	return nil
 }
@@ -433,32 +356,224 @@ func (m *QueryResult) GetRows() []*Row {
 	return nil
 }
 
-// QueryResultList is the return type for ExecuteBatch
-type QueryResultList struct {
-	List []*QueryResult `protobuf:"bytes,1,rep,name=list" json:"list,omitempty"`
+// ExecuteRequest is the payload to Execute
+type ExecuteRequest struct {
+	Target        *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	Query         *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	TransactionId int64       `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
-func (m *QueryResultList) Reset()         { *m = QueryResultList{} }
-func (m *QueryResultList) String() string { return proto.CompactTextString(m) }
-func (*QueryResultList) ProtoMessage()    {}
+func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
+func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteRequest) ProtoMessage()    {}
 
-func (m *QueryResultList) GetList() []*QueryResult {
+func (m *ExecuteRequest) GetTarget() *Target {
 	if m != nil {
-		return m.List
+		return m.Target
 	}
 	return nil
 }
 
+func (m *ExecuteRequest) GetQuery() *BoundQuery {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+// ExecuteResponse is the returned value from Execute
+type ExecuteResponse struct {
+	//  RPCError error = 1;
+	Result *QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
+func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteResponse) ProtoMessage()    {}
+
+func (m *ExecuteResponse) GetResult() *QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+// ExecuteBatchRequest is the payload to ExecuteBatch
+type ExecuteBatchRequest struct {
+	Target        *Target       `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	Queries       []*BoundQuery `protobuf:"bytes,2,rep,name=queries" json:"queries,omitempty"`
+	TransactionId int64         `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
+}
+
+func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
+func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteBatchRequest) ProtoMessage()    {}
+
+func (m *ExecuteBatchRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+func (m *ExecuteBatchRequest) GetQueries() []*BoundQuery {
+	if m != nil {
+		return m.Queries
+	}
+	return nil
+}
+
+// ExecuteBatchResponse is the returned value from ExecuteBatch
+type ExecuteBatchResponse struct {
+	//  RPCError error = 1;
+	Results []*QueryResult `protobuf:"bytes,2,rep,name=results" json:"results,omitempty"`
+}
+
+func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
+func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteBatchResponse) ProtoMessage()    {}
+
+func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
+	if m != nil {
+		return m.Results
+	}
+	return nil
+}
+
+// StreamExecuteRequest is the payload to StreamExecute
+type StreamExecuteRequest struct {
+	Target *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	Query  *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+}
+
+func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
+func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
+func (*StreamExecuteRequest) ProtoMessage()    {}
+
+func (m *StreamExecuteRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+func (m *StreamExecuteRequest) GetQuery() *BoundQuery {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+// StreamExecuteResponse is the returned value from StreamExecute
+type StreamExecuteResponse struct {
+	//  RPCError error = 1;
+	Result *QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
+func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
+func (*StreamExecuteResponse) ProtoMessage()    {}
+
+func (m *StreamExecuteResponse) GetResult() *QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+// BeginRequest is the payload to Begin
+type BeginRequest struct {
+	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+}
+
+func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
+func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
+func (*BeginRequest) ProtoMessage()    {}
+
+func (m *BeginRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+// BeginResponse is the returned value from Begin
+type BeginResponse struct {
+	//  RPCError error = 1;
+	TransactionId int64 `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+}
+
+func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
+func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
+func (*BeginResponse) ProtoMessage()    {}
+
+// CommitRequest is the payload to Commit
+type CommitRequest struct {
+	Target        *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	TransactionId int64   `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+}
+
+func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
+func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
+func (*CommitRequest) ProtoMessage()    {}
+
+func (m *CommitRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+// CommitResponse is the returned value from Commit
+type CommitResponse struct {
+}
+
+func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
+func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
+func (*CommitResponse) ProtoMessage()    {}
+
+// RollbackRequest is the payload to Rollback
+type RollbackRequest struct {
+	Target        *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	TransactionId int64   `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+}
+
+func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
+func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
+func (*RollbackRequest) ProtoMessage()    {}
+
+func (m *RollbackRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+// RollbackResponse is the returned value from Rollback
+type RollbackResponse struct {
+}
+
+func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
+func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
+func (*RollbackResponse) ProtoMessage()    {}
+
 // SplitQueryRequest is the payload for SplitQuery
 type SplitQueryRequest struct {
-	Query      *BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
-	SplitCount int64       `protobuf:"varint,2,opt,name=split_count" json:"split_count,omitempty"`
-	Session    *Session    `protobuf:"bytes,3,opt,name=session" json:"session,omitempty"`
+	Target     *Target     `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	Query      *BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
+	SplitCount int64       `protobuf:"varint,3,opt,name=split_count" json:"split_count,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
 func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryRequest) ProtoMessage()    {}
+
+func (m *SplitQueryRequest) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
 
 func (m *SplitQueryRequest) GetQuery() *BoundQuery {
 	if m != nil {
@@ -467,17 +582,12 @@ func (m *SplitQueryRequest) GetQuery() *BoundQuery {
 	return nil
 }
 
-func (m *SplitQueryRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
 // QuerySplit represents one query to execute on the tablet
 type QuerySplit struct {
-	Query    *BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
-	RowCount int64       `protobuf:"varint,2,opt,name=row_count" json:"row_count,omitempty"`
+	// query is the query to execute
+	Query *BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	// row_count is the approximate row count the query will return
+	RowCount int64 `protobuf:"varint,2,opt,name=row_count" json:"row_count,omitempty"`
 }
 
 func (m *QuerySplit) Reset()         { *m = QuerySplit{} }
@@ -491,38 +601,22 @@ func (m *QuerySplit) GetQuery() *BoundQuery {
 	return nil
 }
 
-// SplitQueryResult is returned by SplitQuery and represents all the queries
+// SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
-type SplitQueryResult struct {
+type SplitQueryResponse struct {
 	Queries []*QuerySplit `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
 }
 
-func (m *SplitQueryResult) Reset()         { *m = SplitQueryResult{} }
-func (m *SplitQueryResult) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResult) ProtoMessage()    {}
+func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
+func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
+func (*SplitQueryResponse) ProtoMessage()    {}
 
-func (m *SplitQueryResult) GetQueries() []*QuerySplit {
+func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
 		return m.Queries
 	}
 	return nil
 }
-
-// CommitResponse is returned by Commit, and empty.
-type CommitResponse struct {
-}
-
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
-
-// RollbackResponse is returned by Rollback, and empty.
-type RollbackResponse struct {
-}
-
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
 
 func init() {
 	proto.RegisterEnum("queryservice.BindVariable_Type", BindVariable_Type_name, BindVariable_Type_value)
@@ -533,29 +627,26 @@ func init() {
 // Client API for SqlQuery service
 
 type SqlQueryClient interface {
-	// GetSessionId returns a valid session id to be used for
-	// subsequent calls. This should be the first call by clients.
-	GetSessionId(ctx context.Context, in *SessionParams, opts ...grpc.CallOption) (*SessionInfo, error)
 	// Execute executes the specified SQL query (might be in a
-	// transaction context, if Query.session.transaction_id is set).
-	Execute(ctx context.Context, in *Query, opts ...grpc.CallOption) (*QueryResult, error)
+	// transaction context, if Query.transaction_id is set).
+	Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error)
 	// ExecuteBatch executes a list of queries, and returns the result
 	// for each query.
-	ExecuteBatch(ctx context.Context, in *QueryList, opts ...grpc.CallOption) (*QueryResultList, error)
+	ExecuteBatch(ctx context.Context, in *ExecuteBatchRequest, opts ...grpc.CallOption) (*ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(ctx context.Context, in *Query, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error)
+	StreamExecute(ctx context.Context, in *StreamExecuteRequest, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error)
 	// Begin a transaction.
-	Begin(ctx context.Context, in *Session, opts ...grpc.CallOption) (*TransactionInfo, error)
+	Begin(ctx context.Context, in *BeginRequest, opts ...grpc.CallOption) (*BeginResponse, error)
 	// Commit a transaction.
-	Commit(ctx context.Context, in *Session, opts ...grpc.CallOption) (*CommitResponse, error)
+	Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(ctx context.Context, in *Session, opts ...grpc.CallOption) (*RollbackResponse, error)
+	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
-	SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResult, error)
+	SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResponse, error)
 }
 
 type sqlQueryClient struct {
@@ -566,17 +657,8 @@ func NewSqlQueryClient(cc *grpc.ClientConn) SqlQueryClient {
 	return &sqlQueryClient{cc}
 }
 
-func (c *sqlQueryClient) GetSessionId(ctx context.Context, in *SessionParams, opts ...grpc.CallOption) (*SessionInfo, error) {
-	out := new(SessionInfo)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/GetSessionId", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *sqlQueryClient) Execute(ctx context.Context, in *Query, opts ...grpc.CallOption) (*QueryResult, error) {
-	out := new(QueryResult)
+func (c *sqlQueryClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error) {
+	out := new(ExecuteResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -584,8 +666,8 @@ func (c *sqlQueryClient) Execute(ctx context.Context, in *Query, opts ...grpc.Ca
 	return out, nil
 }
 
-func (c *sqlQueryClient) ExecuteBatch(ctx context.Context, in *QueryList, opts ...grpc.CallOption) (*QueryResultList, error) {
-	out := new(QueryResultList)
+func (c *sqlQueryClient) ExecuteBatch(ctx context.Context, in *ExecuteBatchRequest, opts ...grpc.CallOption) (*ExecuteBatchResponse, error) {
+	out := new(ExecuteBatchResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -593,7 +675,7 @@ func (c *sqlQueryClient) ExecuteBatch(ctx context.Context, in *QueryList, opts .
 	return out, nil
 }
 
-func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *Query, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error) {
+func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *StreamExecuteRequest, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_SqlQuery_serviceDesc.Streams[0], c.cc, "/queryservice.SqlQuery/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
@@ -609,7 +691,7 @@ func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *Query, opts ...g
 }
 
 type SqlQuery_StreamExecuteClient interface {
-	Recv() (*QueryResult, error)
+	Recv() (*StreamExecuteResponse, error)
 	grpc.ClientStream
 }
 
@@ -617,16 +699,16 @@ type sqlQueryStreamExecuteClient struct {
 	grpc.ClientStream
 }
 
-func (x *sqlQueryStreamExecuteClient) Recv() (*QueryResult, error) {
-	m := new(QueryResult)
+func (x *sqlQueryStreamExecuteClient) Recv() (*StreamExecuteResponse, error) {
+	m := new(StreamExecuteResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *sqlQueryClient) Begin(ctx context.Context, in *Session, opts ...grpc.CallOption) (*TransactionInfo, error) {
-	out := new(TransactionInfo)
+func (c *sqlQueryClient) Begin(ctx context.Context, in *BeginRequest, opts ...grpc.CallOption) (*BeginResponse, error) {
+	out := new(BeginResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -634,7 +716,7 @@ func (c *sqlQueryClient) Begin(ctx context.Context, in *Session, opts ...grpc.Ca
 	return out, nil
 }
 
-func (c *sqlQueryClient) Commit(ctx context.Context, in *Session, opts ...grpc.CallOption) (*CommitResponse, error) {
+func (c *sqlQueryClient) Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error) {
 	out := new(CommitResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Commit", in, out, c.cc, opts...)
 	if err != nil {
@@ -643,7 +725,7 @@ func (c *sqlQueryClient) Commit(ctx context.Context, in *Session, opts ...grpc.C
 	return out, nil
 }
 
-func (c *sqlQueryClient) Rollback(ctx context.Context, in *Session, opts ...grpc.CallOption) (*RollbackResponse, error) {
+func (c *sqlQueryClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error) {
 	out := new(RollbackResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Rollback", in, out, c.cc, opts...)
 	if err != nil {
@@ -652,8 +734,8 @@ func (c *sqlQueryClient) Rollback(ctx context.Context, in *Session, opts ...grpc
 	return out, nil
 }
 
-func (c *sqlQueryClient) SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResult, error) {
-	out := new(SplitQueryResult)
+func (c *sqlQueryClient) SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResponse, error) {
+	out := new(SplitQueryResponse)
 	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -664,49 +746,34 @@ func (c *sqlQueryClient) SplitQuery(ctx context.Context, in *SplitQueryRequest, 
 // Server API for SqlQuery service
 
 type SqlQueryServer interface {
-	// GetSessionId returns a valid session id to be used for
-	// subsequent calls. This should be the first call by clients.
-	GetSessionId(context.Context, *SessionParams) (*SessionInfo, error)
 	// Execute executes the specified SQL query (might be in a
-	// transaction context, if Query.session.transaction_id is set).
-	Execute(context.Context, *Query) (*QueryResult, error)
+	// transaction context, if Query.transaction_id is set).
+	Execute(context.Context, *ExecuteRequest) (*ExecuteResponse, error)
 	// ExecuteBatch executes a list of queries, and returns the result
 	// for each query.
-	ExecuteBatch(context.Context, *QueryList) (*QueryResultList, error)
+	ExecuteBatch(context.Context, *ExecuteBatchRequest) (*ExecuteBatchResponse, error)
 	// StreamExecute executes a streaming query. Use this method if the
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(*Query, SqlQuery_StreamExecuteServer) error
+	StreamExecute(*StreamExecuteRequest, SqlQuery_StreamExecuteServer) error
 	// Begin a transaction.
-	Begin(context.Context, *Session) (*TransactionInfo, error)
+	Begin(context.Context, *BeginRequest) (*BeginResponse, error)
 	// Commit a transaction.
-	Commit(context.Context, *Session) (*CommitResponse, error)
+	Commit(context.Context, *CommitRequest) (*CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(context.Context, *Session) (*RollbackResponse, error)
+	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
-	SplitQuery(context.Context, *SplitQueryRequest) (*SplitQueryResult, error)
+	SplitQuery(context.Context, *SplitQueryRequest) (*SplitQueryResponse, error)
 }
 
 func RegisterSqlQueryServer(s *grpc.Server, srv SqlQueryServer) {
 	s.RegisterService(&_SqlQuery_serviceDesc, srv)
 }
 
-func _SqlQuery_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(SessionParams)
-	if err := codec.Unmarshal(buf, in); err != nil {
-		return nil, err
-	}
-	out, err := srv.(SqlQueryServer).GetSessionId(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(Query)
+	in := new(ExecuteRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -718,7 +785,7 @@ func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.
 }
 
 func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(QueryList)
+	in := new(ExecuteBatchRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -730,7 +797,7 @@ func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec 
 }
 
 func _SqlQuery_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Query)
+	m := new(StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -738,7 +805,7 @@ func _SqlQuery_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) 
 }
 
 type SqlQuery_StreamExecuteServer interface {
-	Send(*QueryResult) error
+	Send(*StreamExecuteResponse) error
 	grpc.ServerStream
 }
 
@@ -746,12 +813,12 @@ type sqlQueryStreamExecuteServer struct {
 	grpc.ServerStream
 }
 
-func (x *sqlQueryStreamExecuteServer) Send(m *QueryResult) error {
+func (x *sqlQueryStreamExecuteServer) Send(m *StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(Session)
+	in := new(BeginRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -763,7 +830,7 @@ func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 }
 
 func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(Session)
+	in := new(CommitRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -775,7 +842,7 @@ func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.C
 }
 
 func _SqlQuery_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(Session)
+	in := new(RollbackRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -802,10 +869,6 @@ var _SqlQuery_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "queryservice.SqlQuery",
 	HandlerType: (*SqlQueryServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetSessionId",
-			Handler:    _SqlQuery_GetSessionId_Handler,
-		},
 		{
 			MethodName: "Execute",
 			Handler:    _SqlQuery_Execute_Handler,

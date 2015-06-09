@@ -183,6 +183,7 @@ bson:
 # FIXME(alainjobart) also add support for python gRPC stubs, right now
 # it's only the proto files without gRPC
 proto:
+	cd go/vt/proto/topo && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topo.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanager && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
