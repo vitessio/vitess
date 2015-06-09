@@ -27,7 +27,7 @@ message TableDefinition {
   // the primary key columns in the primary key order
   repeated string primary_key_columns = 6;
 
-  // TABLE_BASE_TABLE or TABLE_VIEW
+  // type is either mysqlctl.TableBaseTable or mysqlctl.TableView
   string type = 4;
 
   // how much space the data file takes.
@@ -43,11 +43,6 @@ message SchemaDefinition {
   string version = 3;
 }
 
-message Privilege {
-  string name = 1;
-  string value = 2;
-}
-
 // UserPermission describes a single row in the mysql.user table
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
@@ -55,7 +50,7 @@ message UserPermission {
   string host = 1;
   string user = 2;
   uint64 password_checksum = 3;
-  repeated Privilege privileges = 4;
+  map<string, string> privileges = 4;
 }
 
 // DbPermission describes a single row in the mysql.db table
@@ -64,7 +59,7 @@ message DbPermission {
   string host = 1;
   string db = 2;
   string user = 3;
-  repeated Privilege privileges = 4;
+  map<string, string> privileges = 4;
 }
 
 // HostPermission describes a single row in the mysql.host table
@@ -72,7 +67,7 @@ message DbPermission {
 message HostPermission {
   string host = 1;
   string db = 2;
-  repeated Privilege privileges = 3;
+  map<string, string> privileges = 3;
 }
 
 // Permissions have all the rows in mysql.{user,db,host} tables,
@@ -83,9 +78,10 @@ message Permissions {
   repeated HostPermission host_permissions = 3;
 }
 
+// BlpPosition is a replication position for a given binlog player
 message BlpPosition {
   uint32 uid = 1;
-  replication.Position position = 3;
+  replication.Position position = 2;
 }
 
 //

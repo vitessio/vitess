@@ -11,7 +11,6 @@ It is generated from these files:
 It has these top-level messages:
 	TableDefinition
 	SchemaDefinition
-	Privilege
 	UserPermission
 	DbPermission
 	HostPermission
@@ -129,7 +128,7 @@ type TableDefinition struct {
 	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
 	// the primary key columns in the primary key order
 	PrimaryKeyColumns []string `protobuf:"bytes,6,rep,name=primary_key_columns" json:"primary_key_columns,omitempty"`
-	// TABLE_BASE_TABLE or TABLE_VIEW
+	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
 	Type string `protobuf:"bytes,4,opt,name=type" json:"type,omitempty"`
 	// how much space the data file takes.
 	DataLength uint64 `protobuf:"varint,5,opt,name=data_length" json:"data_length,omitempty"`
@@ -158,30 +157,21 @@ func (m *SchemaDefinition) GetTableDefinitions() []*TableDefinition {
 	return nil
 }
 
-type Privilege struct {
-	Name  string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Value string `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
-}
-
-func (m *Privilege) Reset()         { *m = Privilege{} }
-func (m *Privilege) String() string { return proto.CompactTextString(m) }
-func (*Privilege) ProtoMessage()    {}
-
 // UserPermission describes a single row in the mysql.user table
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
 type UserPermission struct {
-	Host             string       `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	User             string       `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
-	PasswordChecksum uint64       `protobuf:"varint,3,opt,name=password_checksum" json:"password_checksum,omitempty"`
-	Privileges       []*Privilege `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty"`
+	Host             string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	User             string            `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
+	PasswordChecksum uint64            `protobuf:"varint,3,opt,name=password_checksum" json:"password_checksum,omitempty"`
+	Privileges       map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *UserPermission) Reset()         { *m = UserPermission{} }
 func (m *UserPermission) String() string { return proto.CompactTextString(m) }
 func (*UserPermission) ProtoMessage()    {}
 
-func (m *UserPermission) GetPrivileges() []*Privilege {
+func (m *UserPermission) GetPrivileges() map[string]string {
 	if m != nil {
 		return m.Privileges
 	}
@@ -191,17 +181,17 @@ func (m *UserPermission) GetPrivileges() []*Privilege {
 // DbPermission describes a single row in the mysql.db table
 // Primary key is Host+Db+User
 type DbPermission struct {
-	Host       string       `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	Db         string       `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
-	User       string       `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
-	Privileges []*Privilege `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty"`
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	User       string            `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *DbPermission) Reset()         { *m = DbPermission{} }
 func (m *DbPermission) String() string { return proto.CompactTextString(m) }
 func (*DbPermission) ProtoMessage()    {}
 
-func (m *DbPermission) GetPrivileges() []*Privilege {
+func (m *DbPermission) GetPrivileges() map[string]string {
 	if m != nil {
 		return m.Privileges
 	}
@@ -211,16 +201,16 @@ func (m *DbPermission) GetPrivileges() []*Privilege {
 // HostPermission describes a single row in the mysql.host table
 // Primary key is Host+Db
 type HostPermission struct {
-	Host       string       `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
-	Db         string       `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
-	Privileges []*Privilege `protobuf:"bytes,3,rep,name=privileges" json:"privileges,omitempty"`
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,3,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
 func (m *HostPermission) Reset()         { *m = HostPermission{} }
 func (m *HostPermission) String() string { return proto.CompactTextString(m) }
 func (*HostPermission) ProtoMessage()    {}
 
-func (m *HostPermission) GetPrivileges() []*Privilege {
+func (m *HostPermission) GetPrivileges() map[string]string {
 	if m != nil {
 		return m.Privileges
 	}
@@ -260,9 +250,10 @@ func (m *Permissions) GetHostPermissions() []*HostPermission {
 	return nil
 }
 
+// BlpPosition is a replication position for a given binlog player
 type BlpPosition struct {
 	Uid      uint32                `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
-	Position *replication.Position `protobuf:"bytes,3,opt,name=position" json:"position,omitempty"`
+	Position *replication.Position `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
