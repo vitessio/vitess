@@ -185,6 +185,8 @@ bson:
 proto:
 	cd go/vt/proto/vtrpc && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtrpc.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/topo && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topo.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/replication && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/replication.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/binlog && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlog.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgateservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgateservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
