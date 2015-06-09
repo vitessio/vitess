@@ -118,7 +118,7 @@ message ExecuteHookResponse {
 
 message GetSchemaRequest {
   repeated string tables = 1;
-  optional bool include_views = 2;
+  bool include_views = 2;
   repeated string exclude_tables = 3;
 }
 
