@@ -376,7 +376,7 @@ $ kvtctl ListAllTablets test
     the table defined in the _createtesttable.sql_ file:
 
     ``` sh
-vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
     <br>The SQL to create the table is shown below:

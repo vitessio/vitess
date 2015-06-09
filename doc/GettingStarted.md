@@ -376,7 +376,7 @@ $VTROOT/bin/vtctlclient -server localhost:15000 ListAllTablets test
     file.
 
     ``` sh
-$VTROOT/bin/vtctlclient -server localhost:15000 ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+$VTROOT/bin/vtctlclient -server localhost:15000 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
     <br>The SQL to create the table is shown below:

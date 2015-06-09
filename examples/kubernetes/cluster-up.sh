@@ -201,7 +201,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
 done
 echo Done
 echo -n Applying Schema...
-$kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+$kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 echo Done
 
 echo Creating firewall rule for vtgate
