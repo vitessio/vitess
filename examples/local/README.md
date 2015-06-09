@@ -128,7 +128,7 @@ The vtctl tool can manage schema across all tablets in a keyspace.
 To create the table defined in `create_test_table.sql`:
 
 ```
-vitess/examples/local$ $VTROOT/bin/vtctlclient -server localhost:15000 ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/local$ $VTROOT/bin/vtctlclient -server localhost:15000 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
 # Starting vtgate
