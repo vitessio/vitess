@@ -25,13 +25,13 @@ message TableDefinition {
   repeated string columns = 3;
 
   // the primary key columns in the primary key order
-  repeated string primary_key_columns = 6;
+  repeated string primary_key_columns = 4;
 
   // type is either mysqlctl.TableBaseTable or mysqlctl.TableView
-  string type = 4;
+  string type = 5;
 
   // how much space the data file takes.
-  uint64 data_length = 5;
+  uint64 data_length = 6;
 
   // approximate number of rows
   uint64 row_count = 7;

@@ -127,11 +127,11 @@ type TableDefinition struct {
 	// the columns in the order that will be used to dump and load the data
 	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
 	// the primary key columns in the primary key order
-	PrimaryKeyColumns []string `protobuf:"bytes,6,rep,name=primary_key_columns" json:"primary_key_columns,omitempty"`
+	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns" json:"primary_key_columns,omitempty"`
 	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
-	Type string `protobuf:"bytes,4,opt,name=type" json:"type,omitempty"`
+	Type string `protobuf:"bytes,5,opt,name=type" json:"type,omitempty"`
 	// how much space the data file takes.
-	DataLength uint64 `protobuf:"varint,5,opt,name=data_length" json:"data_length,omitempty"`
+	DataLength uint64 `protobuf:"varint,6,opt,name=data_length" json:"data_length,omitempty"`
 	// approximate number of rows
 	RowCount uint64 `protobuf:"varint,7,opt,name=row_count" json:"row_count,omitempty"`
 }
