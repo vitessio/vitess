@@ -10,8 +10,8 @@ package topo;
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
 message KeyRange {
-  optional bytes start = 1;
-  optional bytes end = 2;
+  bytes start = 1;
+  bytes end = 2;
 }
 
 // KeyspaceIdType describes the type of the sharding key for a

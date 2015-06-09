@@ -57,6 +57,6 @@ enum ErrorCode {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 message RPCError {
-  optional ErrorCode code = 1;
-  optional string message = 2;
+  ErrorCode code = 1;
+  string message = 2;
 }
