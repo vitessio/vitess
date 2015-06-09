@@ -93,7 +93,7 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 
 	// get version from the master, or error
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering version for master %v", si.MasterAlias)
@@ -150,7 +150,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
