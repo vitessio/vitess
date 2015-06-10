@@ -97,18 +97,3 @@ message StreamTablesRequest {
 message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
-
-// UpdateStream is the RPC version of binlog.UpdateStream.
-service UpdateStream {
-
-  // StreamUpdate streams the binlog events, to know which objects have changed.
-  rpc StreamUpdate(StreamUpdateRequest) returns (StreamUpdateResponse) {};
-
-  // StreamKeyRange returns the binlog transactions related to
-  // the specified Keyrange.
-  rpc StreamKeyRange(StreamKeyRangeRequest) returns (StreamKeyRangeResponse) {};
-
-  // StreamTables returns the binlog transactions related to
-  // the specified Tables.
-  rpc StreamTables(StreamTablesRequest) returns (StreamTablesResponse) {};
-}
