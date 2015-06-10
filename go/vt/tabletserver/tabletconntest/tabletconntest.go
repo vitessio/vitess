@@ -323,6 +323,9 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 		<-panicWait
 		panic(fmt.Errorf("test-triggered panic late"))
 	}
+	if f.hasError {
+		return testTabletError
+	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
 		f.t.Errorf("sendReply2 failed: %v", err)
 	}
@@ -396,6 +399,37 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 	if err := errFunc(); err != nil {
 		t.Fatalf("StreamExecute errFunc failed: %v", err)
+	}
+}
+
+func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testStreamExecuteError")
+	ctx := context.Background()
+	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	if err != nil {
+		t.Fatalf("StreamExecute failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute failed: cannot read result1")
+	}
+	if len(qr.Rows) == 0 {
+		qr.Rows = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
+	}
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecute channel wasn't closed")
+	}
+	err = errFunc()
+	if err == nil {
+		t.Fatalf("StreamExecute was expecting an error, didn't get one")
+	}
+	if err.Error() != expectedErr {
+		t.Errorf("Unexpected error from StreamExecute: got %v wanted %v", err, expectedErr)
 	}
 }
 
@@ -643,7 +677,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testCommitError(t, conn)
 	testRollbackError(t, conn)
 	testExecuteError(t, conn)
-	// testStreamExecuteError(t, conn)
+	testStreamExecuteError(t, conn)
 	testExecuteBatchError(t, conn)
 	testSplitQueryError(t, conn)
 	fake.hasError = false

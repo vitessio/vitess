@@ -78,9 +78,24 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
 func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
 	defer sq.server.HandlePanic(&err)
-	return sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(reply *mproto.QueryResult) error {
+	tErr := sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
+	if tErr == nil {
+		return nil
+	}
+	if *tabletserver.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(mproto.QueryResult)
+		tabletserver.AddTabletErrorToQueryResult(tErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return tErr
 }
 
 // ExecuteBatch is exposing tabletserver.SqlQuery.ExecuteBatch

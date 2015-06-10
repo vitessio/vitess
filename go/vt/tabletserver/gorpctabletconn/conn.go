@@ -172,15 +172,36 @@ func (conn *TabletBson) StreamExecute(ctx context.Context, query string, bindVar
 	if !ok {
 		return nil, nil, tabletError(c.Error)
 	}
+	// SqlQuery.StreamExecute might return an application error inside the QueryResult
+	vtErr := vterrors.FromRPCError(firstResult.Err)
+	if vtErr != nil {
+		return nil, nil, tabletError(vtErr)
+	}
 	srout := make(chan *mproto.QueryResult, 1)
 	go func() {
 		defer close(srout)
 		srout <- firstResult
 		for r := range sr {
-			srout <- r
+			vtErr = vterrors.FromRPCError(r.Err)
+			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
+			// the server specifically to indicate an error, and we shouldn't surface it to clients.
+			if vtErr == nil {
+				srout <- r
+			}
 		}
 	}()
-	return srout, func() error { return tabletError(c.Error) }, nil
+	// errFunc will return either an RPC-layer error or an application error, if one exists.
+	// It will only return the most recent application error (i.e, from the QueryResult that
+	// most recently contained an error). It will prioritize an RPC-layer error over an apperror,
+	// if both exist.
+	errFunc := func() error {
+		rpcErr := tabletError(c.Error)
+		if rpcErr != nil {
+			return rpcErr
+		}
+		return tabletError(vtErr)
+	}
+	return srout, errFunc, nil
 }
 
 // Begin starts a transaction.
