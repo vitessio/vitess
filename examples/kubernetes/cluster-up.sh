@@ -116,29 +116,31 @@ gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MAC
 gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes
-for i in `seq 1 $num_nodes`; do
+i=1
+for nodename in `$KUBECTL get nodes --no-headers | awk '{print $1}'`; do
   for j in `seq 0 2`; do
-    $KUBECTL label nodes k8s-$GKE_CLUSTER_NAME-node-${i} id=$i
+    $KUBECTL label nodes $nodename id=$i
     result=`$KUBECTL get nodes | grep id=$i`
     if [ -n "$result" ]; then
       break
     fi
     sleep 1
   done
+  let i=i+1
 done
 
 if [ $GKE_SSD_SIZE_GB -gt 0 ]
 then
   export VTDATAROOT_VOLUME='/ssd'
   echo Creating SSDs and attaching to container engine nodes
-  for i in `seq 1 $num_nodes`; do
+  i=1
+  for nodename in `$KUBECTL get nodes --no-headers | awk '{print $1}'`; do
     diskname=$GKE_CLUSTER_NAME-vt-ssd-$i
-    nodename=k8s-$GKE_CLUSTER_NAME-node-$i
     gcloud compute disks create $diskname --type=pd-ssd --size=${GKE_SSD_SIZE_GB}GB
     gcloud compute instances attach-disk $nodename --disk $diskname
-    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME}" &
+    gcloud compute ssh $nodename --zone=$GKE_ZONE --command "sudo mkdir /ssd; sudo /usr/share/google/safe_format_and_mount -m \"mkfs.ext4 -F\" /dev/disk/by-id/google-persistent-disk-1 ${VTDATAROOT_VOLUME} &"
+    let i=i+1
   done
-  wait
 fi
 
 run_script etcd-up.sh
@@ -201,7 +203,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
 done
 echo Done
 echo -n Applying Schema...
-$kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+$kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 echo Done
 
 echo Creating firewall rule for vtgate
@@ -212,12 +214,13 @@ vtgate_ip=`gcloud compute forwarding-rules list | grep $vtgate_pool | awk '{prin
 vtgate_server="$vtgate_ip:$vtgate_port"
 
 if [ -n "$NEWRELIC_LICENSE_KEY" -a $GKE_SSD_SIZE_GB -gt 0 ]; then
-  for i in `seq 1 $num_nodes`; do
-    nodename=k8s-$GKE_CLUSTER_NAME-node-${i}
+  i=1
+  for nodename in `$KUBECTL get nodes --no-header | awk '{print $1}'`; do
     gcloud compute copy-files newrelic.sh $nodename:~/
     gcloud compute copy-files newrelic_start_agent.sh $nodename:~/
     gcloud compute copy-files newrelic_start_mysql_plugin.sh $nodename:~/
     gcloud compute ssh $nodename --command "bash -c '~/newrelic.sh ${NEWRELIC_LICENSE_KEY}'"
+    let i=i+1
   done
 fi
 
