@@ -9,11 +9,102 @@ It is generated from these files:
 	tabletmanager.proto
 
 It has these top-level messages:
-	SnapshotArgs
+	TableDefinition
+	SchemaDefinition
+	UserPermission
+	DbPermission
+	HostPermission
+	Permissions
+	BlpPosition
+	PingRequest
+	PingResponse
+	SleepRequest
+	SleepResponse
+	ExecuteHookRequest
+	ExecuteHookResponse
+	GetSchemaRequest
+	GetSchemaResponse
+	GetPermissionsRequest
+	GetPermissionsResponse
+	SetReadOnlyRequest
+	SetReadOnlyResponse
+	SetReadWriteRequest
+	SetReadWriteResponse
+	ChangeTypeRequest
+	ChangeTypeResponse
+	ScrapRequest
+	ScrapResponse
+	RefreshStateRequest
+	RefreshStateResponse
+	RunHealthCheckRequest
+	RunHealthCheckResponse
+	StreamHealthRequest
+	StreamHealthResponse
+	ReloadSchemaRequest
+	ReloadSchemaResponse
+	PreflightSchemaRequest
+	PreflightSchemaResponse
+	ApplySchemaRequest
+	ApplySchemaResponse
+	ExecuteFetchAsDbaRequest
+	ExecuteFetchAsDbaResponse
+	ExecuteFetchAsAppRequest
+	ExecuteFetchAsAppResponse
+	SlaveStatusRequest
+	SlaveStatusResponse
+	MasterPositionRequest
+	MasterPositionResponse
+	StopSlaveRequest
+	StopSlaveResponse
+	StopSlaveMinimumRequest
+	StopSlaveMinimumResponse
+	StartSlaveRequest
+	StartSlaveResponse
+	TabletExternallyReparentedRequest
+	TabletExternallyReparentedResponse
+	TabletExternallyElectedRequest
+	TabletExternallyElectedResponse
+	GetSlavesRequest
+	GetSlavesResponse
+	WaitBlpPositionRequest
+	WaitBlpPositionResponse
+	StopBlpRequest
+	StopBlpResponse
+	StartBlpRequest
+	StartBlpResponse
+	RunBlpUntilRequest
+	RunBlpUntilResponse
+	ResetReplicationRequest
+	ResetReplicationResponse
+	InitMasterRequest
+	InitMasterResponse
+	PopulateReparentJournalRequest
+	PopulateReparentJournalResponse
+	InitSlaveRequest
+	InitSlaveResponse
+	DemoteMasterRequest
+	DemoteMasterResponse
+	PromoteSlaveWhenCaughtUpRequest
+	PromoteSlaveWhenCaughtUpResponse
+	SlaveWasPromotedRequest
+	SlaveWasPromotedResponse
+	SetMasterRequest
+	SetMasterResponse
+	SlaveWasRestartedRequest
+	SlaveWasRestartedResponse
+	StopReplicationAndGetStatusRequest
+	StopReplicationAndGetStatusResponse
+	PromoteSlaveRequest
+	PromoteSlaveResponse
+	BackupRequest
+	BackupResponse
 */
 package tabletmanager
 
 import proto "github.com/golang/protobuf/proto"
+import queryservice "github.com/youtube/vitess/go/vt/proto/queryservice"
+import topo "github.com/youtube/vitess/go/vt/proto/topo"
+import replication "github.com/youtube/vitess/go/vt/proto/replication"
 import vtctl "github.com/youtube/vitess/go/vt/proto/vtctl"
 
 import (
@@ -28,15 +119,1037 @@ var _ grpc.ClientConn
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-type SnapshotArgs struct {
-	Concurrency         int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
-	ServerMode          bool  `protobuf:"varint,2,opt,name=server_mode" json:"server_mode,omitempty"`
-	ForceMasterSnapshot bool  `protobuf:"varint,3,opt,name=force_master_snapshot" json:"force_master_snapshot,omitempty"`
+type TableDefinition struct {
+	// the table name
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	// the SQL to run to create the table
+	Schema string `protobuf:"bytes,2,opt,name=schema" json:"schema,omitempty"`
+	// the columns in the order that will be used to dump and load the data
+	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
+	// the primary key columns in the primary key order
+	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns" json:"primary_key_columns,omitempty"`
+	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
+	Type string `protobuf:"bytes,5,opt,name=type" json:"type,omitempty"`
+	// how much space the data file takes.
+	DataLength uint64 `protobuf:"varint,6,opt,name=data_length" json:"data_length,omitempty"`
+	// approximate number of rows
+	RowCount uint64 `protobuf:"varint,7,opt,name=row_count" json:"row_count,omitempty"`
 }
 
-func (m *SnapshotArgs) Reset()         { *m = SnapshotArgs{} }
-func (m *SnapshotArgs) String() string { return proto.CompactTextString(m) }
-func (*SnapshotArgs) ProtoMessage()    {}
+func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
+func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
+func (*TableDefinition) ProtoMessage()    {}
+
+type SchemaDefinition struct {
+	DatabaseSchema   string             `protobuf:"bytes,1,opt,name=database_schema" json:"database_schema,omitempty"`
+	TableDefinitions []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions" json:"table_definitions,omitempty"`
+	Version          string             `protobuf:"bytes,3,opt,name=version" json:"version,omitempty"`
+}
+
+func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
+func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
+func (*SchemaDefinition) ProtoMessage()    {}
+
+func (m *SchemaDefinition) GetTableDefinitions() []*TableDefinition {
+	if m != nil {
+		return m.TableDefinitions
+	}
+	return nil
+}
+
+// UserPermission describes a single row in the mysql.user table
+// Primary key is Host+User
+// PasswordChecksum is the crc64 of the password, for security reasons
+type UserPermission struct {
+	Host             string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	User             string            `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
+	PasswordChecksum uint64            `protobuf:"varint,3,opt,name=password_checksum" json:"password_checksum,omitempty"`
+	Privileges       map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *UserPermission) Reset()         { *m = UserPermission{} }
+func (m *UserPermission) String() string { return proto.CompactTextString(m) }
+func (*UserPermission) ProtoMessage()    {}
+
+func (m *UserPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// DbPermission describes a single row in the mysql.db table
+// Primary key is Host+Db+User
+type DbPermission struct {
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	User       string            `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *DbPermission) Reset()         { *m = DbPermission{} }
+func (m *DbPermission) String() string { return proto.CompactTextString(m) }
+func (*DbPermission) ProtoMessage()    {}
+
+func (m *DbPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// HostPermission describes a single row in the mysql.host table
+// Primary key is Host+Db
+type HostPermission struct {
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,3,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *HostPermission) Reset()         { *m = HostPermission{} }
+func (m *HostPermission) String() string { return proto.CompactTextString(m) }
+func (*HostPermission) ProtoMessage()    {}
+
+func (m *HostPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// Permissions have all the rows in mysql.{user,db,host} tables,
+// (all rows are sorted by primary key)
+type Permissions struct {
+	UserPermissions []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions" json:"user_permissions,omitempty"`
+	DbPermissions   []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions" json:"db_permissions,omitempty"`
+	HostPermissions []*HostPermission `protobuf:"bytes,3,rep,name=host_permissions" json:"host_permissions,omitempty"`
+}
+
+func (m *Permissions) Reset()         { *m = Permissions{} }
+func (m *Permissions) String() string { return proto.CompactTextString(m) }
+func (*Permissions) ProtoMessage()    {}
+
+func (m *Permissions) GetUserPermissions() []*UserPermission {
+	if m != nil {
+		return m.UserPermissions
+	}
+	return nil
+}
+
+func (m *Permissions) GetDbPermissions() []*DbPermission {
+	if m != nil {
+		return m.DbPermissions
+	}
+	return nil
+}
+
+func (m *Permissions) GetHostPermissions() []*HostPermission {
+	if m != nil {
+		return m.HostPermissions
+	}
+	return nil
+}
+
+// BlpPosition is a replication position for a given binlog player
+type BlpPosition struct {
+	Uid      uint32                `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
+	Position *replication.Position `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
+func (m *BlpPosition) String() string { return proto.CompactTextString(m) }
+func (*BlpPosition) ProtoMessage()    {}
+
+func (m *BlpPosition) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PingRequest struct {
+	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+}
+
+func (m *PingRequest) Reset()         { *m = PingRequest{} }
+func (m *PingRequest) String() string { return proto.CompactTextString(m) }
+func (*PingRequest) ProtoMessage()    {}
+
+type PingResponse struct {
+	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+}
+
+func (m *PingResponse) Reset()         { *m = PingResponse{} }
+func (m *PingResponse) String() string { return proto.CompactTextString(m) }
+func (*PingResponse) ProtoMessage()    {}
+
+type SleepRequest struct {
+	// duration is in nanoseconds
+	Duration int64 `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
+}
+
+func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
+func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
+func (*SleepRequest) ProtoMessage()    {}
+
+type SleepResponse struct {
+}
+
+func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
+func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
+func (*SleepResponse) ProtoMessage()    {}
+
+type ExecuteHookRequest struct {
+	Name       string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Parameters []string          `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty"`
+	ExtraEnv   map[string]string `protobuf:"bytes,3,rep,name=extra_env" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
+func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteHookRequest) ProtoMessage()    {}
+
+func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
+	if m != nil {
+		return m.ExtraEnv
+	}
+	return nil
+}
+
+type ExecuteHookResponse struct {
+	ExitStatus int64  `protobuf:"varint,1,opt,name=exit_status" json:"exit_status,omitempty"`
+	Stdout     string `protobuf:"bytes,2,opt,name=stdout" json:"stdout,omitempty"`
+	Stderr     string `protobuf:"bytes,3,opt,name=stderr" json:"stderr,omitempty"`
+}
+
+func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
+func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteHookResponse) ProtoMessage()    {}
+
+type GetSchemaRequest struct {
+	Tables        []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
+	IncludeViews  bool     `protobuf:"varint,2,opt,name=include_views" json:"include_views,omitempty"`
+	ExcludeTables []string `protobuf:"bytes,3,rep,name=exclude_tables" json:"exclude_tables,omitempty"`
+}
+
+func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
+func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaRequest) ProtoMessage()    {}
+
+type GetSchemaResponse struct {
+	SchemaDefinition *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition" json:"schema_definition,omitempty"`
+}
+
+func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
+func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaResponse) ProtoMessage()    {}
+
+func (m *GetSchemaResponse) GetSchemaDefinition() *SchemaDefinition {
+	if m != nil {
+		return m.SchemaDefinition
+	}
+	return nil
+}
+
+type GetPermissionsRequest struct {
+}
+
+func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
+func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetPermissionsRequest) ProtoMessage()    {}
+
+type GetPermissionsResponse struct {
+	Permissions *Permissions `protobuf:"bytes,1,opt,name=permissions" json:"permissions,omitempty"`
+}
+
+func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{} }
+func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetPermissionsResponse) ProtoMessage()    {}
+
+func (m *GetPermissionsResponse) GetPermissions() *Permissions {
+	if m != nil {
+		return m.Permissions
+	}
+	return nil
+}
+
+type SetReadOnlyRequest struct {
+}
+
+func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
+func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
+func (*SetReadOnlyRequest) ProtoMessage()    {}
+
+type SetReadOnlyResponse struct {
+}
+
+func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
+func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
+func (*SetReadOnlyResponse) ProtoMessage()    {}
+
+type SetReadWriteRequest struct {
+}
+
+func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
+func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
+func (*SetReadWriteRequest) ProtoMessage()    {}
+
+type SetReadWriteResponse struct {
+}
+
+func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
+func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
+func (*SetReadWriteResponse) ProtoMessage()    {}
+
+type ChangeTypeRequest struct {
+	TabletType topo.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topo.TabletType" json:"tablet_type,omitempty"`
+}
+
+func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
+func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
+func (*ChangeTypeRequest) ProtoMessage()    {}
+
+type ChangeTypeResponse struct {
+}
+
+func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
+func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
+func (*ChangeTypeResponse) ProtoMessage()    {}
+
+type ScrapRequest struct {
+}
+
+func (m *ScrapRequest) Reset()         { *m = ScrapRequest{} }
+func (m *ScrapRequest) String() string { return proto.CompactTextString(m) }
+func (*ScrapRequest) ProtoMessage()    {}
+
+type ScrapResponse struct {
+}
+
+func (m *ScrapResponse) Reset()         { *m = ScrapResponse{} }
+func (m *ScrapResponse) String() string { return proto.CompactTextString(m) }
+func (*ScrapResponse) ProtoMessage()    {}
+
+type RefreshStateRequest struct {
+}
+
+func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
+func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
+func (*RefreshStateRequest) ProtoMessage()    {}
+
+type RefreshStateResponse struct {
+}
+
+func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
+func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
+func (*RefreshStateResponse) ProtoMessage()    {}
+
+type RunHealthCheckRequest struct {
+	TabletType topo.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topo.TabletType" json:"tablet_type,omitempty"`
+}
+
+func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
+func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
+func (*RunHealthCheckRequest) ProtoMessage()    {}
+
+type RunHealthCheckResponse struct {
+}
+
+func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{} }
+func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
+func (*RunHealthCheckResponse) ProtoMessage()    {}
+
+type StreamHealthRequest struct {
+}
+
+func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
+func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthRequest) ProtoMessage()    {}
+
+type StreamHealthResponse struct {
+	Tablet              *topo.Tablet `protobuf:"bytes,1,opt,name=tablet" json:"tablet,omitempty"`
+	BinlogPlayerMapSize int64        `protobuf:"varint,2,opt,name=binlog_player_map_size" json:"binlog_player_map_size,omitempty"`
+	HealthError         string       `protobuf:"bytes,3,opt,name=health_error" json:"health_error,omitempty"`
+	// replication_delay is in nanoseconds
+	ReplicationDelay int64 `protobuf:"varint,4,opt,name=replication_delay" json:"replication_delay,omitempty"`
+}
+
+func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
+func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthResponse) ProtoMessage()    {}
+
+func (m *StreamHealthResponse) GetTablet() *topo.Tablet {
+	if m != nil {
+		return m.Tablet
+	}
+	return nil
+}
+
+type ReloadSchemaRequest struct {
+}
+
+func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
+func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*ReloadSchemaRequest) ProtoMessage()    {}
+
+type ReloadSchemaResponse struct {
+}
+
+func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
+func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*ReloadSchemaResponse) ProtoMessage()    {}
+
+type PreflightSchemaRequest struct {
+	Change string `protobuf:"bytes,1,opt,name=change" json:"change,omitempty"`
+}
+
+func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{} }
+func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*PreflightSchemaRequest) ProtoMessage()    {}
+
+type PreflightSchemaResponse struct {
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse{} }
+func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*PreflightSchemaResponse) ProtoMessage()    {}
+
+func (m *PreflightSchemaResponse) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *PreflightSchemaResponse) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ApplySchemaRequest struct {
+	Sql              string            `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
+	Force            bool              `protobuf:"varint,2,opt,name=force" json:"force,omitempty"`
+	AllowReplication bool              `protobuf:"varint,3,opt,name=allow_replication" json:"allow_replication,omitempty"`
+	BeforeSchema     *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema      *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
+func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*ApplySchemaRequest) ProtoMessage()    {}
+
+func (m *ApplySchemaRequest) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ApplySchemaResponse struct {
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
+func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*ApplySchemaResponse) ProtoMessage()    {}
+
+func (m *ApplySchemaResponse) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *ApplySchemaResponse) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ExecuteFetchAsDbaRequest struct {
+	Query          string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	DbName         string `protobuf:"bytes,2,opt,name=db_name" json:"db_name,omitempty"`
+	MaxRows        uint64 `protobuf:"varint,3,opt,name=max_rows" json:"max_rows,omitempty"`
+	WantFields     bool   `protobuf:"varint,4,opt,name=want_fields" json:"want_fields,omitempty"`
+	DisableBinlogs bool   `protobuf:"varint,5,opt,name=disable_binlogs" json:"disable_binlogs,omitempty"`
+	ReloadSchema   bool   `protobuf:"varint,6,opt,name=reload_schema" json:"reload_schema,omitempty"`
+}
+
+func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaRequest{} }
+func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
+
+type ExecuteFetchAsDbaResponse struct {
+	Result *queryservice.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResponse{} }
+func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
+
+func (m *ExecuteFetchAsDbaResponse) GetResult() *queryservice.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+type ExecuteFetchAsAppRequest struct {
+	Query      string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	MaxRows    uint64 `protobuf:"varint,2,opt,name=max_rows" json:"max_rows,omitempty"`
+	WantFields bool   `protobuf:"varint,3,opt,name=want_fields" json:"want_fields,omitempty"`
+}
+
+func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppRequest{} }
+func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
+
+type ExecuteFetchAsAppResponse struct {
+	Result *queryservice.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResponse{} }
+func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
+
+func (m *ExecuteFetchAsAppResponse) GetResult() *queryservice.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+type SlaveStatusRequest struct {
+}
+
+func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
+func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusRequest) ProtoMessage()    {}
+
+type SlaveStatusResponse struct {
+	Status *replication.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+}
+
+func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
+func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusResponse) ProtoMessage()    {}
+
+func (m *SlaveStatusResponse) GetStatus() *replication.Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+type MasterPositionRequest struct {
+}
+
+func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
+func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
+func (*MasterPositionRequest) ProtoMessage()    {}
+
+type MasterPositionResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{} }
+func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
+func (*MasterPositionResponse) ProtoMessage()    {}
+
+func (m *MasterPositionResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StopSlaveRequest struct {
+}
+
+func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
+func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveRequest) ProtoMessage()    {}
+
+type StopSlaveResponse struct {
+}
+
+func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
+func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveResponse) ProtoMessage()    {}
+
+type StopSlaveMinimumRequest struct {
+	Position    *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	WaitTimeout int64                 `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
+func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumRequest) ProtoMessage()    {}
+
+func (m *StopSlaveMinimumRequest) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StopSlaveMinimumResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
+func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumResponse) ProtoMessage()    {}
+
+func (m *StopSlaveMinimumResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StartSlaveRequest struct {
+}
+
+func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
+func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveRequest) ProtoMessage()    {}
+
+type StartSlaveResponse struct {
+}
+
+func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
+func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveResponse) ProtoMessage()    {}
+
+type TabletExternallyReparentedRequest struct {
+	// external_id is an string value that may be provided by an external
+	// agent for tracking purposes. The tablet will emit this string in
+	// events triggered by TabletExternallyReparented, such as VitessReparent.
+	ExternalId string `protobuf:"bytes,1,opt,name=external_id" json:"external_id,omitempty"`
+}
+
+func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExternallyReparentedRequest{} }
+func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
+
+type TabletExternallyReparentedResponse struct {
+}
+
+func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExternallyReparentedResponse{} }
+func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
+
+type TabletExternallyElectedRequest struct {
+}
+
+func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternallyElectedRequest{} }
+func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyElectedRequest) ProtoMessage()    {}
+
+type TabletExternallyElectedResponse struct {
+}
+
+func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternallyElectedResponse{} }
+func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyElectedResponse) ProtoMessage()    {}
+
+type GetSlavesRequest struct {
+}
+
+func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
+func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesRequest) ProtoMessage()    {}
+
+type GetSlavesResponse struct {
+	Addrs []string `protobuf:"bytes,1,rep,name=addrs" json:"addrs,omitempty"`
+}
+
+func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
+func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesResponse) ProtoMessage()    {}
+
+type WaitBlpPositionRequest struct {
+	BlpPosition *BlpPosition `protobuf:"bytes,1,opt,name=blp_position" json:"blp_position,omitempty"`
+	WaitTimeout int64        `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *WaitBlpPositionRequest) Reset()         { *m = WaitBlpPositionRequest{} }
+func (m *WaitBlpPositionRequest) String() string { return proto.CompactTextString(m) }
+func (*WaitBlpPositionRequest) ProtoMessage()    {}
+
+func (m *WaitBlpPositionRequest) GetBlpPosition() *BlpPosition {
+	if m != nil {
+		return m.BlpPosition
+	}
+	return nil
+}
+
+type WaitBlpPositionResponse struct {
+}
+
+func (m *WaitBlpPositionResponse) Reset()         { *m = WaitBlpPositionResponse{} }
+func (m *WaitBlpPositionResponse) String() string { return proto.CompactTextString(m) }
+func (*WaitBlpPositionResponse) ProtoMessage()    {}
+
+type StopBlpRequest struct {
+}
+
+func (m *StopBlpRequest) Reset()         { *m = StopBlpRequest{} }
+func (m *StopBlpRequest) String() string { return proto.CompactTextString(m) }
+func (*StopBlpRequest) ProtoMessage()    {}
+
+type StopBlpResponse struct {
+	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
+}
+
+func (m *StopBlpResponse) Reset()         { *m = StopBlpResponse{} }
+func (m *StopBlpResponse) String() string { return proto.CompactTextString(m) }
+func (*StopBlpResponse) ProtoMessage()    {}
+
+func (m *StopBlpResponse) GetBlpPositions() []*BlpPosition {
+	if m != nil {
+		return m.BlpPositions
+	}
+	return nil
+}
+
+type StartBlpRequest struct {
+}
+
+func (m *StartBlpRequest) Reset()         { *m = StartBlpRequest{} }
+func (m *StartBlpRequest) String() string { return proto.CompactTextString(m) }
+func (*StartBlpRequest) ProtoMessage()    {}
+
+type StartBlpResponse struct {
+}
+
+func (m *StartBlpResponse) Reset()         { *m = StartBlpResponse{} }
+func (m *StartBlpResponse) String() string { return proto.CompactTextString(m) }
+func (*StartBlpResponse) ProtoMessage()    {}
+
+type RunBlpUntilRequest struct {
+	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
+	WaitTimeout  int64          `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *RunBlpUntilRequest) Reset()         { *m = RunBlpUntilRequest{} }
+func (m *RunBlpUntilRequest) String() string { return proto.CompactTextString(m) }
+func (*RunBlpUntilRequest) ProtoMessage()    {}
+
+func (m *RunBlpUntilRequest) GetBlpPositions() []*BlpPosition {
+	if m != nil {
+		return m.BlpPositions
+	}
+	return nil
+}
+
+type RunBlpUntilResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *RunBlpUntilResponse) Reset()         { *m = RunBlpUntilResponse{} }
+func (m *RunBlpUntilResponse) String() string { return proto.CompactTextString(m) }
+func (*RunBlpUntilResponse) ProtoMessage()    {}
+
+func (m *RunBlpUntilResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type ResetReplicationRequest struct {
+}
+
+func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest{} }
+func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
+func (*ResetReplicationRequest) ProtoMessage()    {}
+
+type ResetReplicationResponse struct {
+}
+
+func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationResponse{} }
+func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
+func (*ResetReplicationResponse) ProtoMessage()    {}
+
+type InitMasterRequest struct {
+}
+
+func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
+func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*InitMasterRequest) ProtoMessage()    {}
+
+type InitMasterResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
+func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*InitMasterResponse) ProtoMessage()    {}
+
+func (m *InitMasterResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PopulateReparentJournalRequest struct {
+	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	ActionName          string                `protobuf:"bytes,2,opt,name=action_name" json:"action_name,omitempty"`
+	MasterAlias         *topo.TabletAlias     `protobuf:"bytes,3,opt,name=master_alias" json:"master_alias,omitempty"`
+	ReplicationPosition *replication.Position `protobuf:"bytes,4,opt,name=replication_position" json:"replication_position,omitempty"`
+}
+
+func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparentJournalRequest{} }
+func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
+func (*PopulateReparentJournalRequest) ProtoMessage()    {}
+
+func (m *PopulateReparentJournalRequest) GetMasterAlias() *topo.TabletAlias {
+	if m != nil {
+		return m.MasterAlias
+	}
+	return nil
+}
+
+func (m *PopulateReparentJournalRequest) GetReplicationPosition() *replication.Position {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return nil
+}
+
+type PopulateReparentJournalResponse struct {
+}
+
+func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparentJournalResponse{} }
+func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
+func (*PopulateReparentJournalResponse) ProtoMessage()    {}
+
+type InitSlaveRequest struct {
+	Parent              *topo.TabletAlias     `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	ReplicationPosition *replication.Position `protobuf:"bytes,2,opt,name=replication_position" json:"replication_position,omitempty"`
+	TimeCreatedNs       int64                 `protobuf:"varint,3,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+}
+
+func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
+func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveRequest) ProtoMessage()    {}
+
+func (m *InitSlaveRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+func (m *InitSlaveRequest) GetReplicationPosition() *replication.Position {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return nil
+}
+
+type InitSlaveResponse struct {
+}
+
+func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
+func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveResponse) ProtoMessage()    {}
+
+type DemoteMasterRequest struct {
+}
+
+func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
+func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*DemoteMasterRequest) ProtoMessage()    {}
+
+type DemoteMasterResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
+func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*DemoteMasterResponse) ProtoMessage()    {}
+
+func (m *DemoteMasterResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PromoteSlaveWhenCaughtUpRequest struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhenCaughtUpRequest{} }
+func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
+
+func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PromoteSlaveWhenCaughtUpResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWhenCaughtUpResponse{} }
+func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
+
+func (m *PromoteSlaveWhenCaughtUpResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type SlaveWasPromotedRequest struct {
+}
+
+func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
+func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedRequest) ProtoMessage()    {}
+
+type SlaveWasPromotedResponse struct {
+}
+
+func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
+func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedResponse) ProtoMessage()    {}
+
+type SetMasterRequest struct {
+	Parent          *topo.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	TimeCreatedNs   int64             `protobuf:"varint,2,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	ForceStartSlave bool              `protobuf:"varint,3,opt,name=force_start_slave" json:"force_start_slave,omitempty"`
+}
+
+func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
+func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*SetMasterRequest) ProtoMessage()    {}
+
+func (m *SetMasterRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+type SetMasterResponse struct {
+}
+
+func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
+func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*SetMasterResponse) ProtoMessage()    {}
+
+type SlaveWasRestartedRequest struct {
+	// the parent alias the tablet should have
+	Parent *topo.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+}
+
+func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
+func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedRequest) ProtoMessage()    {}
+
+func (m *SlaveWasRestartedRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+type SlaveWasRestartedResponse struct {
+}
+
+func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
+func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedResponse) ProtoMessage()    {}
+
+type StopReplicationAndGetStatusRequest struct {
+}
+
+func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicationAndGetStatusRequest{} }
+func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
+
+type StopReplicationAndGetStatusResponse struct {
+	Status *replication.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+}
+
+func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplicationAndGetStatusResponse{} }
+func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
+
+func (m *StopReplicationAndGetStatusResponse) GetStatus() *replication.Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+type PromoteSlaveRequest struct {
+}
+
+func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
+func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveRequest) ProtoMessage()    {}
+
+type PromoteSlaveResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
+func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveResponse) ProtoMessage()    {}
+
+func (m *PromoteSlaveResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type BackupRequest struct {
+	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
+}
+
+func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
+func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
+func (*BackupRequest) ProtoMessage()    {}
+
+type BackupResponse struct {
+	Event *vtctl.LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+}
+
+func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
+func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
+func (*BackupResponse) ProtoMessage()    {}
+
+func (m *BackupResponse) GetEvent() *vtctl.LoggerEvent {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
 
 func init() {
 }
@@ -44,8 +1157,104 @@ func init() {
 // Client API for TabletManager service
 
 type TabletManagerClient interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error)
+	// Ping returns the input payload
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
+	// Sleep sleeps for the provided duration
+	Sleep(ctx context.Context, in *SleepRequest, opts ...grpc.CallOption) (*SleepResponse, error)
+	// ExecuteHook executes the hook remotely
+	ExecuteHook(ctx context.Context, in *ExecuteHookRequest, opts ...grpc.CallOption) (*ExecuteHookResponse, error)
+	// GetSchema asks the tablet for its schema
+	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
+	// GetPermissions asks the tablet for its permissions
+	GetPermissions(ctx context.Context, in *GetPermissionsRequest, opts ...grpc.CallOption) (*GetPermissionsResponse, error)
+	SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error)
+	SetReadWrite(ctx context.Context, in *SetReadWriteRequest, opts ...grpc.CallOption) (*SetReadWriteResponse, error)
+	// ChangeType asks the remote tablet to change its type
+	ChangeType(ctx context.Context, in *ChangeTypeRequest, opts ...grpc.CallOption) (*ChangeTypeResponse, error)
+	Scrap(ctx context.Context, in *ScrapRequest, opts ...grpc.CallOption) (*ScrapResponse, error)
+	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
+	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
+	StreamHealth(ctx context.Context, in *StreamHealthRequest, opts ...grpc.CallOption) (TabletManager_StreamHealthClient, error)
+	ReloadSchema(ctx context.Context, in *ReloadSchemaRequest, opts ...grpc.CallOption) (*ReloadSchemaResponse, error)
+	PreflightSchema(ctx context.Context, in *PreflightSchemaRequest, opts ...grpc.CallOption) (*PreflightSchemaResponse, error)
+	ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error)
+	ExecuteFetchAsDba(ctx context.Context, in *ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*ExecuteFetchAsDbaResponse, error)
+	ExecuteFetchAsApp(ctx context.Context, in *ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*ExecuteFetchAsAppResponse, error)
+	// SlaveStatus returns the current slave status.
+	SlaveStatus(ctx context.Context, in *SlaveStatusRequest, opts ...grpc.CallOption) (*SlaveStatusResponse, error)
+	// MasterPosition returns the current master position
+	MasterPosition(ctx context.Context, in *MasterPositionRequest, opts ...grpc.CallOption) (*MasterPositionResponse, error)
+	// StopSlave makes mysql stop its replication
+	StopSlave(ctx context.Context, in *StopSlaveRequest, opts ...grpc.CallOption) (*StopSlaveResponse, error)
+	// StopSlaveMinimum stops the mysql replication after it reaches
+	// the provided minimum point
+	StopSlaveMinimum(ctx context.Context, in *StopSlaveMinimumRequest, opts ...grpc.CallOption) (*StopSlaveMinimumResponse, error)
+	// StartSlave starts the mysql replication
+	StartSlave(ctx context.Context, in *StartSlaveRequest, opts ...grpc.CallOption) (*StartSlaveResponse, error)
+	// TabletExternallyReparented tells a tablet that its underlying MySQL is
+	// currently the master. It is only used in environments (such as Vitess+MoB)
+	// in which MySQL is reparented by some agent external to Vitess, and then
+	// that agent simply notifies Vitess.
+	//
+	// This call is idempotent with respect to a single target tablet.
+	// However, the tablet assumes there is a cooling-off period following the
+	// initial external reparent from A to B, before this call is repeated on any
+	// tablet other than B. This assumption is configurable with the vttablet flag
+	// "finalize_external_reparent_timeout".
+	//
+	// For more information, see the design doc at go/vt-fast-failover.
+	TabletExternallyReparented(ctx context.Context, in *TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*TabletExternallyReparentedResponse, error)
+	// TabletExternallyElected is an notification that may be sent in
+	// anticipation of potentially later sending TabletExternallyReparented.
+	// The tablet can use this extra lead time to prepare to react quickly if
+	// TabletExternallyReparented does follow.
+	//
+	// This call is effectively a no-op if it is not followed by a call to
+	// TabletExternallyReparented, so the external agent doing the reparent can
+	// still change its mind.
+	//
+	// The agent does not need to wait for this call or cancel it before calling
+	// TabletExternallyReparented if the external reparent operation finishes
+	// before TabletExternallyElected returns.
+	TabletExternallyElected(ctx context.Context, in *TabletExternallyElectedRequest, opts ...grpc.CallOption) (*TabletExternallyElectedResponse, error)
+	// GetSlaves asks for the list of mysql slaves
+	GetSlaves(ctx context.Context, in *GetSlavesRequest, opts ...grpc.CallOption) (*GetSlavesResponse, error)
+	// WaitBlpPosition tells the remote tablet to wait until it reaches
+	// the specified binolg player position
+	WaitBlpPosition(ctx context.Context, in *WaitBlpPositionRequest, opts ...grpc.CallOption) (*WaitBlpPositionResponse, error)
+	// StopBlp asks the tablet to stop all its binlog players,
+	// and returns the current position for all of them
+	StopBlp(ctx context.Context, in *StopBlpRequest, opts ...grpc.CallOption) (*StopBlpResponse, error)
+	// StartBlp asks the tablet to restart its binlog players
+	StartBlp(ctx context.Context, in *StartBlpRequest, opts ...grpc.CallOption) (*StartBlpResponse, error)
+	// RunBlpUntil asks the tablet to restart its binlog players
+	RunBlpUntil(ctx context.Context, in *RunBlpUntilRequest, opts ...grpc.CallOption) (*RunBlpUntilResponse, error)
+	// ResetReplication makes the target not replicating
+	ResetReplication(ctx context.Context, in *ResetReplicationRequest, opts ...grpc.CallOption) (*ResetReplicationResponse, error)
+	// InitMaster initializes the tablet as a master
+	InitMaster(ctx context.Context, in *InitMasterRequest, opts ...grpc.CallOption) (*InitMasterResponse, error)
+	// PopulateReparentJournal tells the tablet to add an entry to its
+	// reparent journal
+	PopulateReparentJournal(ctx context.Context, in *PopulateReparentJournalRequest, opts ...grpc.CallOption) (*PopulateReparentJournalResponse, error)
+	// InitSlave tells the tablet to reparent to the master unconditionnally
+	InitSlave(ctx context.Context, in *InitSlaveRequest, opts ...grpc.CallOption) (*InitSlaveResponse, error)
+	// DemoteMaster tells the soon-to-be-former master it's gonna change
+	DemoteMaster(ctx context.Context, in *DemoteMasterRequest, opts ...grpc.CallOption) (*DemoteMasterResponse, error)
+	// PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
+	// and then be the master
+	PromoteSlaveWhenCaughtUp(ctx context.Context, in *PromoteSlaveWhenCaughtUpRequest, opts ...grpc.CallOption) (*PromoteSlaveWhenCaughtUpResponse, error)
+	// SlaveWasPromoted tells the remote tablet it is now the master
+	SlaveWasPromoted(ctx context.Context, in *SlaveWasPromotedRequest, opts ...grpc.CallOption) (*SlaveWasPromotedResponse, error)
+	// SetMaster tells the slave to reparent
+	SetMaster(ctx context.Context, in *SetMasterRequest, opts ...grpc.CallOption) (*SetMasterResponse, error)
+	// SlaveWasRestarted tells the remote tablet its master has changed
+	SlaveWasRestarted(ctx context.Context, in *SlaveWasRestartedRequest, opts ...grpc.CallOption) (*SlaveWasRestartedResponse, error)
+	// StopReplicationAndGetStatus stops MySQL replication, and returns the
+	// replication status
+	StopReplicationAndGetStatus(ctx context.Context, in *StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*StopReplicationAndGetStatusResponse, error)
+	// PromoteSlave makes the slave the new master
+	PromoteSlave(ctx context.Context, in *PromoteSlaveRequest, opts ...grpc.CallOption) (*PromoteSlaveResponse, error)
+	Backup(ctx context.Context, in *BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 }
 
 type tabletManagerClient struct {
@@ -56,12 +1265,111 @@ func NewTabletManagerClient(cc *grpc.ClientConn) TabletManagerClient {
 	return &tabletManagerClient{cc}
 }
 
-func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanager.TabletManager/Snapshot", opts...)
+func (c *tabletManagerClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
+	out := new(PingResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/Ping", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &tabletManagerSnapshotClient{stream}
+	return out, nil
+}
+
+func (c *tabletManagerClient) Sleep(ctx context.Context, in *SleepRequest, opts ...grpc.CallOption) (*SleepResponse, error) {
+	out := new(SleepResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/Sleep", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ExecuteHook(ctx context.Context, in *ExecuteHookRequest, opts ...grpc.CallOption) (*ExecuteHookResponse, error) {
+	out := new(ExecuteHookResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ExecuteHook", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error) {
+	out := new(GetSchemaResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/GetSchema", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetPermissions(ctx context.Context, in *GetPermissionsRequest, opts ...grpc.CallOption) (*GetPermissionsResponse, error) {
+	out := new(GetPermissionsResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/GetPermissions", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SetReadOnly(ctx context.Context, in *SetReadOnlyRequest, opts ...grpc.CallOption) (*SetReadOnlyResponse, error) {
+	out := new(SetReadOnlyResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SetReadOnly", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SetReadWrite(ctx context.Context, in *SetReadWriteRequest, opts ...grpc.CallOption) (*SetReadWriteResponse, error) {
+	out := new(SetReadWriteResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SetReadWrite", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ChangeType(ctx context.Context, in *ChangeTypeRequest, opts ...grpc.CallOption) (*ChangeTypeResponse, error) {
+	out := new(ChangeTypeResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ChangeType", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) Scrap(ctx context.Context, in *ScrapRequest, opts ...grpc.CallOption) (*ScrapResponse, error) {
+	out := new(ScrapResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/Scrap", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error) {
+	out := new(RefreshStateResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/RefreshState", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error) {
+	out := new(RunHealthCheckResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/RunHealthCheck", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StreamHealth(ctx context.Context, in *StreamHealthRequest, opts ...grpc.CallOption) (TabletManager_StreamHealthClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanager.TabletManager/StreamHealth", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &tabletManagerStreamHealthClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -71,17 +1379,301 @@ func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, op
 	return x, nil
 }
 
-type TabletManager_SnapshotClient interface {
-	Recv() (*vtctl.LoggerEvent, error)
+type TabletManager_StreamHealthClient interface {
+	Recv() (*StreamHealthResponse, error)
 	grpc.ClientStream
 }
 
-type tabletManagerSnapshotClient struct {
+type tabletManagerStreamHealthClient struct {
 	grpc.ClientStream
 }
 
-func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
-	m := new(vtctl.LoggerEvent)
+func (x *tabletManagerStreamHealthClient) Recv() (*StreamHealthResponse, error) {
+	m := new(StreamHealthResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *tabletManagerClient) ReloadSchema(ctx context.Context, in *ReloadSchemaRequest, opts ...grpc.CallOption) (*ReloadSchemaResponse, error) {
+	out := new(ReloadSchemaResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ReloadSchema", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PreflightSchema(ctx context.Context, in *PreflightSchemaRequest, opts ...grpc.CallOption) (*PreflightSchemaResponse, error) {
+	out := new(PreflightSchemaResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/PreflightSchema", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error) {
+	out := new(ApplySchemaResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ApplySchema", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ExecuteFetchAsDba(ctx context.Context, in *ExecuteFetchAsDbaRequest, opts ...grpc.CallOption) (*ExecuteFetchAsDbaResponse, error) {
+	out := new(ExecuteFetchAsDbaResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ExecuteFetchAsDba", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ExecuteFetchAsApp(ctx context.Context, in *ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*ExecuteFetchAsAppResponse, error) {
+	out := new(ExecuteFetchAsAppResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ExecuteFetchAsApp", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SlaveStatus(ctx context.Context, in *SlaveStatusRequest, opts ...grpc.CallOption) (*SlaveStatusResponse, error) {
+	out := new(SlaveStatusResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SlaveStatus", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) MasterPosition(ctx context.Context, in *MasterPositionRequest, opts ...grpc.CallOption) (*MasterPositionResponse, error) {
+	out := new(MasterPositionResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/MasterPosition", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopSlave(ctx context.Context, in *StopSlaveRequest, opts ...grpc.CallOption) (*StopSlaveResponse, error) {
+	out := new(StopSlaveResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StopSlave", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopSlaveMinimum(ctx context.Context, in *StopSlaveMinimumRequest, opts ...grpc.CallOption) (*StopSlaveMinimumResponse, error) {
+	out := new(StopSlaveMinimumResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StopSlaveMinimum", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StartSlave(ctx context.Context, in *StartSlaveRequest, opts ...grpc.CallOption) (*StartSlaveResponse, error) {
+	out := new(StartSlaveResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StartSlave", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) TabletExternallyReparented(ctx context.Context, in *TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*TabletExternallyReparentedResponse, error) {
+	out := new(TabletExternallyReparentedResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/TabletExternallyReparented", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) TabletExternallyElected(ctx context.Context, in *TabletExternallyElectedRequest, opts ...grpc.CallOption) (*TabletExternallyElectedResponse, error) {
+	out := new(TabletExternallyElectedResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/TabletExternallyElected", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) GetSlaves(ctx context.Context, in *GetSlavesRequest, opts ...grpc.CallOption) (*GetSlavesResponse, error) {
+	out := new(GetSlavesResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/GetSlaves", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) WaitBlpPosition(ctx context.Context, in *WaitBlpPositionRequest, opts ...grpc.CallOption) (*WaitBlpPositionResponse, error) {
+	out := new(WaitBlpPositionResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/WaitBlpPosition", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopBlp(ctx context.Context, in *StopBlpRequest, opts ...grpc.CallOption) (*StopBlpResponse, error) {
+	out := new(StopBlpResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StopBlp", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StartBlp(ctx context.Context, in *StartBlpRequest, opts ...grpc.CallOption) (*StartBlpResponse, error) {
+	out := new(StartBlpResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StartBlp", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) RunBlpUntil(ctx context.Context, in *RunBlpUntilRequest, opts ...grpc.CallOption) (*RunBlpUntilResponse, error) {
+	out := new(RunBlpUntilResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/RunBlpUntil", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) ResetReplication(ctx context.Context, in *ResetReplicationRequest, opts ...grpc.CallOption) (*ResetReplicationResponse, error) {
+	out := new(ResetReplicationResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/ResetReplication", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) InitMaster(ctx context.Context, in *InitMasterRequest, opts ...grpc.CallOption) (*InitMasterResponse, error) {
+	out := new(InitMasterResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/InitMaster", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PopulateReparentJournal(ctx context.Context, in *PopulateReparentJournalRequest, opts ...grpc.CallOption) (*PopulateReparentJournalResponse, error) {
+	out := new(PopulateReparentJournalResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/PopulateReparentJournal", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) InitSlave(ctx context.Context, in *InitSlaveRequest, opts ...grpc.CallOption) (*InitSlaveResponse, error) {
+	out := new(InitSlaveResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/InitSlave", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) DemoteMaster(ctx context.Context, in *DemoteMasterRequest, opts ...grpc.CallOption) (*DemoteMasterResponse, error) {
+	out := new(DemoteMasterResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/DemoteMaster", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PromoteSlaveWhenCaughtUp(ctx context.Context, in *PromoteSlaveWhenCaughtUpRequest, opts ...grpc.CallOption) (*PromoteSlaveWhenCaughtUpResponse, error) {
+	out := new(PromoteSlaveWhenCaughtUpResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/PromoteSlaveWhenCaughtUp", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SlaveWasPromoted(ctx context.Context, in *SlaveWasPromotedRequest, opts ...grpc.CallOption) (*SlaveWasPromotedResponse, error) {
+	out := new(SlaveWasPromotedResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SlaveWasPromoted", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SetMaster(ctx context.Context, in *SetMasterRequest, opts ...grpc.CallOption) (*SetMasterResponse, error) {
+	out := new(SetMasterResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SetMaster", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) SlaveWasRestarted(ctx context.Context, in *SlaveWasRestartedRequest, opts ...grpc.CallOption) (*SlaveWasRestartedResponse, error) {
+	out := new(SlaveWasRestartedResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/SlaveWasRestarted", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, in *StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*StopReplicationAndGetStatusResponse, error) {
+	out := new(StopReplicationAndGetStatusResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/StopReplicationAndGetStatus", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) PromoteSlave(ctx context.Context, in *PromoteSlaveRequest, opts ...grpc.CallOption) (*PromoteSlaveResponse, error) {
+	out := new(PromoteSlaveResponse)
+	err := grpc.Invoke(ctx, "/tabletmanager.TabletManager/PromoteSlave", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) Backup(ctx context.Context, in *BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[1], c.cc, "/tabletmanager.TabletManager/Backup", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &tabletManagerBackupClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TabletManager_BackupClient interface {
+	Recv() (*BackupResponse, error)
+	grpc.ClientStream
+}
+
+type tabletManagerBackupClient struct {
+	grpc.ClientStream
+}
+
+func (x *tabletManagerBackupClient) Recv() (*BackupResponse, error) {
+	m := new(BackupResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -91,43 +1683,790 @@ func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
 // Server API for TabletManager service
 
 type TabletManagerServer interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(*SnapshotArgs, TabletManager_SnapshotServer) error
+	// Ping returns the input payload
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
+	// Sleep sleeps for the provided duration
+	Sleep(context.Context, *SleepRequest) (*SleepResponse, error)
+	// ExecuteHook executes the hook remotely
+	ExecuteHook(context.Context, *ExecuteHookRequest) (*ExecuteHookResponse, error)
+	// GetSchema asks the tablet for its schema
+	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
+	// GetPermissions asks the tablet for its permissions
+	GetPermissions(context.Context, *GetPermissionsRequest) (*GetPermissionsResponse, error)
+	SetReadOnly(context.Context, *SetReadOnlyRequest) (*SetReadOnlyResponse, error)
+	SetReadWrite(context.Context, *SetReadWriteRequest) (*SetReadWriteResponse, error)
+	// ChangeType asks the remote tablet to change its type
+	ChangeType(context.Context, *ChangeTypeRequest) (*ChangeTypeResponse, error)
+	Scrap(context.Context, *ScrapRequest) (*ScrapResponse, error)
+	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
+	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
+	StreamHealth(*StreamHealthRequest, TabletManager_StreamHealthServer) error
+	ReloadSchema(context.Context, *ReloadSchemaRequest) (*ReloadSchemaResponse, error)
+	PreflightSchema(context.Context, *PreflightSchemaRequest) (*PreflightSchemaResponse, error)
+	ApplySchema(context.Context, *ApplySchemaRequest) (*ApplySchemaResponse, error)
+	ExecuteFetchAsDba(context.Context, *ExecuteFetchAsDbaRequest) (*ExecuteFetchAsDbaResponse, error)
+	ExecuteFetchAsApp(context.Context, *ExecuteFetchAsAppRequest) (*ExecuteFetchAsAppResponse, error)
+	// SlaveStatus returns the current slave status.
+	SlaveStatus(context.Context, *SlaveStatusRequest) (*SlaveStatusResponse, error)
+	// MasterPosition returns the current master position
+	MasterPosition(context.Context, *MasterPositionRequest) (*MasterPositionResponse, error)
+	// StopSlave makes mysql stop its replication
+	StopSlave(context.Context, *StopSlaveRequest) (*StopSlaveResponse, error)
+	// StopSlaveMinimum stops the mysql replication after it reaches
+	// the provided minimum point
+	StopSlaveMinimum(context.Context, *StopSlaveMinimumRequest) (*StopSlaveMinimumResponse, error)
+	// StartSlave starts the mysql replication
+	StartSlave(context.Context, *StartSlaveRequest) (*StartSlaveResponse, error)
+	// TabletExternallyReparented tells a tablet that its underlying MySQL is
+	// currently the master. It is only used in environments (such as Vitess+MoB)
+	// in which MySQL is reparented by some agent external to Vitess, and then
+	// that agent simply notifies Vitess.
+	//
+	// This call is idempotent with respect to a single target tablet.
+	// However, the tablet assumes there is a cooling-off period following the
+	// initial external reparent from A to B, before this call is repeated on any
+	// tablet other than B. This assumption is configurable with the vttablet flag
+	// "finalize_external_reparent_timeout".
+	//
+	// For more information, see the design doc at go/vt-fast-failover.
+	TabletExternallyReparented(context.Context, *TabletExternallyReparentedRequest) (*TabletExternallyReparentedResponse, error)
+	// TabletExternallyElected is an notification that may be sent in
+	// anticipation of potentially later sending TabletExternallyReparented.
+	// The tablet can use this extra lead time to prepare to react quickly if
+	// TabletExternallyReparented does follow.
+	//
+	// This call is effectively a no-op if it is not followed by a call to
+	// TabletExternallyReparented, so the external agent doing the reparent can
+	// still change its mind.
+	//
+	// The agent does not need to wait for this call or cancel it before calling
+	// TabletExternallyReparented if the external reparent operation finishes
+	// before TabletExternallyElected returns.
+	TabletExternallyElected(context.Context, *TabletExternallyElectedRequest) (*TabletExternallyElectedResponse, error)
+	// GetSlaves asks for the list of mysql slaves
+	GetSlaves(context.Context, *GetSlavesRequest) (*GetSlavesResponse, error)
+	// WaitBlpPosition tells the remote tablet to wait until it reaches
+	// the specified binolg player position
+	WaitBlpPosition(context.Context, *WaitBlpPositionRequest) (*WaitBlpPositionResponse, error)
+	// StopBlp asks the tablet to stop all its binlog players,
+	// and returns the current position for all of them
+	StopBlp(context.Context, *StopBlpRequest) (*StopBlpResponse, error)
+	// StartBlp asks the tablet to restart its binlog players
+	StartBlp(context.Context, *StartBlpRequest) (*StartBlpResponse, error)
+	// RunBlpUntil asks the tablet to restart its binlog players
+	RunBlpUntil(context.Context, *RunBlpUntilRequest) (*RunBlpUntilResponse, error)
+	// ResetReplication makes the target not replicating
+	ResetReplication(context.Context, *ResetReplicationRequest) (*ResetReplicationResponse, error)
+	// InitMaster initializes the tablet as a master
+	InitMaster(context.Context, *InitMasterRequest) (*InitMasterResponse, error)
+	// PopulateReparentJournal tells the tablet to add an entry to its
+	// reparent journal
+	PopulateReparentJournal(context.Context, *PopulateReparentJournalRequest) (*PopulateReparentJournalResponse, error)
+	// InitSlave tells the tablet to reparent to the master unconditionnally
+	InitSlave(context.Context, *InitSlaveRequest) (*InitSlaveResponse, error)
+	// DemoteMaster tells the soon-to-be-former master it's gonna change
+	DemoteMaster(context.Context, *DemoteMasterRequest) (*DemoteMasterResponse, error)
+	// PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
+	// and then be the master
+	PromoteSlaveWhenCaughtUp(context.Context, *PromoteSlaveWhenCaughtUpRequest) (*PromoteSlaveWhenCaughtUpResponse, error)
+	// SlaveWasPromoted tells the remote tablet it is now the master
+	SlaveWasPromoted(context.Context, *SlaveWasPromotedRequest) (*SlaveWasPromotedResponse, error)
+	// SetMaster tells the slave to reparent
+	SetMaster(context.Context, *SetMasterRequest) (*SetMasterResponse, error)
+	// SlaveWasRestarted tells the remote tablet its master has changed
+	SlaveWasRestarted(context.Context, *SlaveWasRestartedRequest) (*SlaveWasRestartedResponse, error)
+	// StopReplicationAndGetStatus stops MySQL replication, and returns the
+	// replication status
+	StopReplicationAndGetStatus(context.Context, *StopReplicationAndGetStatusRequest) (*StopReplicationAndGetStatusResponse, error)
+	// PromoteSlave makes the slave the new master
+	PromoteSlave(context.Context, *PromoteSlaveRequest) (*PromoteSlaveResponse, error)
+	Backup(*BackupRequest, TabletManager_BackupServer) error
 }
 
 func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
 	s.RegisterService(&_TabletManager_serviceDesc, srv)
 }
 
-func _TabletManager_Snapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SnapshotArgs)
+func _TabletManager_Ping_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(PingRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).Ping(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_Sleep_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SleepRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).Sleep(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ExecuteHook_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ExecuteHookRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ExecuteHook(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_GetSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(GetSchemaRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).GetSchema(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_GetPermissions_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(GetPermissionsRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).GetPermissions(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SetReadOnly_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SetReadOnlyRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SetReadOnly(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SetReadWrite_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SetReadWriteRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SetReadWrite(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ChangeType_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ChangeTypeRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ChangeType(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_Scrap_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ScrapRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).Scrap(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_RefreshState_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(RefreshStateRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).RefreshState(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(RunHealthCheckRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).RunHealthCheck(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamHealthRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(TabletManagerServer).Snapshot(m, &tabletManagerSnapshotServer{stream})
+	return srv.(TabletManagerServer).StreamHealth(m, &tabletManagerStreamHealthServer{stream})
 }
 
-type TabletManager_SnapshotServer interface {
-	Send(*vtctl.LoggerEvent) error
+type TabletManager_StreamHealthServer interface {
+	Send(*StreamHealthResponse) error
 	grpc.ServerStream
 }
 
-type tabletManagerSnapshotServer struct {
+type tabletManagerStreamHealthServer struct {
 	grpc.ServerStream
 }
 
-func (x *tabletManagerSnapshotServer) Send(m *vtctl.LoggerEvent) error {
+func (x *tabletManagerStreamHealthServer) Send(m *StreamHealthResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ReloadSchemaRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ReloadSchema(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_PreflightSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(PreflightSchemaRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).PreflightSchema(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ApplySchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ApplySchemaRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ApplySchema(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ExecuteFetchAsDba_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ExecuteFetchAsDbaRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ExecuteFetchAsDba(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ExecuteFetchAsApp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ExecuteFetchAsAppRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ExecuteFetchAsApp(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SlaveStatus_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SlaveStatusRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SlaveStatus(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_MasterPosition_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(MasterPositionRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).MasterPosition(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StopSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StopSlaveRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StopSlave(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StopSlaveMinimum_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StopSlaveMinimumRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StopSlaveMinimum(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StartSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StartSlaveRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StartSlave(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(TabletExternallyReparentedRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).TabletExternallyReparented(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_TabletExternallyElected_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(TabletExternallyElectedRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).TabletExternallyElected(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_GetSlaves_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(GetSlavesRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).GetSlaves(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_WaitBlpPosition_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(WaitBlpPositionRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).WaitBlpPosition(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StopBlp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StopBlpRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StopBlp(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StartBlp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StartBlpRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StartBlp(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_RunBlpUntil_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(RunBlpUntilRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).RunBlpUntil(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_ResetReplication_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(ResetReplicationRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).ResetReplication(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_InitMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(InitMasterRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).InitMaster(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_PopulateReparentJournal_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(PopulateReparentJournalRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).PopulateReparentJournal(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_InitSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(InitSlaveRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).InitSlave(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_DemoteMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(DemoteMasterRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).DemoteMaster(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_PromoteSlaveWhenCaughtUp_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(PromoteSlaveWhenCaughtUpRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).PromoteSlaveWhenCaughtUp(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SlaveWasPromoted_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SlaveWasPromotedRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SlaveWasPromoted(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SetMaster_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SetMasterRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SetMaster(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_SlaveWasRestarted_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(SlaveWasRestartedRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).SlaveWasRestarted(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(StopReplicationAndGetStatusRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).StopReplicationAndGetStatus(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_PromoteSlave_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(PromoteSlaveRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(TabletManagerServer).PromoteSlave(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func _TabletManager_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TabletManagerServer).Backup(m, &tabletManagerBackupServer{stream})
+}
+
+type TabletManager_BackupServer interface {
+	Send(*BackupResponse) error
+	grpc.ServerStream
+}
+
+type tabletManagerBackupServer struct {
+	grpc.ServerStream
+}
+
+func (x *tabletManagerBackupServer) Send(m *BackupResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 var _TabletManager_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "tabletmanager.TabletManager",
 	HandlerType: (*TabletManagerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Ping",
+			Handler:    _TabletManager_Ping_Handler,
+		},
+		{
+			MethodName: "Sleep",
+			Handler:    _TabletManager_Sleep_Handler,
+		},
+		{
+			MethodName: "ExecuteHook",
+			Handler:    _TabletManager_ExecuteHook_Handler,
+		},
+		{
+			MethodName: "GetSchema",
+			Handler:    _TabletManager_GetSchema_Handler,
+		},
+		{
+			MethodName: "GetPermissions",
+			Handler:    _TabletManager_GetPermissions_Handler,
+		},
+		{
+			MethodName: "SetReadOnly",
+			Handler:    _TabletManager_SetReadOnly_Handler,
+		},
+		{
+			MethodName: "SetReadWrite",
+			Handler:    _TabletManager_SetReadWrite_Handler,
+		},
+		{
+			MethodName: "ChangeType",
+			Handler:    _TabletManager_ChangeType_Handler,
+		},
+		{
+			MethodName: "Scrap",
+			Handler:    _TabletManager_Scrap_Handler,
+		},
+		{
+			MethodName: "RefreshState",
+			Handler:    _TabletManager_RefreshState_Handler,
+		},
+		{
+			MethodName: "RunHealthCheck",
+			Handler:    _TabletManager_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "ReloadSchema",
+			Handler:    _TabletManager_ReloadSchema_Handler,
+		},
+		{
+			MethodName: "PreflightSchema",
+			Handler:    _TabletManager_PreflightSchema_Handler,
+		},
+		{
+			MethodName: "ApplySchema",
+			Handler:    _TabletManager_ApplySchema_Handler,
+		},
+		{
+			MethodName: "ExecuteFetchAsDba",
+			Handler:    _TabletManager_ExecuteFetchAsDba_Handler,
+		},
+		{
+			MethodName: "ExecuteFetchAsApp",
+			Handler:    _TabletManager_ExecuteFetchAsApp_Handler,
+		},
+		{
+			MethodName: "SlaveStatus",
+			Handler:    _TabletManager_SlaveStatus_Handler,
+		},
+		{
+			MethodName: "MasterPosition",
+			Handler:    _TabletManager_MasterPosition_Handler,
+		},
+		{
+			MethodName: "StopSlave",
+			Handler:    _TabletManager_StopSlave_Handler,
+		},
+		{
+			MethodName: "StopSlaveMinimum",
+			Handler:    _TabletManager_StopSlaveMinimum_Handler,
+		},
+		{
+			MethodName: "StartSlave",
+			Handler:    _TabletManager_StartSlave_Handler,
+		},
+		{
+			MethodName: "TabletExternallyReparented",
+			Handler:    _TabletManager_TabletExternallyReparented_Handler,
+		},
+		{
+			MethodName: "TabletExternallyElected",
+			Handler:    _TabletManager_TabletExternallyElected_Handler,
+		},
+		{
+			MethodName: "GetSlaves",
+			Handler:    _TabletManager_GetSlaves_Handler,
+		},
+		{
+			MethodName: "WaitBlpPosition",
+			Handler:    _TabletManager_WaitBlpPosition_Handler,
+		},
+		{
+			MethodName: "StopBlp",
+			Handler:    _TabletManager_StopBlp_Handler,
+		},
+		{
+			MethodName: "StartBlp",
+			Handler:    _TabletManager_StartBlp_Handler,
+		},
+		{
+			MethodName: "RunBlpUntil",
+			Handler:    _TabletManager_RunBlpUntil_Handler,
+		},
+		{
+			MethodName: "ResetReplication",
+			Handler:    _TabletManager_ResetReplication_Handler,
+		},
+		{
+			MethodName: "InitMaster",
+			Handler:    _TabletManager_InitMaster_Handler,
+		},
+		{
+			MethodName: "PopulateReparentJournal",
+			Handler:    _TabletManager_PopulateReparentJournal_Handler,
+		},
+		{
+			MethodName: "InitSlave",
+			Handler:    _TabletManager_InitSlave_Handler,
+		},
+		{
+			MethodName: "DemoteMaster",
+			Handler:    _TabletManager_DemoteMaster_Handler,
+		},
+		{
+			MethodName: "PromoteSlaveWhenCaughtUp",
+			Handler:    _TabletManager_PromoteSlaveWhenCaughtUp_Handler,
+		},
+		{
+			MethodName: "SlaveWasPromoted",
+			Handler:    _TabletManager_SlaveWasPromoted_Handler,
+		},
+		{
+			MethodName: "SetMaster",
+			Handler:    _TabletManager_SetMaster_Handler,
+		},
+		{
+			MethodName: "SlaveWasRestarted",
+			Handler:    _TabletManager_SlaveWasRestarted_Handler,
+		},
+		{
+			MethodName: "StopReplicationAndGetStatus",
+			Handler:    _TabletManager_StopReplicationAndGetStatus_Handler,
+		},
+		{
+			MethodName: "PromoteSlave",
+			Handler:    _TabletManager_PromoteSlave_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Snapshot",
-			Handler:       _TabletManager_Snapshot_Handler,
+			StreamName:    "StreamHealth",
+			Handler:       _TabletManager_StreamHealth_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Backup",
+			Handler:       _TabletManager_Backup_Handler,
 			ServerStreams: true,
 		},
 	},

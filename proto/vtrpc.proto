@@ -1,0 +1,62 @@
+// This file contains useful data structures for RPCs in Vitess.
+
+syntax = "proto3";
+
+package vtrpc;
+
+// CallerID is passed along RPCs to identify the originating client
+// for a request. It is not meant to be secure, but only
+// informational.  The client can put whatever info they want in these
+// fields, and they will be trusted by the servers. The fields will
+// just be used for logging purposes, and to easily find a client.
+// VtGate propagates it to VtTablet, and VtTablet may use this
+// information for monitoring purposes, to display on dashboards, or
+// for blacklisting purposes.
+message CallerID {
+  // principal is the effective user identifier. It is usually filled in
+  // with whoever made the request to the appserver, if the request
+  // came from an automated job or another system component.
+  // If the request comes directly from the Internet, or if the Vitess client
+  // takes action on its own accord, it is okay for this field to be absent.
+  string principal = 1;
+
+  // component describes the running process of the effective caller.
+  // It can for instance be the hostname:port of the servlet initiating the
+  // database call, or the container engine ID used by the servlet.
+  string component = 2;
+
+  // subcomponent describes a component inisde the immediate caller which
+  // is responsible for generating is request. Suggested values are a
+  // servlet name or an API endpoint name.
+  string subcomponent = 3;
+}
+
+// ErrorCode is the enum values for Errors
+enum ErrorCode {
+  // NoError means there was no error, and the message should be ignored.
+  NoError = 0;
+
+  // TabletError is the base VtTablet error. All VtTablet errors
+  // should be 4 digits, starting with 1.
+  TabletError = 1000;
+
+  // UnknownTabletError is the code for an unknown error that came
+  // from VtTablet.
+  UnknownTabletError = 1999;
+
+  // VtgateError is the base VTGate error code. All VTGate errors
+  // should be 4 digits, starting with 2.
+  VtgateError = 2000;
+
+  // UnknownVtgateError is the code for an unknown error that came from VTGate.
+  UnknownVtgateError = 2999;
+}
+
+// RPCError is an application-level error structure returned by
+// VtTablet (and passed along by VtGate if appropriate).
+// We use this so the clients don't have to parse the error messages,
+// but instead can depend on the value of the code.
+message RPCError {
+  ErrorCode code = 1;
+  string message = 2;
+}

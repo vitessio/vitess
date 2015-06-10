@@ -1,43 +1,23 @@
 // This file contains all the types and servers necessary to make
-// Stubby calls to Vttablet.
+// RPC calls to Vttablet.
 
 syntax = "proto3";
 
 package queryservice;
 
-// SessionParams is passed to GetSessionId. The server will
-// double-check the keyspace and shard are what the tablet is serving.
-message SessionParams {
+import "topo.proto";
+import "vtrpc.proto";
+
+// Target describes what the client expects the tablet is.
+// If the tablet does not match, an error is returned.
+message Target {
   string keyspace = 1;
   string shard = 2;
-}
-
-// SessionInfo is returned by GetSessionId. Use the provided
-// session_id in the Session object for any subsequent call.
-message SessionInfo {
-  int64 session_id = 1;
-}
-
-// TransactionInfo is returned by Begin. Use the provided
-// transaction_id in the Session object for any subsequent call to be inside
-// the transaction.
-message TransactionInfo {
-  int64 transaction_id = 1;
-}
-
-// Session is passed to all calls.
-message Session {
-  // session_id comes from SessionInfo and is required.
-  int64 session_id = 1;
-
-  // transaction_id comes from TransactionInfo and is required for queries
-  // inside a transaction.
-  int64 transaction_id = 2;
+  topo.TabletType TabletType = 3;
 }
 
 // BindVariable represents a single bind variable in a Query
 message BindVariable {
-  string name = 1;
   enum Type {
     TYPE_NULL = 0;
     TYPE_BYTES = 1;
@@ -50,34 +30,23 @@ message BindVariable {
     TYPE_FLOAT_LIST = 8;
 
   }
-  Type type = 2;
-  bytes value_bytes = 3;
-  int64 value_int = 4;
-  uint64 value_uint = 5;
-  double value_float = 6;
-  repeated bytes value_bytes_list = 7;
-  repeated int64 value_int_list = 8;
-  repeated uint64 value_uint_list = 9;
-  repeated double value_float_list = 10;
+  Type type = 1;
+
+  // Depending on type, only one value below is set.
+  bytes value_bytes = 2;
+  int64 value_int = 3;
+  uint64 value_uint = 4;
+  double value_float = 5;
+  repeated bytes value_bytes_list = 6;
+  repeated int64 value_int_list = 7;
+  repeated uint64 value_uint_list = 8;
+  repeated double value_float_list = 9;
 }
 
-// Query is the payload to Execute
-message Query {
-  bytes sql = 1;
-  repeated BindVariable bind_variables = 2;
-  Session session = 3;
-}
-
-// BoundQuery is one query in a QueryList
+// BoundQuery is a query with its bind variables
 message BoundQuery {
   bytes sql = 1;
-  repeated BindVariable bind_variables = 2;
-}
-
-// QueryList is the payload to ExecuteBatch
-message QueryList {
-  repeated BoundQuery queries = 1;
-  Session session = 2;
+  map<string, BindVariable> bind_variables = 2;
 }
 
 // Field describes a single column returned by a query
@@ -145,14 +114,9 @@ message Field {
   int64 flags = 3;
 }
 
-// Cell is a single value, an array of Cell is a Row
-message Cell {
-  bytes value = 1;
-}
-
 // Row is a database row.
 message Row {
-  repeated Cell values = 1;
+  repeated bytes values = 1;
 }
 
 // QueryResult is returned by Execute and ExecuteStream.
@@ -171,66 +135,133 @@ message QueryResult {
   repeated Row rows = 4;
 }
 
-// QueryResultList is the return type for ExecuteBatch
-message QueryResultList {
-  repeated QueryResult list = 1;
+// ExecuteRequest is the payload to Execute
+message ExecuteRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
+  int64 transaction_id = 4;
+}
+
+// ExecuteResponse is the returned value from Execute
+message ExecuteResponse {
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+}
+
+// ExecuteBatchRequest is the payload to ExecuteBatch
+message ExecuteBatchRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  repeated BoundQuery queries = 3;
+  int64 transaction_id = 4;
+}
+
+// ExecuteBatchResponse is the returned value from ExecuteBatch
+message ExecuteBatchResponse {
+  vtrpc.RPCError error = 1;
+  repeated QueryResult results = 2;
+}
+
+// StreamExecuteRequest is the payload to StreamExecute
+message StreamExecuteRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
+}
+
+// StreamExecuteResponse is the returned value from StreamExecute
+message StreamExecuteResponse {
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+}
+
+// BeginRequest is the payload to Begin
+message BeginRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+}
+
+// BeginResponse is the returned value from Begin
+message BeginResponse {
+  vtrpc.RPCError error = 1;
+  int64 transaction_id = 2;
+}
+
+// CommitRequest is the payload to Commit
+message CommitRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  int64 transaction_id = 3;
+}
+
+// CommitResponse is the returned value from Commit
+message CommitResponse {
+  vtrpc.RPCError error = 1;
+}
+
+// RollbackRequest is the payload to Rollback
+message RollbackRequest {
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  int64 transaction_id = 3;
+}
+
+// RollbackResponse is the returned value from Rollback
+message RollbackResponse {
+  vtrpc.RPCError error = 1;
 }
 
 // SplitQueryRequest is the payload for SplitQuery
 message SplitQueryRequest {
-  BoundQuery query = 1;
-  int64 split_count = 2;
-  Session session = 3;
+  vtrpc.CallerID caller_id = 1;
+  Target target = 2;
+  BoundQuery query = 3;
+  int64 split_count = 4;
 }
 
 // QuerySplit represents one query to execute on the tablet
 message QuerySplit {
+  // query is the query to execute
   BoundQuery query = 1;
+
+  // row_count is the approximate row count the query will return
   int64 row_count = 2;
 }
 
-// SplitQueryResult is returned by SplitQuery and represents all the queries
+// SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
-message SplitQueryResult {
-  repeated QuerySplit queries = 1;
+message SplitQueryResponse {
+  vtrpc.RPCError error = 1;
+  repeated QuerySplit queries = 2;
 }
-
-// CommitResponse is returned by Commit, and empty.
-message CommitResponse {}
-
-// RollbackResponse is returned by Rollback, and empty.
-message RollbackResponse {}
 
 // SqlQuery defines the tablet SQL query, implemented by vttablet.
 service SqlQuery {
-  // GetSessionId returns a valid session id to be used for
-  // subsequent calls. This should be the first call by clients.
-  rpc GetSessionId (SessionParams) returns (SessionInfo) {};
-
   // Execute executes the specified SQL query (might be in a
-  // transaction context, if Query.session.transaction_id is set).
-  rpc Execute (Query) returns (QueryResult) {};
+  // transaction context, if Query.transaction_id is set).
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {};
 
   // ExecuteBatch executes a list of queries, and returns the result
   // for each query.
-  rpc ExecuteBatch(QueryList) returns (QueryResultList) {};
+  rpc ExecuteBatch(ExecuteBatchRequest) returns (ExecuteBatchResponse) {};
 
   // StreamExecute executes a streaming query. Use this method if the
   // query returns a large number of rows. The first QueryResult will
   // contain the Fields, subsequent QueryResult messages will contain
   // the rows.
-  rpc StreamExecute (Query) returns (stream QueryResult) {};
+  rpc StreamExecute(StreamExecuteRequest) returns (stream StreamExecuteResponse) {};
 
   // Begin a transaction.
-  rpc Begin (Session) returns (TransactionInfo) {};
+  rpc Begin(BeginRequest) returns (BeginResponse) {};
 
   // Commit a transaction.
-  rpc Commit (Session) returns (CommitResponse) {};
+  rpc Commit(CommitRequest) returns (CommitResponse) {};
 
   // Rollback a transaction.
-  rpc Rollback (Session) returns (RollbackResponse) {};
+  rpc Rollback(RollbackRequest) returns (RollbackResponse) {};
 
   // SplitQuery is the API to facilitate MapReduce-type iterations
   // over large data sets (like full table dumps).
-  rpc SplitQuery(SplitQueryRequest) returns (SplitQueryResult) {};
+  rpc SplitQuery(SplitQueryRequest) returns (SplitQueryResponse) {};
 }
