@@ -9,44 +9,11 @@ It is generated from these files:
 	vtgateservice.proto
 
 It has these top-level messages:
-	Session
-	ExecuteRequest
-	ExecuteResponse
-	ExecuteShardsRequest
-	ExecuteShardsResponse
-	ExecuteKeyspaceIdsRequest
-	ExecuteKeyspaceIdsResponse
-	ExecuteKeyRangesRequest
-	ExecuteKeyRangesResponse
-	ExecuteEntityIdsRequest
-	ExecuteEntityIdsResponse
-	ExecuteBatchShardsRequest
-	ExecuteBatchShardsResponse
-	ExecuteBatchKeyspaceIdsRequest
-	ExecuteBatchKeyspaceIdsResponse
-	StreamExecuteRequest
-	StreamExecuteResponse
-	StreamExecuteShardsRequest
-	StreamExecuteShardsResponse
-	StreamExecuteKeyspaceIdsRequest
-	StreamExecuteKeyspaceIdsResponse
-	StreamExecuteKeyRangesRequest
-	StreamExecuteKeyRangesResponse
-	BeginRequest
-	BeginResponse
-	CommitRequest
-	CommitResponse
-	RollbackRequest
-	RollbackResponse
-	SplitQueryRequest
-	SplitQueryResponse
 */
 package vtgateservice
 
 import proto "github.com/golang/protobuf/proto"
-import queryservice "github.com/youtube/vitess/go/vt/proto/queryservice"
-import topo "github.com/youtube/vitess/go/vt/proto/topo"
-import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
+import vtgate "github.com/youtube/vitess/go/vt/proto/vtgate"
 
 import (
 	context "golang.org/x/net/context"
@@ -60,1002 +27,7 @@ var _ grpc.ClientConn
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-type ExecuteEntityIdsRequest_EntityId_Type int32
-
-const (
-	ExecuteEntityIdsRequest_EntityId_TYPE_NULL  ExecuteEntityIdsRequest_EntityId_Type = 0
-	ExecuteEntityIdsRequest_EntityId_TYPE_BYTES ExecuteEntityIdsRequest_EntityId_Type = 1
-	ExecuteEntityIdsRequest_EntityId_TYPE_INT   ExecuteEntityIdsRequest_EntityId_Type = 2
-	ExecuteEntityIdsRequest_EntityId_TYPE_UINT  ExecuteEntityIdsRequest_EntityId_Type = 3
-	ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT ExecuteEntityIdsRequest_EntityId_Type = 4
-)
-
-var ExecuteEntityIdsRequest_EntityId_Type_name = map[int32]string{
-	0: "TYPE_NULL",
-	1: "TYPE_BYTES",
-	2: "TYPE_INT",
-	3: "TYPE_UINT",
-	4: "TYPE_FLOAT",
-}
-var ExecuteEntityIdsRequest_EntityId_Type_value = map[string]int32{
-	"TYPE_NULL":  0,
-	"TYPE_BYTES": 1,
-	"TYPE_INT":   2,
-	"TYPE_UINT":  3,
-	"TYPE_FLOAT": 4,
-}
-
-func (x ExecuteEntityIdsRequest_EntityId_Type) String() string {
-	return proto.EnumName(ExecuteEntityIdsRequest_EntityId_Type_name, int32(x))
-}
-
-// Session objects are session cookies and are invalidated on
-// use. Query results will contain updated session values.
-// Their content should be opaque to the user.
-type Session struct {
-	InTransaction bool                    `protobuf:"varint,1,opt,name=in_transaction" json:"in_transaction,omitempty"`
-	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions" json:"shard_sessions,omitempty"`
-}
-
-func (m *Session) Reset()         { *m = Session{} }
-func (m *Session) String() string { return proto.CompactTextString(m) }
-func (*Session) ProtoMessage()    {}
-
-func (m *Session) GetShardSessions() []*Session_ShardSession {
-	if m != nil {
-		return m.ShardSessions
-	}
-	return nil
-}
-
-type Session_ShardSession struct {
-	Target        *queryservice.Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
-	TransactionId int64                `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
-}
-
-func (m *Session_ShardSession) Reset()         { *m = Session_ShardSession{} }
-func (m *Session_ShardSession) String() string { return proto.CompactTextString(m) }
-func (*Session_ShardSession) ProtoMessage()    {}
-
-func (m *Session_ShardSession) GetTarget() *queryservice.Target {
-	if m != nil {
-		return m.Target
-	}
-	return nil
-}
-
-// ExecuteRequest is the payload to Execute
-type ExecuteRequest struct {
-	CallerId         *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                 `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Query            *queryservice.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	TabletType       topo.TabletType          `protobuf:"varint,4,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                     `protobuf:"varint,5,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
-func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteRequest) ProtoMessage()    {}
-
-func (m *ExecuteRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// ExecuteResponse is the returned value from Execute
-type ExecuteResponse struct {
-	Error   *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                  `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Result  *queryservice.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
-func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteResponse) ProtoMessage()    {}
-
-func (m *ExecuteResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// ExecuteShardsRequest is the payload to ExecuteShards
-type ExecuteShardsRequest struct {
-	CallerId         *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                 `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Query            *queryservice.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	Keyspace         string                   `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shards           []string                 `protobuf:"bytes,5,rep,name=shards" json:"shards,omitempty"`
-	TabletType       topo.TabletType          `protobuf:"varint,6,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                     `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteShardsRequest) Reset()         { *m = ExecuteShardsRequest{} }
-func (m *ExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsRequest) ProtoMessage()    {}
-
-func (m *ExecuteShardsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteShardsRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteShardsRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// ExecuteShardsResponse is the returned value from ExecuteShards
-type ExecuteShardsResponse struct {
-	Error   *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                  `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Result  *queryservice.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *ExecuteShardsResponse) Reset()         { *m = ExecuteShardsResponse{} }
-func (m *ExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsResponse) ProtoMessage()    {}
-
-func (m *ExecuteShardsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteShardsResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteShardsResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds
-type ExecuteKeyspaceIdsRequest struct {
-	CallerId         *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                 `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Query            *queryservice.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	Keyspace         string                   `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyspaceIds      [][]byte                 `protobuf:"bytes,5,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType       topo.TabletType          `protobuf:"varint,6,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                     `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteKeyspaceIdsRequest) Reset()         { *m = ExecuteKeyspaceIdsRequest{} }
-func (m *ExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsRequest) ProtoMessage()    {}
-
-func (m *ExecuteKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteKeyspaceIdsRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteKeyspaceIdsRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds
-type ExecuteKeyspaceIdsResponse struct {
-	Error   *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                  `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Result  *queryservice.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *ExecuteKeyspaceIdsResponse) Reset()         { *m = ExecuteKeyspaceIdsResponse{} }
-func (m *ExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsResponse) ProtoMessage()    {}
-
-func (m *ExecuteKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteKeyspaceIdsResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteKeyspaceIdsResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges
-type ExecuteKeyRangesRequest struct {
-	CallerId         *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                 `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Query            *queryservice.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	Keyspace         string                   `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyRanges        []*topo.KeyRange         `protobuf:"bytes,5,rep,name=key_ranges" json:"key_ranges,omitempty"`
-	TabletType       topo.TabletType          `protobuf:"varint,6,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                     `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteKeyRangesRequest) Reset()         { *m = ExecuteKeyRangesRequest{} }
-func (m *ExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesRequest) ProtoMessage()    {}
-
-func (m *ExecuteKeyRangesRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteKeyRangesRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteKeyRangesRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-func (m *ExecuteKeyRangesRequest) GetKeyRanges() []*topo.KeyRange {
-	if m != nil {
-		return m.KeyRanges
-	}
-	return nil
-}
-
-// ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges
-type ExecuteKeyRangesResponse struct {
-	Error   *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                  `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Result  *queryservice.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *ExecuteKeyRangesResponse) Reset()         { *m = ExecuteKeyRangesResponse{} }
-func (m *ExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesResponse) ProtoMessage()    {}
-
-func (m *ExecuteKeyRangesResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteKeyRangesResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteKeyRangesResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// ExecuteEntityIdsRequest is the payload to ExecuteEntityIds
-type ExecuteEntityIdsRequest struct {
-	CallerId          *vtrpc.CallerID                     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session           *Session                            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Query             *queryservice.BoundQuery            `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	Keyspace          string                              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	EntityColumnName  string                              `protobuf:"bytes,5,opt,name=entity_column_name" json:"entity_column_name,omitempty"`
-	EntityKeyspaceIds []*ExecuteEntityIdsRequest_EntityId `protobuf:"bytes,6,rep,name=entity_keyspace_ids" json:"entity_keyspace_ids,omitempty"`
-	TabletType        topo.TabletType                     `protobuf:"varint,7,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction  bool                                `protobuf:"varint,8,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteEntityIdsRequest) Reset()         { *m = ExecuteEntityIdsRequest{} }
-func (m *ExecuteEntityIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsRequest) ProtoMessage()    {}
-
-func (m *ExecuteEntityIdsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsRequest) GetEntityKeyspaceIds() []*ExecuteEntityIdsRequest_EntityId {
-	if m != nil {
-		return m.EntityKeyspaceIds
-	}
-	return nil
-}
-
-type ExecuteEntityIdsRequest_EntityId struct {
-	XidType    ExecuteEntityIdsRequest_EntityId_Type `protobuf:"varint,1,opt,name=xid_type,enum=vtgateservice.ExecuteEntityIdsRequest_EntityId_Type" json:"xid_type,omitempty"`
-	XidBytes   []byte                                `protobuf:"bytes,2,opt,name=xid_bytes,proto3" json:"xid_bytes,omitempty"`
-	XidInt     int64                                 `protobuf:"varint,3,opt,name=xid_int" json:"xid_int,omitempty"`
-	XidUint    uint64                                `protobuf:"varint,4,opt,name=xid_uint" json:"xid_uint,omitempty"`
-	XidFloat   float64                               `protobuf:"fixed64,5,opt,name=xid_float" json:"xid_float,omitempty"`
-	KeyspaceId []byte                                `protobuf:"bytes,6,opt,name=keyspace_id,proto3" json:"keyspace_id,omitempty"`
-}
-
-func (m *ExecuteEntityIdsRequest_EntityId) Reset()         { *m = ExecuteEntityIdsRequest_EntityId{} }
-func (m *ExecuteEntityIdsRequest_EntityId) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsRequest_EntityId) ProtoMessage()    {}
-
-// ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds
-type ExecuteEntityIdsResponse struct {
-	Error   *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                  `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Result  *queryservice.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *ExecuteEntityIdsResponse) Reset()         { *m = ExecuteEntityIdsResponse{} }
-func (m *ExecuteEntityIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsResponse) ProtoMessage()    {}
-
-func (m *ExecuteEntityIdsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
-type ExecuteBatchShardsRequest struct {
-	CallerId         *vtrpc.CallerID            `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                   `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Queries          []*queryservice.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	Keyspace         string                     `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shards           []string                   `protobuf:"bytes,5,rep,name=shards" json:"shards,omitempty"`
-	TabletType       topo.TabletType            `protobuf:"varint,6,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                       `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteBatchShardsRequest) Reset()         { *m = ExecuteBatchShardsRequest{} }
-func (m *ExecuteBatchShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsRequest) ProtoMessage()    {}
-
-func (m *ExecuteBatchShardsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteBatchShardsRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteBatchShardsRequest) GetQueries() []*queryservice.BoundQuery {
-	if m != nil {
-		return m.Queries
-	}
-	return nil
-}
-
-// ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards
-type ExecuteBatchShardsResponse struct {
-	Error   *vtrpc.RPCError             `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                    `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Results []*queryservice.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
-}
-
-func (m *ExecuteBatchShardsResponse) Reset()         { *m = ExecuteBatchShardsResponse{} }
-func (m *ExecuteBatchShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsResponse) ProtoMessage()    {}
-
-func (m *ExecuteBatchShardsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteBatchShardsResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteBatchShardsResponse) GetResults() []*queryservice.QueryResult {
-	if m != nil {
-		return m.Results
-	}
-	return nil
-}
-
-// ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
-type ExecuteBatchKeyspaceIdsRequest struct {
-	CallerId         *vtrpc.CallerID            `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session                   `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Queries          []*queryservice.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	Keyspace         string                     `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyspaceIds      [][]byte                   `protobuf:"bytes,5,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType       topo.TabletType            `protobuf:"varint,6,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                       `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
-}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) Reset()         { *m = ExecuteBatchKeyspaceIdsRequest{} }
-func (m *ExecuteBatchKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchKeyspaceIdsRequest) ProtoMessage()    {}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) GetQueries() []*queryservice.BoundQuery {
-	if m != nil {
-		return m.Queries
-	}
-	return nil
-}
-
-// ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId
-type ExecuteBatchKeyspaceIdsResponse struct {
-	Error   *vtrpc.RPCError             `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session                    `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Results []*queryservice.QueryResult `protobuf:"bytes,3,rep,name=results" json:"results,omitempty"`
-}
-
-func (m *ExecuteBatchKeyspaceIdsResponse) Reset()         { *m = ExecuteBatchKeyspaceIdsResponse{} }
-func (m *ExecuteBatchKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchKeyspaceIdsResponse) ProtoMessage()    {}
-
-func (m *ExecuteBatchKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *ExecuteBatchKeyspaceIdsResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*queryservice.QueryResult {
-	if m != nil {
-		return m.Results
-	}
-	return nil
-}
-
-// StreamExecuteRequest is the payload to StreamExecute
-type StreamExecuteRequest struct {
-	CallerId   *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Query      *queryservice.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	TabletType topo.TabletType          `protobuf:"varint,3,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-}
-
-func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
-func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteRequest) ProtoMessage()    {}
-
-func (m *StreamExecuteRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *StreamExecuteRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// StreamExecuteResponse is the returned value from StreamExecute
-type StreamExecuteResponse struct {
-	Error  *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *queryservice.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
-func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *StreamExecuteResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// StreamExecuteShardsRequest is the payload to StreamExecuteShards
-type StreamExecuteShardsRequest struct {
-	CallerId   *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Query      *queryservice.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	Keyspace   string                   `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shards     []string                 `protobuf:"bytes,4,rep,name=shards" json:"shards,omitempty"`
-	TabletType topo.TabletType          `protobuf:"varint,5,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-}
-
-func (m *StreamExecuteShardsRequest) Reset()         { *m = StreamExecuteShardsRequest{} }
-func (m *StreamExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsRequest) ProtoMessage()    {}
-
-func (m *StreamExecuteShardsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *StreamExecuteShardsRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// StreamExecuteShardsResponse is the returned value from StreamExecuteShards
-type StreamExecuteShardsResponse struct {
-	Error  *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *queryservice.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *StreamExecuteShardsResponse) Reset()         { *m = StreamExecuteShardsResponse{} }
-func (m *StreamExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteShardsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *StreamExecuteShardsResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds
-type StreamExecuteKeyspaceIdsRequest struct {
-	CallerId    *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Query       *queryservice.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	Keyspace    string                   `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyspaceIds [][]byte                 `protobuf:"bytes,4,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType  topo.TabletType          `protobuf:"varint,5,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-}
-
-func (m *StreamExecuteKeyspaceIdsRequest) Reset()         { *m = StreamExecuteKeyspaceIdsRequest{} }
-func (m *StreamExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyspaceIdsRequest) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyspaceIdsRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyspaceIdsRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
-type StreamExecuteKeyspaceIdsResponse struct {
-	Error  *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *queryservice.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *StreamExecuteKeyspaceIdsResponse) Reset()         { *m = StreamExecuteKeyspaceIdsResponse{} }
-func (m *StreamExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyspaceIdsResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyspaceIdsResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges
-type StreamExecuteKeyRangesRequest struct {
-	CallerId   *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Query      *queryservice.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	Keyspace   string                   `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyRanges  []*topo.KeyRange         `protobuf:"bytes,4,rep,name=key_ranges" json:"key_ranges,omitempty"`
-	TabletType topo.TabletType          `protobuf:"varint,5,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
-}
-
-func (m *StreamExecuteKeyRangesRequest) Reset()         { *m = StreamExecuteKeyRangesRequest{} }
-func (m *StreamExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesRequest) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyRangesRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyRangesRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyRangesRequest) GetKeyRanges() []*topo.KeyRange {
-	if m != nil {
-		return m.KeyRanges
-	}
-	return nil
-}
-
-// StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
-type StreamExecuteKeyRangesResponse struct {
-	Error  *vtrpc.RPCError           `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *queryservice.QueryResult `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
-}
-
-func (m *StreamExecuteKeyRangesResponse) Reset()         { *m = StreamExecuteKeyRangesResponse{} }
-func (m *StreamExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteKeyRangesResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyRangesResponse) GetResult() *queryservice.QueryResult {
-	if m != nil {
-		return m.Result
-	}
-	return nil
-}
-
-// BeginRequest is the payload to Begin
-type BeginRequest struct {
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-}
-
-func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
-func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginRequest) ProtoMessage()    {}
-
-func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-// BeginResponse is the returned value from Begin
-type BeginResponse struct {
-	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Session *Session        `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-}
-
-func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
-func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginResponse) ProtoMessage()    {}
-
-func (m *BeginResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-func (m *BeginResponse) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-// CommitRequest is the payload to Commit
-type CommitRequest struct {
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session  *Session        `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-}
-
-func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
-func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitRequest) ProtoMessage()    {}
-
-func (m *CommitRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *CommitRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-// CommitResponse is the returned value from Commit
-type CommitResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-}
-
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
-
-func (m *CommitResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-// RollbackRequest is the payload to Rollback
-type RollbackRequest struct {
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session  *Session        `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-}
-
-func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
-func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackRequest) ProtoMessage()    {}
-
-func (m *RollbackRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *RollbackRequest) GetSession() *Session {
-	if m != nil {
-		return m.Session
-	}
-	return nil
-}
-
-// RollbackResponse is the returned value from Rollback
-type RollbackResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-}
-
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
-
-func (m *RollbackResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
-
-// SplitQueryRequest is the payload to SplitQuery
-type SplitQueryRequest struct {
-	CallerId   *vtrpc.CallerID          `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Keyspace   string                   `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
-	Query      *queryservice.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	SplitCount int64                    `protobuf:"varint,4,opt,name=split_count" json:"split_count,omitempty"`
-}
-
-func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
-func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryRequest) ProtoMessage()    {}
-
-func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
-	if m != nil {
-		return m.CallerId
-	}
-	return nil
-}
-
-func (m *SplitQueryRequest) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-// SplitQueryResponse is the returned value from SplitQuery
-type SplitQueryResponse struct {
-	Splits []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits" json:"splits,omitempty"`
-}
-
-func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
-func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse) ProtoMessage()    {}
-
-func (m *SplitQueryResponse) GetSplits() []*SplitQueryResponse_Part {
-	if m != nil {
-		return m.Splits
-	}
-	return nil
-}
-
-type SplitQueryResponse_KeyRangePart struct {
-	Keyspace  string           `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyRanges []*topo.KeyRange `protobuf:"bytes,2,rep,name=key_ranges" json:"key_ranges,omitempty"`
-}
-
-func (m *SplitQueryResponse_KeyRangePart) Reset()         { *m = SplitQueryResponse_KeyRangePart{} }
-func (m *SplitQueryResponse_KeyRangePart) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_KeyRangePart) ProtoMessage()    {}
-
-func (m *SplitQueryResponse_KeyRangePart) GetKeyRanges() []*topo.KeyRange {
-	if m != nil {
-		return m.KeyRanges
-	}
-	return nil
-}
-
-type SplitQueryResponse_ShardPart struct {
-	Keyspace string   `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shards   []string `protobuf:"bytes,2,rep,name=shards" json:"shards,omitempty"`
-}
-
-func (m *SplitQueryResponse_ShardPart) Reset()         { *m = SplitQueryResponse_ShardPart{} }
-func (m *SplitQueryResponse_ShardPart) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_ShardPart) ProtoMessage()    {}
-
-type SplitQueryResponse_Part struct {
-	Query        *queryservice.BoundQuery         `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
-	KeyRangePart *SplitQueryResponse_KeyRangePart `protobuf:"bytes,2,opt,name=key_range_part" json:"key_range_part,omitempty"`
-	ShardPart    *SplitQueryResponse_ShardPart    `protobuf:"bytes,3,opt,name=shard_part" json:"shard_part,omitempty"`
-	Size         int64                            `protobuf:"varint,4,opt,name=size" json:"size,omitempty"`
-}
-
-func (m *SplitQueryResponse_Part) Reset()         { *m = SplitQueryResponse_Part{} }
-func (m *SplitQueryResponse_Part) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_Part) ProtoMessage()    {}
-
-func (m *SplitQueryResponse_Part) GetQuery() *queryservice.BoundQuery {
-	if m != nil {
-		return m.Query
-	}
-	return nil
-}
-
-func (m *SplitQueryResponse_Part) GetKeyRangePart() *SplitQueryResponse_KeyRangePart {
-	if m != nil {
-		return m.KeyRangePart
-	}
-	return nil
-}
-
-func (m *SplitQueryResponse_Part) GetShardPart() *SplitQueryResponse_ShardPart {
-	if m != nil {
-		return m.ShardPart
-	}
-	return nil
-}
-
 func init() {
-	proto.RegisterEnum("vtgateservice.ExecuteEntityIdsRequest_EntityId_Type", ExecuteEntityIdsRequest_EntityId_Type_name, ExecuteEntityIdsRequest_EntityId_Type_value)
 }
 
 // Client API for VTGate service
@@ -1063,39 +35,39 @@ func init() {
 type VTGateClient interface {
 	// Execute executes tries to route the query to the right shard.
 	// (this is a vtgate v3 API, use carefully)
-	Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error)
+	Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
-	ExecuteShards(ctx context.Context, in *ExecuteShardsRequest, opts ...grpc.CallOption) (*ExecuteShardsResponse, error)
+	ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	ExecuteKeyspaceIds(ctx context.Context, in *ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*ExecuteKeyspaceIdsResponse, error)
+	ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	ExecuteKeyRanges(ctx context.Context, in *ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*ExecuteKeyRangesResponse, error)
+	ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	ExecuteEntityIds(ctx context.Context, in *ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*ExecuteEntityIdsResponse, error)
+	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
-	ExecuteBatchShards(ctx context.Context, in *ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*ExecuteBatchShardsResponse, error)
+	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	ExecuteBatchKeyspaceIds(ctx context.Context, in *ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*ExecuteBatchKeyspaceIdsResponse, error)
+	ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
 	// StreamExecute exectures a streaming query based on shards.
 	// (this is a vtgate v3 API, use carefully)
-	StreamExecute(ctx context.Context, in *StreamExecuteRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteClient, error)
+	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteClient, error)
 	// StreamExecuteShard exectures a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteShards(ctx context.Context, in *StreamExecuteShardsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteShardsClient, error)
+	StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteShardsClient, error)
 	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteKeyspaceIds(ctx context.Context, in *StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyspaceIdsClient, error)
+	StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyspaceIdsClient, error)
 	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteKeyRanges(ctx context.Context, in *StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyRangesClient, error)
+	StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyRangesClient, error)
 	// Begin a transaction.
-	Begin(ctx context.Context, in *BeginRequest, opts ...grpc.CallOption) (*BeginResponse, error)
+	Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
-	Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error)
+	Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
+	Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
-	SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResponse, error)
+	SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error)
 }
 
 type vTGateClient struct {
@@ -1106,8 +78,8 @@ func NewVTGateClient(cc *grpc.ClientConn) VTGateClient {
 	return &vTGateClient{cc}
 }
 
-func (c *vTGateClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...grpc.CallOption) (*ExecuteResponse, error) {
-	out := new(ExecuteResponse)
+func (c *vTGateClient) Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error) {
+	out := new(vtgate.ExecuteResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1115,8 +87,8 @@ func (c *vTGateClient) Execute(ctx context.Context, in *ExecuteRequest, opts ...
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteShards(ctx context.Context, in *ExecuteShardsRequest, opts ...grpc.CallOption) (*ExecuteShardsResponse, error) {
-	out := new(ExecuteShardsResponse)
+func (c *vTGateClient) ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error) {
+	out := new(vtgate.ExecuteShardsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteShards", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1124,8 +96,8 @@ func (c *vTGateClient) ExecuteShards(ctx context.Context, in *ExecuteShardsReque
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteKeyspaceIds(ctx context.Context, in *ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*ExecuteKeyspaceIdsResponse, error) {
-	out := new(ExecuteKeyspaceIdsResponse)
+func (c *vTGateClient) ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error) {
+	out := new(vtgate.ExecuteKeyspaceIdsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteKeyspaceIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1133,8 +105,8 @@ func (c *vTGateClient) ExecuteKeyspaceIds(ctx context.Context, in *ExecuteKeyspa
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteKeyRanges(ctx context.Context, in *ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*ExecuteKeyRangesResponse, error) {
-	out := new(ExecuteKeyRangesResponse)
+func (c *vTGateClient) ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error) {
+	out := new(vtgate.ExecuteKeyRangesResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteKeyRanges", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1142,8 +114,8 @@ func (c *vTGateClient) ExecuteKeyRanges(ctx context.Context, in *ExecuteKeyRange
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteEntityIds(ctx context.Context, in *ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*ExecuteEntityIdsResponse, error) {
-	out := new(ExecuteEntityIdsResponse)
+func (c *vTGateClient) ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error) {
+	out := new(vtgate.ExecuteEntityIdsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteEntityIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1151,8 +123,8 @@ func (c *vTGateClient) ExecuteEntityIds(ctx context.Context, in *ExecuteEntityId
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteBatchShards(ctx context.Context, in *ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*ExecuteBatchShardsResponse, error) {
-	out := new(ExecuteBatchShardsResponse)
+func (c *vTGateClient) ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error) {
+	out := new(vtgate.ExecuteBatchShardsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteBatchShards", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1160,8 +132,8 @@ func (c *vTGateClient) ExecuteBatchShards(ctx context.Context, in *ExecuteBatchS
 	return out, nil
 }
 
-func (c *vTGateClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*ExecuteBatchKeyspaceIdsResponse, error) {
-	out := new(ExecuteBatchKeyspaceIdsResponse)
+func (c *vTGateClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error) {
+	out := new(vtgate.ExecuteBatchKeyspaceIdsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/ExecuteBatchKeyspaceIds", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1169,7 +141,7 @@ func (c *vTGateClient) ExecuteBatchKeyspaceIds(ctx context.Context, in *ExecuteB
 	return out, nil
 }
 
-func (c *vTGateClient) StreamExecute(ctx context.Context, in *StreamExecuteRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteClient, error) {
+func (c *vTGateClient) StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_VTGate_serviceDesc.Streams[0], c.cc, "/vtgateservice.VTGate/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
@@ -1185,7 +157,7 @@ func (c *vTGateClient) StreamExecute(ctx context.Context, in *StreamExecuteReque
 }
 
 type VTGate_StreamExecuteClient interface {
-	Recv() (*StreamExecuteResponse, error)
+	Recv() (*vtgate.StreamExecuteResponse, error)
 	grpc.ClientStream
 }
 
@@ -1193,15 +165,15 @@ type vTGateStreamExecuteClient struct {
 	grpc.ClientStream
 }
 
-func (x *vTGateStreamExecuteClient) Recv() (*StreamExecuteResponse, error) {
-	m := new(StreamExecuteResponse)
+func (x *vTGateStreamExecuteClient) Recv() (*vtgate.StreamExecuteResponse, error) {
+	m := new(vtgate.StreamExecuteResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *vTGateClient) StreamExecuteShards(ctx context.Context, in *StreamExecuteShardsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteShardsClient, error) {
+func (c *vTGateClient) StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteShardsClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_VTGate_serviceDesc.Streams[1], c.cc, "/vtgateservice.VTGate/StreamExecuteShards", opts...)
 	if err != nil {
 		return nil, err
@@ -1217,7 +189,7 @@ func (c *vTGateClient) StreamExecuteShards(ctx context.Context, in *StreamExecut
 }
 
 type VTGate_StreamExecuteShardsClient interface {
-	Recv() (*StreamExecuteShardsResponse, error)
+	Recv() (*vtgate.StreamExecuteShardsResponse, error)
 	grpc.ClientStream
 }
 
@@ -1225,15 +197,15 @@ type vTGateStreamExecuteShardsClient struct {
 	grpc.ClientStream
 }
 
-func (x *vTGateStreamExecuteShardsClient) Recv() (*StreamExecuteShardsResponse, error) {
-	m := new(StreamExecuteShardsResponse)
+func (x *vTGateStreamExecuteShardsClient) Recv() (*vtgate.StreamExecuteShardsResponse, error) {
+	m := new(vtgate.StreamExecuteShardsResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *vTGateClient) StreamExecuteKeyspaceIds(ctx context.Context, in *StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyspaceIdsClient, error) {
+func (c *vTGateClient) StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyspaceIdsClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_VTGate_serviceDesc.Streams[2], c.cc, "/vtgateservice.VTGate/StreamExecuteKeyspaceIds", opts...)
 	if err != nil {
 		return nil, err
@@ -1249,7 +221,7 @@ func (c *vTGateClient) StreamExecuteKeyspaceIds(ctx context.Context, in *StreamE
 }
 
 type VTGate_StreamExecuteKeyspaceIdsClient interface {
-	Recv() (*StreamExecuteKeyspaceIdsResponse, error)
+	Recv() (*vtgate.StreamExecuteKeyspaceIdsResponse, error)
 	grpc.ClientStream
 }
 
@@ -1257,15 +229,15 @@ type vTGateStreamExecuteKeyspaceIdsClient struct {
 	grpc.ClientStream
 }
 
-func (x *vTGateStreamExecuteKeyspaceIdsClient) Recv() (*StreamExecuteKeyspaceIdsResponse, error) {
-	m := new(StreamExecuteKeyspaceIdsResponse)
+func (x *vTGateStreamExecuteKeyspaceIdsClient) Recv() (*vtgate.StreamExecuteKeyspaceIdsResponse, error) {
+	m := new(vtgate.StreamExecuteKeyspaceIdsResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *vTGateClient) StreamExecuteKeyRanges(ctx context.Context, in *StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyRangesClient, error) {
+func (c *vTGateClient) StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (VTGate_StreamExecuteKeyRangesClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_VTGate_serviceDesc.Streams[3], c.cc, "/vtgateservice.VTGate/StreamExecuteKeyRanges", opts...)
 	if err != nil {
 		return nil, err
@@ -1281,7 +253,7 @@ func (c *vTGateClient) StreamExecuteKeyRanges(ctx context.Context, in *StreamExe
 }
 
 type VTGate_StreamExecuteKeyRangesClient interface {
-	Recv() (*StreamExecuteKeyRangesResponse, error)
+	Recv() (*vtgate.StreamExecuteKeyRangesResponse, error)
 	grpc.ClientStream
 }
 
@@ -1289,16 +261,16 @@ type vTGateStreamExecuteKeyRangesClient struct {
 	grpc.ClientStream
 }
 
-func (x *vTGateStreamExecuteKeyRangesClient) Recv() (*StreamExecuteKeyRangesResponse, error) {
-	m := new(StreamExecuteKeyRangesResponse)
+func (x *vTGateStreamExecuteKeyRangesClient) Recv() (*vtgate.StreamExecuteKeyRangesResponse, error) {
+	m := new(vtgate.StreamExecuteKeyRangesResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *vTGateClient) Begin(ctx context.Context, in *BeginRequest, opts ...grpc.CallOption) (*BeginResponse, error) {
-	out := new(BeginResponse)
+func (c *vTGateClient) Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error) {
+	out := new(vtgate.BeginResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1306,8 +278,8 @@ func (c *vTGateClient) Begin(ctx context.Context, in *BeginRequest, opts ...grpc
 	return out, nil
 }
 
-func (c *vTGateClient) Commit(ctx context.Context, in *CommitRequest, opts ...grpc.CallOption) (*CommitResponse, error) {
-	out := new(CommitResponse)
+func (c *vTGateClient) Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error) {
+	out := new(vtgate.CommitResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/Commit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1315,8 +287,8 @@ func (c *vTGateClient) Commit(ctx context.Context, in *CommitRequest, opts ...gr
 	return out, nil
 }
 
-func (c *vTGateClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error) {
-	out := new(RollbackResponse)
+func (c *vTGateClient) Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error) {
+	out := new(vtgate.RollbackResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/Rollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1324,8 +296,8 @@ func (c *vTGateClient) Rollback(ctx context.Context, in *RollbackRequest, opts .
 	return out, nil
 }
 
-func (c *vTGateClient) SplitQuery(ctx context.Context, in *SplitQueryRequest, opts ...grpc.CallOption) (*SplitQueryResponse, error) {
-	out := new(SplitQueryResponse)
+func (c *vTGateClient) SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error) {
+	out := new(vtgate.SplitQueryResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.VTGate/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -1338,39 +310,39 @@ func (c *vTGateClient) SplitQuery(ctx context.Context, in *SplitQueryRequest, op
 type VTGateServer interface {
 	// Execute executes tries to route the query to the right shard.
 	// (this is a vtgate v3 API, use carefully)
-	Execute(context.Context, *ExecuteRequest) (*ExecuteResponse, error)
+	Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
-	ExecuteShards(context.Context, *ExecuteShardsRequest) (*ExecuteShardsResponse, error)
+	ExecuteShards(context.Context, *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	ExecuteKeyspaceIds(context.Context, *ExecuteKeyspaceIdsRequest) (*ExecuteKeyspaceIdsResponse, error)
+	ExecuteKeyspaceIds(context.Context, *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	ExecuteKeyRanges(context.Context, *ExecuteKeyRangesRequest) (*ExecuteKeyRangesResponse, error)
+	ExecuteKeyRanges(context.Context, *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	ExecuteEntityIds(context.Context, *ExecuteEntityIdsRequest) (*ExecuteEntityIdsResponse, error)
+	ExecuteEntityIds(context.Context, *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
-	ExecuteBatchShards(context.Context, *ExecuteBatchShardsRequest) (*ExecuteBatchShardsResponse, error)
+	ExecuteBatchShards(context.Context, *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	ExecuteBatchKeyspaceIds(context.Context, *ExecuteBatchKeyspaceIdsRequest) (*ExecuteBatchKeyspaceIdsResponse, error)
+	ExecuteBatchKeyspaceIds(context.Context, *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
 	// StreamExecute exectures a streaming query based on shards.
 	// (this is a vtgate v3 API, use carefully)
-	StreamExecute(*StreamExecuteRequest, VTGate_StreamExecuteServer) error
+	StreamExecute(*vtgate.StreamExecuteRequest, VTGate_StreamExecuteServer) error
 	// StreamExecuteShard exectures a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteShards(*StreamExecuteShardsRequest, VTGate_StreamExecuteShardsServer) error
+	StreamExecuteShards(*vtgate.StreamExecuteShardsRequest, VTGate_StreamExecuteShardsServer) error
 	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteKeyspaceIds(*StreamExecuteKeyspaceIdsRequest, VTGate_StreamExecuteKeyspaceIdsServer) error
+	StreamExecuteKeyspaceIds(*vtgate.StreamExecuteKeyspaceIdsRequest, VTGate_StreamExecuteKeyspaceIdsServer) error
 	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
-	StreamExecuteKeyRanges(*StreamExecuteKeyRangesRequest, VTGate_StreamExecuteKeyRangesServer) error
+	StreamExecuteKeyRanges(*vtgate.StreamExecuteKeyRangesRequest, VTGate_StreamExecuteKeyRangesServer) error
 	// Begin a transaction.
-	Begin(context.Context, *BeginRequest) (*BeginResponse, error)
+	Begin(context.Context, *vtgate.BeginRequest) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
-	Commit(context.Context, *CommitRequest) (*CommitResponse, error)
+	Commit(context.Context, *vtgate.CommitRequest) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
-	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
+	Rollback(context.Context, *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
-	SplitQuery(context.Context, *SplitQueryRequest) (*SplitQueryResponse, error)
+	SplitQuery(context.Context, *vtgate.SplitQueryRequest) (*vtgate.SplitQueryResponse, error)
 }
 
 func RegisterVTGateServer(s *grpc.Server, srv VTGateServer) {
@@ -1378,7 +350,7 @@ func RegisterVTGateServer(s *grpc.Server, srv VTGateServer) {
 }
 
 func _VTGate_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteRequest)
+	in := new(vtgate.ExecuteRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1390,7 +362,7 @@ func _VTGate_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Co
 }
 
 func _VTGate_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteShardsRequest)
+	in := new(vtgate.ExecuteShardsRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1402,7 +374,7 @@ func _VTGate_ExecuteShards_Handler(srv interface{}, ctx context.Context, codec g
 }
 
 func _VTGate_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteKeyspaceIdsRequest)
+	in := new(vtgate.ExecuteKeyspaceIdsRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1414,7 +386,7 @@ func _VTGate_ExecuteKeyspaceIds_Handler(srv interface{}, ctx context.Context, co
 }
 
 func _VTGate_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteKeyRangesRequest)
+	in := new(vtgate.ExecuteKeyRangesRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1426,7 +398,7 @@ func _VTGate_ExecuteKeyRanges_Handler(srv interface{}, ctx context.Context, code
 }
 
 func _VTGate_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteEntityIdsRequest)
+	in := new(vtgate.ExecuteEntityIdsRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1438,7 +410,7 @@ func _VTGate_ExecuteEntityIds_Handler(srv interface{}, ctx context.Context, code
 }
 
 func _VTGate_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteBatchShardsRequest)
+	in := new(vtgate.ExecuteBatchShardsRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1450,7 +422,7 @@ func _VTGate_ExecuteBatchShards_Handler(srv interface{}, ctx context.Context, co
 }
 
 func _VTGate_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(ExecuteBatchKeyspaceIdsRequest)
+	in := new(vtgate.ExecuteBatchKeyspaceIdsRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1462,7 +434,7 @@ func _VTGate_ExecuteBatchKeyspaceIds_Handler(srv interface{}, ctx context.Contex
 }
 
 func _VTGate_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamExecuteRequest)
+	m := new(vtgate.StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1470,7 +442,7 @@ func _VTGate_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) er
 }
 
 type VTGate_StreamExecuteServer interface {
-	Send(*StreamExecuteResponse) error
+	Send(*vtgate.StreamExecuteResponse) error
 	grpc.ServerStream
 }
 
@@ -1478,12 +450,12 @@ type vTGateStreamExecuteServer struct {
 	grpc.ServerStream
 }
 
-func (x *vTGateStreamExecuteServer) Send(m *StreamExecuteResponse) error {
+func (x *vTGateStreamExecuteServer) Send(m *vtgate.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _VTGate_StreamExecuteShards_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamExecuteShardsRequest)
+	m := new(vtgate.StreamExecuteShardsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1491,7 +463,7 @@ func _VTGate_StreamExecuteShards_Handler(srv interface{}, stream grpc.ServerStre
 }
 
 type VTGate_StreamExecuteShardsServer interface {
-	Send(*StreamExecuteShardsResponse) error
+	Send(*vtgate.StreamExecuteShardsResponse) error
 	grpc.ServerStream
 }
 
@@ -1499,12 +471,12 @@ type vTGateStreamExecuteShardsServer struct {
 	grpc.ServerStream
 }
 
-func (x *vTGateStreamExecuteShardsServer) Send(m *StreamExecuteShardsResponse) error {
+func (x *vTGateStreamExecuteShardsServer) Send(m *vtgate.StreamExecuteShardsResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _VTGate_StreamExecuteKeyspaceIds_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamExecuteKeyspaceIdsRequest)
+	m := new(vtgate.StreamExecuteKeyspaceIdsRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1512,7 +484,7 @@ func _VTGate_StreamExecuteKeyspaceIds_Handler(srv interface{}, stream grpc.Serve
 }
 
 type VTGate_StreamExecuteKeyspaceIdsServer interface {
-	Send(*StreamExecuteKeyspaceIdsResponse) error
+	Send(*vtgate.StreamExecuteKeyspaceIdsResponse) error
 	grpc.ServerStream
 }
 
@@ -1520,12 +492,12 @@ type vTGateStreamExecuteKeyspaceIdsServer struct {
 	grpc.ServerStream
 }
 
-func (x *vTGateStreamExecuteKeyspaceIdsServer) Send(m *StreamExecuteKeyspaceIdsResponse) error {
+func (x *vTGateStreamExecuteKeyspaceIdsServer) Send(m *vtgate.StreamExecuteKeyspaceIdsResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _VTGate_StreamExecuteKeyRanges_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StreamExecuteKeyRangesRequest)
+	m := new(vtgate.StreamExecuteKeyRangesRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -1533,7 +505,7 @@ func _VTGate_StreamExecuteKeyRanges_Handler(srv interface{}, stream grpc.ServerS
 }
 
 type VTGate_StreamExecuteKeyRangesServer interface {
-	Send(*StreamExecuteKeyRangesResponse) error
+	Send(*vtgate.StreamExecuteKeyRangesResponse) error
 	grpc.ServerStream
 }
 
@@ -1541,12 +513,12 @@ type vTGateStreamExecuteKeyRangesServer struct {
 	grpc.ServerStream
 }
 
-func (x *vTGateStreamExecuteKeyRangesServer) Send(m *StreamExecuteKeyRangesResponse) error {
+func (x *vTGateStreamExecuteKeyRangesServer) Send(m *vtgate.StreamExecuteKeyRangesResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _VTGate_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(BeginRequest)
+	in := new(vtgate.BeginRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1558,7 +530,7 @@ func _VTGate_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Code
 }
 
 func _VTGate_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(CommitRequest)
+	in := new(vtgate.CommitRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1570,7 +542,7 @@ func _VTGate_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Cod
 }
 
 func _VTGate_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(RollbackRequest)
+	in := new(vtgate.RollbackRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -1582,7 +554,7 @@ func _VTGate_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.C
 }
 
 func _VTGate_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(SplitQueryRequest)
+	in := new(vtgate.SplitQueryRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}

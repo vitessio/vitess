@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package tabletmanager;
 
-import "queryservice.proto";
+import "query.proto";
 import "topo.proto";
 import "replication.proto";
 import "vtctl.proto";
@@ -221,7 +221,7 @@ message ExecuteFetchAsDbaRequest {
 }
 
 message ExecuteFetchAsDbaResponse {
-  queryservice.QueryResult result = 1;
+  query.QueryResult result = 1;
 }
 
 message ExecuteFetchAsAppRequest {
@@ -231,7 +231,7 @@ message ExecuteFetchAsAppRequest {
 }
 
 message ExecuteFetchAsAppResponse {
-  queryservice.QueryResult result = 1;
+  query.QueryResult result = 1;
 }
 
 message SlaveStatusRequest {
@@ -414,166 +414,4 @@ message BackupRequest {
 
 message BackupResponse {
   vtctl.LoggerEvent event = 1;
-}
-
-// TabletManager is a Stubby version of tabletmanager.TabletManager.
-service TabletManager {
-  //
-  // Various read-only methods
-  //
-
-  // Ping returns the input payload
-  rpc Ping(PingRequest) returns (PingResponse) {};
-
-  // Sleep sleeps for the provided duration
-  rpc Sleep(SleepRequest) returns (SleepResponse) {};
-
-  // ExecuteHook executes the hook remotely
-  rpc ExecuteHook(ExecuteHookRequest) returns (ExecuteHookResponse) {};
-
-  // GetSchema asks the tablet for its schema
-  rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse) {};
-
-  // GetPermissions asks the tablet for its permissions
-  rpc GetPermissions(GetPermissionsRequest) returns (GetPermissionsResponse) {};
-
-  //
-  // Various read-write methods
-  //
-
-  rpc SetReadOnly(SetReadOnlyRequest) returns (SetReadOnlyResponse) {};
-
-  rpc SetReadWrite(SetReadWriteRequest) returns (SetReadWriteResponse) {};
-
-  // ChangeType asks the remote tablet to change its type
-  rpc ChangeType(ChangeTypeRequest) returns (ChangeTypeResponse) {};
-
-  rpc Scrap(ScrapRequest) returns (ScrapResponse) {};
-
-  rpc RefreshState(RefreshStateRequest) returns (RefreshStateResponse) {};
-
-  rpc RunHealthCheck(RunHealthCheckRequest) returns (RunHealthCheckResponse) {};
-
-  rpc StreamHealth(StreamHealthRequest) returns (stream StreamHealthResponse) {};
-
-  rpc ReloadSchema(ReloadSchemaRequest) returns (ReloadSchemaResponse) {};
-
-  rpc PreflightSchema(PreflightSchemaRequest) returns (PreflightSchemaResponse) {};
-
-  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {};
-
-  rpc ExecuteFetchAsDba(ExecuteFetchAsDbaRequest) returns (ExecuteFetchAsDbaResponse) {};
-
-  rpc ExecuteFetchAsApp(ExecuteFetchAsAppRequest) returns (ExecuteFetchAsAppResponse) {};
-
-  //
-  // Replication related methods
-  //
-
-  // SlaveStatus returns the current slave status.
-  rpc SlaveStatus(SlaveStatusRequest) returns (SlaveStatusResponse) {};
-
-  // MasterPosition returns the current master position
-  rpc MasterPosition(MasterPositionRequest) returns (MasterPositionResponse) {};
-
-  // StopSlave makes mysql stop its replication
-  rpc StopSlave(StopSlaveRequest) returns (StopSlaveResponse) {};
-
-  // StopSlaveMinimum stops the mysql replication after it reaches
-  // the provided minimum point
-  rpc StopSlaveMinimum(StopSlaveMinimumRequest) returns (StopSlaveMinimumResponse) {};
-
-  // StartSlave starts the mysql replication
-  rpc StartSlave(StartSlaveRequest) returns (StartSlaveResponse) {};
-
-  // TabletExternallyReparented tells a tablet that its underlying MySQL is
-  // currently the master. It is only used in environments (such as Vitess+MoB)
-  // in which MySQL is reparented by some agent external to Vitess, and then
-  // that agent simply notifies Vitess.
-  //
-  // This call is idempotent with respect to a single target tablet.
-  // However, the tablet assumes there is a cooling-off period following the
-  // initial external reparent from A to B, before this call is repeated on any
-  // tablet other than B. This assumption is configurable with the vttablet flag
-  // "finalize_external_reparent_timeout".
-  //
-  // For more information, see the design doc at go/vt-fast-failover.
-  rpc TabletExternallyReparented(TabletExternallyReparentedRequest) returns (TabletExternallyReparentedResponse) {};
-
-  // TabletExternallyElected is an notification that may be sent in
-  // anticipation of potentially later sending TabletExternallyReparented.
-  // The tablet can use this extra lead time to prepare to react quickly if
-  // TabletExternallyReparented does follow.
-  //
-  // This call is effectively a no-op if it is not followed by a call to
-  // TabletExternallyReparented, so the external agent doing the reparent can
-  // still change its mind.
-  //
-  // The agent does not need to wait for this call or cancel it before calling
-  // TabletExternallyReparented if the external reparent operation finishes
-  // before TabletExternallyElected returns.
-  rpc TabletExternallyElected(TabletExternallyElectedRequest) returns (TabletExternallyElectedResponse) {};
-
-  // GetSlaves asks for the list of mysql slaves
-  rpc GetSlaves(GetSlavesRequest) returns (GetSlavesResponse) {};
-
-  // WaitBlpPosition tells the remote tablet to wait until it reaches
-  // the specified binolg player position
-  rpc WaitBlpPosition(WaitBlpPositionRequest) returns (WaitBlpPositionResponse) {};
-
-  // StopBlp asks the tablet to stop all its binlog players,
-  // and returns the current position for all of them
-  rpc StopBlp(StopBlpRequest) returns (StopBlpResponse) {};
-
-  // StartBlp asks the tablet to restart its binlog players
-  rpc StartBlp(StartBlpRequest) returns (StartBlpResponse) {};
-
-  // RunBlpUntil asks the tablet to restart its binlog players
-  rpc RunBlpUntil(RunBlpUntilRequest) returns (RunBlpUntilResponse) {};
-
-  //
-  // Reparenting related functions
-  //
-
-  // ResetReplication makes the target not replicating
-  rpc ResetReplication(ResetReplicationRequest) returns (ResetReplicationResponse) {};
-
-  // InitMaster initializes the tablet as a master
-  rpc InitMaster(InitMasterRequest) returns (InitMasterResponse) {};
-
-  // PopulateReparentJournal tells the tablet to add an entry to its
-  // reparent journal
-  rpc PopulateReparentJournal(PopulateReparentJournalRequest) returns (PopulateReparentJournalResponse) {};
-
-  // InitSlave tells the tablet to reparent to the master unconditionnally
-  rpc InitSlave(InitSlaveRequest) returns (InitSlaveResponse) {};
-
-  // DemoteMaster tells the soon-to-be-former master it's gonna change
-  rpc DemoteMaster(DemoteMasterRequest) returns (DemoteMasterResponse) {};
-
-  // PromoteSlaveWhenCaughtUp tells the remote tablet to catch up,
-  // and then be the master
-  rpc PromoteSlaveWhenCaughtUp(PromoteSlaveWhenCaughtUpRequest) returns (PromoteSlaveWhenCaughtUpResponse) {};
-
-  // SlaveWasPromoted tells the remote tablet it is now the master
-  rpc SlaveWasPromoted(SlaveWasPromotedRequest) returns (SlaveWasPromotedResponse) {};
-
-  // SetMaster tells the slave to reparent
-  rpc SetMaster(SetMasterRequest) returns (SetMasterResponse) {};
-
-  // SlaveWasRestarted tells the remote tablet its master has changed
-  rpc SlaveWasRestarted(SlaveWasRestartedRequest) returns (SlaveWasRestartedResponse) {};
-
-  // StopReplicationAndGetStatus stops MySQL replication, and returns the
-  // replication status
-  rpc StopReplicationAndGetStatus(StopReplicationAndGetStatusRequest) returns (StopReplicationAndGetStatusResponse) {};
-
-  // PromoteSlave makes the slave the new master
-  rpc PromoteSlave(PromoteSlaveRequest) returns (PromoteSlaveResponse) {};
-
-  //
-  // Backup related methods
-  //
-
-  rpc Backup(BackupRequest) returns (stream BackupResponse) {};
 }

@@ -187,13 +187,20 @@ proto:
 	cd go/vt/proto/topo && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topo.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/replication && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/replication.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/binlog && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlog.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/binlogservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlogservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/query && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/query.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtgate && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgate.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgateservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgateservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtctlservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctlservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanager && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/tabletmanagerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/automationservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automationservice.proto --go_out=plugins=grpc:.
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctl.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctlservice.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
 # This rule builds a bootstrap image of the given flavor.
 # Example: $ make docker_bootstrap flavor=mariadb

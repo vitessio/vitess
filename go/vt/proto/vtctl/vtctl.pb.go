@@ -9,37 +9,17 @@ It is generated from these files:
 	vtctl.proto
 
 It has these top-level messages:
-	ExecuteVtctlCommandArgs
 	Time
 	LoggerEvent
+	ExecuteVtctlCommandRequest
+	ExecuteVtctlCommandResponse
 */
 package vtctl
 
 import proto "github.com/golang/protobuf/proto"
 
-import (
-	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
-)
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
-
-// ExecuteVtctlCommandArgs arguments to ExecuteVtctlCommand
-// timeouts are in nanoseconds.
-type ExecuteVtctlCommandArgs struct {
-	Args          []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
-	ActionTimeout int64    `protobuf:"varint,2,opt,name=action_timeout" json:"action_timeout,omitempty"`
-	LockTimeout   int64    `protobuf:"varint,3,opt,name=lock_timeout" json:"lock_timeout,omitempty"`
-}
-
-func (m *ExecuteVtctlCommandArgs) Reset()         { *m = ExecuteVtctlCommandArgs{} }
-func (m *ExecuteVtctlCommandArgs) String() string { return proto.CompactTextString(m) }
-func (*ExecuteVtctlCommandArgs) ProtoMessage()    {}
 
 // Time represents a time stamp in nanoseconds. In go, use time.Unix to
 // rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
@@ -72,95 +52,33 @@ func (m *LoggerEvent) GetTime() *Time {
 	return nil
 }
 
+// ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
+// timeouts are in nanoseconds.
+type ExecuteVtctlCommandRequest struct {
+	Args          []string `protobuf:"bytes,1,rep,name=args" json:"args,omitempty"`
+	ActionTimeout int64    `protobuf:"varint,2,opt,name=action_timeout" json:"action_timeout,omitempty"`
+	LockTimeout   int64    `protobuf:"varint,3,opt,name=lock_timeout" json:"lock_timeout,omitempty"`
+}
+
+func (m *ExecuteVtctlCommandRequest) Reset()         { *m = ExecuteVtctlCommandRequest{} }
+func (m *ExecuteVtctlCommandRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteVtctlCommandRequest) ProtoMessage()    {}
+
+// ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
+type ExecuteVtctlCommandResponse struct {
+	Event *LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+}
+
+func (m *ExecuteVtctlCommandResponse) Reset()         { *m = ExecuteVtctlCommandResponse{} }
+func (m *ExecuteVtctlCommandResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteVtctlCommandResponse) ProtoMessage()    {}
+
+func (m *ExecuteVtctlCommandResponse) GetEvent() *LoggerEvent {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
+
 func init() {
-}
-
-// Client API for Vtctl service
-
-type VtctlClient interface {
-	ExecuteVtctlCommand(ctx context.Context, in *ExecuteVtctlCommandArgs, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error)
-}
-
-type vtctlClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewVtctlClient(cc *grpc.ClientConn) VtctlClient {
-	return &vtctlClient{cc}
-}
-
-func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *ExecuteVtctlCommandArgs, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Vtctl_serviceDesc.Streams[0], c.cc, "/vtctl.Vtctl/ExecuteVtctlCommand", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vtctlExecuteVtctlCommandClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vtctl_ExecuteVtctlCommandClient interface {
-	Recv() (*LoggerEvent, error)
-	grpc.ClientStream
-}
-
-type vtctlExecuteVtctlCommandClient struct {
-	grpc.ClientStream
-}
-
-func (x *vtctlExecuteVtctlCommandClient) Recv() (*LoggerEvent, error) {
-	m := new(LoggerEvent)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// Server API for Vtctl service
-
-type VtctlServer interface {
-	ExecuteVtctlCommand(*ExecuteVtctlCommandArgs, Vtctl_ExecuteVtctlCommandServer) error
-}
-
-func RegisterVtctlServer(s *grpc.Server, srv VtctlServer) {
-	s.RegisterService(&_Vtctl_serviceDesc, srv)
-}
-
-func _Vtctl_ExecuteVtctlCommand_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ExecuteVtctlCommandArgs)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VtctlServer).ExecuteVtctlCommand(m, &vtctlExecuteVtctlCommandServer{stream})
-}
-
-type Vtctl_ExecuteVtctlCommandServer interface {
-	Send(*LoggerEvent) error
-	grpc.ServerStream
-}
-
-type vtctlExecuteVtctlCommandServer struct {
-	grpc.ServerStream
-}
-
-func (x *vtctlExecuteVtctlCommandServer) Send(m *LoggerEvent) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-var _Vtctl_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "vtctl.Vtctl",
-	HandlerType: (*VtctlServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "ExecuteVtctlCommand",
-			Handler:       _Vtctl_ExecuteVtctlCommand_Handler,
-			ServerStreams: true,
-		},
-	},
 }

@@ -1,4 +1,4 @@
-// Protobuf messages for the automation framework.
+// Protobuf data structures for the automation framework.
 
 // Messages (e.g. Task) are used both for checkpoint data and API access
 // (e.g. retrieving the current status of a pending cluster operation).
@@ -77,13 +77,4 @@ message GetClusterOperationDetailsRequest {
 message GetClusterOperationDetailsResponse {
   // Full snapshot of the execution e.g. including output of each task.
   ClusterOperation cluster_op = 2;
-}
-
-service Automation {
-  // Start a cluster operation.
-  rpc EnqueueClusterOperation(EnqueueClusterOperationRequest) returns (EnqueueClusterOperationResponse) {};
-
-  // TODO(mberlin): Polling this is bad. Implement a subscribe mechanism to wait for changes?
-  // Get all details of an active cluster operation.
-  rpc GetClusterOperationDetails(GetClusterOperationDetailsRequest) returns (GetClusterOperationDetailsResponse) {};
 }

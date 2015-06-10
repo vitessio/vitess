@@ -15,11 +15,12 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
+	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
 type gRPCVtctlClient struct {
 	cc *grpc.ClientConn
-	c  pb.VtctlClient
+	c  pbs.VtctlClient
 }
 
 func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
@@ -28,7 +29,7 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 	if err != nil {
 		return nil, err
 	}
-	c := pb.NewVtctlClient(cc)
+	c := pbs.NewVtctlClient(cc)
 
 	return &gRPCVtctlClient{
 		cc: cc,
@@ -38,7 +39,7 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 
 // ExecuteVtctlCommand is part of the VtctlClient interface
 func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
-	query := &pb.ExecuteVtctlCommandArgs{
+	query := &pb.ExecuteVtctlCommandRequest{
 		Args:          args,
 		ActionTimeout: int64(actionTimeout.Nanoseconds()),
 		LockTimeout:   int64(lockTimeout.Nanoseconds()),
@@ -62,11 +63,11 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 				return
 			}
 			results <- &logutil.LoggerEvent{
-				Time:  time.Unix(le.Time.Seconds, le.Time.Nanoseconds),
-				Level: int(le.Level),
-				File:  le.File,
-				Line:  int(le.Line),
-				Value: le.Value,
+				Time:  time.Unix(le.Event.Time.Seconds, le.Event.Time.Nanoseconds),
+				Level: int(le.Event.Level),
+				File:  le.Event.File,
+				Line:  int(le.Event.Line),
+				Value: le.Event.Value,
 			}
 		}
 	}()

@@ -1,0 +1,16 @@
+// Protobuf service for the automation framework.
+
+syntax = "proto3";
+
+package automationservice;
+
+import "automation.proto";
+
+service Automation {
+  // Start a cluster operation.
+  rpc EnqueueClusterOperation(automation.EnqueueClusterOperationRequest) returns (automation.EnqueueClusterOperationResponse) {};
+
+  // TODO(mberlin): Polling this is bad. Implement a subscribe mechanism to wait for changes?
+  // Get all details of an active cluster operation.
+  rpc GetClusterOperationDetails(automation.GetClusterOperationDetailsRequest) returns (automation.GetClusterOperationDetailsResponse) {};
+}

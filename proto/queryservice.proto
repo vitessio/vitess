@@ -1,267 +1,37 @@
-// This file contains all the types and servers necessary to make
-// RPC calls to Vttablet.
+// This file contains the service VtTablet exposes for queries.
 
 syntax = "proto3";
 
 package queryservice;
 
-import "topo.proto";
-import "vtrpc.proto";
-
-// Target describes what the client expects the tablet is.
-// If the tablet does not match, an error is returned.
-message Target {
-  string keyspace = 1;
-  string shard = 2;
-  topo.TabletType TabletType = 3;
-}
-
-// BindVariable represents a single bind variable in a Query
-message BindVariable {
-  enum Type {
-    TYPE_NULL = 0;
-    TYPE_BYTES = 1;
-    TYPE_INT = 2;
-    TYPE_UINT = 3;
-    TYPE_FLOAT = 4;
-    TYPE_BYTES_LIST = 5;
-    TYPE_INT_LIST = 6;
-    TYPE_UINT_LIST = 7;
-    TYPE_FLOAT_LIST = 8;
-
-  }
-  Type type = 1;
-
-  // Depending on type, only one value below is set.
-  bytes value_bytes = 2;
-  int64 value_int = 3;
-  uint64 value_uint = 4;
-  double value_float = 5;
-  repeated bytes value_bytes_list = 6;
-  repeated int64 value_int_list = 7;
-  repeated uint64 value_uint_list = 8;
-  repeated double value_float_list = 9;
-}
-
-// BoundQuery is a query with its bind variables
-message BoundQuery {
-  bytes sql = 1;
-  map<string, BindVariable> bind_variables = 2;
-}
-
-// Field describes a single column returned by a query
-message Field {
-  // name of the field as returned by mysql C API
-  string name = 1;
-
-  // Type follows enum_field_types from mysql.h.
-  enum Type {
-    TYPE_DECIMAL = 0;
-    TYPE_TINY = 1;
-    TYPE_SHORT = 2;
-    TYPE_LONG = 3;
-    TYPE_FLOAT = 4;
-    TYPE_DOUBLE = 5;
-    TYPE_NULL = 6;
-    TYPE_TIMESTAMP = 7;
-    TYPE_LONGLONG = 8;
-    TYPE_INT24 = 9;
-    TYPE_DATE = 10;
-    TYPE_TIME = 11;
-    TYPE_DATETIME = 12;
-    TYPE_YEAR = 13;
-    TYPE_NEWDATE = 14;
-    TYPE_VARCHAR = 15;
-    TYPE_BIT = 16;
-    TYPE_NEWDECIMAL = 246;
-    TYPE_ENUM = 247;
-    TYPE_SET = 248;
-    TYPE_TINY_BLOB = 249;
-    TYPE_MEDIUM_BLOB = 250;
-    TYPE_LONG_BLOB = 251;
-    TYPE_BLOB = 252;
-    TYPE_VAR_STRING = 253;
-    TYPE_STRING = 254;
-    TYPE_GEOMETRY = 255;
-  }
-  Type type = 2;
-
-  // Flag contains the MySQL field flags bitset values e.g. to
-  // distinguish between signed and unsigned integer.  These numbers
-  // should exactly match values defined in
-  // dist/mysql-5.1.52/include/mysql_com.h
-  enum Flag {
-    // ZEROVALUE_FLAG is not part of the MySQL specification and only
-    // used in unit tests.
-    VT_ZEROVALUE_FLAG        = 0;
-    VT_NOT_NULL_FLAG         = 1;
-    VT_PRI_KEY_FLAG          = 2;
-    VT_UNIQUE_KEY_FLAG       = 4;
-    VT_MULTIPLE_KEY_FLAG     = 8;
-    VT_BLOB_FLAG             = 16;
-    VT_UNSIGNED_FLAG         = 32;
-    VT_ZEROFILL_FLAG         = 64;
-    VT_BINARY_FLAG           = 128;
-    VT_ENUM_FLAG             = 256;
-    VT_AUTO_INCREMENT_FLAG   = 512;
-    VT_TIMESTAMP_FLAG        = 1024;
-    VT_SET_FLAG              = 2048;
-    VT_NO_DEFAULT_VALUE_FLAG = 4096;
-    VT_ON_UPDATE_NOW_FLAG    = 8192;
-    VT_NUM_FLAG              = 32768;
-  }
-  // flags is essentially a bitset<Flag>.
-  int64 flags = 3;
-}
-
-// Row is a database row.
-message Row {
-  repeated bytes values = 1;
-}
-
-// QueryResult is returned by Execute and ExecuteStream.
-//
-// As returned by Execute, len(fields) is always equal to len(row)
-// (for each row in rows).
-//
-// As returned by StreamExecute, the first QueryResult has the fields
-// set, and subsequent QueryResult have rows set. And as Execute,
-// len(QueryResult[0].fields) is always equal to len(row) (for each
-// row in rows for each QueryResult in QueryResult[1:]).
-message QueryResult {
-  repeated Field fields = 1;
-  uint64 rows_affected = 2;
-  uint64 insert_id = 3;
-  repeated Row rows = 4;
-}
-
-// ExecuteRequest is the payload to Execute
-message ExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  BoundQuery query = 3;
-  int64 transaction_id = 4;
-}
-
-// ExecuteResponse is the returned value from Execute
-message ExecuteResponse {
-  vtrpc.RPCError error = 1;
-  QueryResult result = 2;
-}
-
-// ExecuteBatchRequest is the payload to ExecuteBatch
-message ExecuteBatchRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  repeated BoundQuery queries = 3;
-  int64 transaction_id = 4;
-}
-
-// ExecuteBatchResponse is the returned value from ExecuteBatch
-message ExecuteBatchResponse {
-  vtrpc.RPCError error = 1;
-  repeated QueryResult results = 2;
-}
-
-// StreamExecuteRequest is the payload to StreamExecute
-message StreamExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  BoundQuery query = 3;
-}
-
-// StreamExecuteResponse is the returned value from StreamExecute
-message StreamExecuteResponse {
-  vtrpc.RPCError error = 1;
-  QueryResult result = 2;
-}
-
-// BeginRequest is the payload to Begin
-message BeginRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-}
-
-// BeginResponse is the returned value from Begin
-message BeginResponse {
-  vtrpc.RPCError error = 1;
-  int64 transaction_id = 2;
-}
-
-// CommitRequest is the payload to Commit
-message CommitRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  int64 transaction_id = 3;
-}
-
-// CommitResponse is the returned value from Commit
-message CommitResponse {
-  vtrpc.RPCError error = 1;
-}
-
-// RollbackRequest is the payload to Rollback
-message RollbackRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  int64 transaction_id = 3;
-}
-
-// RollbackResponse is the returned value from Rollback
-message RollbackResponse {
-  vtrpc.RPCError error = 1;
-}
-
-// SplitQueryRequest is the payload for SplitQuery
-message SplitQueryRequest {
-  vtrpc.CallerID caller_id = 1;
-  Target target = 2;
-  BoundQuery query = 3;
-  int64 split_count = 4;
-}
-
-// QuerySplit represents one query to execute on the tablet
-message QuerySplit {
-  // query is the query to execute
-  BoundQuery query = 1;
-
-  // row_count is the approximate row count the query will return
-  int64 row_count = 2;
-}
-
-// SplitQueryResponse is returned by SplitQuery and represents all the queries
-// to execute in order to get the entire data set.
-message SplitQueryResponse {
-  vtrpc.RPCError error = 1;
-  repeated QuerySplit queries = 2;
-}
+import "query.proto";
 
 // SqlQuery defines the tablet SQL query, implemented by vttablet.
 service SqlQuery {
   // Execute executes the specified SQL query (might be in a
   // transaction context, if Query.transaction_id is set).
-  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {};
+  rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};
 
   // ExecuteBatch executes a list of queries, and returns the result
   // for each query.
-  rpc ExecuteBatch(ExecuteBatchRequest) returns (ExecuteBatchResponse) {};
+  rpc ExecuteBatch(query.ExecuteBatchRequest) returns (query.ExecuteBatchResponse) {};
 
   // StreamExecute executes a streaming query. Use this method if the
   // query returns a large number of rows. The first QueryResult will
   // contain the Fields, subsequent QueryResult messages will contain
   // the rows.
-  rpc StreamExecute(StreamExecuteRequest) returns (stream StreamExecuteResponse) {};
+  rpc StreamExecute(query.StreamExecuteRequest) returns (stream query.StreamExecuteResponse) {};
 
   // Begin a transaction.
-  rpc Begin(BeginRequest) returns (BeginResponse) {};
+  rpc Begin(query.BeginRequest) returns (query.BeginResponse) {};
 
   // Commit a transaction.
-  rpc Commit(CommitRequest) returns (CommitResponse) {};
+  rpc Commit(query.CommitRequest) returns (query.CommitResponse) {};
 
   // Rollback a transaction.
-  rpc Rollback(RollbackRequest) returns (RollbackResponse) {};
+  rpc Rollback(query.RollbackRequest) returns (query.RollbackResponse) {};
 
   // SplitQuery is the API to facilitate MapReduce-type iterations
   // over large data sets (like full table dumps).
-  rpc SplitQuery(SplitQueryRequest) returns (SplitQueryResponse) {};
+  rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};
 }
