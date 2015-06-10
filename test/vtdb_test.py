@@ -443,6 +443,20 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
+  def test_conn_after_stream_execute_failure(self):
+    """After a stream execute failure, other operations should work on the same connection."""
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+    try:
+      stream_cursor = cursor.StreamCursor(master_conn)
+      with self.assertRaises(dbexceptions.DatabaseError):
+        stream_cursor.execute("invalid sql syntax", {})
+      master_conn._execute("select * from vt_insert_test", {})
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
   def test_tablet_restart_begin(self):
     try:
       master_conn = get_connection(db_type='master')
