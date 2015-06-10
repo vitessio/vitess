@@ -552,12 +552,25 @@ func Restore(ctx context.Context, mysqld MysqlDaemon, bucket string, restoreConc
 		return proto.ReplicationPosition{}, err
 	}
 
-	log.Infof("Restore: running mysql_upgrade if necessary")
-	if err := mysqld.RunMysqlUpgrade(); err != nil {
+	// mysqld needs to be running in order for mysql_upgrade to work.
+	log.Infof("Restore: starting mysqld for mysql_upgrade")
+	err = mysqld.Start(ctx)
+	if err != nil {
 		return proto.ReplicationPosition{}, err
 	}
 
-	log.Infof("Restore: restart mysqld")
+	log.Infof("Restore: running mysql_upgrade")
+	if err := mysqld.RunMysqlUpgrade(); err != nil {
+		return proto.ReplicationPosition{}, fmt.Errorf("mysql_upgrade failed: %v", err)
+	}
+
+	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
+	// so that any changes made to system tables take effect.
+	log.Infof("Restore: restarting mysqld after mysql_upgrade")
+	err = mysqld.Shutdown(ctx, true)
+	if err != nil {
+		return proto.ReplicationPosition{}, err
+	}
 	err = mysqld.Start(ctx)
 	if err != nil {
 		return proto.ReplicationPosition{}, err

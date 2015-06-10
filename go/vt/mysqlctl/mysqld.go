@@ -143,7 +143,17 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	}
 
 	// run the program, if it fails, we fail
-	cmd := exec.Command(name, "--defaults-file="+mysqld.config.path)
+	args := []string{
+		// --defaults-file=* must be the first arg.
+		"--defaults-file=" + mysqld.config.path,
+		"--socket", mysqld.config.SocketFile,
+		"--user", mysqld.dba.Uname,
+	}
+	if mysqld.dba.Pass != "" {
+		// --password must be omitted entirely if empty, or else it will prompt.
+		args = append(args, "--password", mysqld.dba.Pass)
+	}
+	cmd := exec.Command(name, args...)
 	cmd.Env = []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
