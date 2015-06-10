@@ -7,6 +7,7 @@ package gorpcqueryservice
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -32,13 +33,13 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 }
 
 // Commit is exposing tabletserver.SqlQuery.Commit
-func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
 	defer sq.server.HandlePanic(&err)
 	return sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
 // Rollback is exposing tabletserver.SqlQuery.Rollback
-func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
 	defer sq.server.HandlePanic(&err)
 	return sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 }
