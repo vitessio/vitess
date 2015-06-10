@@ -171,6 +171,29 @@ def do_write(count):
                          {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
   master_conn.commit()
 
+def direct_batch_write(count, tablet):
+  """Writes a number of rows directly to MySQL on a tablet.
+
+  This is significantly faster than do_writes(), but it works by bypassing the
+  entire VtTablet layer, and batches all the inserts into a single round-trip.
+  This can cause unexpected behavior, so should be used sparingly.
+  """
+  master_conn = get_connection(db_type='master')
+  master_conn.begin()
+  master_conn._execute("delete from vt_insert_test", {})
+  master_conn.commit()
+  kid_list = shard_kid_map[master_conn.shard]
+  values_str = ""
+  for x in xrange(count):
+    if x != 0:
+      values_str += ','
+    keyspace_id = kid_list[count%len(kid_list)]
+    values_str += '("test %s", "%s")' % (x, keyspace_id)
+  tablet.mquery('vt_test_keyspace', [
+        'begin',
+        'insert into vt_insert_test(msg, keyspace_id) values%s' % values_str,
+        'commit'
+        ], write=True)
 
 class TestTabletFunctions(unittest.TestCase):
   def setUp(self):
@@ -374,6 +397,38 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Communication with shard0 replica failed with error %s" %
                 str(e))
+
+  def test_fail_mid_stream_execute(self):
+    """Tests for errors in the middle of a stream execute.
+
+    This is for testing app failures, not infrastructure failures. We simulate
+    an app failure by killing MySQL on the master tablet.
+
+    This test is inherently racy, as it tries to kill MySQL in the middle
+    of query execution.
+    """
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+    try:
+      count = 30000
+      logging.debug("Starting to write %s rows" % count)
+      direct_batch_write(count, self.master_tablet)
+      logging.debug("Finished writing %s rows" % count)
+      stream_cursor = cursor.StreamCursor(master_conn)
+      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.fetchone()
+      logging.debug("Killing mysql on master")
+      # We need to kill MySQL during query execution, not before.
+      utils.wait_procs([self.master_tablet.teardown_mysql()])
+      # dbexceptions.DatabaseError map to an app failures, not infrastructure.
+      with self.assertRaises(dbexceptions.DatabaseError):
+        logging.debug("Doing stream_cursor.fetchall()")
+        stream_cursor.fetchall()
+      utils.wait_procs([self.master_tablet.init_mysql()])
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
   def test_tablet_restart_begin(self):
     try:

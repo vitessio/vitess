@@ -287,6 +287,8 @@ class TabletConnection(object):
         if self._stream_result is None:
           self._stream_result_index = None
           return None
+        if self._stream_result.reply.get('Err'):
+          raise gorpc.AppError(self._stream_result.reply['Err'].get('Message', 'Missing error message'))
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
       except:
@@ -294,7 +296,6 @@ class TabletConnection(object):
         raise
 
     row = tuple(_make_row(self._stream_result.reply['Rows'][self._stream_result_index], self._stream_conversions))
-
     # If we are reading the last row, set us up to read more data.
     self._stream_result_index += 1
     if self._stream_result_index == len(self._stream_result.reply['Rows']):
