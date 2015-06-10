@@ -1,333 +1,60 @@
-// Definitions for service vtgateservice.
+// Service definition for vtgateservice.
 // This is the main entry point to Vitess.
 
 syntax = "proto3";
 
 package vtgateservice;
 
-import "queryservice.proto";
-import "topo.proto";
-import "vtrpc.proto";
-
-// Session objects are session cookies and are invalidated on
-// use. Query results will contain updated session values.
-// Their content should be opaque to the user.
-message Session {
-  bool in_transaction = 1;
-
-  message ShardSession {
-    queryservice.Target target = 1;
-    int64 transaction_id = 2;
-  }
-  repeated ShardSession shard_sessions = 2;
-}
-
-// ExecuteRequest is the payload to Execute
-message ExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  queryservice.BoundQuery query = 3;
-  topo.TabletType TabletType = 4;
-  bool not_in_transaction = 5;
-}
-
-// ExecuteResponse is the returned value from Execute
-message ExecuteResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  queryservice.QueryResult result = 3;
-}
-
-// ExecuteShardsRequest is the payload to ExecuteShards
-message ExecuteShardsRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  queryservice.BoundQuery query = 3;
-  string keyspace = 4;
-  repeated string shards = 5;
-  topo.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
-}
-
-// ExecuteShardsResponse is the returned value from ExecuteShards
-message ExecuteShardsResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  queryservice.QueryResult result = 3;
-}
-
-// ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds
-message ExecuteKeyspaceIdsRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  queryservice.BoundQuery query = 3;
-  string keyspace = 4;
-  repeated bytes keyspace_ids = 5;
-  topo.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
-}
-
-// ExecuteKeyspaceIdsResponse is the returned value from ExecuteKeyspaceIds
-message ExecuteKeyspaceIdsResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  queryservice.QueryResult result = 3;
-}
-
-// ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges
-message ExecuteKeyRangesRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  queryservice.BoundQuery query = 3;
-  string keyspace = 4;
-  repeated topo.KeyRange key_ranges = 5;
-  topo.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
-}
-
-// ExecuteKeyRangesResponse is the returned value from ExecuteKeyRanges
-message ExecuteKeyRangesResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  queryservice.QueryResult result = 3;
-}
-
-// ExecuteEntityIdsRequest is the payload to ExecuteEntityIds
-message ExecuteEntityIdsRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  queryservice.BoundQuery query = 3;
-  string keyspace = 4;
-  string entity_column_name = 5;
-  message EntityId {
-    enum Type {
-      TYPE_NULL = 0;
-      TYPE_BYTES = 1;
-      TYPE_INT = 2;
-      TYPE_UINT = 3;
-      TYPE_FLOAT = 4;
-    }
-    Type xid_type = 1;
-    bytes xid_bytes = 2;
-    int64 xid_int = 3;
-    uint64 xid_uint = 4;
-    double xid_float = 5;
-    bytes keyspace_id = 6;
-  }
-  repeated EntityId entity_keyspace_ids = 6;
-  topo.TabletType TabletType = 7;
-  bool not_in_transaction = 8;
-}
-
-// ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds
-message ExecuteEntityIdsResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  queryservice.QueryResult result = 3;
-}
-
-// ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
-message ExecuteBatchShardsRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  repeated queryservice.BoundQuery queries = 3;
-  string keyspace = 4;
-  repeated string shards = 5;
-  topo.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
-}
-
-// ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards
-message ExecuteBatchShardsResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  repeated queryservice.QueryResult results = 3;
-}
-
-// ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
-message ExecuteBatchKeyspaceIdsRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-  repeated queryservice.BoundQuery queries = 3;
-  string keyspace = 4;
-  repeated bytes keyspace_ids = 5;
-  topo.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
-}
-
-// ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId
-message ExecuteBatchKeyspaceIdsResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-  repeated queryservice.QueryResult results = 3;
-}
-
-// StreamExecuteRequest is the payload to StreamExecute
-message StreamExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
-  topo.TabletType TabletType = 3;
-}
-
-// StreamExecuteResponse is the returned value from StreamExecute
-message StreamExecuteResponse {
-  vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
-}
-
-// StreamExecuteShardsRequest is the payload to StreamExecuteShards
-message StreamExecuteShardsRequest {
-  vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
-  string keyspace = 3;
-  repeated string shards = 4;
-  topo.TabletType TabletType = 5;
-}
-
-// StreamExecuteShardsResponse is the returned value from StreamExecuteShards
-message StreamExecuteShardsResponse {
-  vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
-}
-
-// StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds
-message StreamExecuteKeyspaceIdsRequest {
-  vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
-  string keyspace = 3;
-  repeated bytes keyspace_ids = 4;
-  topo.TabletType TabletType = 5;
-}
-
-// StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
-message StreamExecuteKeyspaceIdsResponse {
-  vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
-}
-
-// StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges
-message StreamExecuteKeyRangesRequest {
-  vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
-  string keyspace = 3;
-  repeated topo.KeyRange key_ranges = 4;
-  topo.TabletType TabletType = 5;
-}
-
-// StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
-message StreamExecuteKeyRangesResponse {
-  vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
-}
-
-// BeginRequest is the payload to Begin
-message BeginRequest {
-  vtrpc.CallerID caller_id = 1;
-}
-
-// BeginResponse is the returned value from Begin
-message BeginResponse {
-  vtrpc.RPCError error = 1;
-  Session session = 2;
-}
-
-// CommitRequest is the payload to Commit
-message CommitRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-}
-
-// CommitResponse is the returned value from Commit
-message CommitResponse {
-  vtrpc.RPCError error = 1;
-}
-
-// RollbackRequest is the payload to Rollback
-message RollbackRequest {
-  vtrpc.CallerID caller_id = 1;
-  Session session = 2;
-}
-
-// RollbackResponse is the returned value from Rollback
-message RollbackResponse {
-  vtrpc.RPCError error = 1;
-}
-
-// SplitQueryRequest is the payload to SplitQuery
-message SplitQueryRequest {
-  vtrpc.CallerID caller_id = 1;
-  string keyspace = 2;
-  queryservice.BoundQuery query = 3;
-  int64 split_count = 4;
-}
-
-// SplitQueryResponse is the returned value from SplitQuery
-message SplitQueryResponse {
-  message KeyRangePart {
-    string keyspace = 1;
-    repeated topo.KeyRange key_ranges = 2;
-  }
-  message ShardPart {
-    string keyspace = 1;
-    repeated string shards = 2;
-  }
-  message Part {
-    queryservice.BoundQuery query = 1;
-    KeyRangePart key_range_part = 2;
-    ShardPart shard_part = 3;
-    int64 size = 4;
-  }
-  repeated Part splits = 1;
-}
+import "vtgate.proto";
 
 service VTGate {
   // Execute executes tries to route the query to the right shard.
   // (this is a vtgate v3 API, use carefully)
-  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {};
+  rpc Execute(vtgate.ExecuteRequest) returns (vtgate.ExecuteResponse) {};
 
   // ExecuteShards executes the query on the specified shards.
-  rpc ExecuteShards(ExecuteShardsRequest) returns (ExecuteShardsResponse) {};
+  rpc ExecuteShards(vtgate.ExecuteShardsRequest) returns (vtgate.ExecuteShardsResponse) {};
 
   // ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-  rpc ExecuteKeyspaceIds(ExecuteKeyspaceIdsRequest) returns (ExecuteKeyspaceIdsResponse) {};
+  rpc ExecuteKeyspaceIds(vtgate.ExecuteKeyspaceIdsRequest) returns (vtgate.ExecuteKeyspaceIdsResponse) {};
 
   // ExecuteKeyRanges executes the query based on the specified key ranges.
-  rpc ExecuteKeyRanges(ExecuteKeyRangesRequest) returns (ExecuteKeyRangesResponse) {};
+  rpc ExecuteKeyRanges(vtgate.ExecuteKeyRangesRequest) returns (vtgate.ExecuteKeyRangesResponse) {};
 
   // ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-  rpc ExecuteEntityIds(ExecuteEntityIdsRequest) returns (ExecuteEntityIdsResponse) {};
+  rpc ExecuteEntityIds(vtgate.ExecuteEntityIdsRequest) returns (vtgate.ExecuteEntityIdsResponse) {};
 
   // ExecuteBatchShards executes the list of queries on the specified shards.
-  rpc ExecuteBatchShards(ExecuteBatchShardsRequest) returns (ExecuteBatchShardsResponse) {};
+  rpc ExecuteBatchShards(vtgate.ExecuteBatchShardsRequest) returns (vtgate.ExecuteBatchShardsResponse) {};
 
   // ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-  rpc ExecuteBatchKeyspaceIds(ExecuteBatchKeyspaceIdsRequest) returns (ExecuteBatchKeyspaceIdsResponse) {};
+  rpc ExecuteBatchKeyspaceIds(vtgate.ExecuteBatchKeyspaceIdsRequest) returns (vtgate.ExecuteBatchKeyspaceIdsResponse) {};
 
   // StreamExecute exectures a streaming query based on shards.
   // (this is a vtgate v3 API, use carefully)
-  rpc StreamExecute(StreamExecuteRequest) returns (stream StreamExecuteResponse) {};
+  rpc StreamExecute(vtgate.StreamExecuteRequest) returns (stream vtgate.StreamExecuteResponse) {};
 
   // StreamExecuteShard exectures a streaming query based on shards.
   // Use this method if the query returns a large number of rows.
-  rpc StreamExecuteShards(StreamExecuteShardsRequest) returns (stream StreamExecuteShardsResponse) {};
+  rpc StreamExecuteShards(vtgate.StreamExecuteShardsRequest) returns (stream vtgate.StreamExecuteShardsResponse) {};
 
   // StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
   // Use this method if the query returns a large number of rows.
-  rpc StreamExecuteKeyspaceIds(StreamExecuteKeyspaceIdsRequest) returns (stream StreamExecuteKeyspaceIdsResponse) {};
+  rpc StreamExecuteKeyspaceIds(vtgate.StreamExecuteKeyspaceIdsRequest) returns (stream vtgate.StreamExecuteKeyspaceIdsResponse) {};
 
   // StreamExecuteKeyRanges exectures a streaming query based on key ranges.
   // Use this method if the query returns a large number of rows.
-  rpc StreamExecuteKeyRanges(StreamExecuteKeyRangesRequest) returns (stream StreamExecuteKeyRangesResponse) {};
+  rpc StreamExecuteKeyRanges(vtgate.StreamExecuteKeyRangesRequest) returns (stream vtgate.StreamExecuteKeyRangesResponse) {};
 
   // Begin a transaction.
-  rpc Begin(BeginRequest) returns (BeginResponse) {};
+  rpc Begin(vtgate.BeginRequest) returns (vtgate.BeginResponse) {};
 
   // Commit a transaction.
-  rpc Commit(CommitRequest) returns (CommitResponse) {};
+  rpc Commit(vtgate.CommitRequest) returns (vtgate.CommitResponse) {};
 
   // Rollback a transaction.
-  rpc Rollback(RollbackRequest) returns (RollbackResponse) {};
+  rpc Rollback(vtgate.RollbackRequest) returns (vtgate.RollbackResponse) {};
 
   // Split a query into non-overlapping sub queries
-  rpc SplitQuery(SplitQueryRequest) returns (SplitQueryResponse) {};
+  rpc SplitQuery(vtgate.SplitQueryRequest) returns (vtgate.SplitQueryResponse) {};
 }
