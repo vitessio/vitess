@@ -263,6 +263,8 @@ class TabletConnection(object):
       self.client.stream_call('SqlQuery.StreamExecute', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
+      if reply.get('Err'):
+        raise gorpc.AppError(reply['Err'].get('Message', 'Missing error message'))
 
       for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))

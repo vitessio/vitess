@@ -422,11 +422,24 @@ class TestFailures(unittest.TestCase):
       logging.debug("Killing mysql on master")
       # We need to kill MySQL during query execution, not before.
       utils.wait_procs([self.master_tablet.teardown_mysql()])
-      # dbexceptions.DatabaseError map to an app failures, not infrastructure.
+      # dbexceptions.DatabaseError maps to an app failure, not infrastructure.
       with self.assertRaises(dbexceptions.DatabaseError):
         logging.debug("Doing stream_cursor.fetchall()")
         stream_cursor.fetchall()
       utils.wait_procs([self.master_tablet.init_mysql()])
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
+  def test_fail_stream_execute_initial(self):
+    """Tests for app errors in the first stream execute response."""
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+    try:
+      stream_cursor = cursor.StreamCursor(master_conn)
+      with self.assertRaises(dbexceptions.DatabaseError):
+        stream_cursor.execute("invalid sql syntax", {})
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
