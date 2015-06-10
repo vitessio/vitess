@@ -42,8 +42,10 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	return tErr
 }
 
-// Commit is exposing tabletserver.SqlQuery.Commit
-func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
+// UnsupportedNewCommit should not be used by anything other than tests.
+// It will eventually replace Commit, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) UnsupportedNewCommit(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
 	tabletserver.AddTabletErrorToErrorOnly(tErr, reply)
@@ -53,8 +55,16 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, reply *p
 	return tErr
 }
 
-// Rollback is exposing tabletserver.SqlQuery.Rollback
-func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
+// Commit is exposing tabletserver.SqlQuery.Commit
+func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
+	defer sq.server.HandlePanic(&err)
+	return sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
+}
+
+// UnsupportedNewRollback should not be used by anything other than tests.
+// It will eventually replace Rollback, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) UnsupportedNewRollback(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 	tabletserver.AddTabletErrorToErrorOnly(tErr, reply)
@@ -62,6 +72,12 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, reply 
 		return nil
 	}
 	return tErr
+}
+
+// Rollback is exposing tabletserver.SqlQuery.Rollback
+func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
+	defer sq.server.HandlePanic(&err)
+	return sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
 // Execute is exposing tabletserver.SqlQuery.Execute

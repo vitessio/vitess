@@ -142,7 +142,12 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitError")
 	ctx := context.Background()
-	err := conn.Commit(ctx, commitTransactionId)
+	var err error
+	if *tabletserver.RPCErrorOnlyInReply {
+		err = conn.UnsupportedNewCommit(ctx, commitTransactionId)
+	} else {
+		err = conn.Commit(ctx, commitTransactionId)
+	}
 	if err == nil {
 		t.Fatalf("Commit was expecting an error, didn't get one")
 	}
@@ -190,7 +195,12 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitError")
 	ctx := context.Background()
-	err := conn.Rollback(ctx, rollbackTransactionId)
+	var err error
+	if *tabletserver.RPCErrorOnlyInReply {
+		err = conn.UnsupportedNewRollback(ctx, commitTransactionId)
+	} else {
+		err = conn.Rollback(ctx, commitTransactionId)
+	}
 	if err == nil {
 		t.Fatalf("Rollback was expecting an error, didn't get one")
 	}

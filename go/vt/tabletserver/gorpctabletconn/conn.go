@@ -253,6 +253,33 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	return tabletError(err)
 }
 
+// UnsupportedNewCommit should not be used for anything except tests for now;
+// it will eventually replace the existing Commit.
+// UnsupportedNewCommit commits the ongoing transaction.
+func (conn *TabletBson) UnsupportedNewCommit(ctx context.Context, transactionID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &tproto.Session{
+		SessionId:     conn.sessionID,
+		TransactionId: transactionID,
+	}
+	var errReply tproto.ErrorOnly
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewCommit", req, &errReply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Commit might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(errReply.Err)
+	}
+	err := conn.withTimeout(ctx, action)
+	return tabletError(err)
+}
+
 // Rollback rolls back the ongoing transaction.
 func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
@@ -268,6 +295,33 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 	var errReply tproto.ErrorOnly
 	action := func() error {
 		err := conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &errReply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Rollback might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(errReply.Err)
+	}
+	err := conn.withTimeout(ctx, action)
+	return tabletError(err)
+}
+
+// UnsupportedNewRollback should not be used for anything except tests for now;
+// it will eventually replace the existing Rollback.
+// UnsupportedNewRollback rolls back the ongoing transaction.
+func (conn *TabletBson) UnsupportedNewRollback(ctx context.Context, transactionID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return tabletconn.ConnClosed
+	}
+
+	req := &tproto.Session{
+		SessionId:     conn.sessionID,
+		TransactionId: transactionID,
+	}
+	var errReply tproto.ErrorOnly
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewRollback", req, &errReply)
 		if err != nil {
 			return err
 		}
