@@ -18,55 +18,11 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctl.proto',
   package='vtctl',
-  serialized_pb=_b('\n\x0bvtctl.proto\x12\x05vtctl\"U\n\x17\x45xecuteVtctlCommandArgs\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\x12\x14\n\x0clock_timeout\x18\x03 \x01(\x03\",\n\x04Time\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\x13\n\x0bnanoseconds\x18\x02 \x01(\x03\"b\n\x0bLoggerEvent\x12\x19\n\x04time\x18\x01 \x01(\x0b\x32\x0b.vtctl.Time\x12\r\n\x05level\x18\x02 \x01(\x03\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t2V\n\x05Vtctl\x12M\n\x13\x45xecuteVtctlCommand\x12\x1e.vtctl.ExecuteVtctlCommandArgs\x1a\x12.vtctl.LoggerEvent\"\x00\x30\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x0bvtctl.proto\x12\x05vtctl\",\n\x04Time\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\x13\n\x0bnanoseconds\x18\x02 \x01(\x03\"b\n\x0bLoggerEvent\x12\x19\n\x04time\x18\x01 \x01(\x0b\x32\x0b.vtctl.Time\x12\r\n\x05level\x18\x02 \x01(\x03\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t\"X\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\x12\x14\n\x0clock_timeout\x18\x03 \x01(\x03\"@\n\x1b\x45xecuteVtctlCommandResponse\x12!\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x12.vtctl.LoggerEventb\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
-
-
-_EXECUTEVTCTLCOMMANDARGS = _descriptor.Descriptor(
-  name='ExecuteVtctlCommandArgs',
-  full_name='vtctl.ExecuteVtctlCommandArgs',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='args', full_name='vtctl.ExecuteVtctlCommandArgs.args', index=0,
-      number=1, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='action_timeout', full_name='vtctl.ExecuteVtctlCommandArgs.action_timeout', index=1,
-      number=2, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    _descriptor.FieldDescriptor(
-      name='lock_timeout', full_name='vtctl.ExecuteVtctlCommandArgs.lock_timeout', index=2,
-      number=3, type=3, cpp_type=2, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  options=None,
-  is_extendable=False,
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=22,
-  serialized_end=107,
-)
 
 
 _TIME = _descriptor.Descriptor(
@@ -101,8 +57,8 @@ _TIME = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=109,
-  serialized_end=153,
+  serialized_start=22,
+  serialized_end=66,
 )
 
 
@@ -159,21 +115,90 @@ _LOGGEREVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=155,
-  serialized_end=253,
+  serialized_start=68,
+  serialized_end=166,
+)
+
+
+_EXECUTEVTCTLCOMMANDREQUEST = _descriptor.Descriptor(
+  name='ExecuteVtctlCommandRequest',
+  full_name='vtctl.ExecuteVtctlCommandRequest',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='args', full_name='vtctl.ExecuteVtctlCommandRequest.args', index=0,
+      number=1, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='action_timeout', full_name='vtctl.ExecuteVtctlCommandRequest.action_timeout', index=1,
+      number=2, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='lock_timeout', full_name='vtctl.ExecuteVtctlCommandRequest.lock_timeout', index=2,
+      number=3, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=168,
+  serialized_end=256,
+)
+
+
+_EXECUTEVTCTLCOMMANDRESPONSE = _descriptor.Descriptor(
+  name='ExecuteVtctlCommandResponse',
+  full_name='vtctl.ExecuteVtctlCommandResponse',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='event', full_name='vtctl.ExecuteVtctlCommandResponse.event', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=258,
+  serialized_end=322,
 )
 
 _LOGGEREVENT.fields_by_name['time'].message_type = _TIME
-DESCRIPTOR.message_types_by_name['ExecuteVtctlCommandArgs'] = _EXECUTEVTCTLCOMMANDARGS
+_EXECUTEVTCTLCOMMANDRESPONSE.fields_by_name['event'].message_type = _LOGGEREVENT
 DESCRIPTOR.message_types_by_name['Time'] = _TIME
 DESCRIPTOR.message_types_by_name['LoggerEvent'] = _LOGGEREVENT
-
-ExecuteVtctlCommandArgs = _reflection.GeneratedProtocolMessageType('ExecuteVtctlCommandArgs', (_message.Message,), dict(
-  DESCRIPTOR = _EXECUTEVTCTLCOMMANDARGS,
-  __module__ = 'vtctl_pb2'
-  # @@protoc_insertion_point(class_scope:vtctl.ExecuteVtctlCommandArgs)
-  ))
-_sym_db.RegisterMessage(ExecuteVtctlCommandArgs)
+DESCRIPTOR.message_types_by_name['ExecuteVtctlCommandRequest'] = _EXECUTEVTCTLCOMMANDREQUEST
+DESCRIPTOR.message_types_by_name['ExecuteVtctlCommandResponse'] = _EXECUTEVTCTLCOMMANDRESPONSE
 
 Time = _reflection.GeneratedProtocolMessageType('Time', (_message.Message,), dict(
   DESCRIPTOR = _TIME,
@@ -189,51 +214,22 @@ LoggerEvent = _reflection.GeneratedProtocolMessageType('LoggerEvent', (_message.
   ))
 _sym_db.RegisterMessage(LoggerEvent)
 
+ExecuteVtctlCommandRequest = _reflection.GeneratedProtocolMessageType('ExecuteVtctlCommandRequest', (_message.Message,), dict(
+  DESCRIPTOR = _EXECUTEVTCTLCOMMANDREQUEST,
+  __module__ = 'vtctl_pb2'
+  # @@protoc_insertion_point(class_scope:vtctl.ExecuteVtctlCommandRequest)
+  ))
+_sym_db.RegisterMessage(ExecuteVtctlCommandRequest)
+
+ExecuteVtctlCommandResponse = _reflection.GeneratedProtocolMessageType('ExecuteVtctlCommandResponse', (_message.Message,), dict(
+  DESCRIPTOR = _EXECUTEVTCTLCOMMANDRESPONSE,
+  __module__ = 'vtctl_pb2'
+  # @@protoc_insertion_point(class_scope:vtctl.ExecuteVtctlCommandResponse)
+  ))
+_sym_db.RegisterMessage(ExecuteVtctlCommandResponse)
+
 
 import abc
 from grpc.early_adopter import implementations
 from grpc.framework.alpha import utilities
-class EarlyAdopterVtctlServicer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def ExecuteVtctlCommand(self, request, context):
-    raise NotImplementedError()
-class EarlyAdopterVtctlServer(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def start(self):
-    raise NotImplementedError()
-  @abc.abstractmethod
-  def stop(self):
-    raise NotImplementedError()
-class EarlyAdopterVtctlStub(object):
-  """<fill me in later!>"""
-  __metaclass__ = abc.ABCMeta
-  @abc.abstractmethod
-  def ExecuteVtctlCommand(self, request):
-    raise NotImplementedError()
-  ExecuteVtctlCommand.async = None
-def early_adopter_create_Vtctl_server(servicer, port, private_key=None, certificate_chain=None):
-  import vtctl_pb2
-  import vtctl_pb2
-  method_service_descriptions = {
-    "ExecuteVtctlCommand": utilities.unary_stream_service_description(
-      servicer.ExecuteVtctlCommand,
-      vtctl_pb2.ExecuteVtctlCommandArgs.FromString,
-      vtctl_pb2.LoggerEvent.SerializeToString,
-    ),
-  }
-  return implementations.server("vtctl.Vtctl", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
-def early_adopter_create_Vtctl_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
-  import vtctl_pb2
-  import vtctl_pb2
-  method_invocation_descriptions = {
-    "ExecuteVtctlCommand": utilities.unary_stream_invocation_description(
-      vtctl_pb2.ExecuteVtctlCommandArgs.SerializeToString,
-      vtctl_pb2.LoggerEvent.FromString,
-    ),
-  }
-  return implementations.stub("vtctl.Vtctl", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)
