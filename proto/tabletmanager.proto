@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package tabletmanager;
 
-import "queryservice.proto";
+import "query.proto";
 import "topo.proto";
 import "replication.proto";
 import "vtctl.proto";
@@ -221,7 +221,7 @@ message ExecuteFetchAsDbaRequest {
 }
 
 message ExecuteFetchAsDbaResponse {
-  queryservice.QueryResult result = 1;
+  query.QueryResult result = 1;
 }
 
 message ExecuteFetchAsAppRequest {
@@ -231,7 +231,7 @@ message ExecuteFetchAsAppRequest {
 }
 
 message ExecuteFetchAsAppResponse {
-  queryservice.QueryResult result = 1;
+  query.QueryResult result = 1;
 }
 
 message SlaveStatusRequest {

@@ -102,7 +102,7 @@ It has these top-level messages:
 package tabletmanager
 
 import proto "github.com/golang/protobuf/proto"
-import queryservice "github.com/youtube/vitess/go/vt/proto/queryservice"
+import query "github.com/youtube/vitess/go/vt/proto/query"
 import topo "github.com/youtube/vitess/go/vt/proto/topo"
 import replication "github.com/youtube/vitess/go/vt/proto/replication"
 import vtctl "github.com/youtube/vitess/go/vt/proto/vtctl"
@@ -593,14 +593,14 @@ func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextStr
 func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
 
 type ExecuteFetchAsDbaResponse struct {
-	Result *queryservice.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResponse{} }
 func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
 
-func (m *ExecuteFetchAsDbaResponse) GetResult() *queryservice.QueryResult {
+func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}
@@ -618,14 +618,14 @@ func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextStr
 func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
 
 type ExecuteFetchAsAppResponse struct {
-	Result *queryservice.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResponse{} }
 func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
 
-func (m *ExecuteFetchAsAppResponse) GetResult() *queryservice.QueryResult {
+func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
 	if m != nil {
 		return m.Result
 	}

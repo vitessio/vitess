@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package vtgate;
 
-import "queryservice.proto";
+import "query.proto";
 import "topo.proto";
 import "vtrpc.proto";
 
@@ -15,7 +15,7 @@ message Session {
   bool in_transaction = 1;
 
   message ShardSession {
-    queryservice.Target target = 1;
+    query.Target target = 1;
     int64 transaction_id = 2;
   }
   repeated ShardSession shard_sessions = 2;
@@ -25,7 +25,7 @@ message Session {
 message ExecuteRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   topo.TabletType TabletType = 4;
   bool not_in_transaction = 5;
 }
@@ -34,14 +34,14 @@ message ExecuteRequest {
 message ExecuteResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  queryservice.QueryResult result = 3;
+  query.QueryResult result = 3;
 }
 
 // ExecuteShardsRequest is the payload to ExecuteShards
 message ExecuteShardsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   string keyspace = 4;
   repeated string shards = 5;
   topo.TabletType TabletType = 6;
@@ -52,14 +52,14 @@ message ExecuteShardsRequest {
 message ExecuteShardsResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  queryservice.QueryResult result = 3;
+  query.QueryResult result = 3;
 }
 
 // ExecuteKeyspaceIdsRequest is the payload to ExecuteKeyspaceIds
 message ExecuteKeyspaceIdsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   string keyspace = 4;
   repeated bytes keyspace_ids = 5;
   topo.TabletType TabletType = 6;
@@ -70,14 +70,14 @@ message ExecuteKeyspaceIdsRequest {
 message ExecuteKeyspaceIdsResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  queryservice.QueryResult result = 3;
+  query.QueryResult result = 3;
 }
 
 // ExecuteKeyRangesRequest is the payload to ExecuteKeyRanges
 message ExecuteKeyRangesRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   string keyspace = 4;
   repeated topo.KeyRange key_ranges = 5;
   topo.TabletType TabletType = 6;
@@ -88,14 +88,14 @@ message ExecuteKeyRangesRequest {
 message ExecuteKeyRangesResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  queryservice.QueryResult result = 3;
+  query.QueryResult result = 3;
 }
 
 // ExecuteEntityIdsRequest is the payload to ExecuteEntityIds
 message ExecuteEntityIdsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   string keyspace = 4;
   string entity_column_name = 5;
   message EntityId {
@@ -122,14 +122,14 @@ message ExecuteEntityIdsRequest {
 message ExecuteEntityIdsResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  queryservice.QueryResult result = 3;
+  query.QueryResult result = 3;
 }
 
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 message ExecuteBatchShardsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  repeated queryservice.BoundQuery queries = 3;
+  repeated query.BoundQuery queries = 3;
   string keyspace = 4;
   repeated string shards = 5;
   topo.TabletType TabletType = 6;
@@ -140,14 +140,14 @@ message ExecuteBatchShardsRequest {
 message ExecuteBatchShardsResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  repeated queryservice.QueryResult results = 3;
+  repeated query.QueryResult results = 3;
 }
 
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
 message ExecuteBatchKeyspaceIdsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  repeated queryservice.BoundQuery queries = 3;
+  repeated query.BoundQuery queries = 3;
   string keyspace = 4;
   repeated bytes keyspace_ids = 5;
   topo.TabletType TabletType = 6;
@@ -158,26 +158,26 @@ message ExecuteBatchKeyspaceIdsRequest {
 message ExecuteBatchKeyspaceIdsResponse {
   vtrpc.RPCError error = 1;
   Session session = 2;
-  repeated queryservice.QueryResult results = 3;
+  repeated query.QueryResult results = 3;
 }
 
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
   vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
+  query.BoundQuery query = 2;
   topo.TabletType TabletType = 3;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
 message StreamExecuteResponse {
   vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
+  query.QueryResult result = 2;
 }
 
 // StreamExecuteShardsRequest is the payload to StreamExecuteShards
 message StreamExecuteShardsRequest {
   vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
+  query.BoundQuery query = 2;
   string keyspace = 3;
   repeated string shards = 4;
   topo.TabletType TabletType = 5;
@@ -186,13 +186,13 @@ message StreamExecuteShardsRequest {
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards
 message StreamExecuteShardsResponse {
   vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
+  query.QueryResult result = 2;
 }
 
 // StreamExecuteKeyspaceIdsRequest is the payload to StreamExecuteKeyspaceIds
 message StreamExecuteKeyspaceIdsRequest {
   vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
+  query.BoundQuery query = 2;
   string keyspace = 3;
   repeated bytes keyspace_ids = 4;
   topo.TabletType TabletType = 5;
@@ -201,13 +201,13 @@ message StreamExecuteKeyspaceIdsRequest {
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
 message StreamExecuteKeyspaceIdsResponse {
   vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
+  query.QueryResult result = 2;
 }
 
 // StreamExecuteKeyRangesRequest is the payload to StreamExecuteKeyRanges
 message StreamExecuteKeyRangesRequest {
   vtrpc.CallerID caller_id = 1;
-  queryservice.BoundQuery query = 2;
+  query.BoundQuery query = 2;
   string keyspace = 3;
   repeated topo.KeyRange key_ranges = 4;
   topo.TabletType TabletType = 5;
@@ -216,7 +216,7 @@ message StreamExecuteKeyRangesRequest {
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
 message StreamExecuteKeyRangesResponse {
   vtrpc.RPCError error = 1;
-  queryservice.QueryResult result = 2;
+  query.QueryResult result = 2;
 }
 
 // BeginRequest is the payload to Begin
@@ -256,7 +256,7 @@ message RollbackResponse {
 message SplitQueryRequest {
   vtrpc.CallerID caller_id = 1;
   string keyspace = 2;
-  queryservice.BoundQuery query = 3;
+  query.BoundQuery query = 3;
   int64 split_count = 4;
 }
 
@@ -271,7 +271,7 @@ message SplitQueryResponse {
     repeated string shards = 2;
   }
   message Part {
-    queryservice.BoundQuery query = 1;
+    query.BoundQuery query = 1;
     KeyRangePart key_range_part = 2;
     ShardPart shard_part = 3;
     int64 size = 4;
