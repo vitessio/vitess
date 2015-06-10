@@ -18,6 +18,7 @@
     html.className = html.className + ' no-touch';
   }
 
+
   function closeMenu() {
     body.classList.remove('open');
     appbar.classList.remove('open');
@@ -35,6 +36,7 @@
       closeMenu();
     }
   }
+
 
   var previous = -1;
   function handleScroll(event) {

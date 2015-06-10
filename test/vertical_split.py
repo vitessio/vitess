@@ -88,12 +88,12 @@ def tearDownModule():
 
 class TestVerticalSplit(unittest.TestCase):
   def setUp(self):
-    self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='0s')
-    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u"%self.vtgate_port,
+    utils.VtGate().start(cache_ttl='0s')
+    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                                "test_nj", 30.0)
     self.vtgate_addrs = None
     if client_type == VTGATE:
-      self.vtgate_addrs = {"vt": ["localhost:%s"%(self.vtgate_port),]}
+      self.vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
 
     self.insert_index = 0
     # Lowering the keyspace refresh throttle so things are testable.
@@ -102,7 +102,7 @@ class TestVerticalSplit(unittest.TestCase):
 
   def tearDown(self):
     self.vtgate_client.close()
-    utils.vtgate_kill(self.vtgate_server)
+    utils.vtgate.kill()
 
   def _create_source_schema(self):
     create_table_template = '''create table %s(

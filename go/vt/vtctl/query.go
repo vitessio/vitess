@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/jscfg"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -20,20 +21,25 @@ import (
 
 // This file contains the query command group for vtctl.
 
-const queriesGroundName = "Queries"
+const queriesGroupName = "Queries"
 
 func init() {
-	addCommandGroup(queriesGroundName)
-	addCommand(queriesGroundName, command{
+	addCommandGroup(queriesGroupName)
+	addCommand(queriesGroupName, command{
 		"VtGateExecute",
 		commandVtGateExecute,
 		"-server <vtgate> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server."})
-	addCommand(queriesGroundName, command{
+	addCommand(queriesGroupName, command{
 		"VtGateExecuteShard",
 		commandVtGateExecuteShard,
 		"-server <vtgate> -keyspace <keyspace> -shards <shard0>,<shard1>,... [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-tablet_type <tablet type>] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server."})
+	addCommand(queriesGroupName, command{
+		"VtGateSplitQuery",
+		commandVtGateSplitQuery,
+		"-server <vtgate> -keyspace <keyspace> -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
+		"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
 }
 
 type bindvars map[string]interface{}
@@ -137,5 +143,34 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("Execute failed: %v", err)
 	}
 	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
+	return nil
+}
+
+func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	server := subFlags.String("server", "", "VtGate server to connect to")
+	bindVariables := newBindvars(subFlags)
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
+	splitCount := subFlags.Int("split_count", 16, "number of splits to generate")
+	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
+	}
+
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
+	}
+	defer vtgateConn.Close()
+	r, err := vtgateConn.SplitQuery(ctx, *keyspace, tproto.BoundQuery{
+		Sql:           subFlags.Arg(0),
+		BindVariables: *bindVariables,
+	}, *splitCount)
+	if err != nil {
+		return fmt.Errorf("SplitQuery failed: %v", err)
+	}
+	wr.Logger().Printf("%v\n", jscfg.ToJSON(r))
 	return nil
 }

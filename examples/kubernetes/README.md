@@ -210,7 +210,7 @@ To create the table defined in `create_test_table.sql`:
 
 ```
 # run this from the example dir so it finds the create_test_table.sql file
-vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
 ## Start a vtgate pool

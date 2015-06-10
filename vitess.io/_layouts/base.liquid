@@ -1,38 +1,120 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js">
-<head>
-{% include meta.liquid %}
-{% include styles.liquid %}
-</head>
-<body class="">
+<html lang="en-US">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width" />
+      {% include meta.liquid %}
+      {% include styles.liquid %}
+      <link rel="stylesheet" href="{{ site.baseurl }}/css/components.css">
+      <link rel="stylesheet" href="{{ site.baseurl }}/css/responsee.css">
+      <!-- CUSTOM STYLE -->
+      <link rel="stylesheet" href="{{ site.baseurl }}/css/template-style.css">
+      <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,600,700,800&subset=latin,latin-ext' rel='stylesheet' type='text/css'>
+      <script type="text/javascript" src="{{ site.baseurl }}/assets/scripts/jquery-1.8.3.min.js"></script>
+      <script type="text/javascript" src="{{ site.baseurl }}/assets/scripts/jquery-ui.min.js"></script>    
+      <script type="text/javascript" src="{{ site.baseurl }}/assets/scripts/modernizr.js"></script>
+      <script type="text/javascript" src="{{ site.baseurl }}/assets/scripts/responsee.js"></script>
+      <!--[if lt IE 9]>
+      <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+      <![endif]-->
+   </head>
+   <body class="size-1140">
+      <header id="app-bar" class="app-bar promote-layer">
+         <div class="line">
+            <div class="app-bar-container">
+               <button id="menu" class="menu" title="Menu"></button>
+               <h1 class="logo"><a href="{{ site.baseurl }}/">Vitess</a></h1>
+               <section class="app-bar-actions">
+                  <a href="#"><i class="icon icon-chevron-up"></i> Top</a>
+               </section>
+            </div>
+            <div class="navdrawer">
+              <nav id="nav" class="navdrawer-container promote-layer">
+                <h4>Navigation</h4>
+                {% include nav.liquid %}
+              </nav>
+            </div>
+         </div>
+      </header>
+      <!-- ASIDE NAV AND CONTENT -->
+      <div class="line">
+         <div class="box  margin-bottom">
+            <div class="margin">
+               <!-- ASIDE NAV 2 -->
+               <nav class="scrolling-nav" style="margin:0">
+               <aside class="s-12">
+                  <div class="aside-nav">
+                     <div class="aside-nav-header">Overview</div>
+                     <ul>
+                        <li><a href="/overview/">What is Vitess</a></li>
+                        <li><a href="/overview/concepts.html">Key Concepts</a></li>
+                     </ul>
+                     <div class="aside-nav-header">Getting Started</div>
+                     <ul>
+                        <li><a href="/getting-started/">Run Vitess on Kubernetes</a></li>
+                        <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+                     </ul>
+                     <div class="aside-nav-header">User Guide</div>
+                     <ul>
+                        <li><a href="/user-guide/sharding.html">Sharding</a>
+                          <ul>
+                            <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
+                          </ul>
+                        </li>
+<!--
+                        <li><a href="/user-guide/schema-management.html">Schema Management</a></li>
+                        <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+                        <li><a href="/user-guide/storage.html">Storage</a></li>
+                        <li><a href="/user-guide/api.html">Using the API</a></li>
+-->
+                     </ul>
+<!--
+                     <div class="aside-nav-header">Architecture</div>
+                     <ul>
+                        <li><a href="/architecture/life-of-a-query.html">Life of a Query</a></li>
+                        <li><a href="/architecture/topology-service.html">Topology Service</a></li>
+                     </ul>
 
-<header id="app-bar" class="app-bar promote-layer">
-  <div class="app-bar-container">
-    <button id="menu" class="menu" title="Menu"></button>
-    <h1 class="logo"><a href="{{ site.baseurl }}/">Vitess</a></h1>
-    <section class="app-bar-actions">
-      <a href="#"><i class="icon icon-chevron-up"></i> Top</a>
-    </section>
-  </div>
-</header>
+                     <div class="aside-nav-header">Maintenance</div>
+                     <ul>
+                        <li><a href="/maintenance/monitoring.html">Monitoring</a></li>
+                        <li><a href="/maintenance/testing.html">Testing</a></li>
+                     </ul>
+-->
+                     <div class="aside-nav-header">Reference</div>
+                     <ul>
+                        <li><a href="/reference/vtctl.html">vtctl Reference</a></li>
+<!--
+                        <li><a href="/reference/api.html">API Reference</a></li>
+                        <li><a href="/reference/client-libraries/">Client Libraries</a></li>
+-->
+                     </ul>
+<!--
+                     <div class="aside-nav-header">Other Resources</div>
+                     <ul>
+                        <li><a href="/resources/presentations.html">Presentations</a></li>
+                        <li class="last"><a href="/resources/roadmap.html">Roadmap</a></li>
+                     </ul>
+                  </div>
+-->
+               </aside>
+               </nav>
+               <!-- CONTENT -->
+               <section class="s-12 l-9">
+                 {{ content }}
+               </section>
+            </div>
+         </div>
+         <footer>
+            <div class="s-12">
+               <div style="float: left; display: inline-block; width: 50%;">&copy; 2015 Google. Licensed under <a href="http://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</div>
+               <div style="float: right; display: inline-block; text-align: right; width: 50%;">Design and coding based on <a href="http://www.myresponsee.com" title="Responsee - lightweight responsive framework">Responsee</a> framework</div>
+               </div>
+         </footer>
+      </div>
+      <!-- FOOTER -->
 
-<div class="navdrawer">
-  <nav id="nav" class="navdrawer-container promote-layer">
-    <h4>Navigation</h4>
-    {% include nav.liquid %}
-  </nav>
-</div>
-
-{{ content }}
-
-<footer>
-  <div class="container">
-    <p class="small">&copy; 2015 Google. Licensed under <a href="http://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
-  </div>
-</footer>
-
-{% include scripts.liquid %}
-{% include analytics.liquid %}
-</body>
+      {% include scripts.liquid %}
+      {% include analytics.liquid %}
+   </body>
 </html>
-

@@ -1,0 +1,60 @@
+// Service definition for vtgateservice.
+// This is the main entry point to Vitess.
+
+syntax = "proto3";
+
+package vtgateservice;
+
+import "vtgate.proto";
+
+service VTGate {
+  // Execute executes tries to route the query to the right shard.
+  // (this is a vtgate v3 API, use carefully)
+  rpc Execute(vtgate.ExecuteRequest) returns (vtgate.ExecuteResponse) {};
+
+  // ExecuteShards executes the query on the specified shards.
+  rpc ExecuteShards(vtgate.ExecuteShardsRequest) returns (vtgate.ExecuteShardsResponse) {};
+
+  // ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
+  rpc ExecuteKeyspaceIds(vtgate.ExecuteKeyspaceIdsRequest) returns (vtgate.ExecuteKeyspaceIdsResponse) {};
+
+  // ExecuteKeyRanges executes the query based on the specified key ranges.
+  rpc ExecuteKeyRanges(vtgate.ExecuteKeyRangesRequest) returns (vtgate.ExecuteKeyRangesResponse) {};
+
+  // ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
+  rpc ExecuteEntityIds(vtgate.ExecuteEntityIdsRequest) returns (vtgate.ExecuteEntityIdsResponse) {};
+
+  // ExecuteBatchShards executes the list of queries on the specified shards.
+  rpc ExecuteBatchShards(vtgate.ExecuteBatchShardsRequest) returns (vtgate.ExecuteBatchShardsResponse) {};
+
+  // ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
+  rpc ExecuteBatchKeyspaceIds(vtgate.ExecuteBatchKeyspaceIdsRequest) returns (vtgate.ExecuteBatchKeyspaceIdsResponse) {};
+
+  // StreamExecute exectures a streaming query based on shards.
+  // (this is a vtgate v3 API, use carefully)
+  rpc StreamExecute(vtgate.StreamExecuteRequest) returns (stream vtgate.StreamExecuteResponse) {};
+
+  // StreamExecuteShard exectures a streaming query based on shards.
+  // Use this method if the query returns a large number of rows.
+  rpc StreamExecuteShards(vtgate.StreamExecuteShardsRequest) returns (stream vtgate.StreamExecuteShardsResponse) {};
+
+  // StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
+  // Use this method if the query returns a large number of rows.
+  rpc StreamExecuteKeyspaceIds(vtgate.StreamExecuteKeyspaceIdsRequest) returns (stream vtgate.StreamExecuteKeyspaceIdsResponse) {};
+
+  // StreamExecuteKeyRanges exectures a streaming query based on key ranges.
+  // Use this method if the query returns a large number of rows.
+  rpc StreamExecuteKeyRanges(vtgate.StreamExecuteKeyRangesRequest) returns (stream vtgate.StreamExecuteKeyRangesResponse) {};
+
+  // Begin a transaction.
+  rpc Begin(vtgate.BeginRequest) returns (vtgate.BeginResponse) {};
+
+  // Commit a transaction.
+  rpc Commit(vtgate.CommitRequest) returns (vtgate.CommitResponse) {};
+
+  // Rollback a transaction.
+  rpc Rollback(vtgate.RollbackRequest) returns (vtgate.RollbackResponse) {};
+
+  // Split a query into non-overlapping sub queries
+  rpc SplitQuery(vtgate.SplitQueryRequest) returns (vtgate.SplitQueryResponse) {};
+}

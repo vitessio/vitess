@@ -406,16 +406,35 @@ def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
       timeout, sleep_time=0.1
     )
 
-# vtgate helpers, assuming it always restarts on the same port
-def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
-                 topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
-                 auth=False, timeout_total="4s", timeout_per_conn="2s",
-                 cert=None, key=None, ca_cert=None,
-                 socket_file=None, extra_args=None):
-  port = vtport or environment.reserve_ports(1)
-  secure_port = None
-  args = environment.binary_args('vtgate') + [
-          '-port', str(port),
+# Save the first running instance of vtgate. It is saved when 'start'
+# is called, and cleared when kill is called.
+vtgate = None
+
+class VtGate(object):
+  """VtGate object represents a vtgate process.
+  """
+
+  def __init__(self, port=None, cert=None, key=None):
+    """Creates the Vtgate instance and reserve the ports if necessary.
+    """
+    self.port = port or environment.reserve_ports(1)
+    self.secure_port = None
+    if cert:
+      self.secure_port = environment.reserve_ports(1)
+      self.cert = cert
+      self.key = key
+    self.proc = None
+    self.socket_file = None
+
+  def start(self, cell='test_nj', retry_delay=1, retry_count=2,
+            topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
+            auth=False, timeout_total="4s", timeout_per_conn="2s",
+            socket_file=None, extra_args=None):
+    """Starts the process for thie vtgate instance. If no other instance has
+       been started, saves it into the global vtgate variable.
+    """
+    args = environment.binary_args('vtgate') + [
+          '-port', str(self.port),
           '-cell', cell,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
@@ -425,83 +444,133 @@ def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=2,
           '-conn-timeout-per-conn', timeout_per_conn,
           '-bsonrpc_timeout', '5s',
           ] + protocols_flavor().tabletconn_protocol_flags()
-  if topo_impl:
-    args.extend(['-topo_implementation', topo_impl])
-  else:
-    args.extend(environment.topo_server().flags())
-  if tablet_bson_encrypted:
-    args.append('-tablet-bson-encrypted')
-  if auth:
-    args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
-  if cert:
-    secure_port = environment.reserve_ports(1)
-    args.extend(['-secure-port', '%s' % secure_port,
-                 '-cert', cert,
-                 '-key', key])
-    if ca_cert:
-      args.extend(['-ca_cert', ca_cert])
-  if socket_file:
-    args.extend(['-socket_file', socket_file])
+    if topo_impl:
+      args.extend(['-topo_implementation', topo_impl])
+    else:
+      args.extend(environment.topo_server().flags())
+    if tablet_bson_encrypted:
+      args.append('-tablet-bson-encrypted')
+    if auth:
+      args.extend(['-auth-credentials',
+                   os.path.join(environment.vttop, 'test', 'test_data',
+                                'authcredentials_test.json')])
+    if self.secure_port:
+      args.extend(['-secure-port', '%s' % self.secure_port,
+                   '-cert', self.cert,
+                   '-key', self.key])
+    if socket_file:
+      self.socket_file = socket_file
+      args.extend(['-socket_file', socket_file])
 
-  if extra_args:
-    args.extend(extra_args)
+    if extra_args:
+      args.extend(extra_args)
 
-  sp = run_bg(args)
-  if cert:
-    wait_for_vars("vtgate", port, "SecureConnections")
-    return sp, port, secure_port
-  else:
-    wait_for_vars("vtgate", port)
-    return sp, port
+    self.proc = run_bg(args)
+    if self.secure_port:
+      wait_for_vars("vtgate", self.port, "SecureConnections")
+    else:
+      wait_for_vars("vtgate", self.port)
 
-def vtgate_kill(sp):
-  if sp is None:
-    return
-  kill_sub_process(sp, soft=True)
-  sp.wait()
+    global vtgate
+    if not vtgate:
+      vtgate = self
 
-def vtgate_vtclient(vtgate_port, sql, tablet_type='master', bindvars=None,
-                    streaming=False, verbose=False, raise_on_error=False):
-  """vtgate_vtclient uses the vtclient binary to send a query to vtgate.
-  """
-  args = environment.binary_args('vtclient') + [
-    '-server', 'localhost:%u' % vtgate_port,
-    '-tablet_type', tablet_type] + protocols_flavor().vtgate_protocol_flags()
-  if bindvars:
-    args.extend(['-bind_variables', json.dumps(bindvars)])
-  if streaming:
-    args.append('-streaming')
-  if verbose:
-    args.append('-alsologtostderr')
-  args.append(sql)
+  def kill(self):
+    """Terminates the vtgate process, and waits for it to exit.  If this
+    process is the one saved in the global vtgate variable, clears it.
 
-  out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
-  out = out.splitlines()
-  return out, err
+    Note if the test is using just one global vtgate process, and
+    starting it with the test, and killing it at the end of the test,
+    there is no need to call this kill() method,
+    utils.kill_sub_processes() will do a good enough job.
+    """
+    if self.proc is None:
+      return
+    kill_sub_process(self.proc, soft=True)
+    self.proc.wait()
+    self.proc = None
 
-def vtgate_execute(vtgate_port, sql, tablet_type='master', bindvars=None):
-  """vtgate_execute uses 'vtctl VtGateExecute' to execute a command.
-  """
-  args = ['VtGateExecute',
-          '-server', 'localhost:%u' % vtgate_port,
-          '-tablet_type', tablet_type]
-  if bindvars:
-    args.extend(['-bind_variables', json.dumps(bindvars)])
-  args.append(sql)
-  return run_vtctl_json(args)
+    global vtgate
+    if vtgate == self:
+      vtgate = None
 
-def vtgate_execute_shard(vtgate_port, sql, keyspace, shards, tablet_type='master', bindvars=None):
-  """vtgate_execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
-  """
-  args = ['VtGateExecuteShard',
-          '-server', 'localhost:%u' % vtgate_port,
-          '-keyspace', keyspace,
-          '-shards', shards,
-          '-tablet_type', tablet_type]
-  if bindvars:
-    args.extend(['-bind_variables', json.dumps(bindvars)])
-  args.append(sql)
-  return run_vtctl_json(args)
+  def addr(self):
+    """addr returns the address of the vtgate process.
+    """
+    return 'localhost:%u' % self.port
+
+  def secure_addr(self):
+    """secure_addr returns the secure address of the vtgate process.
+    """
+    return 'localhost:%u' % self.secure_port
+
+  def get_status(self):
+    """get_status returns the status page for this process.
+    """
+    return get_status(self.port)
+
+  def get_vars(self):
+    """get_vars returns the vars for this process.
+    """
+    return get_vars(self.port)
+
+  def vtclient(self, sql, tablet_type='master', bindvars=None,
+               streaming=False, verbose=False, raise_on_error=False):
+    """vtclient uses the vtclient binary to send a query to vtgate.
+    """
+    args = environment.binary_args('vtclient') + [
+      '-server', self.addr(),
+      '-tablet_type', tablet_type] + protocols_flavor().vtgate_protocol_flags()
+    if bindvars:
+      args.extend(['-bind_variables', json.dumps(bindvars)])
+    if streaming:
+      args.append('-streaming')
+    if verbose:
+      args.append('-alsologtostderr')
+    args.append(sql)
+
+    out, err = run(args, raise_on_error=raise_on_error, trap_output=True)
+    out = out.splitlines()
+    return out, err
+
+  def execute(self, sql, tablet_type='master', bindvars=None):
+    """execute uses 'vtctl VtGateExecute' to execute a command.
+    """
+    args = ['VtGateExecute',
+            '-server', self.addr(),
+            '-tablet_type', tablet_type]
+    if bindvars:
+      args.extend(['-bind_variables', json.dumps(bindvars)])
+    args.append(sql)
+    return run_vtctl_json(args)
+
+  def execute_shard(self, sql, keyspace, shards, tablet_type='master',
+                    bindvars=None):
+    """execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
+    """
+    args = ['VtGateExecuteShard',
+            '-server', self.addr(),
+            '-keyspace', keyspace,
+            '-shards', shards,
+            '-tablet_type', tablet_type]
+    if bindvars:
+      args.extend(['-bind_variables', json.dumps(bindvars)])
+    args.append(sql)
+    return run_vtctl_json(args)
+
+  def split_query(self, sql, keyspace, split_count, bindvars=None):
+    """split_query uses 'vtctl VtGateSplitQuery' to cut a query up
+    in chunks.
+    """
+    args = ['VtGateSplitQuery',
+            '-server', self.addr(),
+            '-keyspace', keyspace,
+            '-split_count', str(split_count)]
+    if bindvars:
+      args.extend(['-bind_variables', json.dumps(bindvars)])
+    args.append(sql)
+    return run_vtctl_json(args)
+
 
 # vtctl helpers
 # The modes are not all equivalent, and we don't really thrive for it.
@@ -796,12 +865,12 @@ class Vtctld(object):
   def start(self):
     args = environment.binary_args('vtctld') + [
             '-debug',
-            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '-log_dir', environment.vtlogroot,
-            '-port', str(self.port),
-            '-schema-change-dir', self.schema_change_dir,
-            '-schema-change-controller', 'local',
-            '-schema-change-check-interval', '1',
+            '--templates', environment.vttop + '/go/cmd/vtctld/templates',
+            '--log_dir', environment.vtlogroot,
+            '--port', str(self.port),
+            '--schema_change_dir', self.schema_change_dir,
+            '--schema_change_controller', 'local',
+            '--schema_change_check_interval', '1',
             ] + \
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags() + \

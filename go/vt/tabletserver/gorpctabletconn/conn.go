@@ -20,6 +20,7 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 )
 
@@ -106,7 +107,12 @@ func (conn *TabletBson) Execute(ctx context.Context, query string, bindVars map[
 	}
 	qr := new(mproto.QueryResult)
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Execute", req, qr)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Execute", req, qr)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Execute might return an application error inside the QueryResult
+		return vterrors.FromRPCError(qr.Err)
 	}
 	if err := conn.withTimeout(ctx, action); err != nil {
 		return nil, tabletError(err)
@@ -271,7 +277,18 @@ func tabletError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if _, ok := err.(rpcplus.ServerError); ok {
+	// TODO(aaijazi): tabletconn is in an intermediate state right now, where application errors
+	// can be returned as rpcplus.ServerError or vterrors.VitessError. Soon, it will be standardized
+	// to only VitessError.
+	isServerError := false
+	switch err.(type) {
+	case rpcplus.ServerError:
+		isServerError = true
+	case *vterrors.VitessError:
+		isServerError = true
+	default:
+	}
+	if isServerError {
 		var code int
 		errStr := err.Error()
 		switch {

@@ -12,39 +12,45 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 )
 
-var mysqlctlClientProtocol = flag.String("mysqlctl_client_protocol", "gorpc", "the protocol to use to talk to the mysqlctl server")
+var protocol = flag.String("mysqlctl_client_protocol", "gorpc", "the protocol to use to talk to the mysqlctl server")
+var connectionTimeout = flag.Duration("mysqlctl_client_connection_timeout", 30*time.Second, "the connection timeout to use to talk to the mysqlctl server")
 
 // MysqlctlClient defines the interface used to send remote mysqlctl commands
 type MysqlctlClient interface {
 	// Start calls Mysqld.Start remotely.
-	Start(mysqlWaitTime time.Duration) error
+	Start(ctx context.Context) error
+
 	// Shutdown calls Mysqld.Shutdown remotely.
-	Shutdown(waitForMysqld bool, mysqlWaitTime time.Duration) error
+	Shutdown(ctx context.Context, waitForMysqld bool) error
+
+	// RunMysqlUpgrade calls Mysqld.RunMysqlUpgrade remotely.
+	RunMysqlUpgrade(ctx context.Context) error
 
 	// Close will terminate the connection. This object won't be used anymore.
 	Close()
 }
 
-// MysqlctlClientFactory functions are registered by client implementations.
-type MysqlctlClientFactory func(network, addr string, dialTimeout time.Duration) (MysqlctlClient, error)
+// Factory functions are registered by client implementations.
+type Factory func(network, addr string, dialTimeout time.Duration) (MysqlctlClient, error)
 
-var mysqlctlClientFactories = make(map[string]MysqlctlClientFactory)
+var factories = make(map[string]Factory)
 
-// RegisterMysqlctlClientFactory allows a client implementation to register itself
-func RegisterMysqlctlClientFactory(name string, factory MysqlctlClientFactory) {
-	if _, ok := mysqlctlClientFactories[name]; ok {
-		log.Fatalf("RegisterMysqlctlClientFactory %s already exists", name)
+// RegisterFactory allows a client implementation to register itself
+func RegisterFactory(name string, factory Factory) {
+	if _, ok := factories[name]; ok {
+		log.Fatalf("RegisterFactory %s already exists", name)
 	}
-	mysqlctlClientFactories[name] = factory
+	factories[name] = factory
 }
 
 // New creates a client implementation as specified by a flag.
-func New(network, addr string, dialTimeout time.Duration) (MysqlctlClient, error) {
-	factory, ok := mysqlctlClientFactories[*mysqlctlClientProtocol]
+func New(network, addr string) (MysqlctlClient, error) {
+	factory, ok := factories[*protocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown mysqlctl client protocol: %v", *mysqlctlClientProtocol)
+		return nil, fmt.Errorf("unknown mysqlctl client protocol: %v", *protocol)
 	}
-	return factory(network, addr, dialTimeout)
+	return factory(network, addr, *connectionTimeout)
 }

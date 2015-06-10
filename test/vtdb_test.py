@@ -36,9 +36,6 @@ shard_0_replica = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
-
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
                          345387386794260318, 332484755310826578,
@@ -85,12 +82,10 @@ def setUpModule():
     raise
 
 def tearDownModule():
-  global vtgate_server
   logging.debug("in tearDownModule")
   if utils.options.skip_teardown:
     return
   logging.debug("Tearing down the servers and setup")
-  utils.vtgate_kill(vtgate_server)
   tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                        shard_1_replica])
   teardown_procs = [shard_0_master.teardown_mysql(),
@@ -111,9 +106,6 @@ def tearDownModule():
   shard_1_replica.remove_tree()
 
 def setup_tablets():
-  global vtgate_server
-  global vtgate_port
-
   # Start up a master mysql and vttablet
   logging.debug("Setting up tablets")
   utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -148,21 +140,18 @@ def setup_tablets():
                            'Partitions(rdonly): -80 80-\n' +
                            'Partitions(replica): -80 80-\n')
 
-  vtgate_server, vtgate_port = utils.vtgate_start()
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
-                                        "test_nj", 30.0)
+  utils.VtGate().start()
+  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj", 30.0)
   topology.read_topology(vtgate_client)
 
 
 def get_connection(db_type='master', shard_index=0, user=None, password=None):
   global vtgate_protocol
-  global vtgate_port
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
-                                        "test_nj", 30.0)
+  vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
+  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
                                   db_type, timeout,
                                   user=user, password=password,
@@ -531,13 +520,12 @@ class TestExceptionLogging(unittest.TestCase):
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
-    global vtgate_server, vtgate_port
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
     self.replica_tablet.kill_vttablet()
     self.replica_tablet.start_vttablet(auth=True)
-    utils.vtgate_kill(vtgate_server)
-    vtgate_server, vtgate_port = utils.vtgate_start(auth=True)
+    utils.vtgate.kill()
+    utils.VtGate().start(auth=True)
     credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
                                          'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')
@@ -617,14 +605,13 @@ class LocalLogger(vtdb_logger.VtdbLogger):
 
 class TestTopoReResolve(unittest.TestCase):
   def setUp(self):
-    global vtgate_port
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
     self.keyspace_fetch_throttle = 1
     vtdb_logger.register_vtdb_logger(LocalLogger())
     # Lowering the keyspace refresh throttle so things are testable.
     topology.set_keyspace_fetch_throttle(0.1)
-    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                                "test_nj", 30.0)
 
   def test_topo_read_threshold(self):

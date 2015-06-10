@@ -14,7 +14,7 @@ import (
 )
 
 func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, keyspaceIds []key.KeyspaceId) (string, []string, error) {
-	keyspace, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -33,10 +33,10 @@ func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, k
 	return keyspace, res, nil
 }
 
-func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, []topo.ShardReference, error) {
+func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType) (string, *topo.SrvKeyspace, []topo.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
-		return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
+		return "", nil, nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 	}
 
 	// check if the keyspace has been redirected for this tabletType.
@@ -44,15 +44,15 @@ func getKeyspaceShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspa
 		keyspace = servedFrom
 		srvKeyspace, err = topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 		if err != nil {
-			return "", nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
+			return "", nil, nil, fmt.Errorf("keyspace %v fetch error: %v", keyspace, err)
 		}
 	}
 
 	partition, ok := srvKeyspace.Partitions[tabletType]
 	if !ok {
-		return "", nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
+		return "", nil, nil, fmt.Errorf("No partition found for tabletType %v in keyspace %v", tabletType, keyspace)
 	}
-	return keyspace, partition.ShardReferences, nil
+	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
 
 func getShardForKeyspaceId(allShards []topo.ShardReference, keyspaceId key.KeyspaceId) (string, error) {
@@ -69,7 +69,7 @@ func getShardForKeyspaceId(allShards []topo.ShardReference, keyspaceId key.Keysp
 }
 
 func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType topo.TabletType) (string, map[string][]interface{}, error) {
-	keyspace, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -88,7 +88,7 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
 func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krs []key.KeyRange) (string, []string, error) {
-	keyspace, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
@@ -131,7 +131,7 @@ func resolveKeyRangeToShards(allShards []topo.ShardReference, kr key.KeyRange) (
 // mapExactShards maps a keyrange to shards only if there's a complete
 // match. If there's any partial match the function returns no match.
 func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, kr key.KeyRange) (newkeyspace string, shards []string, err error) {
-	keyspace, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
+	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}

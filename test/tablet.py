@@ -484,6 +484,8 @@ class Tablet(object):
     if supports_backups:
       args.extend(['-restore_from_backup'] + get_backup_storage_flags())
 
+    args.extend(['-rpc-error-only-in-reply=true'])
+
     if extra_args:
       args.extend(extra_args)
 

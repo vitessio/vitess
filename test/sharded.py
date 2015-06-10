@@ -107,7 +107,7 @@ class TestSharded(unittest.TestCase):
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
     # start vtgate, we'll use it later
-    vtgate_server, vtgate_port = utils.vtgate_start()
+    utils.VtGate().start()
 
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.reset_replication()
@@ -171,7 +171,7 @@ class TestSharded(unittest.TestCase):
     # now try to connect using the python client and shard-aware connection
     # to both shards
     # first get the topology and check it
-    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                           "test_nj", 30.0)
     topology.read_keyspaces(vtgate_client)
 
@@ -210,7 +210,7 @@ class TestSharded(unittest.TestCase):
       if "fatal: Shard mismatch, expecting -80, received -90" not in str(e):
         self.fail('unexpected exception: ' + str(e))
 
-    utils.vtgate_kill(vtgate_server)
+    utils.vtgate.kill()
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                          shard_1_replica])
 

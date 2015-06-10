@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -17,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
 	_ "github.com/youtube/vitess/go/mysql"
@@ -32,41 +34,50 @@ var (
 )
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
 	bootstrapArchive := subFlags.String("bootstrap_archive", "mysql-db-dir.tbz", "name of bootstrap archive within vitess/data/bootstrap directory")
 	subFlags.Parse(args)
 
-	if err := mysqld.Init(*waitTime, *bootstrapArchive); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	defer cancel()
+	if err := mysqld.Init(ctx, *bootstrapArchive); err != nil {
 		return fmt.Errorf("failed init mysql: %v", err)
 	}
 	return nil
 }
 
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
-	if err := mysqld.Shutdown(true, *waitTime); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	defer cancel()
+	if err := mysqld.Shutdown(ctx, true); err != nil {
 		return fmt.Errorf("failed shutdown mysql: %v", err)
 	}
 	return nil
 }
 
 func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
-	waitTime := subFlags.Duration("wait_time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqld.Start(*waitTime); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	defer cancel()
+	if err := mysqld.Start(ctx); err != nil {
 		return fmt.Errorf("failed start mysql: %v", err)
 	}
 	return nil
 }
 
 func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) error {
+	waitTime := subFlags.Duration("wait_time", 2*time.Minute, "how long to wait for shutdown")
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
-	if err := mysqld.Teardown(*force); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
+	defer cancel()
+	if err := mysqld.Teardown(ctx, *force); err != nil {
 		return fmt.Errorf("failed teardown mysql (forced? %v): %v", *force, err)
 	}
 	return nil

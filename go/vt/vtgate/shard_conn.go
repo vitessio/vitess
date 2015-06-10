@@ -52,7 +52,7 @@ type ShardConn struct {
 // number of retries before a ShardConn returns an error on an operation.
 func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
 	getAddresses := func() (*topo.EndPoints, error) {
-		endpoints, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, fmt.Errorf("endpoints fetch error: %v", err)
 		}

@@ -39,9 +39,6 @@ shard_1_master = tablet.Tablet()
 shard_1_replica1 = tablet.Tablet()
 shard_1_replica2 = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
-
 KEYSPACE_NAME = 'test_keyspace'
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
@@ -114,12 +111,10 @@ def setUpModule():
     raise
 
 def tearDownModule():
-  global vtgate_server
   logging.debug("in tearDownModule")
   if utils.options.skip_teardown:
     return
   logging.debug("Tearing down the servers and setup")
-  utils.vtgate_kill(vtgate_server)
   tablet.kill_tablets([shard_0_master,
                        shard_0_replica1, shard_0_replica2,
                        shard_1_master,
@@ -146,9 +141,6 @@ def tearDownModule():
   shard_1_replica2.remove_tree()
 
 def setup_tablets():
-  global vtgate_server
-  global vtgate_port
-
   # Start up a master mysql and vttablet
   logging.debug("Setting up tablets")
   utils.run_vtctl(['CreateKeyspace', KEYSPACE_NAME])
@@ -187,13 +179,12 @@ def setup_tablets():
                            'Partitions(rdonly): -80 80-\n' +
                            'Partitions(replica): -80 80-\n')
 
-  vtgate_server, vtgate_port = utils.vtgate_start()
+  utils.VtGate().start()
 
 
 def get_connection(user=None, password=None, timeout=10.0):
-  global vtgate_port
   conn = None
-  vtgate_addrs = {"vt": ["localhost:%s" % (vtgate_port),]}
+  vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
   conn = conn_class.connect(vtgate_addrs, timeout,
                             user=user, password=password)
   return conn
@@ -236,9 +227,9 @@ def do_write(count, shard_index):
 
 
 def restart_vtgate(extra_args={}):
-  global vtgate_server, vtgate_port
-  utils.vtgate_kill(vtgate_server)
-  vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port, extra_args=extra_args)
+  port = utils.vtgate.port
+  utils.vtgate.kill()
+  utils.VtGate(port=port).start(extra_args=extra_args)
 
 
 class TestVTGateFunctions(unittest.TestCase):
@@ -249,7 +240,7 @@ class TestVTGateFunctions(unittest.TestCase):
     self.replica_tablet = shard_1_replica1
 
   def test_status(self):
-    self.assertIn('</html>', utils.get_status(vtgate_port))
+    self.assertIn('</html>', utils.vtgate.get_status())
 
   def test_connect(self):
     try:
@@ -694,7 +685,6 @@ class TestVTGateFunctions(unittest.TestCase):
 
 class TestFailures(unittest.TestCase):
   def setUp(self):
-    global vtgate_server, vtgate_port
     self.shard_index = 1
     self.keyrange = get_keyrange(shard_names[self.shard_index])
     self.master_tablet = shard_1_master
@@ -706,8 +696,9 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet2 = shard_1_replica2
     self.replica_tablet2.kill_vttablet()
     self.tablet_start(self.replica_tablet2, 'replica')
-    utils.vtgate_kill(vtgate_server)
-    vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
+    port = utils.vtgate.port
+    utils.vtgate.kill()
+    utils.VtGate(port=port).start()
 
   def tablet_start(self, tablet, tablet_type, lameduck_period='0.5s'):
     return tablet.start_vttablet(lameduck_period=lameduck_period)
@@ -720,7 +711,7 @@ class TestFailures(unittest.TestCase):
     with self.assertRaises(dbexceptions.DatabaseError):
       cursor.execute('select * from vt_insert_test', {})
     # Page should have loaded successfully
-    self.assertIn('</html>', utils.get_status(vtgate_port))
+    self.assertIn('</html>', utils.vtgate.get_status())
 
   def test_tablet_restart_read(self):
     try:
@@ -746,18 +737,18 @@ class TestFailures(unittest.TestCase):
                 (shard_names[self.shard_index], str(e)))
 
   def test_vtgate_restart_read(self):
-    global vtgate_server, vtgate_port
     try:
       vtgate_conn = get_connection()
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % (str(e)))
-    utils.vtgate_kill(vtgate_server)
+    port = utils.vtgate.port
+    utils.vtgate.kill()
     with self.assertRaises(dbexceptions.OperationalError):
       vtgate_conn._execute(
           "select 1 from vt_insert_test", {},
           KEYSPACE_NAME, 'replica',
           keyranges=[self.keyrange])
-    vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
+    utils.VtGate(port=port).start()
     vtgate_conn = get_connection()
     vtgate_conn._execute(
           "select 1 from vt_insert_test", {},
@@ -786,7 +777,6 @@ class TestFailures(unittest.TestCase):
                 str(e))
 
   def test_vtgate_restart_stream_execute(self):
-    global vtgate_server, vtgate_port
     try:
       vtgate_conn = get_connection()
     except Exception, e:
@@ -795,10 +785,11 @@ class TestFailures(unittest.TestCase):
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
-    utils.vtgate_kill(vtgate_server)
+    port = utils.vtgate.port
+    utils.vtgate.kill()
     with self.assertRaises(dbexceptions.OperationalError):
       stream_cursor.execute("select * from vt_insert_test", {})
-    vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
+    utils.VtGate(port=port).start()
     vtgate_conn = get_connection()
     stream_cursor = vtgate_conn.cursor(
         KEYSPACE_NAME, 'replica',
@@ -829,15 +820,15 @@ class TestFailures(unittest.TestCase):
     vtgate_conn.commit()
 
   def test_vtgate_restart_begin(self):
-    global vtgate_server, vtgate_port
     try:
       vtgate_conn = get_connection()
     except Exception, e:
       self.fail("Connection to vtgate failed with error %s" % str(e))
-    utils.vtgate_kill(vtgate_server)
+    port = utils.vtgate.port
+    utils.vtgate.kill()
     with self.assertRaises(dbexceptions.OperationalError):
       vtgate_conn.begin()
-    vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
+    utils.VtGate(port=port).start()
     vtgate_conn = get_connection()
     vtgate_conn.begin()
 
@@ -883,7 +874,7 @@ class TestFailures(unittest.TestCase):
       cursor.execute("this is not valid syntax, throw an error", {})
 
     try:
-      non_vtgate_errors = utils.get_vars(vtgate_port)['VtgateInfoErrorCounts']['NonVtgateErrors']
+      non_vtgate_errors = utils.vtgate.get_vars()['VtgateInfoErrorCounts']['NonVtgateErrors']
     except KeyError as e:
       self.fail("No errors in VTGate that weren't logged as exceptions: 'NonVtgateErrors' vars not found")
     self.assertEqual(
@@ -920,20 +911,20 @@ class TestFailures(unittest.TestCase):
 
 
   def test_vtgate_fail_write(self):
-    global vtgate_server, vtgate_port
     try:
       vtgate_conn = get_connection()
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
+    port = utils.vtgate.port
     with self.assertRaises(dbexceptions.OperationalError):
       vtgate_conn.begin()
-      utils.vtgate_kill(vtgate_server)
+      utils.vtgate.kill()
       vtgate_conn._execute(
           "delete from vt_insert_test", {},
           KEYSPACE_NAME, 'master',
           keyranges=[self.keyrange])
       vtgate_conn.commit()
-    vtgate_server, vtgate_port = utils.vtgate_start(vtgate_port)
+    utils.VtGate(port=port).start()
     try:
       vtgate_conn = get_connection()
     except Exception, e:
@@ -1537,13 +1528,13 @@ class TestExceptionLogging(unittest.TestCase):
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
-    global vtgate_server, vtgate_port
     self.shard_index = 1
     self.replica_tablet = shard_1_replica1
     self.replica_tablet.kill_vttablet()
     self.replica_tablet.start_vttablet(auth=True)
-    utils.vtgate_kill(vtgate_server)
-    vtgate_server, vtgate_port = utils.vtgate_start(auth=True)
+    port = utils.vtgate.port
+    utils.vtgate.kill()
+    utils.VtGate(port=port).start(auth=True)
     credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
                                          'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')

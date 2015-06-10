@@ -325,7 +325,23 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
     As a workaround, you can proxy over an SSH connection to a
     Kubernetes minion, or you can launch a proxy as a Kubernetes
     service. In the future, we plan to provide proxying via the
-    Kubernetes API server without a need for additional setup. 
+    Kubernetes API server without a need for additional setup.<br><br>
+
+    **_Direct connection to mysqld_**
+
+    Since the mysqld within the vttablet pod is only meant to be
+    accessed via vttablet, our default bootstrap settings allow
+    connections only from localhost.<br><br>
+
+    If you want to check or manipulate the underlying mysqld,
+    you can SSH to the Kubernetes node on which the pod is running.
+    Then use [docker exec](https://docs.docker.com/reference/commandline/cli/#exec)
+    to launch a bash shell inside the mysql container, and connect with:
+
+    ``` sh
+# For example, while inside the mysql container for pod vttablet-100:
+$ TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.sock
+```
 
 1.  **Elect a master vttablet**
 
@@ -376,7 +392,7 @@ $ kvtctl ListAllTablets test
     the table defined in the _createtesttable.sql_ file:
 
     ``` sh
-vitess/examples/kubernetes$ kvtctl ApplySchemaKeyspace -simple -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
     <br>The SQL to create the table is shown below:

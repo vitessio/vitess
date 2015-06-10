@@ -28,10 +28,6 @@ master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
 master_host = 'localhost:%u' % master_tablet.port
 
-vtgate_server = None
-vtgate_port = None
-vtgate_socket_file = None
-
 master_start_position = None
 
 _create_vt_insert_test = '''create table if not exists vt_insert_test (
@@ -63,9 +59,6 @@ def _get_repl_current_position():
 
 
 def setUpModule():
-  global vtgate_server
-  global vtgate_port
-  global vtgate_socket_file
   global master_start_position
 
   try:
@@ -90,9 +83,7 @@ def setUpModule():
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
 
-    vtgate_socket_file = environment.tmproot + '/vtgate.sock'
-    vtgate_server, vtgate_port = utils.vtgate_start(
-        socket_file=vtgate_socket_file)
+    utils.VtGate().start(socket_file=environment.tmproot+'/vtgate.sock')
 
     master_tablet.start_vttablet()
     replica_tablet.start_vttablet()
@@ -130,7 +121,6 @@ def tearDownModule():
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.vtgate_kill(vtgate_server)
   environment.topo_server().teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
@@ -153,7 +143,7 @@ class TestUpdateStream(unittest.TestCase):
         (x, x, x) for x in xrange(count)]
 
   def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection(vtgate_socket_file,
+    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.socket_file,
                                                'test_nj', 30.0)
     topology.read_topology(self.vtgate_client)
 

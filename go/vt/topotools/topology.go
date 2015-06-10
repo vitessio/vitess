@@ -289,7 +289,7 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 							return
 						}
 						for _, tabletType := range tabletTypes {
-							endPoints, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
+							endPoints, _, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 							if err != nil {
 								rec.RecordError(fmt.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err))
 								continue

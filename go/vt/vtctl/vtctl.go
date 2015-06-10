@@ -213,7 +213,7 @@ var commands = []commandGroup{
 				"<keyspace/shard>",
 				"Shows the replication status of each slave machine in the shard graph. In this case, the status refers to the replication lag between the master vttablet and the slave vttablet. In Vitess, data is always written to the master vttablet first and then replicated to all slave vttablets."},
 			command{"ListShardTablets", commandListShardTablets,
-				"<keyspace/shard>)",
+				"<keyspace/shard>",
 				"Lists all tablets in the specified shard."},
 			command{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard> [<served tablet type1>,<served tablet type2>,...]",
@@ -682,7 +682,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Changes the tablet type to <code>scrap</code> in ZooKeeper or etcd if a tablet is offline")
-	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard and keyspace graph after scrapping the tablet")
+	skipRebuild := subFlags.Bool("skip-rebuild", false, "Skips rebuilding the shard graph after scrapping the tablet")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2008,7 +2008,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	tabletType := topo.TabletType(subFlags.Arg(2))
-	endPoints, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
+	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
 	if err == nil {
 		wr.Logger().Printf("%v\n", jscfg.ToJSON(endPoints))
 	}

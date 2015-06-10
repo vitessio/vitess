@@ -421,11 +421,11 @@ func (stc *ScatterConn) Rollback(context context.Context, session *SafeSession) 
 	return nil
 }
 
-// SplitQuery scatters a SplitQuery request to all shards. For a set of
+// SplitQueryKeyRange scatters a SplitQuery request to all shards. For a set of
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, query tproto.BoundQuery, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
 	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
 		queries, err := sdc.SplitQuery(ctx, query, splitCount)
@@ -458,6 +458,51 @@ func (stc *ScatterConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	for shard := range keyRangeByShard {
 		shards = append(shards, shard)
 	}
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), false, actionFunc)
+	splits := []proto.SplitQueryPart{}
+	for s := range allSplits {
+		splits = append(splits, s.([]proto.SplitQueryPart)...)
+	}
+	if allErrors.HasErrors() {
+		err := allErrors.AggrError(stc.aggregateErrors)
+		return nil, err
+	}
+	return splits, nil
+}
+
+// SplitQueryCustomSharding scatters a SplitQuery request to all
+// shards. For a set of splits received from a shard, it construct a
+// KeyRange queries by appending that shard's name to the
+// splits. Aggregates all splits across all shards in no specific
+// order and returns.
+func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, query tproto.BoundQuery, splitCount int, shards []string, keyspace string) ([]proto.SplitQueryPart, error) {
+	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
+		// Get all splits from this shard
+		queries, err := sdc.SplitQuery(ctx, query, splitCount)
+		if err != nil {
+			return err
+		}
+		// Append the keyrange for this shard to all the splits received
+		splits := []proto.SplitQueryPart{}
+		for _, query := range queries {
+			qs := &proto.QueryShard{
+				Sql:           query.Query.Sql,
+				BindVariables: query.Query.BindVariables,
+				Keyspace:      keyspace,
+				Shards:        []string{sdc.shard},
+				TabletType:    topo.TYPE_RDONLY,
+			}
+			split := proto.SplitQueryPart{
+				QueryShard: qs,
+				Size:       query.RowCount,
+			}
+			splits = append(splits, split)
+		}
+		// Push all the splits from this shard to results channel
+		results <- splits
+		return nil
+	}
+
 	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, topo.TYPE_RDONLY, NewSafeSession(&proto.Session{}), false, actionFunc)
 	splits := []proto.SplitQueryPart{}
 	for s := range allSplits {

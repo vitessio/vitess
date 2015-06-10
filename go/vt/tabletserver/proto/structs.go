@@ -22,7 +22,10 @@ type SessionParams struct {
 // session_id in the Session object for any subsequent call.
 type SessionInfo struct {
 	SessionId int64
+	Err       *mproto.RPCError
 }
+
+//go:generate bsongen -file $GOFILE -type SessionInfo -o session_info_bson.go
 
 // Query is the payload to Execute.
 type Query struct {
@@ -98,7 +101,10 @@ type Session struct {
 // the transaction.
 type TransactionInfo struct {
 	TransactionId int64
+	Err           *mproto.RPCError
 }
+
+//go:generate bsongen -file $GOFILE -type TransactionInfo -o transaction_info_bson.go
 
 // SplitQueryRequest represents a request to split a Query into queries that
 // each return a subset of the original query.

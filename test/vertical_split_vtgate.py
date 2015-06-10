@@ -50,7 +50,7 @@ class TestVerticalSplitVTGate(vertical_split.TestVerticalSplit):
           self.fail("Execute failed w/ exception %s" % str(e))
 
   def _check_stats(self):
-    v = utils.get_vars(self.vtgate_port)
+    v = utils.vtgate.get_vars()
     self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, "unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s" % str(v))
     self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, "unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s" % str(v))
     self.assertEqual(len(v['VtgateApiErrorCounts']), 0, "unexpected errors for VtgateApiErrorCounts inside %s" % str(v))

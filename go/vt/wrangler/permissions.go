@@ -49,7 +49,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	}
 
 	// get permissions from the master, or error
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering permissions for master %v", si.MasterAlias)
@@ -105,7 +105,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias

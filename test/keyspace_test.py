@@ -35,9 +35,6 @@ shard_1_replica = tablet.Tablet()
 unsharded_master = tablet.Tablet()
 unsharded_replica = tablet.Tablet()
 
-vtgate_server = None
-vtgate_port = None
-
 shard_names = ['-80', '80-']
 shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
                          345387386794260318, 332484755310826578,
@@ -82,8 +79,6 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  global vtgate_server
-  utils.vtgate_kill(vtgate_server)
   tablet.kill_tablets([shard_0_master, shard_0_replica,
                       shard_1_master, shard_1_replica])
   teardown_procs = [
@@ -108,12 +103,9 @@ def tearDownModule():
   unsharded_replica.remove_tree()
 
 def setup_tablets():
-  global vtgate_server
-  global vtgate_port
-
   setup_sharded_keyspace()
   setup_unsharded_keyspace()
-  vtgate_server, vtgate_port = utils.vtgate_start()
+  utils.VtGate().start()
 
 
 def setup_sharded_keyspace():
@@ -182,8 +174,7 @@ ALL_DB_TYPES = ['master', 'rdonly', 'replica']
 
 class TestKeyspace(unittest.TestCase):
   def _read_keyspace(self, keyspace_name):
-    global vtgate_port
-    vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                           "test_nj", 30.0)
     return keyspace.read_keyspace(vtgate_client, keyspace_name)
 

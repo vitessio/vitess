@@ -44,7 +44,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// do the optional restore, if that fails we are in a bad state,
 	// just log.Fatalf out.
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	pos, err := mysqlctl.Restore(agent.MysqlDaemon, bucket, *restoreConcurrency, agent.hookExtraEnv())
+	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, bucket, *restoreConcurrency, agent.hookExtraEnv())
 	if err != nil && err != mysqlctl.ErrNoBackup {
 		return fmt.Errorf("Cannot restore original backup: %v", err)
 	}

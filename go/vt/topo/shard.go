@@ -180,10 +180,16 @@ func newShard() *Shard {
 	return &Shard{}
 }
 
+// IsShardUsingRangeBasedSharding returns true if the shard name
+// implies it is using range based sharding.
+func IsShardUsingRangeBasedSharding(shard string) bool {
+	return strings.Contains(shard, "-")
+}
+
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
 func ValidateShardName(shard string) (string, key.KeyRange, error) {
-	if !strings.Contains(shard, "-") {
+	if !IsShardUsingRangeBasedSharding(shard) {
 		return shard, key.KeyRange{}, nil
 	}
 
@@ -306,7 +312,6 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 // (call topotools.CreateShard to do that for you).
 // In unit tests (that are not parallel), this function can be called directly.
 func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
-
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
@@ -323,19 +328,23 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 		},
 	}
 
-	sis, err := FindAllShardsInKeyspace(ctx, ts, keyspace)
-	if err != nil && err != ErrNoNode {
-		return err
-	}
-	for _, si := range sis {
-		if key.KeyRangesIntersect(si.KeyRange, keyRange) {
-			for t := range si.ServedTypesMap {
-				delete(s.ServedTypesMap, t)
+	if IsShardUsingRangeBasedSharding(name) {
+		// if we are using range-based sharding, we don't want
+		// overlapping shards to all serve and confuse the clients.
+		sis, err := FindAllShardsInKeyspace(ctx, ts, keyspace)
+		if err != nil && err != ErrNoNode {
+			return err
+		}
+		for _, si := range sis {
+			if key.KeyRangesIntersect(si.KeyRange, keyRange) {
+				for t := range si.ServedTypesMap {
+					delete(s.ServedTypesMap, t)
+				}
 			}
 		}
-	}
-	if len(s.ServedTypesMap) == 0 {
-		s.ServedTypesMap = nil
+		if len(s.ServedTypesMap) == 0 {
+			s.ServedTypesMap = nil
+		}
 	}
 
 	return ts.CreateShard(ctx, keyspace, name, s)

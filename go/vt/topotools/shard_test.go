@@ -45,6 +45,48 @@ func TestCreateShard(t *testing.T) {
 	}
 }
 
+// TestCreateShardCustomSharding checks ServedTypes is set correctly
+// when creating multiple custom sharding shards
+func TestCreateShardCustomSharding(t *testing.T) {
+	ctx := context.Background()
+	cells := []string{"test_cell"}
+
+	// Set up topology.
+	ts := zktopo.NewTestServer(t, cells)
+
+	// create keyspace
+	keyspace := "test_keyspace"
+	if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace failed: %v", err)
+	}
+
+	// create first shard in keyspace
+	shard0 := "0"
+	if err := CreateShard(ctx, ts, keyspace, shard0); err != nil {
+		t.Fatalf("CreateShard(shard0) failed: %v", err)
+	}
+	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
+		t.Fatalf("GetShard(shard0) failed: %v", err)
+	} else {
+		if len(si.ServedTypesMap) != 3 {
+			t.Fatalf("shard0 should have all 3 served types")
+		}
+	}
+
+	// create second shard in keyspace
+	shard1 := "1"
+	if err := CreateShard(ctx, ts, keyspace, shard1); err != nil {
+		t.Fatalf("CreateShard(shard1) failed: %v", err)
+	}
+	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
+		t.Fatalf("GetShard(shard1) failed: %v", err)
+	} else {
+		if len(si.ServedTypesMap) != 3 {
+			t.Fatalf("shard1 should have all 3 served types")
+		}
+	}
+}
+
 // TestGetOrCreateShard will create / get 100 shards in a keyspace
 // for a long time in parallel, making sure the locking and everything
 // works correctly.

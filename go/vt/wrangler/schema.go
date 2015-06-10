@@ -66,7 +66,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	}
 
 	// get schema from the master, or error
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for master %v", si.MasterAlias)
@@ -123,7 +123,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == topo.NO_TABLET {
+	if si.MasterAlias.IsZero() {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
@@ -160,7 +160,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 			continue
 		}
 
-		if si.MasterAlias.Uid == topo.NO_TABLET {
+		if si.MasterAlias.IsZero() {
 			er.RecordError(fmt.Errorf("No master in shard %v/%v", keyspace, shard))
 			continue
 		}

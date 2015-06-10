@@ -11,6 +11,7 @@ from urlparse import urlparse
 
 import vtctl_client
 import vtctl_pb2
+import vtctlservice_pb2
 
 class GRPCVtctlClient(vtctl_client.VctlClient):
     """GoRpcVtctlClient is the gRPC implementation of VctlClient.
@@ -31,8 +32,8 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
             self.stub.close()
 
         p = urlparse("http://" + self.addr)
-        self.stub = vtctl_pb2.early_adopter_create_Vtctl_stub(p.hostname,
-                                                              p.port)
+        self.stub = vtctlservice_pb2.early_adopter_create_Vtctl_stub(p.hostname,
+                                                                     p.port)
 
     def close(self):
         self.stub.close()
@@ -54,24 +55,24 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
         Returns:
             The console output of the action.
         """
-        req = vtctl_pb2.ExecuteVtctlCommandArgs(
+        req = vtctl_pb2.ExecuteVtctlCommandRequest(
             args=args,
             action_timeout=long(action_timeout * 1000000000),
             lock_timeout=long(lock_timeout * 1000000000))
         console_result = ''
         with self.stub as stub:
-            for e in stub.ExecuteVtctlCommand(req, action_timeout):
-                if e.level == 0:
+            for response in stub.ExecuteVtctlCommand(req, action_timeout):
+                if response.event.level == 0:
                     if info_to_debug:
-                        logging.debug('%s', e.value)
+                        logging.debug('%s', response.event.value)
                     else:
-                        logging.info('%s', e.value)
-                elif e.level == 1:
-                    logging.warning('%s', e.value)
-                elif e.level == 2:
-                    logging.error('%s', e.value)
-                elif e.level == 3:
-                    console_result += e.value
+                        logging.info('%s', response.event.value)
+                elif response.event.level == 1:
+                    logging.warning('%s', response.event.value)
+                elif response.event.level == 2:
+                    logging.error('%s', response.event.value)
+                elif response.event.level == 3:
+                    console_result += response.event.value
 
         return console_result
 

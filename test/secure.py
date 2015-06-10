@@ -231,7 +231,7 @@ def tearDownModule():
 class TestSecure(unittest.TestCase):
 
   def test_secure(self):
-    vtgate_server, vtgate_port = utils.vtgate_start(cache_ttl='0s')
+    utils.VtGate().start(cache_ttl='0s')
 
     # start the tablets
     shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
@@ -252,7 +252,7 @@ class TestSecure(unittest.TestCase):
                      shard_0_master.tablet_alias], auto_log=True)
 
     # then get the topology and check it
-    topo_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+    topo_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                         "test_nj", 30.0)
     topology.read_keyspaces(topo_client)
 
@@ -304,16 +304,14 @@ class TestSecure(unittest.TestCase):
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
     # start a vtgate to connect to that tablet
-    gate_proc, gate_port, gate_secure_port = utils.vtgate_start(
-        tablet_bson_encrypted=True,
-        cert=cert_dir + "/vt-server-cert.pem",
-        key=cert_dir + "/vt-server-key.pem")
+    gate = utils.VtGate(cert=cert_dir + "/vt-server-cert.pem",
+                        key=cert_dir + "/vt-server-key.pem")
+    gate.start(tablet_bson_encrypted=True)
 
     # try to connect to vtgate with regular client
     timeout = 2.0
     try:
-      conn = vtgatev2.connect(["localhost:%s" % (gate_secure_port),],
-                               timeout)
+      conn = vtgatev2.connect([gate.secure_addr(),], timeout)
       self.fail("No exception raised to VTGate secure port")
     except dbexceptions.OperationalError as e:
       exception_type = e.args[2]
@@ -323,13 +321,12 @@ class TestSecure(unittest.TestCase):
       if not exception_msg.startswith('Unexpected EOF in handshake to'):
         self.fail("Unexpected exception message: %s" % exception_msg)
 
-    sconn = utils.get_vars(gate_port)["SecureConnections"]
+    sconn = utils.get_vars(gate.port)["SecureConnections"]
     if sconn != 0:
       self.fail("unexpected conns %s" % sconn)
 
     # connect to vtgate with encrypted port
-    conn = vtgatev2.connect(["localhost:%s" % (gate_secure_port),],
-                             timeout, encrypted=True)
+    conn = vtgatev2.connect([gate.secure_addr(),], timeout, encrypted=True)
     (results, rowcount, lastrowid, fields) = conn._execute(
         "select 1 from dual",
         {},
@@ -340,10 +337,10 @@ class TestSecure(unittest.TestCase):
     self.assertEqual(len(fields), 1, "want 1, got %d" % (len(fields)))
     self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
 
-    sconn = utils.get_vars(gate_port)["SecureConnections"]
+    sconn = utils.get_vars(gate.port)["SecureConnections"]
     if sconn != 1:
       self.fail("unexpected conns %s" % sconn)
-    saccept = utils.get_vars(gate_port)["SecureAccepts"]
+    saccept = utils.get_vars(gate.port)["SecureAccepts"]
     if saccept == 0:
       self.fail("unexpected accepts %s" % saccept)
 
@@ -358,10 +355,10 @@ class TestSecure(unittest.TestCase):
     except dbexceptions.TimeoutError as e:
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
     conn.close()
-    utils.vtgate_kill(gate_proc)
+    gate.kill()
 
     # kill everything
-    utils.vtgate_kill(vtgate_server)
+    utils.vtgate.kill()
 
   def test_restart(self):
     shard_0_master.create_db('vt_test_keyspace')
