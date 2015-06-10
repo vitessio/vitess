@@ -339,6 +339,7 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
     to launch a bash shell inside the mysql container, and connect with:
 
     ``` sh
+# For example, while inside the mysql container for pod vttablet-100:
 $ TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.sock
 ```
 
