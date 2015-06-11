@@ -149,7 +149,7 @@ message QueryResult {
 
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
@@ -164,7 +164,7 @@ message ExecuteResponse {
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 message ExecuteBatchRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   repeated BoundQuery queries = 4;
@@ -179,7 +179,7 @@ message ExecuteBatchResponse {
 
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
@@ -193,7 +193,7 @@ message StreamExecuteResponse {
 
 // BeginRequest is the payload to Begin
 message BeginRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
 }
@@ -206,7 +206,7 @@ message BeginResponse {
 
 // CommitRequest is the payload to Commit
 message CommitRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -219,7 +219,7 @@ message CommitResponse {
 
 // RollbackRequest is the payload to Rollback
 message RollbackRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
@@ -232,7 +232,7 @@ message RollbackResponse {
 
 // SplitQueryRequest is the payload for SplitQuery
 message SplitQueryRequest {
-  vtrpc.CallerID caller_id = 1;
+  vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
