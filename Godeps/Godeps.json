@@ -15,6 +15,6 @@
 			"ImportPath": "github.com/influxdb/influxdb/client",
 			"Comment": "v0.8.8",
 			"Rev": "afde71eb1740fd763ab9450e1f700ba0e53c36d0"
-		},
+		}
 	]
 }
