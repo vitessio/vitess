@@ -10,6 +10,7 @@ It is generated from these files:
 
 It has these top-level messages:
 	Target
+	VTGateCallerID
 	BindVariable
 	BoundQuery
 	Field
@@ -257,6 +258,22 @@ func (m *Target) Reset()         { *m = Target{} }
 func (m *Target) String() string { return proto.CompactTextString(m) }
 func (*Target) ProtoMessage()    {}
 
+// VTGateCallerID is sent by VTGate to VTTablet to describe the
+// caller. If possible, this enformation is secure. For instance,
+// if using unique certificates that guarantee that VTGate->VTTablet
+// traffic cannot be spoofed, then VTTablet can trust this information,
+// and VTTablet will use it for tablet ACLs, for instance.
+// Because of this security guarantee, this is different than the CallerID
+// structure, which is not secure at all, because it is provided
+// by the Vitess client.
+type VTGateCallerID struct {
+	Username string `protobuf:"bytes,1,opt,name=username" json:"username,omitempty"`
+}
+
+func (m *VTGateCallerID) Reset()         { *m = VTGateCallerID{} }
+func (m *VTGateCallerID) String() string { return proto.CompactTextString(m) }
+func (*VTGateCallerID) ProtoMessage()    {}
+
 // BindVariable represents a single bind variable in a Query
 type BindVariable struct {
 	Type BindVariable_Type `protobuf:"varint,1,opt,name=type,enum=query.BindVariable_Type" json:"type,omitempty"`
@@ -350,10 +367,11 @@ func (m *QueryResult) GetRows() []*Row {
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
-	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	Query         *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	TransactionId int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
+	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
@@ -363,6 +381,13 @@ func (*ExecuteRequest) ProtoMessage()    {}
 func (m *ExecuteRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *ExecuteRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -407,10 +432,11 @@ func (m *ExecuteResponse) GetResult() *QueryResult {
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 type ExecuteBatchRequest struct {
-	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	Queries       []*BoundQuery   `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	TransactionId int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
+	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
@@ -420,6 +446,13 @@ func (*ExecuteBatchRequest) ProtoMessage()    {}
 func (m *ExecuteBatchRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *ExecuteBatchRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -464,9 +497,10 @@ func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 
 // StreamExecuteRequest is the payload to StreamExecute
 type StreamExecuteRequest struct {
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target   *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	Query    *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
 }
 
 func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
@@ -476,6 +510,13 @@ func (*StreamExecuteRequest) ProtoMessage()    {}
 func (m *StreamExecuteRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *StreamExecuteRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -520,8 +561,9 @@ func (m *StreamExecuteResponse) GetResult() *QueryResult {
 
 // BeginRequest is the payload to Begin
 type BeginRequest struct {
-	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target   *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 }
 
 func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
@@ -531,6 +573,13 @@ func (*BeginRequest) ProtoMessage()    {}
 func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *BeginRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -561,9 +610,10 @@ func (m *BeginResponse) GetError() *vtrpc.RPCError {
 
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
-	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	TransactionId int64           `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
@@ -573,6 +623,13 @@ func (*CommitRequest) ProtoMessage()    {}
 func (m *CommitRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *CommitRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -602,9 +659,10 @@ func (m *CommitResponse) GetError() *vtrpc.RPCError {
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
-	CallerId      *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target        *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	TransactionId int64           `protobuf:"varint,3,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
@@ -614,6 +672,13 @@ func (*RollbackRequest) ProtoMessage()    {}
 func (m *RollbackRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *RollbackRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
@@ -643,10 +708,11 @@ func (m *RollbackResponse) GetError() *vtrpc.RPCError {
 
 // SplitQueryRequest is the payload for SplitQuery
 type SplitQueryRequest struct {
-	CallerId   *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Target     *Target         `protobuf:"bytes,2,opt,name=target" json:"target,omitempty"`
-	Query      *BoundQuery     `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	SplitCount int64           `protobuf:"varint,4,opt,name=split_count" json:"split_count,omitempty"`
+	CallerId          *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
+	SplitCount        int64           `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
@@ -656,6 +722,13 @@ func (*SplitQueryRequest) ProtoMessage()    {}
 func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
 	if m != nil {
 		return m.CallerId
+	}
+	return nil
+}
+
+func (m *SplitQueryRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
 	}
 	return nil
 }
