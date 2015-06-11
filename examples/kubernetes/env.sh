@@ -1,6 +1,7 @@
 # This is an include file used by the other scripts in this directory.
 
-if [ -z "$KUBECTL" ]; then
-  echo 'Please set KUBECTL env var to point to kubectl or kubectl.sh'
-  exit 1
-fi
+# Most clusters will just be accessed with 'kubectl' on $PATH.
+# However, some might require a different command. For example, GKE required
+# KUBECTL='gcloud alpha container kubectl' for a while. Now that most of our
+# use cases just need KUBECTL=kubectl, we'll make that the default.
+KUBECTL=${KUBECTL:-kubectl}
