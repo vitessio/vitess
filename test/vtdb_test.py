@@ -398,38 +398,6 @@ class TestFailures(unittest.TestCase):
       self.fail("Communication with shard0 replica failed with error %s" %
                 str(e))
 
-  def test_fail_mid_stream_execute(self):
-    """Tests for errors in the middle of a stream execute.
-
-    This is for testing app failures, not infrastructure failures. We simulate
-    an app failure by killing MySQL on the master tablet.
-
-    This test is inherently racy, as it tries to kill MySQL in the middle
-    of query execution.
-    """
-    try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
-    except Exception, e:
-      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
-    try:
-      count = 30000
-      logging.debug("Starting to write %s rows" % count)
-      direct_batch_write(count, self.master_tablet)
-      logging.debug("Finished writing %s rows" % count)
-      stream_cursor = cursor.StreamCursor(master_conn)
-      stream_cursor.execute("select * from vt_insert_test", {})
-      stream_cursor.fetchone()
-      logging.debug("Killing mysql on master")
-      # We need to kill MySQL during query execution, not before.
-      utils.wait_procs([self.master_tablet.teardown_mysql()])
-      # dbexceptions.DatabaseError maps to an app failure, not infrastructure.
-      with self.assertRaises(dbexceptions.DatabaseError):
-        logging.debug("Doing stream_cursor.fetchall()")
-        stream_cursor.fetchall()
-      utils.wait_procs([self.master_tablet.init_mysql()])
-    except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
-
   def test_fail_stream_execute_initial(self):
     """Tests for app errors in the first stream execute response."""
     try:

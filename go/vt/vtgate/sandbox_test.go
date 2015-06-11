@@ -455,6 +455,10 @@ func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	return sbc.getError()
 }
 
+func (sbc *sandboxConn) UnsupportedNewCommit(ctx context.Context, transactionID int64) error {
+	return sbc.Commit(ctx, transactionID)
+}
+
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
@@ -462,6 +466,10 @@ func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
+}
+
+func (sbc *sandboxConn) UnsupportedNewRollback(ctx context.Context, transactionID int64) error {
+	return sbc.Rollback(ctx, transactionID)
 }
 
 var sandboxSQRowCount = int64(10)
