@@ -62,7 +62,7 @@ func (x KeyspaceIdType) String() string {
 type TabletType int32
 
 const (
-	TabletType_UNKNOW         TabletType = 0
+	TabletType_UNKNOWN        TabletType = 0
 	TabletType_IDLE           TabletType = 1
 	TabletType_MASTER         TabletType = 2
 	TabletType_REPLICA        TabletType = 3
@@ -78,7 +78,7 @@ const (
 )
 
 var TabletType_name = map[int32]string{
-	0: "UNKNOW",
+	0: "UNKNOWN",
 	1: "IDLE",
 	2: "MASTER",
 	3: "REPLICA",
@@ -93,7 +93,7 @@ var TabletType_name = map[int32]string{
 	11: "SCRAP",
 }
 var TabletType_value = map[string]int32{
-	"UNKNOW":         0,
+	"UNKNOWN":        0,
 	"IDLE":           1,
 	"MASTER":         2,
 	"REPLICA":        3,
