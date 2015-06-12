@@ -148,6 +148,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--defaults-file=" + mysqld.config.path,
 		"--socket", mysqld.config.SocketFile,
 		"--user", mysqld.dba.Uname,
+		"--force", // Don't complain if it's already been upgraded.
 	}
 	if mysqld.dba.Pass != "" {
 		// --password must be omitted entirely if empty, or else it will prompt.
