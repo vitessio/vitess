@@ -90,7 +90,15 @@ func (fpc *FakePoolConnection) Reconnect() error {
 	return nil
 }
 
-func TestCopySchemaShard(t *testing.T) {
+func TestCopySchemaShard_UseTabletAsSource(t *testing.T) {
+	copySchema(t, false /* useShardAsSource */)
+}
+
+func TestCopySchemaShard_UseShardAsSource(t *testing.T) {
+	copySchema(t, true /* useShardAsSource */)
+}
+
+func copySchema(t *testing.T, useShardAsSource bool) {
 	db := fakesqldb.Register()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
@@ -110,7 +118,7 @@ func TestCopySchemaShard(t *testing.T) {
 		defer ft.StopActionLoop(t)
 	}
 
-	sourceRdonly.FakeMysqlDaemon.Schema = &myproto.SchemaDefinition{
+	schema := &myproto.SchemaDefinition{
 		DatabaseSchema: "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
 		TableDefinitions: []*myproto.TableDefinition{
 			&myproto.TableDefinition{
@@ -125,6 +133,8 @@ func TestCopySchemaShard(t *testing.T) {
 			},
 		},
 	}
+	sourceMaster.FakeMysqlDaemon.Schema = schema
+	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
 	createTable := "CREATE TABLE `vt_ks`.`resharding1` (\n"+
@@ -146,7 +156,11 @@ func TestCopySchemaShard(t *testing.T) {
 	db.AddQuery(createTable, &mproto.QueryResult{})
 	db.AddQuery(createTableView, &mproto.QueryResult{})
 
-	if err := vp.Run([]string{"CopySchemaShard", "-include-views", sourceRdonly.Tablet.Alias.String(), "ks/-40"}); err != nil {
+	source := sourceRdonly.Tablet.Alias.String()
+	if useShardAsSource {
+		source = "ks/-80"
+	}
+	if err := vp.Run([]string{"CopySchemaShard", "-include-views", source, "ks/-40"}); err != nil {
 		t.Fatalf("CopySchemaShard failed: %v", err)
 	}
 	if count := db.GetQueryCalledNum(createDb); count != 1 {

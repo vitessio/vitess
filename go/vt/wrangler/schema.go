@@ -417,27 +417,38 @@ func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, ch
 	return nil, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
+// CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
+// For both source and destination it picks the master tablet. See also CopySchemaShard.
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string) error {
+	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
+	if err != nil {
+		return err
+	}
+	
+	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard)
+}
+
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, keyspace, shard string) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
 	sd, err := wr.GetSchema(ctx, srcTabletAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
+	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
+	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}
 	createSql := sd.ToSQLStrings()
 
 	for i, sqlLine := range createSql {
-		err = wr.applySqlShard(ctx, tabletInfo, sqlLine, i == len(createSql)-1)
+		err = wr.applySqlShard(ctx, destTabletInfo, sqlLine, i == len(createSql)-1)
 		if err != nil {
 			return err
 		}
