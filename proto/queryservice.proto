@@ -6,8 +6,8 @@ package queryservice;
 
 import "query.proto";
 
-// SqlQuery defines the tablet SQL query, implemented by vttablet.
-service SqlQuery {
+// Query defines the tablet query service, implemented by vttablet.
+service Query {
   // Execute executes the specified SQL query (might be in a
   // transaction context, if Query.transaction_id is set).
   rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};
