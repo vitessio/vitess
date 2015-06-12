@@ -1,10 +1,11 @@
-apiVersion: v1beta1
 kind: Service
-id: vtgate
-port: 15001
-containerPort: 15001
-selector:
+apiVersion: v1beta3
+metadata:
   name: vtgate
-labels:
-  name: vtgate
-createExternalLoadBalancer: true
+  labels: {name: vtgate}
+spec:
+  ports:
+    - port: 15001
+  selector: {name: vtgate}
+  type: LoadBalancer
+

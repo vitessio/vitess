@@ -1,10 +1,14 @@
-apiVersion: v1beta1
 kind: Service
-id: vtctld
-port: 15000
-containerPort: 15000
-createExternalLoadBalancer: true
-selector:
+apiVersion: v1beta3
+metadata:
   name: vtctld
-labels:
-  name: vtctld
+  labels:
+    name: vtctld
+spec:
+  ports:
+    - port: 15000
+      targetPort: 15000
+      nodePort: 30000
+  selector: {name: vtctld}
+  type: NodePort
+
