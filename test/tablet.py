@@ -541,6 +541,7 @@ class Tablet(object):
   def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
+      last_seen_state = "?"
       if v == None:
         logging.debug(
             '  vttablet %s not answering at /debug/vars, waiting...',
@@ -552,13 +553,15 @@ class Tablet(object):
               self.tablet_alias)
         else:
           s = v['TabletStateName']
+          last_seen_state = s
           if s != expected:
             logging.debug(
                 '  vttablet %s in state %s != %s', self.tablet_alias, s,
                 expected)
           else:
             break
-      timeout = utils.wait_step('waiting for state %s' % expected, timeout,
+      timeout = utils.wait_step('waiting for state %s (last seen state: %s)' % (expected, last_seen_state),
+                                timeout,
                                 sleep_time=0.1)
 
   def wait_for_mysqlctl_socket(self, timeout=10.0):
