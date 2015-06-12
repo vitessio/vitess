@@ -1,86 +1,84 @@
 {
-  "Tests": [
-    {
-      "Name": "queryservice_vtocc",
+  "Tests": {
+    "queryservice_vtocc": {
       "File": "queryservice_test.py",
       "Args": "-m -e vtocc"
     },
-    {
-      "Name": "queryservice_vttablet",
+    "queryservice_vttablet": {
       "File": "queryservice_test.py",
       "Args": "-m -e vttablet"
     },
-    {
+    "vertical_split": {
       "File": "vertical_split.py"
     },
-    {
+    "vertical_split_vtgate": {
       "File": "vertical_split_vtgate.py"
     },
-    {
+    "schema": {
       "File": "schema.py"
     },
-    {
+    "keyspace": {
       "File": "keyspace_test.py"
     },
-    {
+    "keyrange": {
       "File": "keyrange_test.py"
     },
-    {
+    "mysqlctl": {
       "File": "mysqlctl.py"
     },
-    {
+    "sharded": {
       "File": "sharded.py"
     },
-    {
+    "secure": {
       "File": "secure.py"
     },
-    {
+    "binlog": {
       "File": "binlog.py"
     },
-    {
+    "backup": {
       "File": "backup.py"
     },
-    {
+    "custom_sharding": {
       "File": "custom_sharding.py"
     },
-    {
+    "update_stream": {
       "File": "update_stream.py"
     },
-    {
+    "tabletmanager": {
       "File": "tabletmanager.py"
     },
-    {
+    "reparent": {
       "File": "reparent.py"
     },
-    {
+    "vtdb": {
       "File": "vtdb_test.py"
     },
-    {
+    "vtgate_utils": {
       "File": "vtgate_utils_test.py"
     },
-    {
+    "rowcache_invalidator": {
       "File": "rowcache_invalidator.py"
     },
-    {
+    "vtgatev2": {
       "File": "vtgatev2_test.py"
     },
-    {
+    "zkocc": {
       "File": "zkocc_test.py"
     },
-    {
+    "initial_sharding_bytes": {
       "File": "initial_sharding_bytes.py"
     },
-    {
+    "initial_sharding": {
       "File": "initial_sharding.py"
     },
-    {
+    "resharding_bytes": {
       "File": "resharding_bytes.py"
     },
-    {
+    "resharding": {
       "File": "resharding.py"
     },
-    {
+    "worker": {
       "File": "worker.py"
     }
-  ]
+  }
 }

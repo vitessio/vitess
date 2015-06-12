@@ -32,10 +32,18 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
-	"strings"
+	"sort"
 	"syscall"
 	"time"
 )
+
+var usage = `Usage of test.go:
+
+go run test.go [options] [test_name ...]
+
+If one or more test names are provided, run only those tests.
+Otherwise, run all tests in test/config.json.
+`
 
 // Flags
 var (
@@ -49,7 +57,7 @@ var (
 
 // Config is the overall object serialized in test/config.json.
 type Config struct {
-	Tests []*Test
+	Tests map[string]*Test
 }
 
 // Test is an entry from the test/config.json file.
@@ -120,7 +128,14 @@ func (t *Test) logf(format string, v ...interface{}) {
 }
 
 func main() {
+	flag.Usage = func() {
+		os.Stderr.WriteString(usage)
+		os.Stderr.WriteString("\nOptions:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
+
+	startTime := time.Now()
 
 	// Get test configs.
 	configData, err := ioutil.ReadFile("test/config.json")
@@ -132,6 +147,31 @@ func main() {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
 	log.Printf("Bootstrap flavor: %v", *flavor)
+
+	// Positional args specify which tests to run.
+	// If none specified, run all tests in alphabetical order.
+	var tests []*Test
+	if flag.NArg() > 0 {
+		for _, name := range flag.Args() {
+			t, ok := config.Tests[name]
+			if !ok {
+				log.Fatalf("Unknown test: %v", name)
+			}
+			t.Name = name
+			tests = append(tests, t)
+		}
+	} else {
+		names := make([]string, 0, len(config.Tests))
+		for n := range config.Tests {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			t := config.Tests[n]
+			t.Name = n
+			tests = append(tests, t)
+		}
+	}
 
 	// Copy working repo to tmpDir.
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "vt_")
@@ -165,11 +205,7 @@ func main() {
 			close(done)
 		}()
 
-		for _, test := range config.Tests {
-			if test.Name == "" {
-				test.Name = strings.TrimSuffix(test.File, ".py")
-			}
-
+		for _, test := range tests {
 			for try := 1; ; try++ {
 				select {
 				case <-stop:
@@ -189,7 +225,7 @@ func main() {
 				start := time.Now()
 				if err := test.run(tmpDir); err != nil {
 					// This try failed.
-					test.logf("FAILED (try %v/%v): %v", try, *retryMax, err)
+					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, time.Since(start), err)
 					continue
 				}
 
@@ -199,7 +235,7 @@ func main() {
 					passed++
 				} else {
 					// Passed, but not on the first try.
-					test.logf("FLAKY (1/%v passed)", try)
+					test.logf("FLAKY (1/%v passed in %v)", try, time.Since(start))
 					flaky++
 				}
 				break
@@ -228,8 +264,9 @@ func main() {
 	}
 
 	// Print stats.
-	skipped := len(config.Tests) - passed - flaky - failed
+	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
+	log.Printf("Total time: %v", time.Since(startTime))
 
 	if failed > 0 || skipped > 0 {
 		os.Exit(1)
