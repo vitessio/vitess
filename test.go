@@ -48,6 +48,7 @@ Otherwise, run all tests in test/config.json.
 // Flags
 var (
 	flavor   = flag.String("flavor", "mariadb", "bootstrap flavor to run against")
+	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
@@ -158,10 +159,12 @@ func main() {
 				log.Fatalf("Unknown test: %v", name)
 			}
 			t.Name = name
-			tests = append(tests, t)
+			for i := 0; i < *runCount; i++ {
+				tests = append(tests, t)
+			}
 		}
 	} else {
-		names := make([]string, 0, len(config.Tests))
+		var names []string
 		for n := range config.Tests {
 			names = append(names, n)
 		}
@@ -169,7 +172,9 @@ func main() {
 		for _, n := range names {
 			t := config.Tests[n]
 			t.Name = n
-			tests = append(tests, t)
+			for i := 0; i < *runCount; i++ {
+				tests = append(tests, t)
+			}
 		}
 	}
 
