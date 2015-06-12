@@ -312,6 +312,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
         tablet.scrap(force=True, skip_rebuild=True)
         utils.run_vtctl(['DeleteTablet', tablet.tablet_alias], auto_log=True)
         tablet.kill_vttablet()
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
       utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
