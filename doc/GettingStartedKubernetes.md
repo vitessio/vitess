@@ -92,7 +92,9 @@ account with a project in the Google Developers Console.
 
     ``` sh
 $ gcloud components update alpha kubectl
+```
 
+    ``` sh
 # Check if kubectl is on your PATH:
 $ which kubectl
 ### example output:
@@ -293,7 +295,9 @@ $ kvtctl help
 # Tablets:
 #   InitTablet ...
 # ...
+```
 
+    ``` sh
 # Get usage for a specific command:
 $ kvtctl help InitTablet
 ```
@@ -383,15 +387,11 @@ https://1.2.3.4/api/v1beta3/proxy/namespaces/default/pods/vttablet-100:15002/deb
 $ kubectl get pods | grep vttablet-100
 ### example output:
 # vttablet-100 [...] 10.64.2.9    k8s-example-3c0115e4-node-x6jc  [...]
-
 $ gcloud compute ssh k8s-example-3c0115e4-node-x6jc
-
 k8s-example-3c0115e4-node-x6jc:~$ sudo docker ps | grep vttablet-100
 ### example output:
 # ef40b4ff08fa   vitess/lite:latest [...]  k8s_mysql.16e2a810_vttablet-100[...]
-
 k8s-example-3c0115e4-node-x6jc:~$ sudo docker exec -ti ef40b4ff08fa bash
-
 # Now you're in a shell inside the mysql container.
 # We need to tell the mysql client the username and socket file to use.
 vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.sock
