@@ -237,15 +237,6 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 	}
 }
 
-// AddTabletErrorToErrorOnly will mutate a ErrorOnly struct to fill in the Err
-// field with details from the TabletError.
-func AddTabletErrorToErrorOnly(err error, reply *proto.ErrorOnly) {
-	if err == nil {
-		return
-	}
-	reply.Err = rpcErrFromTabletError(err)
-}
-
 // AddTabletErrorToQueryResult will mutate a QueryResult struct to fill in the Err
 // field with details from the TabletError.
 func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
@@ -285,6 +276,24 @@ func AddTabletErrorToQueryResultList(err error, reply *proto.QueryResultList) {
 // AddTabletErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
 // field with details from the TabletError.
 func AddTabletErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromTabletError(err)
+}
+
+// AddTabletErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
+// field with details from the TabletError.
+func AddTabletErrorToCommitResponse(err error, reply *proto.CommitResponse) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromTabletError(err)
+}
+
+// AddTabletErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
+// field with details from the TabletError.
+func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) {
 	if err == nil {
 		return
 	}

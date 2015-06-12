@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -240,14 +241,8 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var errReply tproto.ErrorOnly
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &errReply)
-		if err != nil {
-			return err
-		}
-		// SqlQuery.Commit might return an application error inside the ErrorOnly
-		return vterrors.FromRPCError(errReply.Err)
+		return conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &rpc.Unused{})
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -263,18 +258,18 @@ func (conn *TabletBson) UnsupportedNewCommit(ctx context.Context, transactionID 
 		return tabletconn.ConnClosed
 	}
 
-	req := &tproto.Session{
+	commitRequest := &tproto.CommitRequest{
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var errReply tproto.ErrorOnly
+	commitResponse := new(tproto.CommitResponse)
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewCommit", req, &errReply)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewCommit", commitRequest, commitResponse)
 		if err != nil {
 			return err
 		}
 		// SqlQuery.Commit might return an application error inside the ErrorOnly
-		return vterrors.FromRPCError(errReply.Err)
+		return vterrors.FromRPCError(commitResponse.Err)
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -292,14 +287,8 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var errReply tproto.ErrorOnly
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &errReply)
-		if err != nil {
-			return err
-		}
-		// SqlQuery.Rollback might return an application error inside the ErrorOnly
-		return vterrors.FromRPCError(errReply.Err)
+		return conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &rpc.Unused{})
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -315,18 +304,18 @@ func (conn *TabletBson) UnsupportedNewRollback(ctx context.Context, transactionI
 		return tabletconn.ConnClosed
 	}
 
-	req := &tproto.Session{
+	rollbackRequest := &tproto.RollbackRequest{
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
-	var errReply tproto.ErrorOnly
+	rollbackResponse := new(tproto.RollbackResponse)
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewRollback", req, &errReply)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewRollback", rollbackRequest, rollbackResponse)
 		if err != nil {
 			return err
 		}
 		// SqlQuery.Rollback might return an application error inside the ErrorOnly
-		return vterrors.FromRPCError(errReply.Err)
+		return vterrors.FromRPCError(rollbackResponse.Err)
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)

@@ -45,10 +45,14 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 // UnsupportedNewCommit should not be used by anything other than tests.
 // It will eventually replace Commit, but it breaks compatibility with older clients.
 // Once all clients are upgraded, it can be replaced.
-func (sq *SqlQuery) UnsupportedNewCommit(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
+func (sq *SqlQuery) UnsupportedNewCommit(ctx context.Context, commitRequest *proto.CommitRequest, commitResponse *proto.CommitResponse) (err error) {
 	defer sq.server.HandlePanic(&err)
+	session := &proto.Session{
+		SessionId:     commitRequest.SessionId,
+		TransactionId: commitRequest.TransactionId,
+	}
 	tErr := sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
-	tabletserver.AddTabletErrorToErrorOnly(tErr, reply)
+	tabletserver.AddTabletErrorToCommitResponse(tErr, commitResponse)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
 	}
@@ -64,10 +68,14 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput
 // UnsupportedNewRollback should not be used by anything other than tests.
 // It will eventually replace Rollback, but it breaks compatibility with older clients.
 // Once all clients are upgraded, it can be replaced.
-func (sq *SqlQuery) UnsupportedNewRollback(ctx context.Context, session *proto.Session, reply *proto.ErrorOnly) (err error) {
+func (sq *SqlQuery) UnsupportedNewRollback(ctx context.Context, rollbackRequest *proto.RollbackRequest, rollbackResponse *proto.RollbackResponse) (err error) {
 	defer sq.server.HandlePanic(&err)
+	session := &proto.Session{
+		SessionId:     rollbackRequest.SessionId,
+		TransactionId: rollbackRequest.TransactionId,
+	}
 	tErr := sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
-	tabletserver.AddTabletErrorToErrorOnly(tErr, reply)
+	tabletserver.AddTabletErrorToRollbackResponse(tErr, rollbackResponse)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
 	}

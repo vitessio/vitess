@@ -27,13 +27,6 @@ type SessionInfo struct {
 
 //go:generate bsongen -file $GOFILE -type SessionInfo -o session_info_bson.go
 
-// ErrorOnly is the response from an RPC call that has no return value except an error..
-type ErrorOnly struct {
-	Err *mproto.RPCError
-}
-
-//go:generate bsongen -file $GOFILE -type ErrorOnly -o error_only_bson.go
-
 // Query is the payload to Execute.
 type Query struct {
 	Sql           string
@@ -137,4 +130,65 @@ type QuerySplit struct {
 type SplitQueryResult struct {
 	Queries []QuerySplit
 	Err     *mproto.RPCError
+}
+
+// CallerID is the BSON implementation of the proto3 vtrpc.CallerID
+type CallerID struct {
+	Principal    string
+	Component    string
+	Subcomponent string
+}
+
+// VTGateCallerID is the BSON implementation of the proto3 query.VTGateCallerID
+type VTGateCallerID struct {
+	Username string
+}
+
+// TabletType is the BSON implementation of the proto3 query.TabletType.
+// Assumes that enums are expressed as int64 in BSON.
+type TabletType int64
+
+// Target is the BSON implementation of the proto3 query.Target
+type Target struct {
+	Keyspace   string
+	Shard      string
+	TabletType TabletType
+}
+
+// CommitRequest is the BSON implementation of the proto3 query.CommitRequest
+type CommitRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	TransactionId     int64
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// CommitResponse is the BSON implementation of the proto3 query.CommitResponse
+type CommitResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}
+
+// RollbackRequest is the BSON implementation of the proto3 query.RollbackRequest
+type RollbackRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	TransactionId     int64
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// RollbackResponse is the BSON implementation of the proto3 query.RollbackResponse
+type RollbackResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
 }
