@@ -174,10 +174,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     # Reparent to choose an initial master
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/%s' % shard_name,
                      shard_tablets.master.tablet_alias], auto_log=True)
-    if wait_state == 'SERVING':
-      # Update the cell-local SrvKeyspace node, which tells VTGate which set of shards to use for a given type (master, replica, rdonly).
-      utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     create_table_sql = (
       'create table worker_test('
@@ -312,6 +309,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
         tablet.scrap(force=True, skip_rebuild=True)
         utils.run_vtctl(['DeleteTablet', tablet.tablet_alias], auto_log=True)
         tablet.kill_vttablet()
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
       utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
