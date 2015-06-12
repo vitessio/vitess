@@ -1,0 +1,46 @@
+// This file defines the replication related structures we use.
+
+syntax = "proto3";
+
+package replication;
+
+// MariaDB 10.0
+message MariadbGtid {
+  uint32 domain = 1;
+  uint32 server = 2;
+  uint64 sequence = 3;
+}
+
+// MySQL 5.6
+message MysqlGtidSet {
+  message MysqlInterval {
+    uint64 first = 1;
+    uint64 last = 2;
+  }
+  message MysqlUuidSet {
+    bytes uuid = 1;
+    repeated MysqlInterval interval = 2;
+  }
+  repeated MysqlUuidSet uuid_set = 1;
+}
+
+// Position represents the information required to specify where to start
+// replication. The contents vary depending on the flavor of MySQL in use.
+// We define all the fields here and use only the ones we need for each flavor.
+message Position {
+  MariadbGtid mariadb_gtid = 1;
+  MysqlGtidSet mysql_gtid_set = 2;
+}
+
+// Status is the replication status for MySQL (returned by 'show slave status'
+// and parsed into a Position and fields).
+message Status {
+  Position position = 1;
+  Position io_position = 2;
+  bool slave_io_running = 3;
+  bool slave_sql_running = 4;
+  uint32 seconds_behind_master = 5;
+  string master_host = 6;
+  int32 master_port = 7;
+  int32 master_connect_retry = 8;
+}

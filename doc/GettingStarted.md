@@ -228,6 +228,17 @@ you can use the example scripts in the Github repo to bring up a Vitess
 cluster on your local machine. These scripts use ZooKeeper as the
 lock service. ZooKeeper is included in the Vitess distribution.
 
+1.  **Check system settings**
+
+    Some Linux distributions ship with default file descriptor limits
+    that are too low for database servers. This issue could show up
+    as the database crashing with the message "too many open files".<br><br>
+
+    Check the system-wide `file-max` setting as well as user-specific
+    `ulimit` values. We recommend setting them above 100K to be safe.
+    The exact [procedure](http://www.cyberciti.biz/faq/linux-increase-the-maximum-number-of-open-files/)
+     may vary depending on your Linux distribution.
+
 1.  **Configure environment variables**
 
     If you are still in the same terminal window that

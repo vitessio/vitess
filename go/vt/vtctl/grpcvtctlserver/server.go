@@ -19,10 +19,11 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
-	"github.com/youtube/vitess/go/vt/vtctl"
+	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
 // VtctlServer is our RPC server
@@ -36,7 +37,7 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 }
 
 // ExecuteVtctlCommand is part of the pb.VtctlServer interface
-func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stream pb.Vtctl_ExecuteVtctlCommandServer) (err error) {
+func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, stream pbs.Vtctl_ExecuteVtctlCommandServer) (err error) {
 	defer vtctl.HandlePanic(&err)
 
 	// create a logger, send the result back to the caller
@@ -52,15 +53,17 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandArgs, stre
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			stream.Send(&pb.LoggerEvent{
-				Time: &pb.Time{
-					Seconds:     e.Time.Unix(),
-					Nanoseconds: int64(e.Time.Nanosecond()),
+			stream.Send(&pb.ExecuteVtctlCommandResponse{
+				Event: &pb.LoggerEvent{
+					Time: &pb.Time{
+						Seconds:     e.Time.Unix(),
+						Nanoseconds: int64(e.Time.Nanosecond()),
+					},
+					Level: int64(e.Level),
+					File:  e.File,
+					Line:  int64(e.Line),
+					Value: e.Value,
 				},
-				Level: int64(e.Level),
-				File:  e.File,
-				Line:  int64(e.Line),
-				Value: e.Value,
 			})
 		}
 		wg.Done()
@@ -85,5 +88,5 @@ func StartServer(s *grpc.Server, ts topo.Server) {
 		log.Infof("Disabling gRPC vtctl service")
 		return
 	}
-	pb.RegisterVtctlServer(s, NewVtctlServer(ts))
+	pbs.RegisterVtctlServer(s, NewVtctlServer(ts))
 }

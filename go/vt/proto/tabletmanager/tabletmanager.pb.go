@@ -9,126 +9,1138 @@ It is generated from these files:
 	tabletmanager.proto
 
 It has these top-level messages:
-	SnapshotArgs
+	TableDefinition
+	SchemaDefinition
+	UserPermission
+	DbPermission
+	HostPermission
+	Permissions
+	BlpPosition
+	PingRequest
+	PingResponse
+	SleepRequest
+	SleepResponse
+	ExecuteHookRequest
+	ExecuteHookResponse
+	GetSchemaRequest
+	GetSchemaResponse
+	GetPermissionsRequest
+	GetPermissionsResponse
+	SetReadOnlyRequest
+	SetReadOnlyResponse
+	SetReadWriteRequest
+	SetReadWriteResponse
+	ChangeTypeRequest
+	ChangeTypeResponse
+	ScrapRequest
+	ScrapResponse
+	RefreshStateRequest
+	RefreshStateResponse
+	RunHealthCheckRequest
+	RunHealthCheckResponse
+	StreamHealthRequest
+	StreamHealthResponse
+	ReloadSchemaRequest
+	ReloadSchemaResponse
+	PreflightSchemaRequest
+	PreflightSchemaResponse
+	ApplySchemaRequest
+	ApplySchemaResponse
+	ExecuteFetchAsDbaRequest
+	ExecuteFetchAsDbaResponse
+	ExecuteFetchAsAppRequest
+	ExecuteFetchAsAppResponse
+	SlaveStatusRequest
+	SlaveStatusResponse
+	MasterPositionRequest
+	MasterPositionResponse
+	StopSlaveRequest
+	StopSlaveResponse
+	StopSlaveMinimumRequest
+	StopSlaveMinimumResponse
+	StartSlaveRequest
+	StartSlaveResponse
+	TabletExternallyReparentedRequest
+	TabletExternallyReparentedResponse
+	TabletExternallyElectedRequest
+	TabletExternallyElectedResponse
+	GetSlavesRequest
+	GetSlavesResponse
+	WaitBlpPositionRequest
+	WaitBlpPositionResponse
+	StopBlpRequest
+	StopBlpResponse
+	StartBlpRequest
+	StartBlpResponse
+	RunBlpUntilRequest
+	RunBlpUntilResponse
+	ResetReplicationRequest
+	ResetReplicationResponse
+	InitMasterRequest
+	InitMasterResponse
+	PopulateReparentJournalRequest
+	PopulateReparentJournalResponse
+	InitSlaveRequest
+	InitSlaveResponse
+	DemoteMasterRequest
+	DemoteMasterResponse
+	PromoteSlaveWhenCaughtUpRequest
+	PromoteSlaveWhenCaughtUpResponse
+	SlaveWasPromotedRequest
+	SlaveWasPromotedResponse
+	SetMasterRequest
+	SetMasterResponse
+	SlaveWasRestartedRequest
+	SlaveWasRestartedResponse
+	StopReplicationAndGetStatusRequest
+	StopReplicationAndGetStatusResponse
+	PromoteSlaveRequest
+	PromoteSlaveResponse
+	BackupRequest
+	BackupResponse
 */
 package tabletmanager
 
 import proto "github.com/golang/protobuf/proto"
+import query "github.com/youtube/vitess/go/vt/proto/query"
+import topo "github.com/youtube/vitess/go/vt/proto/topo"
+import replication "github.com/youtube/vitess/go/vt/proto/replication"
 import vtctl "github.com/youtube/vitess/go/vt/proto/vtctl"
-
-import (
-	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
-)
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-type SnapshotArgs struct {
-	Concurrency         int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
-	ServerMode          bool  `protobuf:"varint,2,opt,name=server_mode" json:"server_mode,omitempty"`
-	ForceMasterSnapshot bool  `protobuf:"varint,3,opt,name=force_master_snapshot" json:"force_master_snapshot,omitempty"`
+type TableDefinition struct {
+	// the table name
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	// the SQL to run to create the table
+	Schema string `protobuf:"bytes,2,opt,name=schema" json:"schema,omitempty"`
+	// the columns in the order that will be used to dump and load the data
+	Columns []string `protobuf:"bytes,3,rep,name=columns" json:"columns,omitempty"`
+	// the primary key columns in the primary key order
+	PrimaryKeyColumns []string `protobuf:"bytes,4,rep,name=primary_key_columns" json:"primary_key_columns,omitempty"`
+	// type is either mysqlctl.TableBaseTable or mysqlctl.TableView
+	Type string `protobuf:"bytes,5,opt,name=type" json:"type,omitempty"`
+	// how much space the data file takes.
+	DataLength uint64 `protobuf:"varint,6,opt,name=data_length" json:"data_length,omitempty"`
+	// approximate number of rows
+	RowCount uint64 `protobuf:"varint,7,opt,name=row_count" json:"row_count,omitempty"`
 }
 
-func (m *SnapshotArgs) Reset()         { *m = SnapshotArgs{} }
-func (m *SnapshotArgs) String() string { return proto.CompactTextString(m) }
-func (*SnapshotArgs) ProtoMessage()    {}
+func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
+func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
+func (*TableDefinition) ProtoMessage()    {}
+
+type SchemaDefinition struct {
+	DatabaseSchema   string             `protobuf:"bytes,1,opt,name=database_schema" json:"database_schema,omitempty"`
+	TableDefinitions []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions" json:"table_definitions,omitempty"`
+	Version          string             `protobuf:"bytes,3,opt,name=version" json:"version,omitempty"`
+}
+
+func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
+func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
+func (*SchemaDefinition) ProtoMessage()    {}
+
+func (m *SchemaDefinition) GetTableDefinitions() []*TableDefinition {
+	if m != nil {
+		return m.TableDefinitions
+	}
+	return nil
+}
+
+// UserPermission describes a single row in the mysql.user table
+// Primary key is Host+User
+// PasswordChecksum is the crc64 of the password, for security reasons
+type UserPermission struct {
+	Host             string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	User             string            `protobuf:"bytes,2,opt,name=user" json:"user,omitempty"`
+	PasswordChecksum uint64            `protobuf:"varint,3,opt,name=password_checksum" json:"password_checksum,omitempty"`
+	Privileges       map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *UserPermission) Reset()         { *m = UserPermission{} }
+func (m *UserPermission) String() string { return proto.CompactTextString(m) }
+func (*UserPermission) ProtoMessage()    {}
+
+func (m *UserPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// DbPermission describes a single row in the mysql.db table
+// Primary key is Host+Db+User
+type DbPermission struct {
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	User       string            `protobuf:"bytes,3,opt,name=user" json:"user,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,4,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *DbPermission) Reset()         { *m = DbPermission{} }
+func (m *DbPermission) String() string { return proto.CompactTextString(m) }
+func (*DbPermission) ProtoMessage()    {}
+
+func (m *DbPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// HostPermission describes a single row in the mysql.host table
+// Primary key is Host+Db
+type HostPermission struct {
+	Host       string            `protobuf:"bytes,1,opt,name=host" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db" json:"db,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,3,rep,name=privileges" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *HostPermission) Reset()         { *m = HostPermission{} }
+func (m *HostPermission) String() string { return proto.CompactTextString(m) }
+func (*HostPermission) ProtoMessage()    {}
+
+func (m *HostPermission) GetPrivileges() map[string]string {
+	if m != nil {
+		return m.Privileges
+	}
+	return nil
+}
+
+// Permissions have all the rows in mysql.{user,db,host} tables,
+// (all rows are sorted by primary key)
+type Permissions struct {
+	UserPermissions []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions" json:"user_permissions,omitempty"`
+	DbPermissions   []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions" json:"db_permissions,omitempty"`
+	HostPermissions []*HostPermission `protobuf:"bytes,3,rep,name=host_permissions" json:"host_permissions,omitempty"`
+}
+
+func (m *Permissions) Reset()         { *m = Permissions{} }
+func (m *Permissions) String() string { return proto.CompactTextString(m) }
+func (*Permissions) ProtoMessage()    {}
+
+func (m *Permissions) GetUserPermissions() []*UserPermission {
+	if m != nil {
+		return m.UserPermissions
+	}
+	return nil
+}
+
+func (m *Permissions) GetDbPermissions() []*DbPermission {
+	if m != nil {
+		return m.DbPermissions
+	}
+	return nil
+}
+
+func (m *Permissions) GetHostPermissions() []*HostPermission {
+	if m != nil {
+		return m.HostPermissions
+	}
+	return nil
+}
+
+// BlpPosition is a replication position for a given binlog player
+type BlpPosition struct {
+	Uid      uint32                `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
+	Position *replication.Position `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
+func (m *BlpPosition) String() string { return proto.CompactTextString(m) }
+func (*BlpPosition) ProtoMessage()    {}
+
+func (m *BlpPosition) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PingRequest struct {
+	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+}
+
+func (m *PingRequest) Reset()         { *m = PingRequest{} }
+func (m *PingRequest) String() string { return proto.CompactTextString(m) }
+func (*PingRequest) ProtoMessage()    {}
+
+type PingResponse struct {
+	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
+}
+
+func (m *PingResponse) Reset()         { *m = PingResponse{} }
+func (m *PingResponse) String() string { return proto.CompactTextString(m) }
+func (*PingResponse) ProtoMessage()    {}
+
+type SleepRequest struct {
+	// duration is in nanoseconds
+	Duration int64 `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
+}
+
+func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
+func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
+func (*SleepRequest) ProtoMessage()    {}
+
+type SleepResponse struct {
+}
+
+func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
+func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
+func (*SleepResponse) ProtoMessage()    {}
+
+type ExecuteHookRequest struct {
+	Name       string            `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Parameters []string          `protobuf:"bytes,2,rep,name=parameters" json:"parameters,omitempty"`
+	ExtraEnv   map[string]string `protobuf:"bytes,3,rep,name=extra_env" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+}
+
+func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
+func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteHookRequest) ProtoMessage()    {}
+
+func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
+	if m != nil {
+		return m.ExtraEnv
+	}
+	return nil
+}
+
+type ExecuteHookResponse struct {
+	ExitStatus int64  `protobuf:"varint,1,opt,name=exit_status" json:"exit_status,omitempty"`
+	Stdout     string `protobuf:"bytes,2,opt,name=stdout" json:"stdout,omitempty"`
+	Stderr     string `protobuf:"bytes,3,opt,name=stderr" json:"stderr,omitempty"`
+}
+
+func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
+func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteHookResponse) ProtoMessage()    {}
+
+type GetSchemaRequest struct {
+	Tables        []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
+	IncludeViews  bool     `protobuf:"varint,2,opt,name=include_views" json:"include_views,omitempty"`
+	ExcludeTables []string `protobuf:"bytes,3,rep,name=exclude_tables" json:"exclude_tables,omitempty"`
+}
+
+func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
+func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaRequest) ProtoMessage()    {}
+
+type GetSchemaResponse struct {
+	SchemaDefinition *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition" json:"schema_definition,omitempty"`
+}
+
+func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
+func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaResponse) ProtoMessage()    {}
+
+func (m *GetSchemaResponse) GetSchemaDefinition() *SchemaDefinition {
+	if m != nil {
+		return m.SchemaDefinition
+	}
+	return nil
+}
+
+type GetPermissionsRequest struct {
+}
+
+func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
+func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetPermissionsRequest) ProtoMessage()    {}
+
+type GetPermissionsResponse struct {
+	Permissions *Permissions `protobuf:"bytes,1,opt,name=permissions" json:"permissions,omitempty"`
+}
+
+func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{} }
+func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetPermissionsResponse) ProtoMessage()    {}
+
+func (m *GetPermissionsResponse) GetPermissions() *Permissions {
+	if m != nil {
+		return m.Permissions
+	}
+	return nil
+}
+
+type SetReadOnlyRequest struct {
+}
+
+func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
+func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
+func (*SetReadOnlyRequest) ProtoMessage()    {}
+
+type SetReadOnlyResponse struct {
+}
+
+func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
+func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
+func (*SetReadOnlyResponse) ProtoMessage()    {}
+
+type SetReadWriteRequest struct {
+}
+
+func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
+func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
+func (*SetReadWriteRequest) ProtoMessage()    {}
+
+type SetReadWriteResponse struct {
+}
+
+func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
+func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
+func (*SetReadWriteResponse) ProtoMessage()    {}
+
+type ChangeTypeRequest struct {
+	TabletType topo.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topo.TabletType" json:"tablet_type,omitempty"`
+}
+
+func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
+func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
+func (*ChangeTypeRequest) ProtoMessage()    {}
+
+type ChangeTypeResponse struct {
+}
+
+func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
+func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
+func (*ChangeTypeResponse) ProtoMessage()    {}
+
+type ScrapRequest struct {
+}
+
+func (m *ScrapRequest) Reset()         { *m = ScrapRequest{} }
+func (m *ScrapRequest) String() string { return proto.CompactTextString(m) }
+func (*ScrapRequest) ProtoMessage()    {}
+
+type ScrapResponse struct {
+}
+
+func (m *ScrapResponse) Reset()         { *m = ScrapResponse{} }
+func (m *ScrapResponse) String() string { return proto.CompactTextString(m) }
+func (*ScrapResponse) ProtoMessage()    {}
+
+type RefreshStateRequest struct {
+}
+
+func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
+func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
+func (*RefreshStateRequest) ProtoMessage()    {}
+
+type RefreshStateResponse struct {
+}
+
+func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
+func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
+func (*RefreshStateResponse) ProtoMessage()    {}
+
+type RunHealthCheckRequest struct {
+	TabletType topo.TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topo.TabletType" json:"tablet_type,omitempty"`
+}
+
+func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
+func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
+func (*RunHealthCheckRequest) ProtoMessage()    {}
+
+type RunHealthCheckResponse struct {
+}
+
+func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{} }
+func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
+func (*RunHealthCheckResponse) ProtoMessage()    {}
+
+type StreamHealthRequest struct {
+}
+
+func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
+func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthRequest) ProtoMessage()    {}
+
+type StreamHealthResponse struct {
+	Tablet              *topo.Tablet `protobuf:"bytes,1,opt,name=tablet" json:"tablet,omitempty"`
+	BinlogPlayerMapSize int64        `protobuf:"varint,2,opt,name=binlog_player_map_size" json:"binlog_player_map_size,omitempty"`
+	HealthError         string       `protobuf:"bytes,3,opt,name=health_error" json:"health_error,omitempty"`
+	// replication_delay is in nanoseconds
+	ReplicationDelay int64 `protobuf:"varint,4,opt,name=replication_delay" json:"replication_delay,omitempty"`
+}
+
+func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
+func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthResponse) ProtoMessage()    {}
+
+func (m *StreamHealthResponse) GetTablet() *topo.Tablet {
+	if m != nil {
+		return m.Tablet
+	}
+	return nil
+}
+
+type ReloadSchemaRequest struct {
+}
+
+func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
+func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*ReloadSchemaRequest) ProtoMessage()    {}
+
+type ReloadSchemaResponse struct {
+}
+
+func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
+func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*ReloadSchemaResponse) ProtoMessage()    {}
+
+type PreflightSchemaRequest struct {
+	Change string `protobuf:"bytes,1,opt,name=change" json:"change,omitempty"`
+}
+
+func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{} }
+func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*PreflightSchemaRequest) ProtoMessage()    {}
+
+type PreflightSchemaResponse struct {
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse{} }
+func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*PreflightSchemaResponse) ProtoMessage()    {}
+
+func (m *PreflightSchemaResponse) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *PreflightSchemaResponse) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ApplySchemaRequest struct {
+	Sql              string            `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
+	Force            bool              `protobuf:"varint,2,opt,name=force" json:"force,omitempty"`
+	AllowReplication bool              `protobuf:"varint,3,opt,name=allow_replication" json:"allow_replication,omitempty"`
+	BeforeSchema     *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema      *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
+func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*ApplySchemaRequest) ProtoMessage()    {}
+
+func (m *ApplySchemaRequest) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ApplySchemaResponse struct {
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema" json:"before_schema,omitempty"`
+	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema" json:"after_schema,omitempty"`
+}
+
+func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
+func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
+func (*ApplySchemaResponse) ProtoMessage()    {}
+
+func (m *ApplySchemaResponse) GetBeforeSchema() *SchemaDefinition {
+	if m != nil {
+		return m.BeforeSchema
+	}
+	return nil
+}
+
+func (m *ApplySchemaResponse) GetAfterSchema() *SchemaDefinition {
+	if m != nil {
+		return m.AfterSchema
+	}
+	return nil
+}
+
+type ExecuteFetchAsDbaRequest struct {
+	Query          string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	DbName         string `protobuf:"bytes,2,opt,name=db_name" json:"db_name,omitempty"`
+	MaxRows        uint64 `protobuf:"varint,3,opt,name=max_rows" json:"max_rows,omitempty"`
+	WantFields     bool   `protobuf:"varint,4,opt,name=want_fields" json:"want_fields,omitempty"`
+	DisableBinlogs bool   `protobuf:"varint,5,opt,name=disable_binlogs" json:"disable_binlogs,omitempty"`
+	ReloadSchema   bool   `protobuf:"varint,6,opt,name=reload_schema" json:"reload_schema,omitempty"`
+}
+
+func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaRequest{} }
+func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
+
+type ExecuteFetchAsDbaResponse struct {
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResponse{} }
+func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
+
+func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+type ExecuteFetchAsAppRequest struct {
+	Query      string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	MaxRows    uint64 `protobuf:"varint,2,opt,name=max_rows" json:"max_rows,omitempty"`
+	WantFields bool   `protobuf:"varint,3,opt,name=want_fields" json:"want_fields,omitempty"`
+}
+
+func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppRequest{} }
+func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
+
+type ExecuteFetchAsAppResponse struct {
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResponse{} }
+func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
+func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
+
+func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+type SlaveStatusRequest struct {
+}
+
+func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
+func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusRequest) ProtoMessage()    {}
+
+type SlaveStatusResponse struct {
+	Status *replication.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+}
+
+func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
+func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveStatusResponse) ProtoMessage()    {}
+
+func (m *SlaveStatusResponse) GetStatus() *replication.Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+type MasterPositionRequest struct {
+}
+
+func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
+func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
+func (*MasterPositionRequest) ProtoMessage()    {}
+
+type MasterPositionResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{} }
+func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
+func (*MasterPositionResponse) ProtoMessage()    {}
+
+func (m *MasterPositionResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StopSlaveRequest struct {
+}
+
+func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
+func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveRequest) ProtoMessage()    {}
+
+type StopSlaveResponse struct {
+}
+
+func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
+func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveResponse) ProtoMessage()    {}
+
+type StopSlaveMinimumRequest struct {
+	Position    *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	WaitTimeout int64                 `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
+func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumRequest) ProtoMessage()    {}
+
+func (m *StopSlaveMinimumRequest) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StopSlaveMinimumResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
+func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
+func (*StopSlaveMinimumResponse) ProtoMessage()    {}
+
+func (m *StopSlaveMinimumResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type StartSlaveRequest struct {
+}
+
+func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
+func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveRequest) ProtoMessage()    {}
+
+type StartSlaveResponse struct {
+}
+
+func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
+func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*StartSlaveResponse) ProtoMessage()    {}
+
+type TabletExternallyReparentedRequest struct {
+	// external_id is an string value that may be provided by an external
+	// agent for tracking purposes. The tablet will emit this string in
+	// events triggered by TabletExternallyReparented, such as VitessReparent.
+	ExternalId string `protobuf:"bytes,1,opt,name=external_id" json:"external_id,omitempty"`
+}
+
+func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExternallyReparentedRequest{} }
+func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
+
+type TabletExternallyReparentedResponse struct {
+}
+
+func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExternallyReparentedResponse{} }
+func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
+
+type TabletExternallyElectedRequest struct {
+}
+
+func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternallyElectedRequest{} }
+func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyElectedRequest) ProtoMessage()    {}
+
+type TabletExternallyElectedResponse struct {
+}
+
+func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternallyElectedResponse{} }
+func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
+func (*TabletExternallyElectedResponse) ProtoMessage()    {}
+
+type GetSlavesRequest struct {
+}
+
+func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
+func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesRequest) ProtoMessage()    {}
+
+type GetSlavesResponse struct {
+	Addrs []string `protobuf:"bytes,1,rep,name=addrs" json:"addrs,omitempty"`
+}
+
+func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
+func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSlavesResponse) ProtoMessage()    {}
+
+type WaitBlpPositionRequest struct {
+	BlpPosition *BlpPosition `protobuf:"bytes,1,opt,name=blp_position" json:"blp_position,omitempty"`
+	WaitTimeout int64        `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *WaitBlpPositionRequest) Reset()         { *m = WaitBlpPositionRequest{} }
+func (m *WaitBlpPositionRequest) String() string { return proto.CompactTextString(m) }
+func (*WaitBlpPositionRequest) ProtoMessage()    {}
+
+func (m *WaitBlpPositionRequest) GetBlpPosition() *BlpPosition {
+	if m != nil {
+		return m.BlpPosition
+	}
+	return nil
+}
+
+type WaitBlpPositionResponse struct {
+}
+
+func (m *WaitBlpPositionResponse) Reset()         { *m = WaitBlpPositionResponse{} }
+func (m *WaitBlpPositionResponse) String() string { return proto.CompactTextString(m) }
+func (*WaitBlpPositionResponse) ProtoMessage()    {}
+
+type StopBlpRequest struct {
+}
+
+func (m *StopBlpRequest) Reset()         { *m = StopBlpRequest{} }
+func (m *StopBlpRequest) String() string { return proto.CompactTextString(m) }
+func (*StopBlpRequest) ProtoMessage()    {}
+
+type StopBlpResponse struct {
+	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
+}
+
+func (m *StopBlpResponse) Reset()         { *m = StopBlpResponse{} }
+func (m *StopBlpResponse) String() string { return proto.CompactTextString(m) }
+func (*StopBlpResponse) ProtoMessage()    {}
+
+func (m *StopBlpResponse) GetBlpPositions() []*BlpPosition {
+	if m != nil {
+		return m.BlpPositions
+	}
+	return nil
+}
+
+type StartBlpRequest struct {
+}
+
+func (m *StartBlpRequest) Reset()         { *m = StartBlpRequest{} }
+func (m *StartBlpRequest) String() string { return proto.CompactTextString(m) }
+func (*StartBlpRequest) ProtoMessage()    {}
+
+type StartBlpResponse struct {
+}
+
+func (m *StartBlpResponse) Reset()         { *m = StartBlpResponse{} }
+func (m *StartBlpResponse) String() string { return proto.CompactTextString(m) }
+func (*StartBlpResponse) ProtoMessage()    {}
+
+type RunBlpUntilRequest struct {
+	BlpPositions []*BlpPosition `protobuf:"bytes,1,rep,name=blp_positions" json:"blp_positions,omitempty"`
+	WaitTimeout  int64          `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+}
+
+func (m *RunBlpUntilRequest) Reset()         { *m = RunBlpUntilRequest{} }
+func (m *RunBlpUntilRequest) String() string { return proto.CompactTextString(m) }
+func (*RunBlpUntilRequest) ProtoMessage()    {}
+
+func (m *RunBlpUntilRequest) GetBlpPositions() []*BlpPosition {
+	if m != nil {
+		return m.BlpPositions
+	}
+	return nil
+}
+
+type RunBlpUntilResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *RunBlpUntilResponse) Reset()         { *m = RunBlpUntilResponse{} }
+func (m *RunBlpUntilResponse) String() string { return proto.CompactTextString(m) }
+func (*RunBlpUntilResponse) ProtoMessage()    {}
+
+func (m *RunBlpUntilResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type ResetReplicationRequest struct {
+}
+
+func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest{} }
+func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
+func (*ResetReplicationRequest) ProtoMessage()    {}
+
+type ResetReplicationResponse struct {
+}
+
+func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationResponse{} }
+func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
+func (*ResetReplicationResponse) ProtoMessage()    {}
+
+type InitMasterRequest struct {
+}
+
+func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
+func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*InitMasterRequest) ProtoMessage()    {}
+
+type InitMasterResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
+func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*InitMasterResponse) ProtoMessage()    {}
+
+func (m *InitMasterResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PopulateReparentJournalRequest struct {
+	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	ActionName          string                `protobuf:"bytes,2,opt,name=action_name" json:"action_name,omitempty"`
+	MasterAlias         *topo.TabletAlias     `protobuf:"bytes,3,opt,name=master_alias" json:"master_alias,omitempty"`
+	ReplicationPosition *replication.Position `protobuf:"bytes,4,opt,name=replication_position" json:"replication_position,omitempty"`
+}
+
+func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparentJournalRequest{} }
+func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
+func (*PopulateReparentJournalRequest) ProtoMessage()    {}
+
+func (m *PopulateReparentJournalRequest) GetMasterAlias() *topo.TabletAlias {
+	if m != nil {
+		return m.MasterAlias
+	}
+	return nil
+}
+
+func (m *PopulateReparentJournalRequest) GetReplicationPosition() *replication.Position {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return nil
+}
+
+type PopulateReparentJournalResponse struct {
+}
+
+func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparentJournalResponse{} }
+func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
+func (*PopulateReparentJournalResponse) ProtoMessage()    {}
+
+type InitSlaveRequest struct {
+	Parent              *topo.TabletAlias     `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	ReplicationPosition *replication.Position `protobuf:"bytes,2,opt,name=replication_position" json:"replication_position,omitempty"`
+	TimeCreatedNs       int64                 `protobuf:"varint,3,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+}
+
+func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
+func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveRequest) ProtoMessage()    {}
+
+func (m *InitSlaveRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+func (m *InitSlaveRequest) GetReplicationPosition() *replication.Position {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return nil
+}
+
+type InitSlaveResponse struct {
+}
+
+func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
+func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*InitSlaveResponse) ProtoMessage()    {}
+
+type DemoteMasterRequest struct {
+}
+
+func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
+func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*DemoteMasterRequest) ProtoMessage()    {}
+
+type DemoteMasterResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
+func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*DemoteMasterResponse) ProtoMessage()    {}
+
+func (m *DemoteMasterResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PromoteSlaveWhenCaughtUpRequest struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhenCaughtUpRequest{} }
+func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
+
+func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type PromoteSlaveWhenCaughtUpResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWhenCaughtUpResponse{} }
+func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
+
+func (m *PromoteSlaveWhenCaughtUpResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type SlaveWasPromotedRequest struct {
+}
+
+func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
+func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedRequest) ProtoMessage()    {}
+
+type SlaveWasPromotedResponse struct {
+}
+
+func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
+func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasPromotedResponse) ProtoMessage()    {}
+
+type SetMasterRequest struct {
+	Parent          *topo.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	TimeCreatedNs   int64             `protobuf:"varint,2,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	ForceStartSlave bool              `protobuf:"varint,3,opt,name=force_start_slave" json:"force_start_slave,omitempty"`
+}
+
+func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
+func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
+func (*SetMasterRequest) ProtoMessage()    {}
+
+func (m *SetMasterRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+type SetMasterResponse struct {
+}
+
+func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
+func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
+func (*SetMasterResponse) ProtoMessage()    {}
+
+type SlaveWasRestartedRequest struct {
+	// the parent alias the tablet should have
+	Parent *topo.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+}
+
+func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
+func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedRequest) ProtoMessage()    {}
+
+func (m *SlaveWasRestartedRequest) GetParent() *topo.TabletAlias {
+	if m != nil {
+		return m.Parent
+	}
+	return nil
+}
+
+type SlaveWasRestartedResponse struct {
+}
+
+func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
+func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
+func (*SlaveWasRestartedResponse) ProtoMessage()    {}
+
+type StopReplicationAndGetStatusRequest struct {
+}
+
+func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicationAndGetStatusRequest{} }
+func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
+
+type StopReplicationAndGetStatusResponse struct {
+	Status *replication.Status `protobuf:"bytes,1,opt,name=status" json:"status,omitempty"`
+}
+
+func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplicationAndGetStatusResponse{} }
+func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
+
+func (m *StopReplicationAndGetStatusResponse) GetStatus() *replication.Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+type PromoteSlaveRequest struct {
+}
+
+func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
+func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveRequest) ProtoMessage()    {}
+
+type PromoteSlaveResponse struct {
+	Position *replication.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+}
+
+func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
+func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
+func (*PromoteSlaveResponse) ProtoMessage()    {}
+
+func (m *PromoteSlaveResponse) GetPosition() *replication.Position {
+	if m != nil {
+		return m.Position
+	}
+	return nil
+}
+
+type BackupRequest struct {
+	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
+}
+
+func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
+func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
+func (*BackupRequest) ProtoMessage()    {}
+
+type BackupResponse struct {
+	Event *vtctl.LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+}
+
+func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
+func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
+func (*BackupResponse) ProtoMessage()    {}
+
+func (m *BackupResponse) GetEvent() *vtctl.LoggerEvent {
+	if m != nil {
+		return m.Event
+	}
+	return nil
+}
 
 func init() {
-}
-
-// Client API for TabletManager service
-
-type TabletManagerClient interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error)
-}
-
-type tabletManagerClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewTabletManagerClient(cc *grpc.ClientConn) TabletManagerClient {
-	return &tabletManagerClient{cc}
-}
-
-func (c *tabletManagerClient) Snapshot(ctx context.Context, in *SnapshotArgs, opts ...grpc.CallOption) (TabletManager_SnapshotClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanager.TabletManager/Snapshot", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &tabletManagerSnapshotClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type TabletManager_SnapshotClient interface {
-	Recv() (*vtctl.LoggerEvent, error)
-	grpc.ClientStream
-}
-
-type tabletManagerSnapshotClient struct {
-	grpc.ClientStream
-}
-
-func (x *tabletManagerSnapshotClient) Recv() (*vtctl.LoggerEvent, error) {
-	m := new(vtctl.LoggerEvent)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// Server API for TabletManager service
-
-type TabletManagerServer interface {
-	// FIXME(alainjobart) need to also return SnapshotReply
-	Snapshot(*SnapshotArgs, TabletManager_SnapshotServer) error
-}
-
-func RegisterTabletManagerServer(s *grpc.Server, srv TabletManagerServer) {
-	s.RegisterService(&_TabletManager_serviceDesc, srv)
-}
-
-func _TabletManager_Snapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SnapshotArgs)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TabletManagerServer).Snapshot(m, &tabletManagerSnapshotServer{stream})
-}
-
-type TabletManager_SnapshotServer interface {
-	Send(*vtctl.LoggerEvent) error
-	grpc.ServerStream
-}
-
-type tabletManagerSnapshotServer struct {
-	grpc.ServerStream
-}
-
-func (x *tabletManagerSnapshotServer) Send(m *vtctl.LoggerEvent) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-var _TabletManager_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "tabletmanager.TabletManager",
-	HandlerType: (*TabletManagerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "Snapshot",
-			Handler:       _TabletManager_Snapshot_Handler,
-			ServerStreams: true,
-		},
-	},
 }

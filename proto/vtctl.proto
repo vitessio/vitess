@@ -1,16 +1,9 @@
-// This package contains a service allowing you to use vtctld as a
-// proxy for vt commands.
+// This package contains the data sturctures for a service allowing
+// you to use vtctld as a server for vt commands.
+
 syntax = "proto3";
 
 package vtctl;
-
-// ExecuteVtctlCommandArgs arguments to ExecuteVtctlCommand
-// timeouts are in nanoseconds.
-message ExecuteVtctlCommandArgs {
-  repeated string args = 1;
-  int64 action_timeout = 2;
-  int64 lock_timeout = 3;
-}
 
 // Time represents a time stamp in nanoseconds. In go, use time.Unix to
 // rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
@@ -28,7 +21,15 @@ message LoggerEvent {
   string value = 5;
 }
 
-// Service Vtctl allows you to call vt commands through gRPC.
-service Vtctl {
-  rpc ExecuteVtctlCommand (ExecuteVtctlCommandArgs) returns (stream LoggerEvent) {};
+// ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
+// timeouts are in nanoseconds.
+message ExecuteVtctlCommandRequest {
+  repeated string args = 1;
+  int64 action_timeout = 2;
+  int64 lock_timeout = 3;
+}
+
+// ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
+message ExecuteVtctlCommandResponse {
+  LoggerEvent event = 1;
 }
