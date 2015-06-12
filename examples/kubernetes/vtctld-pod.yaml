@@ -1,29 +1,28 @@
-apiVersion: v1beta1
 kind: Pod
-id: vtctld
-desiredState:
-  manifest:
-    version: v1beta1
-    id: vtctld
-    containers:
-      - name: vtctld
-        image: vitess/lite
-        volumeMounts:
-          - name: syslog
-            mountPath: /dev/log
-          - name: vtdataroot
-            mountPath: /vt/vtdataroot
-        command:
-          - sh
-          - "-c"
-          - >-
-            mkdir -p $VTDATAROOT/tmp &&
-            chown -R vitess /vt &&
-            su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
-    volumes:
-      - name: syslog
-        source: {hostDir: {path: /dev/log}}
-      - name: vtdataroot
-        source: {emptyDir: {}}
-labels:
+apiVersion: v1beta3
+metadata:
   name: vtctld
+  labels:
+    name: vtctld
+spec:
+  containers:
+    - name: vtctld
+      image: vitess/lite
+      volumeMounts:
+        - name: syslog
+          mountPath: /dev/log
+        - name: vtdataroot
+          mountPath: /vt/vtdataroot
+      command:
+        - sh
+        - "-c"
+        - >-
+          mkdir -p $VTDATAROOT/tmp &&
+          chown -R vitess /vt &&
+          su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
+  volumes:
+    - name: syslog
+      hostPath: {path: /dev/log}
+    - name: vtdataroot
+      emptyDir: {}
+

@@ -18,9 +18,9 @@ FORCE_NODE=${FORCE_NODE:-false}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 
-vtdataroot_volume='{emptyDir: {}}'
+vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
-  vtdataroot_volume="{hostDir: {path: ${VTDATAROOT_VOLUME}}}"
+  vtdataroot_volume="hostDir: {path: ${VTDATAROOT_VOLUME}}"
 fi
 
 index=1
