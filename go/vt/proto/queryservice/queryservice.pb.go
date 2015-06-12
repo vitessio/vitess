@@ -30,9 +30,9 @@ var _ = proto.Marshal
 func init() {
 }
 
-// Client API for SqlQuery service
+// Client API for Query service
 
-type SqlQueryClient interface {
+type QueryClient interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error)
@@ -43,7 +43,7 @@ type SqlQueryClient interface {
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error)
+	StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error)
 	// Begin a transaction.
 	Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error)
 	// Commit a transaction.
@@ -55,38 +55,38 @@ type SqlQueryClient interface {
 	SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error)
 }
 
-type sqlQueryClient struct {
+type queryClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewSqlQueryClient(cc *grpc.ClientConn) SqlQueryClient {
-	return &sqlQueryClient{cc}
+func NewQueryClient(cc *grpc.ClientConn) QueryClient {
+	return &queryClient{cc}
 }
 
-func (c *sqlQueryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
+func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
 	out := new(query.ExecuteResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Execute", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Execute", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *sqlQueryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error) {
+func (c *queryClient) ExecuteBatch(ctx context.Context, in *query.ExecuteBatchRequest, opts ...grpc.CallOption) (*query.ExecuteBatchResponse, error) {
 	out := new(query.ExecuteBatchResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/ExecuteBatch", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (SqlQuery_StreamExecuteClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_SqlQuery_serviceDesc.Streams[0], c.cc, "/queryservice.SqlQuery/StreamExecute", opts...)
+func (c *queryClient) StreamExecute(ctx context.Context, in *query.StreamExecuteRequest, opts ...grpc.CallOption) (Query_StreamExecuteClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[0], c.cc, "/queryservice.Query/StreamExecute", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &sqlQueryStreamExecuteClient{stream}
+	x := &queryStreamExecuteClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -96,16 +96,16 @@ func (c *sqlQueryClient) StreamExecute(ctx context.Context, in *query.StreamExec
 	return x, nil
 }
 
-type SqlQuery_StreamExecuteClient interface {
+type Query_StreamExecuteClient interface {
 	Recv() (*query.StreamExecuteResponse, error)
 	grpc.ClientStream
 }
 
-type sqlQueryStreamExecuteClient struct {
+type queryStreamExecuteClient struct {
 	grpc.ClientStream
 }
 
-func (x *sqlQueryStreamExecuteClient) Recv() (*query.StreamExecuteResponse, error) {
+func (x *queryStreamExecuteClient) Recv() (*query.StreamExecuteResponse, error) {
 	m := new(query.StreamExecuteResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -113,45 +113,45 @@ func (x *sqlQueryStreamExecuteClient) Recv() (*query.StreamExecuteResponse, erro
 	return m, nil
 }
 
-func (c *sqlQueryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error) {
+func (c *queryClient) Begin(ctx context.Context, in *query.BeginRequest, opts ...grpc.CallOption) (*query.BeginResponse, error) {
 	out := new(query.BeginResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Begin", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Begin", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *sqlQueryClient) Commit(ctx context.Context, in *query.CommitRequest, opts ...grpc.CallOption) (*query.CommitResponse, error) {
+func (c *queryClient) Commit(ctx context.Context, in *query.CommitRequest, opts ...grpc.CallOption) (*query.CommitResponse, error) {
 	out := new(query.CommitResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Commit", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Commit", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *sqlQueryClient) Rollback(ctx context.Context, in *query.RollbackRequest, opts ...grpc.CallOption) (*query.RollbackResponse, error) {
+func (c *queryClient) Rollback(ctx context.Context, in *query.RollbackRequest, opts ...grpc.CallOption) (*query.RollbackResponse, error) {
 	out := new(query.RollbackResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/Rollback", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/Rollback", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *sqlQueryClient) SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error) {
+func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error) {
 	out := new(query.SplitQueryResponse)
-	err := grpc.Invoke(ctx, "/queryservice.SqlQuery/SplitQuery", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/queryservice.Query/SplitQuery", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for SqlQuery service
+// Server API for Query service
 
-type SqlQueryServer interface {
+type QueryServer interface {
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(context.Context, *query.ExecuteRequest) (*query.ExecuteResponse, error)
@@ -162,7 +162,7 @@ type SqlQueryServer interface {
 	// query returns a large number of rows. The first QueryResult will
 	// contain the Fields, subsequent QueryResult messages will contain
 	// the rows.
-	StreamExecute(*query.StreamExecuteRequest, SqlQuery_StreamExecuteServer) error
+	StreamExecute(*query.StreamExecuteRequest, Query_StreamExecuteServer) error
 	// Begin a transaction.
 	Begin(context.Context, *query.BeginRequest) (*query.BeginResponse, error)
 	// Commit a transaction.
@@ -174,136 +174,136 @@ type SqlQueryServer interface {
 	SplitQuery(context.Context, *query.SplitQueryRequest) (*query.SplitQueryResponse, error)
 }
 
-func RegisterSqlQueryServer(s *grpc.Server, srv SqlQueryServer) {
-	s.RegisterService(&_SqlQuery_serviceDesc, srv)
+func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
+	s.RegisterService(&_Query_serviceDesc, srv)
 }
 
-func _SqlQuery_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.ExecuteRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).Execute(ctx, in)
+	out, err := srv.(QueryServer).Execute(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func _SqlQuery_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_ExecuteBatch_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.ExecuteBatchRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).ExecuteBatch(ctx, in)
+	out, err := srv.(QueryServer).ExecuteBatch(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func _SqlQuery_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Query_StreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(query.StreamExecuteRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(SqlQueryServer).StreamExecute(m, &sqlQueryStreamExecuteServer{stream})
+	return srv.(QueryServer).StreamExecute(m, &queryStreamExecuteServer{stream})
 }
 
-type SqlQuery_StreamExecuteServer interface {
+type Query_StreamExecuteServer interface {
 	Send(*query.StreamExecuteResponse) error
 	grpc.ServerStream
 }
 
-type sqlQueryStreamExecuteServer struct {
+type queryStreamExecuteServer struct {
 	grpc.ServerStream
 }
 
-func (x *sqlQueryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
+func (x *queryStreamExecuteServer) Send(m *query.StreamExecuteResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _SqlQuery_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Begin_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.BeginRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).Begin(ctx, in)
+	out, err := srv.(QueryServer).Begin(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func _SqlQuery_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Commit_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.CommitRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).Commit(ctx, in)
+	out, err := srv.(QueryServer).Commit(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func _SqlQuery_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_Rollback_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.RollbackRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).Rollback(ctx, in)
+	out, err := srv.(QueryServer).Rollback(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func _SqlQuery_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
 	in := new(query.SplitQueryRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(SqlQueryServer).SplitQuery(ctx, in)
+	out, err := srv.(QueryServer).SplitQuery(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-var _SqlQuery_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "queryservice.SqlQuery",
-	HandlerType: (*SqlQueryServer)(nil),
+var _Query_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "queryservice.Query",
+	HandlerType: (*QueryServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Execute",
-			Handler:    _SqlQuery_Execute_Handler,
+			Handler:    _Query_Execute_Handler,
 		},
 		{
 			MethodName: "ExecuteBatch",
-			Handler:    _SqlQuery_ExecuteBatch_Handler,
+			Handler:    _Query_ExecuteBatch_Handler,
 		},
 		{
 			MethodName: "Begin",
-			Handler:    _SqlQuery_Begin_Handler,
+			Handler:    _Query_Begin_Handler,
 		},
 		{
 			MethodName: "Commit",
-			Handler:    _SqlQuery_Commit_Handler,
+			Handler:    _Query_Commit_Handler,
 		},
 		{
 			MethodName: "Rollback",
-			Handler:    _SqlQuery_Rollback_Handler,
+			Handler:    _Query_Rollback_Handler,
 		},
 		{
 			MethodName: "SplitQuery",
-			Handler:    _SqlQuery_SplitQuery_Handler,
+			Handler:    _Query_SplitQuery_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamExecute",
-			Handler:       _SqlQuery_StreamExecute_Handler,
+			Handler:       _Query_StreamExecute_Handler,
 			ServerStreams: true,
 		},
 	},
