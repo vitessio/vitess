@@ -243,29 +243,12 @@ class TestSchema(unittest.TestCase):
     utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', test_keyspace])
     
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
-    self._apply_initial_schema()
-    
-    self._setUp_tablets_shard_2()
-    
-    # CopySchemaShard is responsible for creating the db; one shouldn't exist before
-    # the command is run.
-    self._check_db_not_created(shard_2_master)
-    self._check_db_not_created(shard_2_replica1)
-
-    utils.run_vtctl(['CopySchemaShard',
-                     shard_0_master.tablet_alias,
-                     'test_keyspace/2'],
-                    auto_log=True)
-
-    # shard_2_master should look the same as the replica we copied from
-    self._check_tables(shard_2_master, 4)
-    utils.wait_for_replication_pos(shard_2_master, shard_2_replica1)
-    self._check_tables(shard_2_replica1, 4)
-    shard_0_schema = self._get_schema(shard_0_master.tablet_alias)
-    shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
-    self.assertEqual(shard_0_schema, shard_2_schema)
+    self._test_vtctl_copyschema_shard(shard_0_master.tablet_alias)
 
   def test_vtctl_copyschemashard_use_shard_as_source(self):
+    self._test_vtctl_copyschema_shard('test_keyspace/0')
+
+  def _test_vtctl_copyschemashard(self, source):
     self._apply_initial_schema()
     
     self._setUp_tablets_shard_2()
@@ -276,7 +259,7 @@ class TestSchema(unittest.TestCase):
     self._check_db_not_created(shard_2_replica1)
 
     utils.run_vtctl(['CopySchemaShard',
-                     'test_keyspace/0',
+                     source,
                      'test_keyspace/2'],
                     auto_log=True)
 
