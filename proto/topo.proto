@@ -42,7 +42,7 @@ message TabletAlias {
 // TabletType represents the type of a given tablet.
 enum TabletType {
   option allow_alias = true; // so we can have RDONLY and BATCH co-exist
-  UNKNOW = 0;                // not a valid value
+  UNKNOWN = 0;               // not a valid value
   IDLE = 1;
   MASTER = 2;
   REPLICA = 3;
