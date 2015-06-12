@@ -155,27 +155,9 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	}
 	cmd := exec.Command(name, args...)
 	cmd.Env = []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil
-	}
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			log.Infof("mysql_upgrade stderr: %v", scanner.Text())
-		}
-	}()
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			log.Infof("mysql_upgrade stdout: %v", scanner.Text())
-		}
-	}()
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	log.Infof("mysql_upgrade output: %s", out)
+	return err
 }
 
 // Start will start the mysql daemon, either by running the 'mysqld_start'
