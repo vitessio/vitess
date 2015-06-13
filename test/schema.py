@@ -243,10 +243,10 @@ class TestSchema(unittest.TestCase):
     utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', test_keyspace])
     
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
-    self._test_vtctl_copyschema_shard(shard_0_master.tablet_alias)
+    self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
 
   def test_vtctl_copyschemashard_use_shard_as_source(self):
-    self._test_vtctl_copyschema_shard('test_keyspace/0')
+    self._test_vtctl_copyschemashard('test_keyspace/0')
 
   def _test_vtctl_copyschemashard(self, source):
     self._apply_initial_schema()
