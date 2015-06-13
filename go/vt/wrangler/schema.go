@@ -424,7 +424,7 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 	if err != nil {
 		return err
 	}
-	
+
 	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard)
 }
 
@@ -432,21 +432,33 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
-	sd, err := wr.GetSchema(ctx, srcTabletAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return err
-	}
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
 	}
+
+	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return err
+	}
+	destSd, err := wr.GetSchema(ctx, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		destSd = nil
+	}
+	if destSd != nil {
+		diffs := myproto.DiffSchemaToArray("source", sourceSd, "dest", destSd)
+		if diffs == nil {
+			// Return early because dest has already the same schema as source.
+			return nil
+		}
+	}
+
+	createSql := sourceSd.ToSQLStrings()
 	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}
-	createSql := sd.ToSQLStrings()
-
 	for i, sqlLine := range createSql {
 		err = wr.applySqlShard(ctx, destTabletInfo, sqlLine, i == len(createSql)-1)
 		if err != nil {
