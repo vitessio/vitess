@@ -66,7 +66,8 @@ type Test struct {
 
 // run executes a single try.
 // dir is the location of the vitess repo to use.
-func (t *Test) run(dir string) error {
+// try is the number of the attempt.
+func (t *Test) run(dir string, try int) error {
 	// Teardown is unnecessary since Docker kills everything.
 	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
 	if *extraArgs != "" {
@@ -98,7 +99,14 @@ func (t *Test) run(dir string) error {
 	// Save test output.
 	if err != nil || *logPass {
 		outDir := path.Join("_test", *flavor)
-		outFile := path.Join(outDir, t.Name+".log")
+		var suffix string
+		if t.runIndex > 1 {
+			suffix += fmt.Sprintf("_run_%v", t.runIndex)
+		}
+		if try > 1 {
+			suffix += fmt.Sprintf("_try_%v", try)
+		}
+		outFile := path.Join(outDir, t.Name+suffix+".log")
 		t.logf("saving test output to %v", outFile)
 		if dirErr := os.MkdirAll(outDir, os.FileMode(0755)); dirErr != nil {
 			t.logf("Mkdir error: %v", dirErr)
@@ -249,7 +257,7 @@ func main() {
 					test.logf("running (try %v/%v)...", try, *retryMax)
 				}
 				start := time.Now()
-				if err := test.run(tmpDir); err != nil {
+				if err := test.run(tmpDir, try); err != nil {
 					// This try failed.
 					test.logf("FAILED (try %v/%v): %v", try, *retryMax, err)
 					continue
