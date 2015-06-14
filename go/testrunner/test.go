@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -39,10 +40,11 @@ import (
 
 // Flags
 var (
-	flavor   = flag.String("flavor", "mariadb", "bootstrap flavor to run against")
-	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
-	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
-	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
+	flavor             = flag.String("flavor", "mariadb", "bootstrap flavor to run against")
+	retryMax           = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
+	logPass            = flag.Bool("log-pass", false, "log test output even if it passes")
+	timeout            = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
+	filterTestsPattern = flag.String("test", "", "run only tests matching this shell pattern (off by default)")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
@@ -119,6 +121,29 @@ func (t *Test) logf(format string, v ...interface{}) {
 	log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
 }
 
+// filterConfig filters out tests which do not have a matching 'Name' or 'File' field.
+// The pattern can be a shell pattern e.g. * and ? are supported.
+func filterConfig(config Config, filterTestsPattern string) Config {
+	if filterTestsPattern == "" {
+		return config
+	}
+
+	filteredConfig := Config{}
+	for _, test := range config.Tests {
+		for _, text := range []string{test.Name, test.File} {
+			matched, err := filepath.Match(filterTestsPattern, text)
+			if err != nil {
+				log.Fatalf("Invalid filter pattern: %v Error: %v", filterTestsPattern, err)
+			}
+			if matched {
+				filteredConfig.Tests = append(filteredConfig.Tests, test)
+				break
+			}
+		}
+	}
+	return filteredConfig
+}
+
 func main() {
 	flag.Parse()
 
@@ -131,6 +156,17 @@ func main() {
 	if err := json.Unmarshal(configData, &config); err != nil {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
+	if len(config.Tests) == 0 {
+		log.Fatalf("Config file contains no tests.")
+	}
+	filteredConfig := filterConfig(config, *filterTestsPattern)
+	if len(filteredConfig.Tests) == 0 {
+		log.Fatalf("All tests were filtered out. Pattern is too restrictive.")
+	}
+	if len(filteredConfig.Tests) < len(config.Tests) {
+		log.Printf("Running filtered subset of %v test(s) (out of %v).", len(filteredConfig.Tests), len(config.Tests))
+	}
+	config = filteredConfig
 	log.Printf("Bootstrap flavor: %v", *flavor)
 
 	// Copy working repo to tmpDir.
