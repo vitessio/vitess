@@ -3,8 +3,6 @@
 import logging
 import unittest
 import os
-import sys
-import time
 
 import environment
 import utils
@@ -126,24 +124,23 @@ class TestSchema(unittest.TestCase):
     # Broadly catch all exceptions, since the exception being raised is internal to MySQL.
     # We're strictly checking the error message though, so should be fine.
     with self.assertRaisesRegexp(Exception, '(1049, "Unknown database \'%s\'")' % db_name):
-      tables = tablet.mquery(db_name, 'show tables')
+      tablet.mquery(db_name, 'show tables')
 
   def _apply_schema(self, keyspace, sql):
-    out, err  = utils.run_vtctl(['ApplySchema',
-                                 '-sql='+sql,
-                                 keyspace],
-                                 trap_output=True,
-                                 log_level='INFO',
-                                 raise_on_error=True)
-
+    out, _  = utils.run_vtctl(['ApplySchema',
+                               '-sql='+sql,
+                               keyspace],
+                               trap_output=True,
+                               log_level='INFO',
+                               raise_on_error=True)
     return out
 
   def _get_schema(self, tablet_alias):
-    out, err = utils.run_vtctl(['GetSchema',
-                                tablet_alias],
-                                trap_output=True,
-                                log_level='INFO',
-                                raise_on_error=True)
+    out, _ = utils.run_vtctl(['GetSchema',
+                              tablet_alias],
+                              trap_output=True,
+                              log_level='INFO',
+                              raise_on_error=True)
     return out
 
   def _create_test_table_sql(self, table):
@@ -168,10 +165,6 @@ class TestSchema(unittest.TestCase):
       self._create_test_table_sql('vt_select_test03'),
       self._create_test_table_sql('vt_select_test04')])
 
-    tables = ','.join([
-      'vt_select_test01', 'vt_select_test02',
-      'vt_select_test03', 'vt_select_test04'])
-
     # apply schema changes to the test keyspace
     self._apply_schema(test_keyspace, schema_changes)
 
@@ -186,10 +179,8 @@ class TestSchema(unittest.TestCase):
     # all shards should have the same schema
     self.assertEqual(shard_0_schema, shard_1_schema)
 
-    return tables
-
   def test_schema_changes(self):
-    tables = self._apply_initial_schema()
+    self._apply_initial_schema()
 
     self._apply_schema(test_keyspace, self._alter_test_table_sql('vt_select_test03', 'msg'))
 
