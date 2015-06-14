@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -71,7 +72,8 @@ type Test struct {
 
 // run executes a single try.
 // dir is the location of the vitess repo to use.
-func (t *Test) run(dir string) error {
+// returns the combined stdout+stderr and error.
+func (t *Test) run(dir string) ([]byte, error) {
 	// Teardown is unnecessary since Docker kills everything.
 	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
 	if *extraArgs != "" {
@@ -97,22 +99,8 @@ func (t *Test) run(dir string) error {
 	}()
 
 	// Run the test.
-	output, err := dockerCmd.CombinedOutput()
-	close(done)
-
-	// Save test output.
-	if err != nil || *logPass {
-		outDir := path.Join("_test", *flavor)
-		outFile := path.Join(outDir, t.Name+".log")
-		t.logf("saving test output to %v", outFile)
-		if dirErr := os.MkdirAll(outDir, os.FileMode(0755)); dirErr != nil {
-			t.logf("Mkdir error: %v", dirErr)
-		}
-		if fileErr := ioutil.WriteFile(outFile, output, os.FileMode(0644)); fileErr != nil {
-			t.logf("WriteFile error: %v", fileErr)
-		}
-	}
-	return err
+	defer close(done)
+	return dockerCmd.CombinedOutput()
 }
 
 // stop will terminate the test if it's running.
@@ -142,6 +130,18 @@ func main() {
 	flag.Parse()
 
 	startTime := time.Now()
+
+	// Make output directory.
+	outDir := path.Join("_test", fmt.Sprintf("%v.%v.%v", *flavor, startTime.Format("20060102-150405"), os.Getpid()))
+	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
+		log.Fatalf("Can't create output directory: %v", err)
+	}
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatalf("Can't create log file: %v", err)
+	}
+	log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+	log.Printf("Output directory: %v", outDir)
 
 	// Get test configs.
 	configData, err := ioutil.ReadFile("test/config.json")
@@ -243,7 +243,18 @@ func main() {
 
 				test.logf("running (try %v/%v)...", try, *retryMax)
 				start := time.Now()
-				if err := test.run(tmpDir); err != nil {
+				output, err := test.run(tmpDir)
+
+				// Save test output.
+				if err != nil || *logPass {
+					outFile := fmt.Sprintf("%v-%v.%v.log", test.Name, test.runIndex+1, try)
+					test.logf("saving test output to %v", outFile)
+					if fileErr := ioutil.WriteFile(path.Join(outDir, outFile), output, os.FileMode(0644)); fileErr != nil {
+						test.logf("WriteFile error: %v", fileErr)
+					}
+				}
+
+				if err != nil {
 					// This try failed.
 					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, time.Since(start), err)
 					continue
