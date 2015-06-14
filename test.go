@@ -65,7 +65,8 @@ type Config struct {
 type Test struct {
 	Name, File, Args string
 
-	cmd *exec.Cmd
+	cmd      *exec.Cmd
+	runIndex int
 }
 
 // run executes a single try.
@@ -125,7 +126,11 @@ func (t *Test) stop() {
 }
 
 func (t *Test) logf(format string, v ...interface{}) {
-	log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
+	if *runCount > 1 {
+		log.Printf("%v[%v/%v]: %v", t.Name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
+	} else {
+		log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
+	}
 }
 
 func main() {
@@ -159,23 +164,33 @@ func main() {
 				log.Fatalf("Unknown test: %v", name)
 			}
 			t.Name = name
-			for i := 0; i < *runCount; i++ {
-				tests = append(tests, t)
-			}
+			tests = append(tests, t)
 		}
 	} else {
 		var names []string
-		for n := range config.Tests {
-			names = append(names, n)
+		for name := range config.Tests {
+			names = append(names, name)
 		}
 		sort.Strings(names)
-		for _, n := range names {
-			t := config.Tests[n]
-			t.Name = n
+		for _, name := range names {
+			t := config.Tests[name]
+			t.Name = name
+			tests = append(tests, t)
+		}
+	}
+
+	// Duplicate tests.
+	if *runCount > 1 {
+		var dup []*Test
+		for _, t := range tests {
 			for i := 0; i < *runCount; i++ {
-				tests = append(tests, t)
+				// Make a copy, since they're pointers.
+				test := *t
+				test.runIndex = i
+				dup = append(dup, &test)
 			}
 		}
+		tests = dup
 	}
 
 	// Copy working repo to tmpDir.
@@ -256,7 +271,7 @@ func main() {
 		close(stop)
 		<-done
 		// Terminate all existing tests.
-		for _, t := range config.Tests {
+		for _, t := range tests {
 			t.stop()
 		}
 	case <-done:
