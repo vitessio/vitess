@@ -45,6 +45,7 @@ var (
 	logPass            = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout            = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
 	filterTestsPattern = flag.String("test", "", "run only tests matching this shell pattern (off by default)")
+	runsPerTest        = flag.Int("runs_per_test", 1, "number of times each test will be executed")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
@@ -59,6 +60,8 @@ type Test struct {
 	Name, File, Args string
 
 	cmd *exec.Cmd
+	// If the test is run multiple times, index of this run.
+	runIndex int
 }
 
 // run executes a single try.
@@ -144,6 +147,22 @@ func filterConfig(config Config, filterTestsPattern string) Config {
 	return filteredConfig
 }
 
+func duplicateTestsForMultipleRuns(config Config, runsPerTest int) Config {
+	if runsPerTest == 1 {
+		return config
+	}
+
+	duplicatedTests := Config{}
+	for _, test := range config.Tests {
+		for run := 1; run <= runsPerTest; run++ {
+			testCopy := test
+			testCopy.runIndex = run
+			duplicatedTests.Tests = append(duplicatedTests.Tests, testCopy)
+		}
+	}
+	return duplicatedTests
+}
+
 func main() {
 	flag.Parse()
 
@@ -166,7 +185,10 @@ func main() {
 	if len(filteredConfig.Tests) < len(config.Tests) {
 		log.Printf("Running filtered subset of %v test(s) (out of %v).", len(filteredConfig.Tests), len(config.Tests))
 	}
-	config = filteredConfig
+	config = duplicateTestsForMultipleRuns(filteredConfig, *runsPerTest)
+	if *runsPerTest > 1 {
+		log.Printf("Each test will be run %v times.", *runsPerTest)
+	}
 	log.Printf("Bootstrap flavor: %v", *flavor)
 
 	// Copy working repo to tmpDir.
@@ -221,7 +243,11 @@ func main() {
 					break
 				}
 
-				test.logf("running (try %v/%v)...", try, *retryMax)
+				if test.runIndex != 0 {
+					test.logf("running (try %v/%v) (run %v/%v)...", try, *retryMax, test.runIndex, *runsPerTest)
+				} else {
+					test.logf("running (try %v/%v)...", try, *retryMax)
+				}
 				start := time.Now()
 				if err := test.run(tmpDir); err != nil {
 					// This try failed.
