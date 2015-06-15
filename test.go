@@ -26,20 +26,30 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path"
-	"strings"
+	"sort"
 	"syscall"
 	"time"
 )
 
+var usage = `Usage of test.go:
+
+go run test.go [options] [test_name ...]
+
+If one or more test names are provided, run only those tests.
+Otherwise, run all tests in test/config.json.
+`
+
 // Flags
 var (
 	flavor   = flag.String("flavor", "mariadb", "bootstrap flavor to run against")
+	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
@@ -49,19 +59,21 @@ var (
 
 // Config is the overall object serialized in test/config.json.
 type Config struct {
-	Tests []*Test
+	Tests map[string]*Test
 }
 
 // Test is an entry from the test/config.json file.
 type Test struct {
 	Name, File, Args string
 
-	cmd *exec.Cmd
+	cmd      *exec.Cmd
+	runIndex int
 }
 
 // run executes a single try.
 // dir is the location of the vitess repo to use.
-func (t *Test) run(dir string) error {
+// returns the combined stdout+stderr and error.
+func (t *Test) run(dir string) ([]byte, error) {
 	// Teardown is unnecessary since Docker kills everything.
 	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
 	if *extraArgs != "" {
@@ -87,22 +99,8 @@ func (t *Test) run(dir string) error {
 	}()
 
 	// Run the test.
-	output, err := dockerCmd.CombinedOutput()
-	close(done)
-
-	// Save test output.
-	if err != nil || *logPass {
-		outDir := path.Join("_test", *flavor)
-		outFile := path.Join(outDir, t.Name+".log")
-		t.logf("saving test output to %v", outFile)
-		if dirErr := os.MkdirAll(outDir, os.FileMode(0755)); dirErr != nil {
-			t.logf("Mkdir error: %v", dirErr)
-		}
-		if fileErr := ioutil.WriteFile(outFile, output, os.FileMode(0644)); fileErr != nil {
-			t.logf("WriteFile error: %v", fileErr)
-		}
-	}
-	return err
+	defer close(done)
+	return dockerCmd.CombinedOutput()
 }
 
 // stop will terminate the test if it's running.
@@ -116,11 +114,34 @@ func (t *Test) stop() {
 }
 
 func (t *Test) logf(format string, v ...interface{}) {
-	log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
+	if *runCount > 1 {
+		log.Printf("%v[%v/%v]: %v", t.Name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
+	} else {
+		log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
+	}
 }
 
 func main() {
+	flag.Usage = func() {
+		os.Stderr.WriteString(usage)
+		os.Stderr.WriteString("\nOptions:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
+
+	startTime := time.Now()
+
+	// Make output directory.
+	outDir := path.Join("_test", fmt.Sprintf("%v.%v.%v", *flavor, startTime.Format("20060102-150405"), os.Getpid()))
+	if err := os.MkdirAll(outDir, os.FileMode(0755)); err != nil {
+		log.Fatalf("Can't create output directory: %v", err)
+	}
+	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatalf("Can't create log file: %v", err)
+	}
+	log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+	log.Printf("Output directory: %v", outDir)
 
 	// Get test configs.
 	configData, err := ioutil.ReadFile("test/config.json")
@@ -132,6 +153,45 @@ func main() {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
 	log.Printf("Bootstrap flavor: %v", *flavor)
+
+	// Positional args specify which tests to run.
+	// If none specified, run all tests in alphabetical order.
+	var tests []*Test
+	if flag.NArg() > 0 {
+		for _, name := range flag.Args() {
+			t, ok := config.Tests[name]
+			if !ok {
+				log.Fatalf("Unknown test: %v", name)
+			}
+			t.Name = name
+			tests = append(tests, t)
+		}
+	} else {
+		var names []string
+		for name := range config.Tests {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			t := config.Tests[name]
+			t.Name = name
+			tests = append(tests, t)
+		}
+	}
+
+	// Duplicate tests.
+	if *runCount > 1 {
+		var dup []*Test
+		for _, t := range tests {
+			for i := 0; i < *runCount; i++ {
+				// Make a copy, since they're pointers.
+				test := *t
+				test.runIndex = i
+				dup = append(dup, &test)
+			}
+		}
+		tests = dup
+	}
 
 	// Copy working repo to tmpDir.
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "vt_")
@@ -165,11 +225,7 @@ func main() {
 			close(done)
 		}()
 
-		for _, test := range config.Tests {
-			if test.Name == "" {
-				test.Name = strings.TrimSuffix(test.File, ".py")
-			}
-
+		for _, test := range tests {
 			for try := 1; ; try++ {
 				select {
 				case <-stop:
@@ -187,9 +243,20 @@ func main() {
 
 				test.logf("running (try %v/%v)...", try, *retryMax)
 				start := time.Now()
-				if err := test.run(tmpDir); err != nil {
+				output, err := test.run(tmpDir)
+
+				// Save test output.
+				if err != nil || *logPass {
+					outFile := fmt.Sprintf("%v-%v.%v.log", test.Name, test.runIndex+1, try)
+					test.logf("saving test output to %v", outFile)
+					if fileErr := ioutil.WriteFile(path.Join(outDir, outFile), output, os.FileMode(0644)); fileErr != nil {
+						test.logf("WriteFile error: %v", fileErr)
+					}
+				}
+
+				if err != nil {
 					// This try failed.
-					test.logf("FAILED (try %v/%v): %v", try, *retryMax, err)
+					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, time.Since(start), err)
 					continue
 				}
 
@@ -199,7 +266,7 @@ func main() {
 					passed++
 				} else {
 					// Passed, but not on the first try.
-					test.logf("FLAKY (1/%v passed)", try)
+					test.logf("FLAKY (1/%v passed in %v)", try, time.Since(start))
 					flaky++
 				}
 				break
@@ -215,7 +282,7 @@ func main() {
 		close(stop)
 		<-done
 		// Terminate all existing tests.
-		for _, t := range config.Tests {
+		for _, t := range tests {
 			t.stop()
 		}
 	case <-done:
@@ -228,8 +295,9 @@ func main() {
 	}
 
 	// Print stats.
-	skipped := len(config.Tests) - passed - flaky - failed
+	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
+	log.Printf("Total time: %v", time.Since(startTime))
 
 	if failed > 0 || skipped > 0 {
 		os.Exit(1)
