@@ -229,6 +229,32 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 	return txInfo.TransactionId, tabletError(err)
 }
 
+// Begin2 should not be used for anything except tests for now;
+// it will eventually replace the existing Commit.
+// Begin2 starts a transaction.
+func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return 0, tabletconn.ConnClosed
+	}
+
+	beginRequest := &tproto.BeginRequest{
+		SessionId: conn.sessionID,
+	}
+	beginResponse := new(tproto.BeginResponse)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Begin2", beginRequest, beginResponse)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Begin might return an application error inside the TransactionInfo
+		return vterrors.FromRPCError(beginResponse.Err)
+	}
+	err = conn.withTimeout(ctx, action)
+	return beginResponse.TransactionId, tabletError(err)
+}
+
 // Commit commits the ongoing transaction.
 func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
@@ -248,10 +274,10 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	return tabletError(err)
 }
 
-// UnsupportedNewCommit should not be used for anything except tests for now;
+// Commit2 should not be used for anything except tests for now;
 // it will eventually replace the existing Commit.
-// UnsupportedNewCommit commits the ongoing transaction.
-func (conn *TabletBson) UnsupportedNewCommit(ctx context.Context, transactionID int64) error {
+// Commit2 commits the ongoing transaction.
+func (conn *TabletBson) Commit2(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -264,7 +290,7 @@ func (conn *TabletBson) UnsupportedNewCommit(ctx context.Context, transactionID 
 	}
 	commitResponse := new(tproto.CommitResponse)
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewCommit", commitRequest, commitResponse)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Commit2", commitRequest, commitResponse)
 		if err != nil {
 			return err
 		}
@@ -294,10 +320,10 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 	return tabletError(err)
 }
 
-// UnsupportedNewRollback should not be used for anything except tests for now;
+// Rollback2 should not be used for anything except tests for now;
 // it will eventually replace the existing Rollback.
-// UnsupportedNewRollback rolls back the ongoing transaction.
-func (conn *TabletBson) UnsupportedNewRollback(ctx context.Context, transactionID int64) error {
+// Rollback2 rolls back the ongoing transaction.
+func (conn *TabletBson) Rollback2(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -310,7 +336,7 @@ func (conn *TabletBson) UnsupportedNewRollback(ctx context.Context, transactionI
 	}
 	rollbackResponse := new(tproto.RollbackResponse)
 	action := func() error {
-		err := conn.rpcClient.Call(ctx, "SqlQuery.UnsupportedNewRollback", rollbackRequest, rollbackResponse)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Rollback2", rollbackRequest, rollbackResponse)
 		if err != nil {
 			return err
 		}

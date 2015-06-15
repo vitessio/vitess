@@ -282,6 +282,15 @@ func AddTabletErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) 
 	reply.Err = rpcErrFromTabletError(err)
 }
 
+// AddTabletErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
+// field with details from the TabletError.
+func AddTabletErrorToBeginResponse(err error, reply *proto.BeginResponse) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromTabletError(err)
+}
+
 // AddTabletErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
 // field with details from the TabletError.
 func AddTabletErrorToCommitResponse(err error, reply *proto.CommitResponse) {

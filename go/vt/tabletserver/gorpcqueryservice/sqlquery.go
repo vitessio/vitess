@@ -42,10 +42,35 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	return tErr
 }
 
-// UnsupportedNewCommit should not be used by anything other than tests.
+// Begin2 should not be used by anything other than tests.
+// It will eventually replace Begin, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) Begin2(ctx context.Context, beginRequest *proto.BeginRequest, beginResponse *proto.BeginResponse) (err error) {
+	defer sq.server.HandlePanic(&err)
+	session := &proto.Session{
+		SessionId: beginRequest.SessionId,
+	}
+	txInfo := new(proto.TransactionInfo)
+	tErr := sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), session, txInfo)
+	// Convert from TxInfo => beginResponse for the output
+	beginResponse.TransactionId = txInfo.TransactionId
+	tabletserver.AddTabletErrorToBeginResponse(tErr, beginResponse)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
+// Commit is exposing tabletserver.SqlQuery.Commit
+func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
+	defer sq.server.HandlePanic(&err)
+	return sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
+}
+
+// Commit2 should not be used by anything other than tests.
 // It will eventually replace Commit, but it breaks compatibility with older clients.
 // Once all clients are upgraded, it can be replaced.
-func (sq *SqlQuery) UnsupportedNewCommit(ctx context.Context, commitRequest *proto.CommitRequest, commitResponse *proto.CommitResponse) (err error) {
+func (sq *SqlQuery) Commit2(ctx context.Context, commitRequest *proto.CommitRequest, commitResponse *proto.CommitResponse) (err error) {
 	defer sq.server.HandlePanic(&err)
 	session := &proto.Session{
 		SessionId:     commitRequest.SessionId,
@@ -59,16 +84,16 @@ func (sq *SqlQuery) UnsupportedNewCommit(ctx context.Context, commitRequest *pro
 	return tErr
 }
 
-// Commit is exposing tabletserver.SqlQuery.Commit
-func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
+// Rollback is exposing tabletserver.SqlQuery.Rollback
+func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
 	defer sq.server.HandlePanic(&err)
-	return sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
+	return sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
-// UnsupportedNewRollback should not be used by anything other than tests.
+// Rollback2 should not be used by anything other than tests.
 // It will eventually replace Rollback, but it breaks compatibility with older clients.
 // Once all clients are upgraded, it can be replaced.
-func (sq *SqlQuery) UnsupportedNewRollback(ctx context.Context, rollbackRequest *proto.RollbackRequest, rollbackResponse *proto.RollbackResponse) (err error) {
+func (sq *SqlQuery) Rollback2(ctx context.Context, rollbackRequest *proto.RollbackRequest, rollbackResponse *proto.RollbackResponse) (err error) {
 	defer sq.server.HandlePanic(&err)
 	session := &proto.Session{
 		SessionId:     rollbackRequest.SessionId,
@@ -80,12 +105,6 @@ func (sq *SqlQuery) UnsupportedNewRollback(ctx context.Context, rollbackRequest 
 		return nil
 	}
 	return tErr
-}
-
-// Rollback is exposing tabletserver.SqlQuery.Rollback
-func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session, noOutput *rpc.Unused) (err error) {
-	defer sq.server.HandlePanic(&err)
-	return sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 }
 
 // Execute is exposing tabletserver.SqlQuery.Execute

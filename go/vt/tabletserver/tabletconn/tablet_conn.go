@@ -78,8 +78,9 @@ type TabletConn interface {
 
 	// These should not be used for anything except tests for now; they will eventually
 	// replace the existing methods.
-	UnsupportedNewCommit(context context.Context, transactionId int64) error
-	UnsupportedNewRollback(context context.Context, transactionId int64) error
+	Begin2(context context.Context) (transactionId int64, err error)
+	Commit2(context context.Context, transactionId int64) error
+	Rollback2(context context.Context, transactionId int64) error
 
 	// Close must be called for releasing resources.
 	Close()

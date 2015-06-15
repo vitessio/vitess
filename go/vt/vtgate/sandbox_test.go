@@ -446,6 +446,10 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	return sbc.TransactionID.Add(1), nil
 }
 
+func (sbc *sandboxConn) Begin2(ctx context.Context) (int64, error) {
+	return sbc.Begin(ctx)
+}
+
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
@@ -455,7 +459,7 @@ func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) UnsupportedNewCommit(ctx context.Context, transactionID int64) error {
+func (sbc *sandboxConn) Commit2(ctx context.Context, transactionID int64) error {
 	return sbc.Commit(ctx, transactionID)
 }
 
@@ -468,7 +472,7 @@ func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) UnsupportedNewRollback(ctx context.Context, transactionID int64) error {
+func (sbc *sandboxConn) Rollback2(ctx context.Context, transactionID int64) error {
 	return sbc.Rollback(ctx, transactionID)
 }
 

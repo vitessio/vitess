@@ -111,6 +111,38 @@ func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testBegin2")
+	ctx := context.Background()
+	transactionId, err := conn.Begin2(ctx)
+	if err != nil {
+		t.Fatalf("Begin2 failed: %v", err)
+	}
+	if transactionId != beginTransactionId {
+		t.Errorf("Unexpected result from Begin2: got %v wanted %v", transactionId, beginTransactionId)
+	}
+}
+
+func testBegin2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testBegin2Error")
+	ctx := context.Background()
+	_, err := conn.Begin2(ctx)
+	if err == nil {
+		t.Fatalf("Begin2 was expecting an error, didn't get one")
+	}
+	if err.Error() != expectedErr {
+		t.Errorf("Unexpected error from Begin2: got %v wanted %v", err, expectedErr)
+	}
+}
+
+func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testBegin2Panics")
+	ctx := context.Background()
+	if _, err := conn.Begin2(ctx); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // Commit is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Commit(ctx context.Context, session *proto.Session) error {
 	if f.hasError {
@@ -144,7 +176,7 @@ func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	var err error
 	if *tabletserver.RPCErrorOnlyInReply {
-		err = conn.UnsupportedNewCommit(ctx, commitTransactionId)
+		err = conn.Commit2(ctx, commitTransactionId)
 	} else {
 		err = conn.Commit(ctx, commitTransactionId)
 	}
@@ -197,7 +229,7 @@ func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
 	var err error
 	if *tabletserver.RPCErrorOnlyInReply {
-		err = conn.UnsupportedNewRollback(ctx, commitTransactionId)
+		err = conn.Rollback2(ctx, commitTransactionId)
 	} else {
 		err = conn.Rollback(ctx, commitTransactionId)
 	}
@@ -674,6 +706,7 @@ func CreateFakeServer(t *testing.T) *FakeQueryService {
 // TestSuite runs all the tests
 func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	testBegin(t, conn)
+	testBegin2(t, conn)
 	testCommit(t, conn)
 	testRollback(t, conn)
 	testExecute(t, conn)
@@ -684,6 +717,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	// fake should return an error, make sure errors are handled properly
 	fake.hasError = true
 	testBeginError(t, conn)
+	testBegin2Error(t, conn)
 	testCommitError(t, conn)
 	testRollbackError(t, conn)
 	testExecuteError(t, conn)
@@ -695,6 +729,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	// force panics, make sure they're caught
 	fake.panics = true
 	testBeginPanics(t, conn)
+	testBegin2Panics(t, conn)
 	testCommitPanics(t, conn)
 	testRollbackPanics(t, conn)
 	testExecutePanics(t, conn)

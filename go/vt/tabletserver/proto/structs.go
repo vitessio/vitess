@@ -192,3 +192,22 @@ type RollbackResponse struct {
 	// consistent with other BSON structs.
 	Err *mproto.RPCError
 }
+
+// BeginRequest is the BSON implementation of the proto3 query.BeginkRequest
+type BeginRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// BeginResponse is the BSON implementation of the proto3 query.BeginResponse
+type BeginResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err           *mproto.RPCError
+	TransactionId int64
+}
