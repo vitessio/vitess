@@ -9,9 +9,9 @@ source $script_root/env.sh
 
 VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 
-echo "Stopping vtgate replicationController..."
 for uid in `seq 1 $VTGATE_REPLICAS`; do
-  $KUBECTL stop replicationController vtgate-$uid
+  echo "Deleting pod for vtgate ${uid}..."
+  $KUBECTL delete pod vtgate-$uid
 done
 
 echo "Deleting vtgate service..."

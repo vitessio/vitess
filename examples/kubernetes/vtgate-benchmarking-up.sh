@@ -11,9 +11,9 @@ VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 STARTING_INDEX=${STARTING_INDEX:--1}
 
-vtdataroot_volume='{emptyDir: {}}'
+vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
-  vtdataroot_volume="{hostDir: {path: ${VTDATAROOT_VOLUME}}}"
+  vtdataroot_volume="hostDir: {path: ${VTDATAROOT_VOLUME}}"
 fi
 
 echo "Creating vtgate service..."
