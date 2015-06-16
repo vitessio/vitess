@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -263,7 +262,6 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 	if ok {
 		defer q.Broadcast()
 		conn, endPoint, isTimeout, err := sdc.getNewConn(ctx)
-		log.Infof("Connecting to end point: %v", endPoint)
 		q.Result = &connectResult{Conn: conn, EndPoint: endPoint, IsTimeout: isTimeout}
 		q.Err = err
 	} else {
