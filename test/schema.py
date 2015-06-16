@@ -20,6 +20,7 @@ shard_2_replica1 = tablet.Tablet()
 # shard_2 tablets are not used by all tests and not included by default.
 tablets = [shard_0_master, shard_0_replica1, shard_0_replica2, shard_0_rdonly, shard_0_backup,
            shard_1_master, shard_1_replica1]
+tablets_shard2 = [shard_2_master, shard_2_replica1]
 test_keyspace = 'test_keyspace'
 db_name = 'vt_' + test_keyspace
 
@@ -113,6 +114,14 @@ class TestSchema(unittest.TestCase):
     # databases without restarting the tablets.
     for t in tablets:
       t.clean_dbs()
+    # Tablets from shard 2 are always started during the test. Shut them down now.
+    if shard_2_master in tablets:
+      for t in tablets_shard2:
+        t.scrap(force=True, skip_rebuild=True)
+        utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
+        t.kill_vttablet()
+        tablets.remove(t)
+      utils.run_vtctl(['DeleteShard', 'test_keyspace/2'], auto_log=True)
 
   def _check_tables(self, tablet, expectedCount):
     tables = tablet.mquery(db_name, 'show tables')
@@ -210,7 +219,6 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_1_master, 5)
 
   def _setUp_tablets_shard_2(self):
-    tablets_shard2 = [shard_2_master, shard_2_replica1]
     try:
       _init_mysql(tablets_shard2)
     finally:
@@ -233,7 +241,13 @@ class TestSchema(unittest.TestCase):
                      shard_2_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', test_keyspace])
     
-  def test_vtctl_copyschemashard(self):
+  def test_vtctl_copyschemashard_use_tablet_as_source(self):
+    self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
+
+  def test_vtctl_copyschemashard_use_shard_as_source(self):
+    self._test_vtctl_copyschemashard('test_keyspace/0')
+
+  def _test_vtctl_copyschemashard(self, source):
     self._apply_initial_schema()
     
     self._setUp_tablets_shard_2()
@@ -243,18 +257,20 @@ class TestSchema(unittest.TestCase):
     self._check_db_not_created(shard_2_master)
     self._check_db_not_created(shard_2_replica1)
 
-    utils.run_vtctl(['CopySchemaShard',
-                     shard_0_master.tablet_alias,
-                     'test_keyspace/2'],
-                    auto_log=True)
-
-    # shard_2_master should look the same as the replica we copied from
-    self._check_tables(shard_2_master, 4)
-    utils.wait_for_replication_pos(shard_2_master, shard_2_replica1)
-    self._check_tables(shard_2_replica1, 4)
-    shard_0_schema = self._get_schema(shard_0_master.tablet_alias)
-    shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
-    self.assertEqual(shard_0_schema, shard_2_schema)
+    # Run the command twice to make sure it's idempotent.
+    for _ in range(2):
+      utils.run_vtctl(['CopySchemaShard',
+                       source,
+                       'test_keyspace/2'],
+                      auto_log=True)
+  
+      # shard_2_master should look the same as the replica we copied from
+      self._check_tables(shard_2_master, 4)
+      utils.wait_for_replication_pos(shard_2_master, shard_2_replica1)
+      self._check_tables(shard_2_replica1, 4)
+      shard_0_schema = self._get_schema(shard_0_master.tablet_alias)
+      shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
+      self.assertEqual(shard_0_schema, shard_2_schema)
 
 if __name__ == '__main__':
   utils.main()

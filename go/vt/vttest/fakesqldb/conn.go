@@ -36,7 +36,7 @@ type DB struct {
 	mu           sync.Mutex
 }
 
-// AddQuery adds a query and its exptected result.
+// AddQuery adds a query and its expected result.
 func (db *DB) AddQuery(query string, expectedResult *proto.QueryResult) {
 	result := &proto.QueryResult{}
 	*result = *expectedResult
