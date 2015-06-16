@@ -41,7 +41,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	client, err := DialTablet(ctx, topo.EndPoint{
 		Host: "localhost",
 		NamedPortMap: map[string]int{
-			"vt": port,
+			"grpc": port,
 		},
 	}, tabletconntest.TestKeyspace, tabletconntest.TestShard, 30*time.Second)
 	if err != nil {

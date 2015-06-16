@@ -6,6 +6,7 @@ package gorpctabletconn
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -84,7 +84,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	if er.Error != nil {
 		return nil, vterrors.FromVtRPCError(er.Error)
 	}
-	return tproto.ProtoToQueryResult(er.Result), nil
+	return tproto.Proto3ToQueryResult(er.Result), nil
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
@@ -110,13 +110,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	if ebr.Error != nil {
 		return nil, vterrors.FromVtRPCError(ebr.Error)
 	}
-	result := &tproto.QueryResultList{
-		List: make([]mproto.QueryResult, len(ebr.Results)),
-	}
-	for i, qr := range ebr.Results {
-		result.List[i] = *tproto.ProtoToQueryResult(qr)
-	}
-	return result, nil
+	return tproto.Proto3ToQueryResultList(ebr.Results), nil
 }
 
 // StreamExecute starts a streaming query to VTTablet.
@@ -127,27 +121,37 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	req := &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+	req := &pb.StreamExecuteRequest{
+		Query:     tproto.BoundQueryToProto3(query, bindVars),
+		SessionId: conn.sessionID,
+	}
+	stream, err := conn.c.StreamExecute(ctx, req)
+	if err != nil {
+		return nil, nil, err
 	}
 	sr := make(chan *mproto.QueryResult, 10)
-	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	firstResult, ok := <-sr
-	if !ok {
-		return nil, nil, tabletError(c.Error)
-	}
-	srout := make(chan *mproto.QueryResult, 1)
+	var finalError error
 	go func() {
-		defer close(srout)
-		srout <- firstResult
-		for r := range sr {
-			srout <- r
+		for {
+			ser, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF {
+					finalError = err
+				}
+				close(sr)
+				return
+			}
+			if ser.Error != nil {
+				finalError = vterrors.FromVtRPCError(ser.Error)
+				close(sr)
+				return
+			}
+			sr <- tproto.Proto3ToQueryResult(ser.Result)
 		}
 	}()
-	return srout, func() error { return tabletError(c.Error) }, nil
+	return sr, func() error {
+		return finalError
+	}, nil
 }
 
 // Begin starts a transaction.
@@ -158,15 +162,17 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		return 0, tabletconn.ConnClosed
 	}
 
-	req := &tproto.Session{
+	req := &pb.BeginRequest{
 		SessionId: conn.sessionID,
 	}
-	var txInfo tproto.TransactionInfo
-	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
+	br, err := conn.c.Begin(ctx, req)
+	if err != nil {
+		return 0, tabletError(err)
 	}
-	err = conn.withTimeout(ctx, action)
-	return txInfo.TransactionId, tabletError(err)
+	if br.Error != nil {
+		return 0, vterrors.FromVtRPCError(br.Error)
+	}
+	return br.TransactionId, nil
 }
 
 // Commit commits the ongoing transaction.
@@ -177,15 +183,18 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 		return tabletconn.ConnClosed
 	}
 
-	req := &tproto.Session{
-		SessionId:     conn.sessionID,
+	req := &pb.CommitRequest{
 		TransactionId: transactionID,
+		SessionId:     conn.sessionID,
 	}
-	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &rpc.Unused{})
+	cr, err := conn.c.Commit(ctx, req)
+	if err != nil {
+		return tabletError(err)
 	}
-	err := conn.withTimeout(ctx, action)
-	return tabletError(err)
+	if cr.Error != nil {
+		return vterrors.FromVtRPCError(cr.Error)
+	}
+	return nil
 }
 
 // Rollback rolls back the ongoing transaction.
@@ -196,15 +205,18 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		return tabletconn.ConnClosed
 	}
 
-	req := &tproto.Session{
-		SessionId:     conn.sessionID,
+	req := &pb.RollbackRequest{
 		TransactionId: transactionID,
+		SessionId:     conn.sessionID,
 	}
-	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Rollback", req, &rpc.Unused{})
+	rr, err := conn.c.Rollback(ctx, req)
+	if err != nil {
+		return tabletError(err)
 	}
-	err := conn.withTimeout(ctx, action)
-	return tabletError(err)
+	if rr.Error != nil {
+		return vterrors.FromVtRPCError(rr.Error)
+	}
+	return nil
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC
@@ -215,19 +227,20 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 		err = tabletconn.ConnClosed
 		return
 	}
-	req := &tproto.SplitQueryRequest{
-		Query:      query,
-		SplitCount: splitCount,
-		SessionID:  conn.sessionID,
+
+	req := &pb.SplitQueryRequest{
+		Query:      tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
+		SplitCount: int64(splitCount),
+		SessionId:  conn.sessionID,
 	}
-	reply := new(tproto.SplitQueryResult)
-	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply)
-	}
-	if err := conn.withTimeout(ctx, action); err != nil {
+	sqr, err := conn.c.SplitQuery(ctx, req)
+	if err != nil {
 		return nil, tabletError(err)
 	}
-	return reply.Queries, nil
+	if sqr.Error != nil {
+		return nil, vterrors.FromVtRPCError(sqr.Error)
+	}
+	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
 
 // Close closes underlying bsonrpc.
