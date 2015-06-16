@@ -1,5 +1,8 @@
 {
   "Tests": {
+		"unit": {
+			"Command": "godep go test ./go/..."
+		},
     "queryservice_vtocc": {
       "File": "queryservice_test.py",
       "Args": "-m -e vtocc"

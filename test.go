@@ -64,7 +64,7 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	Name, File, Args string
+	Name, File, Args, Command string
 
 	cmd      *exec.Cmd
 	runIndex int
@@ -74,10 +74,13 @@ type Test struct {
 // dir is the location of the vitess repo to use.
 // returns the combined stdout+stderr and error.
 func (t *Test) run(dir string) ([]byte, error) {
-	// Teardown is unnecessary since Docker kills everything.
-	testCmd := fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
-	if *extraArgs != "" {
-		testCmd += " " + *extraArgs
+	testCmd := t.Command
+	if testCmd == "" {
+		// Teardown is unnecessary since Docker kills everything.
+		testCmd = fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
+		if *extraArgs != "" {
+			testCmd += " " + *extraArgs
+		}
 	}
 	dockerCmd := exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
 	dockerCmd.Dir = dir
