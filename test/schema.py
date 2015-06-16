@@ -107,8 +107,7 @@ def tearDownModule():
 class TestSchema(unittest.TestCase):
   def setUp(self):
     for t in tablets:
-      if t != shard_2_master and t != shard_2_replica1:
-        t.create_db(db_name)
+      t.create_db(db_name)
     
   def tearDown(self):
     # This test assumes that it can reset the tablets by simply cleaning their
