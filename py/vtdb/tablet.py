@@ -278,24 +278,38 @@ class TabletConnection(object):
       raise
     return None, 0, 0, self._stream_fields
 
-  def __drain_conn_after_streaming_app_error(self):
-    """Drains the connection of all incoming streaming packets (ignoring them).
+  # we return the fields for the response, and the column conversions
+  # the conversions will need to be passed back to _stream_next
+  # (that way we avoid using a member variable here for such a corner case)
+  def _stream_execute2(self, sql, bind_variables):
+    new_binds = field_types.convert_bind_vars(bind_variables)
+    query = self._make_req()
+    query['Sql'] = sql
+    query['BindVariables'] = new_binds
+    req = {'Query': query}
 
-    This is necessary for streaming calls which return application errors inside
-    the RPC response (instead of through the usual GoRPC error return).
-    This is because GoRPC always expects the last packet to be an error; either
-    the usual GoRPC application error return, or a special "end-of-stream" error.
+    self._stream_fields = []
+    self._stream_conversions = []
+    self._stream_result = None
+    self._stream_result_index = 0
+    try:
+      self.client.stream_call('SqlQuery.StreamExecute2', req)
+      first_response = self.client.stream_next()
+      reply = first_response.reply
+      if reply.get('Err'):
+        self.__drain_conn_after_streaming_app_error()
+        raise gorpc.AppError(reply['Err'].get('Message', 'Missing error message'))
 
-    If an application error is returned with the RPC response, there will still be
-    at least one more packet coming, as GoRPC has not seen anything that it
-    considers to be an error. If the connection is not drained of this last
-    packet, future reads from the wire will be off by one and will return errors.
-    """
-    next_result = self.client.stream_next()
-    if next_result is not None:
-      self.client.close()
-      raise gorpc.GoRpcError("Connection should only have one packet remaining"
-        " after streaming app error in RPC response.")
+      for field in reply['Fields']:
+        self._stream_fields.append((field['Name'], field['Type']))
+        self._stream_conversions.append(field_types.conversions.get(field['Type']))
+    except gorpc.GoRpcError as e:
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
+    return None, 0, 0, self._stream_fields
 
   def _stream_next(self):
     # Terminating condition
@@ -326,6 +340,25 @@ class TabletConnection(object):
       self._stream_result_index = 0
 
     return row
+
+  def __drain_conn_after_streaming_app_error(self):
+    """Drains the connection of all incoming streaming packets (ignoring them).
+
+    This is necessary for streaming calls which return application errors inside
+    the RPC response (instead of through the usual GoRPC error return).
+    This is because GoRPC always expects the last packet to be an error; either
+    the usual GoRPC application error return, or a special "end-of-stream" error.
+
+    If an application error is returned with the RPC response, there will still be
+    at least one more packet coming, as GoRPC has not seen anything that it
+    considers to be an error. If the connection is not drained of this last
+    packet, future reads from the wire will be off by one and will return errors.
+    """
+    next_result = self.client.stream_next()
+    if next_result is not None:
+      self.client.close()
+      raise gorpc.GoRpcError("Connection should only have one packet remaining"
+        " after streaming app error in RPC response.")
 
 def _make_row(row, conversions):
   converted_row = []

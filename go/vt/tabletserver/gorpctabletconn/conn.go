@@ -205,6 +205,63 @@ func (conn *TabletBson) StreamExecute(ctx context.Context, query string, bindVar
 	return srout, errFunc, nil
 }
 
+// StreamExecute2 starts a streaming query to VTTablet. This differs from StreamExecute in that
+// it expects errors to be returned as part of the StreamExecute results.
+func (conn *TabletBson) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	q := &tproto.Query{
+		Sql:           query,
+		BindVariables: bindVars,
+		TransactionId: transactionID,
+		SessionId:     conn.sessionID,
+	}
+	req := &tproto.StreamExecuteRequest{Query: q}
+	// Use QueryResult instead of StreamExecuteResult for now, due to backwards compatability reasons.
+	// It'll be easuer to migrate all end-points to using StreamExecuteResult instead of
+	// maintaining a mixture of QueryResult and StreamExecuteResult channel returns.
+	sr := make(chan *mproto.QueryResult, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute2", req, sr)
+	firstResult, ok := <-sr
+	if !ok {
+		return nil, nil, tabletError(c.Error)
+	}
+	// SqlQuery.StreamExecute might return an application error inside the QueryResult
+	vtErr := vterrors.FromRPCError(firstResult.Err)
+	if vtErr != nil {
+		return nil, nil, tabletError(vtErr)
+	}
+	srout := make(chan *mproto.QueryResult, 1)
+	go func() {
+		defer close(srout)
+		srout <- firstResult
+		for r := range sr {
+			vtErr = vterrors.FromRPCError(r.Err)
+			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
+			// the server specifically to indicate an error, and we shouldn't surface it to clients.
+			if vtErr == nil {
+				srout <- r
+			}
+		}
+	}()
+	// errFunc will return either an RPC-layer error or an application error, if one exists.
+	// It will only return the most recent application error (i.e, from the QueryResult that
+	// most recently contained an error). It will prioritize an RPC-layer error over an apperror,
+	// if both exist.
+	errFunc := func() error {
+		rpcErr := tabletError(c.Error)
+		if rpcErr != nil {
+			return rpcErr
+		}
+		return tabletError(vtErr)
+	}
+	return srout, errFunc, nil
+}
+
 // Begin starts a transaction.
 func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()

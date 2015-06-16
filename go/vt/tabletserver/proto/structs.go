@@ -211,3 +211,21 @@ type BeginResponse struct {
 	Err           *mproto.RPCError
 	TransactionId int64
 }
+
+// StreamExecuteRequest is the BSON implementation of the proto3 query.StreamExecuteRequest
+type StreamExecuteRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	// Query here is of type Query instead of BoundQuery because of backwards compatibility.
+	// The proto3 interface defines the future, where we think there might not be a need for SessionID.
+	Query *Query
+}
+
+// StreamExecuteResponse is the BSON implementation of the proto3 query.StreamExecuteResponse
+type StreamExecuteResponse struct {
+	Result *mproto.QueryResult
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}

@@ -81,6 +81,7 @@ type TabletConn interface {
 	Begin2(context context.Context) (transactionId int64, err error)
 	Commit2(context context.Context, transactionId int64) error
 	Rollback2(context context.Context, transactionId int64) error
+	StreamExecute2(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Close must be called for releasing resources.
 	Close()

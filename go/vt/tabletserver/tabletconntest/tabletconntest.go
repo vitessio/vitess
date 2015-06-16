@@ -508,6 +508,112 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
+	// Make a new panicWait channel, to reset the state to the beginning of the test
+	panicWait = make(chan struct{})
+}
+
+func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testStreamExecute2")
+	ctx := context.Background()
+	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	if err != nil {
+		t.Fatalf("StreamExecute2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute2 failed: cannot read result1")
+	}
+	if len(qr.Rows) == 0 {
+		qr.Rows = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
+	}
+	qr, ok = <-stream
+	if !ok {
+		t.Fatalf("StreamExecute2 failed: cannot read result2")
+	}
+	if len(qr.Fields) == 0 {
+		qr.Fields = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult2) {
+		t.Errorf("Unexpected result2 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult2)
+	}
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecute2 channel wasn't closed")
+	}
+	if err := errFunc(); err != nil {
+		t.Fatalf("StreamExecute2 errFunc failed: %v", err)
+	}
+}
+
+func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testStreamExecute2Error")
+	ctx := context.Background()
+	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	if err != nil {
+		t.Fatalf("StreamExecute2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute2 failed: cannot read result1")
+	}
+	if len(qr.Rows) == 0 {
+		qr.Rows = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
+	}
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecute2 channel wasn't closed")
+	}
+	err = errFunc()
+	if err == nil {
+		t.Fatalf("StreamExecute2 was expecting an error, didn't get one")
+	}
+	if err.Error() != expectedErr {
+		t.Errorf("Unexpected error from StreamExecute2: got %v wanted %v", err, expectedErr)
+	}
+}
+
+func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
+	t.Log("testStreamExecute2Panics")
+	// early panic is before sending the Fields, that is returned
+	// by the StreamExecute2 call itself
+	ctx := context.Background()
+	fake.streamExecutePanicsEarly = true
+	if _, _, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+
+	// late panic is after sending Fields
+	fake.streamExecutePanicsEarly = false
+	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	if err != nil {
+		t.Fatalf("StreamExecute2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute2 failed: cannot read result1")
+	}
+	if len(qr.Rows) == 0 {
+		qr.Rows = nil
+	}
+	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
+		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
+	}
+	close(panicWait)
+	if _, ok := <-stream; ok {
+		t.Fatalf("StreamExecute2 returned more results")
+	}
+	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+	// Make a new panicWait channel, to reset the state to the beginning of the test
+	panicWait = make(chan struct{})
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
@@ -711,6 +817,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollback(t, conn)
 	testExecute(t, conn)
 	testStreamExecute(t, conn)
+	testStreamExecute2(t, conn)
 	testExecuteBatch(t, conn)
 	testSplitQuery(t, conn)
 
@@ -722,6 +829,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackError(t, conn)
 	testExecuteError(t, conn)
 	testStreamExecuteError(t, conn)
+	testStreamExecute2Error(t, conn)
 	testExecuteBatchError(t, conn)
 	testSplitQueryError(t, conn)
 	fake.hasError = false
@@ -734,6 +842,7 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackPanics(t, conn)
 	testExecutePanics(t, conn)
 	testStreamExecutePanics(t, conn, fake)
+	testStreamExecute2Panics(t, conn, fake)
 	testExecuteBatchPanics(t, conn)
 	testSplitQueryPanics(t, conn)
 }

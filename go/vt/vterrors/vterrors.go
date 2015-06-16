@@ -50,6 +50,14 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
+// FromError returns a VitessError with the supplied error code and wrapped error.
+func FromError(code int64, err error) error {
+	return &VitessError{
+		Code: code,
+		err:  err,
+	}
+}
+
 // FromRPCError recovers a VitessError from a *RPCError (which is how VitessErrors
 // are transmitted across RPC boundaries).
 func FromRPCError(rpcErr *mproto.RPCError) error {

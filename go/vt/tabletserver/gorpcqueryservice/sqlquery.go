@@ -121,7 +121,20 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
 func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
 	defer sq.server.HandlePanic(&err)
-	tErr := sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(reply *mproto.QueryResult) error {
+	return sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), query, func(reply *mproto.QueryResult) error {
+		return sendReply(reply)
+	})
+}
+
+// StreamExecute2 should not be used by anything other than tests.
+// It will eventually replace Rollback, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecuteRequest, sendReply func(reply interface{}) error) (err error) {
+	defer sq.server.HandlePanic(&err)
+	if req == nil || req.Query == nil {
+		return nil
+	}
+	tErr := sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), req.Query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
 	if tErr == nil {
