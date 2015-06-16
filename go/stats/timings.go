@@ -22,8 +22,14 @@ type Timings struct {
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
-func NewTimings(name string) *Timings {
+// categories is an optional list of categories to initialize to 0.
+// Categories that aren't initialized will be missing from the map until the
+// first time they are updated.
+func NewTimings(name string, categories ...string) *Timings {
 	t := &Timings{histograms: make(map[string]*Histogram)}
+	for _, cat := range categories {
+		t.histograms[cat] = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
+	}
 	if name != "" {
 		Publish(name, t)
 	}
@@ -143,6 +149,7 @@ func NewMultiTimings(name string, labels []string) *MultiTimings {
 	return t
 }
 
+// Labels returns descriptions of the parts of each compound category name.
 func (mt *MultiTimings) Labels() []string {
 	return mt.labels
 }
