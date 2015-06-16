@@ -250,6 +250,7 @@ class TestSchema(unittest.TestCase):
 
     # shard_2_master should look the same as the replica we copied from
     self._check_tables(shard_2_master, 4)
+    utils.wait_for_replication_pos(shard_2_master, shard_2_replica1)
     self._check_tables(shard_2_replica1, 4)
     shard_0_schema = self._get_schema(shard_0_master.tablet_alias)
     shard_2_schema = self._get_schema(shard_2_master.tablet_alias)
