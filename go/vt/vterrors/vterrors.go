@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	pb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -58,6 +59,18 @@ func FromRPCError(rpcErr *mproto.RPCError) error {
 	}
 	return &VitessError{
 		Code: rpcErr.Code,
+		err:  fmt.Errorf("%v", rpcErr.Message),
+	}
+}
+
+// FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
+// are transmitted across proto3 RPC boundaries).
+func FromVtRPCError(rpcErr *pb.RPCError) error {
+	if rpcErr == nil {
+		return nil
+	}
+	return &VitessError{
+		Code: int64(rpcErr.Code),
 		err:  fmt.Errorf("%v", rpcErr.Message),
 	}
 }

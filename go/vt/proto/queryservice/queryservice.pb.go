@@ -33,6 +33,10 @@ func init() {
 // Client API for Query service
 
 type QueryClient interface {
+	// GetSessionId gets a session id from the server. This call is being
+	// deprecated in favor of using the Target field of the subsequent
+	// queries, but is still here for backward compatibility.
+	GetSessionId(ctx context.Context, in *query.GetSessionIdRequest, opts ...grpc.CallOption) (*query.GetSessionIdResponse, error)
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error)
@@ -61,6 +65,15 @@ type queryClient struct {
 
 func NewQueryClient(cc *grpc.ClientConn) QueryClient {
 	return &queryClient{cc}
+}
+
+func (c *queryClient) GetSessionId(ctx context.Context, in *query.GetSessionIdRequest, opts ...grpc.CallOption) (*query.GetSessionIdResponse, error) {
+	out := new(query.GetSessionIdResponse)
+	err := grpc.Invoke(ctx, "/queryservice.Query/GetSessionId", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *queryClient) Execute(ctx context.Context, in *query.ExecuteRequest, opts ...grpc.CallOption) (*query.ExecuteResponse, error) {
@@ -152,6 +165,10 @@ func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryReques
 // Server API for Query service
 
 type QueryServer interface {
+	// GetSessionId gets a session id from the server. This call is being
+	// deprecated in favor of using the Target field of the subsequent
+	// queries, but is still here for backward compatibility.
+	GetSessionId(context.Context, *query.GetSessionIdRequest) (*query.GetSessionIdResponse, error)
 	// Execute executes the specified SQL query (might be in a
 	// transaction context, if Query.transaction_id is set).
 	Execute(context.Context, *query.ExecuteRequest) (*query.ExecuteResponse, error)
@@ -176,6 +193,18 @@ type QueryServer interface {
 
 func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
 	s.RegisterService(&_Query_serviceDesc, srv)
+}
+
+func _Query_GetSessionId_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(query.GetSessionIdRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(QueryServer).GetSessionId(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func _Query_Execute_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
@@ -275,6 +304,10 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "queryservice.Query",
 	HandlerType: (*QueryServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetSessionId",
+			Handler:    _Query_GetSessionId_Handler,
+		},
 		{
 			MethodName: "Execute",
 			Handler:    _Query_Execute_Handler,

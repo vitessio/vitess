@@ -147,6 +147,20 @@ message QueryResult {
   repeated Row rows = 4;
 }
 
+// GetSessionIdRequest is the payload to GetSessionId
+message GetSessionIdRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  string keyspace = 3;
+  string shard = 4;
+}
+
+// GetSessionIdResponse is the returned value from GetSessionId
+message GetSessionIdResponse {
+  vtrpc.RPCError error = 1;
+  int64 session_id = 2;
+}
+
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -154,6 +168,7 @@ message ExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   int64 transaction_id = 5;
+  int64 session_id = 6;
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -169,6 +184,7 @@ message ExecuteBatchRequest {
   Target target = 3;
   repeated BoundQuery queries = 4;
   int64 transaction_id = 5;
+  int64 session_id = 6;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
@@ -183,6 +199,7 @@ message StreamExecuteRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
+  int64 session_id = 5;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -196,6 +213,7 @@ message BeginRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  int64 session_id = 4;
 }
 
 // BeginResponse is the returned value from Begin
@@ -210,6 +228,7 @@ message CommitRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 session_id = 5;
 }
 
 // CommitResponse is the returned value from Commit
@@ -223,6 +242,7 @@ message RollbackRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 session_id = 5;
 }
 
 // RollbackResponse is the returned value from Rollback
@@ -237,6 +257,7 @@ message SplitQueryRequest {
   Target target = 3;
   BoundQuery query = 4;
   int64 split_count = 5;
+  int64 session_id = 6;
 }
 
 // QuerySplit represents one query to execute on the tablet
