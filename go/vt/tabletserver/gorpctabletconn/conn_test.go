@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -19,7 +20,7 @@ import (
 )
 
 // This test makes sure the go rpc service works
-func TestGoRPCTabletConn(t *testing.T) {
+func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
 	// fake service
 	service := tabletconntest.CreateFakeServer(t)
 
@@ -28,6 +29,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
+	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a Go Rpc server and listen on the port
@@ -41,6 +43,8 @@ func TestGoRPCTabletConn(t *testing.T) {
 		Handler: handler,
 	}
 	go httpServer.Serve(listener)
+	// Handle errors appropriately
+	*tabletserver.RPCErrorOnlyInReply = rpcOnlyInReply
 
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
@@ -59,4 +63,12 @@ func TestGoRPCTabletConn(t *testing.T) {
 
 	// and clean up
 	client.Close()
+}
+
+func TestGoRPCTabletConn(t *testing.T) {
+	testGoRPCTabletConn(t, false)
+}
+
+func TestGoRPCTabletConnWithErrorOnlyInRPCReply(t *testing.T) {
+	testGoRPCTabletConn(t, true)
 }

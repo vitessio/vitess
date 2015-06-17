@@ -433,6 +433,10 @@ func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVar
 	return ch, func() error { return err }, err
 }
 
+func (sbc *sandboxConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	return sbc.StreamExecute(ctx, query, bindVars, transactionID)
+}
+
 func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
@@ -446,6 +450,10 @@ func (sbc *sandboxConn) Begin(ctx context.Context) (int64, error) {
 	return sbc.TransactionID.Add(1), nil
 }
 
+func (sbc *sandboxConn) Begin2(ctx context.Context) (int64, error) {
+	return sbc.Begin(ctx)
+}
+
 func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
@@ -455,6 +463,10 @@ func (sbc *sandboxConn) Commit(ctx context.Context, transactionID int64) error {
 	return sbc.getError()
 }
 
+func (sbc *sandboxConn) Commit2(ctx context.Context, transactionID int64) error {
+	return sbc.Commit(ctx, transactionID)
+}
+
 func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
@@ -462,6 +474,10 @@ func (sbc *sandboxConn) Rollback(ctx context.Context, transactionID int64) error
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
+}
+
+func (sbc *sandboxConn) Rollback2(ctx context.Context, transactionID int64) error {
+	return sbc.Rollback(ctx, transactionID)
 }
 
 var sandboxSQRowCount = int64(10)

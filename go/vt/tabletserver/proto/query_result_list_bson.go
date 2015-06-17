@@ -29,6 +29,12 @@ func (queryResultList *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter, k
 		}
 		lenWriter.Close()
 	}
+	// *mproto.RPCError
+	if queryResultList.Err == nil {
+		bson.EncodePrefix(buf, bson.Null, "Err")
+	} else {
+		(*queryResultList.Err).MarshalBson(buf, "Err")
+	}
 
 	lenWriter.Close()
 }
@@ -61,6 +67,12 @@ func (queryResultList *QueryResultList) UnmarshalBson(buf *bytes.Buffer, kind by
 					_v1.UnmarshalBson(buf, kind)
 					queryResultList.List = append(queryResultList.List, _v1)
 				}
+			}
+		case "Err":
+			// *mproto.RPCError
+			if kind != bson.Null {
+				queryResultList.Err = new(mproto.RPCError)
+				(*queryResultList.Err).UnmarshalBson(buf, kind)
 			}
 		default:
 			bson.Skip(buf, kind)
