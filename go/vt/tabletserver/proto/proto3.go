@@ -188,54 +188,107 @@ func BoundQueryToProto3(sql string, bindVars map[string]interface{}) *pb.BoundQu
 
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure
 func Proto3ToBoundQuery(query *pb.BoundQuery) *BoundQuery {
-	result := &BoundQuery{
-		Sql: string(query.Sql),
+	return &BoundQuery{
+		Sql:           string(query.Sql),
+		BindVariables: Proto3ToBindVariables(query.BindVariables),
 	}
-	if len(query.BindVariables) > 0 {
-		result.BindVariables = make(map[string]interface{})
-		for k, v := range query.BindVariables {
-			switch v.Type {
-			case pb.BindVariable_TYPE_BYTES:
-				result.BindVariables[k] = v.ValueBytes
-			case pb.BindVariable_TYPE_INT:
-				result.BindVariables[k] = v.ValueInt
-			case pb.BindVariable_TYPE_UINT:
-				result.BindVariables[k] = v.ValueUint
-			case pb.BindVariable_TYPE_FLOAT:
-				result.BindVariables[k] = v.ValueFloat
-			case pb.BindVariable_TYPE_BYTES_LIST:
-				bytesList := v.ValueBytesList
-				interfaceList := make([]interface{}, len(bytesList))
-				for i, lv := range bytesList {
-					interfaceList[i] = []byte(lv)
-				}
-				result.BindVariables[k] = interfaceList
-			case pb.BindVariable_TYPE_INT_LIST:
-				intList := v.ValueIntList
-				interfaceList := make([]interface{}, len(intList))
-				for i, lv := range intList {
-					interfaceList[i] = lv
-				}
-				result.BindVariables[k] = interfaceList
-			case pb.BindVariable_TYPE_UINT_LIST:
-				uintList := v.ValueUintList
-				interfaceList := make([]interface{}, len(uintList))
-				for i, lv := range uintList {
-					interfaceList[i] = lv
-				}
-				result.BindVariables[k] = interfaceList
-			case pb.BindVariable_TYPE_FLOAT_LIST:
-				floatList := v.ValueFloatList
-				interfaceList := make([]interface{}, len(floatList))
-				for i, lv := range floatList {
-					interfaceList[i] = lv
-				}
-				result.BindVariables[k] = interfaceList
-			default:
-				result.BindVariables[k] = nil
+}
+
+// Proto3ToBoundQueryList converts am array of proto.BoundQuery to the internal data structure
+func Proto3ToBoundQueryList(queries []*pb.BoundQuery) []BoundQuery {
+	if len(queries) == 0 {
+		return nil
+	}
+	result := make([]BoundQuery, len(queries))
+	for i, q := range queries {
+		result[i] = *Proto3ToBoundQuery(q)
+	}
+	return result
+}
+
+// Proto3ToBindVariables converts a proto.BinVariable map to internal data structure
+func Proto3ToBindVariables(bv map[string]*pb.BindVariable) map[string]interface{} {
+	if len(bv) == 0 {
+		return nil
+	}
+
+	result := make(map[string]interface{})
+	for k, v := range bv {
+		switch v.Type {
+		case pb.BindVariable_TYPE_BYTES:
+			result[k] = v.ValueBytes
+		case pb.BindVariable_TYPE_INT:
+			result[k] = v.ValueInt
+		case pb.BindVariable_TYPE_UINT:
+			result[k] = v.ValueUint
+		case pb.BindVariable_TYPE_FLOAT:
+			result[k] = v.ValueFloat
+		case pb.BindVariable_TYPE_BYTES_LIST:
+			bytesList := v.ValueBytesList
+			interfaceList := make([]interface{}, len(bytesList))
+			for i, lv := range bytesList {
+				interfaceList[i] = []byte(lv)
+			}
+			result[k] = interfaceList
+		case pb.BindVariable_TYPE_INT_LIST:
+			intList := v.ValueIntList
+			interfaceList := make([]interface{}, len(intList))
+			for i, lv := range intList {
+				interfaceList[i] = lv
+			}
+			result[k] = interfaceList
+		case pb.BindVariable_TYPE_UINT_LIST:
+			uintList := v.ValueUintList
+			interfaceList := make([]interface{}, len(uintList))
+			for i, lv := range uintList {
+				interfaceList[i] = lv
+			}
+			result[k] = interfaceList
+		case pb.BindVariable_TYPE_FLOAT_LIST:
+			floatList := v.ValueFloatList
+			interfaceList := make([]interface{}, len(floatList))
+			for i, lv := range floatList {
+				interfaceList[i] = lv
+			}
+			result[k] = interfaceList
+		default:
+			result[k] = nil
+		}
+	}
+	return result
+}
+
+// QueryResultToProto3 converts an internal QueryResult to he proto3 version
+func QueryResultToProto3(qr *mproto.QueryResult) *pb.QueryResult {
+	result := &pb.QueryResult{
+		RowsAffected: qr.RowsAffected,
+		InsertId:     qr.InsertId,
+	}
+
+	if len(qr.Fields) > 0 {
+		result.Fields = make([]*pb.Field, len(qr.Fields))
+		for i, f := range qr.Fields {
+			result.Fields[i] = &pb.Field{
+				Name:  f.Name,
+				Type:  pb.Field_Type(f.Type),
+				Flags: int64(f.Flags),
 			}
 		}
 	}
+
+	if len(qr.Rows) > 0 {
+		result.Rows = make([]*pb.Row, len(qr.Rows))
+		for i, r := range qr.Rows {
+			result.Rows[i] = &pb.Row{
+				Values: make([][]byte, len(r)),
+			}
+			for j, c := range r {
+				result.Rows[i].Values[j] = c.Raw()
+			}
+
+		}
+	}
+
 	return result
 }
 
@@ -283,6 +336,18 @@ func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 	return result
 }
 
+// QueryResultListToProto3 changes the internal array of QueryResult to the proto3 version
+func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
+	if len(results) == 0 {
+		return nil
+	}
+	result := make([]*pb.QueryResult, len(results))
+	for i := range results {
+		result[i] = QueryResultToProto3(&results[i])
+	}
+	return result
+}
+
 // Proto3ToQuerySplits converts a proto3 QuerySplit array to a native QuerySplit array
 func Proto3ToQuerySplits(queries []*pb.QuerySplit) []QuerySplit {
 	if len(queries) == 0 {
@@ -292,6 +357,21 @@ func Proto3ToQuerySplits(queries []*pb.QuerySplit) []QuerySplit {
 	for i, qs := range queries {
 		result[i] = QuerySplit{
 			Query:    *Proto3ToBoundQuery(qs.Query),
+			RowCount: qs.RowCount,
+		}
+	}
+	return result
+}
+
+// QuerySplitsToProto3 converts a native QuerySplit array to the proto3 version
+func QuerySplitsToProto3(queries []QuerySplit) []*pb.QuerySplit {
+	if len(queries) == 0 {
+		return nil
+	}
+	result := make([]*pb.QuerySplit, len(queries))
+	for i, qs := range queries {
+		result[i] = &pb.QuerySplit{
+			Query:    BoundQueryToProto3(qs.Query.Sql, qs.Query.BindVariables),
 			RowCount: qs.RowCount,
 		}
 	}

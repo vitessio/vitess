@@ -256,8 +256,9 @@ message SplitQueryRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
-  int64 split_count = 5;
-  int64 session_id = 6;
+  string split_column = 5;
+  int64 split_count = 6;
+  int64 session_id = 7;
 }
 
 // QuerySplit represents one query to execute on the tablet

@@ -40,7 +40,7 @@ const TestKeyspace = "test_keyspace"
 // TestShard is the Shard we use for this test
 const TestShard = "test_shard"
 
-const testSessionId int64 = 5678
+const testSessionID int64 = 5678
 
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
@@ -50,7 +50,7 @@ func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 	if sessionParams.Shard != TestShard {
 		f.t.Errorf("invalid shard: got %v expected %v", sessionParams.Shard, TestShard)
 	}
-	sessionInfo.SessionId = testSessionId
+	sessionInfo.SessionId = testSessionID
 	return nil
 }
 
@@ -59,27 +59,27 @@ func (f *FakeQueryService) Begin(ctx context.Context, session *proto.Session, tx
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionId {
-		f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
+	if session.SessionId != testSessionID {
+		f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
 	}
 	if session.TransactionId != 0 {
 		f.t.Errorf("Begin: invalid TransactionId: got %v expected 0", session.TransactionId)
 	}
-	txInfo.TransactionId = beginTransactionId
+	txInfo.TransactionId = beginTransactionID
 	return nil
 }
 
-const beginTransactionId int64 = 9990
+const beginTransactionID int64 = 9990
 
 func testBegin(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBegin")
 	ctx := context.Background()
-	transactionId, err := conn.Begin(ctx)
+	transactionID, err := conn.Begin(ctx)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
-	if transactionId != beginTransactionId {
-		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionId, beginTransactionId)
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionID, beginTransactionID)
 	}
 }
 
@@ -95,21 +95,21 @@ func (f *FakeQueryService) Commit(ctx context.Context, session *proto.Session) e
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionId {
-		f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
+	if session.SessionId != testSessionID {
+		f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
 	}
-	if session.TransactionId != commitTransactionId {
-		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", session.TransactionId, commitTransactionId)
+	if session.TransactionId != commitTransactionID {
+		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", session.TransactionId, commitTransactionID)
 	}
 	return nil
 }
 
-const commitTransactionId int64 = 999044
+const commitTransactionID int64 = 999044
 
 func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommit")
 	ctx := context.Background()
-	err := conn.Commit(ctx, commitTransactionId)
+	err := conn.Commit(ctx, commitTransactionID)
 	if err != nil {
 		t.Fatalf("Commit failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 
 func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
-	if err := conn.Commit(ctx, commitTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if err := conn.Commit(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -127,21 +127,21 @@ func (f *FakeQueryService) Rollback(ctx context.Context, session *proto.Session)
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionId {
-		f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionId)
+	if session.SessionId != testSessionID {
+		f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
 	}
-	if session.TransactionId != rollbackTransactionId {
-		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", session.TransactionId, rollbackTransactionId)
+	if session.TransactionId != rollbackTransactionID {
+		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", session.TransactionId, rollbackTransactionID)
 	}
 	return nil
 }
 
-const rollbackTransactionId int64 = 999044
+const rollbackTransactionID int64 = 999044
 
 func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollback")
 	ctx := context.Background()
-	err := conn.Rollback(ctx, rollbackTransactionId)
+	err := conn.Rollback(ctx, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("Rollback failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
-	if err := conn.Rollback(ctx, rollbackTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if err := conn.Rollback(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -165,11 +165,11 @@ func (f *FakeQueryService) Execute(ctx context.Context, query *proto.Query, repl
 	if !reflect.DeepEqual(query.BindVariables, executeBindVars) {
 		f.t.Errorf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
 	}
-	if query.SessionId != testSessionId {
-		f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionId)
+	if query.SessionId != testSessionID {
+		f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
 	}
-	if query.TransactionId != executeTransactionId {
-		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionId)
+	if query.TransactionId != executeTransactionID {
+		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionID)
 	}
 	if f.hasError {
 		*reply = executeQueryResultError
@@ -185,7 +185,7 @@ var executeBindVars = map[string]interface{}{
 	"bind1": int64(1114444),
 }
 
-const executeTransactionId int64 = 678
+const executeTransactionID int64 = 678
 
 var executeQueryResult = mproto.QueryResult{
 	Fields: []mproto.Field{
@@ -222,7 +222,7 @@ var executeQueryResultError = mproto.QueryResult{
 func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecute")
 	ctx := context.Background()
-	qr, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionId)
+	qr, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -234,7 +234,7 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteError")
 	ctx := context.Background()
-	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionId)
+	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
 	if err == nil {
 		t.Fatalf("Execute was expecting an error, didn't get one")
 	}
@@ -246,7 +246,7 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
-	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -264,11 +264,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 	if !reflect.DeepEqual(query.BindVariables, streamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.Query.BindVariables: got %v expected %v", query.BindVariables, streamExecuteBindVars)
 	}
-	if query.SessionId != testSessionId {
-		f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionId)
-	}
-	if query.TransactionId != streamExecuteTransactionId {
-		f.t.Errorf("invalid StreamExecute.Query.TransactionId: got %v expected %v", query.TransactionId, streamExecuteTransactionId)
+	if query.SessionId != testSessionID {
+		f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
 	}
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
@@ -290,7 +287,7 @@ var streamExecuteBindVars = map[string]interface{}{
 	"bind1": int64(93848000),
 }
 
-const streamExecuteTransactionId int64 = 6789992
+const streamExecuteTransactionID int64 = 6789992
 
 var streamExecuteQueryResult1 = mproto.QueryResult{
 	Fields: []mproto.Field{
@@ -321,7 +318,7 @@ var streamExecuteQueryResult2 = mproto.QueryResult{
 func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testStreamExecute")
 	ctx := context.Background()
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -359,13 +356,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	// by the StreamExecute call itself
 	ctx := context.Background()
 	fake.streamExecutePanicsEarly = true
-	if _, _, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, _, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 
 	// late panic is after sending Fields
 	fake.streamExecutePanicsEarly = false
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionId)
+	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -396,11 +393,11 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, queryList *proto.Qu
 	if !reflect.DeepEqual(queryList.Queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
 	}
-	if queryList.SessionId != testSessionId {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionId)
+	if queryList.SessionId != testSessionID {
+		f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
 	}
-	if queryList.TransactionId != executeBatchTransactionId {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.TransactionId: got %v expected %v", queryList.TransactionId, executeBatchTransactionId)
+	if queryList.TransactionId != executeBatchTransactionID {
+		f.t.Errorf("invalid ExecuteBatch.QueryList.TransactionId: got %v expected %v", queryList.TransactionId, executeBatchTransactionID)
 	}
 	*reply = executeBatchQueryResultList
 	return nil
@@ -421,7 +418,7 @@ var executeBatchQueries = []proto.BoundQuery{
 	},
 }
 
-const executeBatchTransactionId int64 = 678
+const executeBatchTransactionID int64 = 678
 
 var executeBatchQueryResultList = proto.QueryResultList{
 	List: []mproto.QueryResult{
@@ -465,7 +462,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch")
 	ctx := context.Background()
-	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionId)
+	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID)
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
@@ -476,7 +473,7 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 
 func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 	ctx := context.Background()
-	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionId); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }

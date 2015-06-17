@@ -763,8 +763,9 @@ type SplitQueryRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	SplitCount        int64           `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
-	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
+	SplitColumn       string          `protobuf:"bytes,5,opt,name=split_column" json:"split_column,omitempty"`
+	SplitCount        int64           `protobuf:"varint,6,opt,name=split_count" json:"split_count,omitempty"`
+	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
