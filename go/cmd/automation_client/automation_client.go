@@ -81,33 +81,36 @@ func main() {
 		os.Exit(4)
 	}
 	fmt.Println("Operation was enqueued. Details:", enqueueResponse)
+	errWait := waitForClusterOp(client, enqueueResponse.Id)
+	if errWait != nil {
+		fmt.Println("ERROR:", errWait)
+		os.Exit(5)
+	}
+	fmt.Println("SUCCESS: ClusterOperation finished.")
+}
 
-	finished := false
-wait_for_clusterop:
-	for !finished {
-		detailsRequest := &pb.GetClusterOperationDetailsRequest{
-			Id: enqueueResponse.Id,
+// waitForClusterOp polls and blocks until the ClusterOperation invocation specified by "id" has finished. If an error occured, it will be returned.
+func waitForClusterOp(client pbs.AutomationClient, id string) error {
+	for {
+		req := &pb.GetClusterOperationDetailsRequest{
+			Id: id,
 		}
 
-		detailsResponse, err := client.GetClusterOperationDetails(context.Background(), detailsRequest)
+		resp, err := client.GetClusterOperationDetails(context.Background(), req)
 		if err != nil {
-			fmt.Printf("Failed to get ClusterOperation Details. Request: %v Error: %v", detailsRequest, err)
-			os.Exit(5)
+			return fmt.Errorf("Failed to get ClusterOperation Details. Request: %v Error: %v", req, err)
 		}
 
-		switch detailsResponse.ClusterOp.State {
+		switch resp.ClusterOp.State {
 		case pb.ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE:
-			fmt.Println("ERROR: ClusterOperation is in an unknown state. Details:", detailsResponse)
-			os.Exit(6)
+			return fmt.Errorf("ClusterOperation is in an unknown state. Details: %v", resp)
 		case pb.ClusterOperationState_CLUSTER_OPERATION_DONE:
-			if detailsResponse.ClusterOp.Error != "" {
-				fmt.Printf("ERROR: ClusterOperation failed. Details:\n%v", proto.MarshalTextString(detailsResponse))
-				os.Exit(7)
+			if resp.ClusterOp.Error != "" {
+				return fmt.Errorf("ClusterOperation failed. Details:\n%v", proto.MarshalTextString(resp))
 			}
-			break wait_for_clusterop
+			return nil
 		}
 
 		time.Sleep(50 * time.Millisecond)
 	}
-	fmt.Println("SUCCESS: ClusterOperation finished.")
 }
