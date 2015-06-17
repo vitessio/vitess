@@ -537,7 +537,9 @@ func main() {
 				schemamanager.NewTabletExecutor(
 					tmclient.NewTabletManagerClient(), ts),
 			)
-			log.Errorf("Schema change failed, error: %v", err)
+			if err != nil {
+				log.Errorf("Schema change failed, error: %v", err)
+			}
 		})
 		servenv.OnClose(func() { timer.Stop() })
 	}

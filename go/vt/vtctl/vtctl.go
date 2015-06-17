@@ -315,8 +315,8 @@ var commands = []commandGroup{
 				"[-force] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
 				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to slaves via replication. If the force flag is set, then numerous checks will be ignored, so that option should be used very cautiously."},
 			command{"CopySchemaShard", commandCopySchemaShard,
-				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] <source tablet alias> <destination keyspace/shard>",
-				"Copies the schema from a source tablet to the specified shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
+				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
+				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
 
 			command{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
@@ -1803,11 +1803,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <keyspace/shard> arguments are both required for the CopySchemaShard command. The <tablet alias> argument identifies a source and the <keyspace/shard> argument identifies a destination.")
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
+		return fmt.Errorf("The <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace.")
 	}
 	var tableArray []string
 	if *tables != "" {
@@ -1817,13 +1813,21 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	destKeyspace, destShard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
 
-	return wr.CopySchemaShard(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews, keyspace, shard)
+	sourceKeyspace, sourceShard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err == nil {
+		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard)
+	} else {
+		sourceTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+		if err == nil {
+			return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
+		}
+		return err
+	}	
 }
 
 func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

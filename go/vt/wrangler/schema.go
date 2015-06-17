@@ -201,7 +201,7 @@ func (wr *Wrangler) ApplySchema(ctx context.Context, tabletAlias topo.TabletAlia
 	return wr.tmc.ApplySchema(ctx, ti, sc)
 }
 
-// ApplySchemaShard applies a shcema change on a shard.
+// ApplySchemaShard applies a schema change on a shard.
 // Note for 'complex' mode (the 'simple' mode is easy enough that we
 // don't need to handle recovery that much): this method is able to
 // recover if interrupted in the middle, because it knows which server
@@ -417,27 +417,50 @@ func (wr *Wrangler) ApplySchemaKeyspace(ctx context.Context, keyspace string, ch
 	return nil, wr.unlockKeyspace(ctx, keyspace, actionNode, lockPath, err)
 }
 
+// CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
+// For both source and destination it picks the master tablet. See also CopySchemaShard.
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string) error {
+	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
+	if err != nil {
+		return err
+	}
+
+	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard)
+}
+
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
 // the destination shard, and is propogated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, keyspace, shard string) error {
-	sd, err := wr.GetSchema(ctx, srcTabletAlias, tables, excludeTables, includeViews)
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias topo.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string) error {
+	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
-	if err != nil {
-		return err
-	}
-	createSql := sd.ToSQLStrings()
 
+	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		return err
+	}
+	destSd, err := wr.GetSchema(ctx, destShardInfo.MasterAlias, tables, excludeTables, includeViews)
+	if err != nil {
+		destSd = nil
+	}
+	if destSd != nil {
+		diffs := myproto.DiffSchemaToArray("source", sourceSd, "dest", destSd)
+		if diffs == nil {
+			// Return early because dest has already the same schema as source.
+			return nil
+		}
+	}
+
+	createSql := sourceSd.ToSQLStrings()
+	destTabletInfo, err := wr.ts.GetTablet(ctx, destShardInfo.MasterAlias)
+	if err != nil {
+		return err
+	}
 	for i, sqlLine := range createSql {
-		err = wr.applySqlShard(ctx, tabletInfo, sqlLine, i == len(createSql)-1)
+		err = wr.applySqlShard(ctx, destTabletInfo, sqlLine, i == len(createSql)-1)
 		if err != nil {
 			return err
 		}
@@ -449,7 +472,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, srcTabletAlias topo.Tab
 // SQL statements, but doesn't return any results, so it's only useful for SQL statements
 // that would be run for their effects (e.g., CREATE).
 // It works by applying the SQL statement on the shard's master tablet with replication turned on.
-// Thus it should be used only for changes that can be applies on a live instance without causing issues;
+// Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
 func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
