@@ -14,6 +14,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -172,10 +173,9 @@ func (f *FakeQueryService) Execute(ctx context.Context, query *proto.Query, repl
 		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionID)
 	}
 	if f.hasError {
-		*reply = executeQueryResultError
-	} else {
-		*reply = executeQueryResult
+		return executeQueryResultError
 	}
+	*reply = executeQueryResult
 	return nil
 }
 
@@ -212,11 +212,9 @@ var executeQueryResult = mproto.QueryResult{
 	},
 }
 
-var executeQueryResultError = mproto.QueryResult{
-	Err: &mproto.RPCError{
-		Code:    1000,
-		Message: "succeeded despite err",
-	},
+var executeQueryResultError = &tabletserver.TabletError{
+	ErrorType: tabletserver.ErrRetry,
+	Message:   "succeeded despite err",
 }
 
 func testExecute(t *testing.T, conn tabletconn.TabletConn) {
@@ -238,7 +236,7 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Execute was expecting an error, didn't get one")
 	}
-	expectedErr := "vttablet: succeeded despite err"
+	expectedErr := "vttablet: retry: succeeded despite err"
 	if err.Error() != expectedErr {
 		t.Errorf("Unexpected error from Execute: got %v wanted %v", err, expectedErr)
 	}
@@ -353,16 +351,29 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 
 func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	// early panic is before sending the Fields, that is returned
-	// by the StreamExecute call itself
+	// by the StreamExecute call itself, or as the first error
+	// by ErrFunc
 	ctx := context.Background()
 	fake.streamExecutePanicsEarly = true
-	if _, _, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
-		t.Fatalf("unexpected panic error: %v", err)
+	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	if err != nil {
+		if !strings.Contains(err.Error(), "caught test panic") {
+			t.Fatalf("unexpected panic error: %v", err)
+		}
+	} else {
+		_, ok := <-stream
+		if ok {
+			t.Fatalf("StreamExecute early panic should not return anything")
+		}
+		err = errFunc()
+		if err == nil || !strings.Contains(err.Error(), "caught test panic") {
+			t.Fatalf("unexpected panic error: %v", err)
+		}
 	}
 
 	// late panic is after sending Fields
 	fake.streamExecutePanicsEarly = false
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
+	stream, errFunc, err = conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}

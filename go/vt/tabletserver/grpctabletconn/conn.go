@@ -7,13 +7,11 @@ package gorpctabletconn
 import (
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/rpcplus"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -23,6 +21,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
+	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
@@ -55,6 +54,9 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 	if err != nil {
 		return nil, err
 	}
+	if gsir.Error != nil {
+		return nil, tabletErrorFromRPCError(gsir.Error)
+	}
 
 	return &gRPCQueryClient{
 		endPoint:  endPoint,
@@ -79,10 +81,10 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
-		return nil, tabletError(err)
+		return nil, tabletErrorFromGRPC(err)
 	}
 	if er.Error != nil {
-		return nil, vterrors.FromVtRPCError(er.Error)
+		return nil, tabletErrorFromRPCError(er.Error)
 	}
 	return tproto.Proto3ToQueryResult(er.Result), nil
 }
@@ -105,10 +107,10 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	}
 	ebr, err := conn.c.ExecuteBatch(ctx, req)
 	if err != nil {
-		return nil, tabletError(err)
+		return nil, tabletErrorFromGRPC(err)
 	}
 	if ebr.Error != nil {
-		return nil, vterrors.FromVtRPCError(ebr.Error)
+		return nil, tabletErrorFromRPCError(ebr.Error)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
 }
@@ -127,7 +129,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, tabletErrorFromGRPC(err)
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	var finalError error
@@ -136,13 +138,13 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 			ser, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					finalError = err
+					finalError = tabletErrorFromGRPC(err)
 				}
 				close(sr)
 				return
 			}
 			if ser.Error != nil {
-				finalError = vterrors.FromVtRPCError(ser.Error)
+				finalError = tabletErrorFromRPCError(ser.Error)
 				close(sr)
 				return
 			}
@@ -167,10 +169,10 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return 0, tabletError(err)
+		return 0, tabletErrorFromGRPC(err)
 	}
 	if br.Error != nil {
-		return 0, vterrors.FromVtRPCError(br.Error)
+		return 0, tabletErrorFromRPCError(br.Error)
 	}
 	return br.TransactionId, nil
 }
@@ -189,10 +191,10 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 	cr, err := conn.c.Commit(ctx, req)
 	if err != nil {
-		return tabletError(err)
+		return tabletErrorFromGRPC(err)
 	}
 	if cr.Error != nil {
-		return vterrors.FromVtRPCError(cr.Error)
+		return tabletErrorFromRPCError(cr.Error)
 	}
 	return nil
 }
@@ -211,10 +213,10 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 	rr, err := conn.c.Rollback(ctx, req)
 	if err != nil {
-		return tabletError(err)
+		return tabletErrorFromGRPC(err)
 	}
 	if rr.Error != nil {
-		return vterrors.FromVtRPCError(rr.Error)
+		return tabletErrorFromRPCError(rr.Error)
 	}
 	return nil
 }
@@ -235,10 +237,10 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
-		return nil, tabletError(err)
+		return nil, tabletErrorFromGRPC(err)
 	}
 	if sqr.Error != nil {
-		return nil, vterrors.FromVtRPCError(sqr.Error)
+		return nil, tabletErrorFromRPCError(sqr.Error)
 	}
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
@@ -262,40 +264,24 @@ func (conn *gRPCQueryClient) EndPoint() topo.EndPoint {
 	return conn.endPoint
 }
 
-func tabletError(err error) error {
-	if err == nil {
-		return nil
-	}
-	// TODO(aaijazi): tabletconn is in an intermediate state right now, where application errors
-	// can be returned as rpcplus.ServerError or vterrors.VitessError. Soon, it will be standardized
-	// to only VitessError.
-	isServerError := false
-	switch err.(type) {
-	case rpcplus.ServerError:
-		isServerError = true
-	case *vterrors.VitessError:
-		isServerError = true
-	default:
-	}
-	if isServerError {
-		var code int
-		errStr := err.Error()
-		switch {
-		case strings.Contains(errStr, "fatal: "):
-			code = tabletconn.ERR_FATAL
-		case strings.Contains(errStr, "retry: "):
-			code = tabletconn.ERR_RETRY
-		case strings.Contains(errStr, "tx_pool_full: "):
-			code = tabletconn.ERR_TX_POOL_FULL
-		case strings.Contains(errStr, "not_in_tx: "):
-			code = tabletconn.ERR_NOT_IN_TX
-		default:
-			code = tabletconn.ERR_NORMAL
-		}
-		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
-	}
-	if err == context.Canceled {
-		return tabletconn.Cancelled
-	}
+// tabletErrorFromGRPC returns a tabletconn.OperationalError from the
+// gRPC error.
+func tabletErrorFromGRPC(err error) error {
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
+}
+
+// tabletErrorFromRPCError reconstructs a tablet error from the
+// RPCError, using the RPCError code.
+func tabletErrorFromRPCError(rpcErr *pbv.RPCError) error {
+	ve := vterrors.FromVtRPCError(rpcErr)
+
+	// see if the range is in the tablet error range
+	if ve.Code >= int64(pbv.ErrorCode_TabletError) && ve.Code <= int64(pbv.ErrorCode_UnknownTabletError) {
+		return &tabletconn.ServerError{
+			Code: int(ve.Code - int64(pbv.ErrorCode_TabletError)),
+			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
+		}
+	}
+
+	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }

@@ -31,23 +31,25 @@ func New(server queryservice.QueryService) *Query {
 // GetSessionId is part of the queryservice.QueryServer interface
 func (q *Query) GetSessionId(ctx context.Context, request *pb.GetSessionIdRequest) (response *pb.GetSessionIdResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
+
 	sessionInfo := new(proto.SessionInfo)
-	if err := q.server.GetSessionId(&proto.SessionParams{
+	gsiErr := q.server.GetSessionId(&proto.SessionParams{
 		Keyspace: request.Keyspace,
 		Shard:    request.Shard,
-	}, sessionInfo); err != nil {
-		return nil, err
-	}
-	return &pb.GetSessionIdResponse{
+	}, sessionInfo)
+
+	response = &pb.GetSessionIdResponse{
 		SessionId: sessionInfo.SessionId,
-	}, nil
+	}
+	tabletserver.AddTabletErrorToResult(gsiErr, &response.Error)
+	return response, nil
 }
 
 // Execute is part of the queryservice.QueryServer interface
 func (q *Query) Execute(ctx context.Context, request *pb.ExecuteRequest) (response *pb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+
 	reply := new(mproto.QueryResult)
 	execErr := q.server.Execute(ctx, &proto.Query{
 		Sql:           string(request.Query.Sql),
@@ -56,7 +58,9 @@ func (q *Query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		TransactionId: request.TransactionId,
 	}, reply)
 	if execErr != nil {
-		return nil, execErr
+		response := new(pb.ExecuteResponse)
+		tabletserver.AddTabletErrorToResult(execErr, &response.Error)
+		return response, nil
 	}
 	return &pb.ExecuteResponse{
 		Result: proto.QueryResultToProto3(reply),
@@ -75,7 +79,9 @@ func (q *Query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 		TransactionId: request.TransactionId,
 	}, reply)
 	if execErr != nil {
-		return nil, execErr
+		response := new(pb.ExecuteBatchResponse)
+		tabletserver.AddTabletErrorToResult(execErr, &response.Error)
+		return response, nil
 	}
 	return &pb.ExecuteBatchResponse{
 		Results: proto.QueryResultListToProto3(reply.List),
@@ -86,7 +92,8 @@ func (q *Query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 func (q *Query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query_StreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	ctx := callinfo.GRPCCallInfo(stream.Context())
-	return q.server.StreamExecute(ctx, &proto.Query{
+
+	seErr := q.server.StreamExecute(ctx, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
@@ -95,18 +102,30 @@ func (q *Query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 			Result: proto.QueryResultToProto3(reply),
 		})
 	})
+	if seErr != nil {
+		response := new(pb.StreamExecuteResponse)
+		tabletserver.AddTabletErrorToResult(seErr, &response.Error)
+		if err := stream.Send(response); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Begin is part of the queryservice.QueryServer interface
 func (q *Query) Begin(ctx context.Context, request *pb.BeginRequest) (response *pb.BeginResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+
 	txInfo := new(proto.TransactionInfo)
-	if err := q.server.Begin(ctx, &proto.Session{
+	if beginErr := q.server.Begin(ctx, &proto.Session{
 		SessionId: request.SessionId,
-	}, txInfo); err != nil {
-		return nil, err
+	}, txInfo); beginErr != nil {
+		response := new(pb.BeginResponse)
+		tabletserver.AddTabletErrorToResult(beginErr, &response.Error)
+		return response, nil
 	}
+
 	return &pb.BeginResponse{
 		TransactionId: txInfo.TransactionId,
 	}, nil
@@ -116,39 +135,46 @@ func (q *Query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 func (q *Query) Commit(ctx context.Context, request *pb.CommitRequest) (response *pb.CommitResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	if err := q.server.Commit(ctx, &proto.Session{
+
+	commitErr := q.server.Commit(ctx, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
-	}); err != nil {
-		return nil, err
-	}
-	return &pb.CommitResponse{}, nil
+	})
+	response = new(pb.CommitResponse)
+	tabletserver.AddTabletErrorToResult(commitErr, &response.Error)
+	return response, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface
 func (q *Query) Rollback(ctx context.Context, request *pb.RollbackRequest) (response *pb.RollbackResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	if err := q.server.Rollback(ctx, &proto.Session{
+	ctx = callinfo.GRPCCallInfo(ctx)
+
+	rollbackErr := q.server.Rollback(ctx, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
-	}); err != nil {
-		return nil, err
-	}
-	return &pb.RollbackResponse{}, nil
+	})
+
+	response = new(pb.RollbackResponse)
+	tabletserver.AddTabletErrorToResult(rollbackErr, &response.Error)
+	return response, nil
 }
 
 // SplitQuery is part of the queryservice.QueryServer interface
 func (q *Query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (response *pb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callinfo.GRPCCallInfo(ctx)
+
 	reply := &proto.SplitQueryResult{}
-	if err := q.server.SplitQuery(ctx, &proto.SplitQueryRequest{
+	if sqErr := q.server.SplitQuery(ctx, &proto.SplitQueryRequest{
 		Query:       *proto.Proto3ToBoundQuery(request.Query),
 		SplitColumn: request.SplitColumn,
 		SplitCount:  int(request.SplitCount),
 		SessionID:   request.SessionId,
-	}, reply); err != nil {
-		return nil, err
+	}, reply); sqErr != nil {
+		response = new(pb.SplitQueryResponse)
+		tabletserver.AddTabletErrorToResult(sqErr, &response.Error)
+		return response, nil
 	}
 	return &pb.SplitQueryResponse{
 		Queries: proto.QuerySplitsToProto3(reply.Queries),

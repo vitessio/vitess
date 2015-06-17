@@ -65,7 +65,7 @@ func FromRPCError(rpcErr *mproto.RPCError) error {
 
 // FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
 // are transmitted across proto3 RPC boundaries).
-func FromVtRPCError(rpcErr *pb.RPCError) error {
+func FromVtRPCError(rpcErr *pb.RPCError) *VitessError {
 	if rpcErr == nil {
 		return nil
 	}

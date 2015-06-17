@@ -16,6 +16,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
@@ -236,4 +237,29 @@ func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
 		}
 	}
 	reply.Err = rpcErr
+}
+
+// AddTabletErrorToResult sets the provided pointer to the provided error,
+// if any.
+func AddTabletErrorToResult(err error, responseError **vtrpc.RPCError) {
+	if err == nil {
+		return
+	}
+	var rpcErr *vtrpc.RPCError
+	if terr, ok := err.(*TabletError); ok {
+		rpcErr = &vtrpc.RPCError{
+			// Transform TabletError code to VitessError code
+			Code: vtrpc.ErrorCode(int64(terr.ErrorType) + vterrors.TabletError),
+			// Make sure the the VitessError message is identical to the TabletError
+			// err, so that downstream consumers will see identical messages no matter
+			// which endpoint they're using.
+			Message: terr.Error(),
+		}
+	} else {
+		rpcErr = &vtrpc.RPCError{
+			Code:    vtrpc.ErrorCode_UnknownTabletError,
+			Message: err.Error(),
+		}
+	}
+	*responseError = rpcErr
 }
