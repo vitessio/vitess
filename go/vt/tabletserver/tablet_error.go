@@ -239,15 +239,14 @@ func AddTabletErrorToQueryResult(err error, reply *mproto.QueryResult) {
 	reply.Err = rpcErr
 }
 
-// AddTabletErrorToResult sets the provided pointer to the provided error,
+// TabletErrorToRPCError transforms the provided error to a RPCError,
 // if any.
-func AddTabletErrorToResult(err error, responseError **vtrpc.RPCError) {
+func TabletErrorToRPCError(err error) *vtrpc.RPCError {
 	if err == nil {
-		return
+		return nil
 	}
-	var rpcErr *vtrpc.RPCError
 	if terr, ok := err.(*TabletError); ok {
-		rpcErr = &vtrpc.RPCError{
+		return &vtrpc.RPCError{
 			// Transform TabletError code to VitessError code
 			Code: vtrpc.ErrorCode(int64(terr.ErrorType) + vterrors.TabletError),
 			// Make sure the the VitessError message is identical to the TabletError
@@ -255,11 +254,9 @@ func AddTabletErrorToResult(err error, responseError **vtrpc.RPCError) {
 			// which endpoint they're using.
 			Message: terr.Error(),
 		}
-	} else {
-		rpcErr = &vtrpc.RPCError{
-			Code:    vtrpc.ErrorCode_UnknownTabletError,
-			Message: err.Error(),
-		}
 	}
-	*responseError = rpcErr
+	return &vtrpc.RPCError{
+		Code:    vtrpc.ErrorCode_UnknownTabletError,
+		Message: err.Error(),
+	}
 }
