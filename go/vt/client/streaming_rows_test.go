@@ -65,7 +65,7 @@ func TestStreamingRows(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri := newStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc, nil)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -122,7 +122,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri := newStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc, nil)
 
 	wantRow := []driver.Value{
 		int64(1),
@@ -159,7 +159,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return errors.New("error before fields") }
 	}()
-	ri := newStreamingRows(qrc, errFunc)
+	ri := newStreamingRows(qrc, errFunc, nil)
 	gotCols := ri.Columns()
 	if gotCols != nil {
 		t.Errorf("cols: %v, want nil", gotCols)
@@ -180,7 +180,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return errors.New("error after fields") }
 	}()
-	ri = newStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc, nil)
 	wantCols := []string{
 		"field1",
 		"field2",
@@ -212,7 +212,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return errors.New("error after rows") }
 	}()
-	ri = newStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc, nil)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	if err != nil {
@@ -233,7 +233,7 @@ func TestStreamingRowsError(t *testing.T) {
 		}()
 		return ch, func() error { return nil }
 	}()
-	ri = newStreamingRows(qrc, errFunc)
+	ri = newStreamingRows(qrc, errFunc, nil)
 	gotRow = make([]driver.Value, 3)
 	err = ri.Next(gotRow)
 	wantErr = "first packet did not return fields"

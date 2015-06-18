@@ -147,11 +147,11 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
-	defer cancel()
 	if s.c.Streaming {
 		qrc, errFunc := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.TabletType)
-		return newStreamingRows(qrc, errFunc), nil
+		return newStreamingRows(qrc, errFunc, cancel), nil
 	}
+	defer cancel()
 	var qr *mproto.QueryResult
 	var err error
 	if s.c.tx == nil {
