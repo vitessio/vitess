@@ -26,7 +26,8 @@ do
   errcount=$(golint $gofile | wc -l)
   if [ "$errcount" -gt "0" ]; then
     errors=YES
-    echo "$errcount suggestions for: golint $gofile"
+    echo "$errcount suggestions for:"
+    echo "golint $gofile"
   fi
 done
 
