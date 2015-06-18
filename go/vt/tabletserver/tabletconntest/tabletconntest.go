@@ -43,9 +43,9 @@ const TestShard = "test_shard"
 
 const testSessionId int64 = 5678
 
-var testTabletError error = tabletserver.NewTabletError(tabletserver.ErrFail, "generic error")
+var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, "generic error")
 
-const expectedErr string = "vttablet: error: generic error"
+const expectedErrMatch string = "error: generic error"
 
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
@@ -98,8 +98,8 @@ func testBeginError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Begin was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from Begin: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from Begin: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -130,8 +130,8 @@ func testBegin2Error(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Begin2 was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from Begin2: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from Begin2: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -183,8 +183,8 @@ func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Commit was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from Commit: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from Commit: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -236,8 +236,8 @@ func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Rollback was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from Rollback: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from Rollback: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -325,8 +325,8 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("Execute was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from Execute: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from Execute: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -339,6 +339,7 @@ func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 var panicWait chan struct{}
+var errorWait chan struct{}
 
 // StreamExecute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
@@ -366,6 +367,9 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query
 		panic(fmt.Errorf("test-triggered panic late"))
 	}
 	if f.hasError {
+		// wait until the client has the response, since all streaming implementation may not
+		// send previous messages if an error has been triggered.
+		<-errorWait
 		return testTabletError
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
@@ -461,6 +465,8 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
+	// signal to the server that the first result has been received
+	close(errorWait)
 	// After 1 result, we expect to get an error (no more results).
 	qr, ok = <-stream
 	if ok {
@@ -470,9 +476,11 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("StreamExecute was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from StreamExecute: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from StreamExecute: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
+	// reset state for the test
+	errorWait = make(chan struct{})
 }
 
 func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
@@ -565,6 +573,8 @@ func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
+	// signal to the server that the first result has been received
+	close(errorWait)
 	// After 1 result, we expect to get an error (no more results).
 	qr, ok = <-stream
 	if ok {
@@ -574,9 +584,11 @@ func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("StreamExecute2 was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from StreamExecute2: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from StreamExecute2: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
+	// reset state for the test
+	errorWait = make(chan struct{})
 }
 
 func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
@@ -712,8 +724,8 @@ func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("ExecuteBatch was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from ExecuteBatch: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from ExecuteBatch: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -784,8 +796,8 @@ func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
 	if err == nil {
 		t.Fatalf("SplitQuery was expecting an error, didn't get one")
 	}
-	if err.Error() != expectedErr {
-		t.Errorf("Unexpected error from SplitQuery: got %v wanted %v", err, expectedErr)
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from SplitQuery: got %v, wanted err containing %v", err, expectedErrMatch)
 	}
 }
 
@@ -799,8 +811,9 @@ func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
 
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
-	// Make the panic channel on init, so there's no state shared between servers
+	// Make the synchronization channels on init, so there's no state shared between servers
 	panicWait = make(chan struct{})
+	errorWait = make(chan struct{})
 
 	return &FakeQueryService{
 		t:      t,
@@ -845,4 +858,5 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testStreamExecute2Panics(t, conn, fake)
 	testExecuteBatchPanics(t, conn)
 	testSplitQueryPanics(t, conn)
+	fake.panics = false
 }
