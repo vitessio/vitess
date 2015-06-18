@@ -191,6 +191,8 @@ func defaultTaskCreator(taskName string) Task {
 	switch taskName {
 	case "HorizontalReshardingTask":
 		return &HorizontalReshardingTask{}
+	case "CopySchemaShardTask":
+		return &CopySchemaShardTask{}
 	default:
 		return nil
 	}
