@@ -23,6 +23,7 @@ import (
 var (
 	srvTopoCacheTTL    = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 	enableRemoteMaster = flag.Bool("enable_remote_master", false, "enable remote master access")
+	srvTopoTimeout     = flag.Duration("srv_topo_timeout", 1*time.Second, "topo server timeout")
 )
 
 const (
@@ -241,6 +242,9 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 	}
 
 	// not in cache or too old, get the real value
+	ctx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
+	defer cancel()
+
 	result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
@@ -290,6 +294,9 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 	}
 
 	// not in cache or too old, get the real value
+	ctx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
+	defer cancel()
+
 	result, err := server.topoServer.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
@@ -340,6 +347,9 @@ func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, key
 	}
 
 	// not in cache or too old, get the real value
+	ctx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
+	defer cancel()
+
 	result, err := server.topoServer.GetSrvShard(ctx, cell, keyspace, shard)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
@@ -421,6 +431,9 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 	}
 
 	// not in cache or too old, get the real value
+	ctx, cancel := context.WithTimeout(context.Background(), *srvTopoTimeout)
+	defer cancel()
+
 	result, _, err = server.topoServer.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	// get remote endpoints for master if enabled
 	if err != nil && server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
