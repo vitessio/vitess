@@ -21,12 +21,15 @@ errors=
 
 # Run on one file at a time because a single invocation of golint 
 # with multiple files requires the files to all be in one package.
+gofiles_with_warnings=()
 for gofile in $gofiles
 do
   errcount=$(golint $gofile | wc -l)
   if [ "$errcount" -gt "0" ]; then
     errors=YES
-    echo "$errcount suggestions for: golint $gofile"
+    echo "$errcount suggestions for:"
+    echo "golint $gofile"
+    gofiles_with_warnings+=($gofile)
   fi
 done
 
@@ -39,7 +42,21 @@ echo
 echo "Lint suggestions were found. They're not enforced, but we're pausing"
 echo "to let you know before they get clobbered in the scrollback buffer."
 echo
-read -r -p 'Press enter to cancel, or type "ack" to continue: '
-if [ "$REPLY" != "ack" ]; then
-  exit 1
+read -r -p 'Press enter to cancel, "s" to step through the warnings or type "ack" to continue: '
+if [ "$REPLY" = "ack" ]; then
+  exit 0
 fi
+if [ "$REPLY" = "s" ]; then
+  first_file="true"
+  for gofile in "${gofiles_with_warnings[@]}"
+  do
+    echo
+    if [ "$first_file" != "true" ]; then
+      echo "Press enter to show the warnings for the next file."
+      read
+    fi
+    golint $gofile
+    first_file="false"
+  done
+fi
+exit 1
