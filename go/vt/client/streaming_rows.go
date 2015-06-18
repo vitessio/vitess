@@ -9,6 +9,8 @@ import (
 	"errors"
 	"io"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -22,11 +24,16 @@ type streamingRows struct {
 	fields  []mproto.Field
 	qr      *mproto.QueryResult
 	index   int
+	cancel  context.CancelFunc
 }
 
 // newStreamingRows creates a new streamingRows from qrc and errFunc.
-func newStreamingRows(qrc <-chan *mproto.QueryResult, errFunc vtgateconn.ErrFunc) driver.Rows {
-	return &streamingRows{qrc: qrc, errFunc: errFunc}
+func newStreamingRows(qrc <-chan *mproto.QueryResult, errFunc vtgateconn.ErrFunc, cancel context.CancelFunc) driver.Rows {
+	return &streamingRows{
+		qrc:     qrc,
+		errFunc: errFunc,
+		cancel:  cancel,
+	}
 }
 
 func (ri *streamingRows) Columns() []string {
@@ -96,5 +103,8 @@ func (ri *streamingRows) setErr() {
 	ri.failed = io.EOF
 	if err := ri.errFunc(); err != nil {
 		ri.failed = err
+	}
+	if ri.cancel != nil {
+		ri.cancel()
 	}
 }
