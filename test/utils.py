@@ -443,7 +443,8 @@ class VtGate(object):
           '-conn-timeout-total', timeout_total,
           '-conn-timeout-per-conn', timeout_per_conn,
           '-bsonrpc_timeout', '5s',
-          ] + protocols_flavor().tabletconn_protocol_flags()
+          '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+          ]
     if topo_impl:
       args.extend(['-topo_implementation', topo_impl])
     else:
@@ -606,7 +607,7 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server().flags())
   args.extend(protocols_flavor().tablet_manager_protocol_flags())
-  args.extend(protocols_flavor().tabletconn_protocol_flags())
+  args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
   args.extend(protocols_flavor().vtgate_protocol_flags())
 
   if auto_log:
@@ -875,10 +876,10 @@ class Vtctld(object):
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags() + \
             protocols_flavor().vtgate_protocol_flags()
-    if protocols_flavor().vtctl_client_protocol() == "grpc":
+    if protocols_flavor().vtctl_client_protocol() == 'grpc':
       args += ['-grpc_port', str(self.grpc_port),
               '-service_map', 'grpc-vtctl']
-    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
+    stderr_fd = open(os.path.join(environment.tmproot, 'vtctld.stderr'), 'w')
     self.proc = run_bg(args, stderr=stderr_fd)
 
     # wait for the process to listen to RPC

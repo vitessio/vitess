@@ -75,6 +75,7 @@ class Tablet(object):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (environment.reserve_ports(1))
     self.mysql_port = mysql_port or (environment.reserve_ports(1))
+    self.grpc_port = environment.reserve_ports(1)
     self.use_mysqlctld = use_mysqlctld
     Tablet.seq += 1
 
@@ -381,6 +382,9 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
+    if protocols_flavor().tabletconn_protocol() == 'grpc':
+      args.extend(['-grpc_port', str(self.grpc_port),
+                   '-service_map', 'grpc-queryservice'])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
     if security_policy:

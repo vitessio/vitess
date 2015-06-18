@@ -8,27 +8,29 @@ class ProtocolsFlavor(object):
 
   def binlog_player_protocol_flags(self):
     """Returns the flags to pass to process to set the binlog player protocol."""
-    return []
+    raise NotImplementedError('Not implemented in the base class')
 
   def vtctl_client_protocol(self):
-    """Returns the protocol to use for vtctl connections. Needs to be supported both in python and go."""
-    return ""
+    """Returns the protocol to use for vtctl connections.
+    Needs to be supported both in python and go."""
+    raise NotImplementedError('Not implemented in the base class')
 
   def tablet_manager_protocol_flags(self):
     """Returns the flags to use for specifying the tablet manager protocol."""
-    return ['-tablet_manager_protocol', 'bson']
+    raise NotImplementedError('Not implemented in the base class')
 
-  def tabletconn_protocol_flags(self):
-    """Returns the flags to use for specifying the query service protocol."""
-    return ['-tablet_protocol', 'gorpc']
+  def tabletconn_protocol(self):
+    """Returns the protocol to use for connections from vtctl/vtgate to
+    vttablet."""
+    raise NotImplementedError('Not implemented in the base class')
 
   def vtgate_protocol_flags(self):
     """Returns the flags to use for specifying the vtgate protocol."""
-    return ['-vtgate_protocol', 'gorpc']
+    raise NotImplementedError('Not implemented in the base class')
 
   def rpc_timeout_message(self):
     """Returns the error message used by the protocol to indicate a timeout."""
-    raise NotImplementedError('Implementations need to overwrite this')
+    raise NotImplementedError('Not implemented in the base class')
 
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
@@ -42,8 +44,8 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def tablet_manager_protocol_flags(self):
     return ['-tablet_manager_protocol', 'bson']
 
-  def tabletconn_protocol_flags(self):
-    return ['-tablet_protocol', 'gorpc']
+  def tabletconn_protocol(self):
+    return 'gorpc'
 
   def vtgate_protocol_flags(self):
     return ['-vtgate_protocol', 'gorpc']
@@ -64,8 +66,8 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
   def tablet_manager_protocol_flags(self):
     return ['-tablet_manager_protocol', 'bson']
 
-  def tabletconn_protocol_flags(self):
-    return ['-tablet_protocol', 'gorpc']
+  def tabletconn_protocol(self):
+    return 'grpc'
 
   def vtgate_protocol_flags(self):
     return ['-vtgate_protocol', 'gorpc']
