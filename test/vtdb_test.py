@@ -171,6 +171,29 @@ def do_write(count):
                          {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
   master_conn.commit()
 
+def direct_batch_write(count, tablet):
+  """Writes a number of rows directly to MySQL on a tablet.
+
+  This is significantly faster than do_writes(), but it works by bypassing the
+  entire VtTablet layer, and batches all the inserts into a single round-trip.
+  This can cause unexpected behavior, so should be used sparingly.
+  """
+  master_conn = get_connection(db_type='master')
+  master_conn.begin()
+  master_conn._execute("delete from vt_insert_test", {})
+  master_conn.commit()
+  kid_list = shard_kid_map[master_conn.shard]
+  values_str = ""
+  for x in xrange(count):
+    if x != 0:
+      values_str += ','
+    keyspace_id = kid_list[count%len(kid_list)]
+    values_str += '("test %s", "%s")' % (x, keyspace_id)
+  tablet.mquery('vt_test_keyspace', [
+        'begin',
+        'insert into vt_insert_test(msg, keyspace_id) values%s' % values_str,
+        'commit'
+        ], write=True)
 
 class TestTabletFunctions(unittest.TestCase):
   def setUp(self):
@@ -374,6 +397,33 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Communication with shard0 replica failed with error %s" %
                 str(e))
+
+  def test_fail_stream_execute_initial(self):
+    """Tests for app errors in the first stream execute response."""
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+    try:
+      stream_cursor = cursor.StreamCursor(master_conn)
+      with self.assertRaises(dbexceptions.DatabaseError):
+        stream_cursor.execute("invalid sql syntax", {})
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+
+  def test_conn_after_stream_execute_failure(self):
+    """After a stream execute failure, other operations should work on the same connection."""
+    try:
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+    try:
+      stream_cursor = cursor.StreamCursor(master_conn)
+      with self.assertRaises(dbexceptions.DatabaseError):
+        stream_cursor.execute("invalid sql syntax", {})
+      master_conn._execute("select * from vt_insert_test", {})
+    except Exception, e:
+      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
   def test_tablet_restart_begin(self):
     try:

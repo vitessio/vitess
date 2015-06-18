@@ -156,6 +156,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}, nil
 }
 
+// StreamExecute2 is the same as StreamExecute for gRPC
+func (conn *gRPCQueryClient) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	return conn.StreamExecute(ctx, query, bindVars, transactionID)
+}
+
 // Begin starts a transaction.
 func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()
@@ -175,6 +180,11 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 		return 0, tabletErrorFromRPCError(br.Error)
 	}
 	return br.TransactionId, nil
+}
+
+// Begin2 is the same as Begin for gRPC
+func (conn *gRPCQueryClient) Begin2(ctx context.Context) (transactionID int64, err error) {
+	return conn.Begin(ctx)
 }
 
 // Commit commits the ongoing transaction.
@@ -199,6 +209,11 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	return nil
 }
 
+// Commit2 is the same as Commit for gRPC
+func (conn *gRPCQueryClient) Commit2(ctx context.Context, transactionID int64) error {
+	return conn.Commit(ctx, transactionID)
+}
+
 // Rollback rolls back the ongoing transaction.
 func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) error {
 	conn.mu.RLock()
@@ -219,6 +234,11 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		return tabletErrorFromRPCError(rr.Error)
 	}
 	return nil
+}
+
+// Rollback2 is the same as Rollback for gRPC
+func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64) error {
+	return conn.Rollback(ctx, transactionID)
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC

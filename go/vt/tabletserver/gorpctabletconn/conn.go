@@ -70,6 +70,11 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		conn.rpcClient.Close()
 		return nil, tabletError(err)
 	}
+	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
+		conn.rpcClient.Close()
+		return nil, tabletError(err)
+	}
 	conn.sessionID = sessionInfo.SessionId
 	return conn, nil
 }
@@ -135,7 +140,12 @@ func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	}
 	qrs := new(tproto.QueryResultList)
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.ExecuteBatch might return an application error inside the QueryResultList
+		return vterrors.FromRPCError(qrs.Err)
 	}
 	if err := conn.withTimeout(ctx, action); err != nil {
 		return nil, tabletError(err)
@@ -163,15 +173,93 @@ func (conn *TabletBson) StreamExecute(ctx context.Context, query string, bindVar
 	if !ok {
 		return nil, nil, tabletError(c.Error)
 	}
+	// SqlQuery.StreamExecute might return an application error inside the QueryResult
+	vtErr := vterrors.FromRPCError(firstResult.Err)
+	if vtErr != nil {
+		return nil, nil, tabletError(vtErr)
+	}
 	srout := make(chan *mproto.QueryResult, 1)
 	go func() {
 		defer close(srout)
 		srout <- firstResult
 		for r := range sr {
-			srout <- r
+			vtErr = vterrors.FromRPCError(r.Err)
+			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
+			// the server specifically to indicate an error, and we shouldn't surface it to clients.
+			if vtErr == nil {
+				srout <- r
+			}
 		}
 	}()
-	return srout, func() error { return tabletError(c.Error) }, nil
+	// errFunc will return either an RPC-layer error or an application error, if one exists.
+	// It will only return the most recent application error (i.e, from the QueryResult that
+	// most recently contained an error). It will prioritize an RPC-layer error over an apperror,
+	// if both exist.
+	errFunc := func() error {
+		rpcErr := tabletError(c.Error)
+		if rpcErr != nil {
+			return rpcErr
+		}
+		return tabletError(vtErr)
+	}
+	return srout, errFunc, nil
+}
+
+// StreamExecute2 starts a streaming query to VTTablet. This differs from StreamExecute in that
+// it expects errors to be returned as part of the StreamExecute results.
+func (conn *TabletBson) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	q := &tproto.Query{
+		Sql:           query,
+		BindVariables: bindVars,
+		TransactionId: transactionID,
+		SessionId:     conn.sessionID,
+	}
+	req := &tproto.StreamExecuteRequest{Query: q}
+	// Use QueryResult instead of StreamExecuteResult for now, due to backwards compatability reasons.
+	// It'll be easuer to migrate all end-points to using StreamExecuteResult instead of
+	// maintaining a mixture of QueryResult and StreamExecuteResult channel returns.
+	sr := make(chan *mproto.QueryResult, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute2", req, sr)
+	firstResult, ok := <-sr
+	if !ok {
+		return nil, nil, tabletError(c.Error)
+	}
+	// SqlQuery.StreamExecute might return an application error inside the QueryResult
+	vtErr := vterrors.FromRPCError(firstResult.Err)
+	if vtErr != nil {
+		return nil, nil, tabletError(vtErr)
+	}
+	srout := make(chan *mproto.QueryResult, 1)
+	go func() {
+		defer close(srout)
+		srout <- firstResult
+		for r := range sr {
+			vtErr = vterrors.FromRPCError(r.Err)
+			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
+			// the server specifically to indicate an error, and we shouldn't surface it to clients.
+			if vtErr == nil {
+				srout <- r
+			}
+		}
+	}()
+	// errFunc will return either an RPC-layer error or an application error, if one exists.
+	// It will only return the most recent application error (i.e, from the QueryResult that
+	// most recently contained an error). It will prioritize an RPC-layer error over an apperror,
+	// if both exist.
+	errFunc := func() error {
+		rpcErr := tabletError(c.Error)
+		if rpcErr != nil {
+			return rpcErr
+		}
+		return tabletError(vtErr)
+	}
+	return srout, errFunc, nil
 }
 
 // Begin starts a transaction.
@@ -187,10 +275,41 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 	}
 	var txInfo tproto.TransactionInfo
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Begin", req, &txInfo)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Begin might return an application error inside the TransactionInfo
+		return vterrors.FromRPCError(txInfo.Err)
 	}
 	err = conn.withTimeout(ctx, action)
 	return txInfo.TransactionId, tabletError(err)
+}
+
+// Begin2 should not be used for anything except tests for now;
+// it will eventually replace the existing Begin.
+// Begin2 starts a transaction.
+func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return 0, tabletconn.ConnClosed
+	}
+
+	beginRequest := &tproto.BeginRequest{
+		SessionId: conn.sessionID,
+	}
+	beginResponse := new(tproto.BeginResponse)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Begin2", beginRequest, beginResponse)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Begin might return an application error inside the TransactionInfo
+		return vterrors.FromRPCError(beginResponse.Err)
+	}
+	err = conn.withTimeout(ctx, action)
+	return beginResponse.TransactionId, tabletError(err)
 }
 
 // Commit commits the ongoing transaction.
@@ -207,6 +326,33 @@ func (conn *TabletBson) Commit(ctx context.Context, transactionID int64) error {
 	}
 	action := func() error {
 		return conn.rpcClient.Call(ctx, "SqlQuery.Commit", req, &rpc.Unused{})
+	}
+	err := conn.withTimeout(ctx, action)
+	return tabletError(err)
+}
+
+// Commit2 should not be used for anything except tests for now;
+// it will eventually replace the existing Commit.
+// Commit2 commits the ongoing transaction.
+func (conn *TabletBson) Commit2(ctx context.Context, transactionID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return tabletconn.ConnClosed
+	}
+
+	commitRequest := &tproto.CommitRequest{
+		SessionId:     conn.sessionID,
+		TransactionId: transactionID,
+	}
+	commitResponse := new(tproto.CommitResponse)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Commit2", commitRequest, commitResponse)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Commit might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(commitResponse.Err)
 	}
 	err := conn.withTimeout(ctx, action)
 	return tabletError(err)
@@ -231,6 +377,33 @@ func (conn *TabletBson) Rollback(ctx context.Context, transactionID int64) error
 	return tabletError(err)
 }
 
+// Rollback2 should not be used for anything except tests for now;
+// it will eventually replace the existing Rollback.
+// Rollback2 rolls back the ongoing transaction.
+func (conn *TabletBson) Rollback2(ctx context.Context, transactionID int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return tabletconn.ConnClosed
+	}
+
+	rollbackRequest := &tproto.RollbackRequest{
+		SessionId:     conn.sessionID,
+		TransactionId: transactionID,
+	}
+	rollbackResponse := new(tproto.RollbackResponse)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Rollback2", rollbackRequest, rollbackResponse)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Rollback might return an application error inside the ErrorOnly
+		return vterrors.FromRPCError(rollbackResponse.Err)
+	}
+	err := conn.withTimeout(ctx, action)
+	return tabletError(err)
+}
+
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC
 func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
@@ -246,7 +419,12 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	}
 	reply := new(tproto.SplitQueryResult)
 	action := func() error {
-		return conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply)
+		err := conn.rpcClient.Call(ctx, "SqlQuery.SplitQuery", req, reply)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.SplitQuery might return an application error inside the SplitQueryRequest
+		return vterrors.FromRPCError(reply.Err)
 	}
 	if err := conn.withTimeout(ctx, action); err != nil {
 		return nil, tabletError(err)

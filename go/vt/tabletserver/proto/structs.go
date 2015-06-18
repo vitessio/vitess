@@ -84,6 +84,7 @@ type QueryList struct {
 // QueryResultList is the return type for ExecuteBatch.
 type QueryResultList struct {
 	List []mproto.QueryResult
+	Err  *mproto.RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResultList -o query_result_list_bson.go
@@ -128,4 +129,103 @@ type QuerySplit struct {
 // SplitQueryResult represents the result of a SplitQueryRequest
 type SplitQueryResult struct {
 	Queries []QuerySplit
+	Err     *mproto.RPCError
+}
+
+// CallerID is the BSON implementation of the proto3 vtrpc.CallerID
+type CallerID struct {
+	Principal    string
+	Component    string
+	Subcomponent string
+}
+
+// VTGateCallerID is the BSON implementation of the proto3 query.VTGateCallerID
+type VTGateCallerID struct {
+	Username string
+}
+
+// TabletType is the BSON implementation of the proto3 query.TabletType.
+// Assumes that enums are expressed as int64 in BSON.
+type TabletType int64
+
+// Target is the BSON implementation of the proto3 query.Target
+type Target struct {
+	Keyspace   string
+	Shard      string
+	TabletType TabletType
+}
+
+// CommitRequest is the BSON implementation of the proto3 query.CommitRequest
+type CommitRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	TransactionId     int64
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// CommitResponse is the BSON implementation of the proto3 query.CommitResponse
+type CommitResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}
+
+// RollbackRequest is the BSON implementation of the proto3 query.RollbackRequest
+type RollbackRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	TransactionId     int64
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// RollbackResponse is the BSON implementation of the proto3 query.RollbackResponse
+type RollbackResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}
+
+// BeginRequest is the BSON implementation of the proto3 query.BeginkRequest
+type BeginRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	// Although SessionId is not part of the proto3 interface, we're adding it here
+	// for backwards compatibility reasons. The proto3 interface defines the future,
+	// where we think there might not be a need for SessionID.
+	SessionId int64
+}
+
+// BeginResponse is the BSON implementation of the proto3 query.BeginResponse
+type BeginResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err           *mproto.RPCError
+	TransactionId int64
+}
+
+// StreamExecuteRequest is the BSON implementation of the proto3 query.StreamExecuteRequest
+type StreamExecuteRequest struct {
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+	Target            *Target
+	// Query here is of type Query instead of BoundQuery because of backwards compatibility.
+	// The proto3 interface defines the future, where we think there might not be a need for SessionID.
+	Query *Query
+}
+
+// StreamExecuteResponse is the BSON implementation of the proto3 query.StreamExecuteResponse
+type StreamExecuteResponse struct {
+	Result *mproto.QueryResult
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
 }

@@ -355,7 +355,7 @@ class GoRpcClient(object):
       # tear down - off-by-one error in the connection somewhere
       self.close()
       raise GoRpcError('request sequence mismatch', response.sequence_id,
-                       self.req)
+                       self.seq)
 
     if response.error:
       self.start_time = None
