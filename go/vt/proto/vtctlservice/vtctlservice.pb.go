@@ -13,7 +13,7 @@ It has these top-level messages:
 package vtctlservice
 
 import proto "github.com/golang/protobuf/proto"
-import vtctl "github.com/youtube/vitess/go/vt/proto/vtctl"
+import vtctldata "github.com/youtube/vitess/go/vt/proto/vtctldata"
 
 import (
 	context "golang.org/x/net/context"
@@ -33,7 +33,7 @@ func init() {
 // Client API for Vtctl service
 
 type VtctlClient interface {
-	ExecuteVtctlCommand(ctx context.Context, in *vtctl.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error)
+	ExecuteVtctlCommand(ctx context.Context, in *vtctldata.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error)
 }
 
 type vtctlClient struct {
@@ -44,7 +44,7 @@ func NewVtctlClient(cc *grpc.ClientConn) VtctlClient {
 	return &vtctlClient{cc}
 }
 
-func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *vtctl.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error) {
+func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *vtctldata.ExecuteVtctlCommandRequest, opts ...grpc.CallOption) (Vtctl_ExecuteVtctlCommandClient, error) {
 	stream, err := grpc.NewClientStream(ctx, &_Vtctl_serviceDesc.Streams[0], c.cc, "/vtctlservice.Vtctl/ExecuteVtctlCommand", opts...)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (c *vtctlClient) ExecuteVtctlCommand(ctx context.Context, in *vtctl.Execute
 }
 
 type Vtctl_ExecuteVtctlCommandClient interface {
-	Recv() (*vtctl.ExecuteVtctlCommandResponse, error)
+	Recv() (*vtctldata.ExecuteVtctlCommandResponse, error)
 	grpc.ClientStream
 }
 
@@ -68,8 +68,8 @@ type vtctlExecuteVtctlCommandClient struct {
 	grpc.ClientStream
 }
 
-func (x *vtctlExecuteVtctlCommandClient) Recv() (*vtctl.ExecuteVtctlCommandResponse, error) {
-	m := new(vtctl.ExecuteVtctlCommandResponse)
+func (x *vtctlExecuteVtctlCommandClient) Recv() (*vtctldata.ExecuteVtctlCommandResponse, error) {
+	m := new(vtctldata.ExecuteVtctlCommandResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (x *vtctlExecuteVtctlCommandClient) Recv() (*vtctl.ExecuteVtctlCommandRespo
 // Server API for Vtctl service
 
 type VtctlServer interface {
-	ExecuteVtctlCommand(*vtctl.ExecuteVtctlCommandRequest, Vtctl_ExecuteVtctlCommandServer) error
+	ExecuteVtctlCommand(*vtctldata.ExecuteVtctlCommandRequest, Vtctl_ExecuteVtctlCommandServer) error
 }
 
 func RegisterVtctlServer(s *grpc.Server, srv VtctlServer) {
@@ -87,7 +87,7 @@ func RegisterVtctlServer(s *grpc.Server, srv VtctlServer) {
 }
 
 func _Vtctl_ExecuteVtctlCommand_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtctl.ExecuteVtctlCommandRequest)
+	m := new(vtctldata.ExecuteVtctlCommandRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func _Vtctl_ExecuteVtctlCommand_Handler(srv interface{}, stream grpc.ServerStrea
 }
 
 type Vtctl_ExecuteVtctlCommandServer interface {
-	Send(*vtctl.ExecuteVtctlCommandResponse) error
+	Send(*vtctldata.ExecuteVtctlCommandResponse) error
 	grpc.ServerStream
 }
 
@@ -103,7 +103,7 @@ type vtctlExecuteVtctlCommandServer struct {
 	grpc.ServerStream
 }
 
-func (x *vtctlExecuteVtctlCommandServer) Send(m *vtctl.ExecuteVtctlCommandResponse) error {
+func (x *vtctlExecuteVtctlCommandServer) Send(m *vtctldata.ExecuteVtctlCommandResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 

@@ -5,7 +5,7 @@
 
 syntax = "proto3";
 
-package topo;
+package topodata;
 
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.

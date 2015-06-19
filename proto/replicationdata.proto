@@ -2,7 +2,7 @@
 
 syntax = "proto3";
 
-package replication;
+package replicationdata;
 
 // MariaDB 10.0
 message MariadbGtid {

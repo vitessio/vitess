@@ -10,7 +10,7 @@ import logging
 from urlparse import urlparse
 
 import vtctl_client
-import vtctl_pb2
+import vtctldata_pb2
 import vtctlservice_pb2
 
 class GRPCVtctlClient(vtctl_client.VctlClient):
@@ -55,7 +55,7 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
         Returns:
             The console output of the action.
         """
-        req = vtctl_pb2.ExecuteVtctlCommandRequest(
+        req = vtctldata_pb2.ExecuteVtctlCommandRequest(
             args=args,
             action_timeout=long(action_timeout * 1000000000),
             lock_timeout=long(lock_timeout * 1000000000))

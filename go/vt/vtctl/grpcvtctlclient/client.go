@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
+	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 

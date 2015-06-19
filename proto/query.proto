@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package query;
 
-import "topo.proto";
+import "topodata.proto";
 import "vtrpc.proto";
 
 // Target describes what the client expects the tablet is.
@@ -13,7 +13,7 @@ import "vtrpc.proto";
 message Target {
   string keyspace = 1;
   string shard = 2;
-  topo.TabletType TabletType = 3;
+  topodata.TabletType TabletType = 3;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the

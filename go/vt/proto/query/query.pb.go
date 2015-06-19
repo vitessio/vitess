@@ -37,7 +37,7 @@ It has these top-level messages:
 package query
 
 import proto "github.com/golang/protobuf/proto"
-import topo "github.com/youtube/vitess/go/vt/proto/topo"
+import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -251,9 +251,9 @@ func (x Field_Flag) String() string {
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
 type Target struct {
-	Keyspace   string          `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shard      string          `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
-	TabletType topo.TabletType `protobuf:"varint,3,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
+	Keyspace   string              `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shard      string              `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
 }
 
 func (m *Target) Reset()         { *m = Target{} }

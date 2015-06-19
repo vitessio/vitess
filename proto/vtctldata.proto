@@ -3,7 +3,7 @@
 
 syntax = "proto3";
 
-package vtctl;
+package vtctldata;
 
 // Time represents a time stamp in nanoseconds. In go, use time.Unix to
 // rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.

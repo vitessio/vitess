@@ -3,12 +3,12 @@
 
 syntax = "proto3";
 
-package tabletmanager;
+package tabletmanagerdata;
 
 import "query.proto";
-import "topo.proto";
-import "replication.proto";
-import "vtctl.proto";
+import "topodata.proto";
+import "replicationdata.proto";
+import "vtctldata.proto";
 
 //
 // Data structures
@@ -81,7 +81,7 @@ message Permissions {
 // BlpPosition is a replication position for a given binlog player
 message BlpPosition {
   uint32 uid = 1;
-  replication.Position position = 2;
+  replicationdata.Position position = 2;
 }
 
 //
@@ -146,7 +146,7 @@ message SetReadWriteResponse {
 }
 
 message ChangeTypeRequest {
-  topo.TabletType tablet_type = 1;
+  topodata.TabletType tablet_type = 1;
 }
 
 message ChangeTypeResponse {
@@ -165,7 +165,7 @@ message RefreshStateResponse {
 }
 
 message RunHealthCheckRequest {
-  topo.TabletType tablet_type = 1;
+  topodata.TabletType tablet_type = 1;
 }
 
 message RunHealthCheckResponse {
@@ -175,7 +175,7 @@ message StreamHealthRequest {
 }
 
 message StreamHealthResponse {
-  topo.Tablet tablet = 1;
+  topodata.Tablet tablet = 1;
   int64 binlog_player_map_size = 2;
   string health_error = 3;
 
@@ -238,14 +238,14 @@ message SlaveStatusRequest {
 }
 
 message SlaveStatusResponse {
-  replication.Status status = 1;
+  replicationdata.Status status = 1;
 }
 
 message MasterPositionRequest {
 }
 
 message MasterPositionResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message StopSlaveRequest {
@@ -255,12 +255,12 @@ message StopSlaveResponse {
 }
 
 message StopSlaveMinimumRequest {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
   int64 wait_timeout = 2;
 }
 
 message StopSlaveMinimumResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message StartSlaveRequest {
@@ -319,7 +319,7 @@ message RunBlpUntilRequest {
 }
 
 message RunBlpUntilResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message ResetReplicationRequest {
@@ -332,22 +332,22 @@ message InitMasterRequest {
 }
 
 message InitMasterResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message PopulateReparentJournalRequest {
   int64 time_created_ns = 1;
   string action_name = 2;
-  topo.TabletAlias master_alias = 3;
-  replication.Position replication_position = 4;
+  topodata.TabletAlias master_alias = 3;
+  replicationdata.Position replication_position = 4;
 }
 
 message PopulateReparentJournalResponse {
 }
 
 message InitSlaveRequest {
-  topo.TabletAlias parent = 1;
-  replication.Position replication_position = 2;
+  topodata.TabletAlias parent = 1;
+  replicationdata.Position replication_position = 2;
   int64 time_created_ns = 3;
 }
 
@@ -358,15 +358,15 @@ message DemoteMasterRequest {
 }
 
 message DemoteMasterResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message PromoteSlaveWhenCaughtUpRequest {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message PromoteSlaveWhenCaughtUpResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 message SlaveWasPromotedRequest {
@@ -376,7 +376,7 @@ message SlaveWasPromotedResponse {
 }
 
 message SetMasterRequest {
-  topo.TabletAlias parent = 1;
+  topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
   bool force_start_slave = 3;
 }
@@ -386,7 +386,7 @@ message SetMasterResponse {
 
 message SlaveWasRestartedRequest {
   // the parent alias the tablet should have
-  topo.TabletAlias parent = 1;
+  topodata.TabletAlias parent = 1;
 }
 
 message SlaveWasRestartedResponse {
@@ -396,14 +396,14 @@ message StopReplicationAndGetStatusRequest {
 }
 
 message StopReplicationAndGetStatusResponse {
-  replication.Status status = 1;
+  replicationdata.Status status = 1;
 }
 
 message PromoteSlaveRequest {
 }
 
 message PromoteSlaveResponse {
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 // Backup / Restore related messages
@@ -413,5 +413,5 @@ message BackupRequest {
 }
 
 message BackupResponse {
-  vtctl.LoggerEvent event = 1;
+  vtctldata.LoggerEvent event = 1;
 }

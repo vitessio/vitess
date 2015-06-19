@@ -5,19 +5,19 @@ syntax = "proto3";
 
 package binlogservice;
 
-import "binlog.proto";
+import "binlogdata.proto";
 
 // UpdateStream is the RPC version of binlog.UpdateStream.
 service UpdateStream {
 
   // StreamUpdate streams the binlog events, to know which objects have changed.
-  rpc StreamUpdate(binlog.StreamUpdateRequest) returns (binlog.StreamUpdateResponse) {};
+  rpc StreamUpdate(binlogdata.StreamUpdateRequest) returns (binlogdata.StreamUpdateResponse) {};
 
   // StreamKeyRange returns the binlog transactions related to
   // the specified Keyrange.
-  rpc StreamKeyRange(binlog.StreamKeyRangeRequest) returns (binlog.StreamKeyRangeResponse) {};
+  rpc StreamKeyRange(binlogdata.StreamKeyRangeRequest) returns (binlogdata.StreamKeyRangeResponse) {};
 
   // StreamTables returns the binlog transactions related to
   // the specified Tables.
-  rpc StreamTables(binlog.StreamTablesRequest) returns (binlog.StreamTablesResponse) {};
+  rpc StreamTables(binlogdata.StreamTablesRequest) returns (binlogdata.StreamTablesResponse) {};
 }
