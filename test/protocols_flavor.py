@@ -32,6 +32,12 @@ class ProtocolsFlavor(object):
     """Returns the error message used by the protocol to indicate a timeout."""
     raise NotImplementedError('Not implemented in the base class')
 
+  def service_map(self):
+    """Returns a list of entries for the service map to enable all
+    relevant protocols in all servers."""
+    raise NotImplementedError('Not implemented in the base class')
+
+
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
 
@@ -52,6 +58,10 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
 
   def rpc_timeout_message(self):
     return 'timeout waiting for'
+
+  def service_map(self):
+    return []
+
 
 class GRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use gRPC everywhere where it is supported.
@@ -74,6 +84,10 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
 
   def rpc_timeout_message(self):
     return 'timeout waiting for'
+
+  def service_map(self):
+    return ['grpc-queryservice', 'grpc-vtctl']
+
 
 __knows_protocols_flavor_map = {
   'gorpc': GoRpcProtocolsFlavor,
