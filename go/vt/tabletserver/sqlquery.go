@@ -344,7 +344,12 @@ func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQ
 			return
 		}
 		if sq.config.TerseErrors && terr.SqlError != 0 {
-			*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+			if terr.SqlMessage == "" {
+				*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+			} else {
+				*err = fmt.Errorf("%s: %s(errno %d) during query: %s",
+					terr.Prefix(), terr.Message, terr.SqlError, query.Sql)
+			}
 		} else {
 			*err = terr
 		}

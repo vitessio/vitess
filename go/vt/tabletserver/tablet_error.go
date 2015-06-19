@@ -14,6 +14,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -48,9 +49,10 @@ var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
 // TabletError is the error type we use in this library
 type TabletError struct {
-	ErrorType int
-	Message   string
-	SqlError  int
+	ErrorType  int
+	Message    string
+	SqlError   int
+	SqlMessage string
 }
 
 // This is how go-mysql exports its error number
@@ -69,9 +71,13 @@ func NewTabletError(errorType int, format string, args ...interface{}) *TabletEr
 // NewTabletErrorSql returns a TabletError based on the error
 func NewTabletErrorSql(errorType int, err error) *TabletError {
 	var errnum int
+	var sqlMsg string
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
 		errnum = sqlErr.Number()
+		if sqldbErr, ok := err.(*sqldb.SqlError); ok {
+			sqlMsg = sqldbErr.Message
+		}
 		// Override error type if MySQL is in read-only mode. It's probably because
 		// there was a remaster and there are old clients still connected.
 		if errnum == mysql.ErrOptionPreventsStatement && strings.Contains(errstr, "read-only") {
@@ -79,9 +85,10 @@ func NewTabletErrorSql(errorType int, err error) *TabletError {
 		}
 	}
 	return &TabletError{
-		ErrorType: errorType,
-		Message:   printable(errstr),
-		SqlError:  errnum,
+		ErrorType:  errorType,
+		Message:    printable(errstr),
+		SqlError:   errnum,
+		SqlMessage: sqlMsg,
 	}
 }
 
