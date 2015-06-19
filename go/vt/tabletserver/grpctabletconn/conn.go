@@ -52,9 +52,11 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		Shard:    shard,
 	})
 	if err != nil {
+		cc.Close()
 		return nil, err
 	}
 	if gsir.Error != nil {
+		cc.Close()
 		return nil, tabletErrorFromRPCError(gsir.Error)
 	}
 

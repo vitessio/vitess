@@ -876,9 +876,10 @@ class Vtctld(object):
             environment.topo_server().flags() + \
             protocols_flavor().tablet_manager_protocol_flags() + \
             protocols_flavor().vtgate_protocol_flags()
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
-      args += ['-grpc_port', str(self.grpc_port),
-              '-service_map', 'grpc-vtctl']
+      args.extend(['-grpc_port', str(self.grpc_port)])
     stderr_fd = open(os.path.join(environment.tmproot, 'vtctld.stderr'), 'w')
     self.proc = run_bg(args, stderr=stderr_fd)
 

@@ -382,9 +382,10 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if protocols_flavor().tabletconn_protocol() == 'grpc':
-      args.extend(['-grpc_port', str(self.grpc_port),
-                   '-service_map', 'grpc-queryservice'])
+      args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
     if security_policy:
