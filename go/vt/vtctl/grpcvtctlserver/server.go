@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
+	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 

@@ -3,10 +3,10 @@
 
 syntax = "proto3";
 
-package binlog;
+package binlogdata;
 
-import "topo.proto";
-import "replication.proto";
+import "topodata.proto";
+import "replicationdata.proto";
 
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
 message Charset {
@@ -54,7 +54,7 @@ message BinlogTransaction {
 // StreamUpdateRequest is the payload to StreamUpdate
 message StreamUpdateRequest{
   // where to start
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 }
 
 // StreamUpdateResponse is the response from StreamUpdate
@@ -64,13 +64,13 @@ message StreamUpdateResponse{
 // StreamKeyRangeRequest is the payload to StreamKeyRange
 message StreamKeyRangeRequest {
   // where to start
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 
   // type to get
-  topo.KeyspaceIdType keyspace_id_type = 2;
+  topodata.KeyspaceIdType keyspace_id_type = 2;
 
   // what to get
-  topo.KeyRange key_range = 3;
+  topodata.KeyRange key_range = 3;
 
   // default charset on the player side
   Charset charset = 4;
@@ -84,7 +84,7 @@ message StreamKeyRangeResponse{
 // StreamTablesRequest is the payload to StreamTables
 message StreamTablesRequest {
   // where to start
-  replication.Position position = 1;
+  replicationdata.Position position = 1;
 
   // what to get
   repeated string tables = 2;

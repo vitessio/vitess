@@ -13,7 +13,7 @@ It has these top-level messages:
 package binlogservice
 
 import proto "github.com/golang/protobuf/proto"
-import binlog "github.com/youtube/vitess/go/vt/proto/binlog"
+import binlogdata "github.com/youtube/vitess/go/vt/proto/binlogdata"
 
 import (
 	context "golang.org/x/net/context"
@@ -34,13 +34,13 @@ func init() {
 
 type UpdateStreamClient interface {
 	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(ctx context.Context, in *binlog.StreamUpdateRequest, opts ...grpc.CallOption) (*binlog.StreamUpdateResponse, error)
+	StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (*binlogdata.StreamUpdateResponse, error)
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
-	StreamKeyRange(ctx context.Context, in *binlog.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlog.StreamKeyRangeResponse, error)
+	StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlogdata.StreamKeyRangeResponse, error)
 	// StreamTables returns the binlog transactions related to
 	// the specified Tables.
-	StreamTables(ctx context.Context, in *binlog.StreamTablesRequest, opts ...grpc.CallOption) (*binlog.StreamTablesResponse, error)
+	StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (*binlogdata.StreamTablesResponse, error)
 }
 
 type updateStreamClient struct {
@@ -51,8 +51,8 @@ func NewUpdateStreamClient(cc *grpc.ClientConn) UpdateStreamClient {
 	return &updateStreamClient{cc}
 }
 
-func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlog.StreamUpdateRequest, opts ...grpc.CallOption) (*binlog.StreamUpdateResponse, error) {
-	out := new(binlog.StreamUpdateResponse)
+func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (*binlogdata.StreamUpdateResponse, error) {
+	out := new(binlogdata.StreamUpdateResponse)
 	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamUpdate", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -60,8 +60,8 @@ func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlog.Stream
 	return out, nil
 }
 
-func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlog.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlog.StreamKeyRangeResponse, error) {
-	out := new(binlog.StreamKeyRangeResponse)
+func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlogdata.StreamKeyRangeResponse, error) {
+	out := new(binlogdata.StreamKeyRangeResponse)
 	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamKeyRange", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -69,8 +69,8 @@ func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlog.Stre
 	return out, nil
 }
 
-func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlog.StreamTablesRequest, opts ...grpc.CallOption) (*binlog.StreamTablesResponse, error) {
-	out := new(binlog.StreamTablesResponse)
+func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (*binlogdata.StreamTablesResponse, error) {
+	out := new(binlogdata.StreamTablesResponse)
 	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamTables", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
@@ -82,13 +82,13 @@ func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlog.Stream
 
 type UpdateStreamServer interface {
 	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(context.Context, *binlog.StreamUpdateRequest) (*binlog.StreamUpdateResponse, error)
+	StreamUpdate(context.Context, *binlogdata.StreamUpdateRequest) (*binlogdata.StreamUpdateResponse, error)
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
-	StreamKeyRange(context.Context, *binlog.StreamKeyRangeRequest) (*binlog.StreamKeyRangeResponse, error)
+	StreamKeyRange(context.Context, *binlogdata.StreamKeyRangeRequest) (*binlogdata.StreamKeyRangeResponse, error)
 	// StreamTables returns the binlog transactions related to
 	// the specified Tables.
-	StreamTables(context.Context, *binlog.StreamTablesRequest) (*binlog.StreamTablesResponse, error)
+	StreamTables(context.Context, *binlogdata.StreamTablesRequest) (*binlogdata.StreamTablesResponse, error)
 }
 
 func RegisterUpdateStreamServer(s *grpc.Server, srv UpdateStreamServer) {
@@ -96,7 +96,7 @@ func RegisterUpdateStreamServer(s *grpc.Server, srv UpdateStreamServer) {
 }
 
 func _UpdateStream_StreamUpdate_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlog.StreamUpdateRequest)
+	in := new(binlogdata.StreamUpdateRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func _UpdateStream_StreamUpdate_Handler(srv interface{}, ctx context.Context, co
 }
 
 func _UpdateStream_StreamKeyRange_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlog.StreamKeyRangeRequest)
+	in := new(binlogdata.StreamKeyRangeRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func _UpdateStream_StreamKeyRange_Handler(srv interface{}, ctx context.Context, 
 }
 
 func _UpdateStream_StreamTables_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlog.StreamTablesRequest)
+	in := new(binlogdata.StreamTablesRequest)
 	if err := codec.Unmarshal(buf, in); err != nil {
 		return nil, err
 	}

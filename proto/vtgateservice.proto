@@ -7,7 +7,7 @@ package vtgateservice;
 
 import "vtgate.proto";
 
-service VTGate {
+service Vitess {
   // Execute executes tries to route the query to the right shard.
   // (this is a vtgate v3 API, use carefully)
   rpc Execute(vtgate.ExecuteRequest) returns (vtgate.ExecuteResponse) {};
