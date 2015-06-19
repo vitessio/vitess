@@ -16,6 +16,8 @@ It has these top-level messages:
 	Field
 	Row
 	QueryResult
+	GetSessionIdRequest
+	GetSessionIdResponse
 	ExecuteRequest
 	ExecuteResponse
 	ExecuteBatchRequest
@@ -365,6 +367,49 @@ func (m *QueryResult) GetRows() []*Row {
 	return nil
 }
 
+// GetSessionIdRequest is the payload to GetSessionId
+type GetSessionIdRequest struct {
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Keyspace          string          `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shard             string          `protobuf:"bytes,4,opt,name=shard" json:"shard,omitempty"`
+}
+
+func (m *GetSessionIdRequest) Reset()         { *m = GetSessionIdRequest{} }
+func (m *GetSessionIdRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSessionIdRequest) ProtoMessage()    {}
+
+func (m *GetSessionIdRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.EffectiveCallerId
+	}
+	return nil
+}
+
+func (m *GetSessionIdRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
+	}
+	return nil
+}
+
+// GetSessionIdResponse is the returned value from GetSessionId
+type GetSessionIdResponse struct {
+	Error     *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	SessionId int64           `protobuf:"varint,2,opt,name=session_id" json:"session_id,omitempty"`
+}
+
+func (m *GetSessionIdResponse) Reset()         { *m = GetSessionIdResponse{} }
+func (m *GetSessionIdResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSessionIdResponse) ProtoMessage()    {}
+
+func (m *GetSessionIdResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
@@ -372,6 +417,7 @@ type ExecuteRequest struct {
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
 	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
@@ -437,6 +483,7 @@ type ExecuteBatchRequest struct {
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
 	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
@@ -501,6 +548,7 @@ type StreamExecuteRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
@@ -564,6 +612,7 @@ type BeginRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	SessionId         int64           `protobuf:"varint,4,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
@@ -614,6 +663,7 @@ type CommitRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
@@ -663,6 +713,7 @@ type RollbackRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
@@ -712,7 +763,9 @@ type SplitQueryRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	SplitCount        int64           `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
+	SplitColumn       string          `protobuf:"bytes,5,opt,name=split_column" json:"split_column,omitempty"`
+	SplitCount        int64           `protobuf:"varint,6,opt,name=split_count" json:"split_count,omitempty"`
+	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }

@@ -16,6 +16,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
@@ -307,4 +308,26 @@ func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 		return
 	}
 	reply.Err = rpcErrFromTabletError(err)
+}
+
+// TabletErrorToRPCError transforms the provided error to a RPCError,
+// if any.
+func TabletErrorToRPCError(err error) *vtrpc.RPCError {
+	if err == nil {
+		return nil
+	}
+	if terr, ok := err.(*TabletError); ok {
+		return &vtrpc.RPCError{
+			// Transform TabletError code to VitessError code
+			Code: vtrpc.ErrorCode(int64(terr.ErrorType) + vterrors.TabletError),
+			// Make sure the the VitessError message is identical to the TabletError
+			// err, so that downstream consumers will see identical messages no matter
+			// which endpoint they're using.
+			Message: terr.Error(),
+		}
+	}
+	return &vtrpc.RPCError{
+		Code:    vtrpc.ErrorCode_UnknownTabletError,
+		Message: err.Error(),
+	}
 }

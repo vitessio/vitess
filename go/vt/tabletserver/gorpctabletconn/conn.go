@@ -287,7 +287,7 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 }
 
 // Begin2 should not be used for anything except tests for now;
-// it will eventually replace the existing Commit.
+// it will eventually replace the existing Begin.
 // Begin2 starts a transaction.
 func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()

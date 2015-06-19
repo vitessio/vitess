@@ -29,7 +29,7 @@ func TestVtctlServer(t *testing.T) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	// Create a Go Rpc server and listen on the port
+	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	pbs.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
 	go server.Serve(listener)

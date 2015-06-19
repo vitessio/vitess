@@ -12,11 +12,9 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
@@ -84,9 +82,5 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 
 // StartServer registers the VtctlServer for RPCs
 func StartServer(s *grpc.Server, ts topo.Server) {
-	if !servenv.ServiceMap["grpc-vtctl"] {
-		log.Infof("Disabling gRPC vtctl service")
-		return
-	}
 	pbs.RegisterVtctlServer(s, NewVtctlServer(ts))
 }
