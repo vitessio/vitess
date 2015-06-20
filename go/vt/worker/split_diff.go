@@ -384,41 +384,55 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 
 			sdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
 			if len(sdw.sourceAliases) != 1 {
-				sdw.wr.Logger().Errorf("Don't support more than one source for table yet: %v", tableDefinition.Name)
+				err := fmt.Errorf("Don't support more than one source for table yet: %v", tableDefinition.Name)
+				rec.RecordError(err)
+				sdw.wr.Logger().Errorf(err.Error())
 				return
 			}
 
 			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
 			if err != nil {
-				sdw.wr.Logger().Errorf("Source shard doesn't overlap with destination????: %v", err)
+				newErr := fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
+				rec.RecordError(newErr)
+				sdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.wr.Logger().Errorf("TableScanByKeyRange(source) failed: %v", err)
+				newErr := fmt.Errorf("TableScanByKeyRange(source) failed: %v", err)
+				rec.RecordError(newErr)
+				sdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
 			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.wr.Logger().Errorf("TableScanByKeyRange(destination) failed: %v", err)
+				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
+				rec.RecordError(newErr)
+				sdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
-				sdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
+				newErr := fmt.Errorf("NewRowDiffer() failed: %v", err)
+				rec.RecordError(newErr)
+				sdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 
 			report, err := differ.Go(sdw.wr.Logger())
 			if err != nil {
-				sdw.wr.Logger().Errorf("Differ.Go failed: %v", err.Error())
+				newErr := fmt.Errorf("Differ.Go failed: %v", err.Error())
+				rec.RecordError(newErr)
+				sdw.wr.Logger().Errorf(newErr.Error())
 			} else {
 				if report.HasDifferences() {
-					sdw.wr.Logger().Warningf("Table %v has differences: %v", tableDefinition.Name, report.String())
+					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
+					rec.RecordError(err)
+					sdw.wr.Logger().Warningf(err.Error())
 				} else {
 					sdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
@@ -427,5 +441,5 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	}
 	wg.Wait()
 
-	return nil
+	return rec.Error()
 }
