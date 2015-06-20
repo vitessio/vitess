@@ -46,7 +46,7 @@ spec:
           -tablet_hostname $(hostname -i)
           -init_keyspace {{keyspace}}
           -init_shard {{shard}}
-          -target_tablet_type replica
+          -target_tablet_type {{tablet_type}}
           -mysqlctl_socket $VTDATAROOT/mysqlctl.sock
           -db-config-app-uname vt_app
           -db-config-app-dbname vt_{{keyspace}}
