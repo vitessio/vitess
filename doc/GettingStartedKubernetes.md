@@ -188,15 +188,24 @@ $ cd $GOPATH/src/github.com/youtube/vitess
 
 1.  **Start an etcd cluster:**
 
+    The Vitess [topology service](http://vitess.io/overview/concepts.html#topology-service)
+    stores coordination data for all the servers in a Vitess cluster.
+    It can store this data in one of several consistent storage systems.
+    In this example, we'll use [etcd](https://github.com/coreos/etcd).
+    Note that we need our own etcd clusters, separate from the one used by
+    Kubernetes itself.
+
     ``` sh
 $ cd examples/kubernetes
 vitess/examples/kubernetes$ ./etcd-up.sh
 ```
 
-    <br>This command creates two clusters. One is for the global cell,
-    and the other is for the test cell. You can check the status
-    of the [pods]
-    (https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
+    <br>This command creates two clusters. One is for the
+    [global cell](http://vitess.io/doc/TopologyService/#global-vs-local),
+    and the other is for a
+    [local cell](http://vitess.io/overview/concepts.html#cell-(data-center))
+    called *test*. You can check the status of the
+    [pods](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
     in the cluster by running:
 
     ``` sh
@@ -302,11 +311,20 @@ $ kvtctl help
 $ kvtctl help InitTablet
 ```
 
+    <br>See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
+    web-formatted version of the <code>vtctl help</code> output.
+
 1.  **Start vttablets**
 
-    Call the following script to launch <code>vttablet</code>
-    and <code>mysqld</code> in a [pod]
-    (https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md):
+    A Vitess [tablet](http://vitess.io/overview/concepts.html#tablet) is the
+    unit of scaling for the database. A tablet consists of the
+    <code>vttablet</code> and <code>mysqld</code> processes, running on the same
+    host. We enforce this coupling in Kubernetes by putting the respective
+    containers for vttablet and mysqld inside a single
+    [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
+
+    Run the following script to launch the vttablet pod, which also includes
+    mysqld:
 
     ``` sh
 vitess/examples/kubernetes$ ./vttablet-up.sh
@@ -335,8 +353,11 @@ $ kvtctl ListAllTablets test
 # test-0000000102 test_keyspace 0 replica 10.64.2.10:15002 10.64.2.10:3306 []
 ```
 
-    <br>By bringing up tablets in a previously empty keyspace, you have
-    effectively just created a new shard. To initialize the keyspace for the new
+    <br>By bringing up tablets in a previously empty
+    [keyspace](http://vitess.io/overview/concepts.html#keyspace),
+    you have effectively just created a new
+    [shard](http://vitess.io/overview/concepts.html#shard).
+    To initialize the keyspace for the new
     shard, call the <code>kvtctl RebuildKeyspaceGraph</code> command:
 
     ``` sh
@@ -399,13 +420,13 @@ vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.
 
 1.  **Elect a master vttablet**
 
-    The vttablets are all started as replicas. In this step, you
-    designate one of the vttablets to be the master. Vitess
+    The tablets are all started as replicas. In this step, you
+    designate one of the tablets to be the master. Vitess
     automatically connects the other replicas' mysqld instances
     so that they start replicating from the master's mysqld.<br><br>
 
     Since this is the first time the shard has been started,
-    the vttablets are not already doing any replication, and the
+    the tablets are not already doing any replication, and the
     tablet types are all replica or spare. As a
     result, the following command uses the <code>-force</code>
     flag when calling the <code>InitShardMaster</code> command
@@ -425,7 +446,7 @@ $ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
 
     After running this command, go back to the **Topology** page
     in the <code>vtctld</code> web interface. When you refresh the
-    page, you should see that one <code>vttablet</code> is the master
+    page, you should see that one tablet is the master
     and the other two are replicas.<br><br>
 
     You can also run this command on the command line to see the
@@ -545,6 +566,10 @@ database. In the meantime, JavaScript on the page continuously polls
 the app server to retrieve a list of GuestBook entries. The app serves
 read-only requests by querying Vitess in 'replica' mode, confirming
 that replication is working.
+
+You can also monitor what each tablet is doing by viewing the vttablet status
+page, as described above. For example, you can see the *Query Stats* change as
+you hit the frontend.
 
 The [GuestBook source code]
 (https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
