@@ -1,35 +1,17 @@
-// This package contains the data sturctures for a service allowing
-// you to use vtctld as a server for vt commands.
+// Data structures for the vtworker RPC interface.
 
 syntax = "proto3";
 
-package vtctldata;
+package vtworkerdata;
 
-// Time represents a time stamp in nanoseconds. In go, use time.Unix to
-// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
-message Time {
-  int64 seconds = 1;
-  int64 nanoseconds = 2;
-}
+import "vtctldata.proto";
 
-// Streamed by ExecuteVtctlCommand
-message LoggerEvent {
-  Time time = 1;
-  int64 level = 2;
-  string file = 3;
-  int64 line = 4;
-  string value = 5;
-}
-
-// ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
-// timeouts are in nanoseconds.
-message ExecuteVtctlCommandRequest {
+// ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
+message ExecuteVtworkerCommandRequest {
   repeated string args = 1;
-  int64 action_timeout = 2;
-  int64 lock_timeout = 3;
 }
 
-// ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
-message ExecuteVtctlCommandResponse {
-  LoggerEvent event = 1;
+// ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
+message ExecuteVtworkerCommandResponse {
+  vtctldata.LoggerEvent event = 1;
 }

@@ -3,39 +3,39 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package grpcvtctlserver contains the gRPC implementation of the server side
-of the remote execution of vtctl commands.
+Package grpcvtworkerserver contains the gRPC implementation of the server side
+of the remote execution of vtworker commands.
 */
-package grpcvtctlserver
+package grpcvtworkerserver
 
 import (
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
+	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	pbvd "github.com/youtube/vitess/go/vt/proto/vtctldata"
+	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
+	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
-// VtctlServer is our RPC server
-type VtctlServer struct {
-	ts topo.Server
+// VtworkerServer is our RPC server
+type VtworkerServer struct {
+	wi *worker.WorkerInstance
 }
 
-// NewVtctlServer returns a new Vtctl Server for the topo server.
-func NewVtctlServer(ts topo.Server) *VtctlServer {
-	return &VtctlServer{ts}
+// NewVtworkerServer returns a new Vtworker Server for the topo server.
+func NewVtworkerServer(wi *worker.WorkerInstance) *VtworkerServer {
+	return &VtworkerServer{wi}
 }
 
-// ExecuteVtctlCommand is part of the pb.VtctlServer interface
-func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, stream pbs.Vtctl_ExecuteVtctlCommandServer) (err error) {
+// ExecuteVtworkerCommand is part of the pb.VtworkerServer interface
+func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandRequest, stream pbs.Vtworker_ExecuteVtworkerCommandServer) (err error) {
 	defer vtctl.HandlePanic(&err)
 
 	// create a logger, send the result back to the caller
@@ -51,9 +51,9 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// we still need to flush and finish the
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
-			stream.Send(&pb.ExecuteVtctlCommandResponse{
-				Event: &pb.LoggerEvent{
-					Time: &pb.Time{
+			stream.Send(&pb.ExecuteVtworkerCommandResponse{
+				Event: &pbvd.LoggerEvent{
+					Time: &pbvd.Time{
 						Seconds:     e.Time.Unix(),
 						Nanoseconds: int64(e.Time.Nanosecond()),
 					},
@@ -68,10 +68,10 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.ts, tmclient.NewTabletManagerClient(), time.Duration(args.LockTimeout))
+	wr := wrangler.New(logger, s.wi.TopoServer, tmclient.NewTabletManagerClient(), s.wi.LockTimeout)
 
 	// execute the command
-	err = vtctl.RunCommand(stream.Context(), wr, args.Args)
+	err = s.wi.RunCommand(args.Args, wr)
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)
@@ -80,7 +80,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 	return err
 }
 
-// StartServer registers the VtctlServer for RPCs
-func StartServer(s *grpc.Server, ts topo.Server) {
-	pbs.RegisterVtctlServer(s, NewVtctlServer(ts))
+// StartServer registers the VtworkerServer for RPCs
+func StartServer(s *grpc.Server, wi *worker.WorkerInstance) {
+	pbs.RegisterVtworkerServer(s, NewVtworkerServer(wi))
 }
