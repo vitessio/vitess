@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package worker
 
 import (
 	"flag"
@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -58,7 +57,7 @@ const splitDiffHTML2 = `
 var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
 var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
-func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
+func commandSplitDiff(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -72,7 +71,7 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray), nil
+	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray), nil
 }
 
 // shardsWithSources returns all the shards that have SourceShards set
@@ -129,7 +128,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	return result, nil
 }
 
-func interactiveSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(wi* WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -169,8 +168,8 @@ func interactiveSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.Res
 	}
 
 	// start the diff job
-	wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray)
-	if _, err := setAndStartWorker(wrk); err != nil {
+	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
+	if _, err := wi.setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
 	}

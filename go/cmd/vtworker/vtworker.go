@@ -16,9 +16,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
@@ -29,11 +26,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 )
 
 var (
 	cell = flag.String("cell", "", "cell to pick servers from")
+	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 )
 
 func init() {
@@ -41,79 +38,13 @@ func init() {
 }
 
 var (
-	// global wrangler object we'll use
-	wr *wrangler.Wrangler
-
-	// mutex is protecting all the following variables
-	// 3 states here:
-	// - no job ever ran (or reset was run): currentWorker is nil,
-	// currentContext/currentCancelFunc is nil, lastRunError is nil
-	// - one worker running: currentWorker is set,
-	//   currentContext/currentCancelFunc is set, lastRunError is nil
-	// - (at least) one worker already ran, none is running atm:
-	//   currentWorker is set, currentContext is nil, lastRunError
-	//   has the error returned by the worker.
-	currentWorkerMutex  sync.Mutex
-	currentWorker       worker.Worker
-	currentMemoryLogger *logutil.MemoryLogger
-	currentContext      context.Context
-	currentCancelFunc   context.CancelFunc
-	lastRunError        error
+	wi *worker.WorkerInstance
 )
-
-// signal handling, centralized here
-func installSignalHandlers() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		<-sigChan
-		// we got a signal, notify our modules
-		currentWorkerMutex.Lock()
-		defer currentWorkerMutex.Unlock()
-		if currentCancelFunc != nil {
-			currentCancelFunc()
-		}
-	}()
-}
-
-// setAndStartWorker will set the current worker.
-// We always log to both memory logger (for display on the web) and
-// console logger (for records / display of command line worker).
-func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
-	currentWorkerMutex.Lock()
-	defer currentWorkerMutex.Unlock()
-	if currentWorker != nil {
-		return nil, fmt.Errorf("A worker is already in progress: %v", currentWorker)
-	}
-
-	currentWorker = wrk
-	currentMemoryLogger = logutil.NewMemoryLogger()
-	currentContext, currentCancelFunc = context.WithCancel(context.Background())
-	lastRunError = nil
-	done := make(chan struct{})
-	wr.SetLogger(logutil.NewTeeLogger(currentMemoryLogger, logutil.NewConsoleLogger()))
-
-	// one go function runs the worker, changes state when done
-	go func() {
-		// run will take a long time
-		log.Infof("Starting worker...")
-		err := wrk.Run(currentContext)
-
-		// it's done, let's save our state
-		currentWorkerMutex.Lock()
-		currentContext = nil
-		currentCancelFunc = nil
-		lastRunError = err
-		currentWorkerMutex.Unlock()
-		close(done)
-	}()
-
-	return done, nil
-}
 
 func main() {
 	defer exit.Recover()
 
+	setUsage()
 	flag.Parse()
 	args := flag.Args()
 
@@ -123,20 +54,41 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
+	wi = worker.NewWorkerInstance(ts, *cell, 30*time.Second, *commandDisplayInterval)
+
 	// The logger will be replaced when we start a job.
-	wr = wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), 30*time.Second)
+	wi.Wr = wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), wi.LockTimeout)
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
-		initInteractiveMode()
+		wi.InitInteractiveMode()
 	} else {
 		// In single command mode, just run it.
-		if err := runCommand(args); err != nil {
+		if err := wi.RunCommand(args, wi.Wr); err != nil {
 			log.Error(err)
 			exit.Return(1)
 		}
 	}
-	installSignalHandlers()
-	initStatusHandling()
+	wi.InstallSignalHandlers()
+	wi.InitStatusHandling()
 
 	servenv.RunDefault()
+}
+
+func setUsage() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+		for _, group := range worker.Commands {
+			if group.Name == "Debugging" {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "%v: %v\n", group.Name, group.Description)
+			for _, cmd := range group.Commands {
+				fmt.Fprintf(os.Stderr, "  %v %v\n", cmd.Name, cmd.Params)
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+	}
 }

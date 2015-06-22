@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package worker
 
 import (
 	"flag"
@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -57,7 +56,7 @@ const verticalSplitDiffHTML2 = `
 var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalSplitDiffHTML)
 var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
 
-func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
+func commandVerticalSplitDiff(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -71,7 +70,7 @@ func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray), nil
+	return NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray), nil
 }
 
 // shardsWithTablesSources returns all the shards that have SourceShards set
@@ -128,7 +127,7 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitDiff(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -168,8 +167,8 @@ func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w 
 	}
 
 	// start the diff job
-	wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray)
-	if _, err := setAndStartWorker(wrk); err != nil {
+	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
+	if _, err := wi.setAndStartWorker(wrk); err != nil {
 		httpError(w, "cannot set worker: %s", err)
 		return
 	}
