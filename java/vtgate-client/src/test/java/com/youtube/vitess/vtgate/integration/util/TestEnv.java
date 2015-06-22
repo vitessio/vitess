@@ -19,6 +19,7 @@ public class TestEnv {
   public Map<String, List<String>> shardKidMap;
   public Map<String, Integer> tablets;
   public String keyspace;
+  public Process pythonScriptProcess;
   public int port;
   public List<KeyspaceId> kids;
 

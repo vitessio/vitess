@@ -14,6 +14,9 @@ import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import org.joda.time.DateTime;
 import org.junit.Assert;
 
@@ -24,32 +27,50 @@ import java.util.List;
 import java.util.Map;
 
 public class Util {
+  static final Logger logger = LogManager.getLogger(Util.class.getName());
+
   /**
    * Setup MySQL, Vttablet and VtGate instances required for the tests. This uses a Python helper
-   * script to start and stop instances. Use the setUp flag to indicate setUp or teardown.
+   * script to start and stop instances.
    */
-  public static void setupTestEnv(TestEnv testEnv, boolean isSetUp) throws Exception {
-    ProcessBuilder pb = new ProcessBuilder(SetupCommand.get(testEnv, isSetUp));
+  public static void setupTestEnv(TestEnv testEnv) throws Exception {
+    ProcessBuilder pb = new ProcessBuilder(SetupCommand.get(testEnv));
     pb.redirectErrorStream(true);
     Process p = pb.start();
     BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-
-    p.waitFor();
-    if (isSetUp) {
-      // The port for VtGate is dynamically assigned and written to
-      // stdout as a JSON string.
-      String line;
-      while ((line = br.readLine()) != null) {
-        try {
-          Type mapType = new TypeToken<Map<String, Integer>>() {}.getType();
-          Map<String, Integer> map = new Gson().fromJson(line, mapType);
-          testEnv.port = map.get("port");
-          return;
-        } catch (JsonSyntaxException e) {
-        }
+    // The port for VtGate is dynamically assigned and written to
+    // stdout as a JSON string.
+    String line;
+    while ((line = br.readLine()) != null) {
+      logger.info("java_vtgate_test_helper: " + line);
+      if (!line.startsWith("{")) {
+        continue;
       }
-      Assert.fail("setup script failed to parse vtgate port");
+      try {
+        Type mapType = new TypeToken<Map<String, Integer>>() {}.getType();
+        Map<String, Integer> map = new Gson().fromJson(line, mapType);
+        testEnv.pythonScriptProcess = p;
+        testEnv.port = map.get("port");
+        return;
+      } catch (JsonSyntaxException e) {
+        logger.error("JsonSyntaxException parsing setup command output: " + line, e);
+      }
     }
+    Assert.fail("setup script failed to parse vtgate port");
+  }
+
+  /**
+   * Teardown the test instances, if any.
+   */
+  public static void teardownTestEnv(TestEnv testEnv) throws Exception {
+    if (testEnv.pythonScriptProcess == null) {
+      return;
+    }
+    logger.info("sending empty line to java_vtgate_test_helper to stop test setup");
+    testEnv.pythonScriptProcess.getOutputStream().write("\n".getBytes());
+    testEnv.pythonScriptProcess.getOutputStream().flush();
+    testEnv.pythonScriptProcess.waitFor();
+    testEnv.pythonScriptProcess = null;
   }
 
   public static void insertRows(TestEnv testEnv, int startId, int count) throws ConnectionException,
