@@ -86,9 +86,6 @@ class TestEnv(object):
         else:
           utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
       utils.VtGate(port=self.vtgate_port).start(cache_ttl='500s')
-      vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj",
-                                            30.0)
-      topology.read_topology(vtgate_client)
     except:
       self.shutdown()
       raise
@@ -122,15 +119,27 @@ def parse_args():
 
 def main():
   env = TestEnv(options)
-  if args[0] == 'setup':
+  if args and args[0] == 'setup':
+    env.set_up()
+    # prime the vtgate topology cache, so if the topo service goes away
+    # when we exit this python script, the cache is already primed.
+    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj",
+                                          30.0)
+    topology.read_topology(vtgate_client)
+    sys.stdout.write(json.dumps({
+      "port": utils.vtgate.port,
+      }) + "\n")
+    sys.stdout.flush()
+  elif args and args[0] == 'teardown':
+    env.shutdown()
+  else:
     env.set_up()
     sys.stdout.write(json.dumps({
       "port": utils.vtgate.port,
       }) + "\n")
     sys.stdout.flush()
-  elif args[0] == 'teardown':
+    raw_input()
     env.shutdown()
-
 
 if __name__ == '__main__':
   parse_args()
