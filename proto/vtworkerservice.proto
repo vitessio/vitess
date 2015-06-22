@@ -1,0 +1,13 @@
+// This package contains a service allowing you to use vtctld as a
+// proxy for vt commands.
+
+syntax = "proto3";
+
+package vtctlservice;
+
+import "vtctldata.proto";
+
+// Service Vtctl allows you to call vt commands through gRPC.
+service Vtctl {
+  rpc ExecuteVtctlCommand (vtctldata.ExecuteVtctlCommandRequest) returns (stream vtctldata.ExecuteVtctlCommandResponse) {};
+}
