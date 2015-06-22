@@ -17,6 +17,7 @@ uid_base=100
 FORCE_NODE=${FORCE_NODE:-false}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
+RDONLY_COUNT=${RDONLY_COUNT:-0}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
@@ -37,9 +38,14 @@ for shard in $(echo $SHARDS | tr "," " "); do
     # leading or trailing dashes for labels
     shard_label=`echo $shard | sed s'/[-]$/-xx/' | sed s'/^-/xx-/'`
 
+    tablet_type=replica
+    if [ $uid_index -gt $(($TABLETS_PER_SHARD-$RDONLY_COUNT-1)) ]; then
+      tablet_type=rdonly
+    fi
+
     # Expand template variables
     sed_script=""
-    for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume; do
+    for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume tablet_type; do
       sed_script+="s,{{$var}},${!var},g;"
     done
 
