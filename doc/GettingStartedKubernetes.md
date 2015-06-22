@@ -80,7 +80,7 @@ account with a project in the Google Developers Console.
     ID while completing the quickstart. Start with step 2 in the setup
     process.
 
-    **Note:** During the quickstart, you'll generate an SSH key for
+    <br>**Note:** During the quickstart, you'll generate an SSH key for
     Google Compute Engine, and you will be prompted to enter a
     passphrase. You will be prompted for that passphrase several times
     when bringing up your Kubernetes cluster later in this guide.
@@ -101,7 +101,7 @@ $ which kubectl
 # ~/google-cloud-sdk/bin/kubectl
 ```
 
-    If <code>kubectl</code> isn't on your PATH, you can tell our scripts where
+    <br>If <code>kubectl</code> isn't on your PATH, you can tell our scripts where
     to find it by setting the <code>KUBECTL</code> environment variable:
 
     ``` sh
@@ -240,7 +240,7 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
     <code>vtctld</code> service is created with the <code>type: NodePort</code>
     option. This creates an
     [external service](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/services.md#external-services)
-    by exposing a port on each node that forwards to the vtctld service.<br><br>
+    by exposing a port on each node that forwards to the vtctld service.<br>
 
 1.  **Access vtctld**
 
@@ -321,9 +321,9 @@ $ kvtctl help InitTablet
     <code>vttablet</code> and <code>mysqld</code> processes, running on the same
     host. We enforce this coupling in Kubernetes by putting the respective
     containers for vttablet and mysqld inside a single
-    [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md)
+    [pod](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/pods.md).
 
-    Run the following script to launch the vttablet pod, which also includes
+    <br>Run the following script to launch the vttablet pod, which also includes
     mysqld:
 
     ``` sh
@@ -388,7 +388,7 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
 https://1.2.3.4/api/v1beta3/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
 ```
 
-    In the future, we plan to have vtctld directly link through this proxy from
+    <br>In the future, we plan to have vtctld directly link through this proxy from
     the **[status]** link.<br><br>
 
     **_Direct connection to mysqld_**
