@@ -409,21 +409,27 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			vsdw.wr.Logger().Infof("Starting the diff on table %v", tableDefinition.Name)
 			sourceQueryResultReader, err := TableScan(ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.sourceAlias, tableDefinition)
 			if err != nil {
-				vsdw.wr.Logger().Errorf("TableScan(source) failed: %v", err)
+				newErr := fmt.Errorf("TableScan(source) failed: %v", err)
+				rec.RecordError(newErr)
+				vsdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
 			destinationQueryResultReader, err := TableScan(ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
 			if err != nil {
-				vsdw.wr.Logger().Errorf("TableScan(destination) failed: %v", err)
+				newErr := fmt.Errorf("TableScan(destination) failed: %v", err)
+				rec.RecordError(newErr)
+				vsdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 			defer destinationQueryResultReader.Close()
 
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
-				vsdw.wr.Logger().Errorf("NewRowDiffer() failed: %v", err)
+				newErr := fmt.Errorf("NewRowDiffer() failed: %v", err)
+				rec.RecordError(newErr)
+				vsdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
 
@@ -432,7 +438,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				vsdw.wr.Logger().Errorf("Differ.Go failed: %v", err)
 			} else {
 				if report.HasDifferences() {
-					vsdw.wr.Logger().Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
+					err := fmt.Errorf("Table %v has differences: %v", tableDefinition.Name, report.String())
+					rec.RecordError(err)
+					vsdw.wr.Logger().Errorf(err.Error())
 				} else {
 					vsdw.wr.Logger().Infof("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS)
 				}
@@ -441,5 +449,5 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	}
 	wg.Wait()
 
-	return nil
+	return rec.Error()
 }
