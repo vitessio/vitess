@@ -87,11 +87,11 @@ account with a project in the Google Developers Console.
 
 ## Start a Kubernetes cluster
 
-1.  Enable or update alpha features in the <code>gcloud</code> tool, and install
+1.  Enable or update beta features in the <code>gcloud</code> tool, and install
     the <code>kubectl</code> tool:
 
     ``` sh
-$ gcloud components update alpha kubectl
+$ gcloud components update beta kubectl
 ```
 
     ``` sh
