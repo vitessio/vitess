@@ -19,8 +19,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// WorkerInstance encapsulate the execution state of vtworker.
-type WorkerInstance struct {
+// Instance encapsulate the execution state of vtworker.
+type Instance struct {
 	// global wrangler object we'll use
 	Wr *wrangler.Wrangler
 
@@ -46,15 +46,15 @@ type WorkerInstance struct {
 	commandDisplayInterval time.Duration
 }
 
-// NewWorkerInstance creates a new WorkerInstance.
-func NewWorkerInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterval time.Duration) *WorkerInstance {
-	return &WorkerInstance{TopoServer: ts, cell: cell, LockTimeout: lockTimeout, commandDisplayInterval: commandDisplayInterval}
+// NewInstance creates a new Instance.
+func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterval time.Duration) *Instance {
+	return &Instance{TopoServer: ts, cell: cell, LockTimeout: lockTimeout, commandDisplayInterval: commandDisplayInterval}
 }
 
 // setAndStartWorker will set the current worker.
 // We always log to both memory logger (for display on the web) and
 // console logger (for records / display of command line worker).
-func (wi *WorkerInstance) setAndStartWorker(wrk Worker) (chan struct{}, error) {
+func (wi *Instance) setAndStartWorker(wrk Worker) (chan struct{}, error) {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
 	if wi.currentWorker != nil {
@@ -87,7 +87,7 @@ func (wi *WorkerInstance) setAndStartWorker(wrk Worker) (chan struct{}, error) {
 }
 
 // InstallSignalHandlers installs signal handler which exit vtworker gracefully.
-func (wi *WorkerInstance) InstallSignalHandlers() {
+func (wi *Instance) InstallSignalHandlers() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 	go func() {

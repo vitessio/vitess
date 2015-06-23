@@ -80,7 +80,7 @@ const splitCloneHTML2 = `
 var splitCloneTemplate = mustParseTemplate("splitClone", splitCloneHTML)
 var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 
-func commandSplitClone(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
@@ -147,7 +147,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 	return result, nil
 }
 
-func interactiveSplitClone(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return

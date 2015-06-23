@@ -37,7 +37,7 @@ func init() {
 }
 
 var (
-	wi *worker.WorkerInstance
+	wi *worker.Instance
 )
 
 func main() {
@@ -51,7 +51,7 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	wi = worker.NewWorkerInstance(ts, *cell, 30*time.Second, *commandDisplayInterval)
+	wi = worker.NewInstance(ts, *cell, 30*time.Second, *commandDisplayInterval)
 	wi.InstallSignalHandlers()
 	wi.InitStatusHandling()
 

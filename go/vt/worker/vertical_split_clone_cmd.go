@@ -78,7 +78,7 @@ const verticalSplitCloneHTML2 = `
 var verticalSplitCloneTemplate = mustParseTemplate("verticalSplitClone", verticalSplitCloneHTML)
 var verticalSplitCloneTemplate2 = mustParseTemplate("verticalSplitClone2", verticalSplitCloneHTML2)
 
-func commandVerticalSplitClone(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -strategy=-help' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
@@ -144,7 +144,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 	return result, nil
 }
 
-func interactiveVerticalSplitClone(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return

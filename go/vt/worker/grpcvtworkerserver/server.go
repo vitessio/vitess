@@ -26,11 +26,11 @@ import (
 
 // VtworkerServer is our RPC server
 type VtworkerServer struct {
-	wi *worker.WorkerInstance
+	wi *worker.Instance
 }
 
 // NewVtworkerServer returns a new Vtworker Server for the topo server.
-func NewVtworkerServer(wi *worker.WorkerInstance) *VtworkerServer {
+func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 	return &VtworkerServer{wi}
 }
 
@@ -81,6 +81,6 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 }
 
 // StartServer registers the VtworkerServer for RPCs
-func StartServer(s *grpc.Server, wi *worker.WorkerInstance) {
+func StartServer(s *grpc.Server, wi *worker.Instance) {
 	pbs.RegisterVtworkerServer(s, NewVtworkerServer(wi))
 }

@@ -62,7 +62,7 @@ func executeTemplate(w http.ResponseWriter, t *template.Template, data interface
 }
 
 // InitInteractiveMode installs webserver handlers for each known command.
-func (wi *WorkerInstance) InitInteractiveMode() {
+func (wi *Instance) InitInteractiveMode() {
 	indexTemplate := mustParseTemplate("index", indexHTML)
 	subIndexTemplate := mustParseTemplate("subIndex", subIndexHTML)
 

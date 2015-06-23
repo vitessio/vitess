@@ -20,8 +20,8 @@ import (
 
 type command struct {
 	Name        string
-	method      func(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error)
-	Interactive func(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
+	method      func(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error)
+	Interactive func(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
 	Params      string
 	Help        string // if help is empty, won't list the command
 }
@@ -61,7 +61,7 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
-func commandWorker(wi *WorkerInstance, wr *wrangler.Wrangler, args []string, cell string) (Worker, error) {
+func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell string) (Worker, error) {
 	action := args[0]
 
 	actionLowerCase := strings.ToLower(action)
@@ -83,7 +83,7 @@ func commandWorker(wi *WorkerInstance, wr *wrangler.Wrangler, args []string, cel
 }
 
 // RunCommand executes the vtworker command specified by "args" and blocks until the command has finished.
-func (wi *WorkerInstance) RunCommand(args []string, wr *wrangler.Wrangler) error {
+func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler) error {
 	wrk, err := commandWorker(wi, wr, args, wi.cell)
 	if err != nil {
 		return err

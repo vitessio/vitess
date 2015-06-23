@@ -56,7 +56,7 @@ const verticalSplitDiffHTML2 = `
 var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalSplitDiffHTML)
 var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
 
-func commandVerticalSplitDiff(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -127,7 +127,7 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return

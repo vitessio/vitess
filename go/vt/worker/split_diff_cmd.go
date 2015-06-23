@@ -57,7 +57,7 @@ const splitDiffHTML2 = `
 var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
 var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
-func commandSplitDiff(wi *WorkerInstance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
+func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -128,7 +128,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	return result, nil
 }
 
-func interactiveSplitDiff(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
