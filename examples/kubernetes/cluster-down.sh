@@ -9,7 +9,7 @@ GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
 base_ssd_name="$GKE_CLUSTER_NAME-vt-ssd-"
 
-gcloud alpha container clusters delete $GKE_CLUSTER_NAME -z $GKE_ZONE -q
+gcloud beta container clusters delete $GKE_CLUSTER_NAME -z $GKE_ZONE -q
 
 num_ssds=`gcloud compute disks list | awk -v name="$base_ssd_name" -v zone=$GKE_ZONE '$1~name && $2==zone' | wc -l`
 for i in `seq 1 $num_ssds`; do
