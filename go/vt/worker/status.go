@@ -58,6 +58,7 @@ const workerStatusHTML = `
 </html>
 `
 
+// InitStatusHandling installs webserver handlers for global actions like /status, /reset and /cancel.
 func (wi *WorkerInstance) InitStatusHandling() {
 	// code to serve /status
 	workerTemplate := mustParseTemplate("worker", workerStatusHTML)

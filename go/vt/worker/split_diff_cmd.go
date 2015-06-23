@@ -128,7 +128,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	return result, nil
 }
 
-func interactiveSplitDiff(wi* WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(wi *WorkerInstance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
