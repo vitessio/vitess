@@ -132,7 +132,7 @@ $ gcloud config set compute/zone us-central1-b
 1.  Create a Kubernetes cluster:
 
     ``` sh
-$ gcloud alpha container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud beta container clusters create example --machine-type n1-standard-1 --num-nodes 3
 ```
 
 1.  While the cluster is starting, you will be prompted several
@@ -593,7 +593,7 @@ Then tear down the Container Engine cluster itself, which will stop the virtual
 machines running on Compute Engine:
 
 ``` sh
-$ gcloud alpha container clusters delete example
+$ gcloud beta container clusters delete example
 ```
 
 It's also a good idea to remove the firewall rules you created, unless you plan
