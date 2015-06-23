@@ -7,8 +7,8 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-echo "Stopping vtgate replicationController..."
-$KUBECTL stop replicationController vtgate
+echo "Stopping vtgate replicationcontroller..."
+$KUBECTL stop replicationcontroller vtgate
 
 echo "Deleting vtgate service..."
 $KUBECTL delete service vtgate
