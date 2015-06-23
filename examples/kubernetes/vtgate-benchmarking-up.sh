@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that starts a vtgate replicationController.
+# This is an example script that starts a vtgate replicationcontroller.
 
 #set -e
 

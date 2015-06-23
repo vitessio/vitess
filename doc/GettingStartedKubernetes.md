@@ -2,7 +2,7 @@ This page explains how to run Vitess on [Kubernetes](http://kubernetes.io).
 It also gives the steps to start a Kubernetes cluster with
 [Google Container Engine](https://cloud.google.com/container-engine/).
 
-If you already have Kubernetes v0.18+ running in one of the other
+If you already have Kubernetes v0.19+ running in one of the other
 [supported platforms](http://kubernetes.io/gettingstarted/),
 you can skip the <code>gcloud</code> steps.
 The <code>kubectl</code> steps will apply to any Kubernetes cluster.
@@ -87,11 +87,11 @@ account with a project in the Google Developers Console.
 
 ## Start a Kubernetes cluster
 
-1.  Enable or update alpha features in the <code>gcloud</code> tool, and install
+1.  Enable or update beta features in the <code>gcloud</code> tool, and install
     the <code>kubectl</code> tool:
 
     ``` sh
-$ gcloud components update alpha kubectl
+$ gcloud components update beta kubectl
 ```
 
     ``` sh
@@ -132,7 +132,7 @@ $ gcloud config set compute/zone us-central1-b
 1.  Create a Kubernetes cluster:
 
     ``` sh
-$ gcloud alpha container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud beta container clusters create example --machine-type n1-standard-1 --num-nodes 3
 ```
 
 1.  While the cluster is starting, you will be prompted several
@@ -142,12 +142,12 @@ $ gcloud alpha container clusters create example --machine-type n1-standard-1 --
 1.  The command's output includes the IP of the Kubernetes master server:
 
     ```
-NAME     ZONE           CLUSTER_API_VERSION  MASTER_IP       MACHINE_TYPE                           NODES  STATUS
-example  us-central1-b  0.18.2               1.2.3.4         n1-standard-1, container-vm-v20150505  3      running
+NAME     ZONE           MASTER_VERSION  MASTER_IP     MACHINE_TYPE   STATUS
+example  us-central1-b  0.19.3          1.2.3.4       n1-standard-1  RUNNING
 ```
 
-    1.  Open /static/app/ on the MASTER_IP in a browser over HTTPS
-        (e.g. <code>https://1.2.3.4/static/app/</code>) to see the Kubernetes
+    1.  Open /ui on the MASTER_IP in a browser over *HTTPS*
+        (e.g. <code>https://1.2.3.4/ui</code>) to see the Kubernetes
         dashboard, where you can monitor nodes, services, pods, etc.
 
     1.  If you see a <code>ERRCERTAUTHORITY_INVALID</code> error
@@ -156,9 +156,8 @@ example  us-central1-b  0.18.2               1.2.3.4         n1-standard-1, cont
         **Advanced** link and then the link to proceed to the URL.
 
     1.  You should be prompted to enter a username and password to
-        access the requested page. Use <code>admin</code> as the username.
-        The randomly-generated password can be found in the <code>token</code>
-        field of the kubectl config:
+        access the requested page. You can find the randomly-generated password
+        with <code>kubectl config view</code>:
 
     ``` sh
 $ kubectl config view
@@ -171,7 +170,8 @@ $ kubectl config view
 # users:
 # - name: gke_project_us-central1-b_example
 #   user:
-#     token: randompassword
+#     password: gr8j0Rb11
+#     username: admin
 ```
 
 
@@ -262,7 +262,7 @@ $ gcloud compute firewall-rules create vtctld --allow tcp:30000
     ``` sh
 $ kubectl get -o yaml nodes
 ### example output:
-# - apiVersion: v1beta3
+# - apiVersion: v1
 #   kind: Node
 # ...
 #   status:
@@ -385,7 +385,7 @@ $ kvtctl RebuildKeyspaceGraph test_keyspace
     on public IP 1.2.3.4), you could navigate to:
 
     ```
-https://1.2.3.4/api/v1beta3/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
+https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status
 ```
 
     <br>In the future, we plan to have vtctld directly link through this proxy from
@@ -593,7 +593,7 @@ Then tear down the Container Engine cluster itself, which will stop the virtual
 machines running on Compute Engine:
 
 ``` sh
-$ gcloud alpha container clusters delete example
+$ gcloud beta container clusters delete example
 ```
 
 It's also a good idea to remove the firewall rules you created, unless you plan
