@@ -115,7 +115,7 @@ echo "*  VTGate count: $vtgate_count"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
+gcloud beta container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
 gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes

@@ -25,7 +25,7 @@ for cell in 'global' 'test'; do
     $KUBECTL create -f -
 
   # Create the replication controller.
-  echo "Creating etcd replicationController for $cell cell..."
+  echo "Creating etcd replicationcontroller for $cell cell..."
   cat etcd-controller-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" -e "s,{{discovery}},$discovery,g" | \
     $KUBECTL create -f -
