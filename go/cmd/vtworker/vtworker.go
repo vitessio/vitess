@@ -19,7 +19,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -29,7 +28,7 @@ import (
 )
 
 var (
-	cell = flag.String("cell", "", "cell to pick servers from")
+	cell                   = flag.String("cell", "", "cell to pick servers from")
 	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 )
 
@@ -42,8 +41,6 @@ var (
 )
 
 func main() {
-	defer exit.Recover()
-
 	setUsage()
 	flag.Parse()
 	args := flag.Args()
@@ -55,6 +52,8 @@ func main() {
 	defer topo.CloseServers()
 
 	wi = worker.NewWorkerInstance(ts, *cell, 30*time.Second, *commandDisplayInterval)
+	wi.InstallSignalHandlers()
+	wi.InitStatusHandling()
 
 	// The logger will be replaced when we start a job.
 	wi.Wr = wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), wi.LockTimeout)
@@ -62,14 +61,15 @@ func main() {
 		// In interactive mode, initialize the web UI to choose a command.
 		wi.InitInteractiveMode()
 	} else {
-		// In single command mode, just run it.
-		if err := wi.RunCommand(args, wi.Wr); err != nil {
-			log.Error(err)
-			exit.Return(1)
-		}
+		// In single command mode, just run it. Since its blocking, run it asynchronously.
+		go func() {
+			if err := wi.RunCommand(args, wi.Wr); err != nil {
+				log.Error(err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		}()
 	}
-	wi.InstallSignalHandlers()
-	wi.InitStatusHandling()
 
 	servenv.RunDefault()
 }

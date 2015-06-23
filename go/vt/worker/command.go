@@ -82,7 +82,7 @@ func commandWorker(wi *WorkerInstance, wr *wrangler.Wrangler, args []string, cel
 	return nil, fmt.Errorf("unknown command: %v", action)
 }
 
-// RunCommand executes the vtworker command specified by "args".
+// RunCommand executes the vtworker command specified by "args" and blocks until the command has finished.
 func (wi *WorkerInstance) RunCommand(args []string, wr *wrangler.Wrangler) error {
 	wrk, err := commandWorker(wi, wr, args, wi.cell)
 	if err != nil {
@@ -93,26 +93,21 @@ func (wi *WorkerInstance) RunCommand(args []string, wr *wrangler.Wrangler) error
 		return fmt.Errorf("cannot set worker: %v", err)
 	}
 
-	// a go routine displays the status every second
-	go func() {
-		timer := time.Tick(wi.commandDisplayInterval)
-		for {
-			select {
-			case <-done:
-				log.Info(wrk.StatusAsText())
-				wi.currentWorkerMutex.Lock()
-				err := wi.lastRunError
-				wi.currentWorkerMutex.Unlock()
-				if err != nil {
-					log.Errorf("Ended with an error: %v", err)
-					os.Exit(1)
-				}
-				os.Exit(0)
-			case <-timer:
-				log.Info(wrk.StatusAsText())
+	// display the status every second
+	timer := time.Tick(wi.commandDisplayInterval)
+	for {
+		select {
+		case <-done:
+			log.Info(wrk.StatusAsText())
+			wi.currentWorkerMutex.Lock()
+			err := wi.lastRunError
+			wi.currentWorkerMutex.Unlock()
+			if err != nil {
+				return err
 			}
+			return nil
+		case <-timer:
+			log.Info(wrk.StatusAsText())
 		}
-	}()
-
-	return nil
+	}
 }
