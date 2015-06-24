@@ -474,11 +474,13 @@ vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql
     <br>The SQL to create the table is shown below:
 
     ```
-CREATE TABLE test_table (
-  id BIGINT AUTO_INCREMENT,
-  msg VARCHAR(250),
-  PRIMARY KEY(id)
-) Engine=InnoDB
+CREATE TABLE messages (
+  page BIGINT(20) UNSIGNED,
+  time_created_ns BIGINT(20) UNSIGNED,
+  keyspace_id BIGINT(20) UNSIGNED,
+  message VARCHAR(10000),
+  PRIMARY KEY (page, time_created_ns)
+) ENGINE=InnoDB
 ```
 
     <br>You can run this command to confirm that the schema was created
@@ -486,17 +488,19 @@ CREATE TABLE test_table (
     is a tablet alias as shown by the <code>ListAllTablets</code> command:
 
     ``` sh
-kvtctl GetSchema test-0000000100
+$ kvtctl GetSchema test-0000000100
 ### example output:
 # {
 #   "DatabaseSchema": "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
 #   "TableDefinitions": [
 #     {
-#       "Name": "test_table",
-#       "Schema": "CREATE TABLE `test_table` (\n  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n  `msg` varchar(250) DEFAULT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+#       "Name": "messages",
+#       "Schema": "CREATE TABLE `messages` (\n  `page` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `time_created_ns` bigint(20) unsigned NOT NULL DEFAULT '0',\n  `keyspace_id` bigint(20) unsigned DEFAULT NULL,\n  `message` varchar(10000) DEFAULT NULL,\n  PRIMARY KEY (`page`,`time_created_ns`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8",
 #       "Columns": [
-#         "id",
-#         "msg"
+#         "page",
+#         "time_created_ns",
+#         "keyspace_id",
+#         "message"
 #       ],
 # ...
 ```
@@ -518,7 +522,9 @@ vitess/examples/kubernetes$ ./vtgate-up.sh
 The GuestBook app in the example is ported from the
 [Kubernetes GuestBook example](https://github.com/GoogleCloudPlatform/kubernetes/tree/master/examples/guestbook-go).
 The server-side code has been rewritten in Python to use Vitess as the storage
-engine. The client-side code (HTML/JavaScript) is essentially unchanged.
+engine. The client-side code (HTML/JavaScript) has been modified to support
+multiple Guestbook pages, which will be useful to demonstrate Vitess sharding in
+a later guide.
 
 ``` sh
 vitess/examples/kubernetes$ ./guestbook-up.sh
@@ -545,7 +551,7 @@ Then, get the external IP of the load balancer for the GuestBook service:
 ``` sh
 $ kubectl get -o yaml service guestbook
 ### example output:
-# apiVersion: v1beta3
+# apiVersion: v1
 # kind: Service
 # ...
 # status:
@@ -561,8 +567,9 @@ from the load balancer's external IP. In the example above, it would be at
 <code>http://3.4.5.6</code>.
 
 You can see Vitess' replication capabilities by opening the app in
-multiple browser windows. Each new entry is committed to the master
-database. In the meantime, JavaScript on the page continuously polls
+multiple browser windows, with the same Guestbook page number.
+Each new entry is committed to the master database.
+In the meantime, JavaScript on the page continuously polls
 the app server to retrieve a list of GuestBook entries. The app serves
 read-only requests by querying Vitess in 'replica' mode, confirming
 that replication is working.
