@@ -9,6 +9,7 @@ package grpcbinlogstreamer
 import (
 	"fmt"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
@@ -42,7 +43,7 @@ func (server *UpdateStream) StreamKeyRange(req *pb.StreamKeyRangeRequest, stream
 		Position:       myproto.ProtoToReplicationPosition(req.Position),
 		KeyspaceIdType: key.ProtoToKeyspaceIdType(req.KeyspaceIdType),
 		KeyRange:       key.ProtoToKeyRange(req.KeyRange),
-		Charset:        proto.ProtoToCharset(req.Charset),
+		Charset:        mproto.ProtoToCharset(req.Charset),
 	}, func(reply *proto.BinlogTransaction) error {
 		return stream.Send(&pb.StreamKeyRangeResponse{
 			BinlogTransaction: proto.BinlogTransactionToProto(reply),
@@ -56,7 +57,7 @@ func (server *UpdateStream) StreamTables(req *pb.StreamTablesRequest, stream pbs
 	return server.updateStream.StreamTables(&proto.TablesRequest{
 		Position: myproto.ProtoToReplicationPosition(req.Position),
 		Tables:   req.Tables,
-		Charset:  proto.ProtoToCharset(req.Charset),
+		Charset:  mproto.ProtoToCharset(req.Charset),
 	}, func(reply *proto.BinlogTransaction) error {
 		return stream.Send(&pb.StreamTablesResponse{
 			BinlogTransaction: proto.BinlogTransactionToProto(reply),

@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
@@ -61,7 +62,7 @@ func (client *client) StreamKeyRange(req *proto.KeyRangeRequest, responseChan ch
 		Position:       myproto.ReplicationPositionToProto(req.Position),
 		KeyspaceIdType: key.KeyspaceIdTypeToProto(req.KeyspaceIdType),
 		KeyRange:       key.KeyRangeToProto(req.KeyRange),
-		Charset:        proto.CharsetToProto(req.Charset),
+		Charset:        mproto.CharsetToProto(req.Charset),
 	}
 
 	response := &response{}
@@ -91,7 +92,7 @@ func (client *client) StreamTables(req *proto.TablesRequest, responseChan chan *
 	query := &pb.StreamTablesRequest{
 		Position: myproto.ReplicationPositionToProto(req.Position),
 		Tables:   req.Tables,
-		Charset:  proto.CharsetToProto(req.Charset),
+		Charset:  mproto.CharsetToProto(req.Charset),
 	}
 
 	response := &response{}

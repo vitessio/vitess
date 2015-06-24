@@ -15,35 +15,11 @@ import (
 // from proto3. Eventually the code will be changed to use proto3
 // structures internally, and this will be obsolete.
 
-// CharsetToProto converts a Charset to a proto3
-func CharsetToProto(c *mproto.Charset) *pb.Charset {
-	if c == nil {
-		return nil
-	}
-	return &pb.Charset{
-		Client: int32(c.Client),
-		Conn:   int32(c.Conn),
-		Server: int32(c.Server),
-	}
-}
-
-// ProtoToCharset converts a proto to a Charset
-func ProtoToCharset(c *pb.Charset) *mproto.Charset {
-	if c == nil {
-		return nil
-	}
-	return &mproto.Charset{
-		Client: int(c.Client),
-		Conn:   int(c.Conn),
-		Server: int(c.Server),
-	}
-}
-
 // StatementToProto converts a Statement to a proto3
 func StatementToProto(s *Statement) *pb.BinlogTransaction_Statement {
 	return &pb.BinlogTransaction_Statement{
 		Category: pb.BinlogTransaction_Statement_Category(s.Category),
-		Charset:  CharsetToProto(s.Charset),
+		Charset:  mproto.CharsetToProto(s.Charset),
 		Sql:      s.Sql,
 	}
 }
@@ -52,7 +28,7 @@ func StatementToProto(s *Statement) *pb.BinlogTransaction_Statement {
 func ProtoToStatement(s *pb.BinlogTransaction_Statement) Statement {
 	return Statement{
 		Category: int(s.Category),
-		Charset:  ProtoToCharset(s.Charset),
+		Charset:  mproto.ProtoToCharset(s.Charset),
 		Sql:      s.Sql,
 	}
 }
