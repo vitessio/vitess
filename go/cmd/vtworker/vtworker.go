@@ -19,6 +19,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
@@ -41,6 +42,8 @@ var (
 )
 
 func main() {
+	defer exit.Recover()
+
 	setUsage()
 	flag.Parse()
 	args := flag.Args()
@@ -61,10 +64,17 @@ func main() {
 		// In interactive mode, initialize the web UI to choose a command.
 		wi.InitInteractiveMode()
 	} else {
-		// In single command mode, just run it. Since its blocking, run it asynchronously.
+		// In single command mode, just run it.
+		worker, done, err := wi.RunCommand(args, wi.Wr)
+		if err != nil {
+			log.Error(err)
+			exit.Return(1)
+		}
+		// Run the subsequent, blocking wait asynchronously.
 		go func() {
-			if err := wi.RunCommand(args, wi.Wr); err != nil {
+			if err := wi.WaitForCommand(worker, done); err != nil {
 				log.Error(err)
+				// We cannot use exit.Return() here because we are in a different go routine now.
 				os.Exit(1)
 			}
 			os.Exit(0)

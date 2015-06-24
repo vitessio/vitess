@@ -82,17 +82,21 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 	return nil, fmt.Errorf("unknown command: %v", action)
 }
 
-// RunCommand executes the vtworker command specified by "args" and blocks until the command has finished.
-func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler) error {
+// RunCommand executes the vtworker command specified by "args". Use WaitForCommand() to block on the returned done channel.
+func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler) (Worker, chan struct{}, error) {
 	wrk, err := commandWorker(wi, wr, args, wi.cell)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	done, err := wi.setAndStartWorker(wrk)
 	if err != nil {
-		return fmt.Errorf("cannot set worker: %v", err)
+		return nil, nil, fmt.Errorf("cannot set worker: %v", err)
 	}
+	return wrk, done, nil
+}
 
+// WaitForCommand blocks until "done" is closed. In the meantime, it logs the status of "wrk".
+func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 	// display the status every second
 	timer := time.Tick(wi.commandDisplayInterval)
 	for {

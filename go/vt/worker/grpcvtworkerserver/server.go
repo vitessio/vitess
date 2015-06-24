@@ -71,7 +71,10 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 	wr := wrangler.New(logger, s.wi.TopoServer, tmclient.NewTabletManagerClient(), s.wi.LockTimeout)
 
 	// execute the command
-	err = s.wi.RunCommand(args.Args, wr)
+	worker, done, err := s.wi.RunCommand(args.Args, wr)
+	if err == nil {
+		err = s.wi.WaitForCommand(worker, done)
+	}
 
 	// close the log channel, and wait for them all to be sent
 	close(logstream)
