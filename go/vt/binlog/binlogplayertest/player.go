@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // FakeBinlogStreamer is our implementation of UpdateStream
@@ -192,8 +193,8 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 }
 
 // Run runs the test suite
-func Run(t *testing.T, bpc binlogplayer.BinlogPlayerClient, addr string, fake *FakeBinlogStreamer) {
-	if err := bpc.Dial(addr, 30*time.Second); err != nil {
+func Run(t *testing.T, bpc binlogplayer.BinlogPlayerClient, endPoint topo.EndPoint, fake *FakeBinlogStreamer) {
+	if err := bpc.Dial(endPoint, 30*time.Second); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
 

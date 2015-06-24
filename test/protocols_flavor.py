@@ -6,8 +6,8 @@ import os
 class ProtocolsFlavor(object):
   """Base class for protocols"""
 
-  def binlog_player_protocol_flags(self):
-    """Returns the flags to pass to process to set the binlog player protocol."""
+  def binlog_player_protocol(self):
+    """Returns the name of the binlog player protocol to use."""
     raise NotImplementedError('Not implemented in the base class')
 
   def vtctl_client_protocol(self):
@@ -41,8 +41,8 @@ class ProtocolsFlavor(object):
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
 
-  def binlog_player_protocol_flags(self):
-    return ['-binlog_player_protocol', 'gorpc']
+  def binlog_player_protocol(self):
+    return 'gorpc'
 
   def vtctl_client_protocol(self):
     return 'gorpc'
@@ -67,8 +67,8 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use gRPC everywhere where it is supported.
   If not supported yet, use GoRPC."""
 
-  def binlog_player_protocol_flags(self):
-    return ['-binlog_player_protocol', 'gorpc']
+  def binlog_player_protocol(self):
+    return 'grpc'
 
   def vtctl_client_protocol(self):
     return 'grpc'
@@ -86,7 +86,7 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return 'timeout waiting for'
 
   def service_map(self):
-    return ['grpc-queryservice', 'grpc-vtctl']
+    return ['grpc-queryservice', 'grpc-updatestream', 'grpc-vtctl']
 
 
 __knows_protocols_flavor_map = {

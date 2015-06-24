@@ -60,9 +60,7 @@ func ProtoToReplicationPosition(rp *pb.Position) ReplicationPosition {
 		}
 	}
 	if rp.MysqlGtidSet != nil {
-		result := ReplicationPosition{
-			GTIDSet: Mysql56GTIDSet(make(map[SID][]interval)),
-		}
+		m := Mysql56GTIDSet(make(map[SID][]interval))
 		for _, s := range rp.MysqlGtidSet.UuidSet {
 			if len(s.Uuid) != 16 {
 				panic(fmt.Errorf("invalid MysqlGtidSet Uuid length: %v", len(s.Uuid)))
@@ -76,8 +74,11 @@ func ProtoToReplicationPosition(rp *pb.Position) ReplicationPosition {
 				ins[i].start = int64(in.First)
 				ins[i].end = int64(in.Last)
 			}
+			m[sid] = ins
 		}
-		return result
+		return ReplicationPosition{
+			GTIDSet: m,
+		}
 	}
 
 	panic(fmt.Errorf("can't convert ReplicationPosition from proto: %#v", rp))

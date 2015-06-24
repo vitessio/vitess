@@ -29,6 +29,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
+	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
@@ -39,7 +40,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 	// Create a gRPC client connecting to the server
 	ctx := context.Background()
 	client, err := DialTablet(ctx, topo.EndPoint{
-		Host: "localhost",
+		Host: host,
 		NamedPortMap: map[string]int{
 			"grpc": port,
 		},

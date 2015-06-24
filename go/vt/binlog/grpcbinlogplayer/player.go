@@ -13,10 +13,12 @@ import (
 	"google.golang.org/grpc"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
@@ -38,7 +40,8 @@ type client struct {
 	ctx context.Context
 }
 
-func (client *client) Dial(addr string, connTimeout time.Duration) error {
+func (client *client) Dial(endPoint topo.EndPoint, connTimeout time.Duration) error {
+	addr := netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["grpc"])
 	var err error
 	client.cc, err = grpc.Dial(addr)
 	if err != nil {

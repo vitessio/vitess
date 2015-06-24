@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
 	"github.com/youtube/vitess/go/vt/binlog/grpcbinlogstreamer"
+	"github.com/youtube/vitess/go/vt/topo"
 
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
 )
@@ -24,6 +25,8 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
+	host := listener.Addr().(*net.TCPAddr).IP.String()
+	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
@@ -35,5 +38,10 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 	c := &client{}
 
 	// and send it to the test suite
-	binlogplayertest.Run(t, c, listener.Addr().String(), fakeUpdateStream)
+	binlogplayertest.Run(t, c, topo.EndPoint{
+		Host: host,
+		NamedPortMap: map[string]int{
+			"grpc": port,
+		},
+	}, fakeUpdateStream)
 }

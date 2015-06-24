@@ -384,7 +384,8 @@ class Tablet(object):
         args.extend(['-ca_cert', ca_cert])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
-    if protocols_flavor().tabletconn_protocol() == 'grpc':
+    if protocols_flavor().tabletconn_protocol() == 'grpc' or \
+       protocols_flavor().binlog_player_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
@@ -427,7 +428,8 @@ class Tablet(object):
     args = []
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server().flags())
-    args.extend(protocols_flavor().binlog_player_protocol_flags())
+    args.extend(['-binlog_player_protocol',
+                protocols_flavor().binlog_player_protocol()])
     args.extend(protocols_flavor().tablet_manager_protocol_flags())
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:

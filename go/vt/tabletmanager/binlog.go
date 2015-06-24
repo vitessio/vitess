@@ -16,7 +16,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
@@ -245,8 +244,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
 	newServerIndex := rand.Intn(len(addrs.Entries))
-	port, _ := addrs.Entries[newServerIndex].NamedPortMap["vt"]
-	addr := netutil.JoinHostPort(addrs.Entries[newServerIndex].Host, port)
+	endPoint := addrs.Entries[newServerIndex]
 
 	// save our current server
 	bpc.playerMutex.Lock()
@@ -266,7 +264,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 		}
 
 		// tables, just get them
-		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, tables, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, endPoint, tables, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	}
 	// the data we have to replicate is the intersection of the
@@ -276,7 +274,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, bpc.keyspaceIDType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 
