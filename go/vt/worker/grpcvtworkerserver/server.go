@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -36,7 +36,7 @@ func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 
 // ExecuteVtworkerCommand is part of the pb.VtworkerServer interface
 func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandRequest, stream pbs.Vtworker_ExecuteVtworkerCommandServer) (err error) {
-	defer vtctl.HandlePanic(&err)
+	defer servenv.HandlePanic("vtworker", &err)
 
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)

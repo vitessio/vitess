@@ -1827,7 +1827,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 			return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
 		}
 		return err
-	}	
+	}
 }
 
 func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2150,13 +2150,5 @@ func PrintAllCommands(logger logutil.Logger) {
 			logger.Printf("  %s %s\n", cmd.name, cmd.params)
 		}
 		logger.Printf("\n")
-	}
-}
-
-// HandlePanic should be called using 'defer' in the RPC code that executes
-// the command
-func HandlePanic(err *error) {
-	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught vtctl panic: %v", x)
 	}
 }
