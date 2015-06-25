@@ -1,4 +1,4 @@
-// This package contains the data sturctures for a service allowing
+// This package contains the data structures for a service allowing
 // you to use vtctld as a server for vt commands.
 
 syntax = "proto3";
