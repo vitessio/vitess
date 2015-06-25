@@ -4,7 +4,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import base64
 import unittest
 
 import environment
@@ -77,9 +76,7 @@ class TestCustomSharding(unittest.TestCase):
       qr = utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                       bindvars=bindvars)
       self.assertEqual(len(qr['Rows']), 1)
-      # vtctl_json will print the JSON-encoded version of QueryResult,
-      # which is a []byte. That translates into a base64-endoded string.
-      v = base64.b64decode(qr['Rows'][0][0])
+      v = qr['Rows'][0][0]
       self.assertEqual(v, 'row %u' % (start+x))
 
   def test_custom_end_to_end(self):
@@ -198,8 +195,8 @@ primary key (id)
       qr = utils.vtgate.execute_shard(q['QueryShard']['Sql'],
                                       'test_keyspace', ",".join(q['QueryShard']['Shards']))
       for r in qr['Rows']:
-        id = int(base64.b64decode(r[0]))
-        rows[id] = base64.b64decode(r[1])
+        id = int(r[0])
+        rows[id] = r[1]
     self.assertEqual(len(rows), 20)
     expected = {}
     for i in xrange(10):

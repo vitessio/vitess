@@ -309,6 +309,10 @@ func (f Fractional) encodeAscii(b BinWriter) {
 	}
 }
 
+func (s String) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(s.raw()))
+}
+
 func (s String) raw() []byte {
 	return []byte(s)
 }
