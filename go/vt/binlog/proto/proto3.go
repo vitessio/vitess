@@ -9,6 +9,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains the methods to convert data structures to and
@@ -64,4 +65,20 @@ func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
 		}
 	}
 	return result
+}
+
+// BlpPositionToProto converts a BlpPosition to a proto3
+func BlpPositionToProto(b *BlpPosition) *pbt.BlpPosition {
+	return &pbt.BlpPosition{
+		Uid:      b.Uid,
+		Position: myproto.ReplicationPositionToProto(b.Position),
+	}
+}
+
+// ProtoToBlpPosition converts a proto to a BlpPosition
+func ProtoToBlpPosition(b *pbt.BlpPosition) *BlpPosition {
+	return &BlpPosition{
+		Uid:      b.Uid,
+		Position: myproto.ProtoToReplicationPosition(b.Position),
+	}
 }
