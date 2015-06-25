@@ -50,11 +50,11 @@ func (x Level) String() string {
 	return proto.EnumName(Level_name, int32(x))
 }
 
-// Time represents a time stamp in nanoseconds. In go, use time.Unix to
-// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
+// Time represents a time stamp in nanoseconds. In go, use logutil library
+// to convert times.
 type Time struct {
 	Seconds     int64 `protobuf:"varint,1,opt,name=seconds" json:"seconds,omitempty"`
-	Nanoseconds int64 `protobuf:"varint,2,opt,name=nanoseconds" json:"nanoseconds,omitempty"`
+	Nanoseconds int32 `protobuf:"varint,2,opt,name=nanoseconds" json:"nanoseconds,omitempty"`
 }
 
 func (m *Time) Reset()         { *m = Time{} }

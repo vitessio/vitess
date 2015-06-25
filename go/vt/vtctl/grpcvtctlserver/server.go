@@ -54,10 +54,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// has been broken. We'll just keep trying.
 			stream.Send(&pb.ExecuteVtctlCommandResponse{
 				Event: &pbl.Event{
-					Time: &pbl.Time{
-						Seconds:     e.Time.Unix(),
-						Nanoseconds: int64(e.Time.Nanosecond()),
-					},
+					Time:  logutil.TimeToProto(e.Time),
 					Level: pbl.Level(e.Level),
 					File:  e.File,
 					Line:  int64(e.Line),

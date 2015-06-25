@@ -5,11 +5,11 @@ syntax = "proto3";
 
 package logutil;
 
-// Time represents a time stamp in nanoseconds. In go, use time.Unix to
-// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
+// Time represents a time stamp in nanoseconds. In go, use logutil library
+// to convert times.
 message Time {
   int64 seconds = 1;
-  int64 nanoseconds = 2;
+  int32 nanoseconds = 2;
 }
 
 // Level is the level of the log messages.
