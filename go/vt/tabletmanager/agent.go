@@ -81,6 +81,10 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
+	// initReplication remembers whether an action has initialized replication.
+	// It is protected by actionMutex.
+	initReplication bool
+
 	// mutex protects the following fields
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
