@@ -19,28 +19,25 @@ and a more [detailed presentation from @Scale '14](http://youtu.be/5yDO-tmIoXY).
 
  * [Helicopter overview](http://vitess.io):
      high level overview of Vitess that should tell you whether Vitess is for you.
- * [Sharding in Vitess](http://vitess.io/doc/Sharding)
- * [Frequently Asked Questions](http://vitess.io/doc/FAQ).
+ * [Sharding in Vitess](http://vitess.io/user-guide/sharding.html)
 
 ### Using Vitess
 
  * Getting Started
   * [On Kubernetes](http://vitess.io/getting-started/).
-  * [From the ground up](http://vitess.io/doc/GettingStarted).
- * [Tools](http://vitess.io/doc/Tools):
+  * [From the ground up](http://vitess.io/getting-started/local-instance.html).
+ * [Architecture](http://vitess.io/overview/#architecture):
      all Vitess tools and servers.
- * [vttablet/vtocc](http://vitess.io/doc/vtocc):
-     information about the most important Vitess server.
  * [Reparenting](http://vitess.io/doc/Reparenting):
      performing master failover.
- * [Resharding](http://vitess.io/doc/Resharding):
+ * [Resharding](http://vitess.io/user-guide/sharding.html#resharding):
      adding more shards to your cluster.
  * [Schema management](http://vitess.io/doc/SchemaManagement):
      managing your database schema using Vitess.
 
 ### Reference
 
- * [General Concepts](http://vitess.io/doc/Concepts)
+ * [General Concepts](http://vitess.io/overview/concepts.html)
  * [Topology Service](http://vitess.io/doc/TopologyService)
  * [V3 design](http://vitess.io/doc/VTGateV3)
 
