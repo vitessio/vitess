@@ -5,21 +5,7 @@ syntax = "proto3";
 
 package vtctldata;
 
-// Time represents a time stamp in nanoseconds. In go, use time.Unix to
-// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
-message Time {
-  int64 seconds = 1;
-  int64 nanoseconds = 2;
-}
-
-// Streamed by ExecuteVtctlCommand
-message LoggerEvent {
-  Time time = 1;
-  int64 level = 2;
-  string file = 3;
-  int64 line = 4;
-  string value = 5;
-}
+import "logutil.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -31,5 +17,5 @@ message ExecuteVtctlCommandRequest {
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 message ExecuteVtctlCommandResponse {
-  LoggerEvent event = 1;
+  logutil.Event event = 1;
 }
