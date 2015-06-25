@@ -105,7 +105,7 @@ import proto "github.com/golang/protobuf/proto"
 import query "github.com/youtube/vitess/go/vt/proto/query"
 import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 import replicationdata "github.com/youtube/vitess/go/vt/proto/replicationdata"
-import vtctldata "github.com/youtube/vitess/go/vt/proto/vtctldata"
+import logutil "github.com/youtube/vitess/go/vt/proto/logutil"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -1128,14 +1128,14 @@ func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
 func (*BackupRequest) ProtoMessage()    {}
 
 type BackupResponse struct {
-	Event *vtctldata.LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 }
 
 func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
 func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
 func (*BackupResponse) ProtoMessage()    {}
 
-func (m *BackupResponse) GetEvent() *vtctldata.LoggerEvent {
+func (m *BackupResponse) GetEvent() *logutil.Event {
 	if m != nil {
 		return m.Event
 	}

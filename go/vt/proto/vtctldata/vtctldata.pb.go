@@ -9,48 +9,16 @@ It is generated from these files:
 	vtctldata.proto
 
 It has these top-level messages:
-	Time
-	LoggerEvent
 	ExecuteVtctlCommandRequest
 	ExecuteVtctlCommandResponse
 */
 package vtctldata
 
 import proto "github.com/golang/protobuf/proto"
+import logutil "github.com/youtube/vitess/go/vt/proto/logutil"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
-
-// Time represents a time stamp in nanoseconds. In go, use time.Unix to
-// rebuild the Time value, and t.Unix() / t.Nanosecond() to generate.
-type Time struct {
-	Seconds     int64 `protobuf:"varint,1,opt,name=seconds" json:"seconds,omitempty"`
-	Nanoseconds int64 `protobuf:"varint,2,opt,name=nanoseconds" json:"nanoseconds,omitempty"`
-}
-
-func (m *Time) Reset()         { *m = Time{} }
-func (m *Time) String() string { return proto.CompactTextString(m) }
-func (*Time) ProtoMessage()    {}
-
-// Streamed by ExecuteVtctlCommand
-type LoggerEvent struct {
-	Time  *Time  `protobuf:"bytes,1,opt,name=time" json:"time,omitempty"`
-	Level int64  `protobuf:"varint,2,opt,name=level" json:"level,omitempty"`
-	File  string `protobuf:"bytes,3,opt,name=file" json:"file,omitempty"`
-	Line  int64  `protobuf:"varint,4,opt,name=line" json:"line,omitempty"`
-	Value string `protobuf:"bytes,5,opt,name=value" json:"value,omitempty"`
-}
-
-func (m *LoggerEvent) Reset()         { *m = LoggerEvent{} }
-func (m *LoggerEvent) String() string { return proto.CompactTextString(m) }
-func (*LoggerEvent) ProtoMessage()    {}
-
-func (m *LoggerEvent) GetTime() *Time {
-	if m != nil {
-		return m.Time
-	}
-	return nil
-}
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -66,14 +34,14 @@ func (*ExecuteVtctlCommandRequest) ProtoMessage()    {}
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 type ExecuteVtctlCommandResponse struct {
-	Event *LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 }
 
 func (m *ExecuteVtctlCommandResponse) Reset()         { *m = ExecuteVtctlCommandResponse{} }
 func (m *ExecuteVtctlCommandResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtctlCommandResponse) ProtoMessage()    {}
 
-func (m *ExecuteVtctlCommandResponse) GetEvent() *LoggerEvent {
+func (m *ExecuteVtctlCommandResponse) GetEvent() *logutil.Event {
 	if m != nil {
 		return m.Event
 	}
