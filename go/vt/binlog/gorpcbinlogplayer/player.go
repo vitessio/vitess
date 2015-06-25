@@ -7,54 +7,57 @@ package gorpcbinlogplayer
 import (
 	"time"
 
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// GoRpcBinlogPlayerResponse is the type returned by the Client for streaming
-type GoRpcBinlogPlayerResponse struct {
+// response is the type returned by the Client for streaming
+type response struct {
 	*rpcplus.Call
 }
 
-func (response *GoRpcBinlogPlayerResponse) Error() error {
+func (response *response) Error() error {
 	return response.Call.Error
 }
 
-// GoRpcBinlogPlayerClient implements a BinlogPlayerClient over go rpc
-type GoRpcBinlogPlayerClient struct {
+// client implements a BinlogPlayerClient over go rpc
+type client struct {
 	*rpcplus.Client
 }
 
-func (client *GoRpcBinlogPlayerClient) Dial(addr string, connTimeout time.Duration) error {
+func (client *client) Dial(endPoint topo.EndPoint, connTimeout time.Duration) error {
+	addr := netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vt"])
 	var err error
 	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout, nil)
 	return err
 }
 
-func (client *GoRpcBinlogPlayerClient) Close() {
+func (client *client) Close() {
 	client.Client.Close()
 }
 
-func (client *GoRpcBinlogPlayerClient) ServeUpdateStream(req *proto.UpdateStreamRequest, responseChan chan *proto.StreamEvent) binlogplayer.BinlogPlayerResponse {
+func (client *client) ServeUpdateStream(req *proto.UpdateStreamRequest, responseChan chan *proto.StreamEvent) binlogplayer.BinlogPlayerResponse {
 	resp := client.Client.StreamGo("UpdateStream.ServeUpdateStream", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	return &response{resp}
 }
 
-func (client *GoRpcBinlogPlayerClient) StreamKeyRange(req *proto.KeyRangeRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamKeyRange(req *proto.KeyRangeRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
 	resp := client.Client.StreamGo("UpdateStream.StreamKeyRange", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	return &response{resp}
 }
 
-func (client *GoRpcBinlogPlayerClient) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
 	resp := client.Client.StreamGo("UpdateStream.StreamTables", req, responseChan)
-	return &GoRpcBinlogPlayerResponse{resp}
+	return &response{resp}
 }
 
 // Registration as a factory
 func init() {
 	binlogplayer.RegisterBinlogPlayerClientFactory("gorpc", func() binlogplayer.BinlogPlayerClient {
-		return &GoRpcBinlogPlayerClient{}
+		return &client{}
 	})
 }

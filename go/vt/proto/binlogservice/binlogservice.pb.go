@@ -34,13 +34,13 @@ func init() {
 
 type UpdateStreamClient interface {
 	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (*binlogdata.StreamUpdateResponse, error)
+	StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (UpdateStream_StreamUpdateClient, error)
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
-	StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlogdata.StreamKeyRangeResponse, error)
+	StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error)
 	// StreamTables returns the binlog transactions related to
 	// the specified Tables.
-	StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (*binlogdata.StreamTablesResponse, error)
+	StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (UpdateStream_StreamTablesClient, error)
 }
 
 type updateStreamClient struct {
@@ -51,102 +51,201 @@ func NewUpdateStreamClient(cc *grpc.ClientConn) UpdateStreamClient {
 	return &updateStreamClient{cc}
 }
 
-func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (*binlogdata.StreamUpdateResponse, error) {
-	out := new(binlogdata.StreamUpdateResponse)
-	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamUpdate", in, out, c.cc, opts...)
+func (c *updateStreamClient) StreamUpdate(ctx context.Context, in *binlogdata.StreamUpdateRequest, opts ...grpc.CallOption) (UpdateStream_StreamUpdateClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[0], c.cc, "/binlogservice.UpdateStream/StreamUpdate", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &updateStreamStreamUpdateClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
-func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (*binlogdata.StreamKeyRangeResponse, error) {
-	out := new(binlogdata.StreamKeyRangeResponse)
-	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamKeyRange", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+type UpdateStream_StreamUpdateClient interface {
+	Recv() (*binlogdata.StreamUpdateResponse, error)
+	grpc.ClientStream
 }
 
-func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (*binlogdata.StreamTablesResponse, error) {
-	out := new(binlogdata.StreamTablesResponse)
-	err := grpc.Invoke(ctx, "/binlogservice.UpdateStream/StreamTables", in, out, c.cc, opts...)
+type updateStreamStreamUpdateClient struct {
+	grpc.ClientStream
+}
+
+func (x *updateStreamStreamUpdateClient) Recv() (*binlogdata.StreamUpdateResponse, error) {
+	m := new(binlogdata.StreamUpdateResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *updateStreamClient) StreamKeyRange(ctx context.Context, in *binlogdata.StreamKeyRangeRequest, opts ...grpc.CallOption) (UpdateStream_StreamKeyRangeClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[1], c.cc, "/binlogservice.UpdateStream/StreamKeyRange", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &updateStreamStreamKeyRangeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type UpdateStream_StreamKeyRangeClient interface {
+	Recv() (*binlogdata.StreamKeyRangeResponse, error)
+	grpc.ClientStream
+}
+
+type updateStreamStreamKeyRangeClient struct {
+	grpc.ClientStream
+}
+
+func (x *updateStreamStreamKeyRangeClient) Recv() (*binlogdata.StreamKeyRangeResponse, error) {
+	m := new(binlogdata.StreamKeyRangeResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *updateStreamClient) StreamTables(ctx context.Context, in *binlogdata.StreamTablesRequest, opts ...grpc.CallOption) (UpdateStream_StreamTablesClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_UpdateStream_serviceDesc.Streams[2], c.cc, "/binlogservice.UpdateStream/StreamTables", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &updateStreamStreamTablesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type UpdateStream_StreamTablesClient interface {
+	Recv() (*binlogdata.StreamTablesResponse, error)
+	grpc.ClientStream
+}
+
+type updateStreamStreamTablesClient struct {
+	grpc.ClientStream
+}
+
+func (x *updateStreamStreamTablesClient) Recv() (*binlogdata.StreamTablesResponse, error) {
+	m := new(binlogdata.StreamTablesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // Server API for UpdateStream service
 
 type UpdateStreamServer interface {
 	// StreamUpdate streams the binlog events, to know which objects have changed.
-	StreamUpdate(context.Context, *binlogdata.StreamUpdateRequest) (*binlogdata.StreamUpdateResponse, error)
+	StreamUpdate(*binlogdata.StreamUpdateRequest, UpdateStream_StreamUpdateServer) error
 	// StreamKeyRange returns the binlog transactions related to
 	// the specified Keyrange.
-	StreamKeyRange(context.Context, *binlogdata.StreamKeyRangeRequest) (*binlogdata.StreamKeyRangeResponse, error)
+	StreamKeyRange(*binlogdata.StreamKeyRangeRequest, UpdateStream_StreamKeyRangeServer) error
 	// StreamTables returns the binlog transactions related to
 	// the specified Tables.
-	StreamTables(context.Context, *binlogdata.StreamTablesRequest) (*binlogdata.StreamTablesResponse, error)
+	StreamTables(*binlogdata.StreamTablesRequest, UpdateStream_StreamTablesServer) error
 }
 
 func RegisterUpdateStreamServer(s *grpc.Server, srv UpdateStreamServer) {
 	s.RegisterService(&_UpdateStream_serviceDesc, srv)
 }
 
-func _UpdateStream_StreamUpdate_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlogdata.StreamUpdateRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
-		return nil, err
+func _UpdateStream_StreamUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.StreamUpdateRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	out, err := srv.(UpdateStreamServer).StreamUpdate(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	return srv.(UpdateStreamServer).StreamUpdate(m, &updateStreamStreamUpdateServer{stream})
 }
 
-func _UpdateStream_StreamKeyRange_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlogdata.StreamKeyRangeRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
-		return nil, err
-	}
-	out, err := srv.(UpdateStreamServer).StreamKeyRange(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+type UpdateStream_StreamUpdateServer interface {
+	Send(*binlogdata.StreamUpdateResponse) error
+	grpc.ServerStream
 }
 
-func _UpdateStream_StreamTables_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
-	in := new(binlogdata.StreamTablesRequest)
-	if err := codec.Unmarshal(buf, in); err != nil {
-		return nil, err
+type updateStreamStreamUpdateServer struct {
+	grpc.ServerStream
+}
+
+func (x *updateStreamStreamUpdateServer) Send(m *binlogdata.StreamUpdateResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _UpdateStream_StreamKeyRange_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.StreamKeyRangeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	out, err := srv.(UpdateStreamServer).StreamTables(ctx, in)
-	if err != nil {
-		return nil, err
+	return srv.(UpdateStreamServer).StreamKeyRange(m, &updateStreamStreamKeyRangeServer{stream})
+}
+
+type UpdateStream_StreamKeyRangeServer interface {
+	Send(*binlogdata.StreamKeyRangeResponse) error
+	grpc.ServerStream
+}
+
+type updateStreamStreamKeyRangeServer struct {
+	grpc.ServerStream
+}
+
+func (x *updateStreamStreamKeyRangeServer) Send(m *binlogdata.StreamKeyRangeResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _UpdateStream_StreamTables_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.StreamTablesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	return out, nil
+	return srv.(UpdateStreamServer).StreamTables(m, &updateStreamStreamTablesServer{stream})
+}
+
+type UpdateStream_StreamTablesServer interface {
+	Send(*binlogdata.StreamTablesResponse) error
+	grpc.ServerStream
+}
+
+type updateStreamStreamTablesServer struct {
+	grpc.ServerStream
+}
+
+func (x *updateStreamStreamTablesServer) Send(m *binlogdata.StreamTablesResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 var _UpdateStream_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "binlogservice.UpdateStream",
 	HandlerType: (*UpdateStreamServer)(nil),
-	Methods: []grpc.MethodDesc{
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "StreamUpdate",
-			Handler:    _UpdateStream_StreamUpdate_Handler,
+			StreamName:    "StreamUpdate",
+			Handler:       _UpdateStream_StreamUpdate_Handler,
+			ServerStreams: true,
 		},
 		{
-			MethodName: "StreamKeyRange",
-			Handler:    _UpdateStream_StreamKeyRange_Handler,
+			StreamName:    "StreamKeyRange",
+			Handler:       _UpdateStream_StreamKeyRange_Handler,
+			ServerStreams: true,
 		},
 		{
-			MethodName: "StreamTables",
-			Handler:    _UpdateStream_StreamTables_Handler,
+			StreamName:    "StreamTables",
+			Handler:       _UpdateStream_StreamTables_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams: []grpc.StreamDesc{},
 }

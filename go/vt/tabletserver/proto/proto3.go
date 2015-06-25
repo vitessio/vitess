@@ -6,7 +6,6 @@ package proto
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/sqltypes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -321,80 +320,13 @@ func Proto3ToBindVariables(bv map[string]*pb.BindVariable) map[string]interface{
 	return result
 }
 
-// QueryResultToProto3 converts an internal QueryResult to he proto3 version
-func QueryResultToProto3(qr *mproto.QueryResult) *pb.QueryResult {
-	result := &pb.QueryResult{
-		RowsAffected: qr.RowsAffected,
-		InsertId:     qr.InsertId,
-	}
-
-	if len(qr.Fields) > 0 {
-		result.Fields = make([]*pb.Field, len(qr.Fields))
-		for i, f := range qr.Fields {
-			result.Fields[i] = &pb.Field{
-				Name:  f.Name,
-				Type:  pb.Field_Type(f.Type),
-				Flags: int64(f.Flags),
-			}
-		}
-	}
-
-	if len(qr.Rows) > 0 {
-		result.Rows = make([]*pb.Row, len(qr.Rows))
-		for i, r := range qr.Rows {
-			result.Rows[i] = &pb.Row{
-				Values: make([][]byte, len(r)),
-			}
-			for j, c := range r {
-				result.Rows[i].Values[j] = c.Raw()
-			}
-
-		}
-	}
-
-	return result
-}
-
-// Proto3ToQueryResult converts a proto3 QueryResult to an internal data structure.
-func Proto3ToQueryResult(qr *pb.QueryResult) *mproto.QueryResult {
-	result := &mproto.QueryResult{
-		RowsAffected: qr.RowsAffected,
-		InsertId:     qr.InsertId,
-	}
-
-	if len(qr.Fields) > 0 {
-		result.Fields = make([]mproto.Field, len(qr.Fields))
-		for i, f := range qr.Fields {
-			result.Fields[i].Name = f.Name
-			result.Fields[i].Type = int64(f.Type)
-			result.Fields[i].Flags = int64(f.Flags)
-		}
-	}
-
-	if len(qr.Rows) > 0 {
-		result.Rows = make([][]sqltypes.Value, len(qr.Rows))
-		for i, r := range qr.Rows {
-			result.Rows[i] = make([]sqltypes.Value, len(r.Values))
-			for j, c := range r.Values {
-				if c == nil {
-					result.Rows[i][j] = sqltypes.NULL
-				} else {
-					result.Rows[i][j] = sqltypes.MakeString(c)
-				}
-			}
-		}
-	}
-
-	return result
-}
-
 // Proto3ToQueryResultList converts a proto3 QueryResult to an internal data structure.
 func Proto3ToQueryResultList(results []*pb.QueryResult) *QueryResultList {
 	result := &QueryResultList{
 		List: make([]mproto.QueryResult, len(results)),
 	}
 	for i, qr := range results {
-		result.List[i] = *Proto3ToQueryResult(qr)
+		result.List[i] = *mproto.Proto3ToQueryResult(qr)
 	}
 	return result
 }
@@ -406,7 +338,7 @@ func QueryResultListToProto3(results []mproto.QueryResult) []*pb.QueryResult {
 	}
 	result := make([]*pb.QueryResult, len(results))
 	for i := range results {
-		result[i] = QueryResultToProto3(&results[i])
+		result[i] = mproto.QueryResultToProto3(&results[i])
 	}
 	return result
 }

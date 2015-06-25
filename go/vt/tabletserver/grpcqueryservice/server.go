@@ -62,7 +62,7 @@ func (q *Query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		}, nil
 	}
 	return &pb.ExecuteResponse{
-		Result: proto.QueryResultToProto3(reply),
+		Result: mproto.QueryResultToProto3(reply),
 	}, nil
 }
 
@@ -98,7 +98,7 @@ func (q *Query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		SessionId:     request.SessionId,
 	}, func(reply *mproto.QueryResult) error {
 		return stream.Send(&pb.StreamExecuteResponse{
-			Result: proto.QueryResultToProto3(reply),
+			Result: mproto.QueryResultToProto3(reply),
 		})
 	})
 	if seErr != nil {
