@@ -316,6 +316,9 @@ class TestTabletManager(unittest.TestCase):
     if environment.topo_server().flavor() != 'zookeeper':
       logging.info("Skipping this test in non-github tree")
       return
+    if tablet_62344.grpc_enabled():
+      logging.info("Skipping this test as second gRPC port interferes")
+      return
 
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
