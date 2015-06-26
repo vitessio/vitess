@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -62,39 +61,6 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 		return nil, nil, err
 	}
 	return cc, pbs.NewTabletManagerClient(cc), nil
-}
-
-// rpcCallTablet wil execute the RPC on the remote server.
-func (client *Client) rpcCallTablet(ctx context.Context, tablet *topo.TabletInfo, name string, args, reply interface{}) error {
-	// create the RPC client, using ctx.Deadline if set, or no timeout.
-	var connectTimeout time.Duration
-	deadline, ok := ctx.Deadline()
-	if ok {
-		connectTimeout = deadline.Sub(time.Now())
-		if connectTimeout < 0 {
-			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.%v on %v", name, tablet.Alias)}
-		}
-	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
-	if err != nil {
-		return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err.Error())
-	}
-	defer rpcClient.Close()
-
-	// use the context Done() channel. Will handle context timeout.
-	call := rpcClient.Go(ctx, "TabletManager."+name, args, reply, nil)
-	select {
-	case <-ctx.Done():
-		if ctx.Err() == context.DeadlineExceeded {
-			return timeoutError{fmt.Errorf("timeout waiting for TabletManager.%v to %v", name, tablet.Alias)}
-		}
-		return fmt.Errorf("interrupted waiting for TabletManager.%v to %v", name, tablet.Alias)
-	case <-call.Done:
-		if call.Error != nil {
-			return fmt.Errorf("remote error for %v: %v", tablet.Alias, call.Error.Error())
-		}
-		return nil
-	}
 }
 
 //
