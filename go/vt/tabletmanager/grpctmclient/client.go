@@ -6,6 +6,7 @@ package grpctmclient
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"google.golang.org/grpc"
@@ -136,29 +137,56 @@ func (client *Client) Sleep(ctx context.Context, tablet *topo.TabletInfo, durati
 
 // ExecuteHook is part of the tmclient.TabletManagerClient interface
 func (client *Client) ExecuteHook(ctx context.Context, tablet *topo.TabletInfo, hk *hook.Hook) (*hook.HookResult, error) {
-	var hr hook.HookResult
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionExecuteHook, hk, &hr); err != nil {
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
 		return nil, err
 	}
-	return &hr, nil
+	defer cc.Close()
+	hr, err := c.ExecuteHook(ctx, &pb.ExecuteHookRequest{
+		Name:       hk.Name,
+		Parameters: hk.Parameters,
+		ExtraEnv:   hk.ExtraEnv,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &hook.HookResult{
+		ExitStatus: int(hr.ExitStatus),
+		Stdout:     hr.Stdout,
+		Stderr:     hr.Stderr,
+	}, nil
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface
 func (client *Client) GetSchema(ctx context.Context, tablet *topo.TabletInfo, tables, excludeTables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
-	var sd myproto.SchemaDefinition
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionGetSchema, &gorpcproto.GetSchemaArgs{Tables: tables, ExcludeTables: excludeTables, IncludeViews: includeViews}, &sd); err != nil {
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
 		return nil, err
 	}
-	return &sd, nil
+	defer cc.Close()
+	response, err := c.GetSchema(ctx, &pb.GetSchemaRequest{
+		Tables:        tables,
+		ExcludeTables: excludeTables,
+		IncludeViews:  includeViews,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return myproto.ProtoToSchemaDefinition(response.SchemaDefinition), nil
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface
 func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInfo) (*myproto.Permissions, error) {
-	var p myproto.Permissions
-	if err := client.rpcCallTablet(ctx, tablet, actionnode.TabletActionGetPermissions, &rpc.Unused{}, &p); err != nil {
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
 		return nil, err
 	}
-	return &p, nil
+	defer cc.Close()
+	response, err := c.GetPermissions(ctx, &pb.GetPermissionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return myproto.ProtoToPermissions(response.Permissions), nil
 }
 
 //
@@ -167,84 +195,122 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topo.TabletInf
 
 // SetReadOnly is part of the tmclient.TabletManagerClient interface
 func (client *Client) SetReadOnly(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSetReadOnly, &rpc.Unused{}, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.SetReadOnly(ctx, &pb.SetReadOnlyRequest{})
+	return err
 }
 
 // SetReadWrite is part of the tmclient.TabletManagerClient interface
 func (client *Client) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionSetReadWrite, &rpc.Unused{}, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.SetReadWrite(ctx, &pb.SetReadWriteRequest{})
+	return err
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
 func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionChangeType, &dbType, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.ChangeType(ctx, &pb.ChangeTypeRequest{
+		TabletType: topo.TabletTypeToProto(dbType),
+	})
+	return err
 }
 
 // Scrap is part of the tmclient.TabletManagerClient interface
 func (client *Client) Scrap(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionScrap, &rpc.Unused{}, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.Scrap(ctx, &pb.ScrapRequest{})
+	return err
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface
 func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRefreshState, &rpc.Unused{}, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.RefreshState(ctx, &pb.RefreshStateRequest{})
+	return err
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
 func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRunHealthCheck, &targetTabletType, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.RunHealthCheck(ctx, &pb.RunHealthCheckRequest{
+		TabletType: topo.TabletTypeToProto(targetTabletType),
+	})
+	return err
 }
 
 // HealthStream is part of the tmclient.TabletManagerClient interface
 func (client *Client) HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, tmclient.ErrFunc, error) {
-	var connectTimeout time.Duration
-	deadline, ok := ctx.Deadline()
-	if ok {
-		connectTimeout = deadline.Sub(time.Now())
-		if connectTimeout < 0 {
-			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.HealthStream on %v", tablet.Alias)}
-		}
-	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
+	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	logstream := make(chan *actionnode.HealthStreamReply, 10)
-	rpcstream := make(chan *actionnode.HealthStreamReply, 10)
-	c := rpcClient.StreamGo("TabletManager.HealthStream", "", rpcstream)
-	interrupted := false
+	stream, err := c.StreamHealth(ctx, &pb.StreamHealthRequest{})
+	if err != nil {
+		cc.Close()
+		return nil, nil, err
+	}
+
+	var finalErr error
 	go func() {
 		for {
-			select {
-			case <-ctx.Done():
-				// context is done
-				interrupted = true
-				close(logstream)
-				rpcClient.Close()
-				return
-			case hsr, ok := <-rpcstream:
-				if !ok {
-					close(logstream)
-					rpcClient.Close()
-					return
+			shr, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF {
+					finalErr = err
 				}
-				logstream <- hsr
+				close(logstream)
+				return
+			}
+			logstream <- &actionnode.HealthStreamReply{
+				Tablet:              topo.ProtoToTablet(shr.Tablet),
+				BinlogPlayerMapSize: shr.BinlogPlayerMapSize,
+				HealthError:         shr.HealthError,
+				ReplicationDelay:    time.Duration(shr.ReplicationDelay),
 			}
 		}
 	}()
 	return logstream, func() error {
-		// this is only called after streaming is done
-		if interrupted {
-			return fmt.Errorf("TabletManager.HealthStreamReply interrupted by context")
-		}
-		return c.Error
+		cc.Close()
+		return finalErr
 	}, nil
 }
 
 // ReloadSchema is part of the tmclient.TabletManagerClient interface
 func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
-	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionReloadSchema, &rpc.Unused{}, &rpc.Unused{})
+	cc, c, err := client.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.ReloadSchema(ctx, &pb.ReloadSchemaRequest{})
+	return err
 }
 
 // PreflightSchema is part of the tmclient.TabletManagerClient interface
