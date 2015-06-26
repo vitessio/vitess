@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 
-	pbl "github.com/youtube/vitess/go/vt/proto/logutil"
 	pb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
 )
@@ -491,13 +490,7 @@ func (s *server) Backup(request *pb.BackupRequest, stream pbs.TabletManager_Back
 				// has been broken. We'll just keep trying
 				// to send.
 				stream.Send(&pb.BackupResponse{
-					Event: &pbl.Event{
-						Time:  logutil.TimeToProto(e.Time),
-						Level: pbl.Level(e.Level),
-						File:  e.File,
-						Line:  int64(e.Line),
-						Value: e.Value,
-					},
+					Event: logutil.LoggerEventToProto(&e),
 				})
 
 			}

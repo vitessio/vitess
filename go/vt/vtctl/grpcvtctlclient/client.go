@@ -62,13 +62,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 				close(results)
 				return
 			}
-			results <- &logutil.LoggerEvent{
-				Time:  logutil.ProtoToTime(le.Event.Time),
-				Level: int(le.Event.Level),
-				File:  le.Event.File,
-				Line:  int(le.Event.Line),
-				Value: le.Event.Value,
-			}
+			results <- logutil.ProtoToLoggerEvent(le.Event)
 		}
 	}()
 	return results, func() error {

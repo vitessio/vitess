@@ -733,13 +733,7 @@ func (client *Client) Backup(ctx context.Context, tablet *topo.TabletInfo, concu
 				close(logstream)
 				return
 			}
-			logstream <- &logutil.LoggerEvent{
-				Time:  logutil.ProtoToTime(br.Event.Time),
-				Level: int(br.Event.Level),
-				File:  br.Event.File,
-				Line:  int(br.Event.Line),
-				Value: br.Event.Value,
-			}
+			logstream <- logutil.ProtoToLoggerEvent(br.Event)
 		}
 	}()
 	return logstream, func() error {
