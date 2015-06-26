@@ -83,6 +83,7 @@ site_integration_test_files = \
 # - medium: 30 secs - 1 min
 # - large: over 1 min
 small_integration_test_files = \
+	tablet_test.py \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	schema.py \
