@@ -82,3 +82,27 @@ func ProtoToBlpPosition(b *pbt.BlpPosition) *BlpPosition {
 		Position: myproto.ProtoToReplicationPosition(b.Position),
 	}
 }
+
+// BlpPositionListToProto converts a BlpPositionList to a proto3
+func BlpPositionListToProto(l *BlpPositionList) []*pbt.BlpPosition {
+	if len(l.Entries) == 0 {
+		return nil
+	}
+	result := make([]*pbt.BlpPosition, len(l.Entries))
+	for i, p := range l.Entries {
+		result[i] = BlpPositionToProto(&p)
+	}
+	return result
+}
+
+// ProtoToBlpPositionList converts a proto to a BlpPositionList
+func ProtoToBlpPositionList(l []*pbt.BlpPosition) *BlpPositionList {
+	result := &BlpPositionList{}
+	if len(l) > 0 {
+		result.Entries = make([]BlpPosition, len(l))
+		for i, p := range l {
+			result.Entries[i] = *ProtoToBlpPosition(p)
+		}
+	}
+	return result
+}

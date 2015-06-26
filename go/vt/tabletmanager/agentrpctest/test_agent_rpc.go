@@ -723,7 +723,7 @@ func (fra *fakeRPCAgent) StopSlaveMinimum(ctx context.Context, position myproto.
 
 func agentRPCTestStopSlaveMinimum(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
 	pos, err := client.StopSlaveMinimum(ctx, ti, testReplicationPosition, testStopSlaveMinimumWaitTime)
-	compareError(t, "StopSlave", err, pos, testReplicationPositionReturned)
+	compareError(t, "StopSlaveMinimum", err, pos, testReplicationPositionReturned)
 }
 
 func agentRPCTestStopSlaveMinimumPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, ti *topo.TabletInfo) {
