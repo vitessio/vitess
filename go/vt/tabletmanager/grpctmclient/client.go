@@ -330,6 +330,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topo.Tablet
 	defer cc.Close()
 	response, err := c.ExecuteFetchAsDba(ctx, &pb.ExecuteFetchAsDbaRequest{
 		Query:          query,
+		DbName:         tablet.DbName(),
 		MaxRows:        uint64(maxRows),
 		WantFields:     wantFields,
 		DisableBinlogs: disableBinlogs,
