@@ -195,6 +195,22 @@ else
     rm -r build
 fi
 
+# install mock
+mock_dist=$VTROOT/dist/py-mock-1.0.1
+if [ -f $mock_dist/.build_finished ]; then
+  echo "skipping mock python build"
+else
+  # For some reason, it seems like setuptools won't create directories even with the --prefix argument
+  mkdir -p $mock_dist/lib/python2.7/site-packages
+  cd $VTTOP/third_party/py && \
+    tar -xzf mock-1.0.1.tar.gz && \
+    cd mock-1.0.1 && \
+    python ./setup.py install --prefix=$mock_dist && \
+    touch $mock_dist/.build_finished && \
+    cd .. && \
+    rm -r mock-1.0.1
+fi
+
 # install cbson
 cbson_dist=$VTROOT/dist/py-cbson
 if [ -d $cbson_dist ]; then
