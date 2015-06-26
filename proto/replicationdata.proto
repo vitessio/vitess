@@ -36,11 +36,10 @@ message Position {
 // and parsed into a Position and fields).
 message Status {
   Position position = 1;
-  Position io_position = 2;
-  bool slave_io_running = 3;
-  bool slave_sql_running = 4;
-  uint32 seconds_behind_master = 5;
-  string master_host = 6;
-  int32 master_port = 7;
-  int32 master_connect_retry = 8;
+  bool slave_io_running = 2;
+  bool slave_sql_running = 3;
+  uint32 seconds_behind_master = 4;
+  string master_host = 5;
+  int32 master_port = 6;
+  int32 master_connect_retry = 7;
 }

@@ -9,6 +9,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains the methods to convert data structures to and
@@ -61,6 +62,46 @@ func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
 		result.Statements = make([]Statement, len(bt.Statements))
 		for i, s := range bt.Statements {
 			result.Statements[i] = ProtoToStatement(s)
+		}
+	}
+	return result
+}
+
+// BlpPositionToProto converts a BlpPosition to a proto3
+func BlpPositionToProto(b *BlpPosition) *pbt.BlpPosition {
+	return &pbt.BlpPosition{
+		Uid:      b.Uid,
+		Position: myproto.ReplicationPositionToProto(b.Position),
+	}
+}
+
+// ProtoToBlpPosition converts a proto to a BlpPosition
+func ProtoToBlpPosition(b *pbt.BlpPosition) *BlpPosition {
+	return &BlpPosition{
+		Uid:      b.Uid,
+		Position: myproto.ProtoToReplicationPosition(b.Position),
+	}
+}
+
+// BlpPositionListToProto converts a BlpPositionList to a proto3
+func BlpPositionListToProto(l *BlpPositionList) []*pbt.BlpPosition {
+	if len(l.Entries) == 0 {
+		return nil
+	}
+	result := make([]*pbt.BlpPosition, len(l.Entries))
+	for i, p := range l.Entries {
+		result[i] = BlpPositionToProto(&p)
+	}
+	return result
+}
+
+// ProtoToBlpPositionList converts a proto to a BlpPositionList
+func ProtoToBlpPositionList(l []*pbt.BlpPosition) *BlpPositionList {
+	result := &BlpPositionList{}
+	if len(l) > 0 {
+		result.Entries = make([]BlpPosition, len(l))
+		for i, p := range l {
+			result.Entries[i] = *ProtoToBlpPosition(p)
 		}
 	}
 	return result

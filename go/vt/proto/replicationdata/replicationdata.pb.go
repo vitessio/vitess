@@ -103,13 +103,12 @@ func (m *Position) GetMysqlGtidSet() *MysqlGtidSet {
 // and parsed into a Position and fields).
 type Status struct {
 	Position            *Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	IoPosition          *Position `protobuf:"bytes,2,opt,name=io_position" json:"io_position,omitempty"`
-	SlaveIoRunning      bool      `protobuf:"varint,3,opt,name=slave_io_running" json:"slave_io_running,omitempty"`
-	SlaveSqlRunning     bool      `protobuf:"varint,4,opt,name=slave_sql_running" json:"slave_sql_running,omitempty"`
-	SecondsBehindMaster uint32    `protobuf:"varint,5,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
-	MasterHost          string    `protobuf:"bytes,6,opt,name=master_host" json:"master_host,omitempty"`
-	MasterPort          int32     `protobuf:"varint,7,opt,name=master_port" json:"master_port,omitempty"`
-	MasterConnectRetry  int32     `protobuf:"varint,8,opt,name=master_connect_retry" json:"master_connect_retry,omitempty"`
+	SlaveIoRunning      bool      `protobuf:"varint,2,opt,name=slave_io_running" json:"slave_io_running,omitempty"`
+	SlaveSqlRunning     bool      `protobuf:"varint,3,opt,name=slave_sql_running" json:"slave_sql_running,omitempty"`
+	SecondsBehindMaster uint32    `protobuf:"varint,4,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
+	MasterHost          string    `protobuf:"bytes,5,opt,name=master_host" json:"master_host,omitempty"`
+	MasterPort          int32     `protobuf:"varint,6,opt,name=master_port" json:"master_port,omitempty"`
+	MasterConnectRetry  int32     `protobuf:"varint,7,opt,name=master_connect_retry" json:"master_connect_retry,omitempty"`
 }
 
 func (m *Status) Reset()         { *m = Status{} }
@@ -119,13 +118,6 @@ func (*Status) ProtoMessage()    {}
 func (m *Status) GetPosition() *Position {
 	if m != nil {
 		return m.Position
-	}
-	return nil
-}
-
-func (m *Status) GetIoPosition() *Position {
-	if m != nil {
-		return m.IoPosition
 	}
 	return nil
 }

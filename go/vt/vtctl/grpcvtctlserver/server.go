@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pbl "github.com/youtube/vitess/go/vt/proto/logutil"
 	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
@@ -53,13 +52,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
 			stream.Send(&pb.ExecuteVtctlCommandResponse{
-				Event: &pbl.Event{
-					Time:  logutil.TimeToProto(e.Time),
-					Level: pbl.Level(e.Level),
-					File:  e.File,
-					Line:  int64(e.Line),
-					Value: e.Value,
-				},
+				Event: logutil.LoggerEventToProto(&e),
 			})
 		}
 		wg.Done()
