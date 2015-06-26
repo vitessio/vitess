@@ -15,8 +15,8 @@ class ProtocolsFlavor(object):
     Needs to be supported both in python and go."""
     raise NotImplementedError('Not implemented in the base class')
 
-  def tablet_manager_protocol_flags(self):
-    """Returns the flags to use for specifying the tablet manager protocol."""
+  def tablet_manager_protocol(self):
+    """Returns the protocol to use for the tablet manager protocol."""
     raise NotImplementedError('Not implemented in the base class')
 
   def tabletconn_protocol(self):
@@ -47,8 +47,8 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def vtctl_client_protocol(self):
     return 'gorpc'
 
-  def tablet_manager_protocol_flags(self):
-    return ['-tablet_manager_protocol', 'bson']
+  def tablet_manager_protocol(self):
+    return 'bson'
 
   def tabletconn_protocol(self):
     return 'gorpc'
@@ -73,8 +73,8 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
   def vtctl_client_protocol(self):
     return 'grpc'
 
-  def tablet_manager_protocol_flags(self):
-    return ['-tablet_manager_protocol', 'bson']
+  def tablet_manager_protocol(self):
+    return 'grpc'
 
   def tabletconn_protocol(self):
     return 'grpc'
@@ -83,10 +83,15 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return ['-vtgate_protocol', 'gorpc']
 
   def rpc_timeout_message(self):
-    return 'timeout waiting for'
+    return 'context deadline exceeded'
 
   def service_map(self):
-    return ['grpc-queryservice', 'grpc-updatestream', 'grpc-vtctl']
+    return [
+        'grpc-queryservice',
+        'grpc-updatestream',
+        'grpc-vtctl',
+        'grpc-tabletmanager',
+        ]
 
 
 __knows_protocols_flavor_map = {

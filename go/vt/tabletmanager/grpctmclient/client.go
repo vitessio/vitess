@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/netutil"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -52,10 +53,11 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 
 	var cc *grpc.ClientConn
 	var err error
+	addr := netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["grpc"])
 	if connectTimeout == 0 {
-		cc, err = grpc.Dial(tablet.Addr(), grpc.WithBlock())
+		cc, err = grpc.Dial(addr, grpc.WithBlock())
 	} else {
-		cc, err = grpc.Dial(tablet.Addr(), grpc.WithBlock(), grpc.WithTimeout(connectTimeout))
+		cc, err = grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(connectTimeout))
 	}
 	if err != nil {
 		return nil, nil, err

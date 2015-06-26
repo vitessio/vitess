@@ -41,7 +41,7 @@ func TestGoRPCTMServer(t *testing.T) {
 		},
 		Hostname: host,
 		Portmap: map[string]int{
-			"vt": port,
+			"grpc": port,
 		},
 	}, 0)
 

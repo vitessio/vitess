@@ -184,8 +184,9 @@ class TestTabletManager(unittest.TestCase):
     # it started to run
     args = (environment.binary_args('vtctl') +
             environment.topo_server().flags() +
-            protocols_flavor().tablet_manager_protocol_flags() +
-            ['-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+            ['-tablet_manager_protocol',
+             protocols_flavor().tablet_manager_protocol(),
+             '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
              '-log_dir', environment.vtlogroot,
              'Sleep', tablet_62344.tablet_alias, '10s'])
     bg = utils.run_bg(args)
