@@ -193,6 +193,7 @@ proto:
 	cd go/vt/proto/query && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/query.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgate && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgate.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgateservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgateservice.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/logutil && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/logutil.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctldata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctldata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctlservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctlservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanagerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerdata.proto --go_out=plugins=grpc:.
@@ -200,6 +201,7 @@ proto:
 	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/automationservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automationservice.proto --go_out=plugins=grpc:.
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
+	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/logutil.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctldata.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctlservice.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 

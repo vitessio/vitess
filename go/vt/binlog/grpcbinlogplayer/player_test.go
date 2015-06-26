@@ -2,23 +2,24 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package gorpcbinlogplayer
+package grpcbinlogplayer
 
 import (
 	"net"
-	"net/http"
 	"testing"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"google.golang.org/grpc"
+
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
-	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogstreamer"
+	"github.com/youtube/vitess/go/vt/binlog/grpcbinlogstreamer"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
 )
 
 // the test here creates a fake server implementation, a fake client
 // implementation, and runs the test suite against the setup.
-func TestGoRPCBinlogStreamer(t *testing.T) {
+func TestGRPCBinlogStreamer(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -27,27 +28,20 @@ func TestGoRPCBinlogStreamer(t *testing.T) {
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	// Create a Go Rpc server and listen on the port
-	server := rpcplus.NewServer()
+	// Create a gRPC server and listen on the port
+	server := grpc.NewServer()
 	fakeUpdateStream := binlogplayertest.NewFakeBinlogStreamer(t)
-	server.Register(gorpcbinlogstreamer.New(fakeUpdateStream))
+	pbs.RegisterUpdateStreamServer(server, grpcbinlogstreamer.New(fakeUpdateStream))
+	go server.Serve(listener)
 
-	// create the HTTP server, serve the server from it
-	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
-	httpServer := http.Server{
-		Handler: handler,
-	}
-	go httpServer.Serve(listener)
-
-	// Create a Go Rpc client to talk to the fake tablet
+	// Create a GRPC client to talk to the fake tablet
 	c := &client{}
 
 	// and send it to the test suite
 	binlogplayertest.Run(t, c, topo.EndPoint{
 		Host: host,
 		NamedPortMap: map[string]int{
-			"vt": port,
+			"grpc": port,
 		},
 	}, fakeUpdateStream)
 }
