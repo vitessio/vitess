@@ -65,7 +65,6 @@ func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
 			for j, c := range r {
 				result.Rows[i].Values[j] = c.Raw()
 			}
-
 		}
 	}
 
