@@ -313,6 +313,16 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_restart(self):
+    """test_restart tests that when starting a second vttablet with the same
+    configuration as another one, it will kill the previous process
+    and take over listening on the socket.
+
+    If vttablet listens to other ports (like gRPC), this feature will
+    break. We believe it is not widely used, so we're OK with this for now.
+    (container based installations usually handle tablet restarts
+    by using a different set of servers, and do not rely on this feature
+    at all).
+    """
     if environment.topo_server().flavor() != 'zookeeper':
       logging.info("Skipping this test in non-github tree")
       return
