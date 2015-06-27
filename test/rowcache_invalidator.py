@@ -197,18 +197,16 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(end4, end3+1)
 
   def test_stop_replication(self):
+    # wait for replication to catch up.
+    self._wait_for_replica()
+
     # restart the replica tablet so the stats are reset
     replica_tablet.kill_vttablet()
     replica_tablet.start_vttablet(memcache=True)
 
     # insert 100 values, should cause 100 invalidations
     self.perform_insert(100)
-    master_position = utils.mysql_query(master_tablet.tablet_uid,
-                                        'vt_test_keyspace',
-                                        'show master status')
-    replica_tablet.mquery('vt_test_keyspace',
-                          "select MASTER_POS_WAIT('%s', %d)" %
-                          (master_position[0][0], master_position[0][1]), 5)
+    self._wait_for_replica()
 
     # wait until the slave processed all data
     for timeout in xrange(300):
@@ -226,12 +224,7 @@ class RowCacheInvalidator(unittest.TestCase):
     self.perform_insert(100)
     time.sleep(2)
     replica_tablet.mquery('vt_test_keyspace', "start slave")
-    master_position = utils.mysql_query(master_tablet.tablet_uid,
-                                        'vt_test_keyspace',
-                                        'show master status')
-    replica_tablet.mquery('vt_test_keyspace',
-                          "select MASTER_POS_WAIT('%s', %d)" %
-                          (master_position[0][0], master_position[0][1]), 5)
+    self._wait_for_replica()
 
     # wait until the slave processed all data
     for timeout in xrange(300):
