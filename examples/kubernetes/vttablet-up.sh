@@ -13,7 +13,7 @@ keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 port=15002
-uid_base=100
+UID_BASE=${UID_BASE:-100}
 FORCE_NODE=${FORCE_NODE:-false}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
@@ -25,6 +25,7 @@ if [ -n "$VTDATAROOT_VOLUME" ]; then
 fi
 
 index=1
+uid_base=$UID_BASE
 for shard in $(echo $SHARDS | tr "," " "); do
   echo "Creating $keyspace.shard-$shard pods in cell $cell..."
   for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
