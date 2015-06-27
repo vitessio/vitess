@@ -82,6 +82,9 @@
     },
     "worker": {
       "File": "worker.py"
+    },
+    "tablet": {
+      "File": "tablet_test.py"
     }
   }
 }

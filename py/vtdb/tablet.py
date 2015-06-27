@@ -173,9 +173,14 @@ class TabletConnection(object):
     """
     response = self.client.call(method_name, request)
     reply = response.reply
+    if not reply or not isinstance(reply, dict):
+      return response
     # Handle the case of new client => old server
-    if reply.get('Err', None):
-      raise gorpc.AppError(reply['Err'].get('Message', 'Missing error message'), method_name)
+    err = reply.get('Err', None)
+    if err:
+      if not isinstance(reply, dict) or 'Message' not in err:
+        raise gorpc.AppError('Missing error message', method_name)
+      raise gorpc.AppError(reply['Err']['Message'], method_name)
     return response
 
   def _execute(self, sql, bind_variables):
