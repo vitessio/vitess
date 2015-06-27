@@ -205,16 +205,17 @@ proto:
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctldata.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctlservice.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
-# This rule builds a bootstrap image of the given flavor.
-# Example: $ make docker_bootstrap flavor=mariadb
+# This rule builds the bootstrap images for all flavors.
 docker_bootstrap:
-	docker/bootstrap/build.sh $(flavor)
+	docker/bootstrap/build.sh common
+	docker/bootstrap/build.sh mariadb
+	docker/bootstrap/build.sh mysql56
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
 docker_test:
-	docker/test/run.sh $(flavor) 'make test'
+	go run test.go -flavor $(flavor)
 
 docker_unit_test:
-	docker/test/run.sh $(flavor) 'make unit_test'
+	go run test.go -flavor $(flavor) unit
