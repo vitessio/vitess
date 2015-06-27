@@ -336,9 +336,13 @@ vitess/examples/kubernetes$ ./vttablet-up.sh
 # pods/vttablet-101
 # Creating pod for tablet test-0000000102...
 # pods/vttablet-102
+# Creating pod for tablet test-0000000103...
+# pods/vttablet-103
+# Creating pod for tablet test-0000000104...
+# pods/vttablet-104
 ```
 
-    <br>Wait until you see all 3 tablets listed in the **Topology** summary page
+    <br>Wait until you see all 5 tablets listed in the **Topology** summary page
     for your <code>vtctld</code> instance
     (e.g. <code>http://2.3.4.5:30000/dbtopo</code>).
     This can take some time if a pod was scheduled on a node that needs to
@@ -348,10 +352,19 @@ vitess/examples/kubernetes$ ./vttablet-up.sh
     ``` sh
 $ kvtctl ListAllTablets test
 ### example output:
-# test-0000000100 test_keyspace 0 replica 10.64.2.9:15002 10.64.2.9:3306 []
-# test-0000000101 test_keyspace 0 replica 10.64.1.12:15002 10.64.1.12:3306 []
-# test-0000000102 test_keyspace 0 replica 10.64.2.10:15002 10.64.2.10:3306 []
+# test-0000000100 test_keyspace 0 replica 10.64.1.6:15002 10.64.1.6:3306 []
+# test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
+# test-0000000102 test_keyspace 0 replica 10.64.0.7:15002 10.64.0.7:3306 []
+# test-0000000103 test_keyspace 0 rdonly 10.64.1.7:15002 10.64.1.7:3306 []
+# test-0000000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []
 ```
+
+    <br>Note that of the 5 tablets, the first 3 were assigned to be
+    **replica** type (for serving live web traffic), while the last 2
+    were assigned to be **rdonly** type (for offline processing).
+    These allocations can be configured in the `vttablet-up.sh` script.
+    See the [tablet](http://vitess.io/overview/concepts.html#tablet)
+    reference for more about the available tablet types.<br>
 
     <br>By bringing up tablets in a previously empty
     [keyspace](http://vitess.io/overview/concepts.html#keyspace),
@@ -397,7 +410,27 @@ https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/st
     meant to be accessed via vttablet, our default bootstrap settings only allow
     connections from localhost.<br><br>
 
-    If you want to check or manipulate the underlying mysqld,
+    If you want to check or manipulate the underlying mysqld, you can issue
+    simple queries or commands through `vtctlclient` like this:
+
+    ``` sh
+# Send a query to tablet 100 in cell 'test'.
+$ kvtctl ExecuteFetchAsDba test-0000000100 "SELECT VERSION()"
+### example output:
+# {
+#   "Fields": [],
+#   "RowsAffected": 1,
+#   "InsertId": 0,
+#   "Rows": [
+#     [
+#       "10.0.20-MariaDB-1~wheezy-log"
+#     ]
+#   ],
+#   "Err": null
+# }
+```
+
+    <br>If you need a truly direct connection to mysqld for bulk operations,
     you can SSH to the Kubernetes node on which the pod is running.
     Then use [docker exec](https://docs.docker.com/reference/commandline/cli/#exec)
     to launch a bash shell inside the mysql container, and connect with the
@@ -420,14 +453,14 @@ vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.
 
 1.  **Elect a master vttablet**
 
-    The tablets are all started as replicas. In this step, you
+    The tablets all start as slaves by default. In this step, you
     designate one of the tablets to be the master. Vitess
-    automatically connects the other replicas' mysqld instances
+    automatically connects the other slaves' mysqld instances
     so that they start replicating from the master's mysqld.<br><br>
 
     Since this is the first time the shard has been started,
     the tablets are not already doing any replication, and the
-    tablet types are all replica or spare. As a
+    tablet types are all replica or rdonly. As a
     result, the following command uses the <code>-force</code>
     flag when calling the <code>InitShardMaster</code> command
     to be able to promote one instance to master.
@@ -447,17 +480,19 @@ $ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
     After running this command, go back to the **Topology** page
     in the <code>vtctld</code> web interface. When you refresh the
     page, you should see that one tablet is the master
-    and the other two are replicas.<br><br>
+    and the others are replica or rdonly.<br><br>
 
     You can also run this command on the command line to see the
     same data:
 
     ``` sh
 $ kvtctl ListAllTablets test
-# The command's output is shown below:
-# test-0000000100 test_keyspace 0 master MASTER_IP:15002 MASTER_IP:3306 []
-# test-0000000101 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
-# test-0000000102 test_keyspace 0 replica REPLICA_IP:15002 REPLICA_IP:3306 []
+### example output:
+# test-0000000100 test_keyspace 0 master 10.64.1.6:15002 10.64.1.6:3306 []
+# test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
+# test-0000000102 test_keyspace 0 replica 10.64.0.7:15002 10.64.0.7:3306 []
+# test-0000000103 test_keyspace 0 rdonly 10.64.1.7:15002 10.64.1.7:3306 []
+# test-0000000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []
 ```
 
 1.  **Create a table**
@@ -574,9 +609,38 @@ the app server to retrieve a list of GuestBook entries. The app serves
 read-only requests by querying Vitess in 'replica' mode, confirming
 that replication is working.
 
-You can also monitor what each tablet is doing by viewing the vttablet status
-page, as described above. For example, you can see the *Query Stats* change as
-you hit the frontend.
+You can also inspect the data stored by the app:
+
+``` sh
+$ kvtctl ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+### example output:
+# {
+#   "Fields": [],
+#   "RowsAffected": 3,
+#   "InsertId": 0,
+#   "Rows": [
+#     [
+#       "42",
+#       "1435441767473414912",
+#       "9080723075667090943",
+#       "First!"
+#     ],
+#     [
+#       "42",
+#       "1435441772740816128",
+#       "9080723075667090943",
+#       "Message 2"
+#     ],
+#     [
+#       "42",
+#       "1435441778454107904",
+#       "9080723075667090943",
+#       "Message 3"
+#     ]
+#   ],
+#   "Err": null
+# }
+```
 
 The [GuestBook source code]
 (https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)

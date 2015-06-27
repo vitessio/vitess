@@ -11,13 +11,13 @@ source $script_root/env.sh
 cell='test'
 keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
-TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
+TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 port=15002
 uid_base=100
 FORCE_NODE=${FORCE_NODE:-false}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
-RDONLY_COUNT=${RDONLY_COUNT:-0}
+RDONLY_COUNT=${RDONLY_COUNT:-2}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
