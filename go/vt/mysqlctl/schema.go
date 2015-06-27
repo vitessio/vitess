@@ -21,7 +21,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 	sd := &proto.SchemaDefinition{}
 
 	// get the database creation command
-	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE " + dbName)
+	qr, fetchErr := mysqld.FetchSuperQuery("SHOW CREATE DATABASE IF NOT EXISTS " + dbName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
