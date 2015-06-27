@@ -458,15 +458,10 @@ func tabletError(err error) error {
 	// TODO(aaijazi): tabletconn is in an intermediate state right now, where application errors
 	// can be returned as rpcplus.ServerError or vterrors.VitessError. Soon, it will be standardized
 	// to only VitessError.
-	isServerError := false
-	switch err.(type) {
-	case rpcplus.ServerError:
-		isServerError = true
-	case *vterrors.VitessError:
-		isServerError = true
-	default:
+	if ve, ok := err.(*vterrors.VitessError); ok {
+		return tabletErrorFromVitessError(ve)
 	}
-	if isServerError {
+	if _, ok := err.(rpcplus.ServerError); ok {
 		var code int
 		errStr := err.Error()
 		switch {
@@ -487,4 +482,16 @@ func tabletError(err error) error {
 		return tabletconn.Cancelled
 	}
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
+}
+
+func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
+	// see if the range is in the tablet error range
+	if ve.Code >= vterrors.TabletError && ve.Code <= vterrors.UnknownTabletError {
+		return &tabletconn.ServerError{
+			Code: int(ve.Code - vterrors.TabletError),
+			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
+		}
+	}
+
+	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }
