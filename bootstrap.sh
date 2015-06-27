@@ -202,6 +202,7 @@ if [ -f $mock_dist/.build_finished ]; then
 else
   # For some reason, it seems like setuptools won't create directories even with the --prefix argument
   mkdir -p $mock_dist/lib/python2.7/site-packages
+  export PYTHONPATH=$(prepend_path $PYTHONPATH $mock_dist/lib/python2.7/site-packages)
   cd $VTTOP/third_party/py && \
     tar -xzf mock-1.0.1.tar.gz && \
     cd mock-1.0.1 && \
