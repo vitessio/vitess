@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that creates a single shard vttablet deployment.
+# This is an example script that creates a vttablet deployment.
 
 set -e
 

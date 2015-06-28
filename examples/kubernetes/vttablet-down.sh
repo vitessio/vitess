@@ -23,6 +23,12 @@ for shard in `seq 1 $num_shards`; do
     uid=$[$uid_base + $uid_index]
     printf -v alias '%s-%010d' $cell $uid
 
+    if [ -n "$VTCTLD_ADDR" ]; then
+      echo "Removing tablet $alias from Vitess topology..."
+      vtctlclient -server $VTCTLD_ADDR ScrapTablet -force $alias
+      vtctlclient -server $VTCTLD_ADDR DeleteTablet $alias
+    fi
+
     echo "Deleting pod for tablet $alias..."
     $KUBECTL delete pod vttablet-$uid
   done
