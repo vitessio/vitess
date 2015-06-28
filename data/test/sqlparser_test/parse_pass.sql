@@ -72,6 +72,16 @@ select /* between */ 1 from t where a between b and c
 select /* not between */ 1 from t where a not between b and c
 select /* is null */ 1 from t where a is null
 select /* is not null */ 1 from t where a is not null
+select /* is true */ 1 from t where a is true
+select /* is not true */ 1 from t where a is not true
+select /* is false */ 1 from t where a is false
+select /* is not false */ 1 from t where a is not false
+select /* is null ev */ 1 from t where (a+null) is null
+select /* is not null ex */ 1 from t where (a > 2) is not null
+select /* is true ev */ 1 from t where (a+2) is true
+select /* is true ex */ 1 from t where (a > 2) is true
+select /* is not false ev */ 1 from t where (a is null) is not false
+select /* is not false ex */ 1 from t where (a+null) is not false
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
