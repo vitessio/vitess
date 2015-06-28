@@ -67,15 +67,18 @@ def list_guestbook(page):
 def add_entry(page, value):
   # Insert a row on the master.
   keyspace_id = get_keyspace_id(page)
+  keyspace_id_int = unpack_keyspace_id(keyspace_id)
   cursor = conn.cursor('test_keyspace', 'master', keyspace_ids=[keyspace_id], writable=True)
 
   cursor.begin()
   cursor.execute(
-      'INSERT INTO messages (page, time_created_ns, keyspace_id, message) VALUES (%(page)s, %(time_created_ns)s, %(keyspace_id)s, %(message)s)',
+      'INSERT INTO messages (page, time_created_ns, keyspace_id, message)'
+      ' VALUES (%(page)s, %(time_created_ns)s, %(keyspace_id)s, %(message)s)'
+      ' /* EMD keyspace_id:'+str(keyspace_id_int)+' */',
       {
         'page': page,
         'time_created_ns': int(time.time() * 1e9),
-        'keyspace_id': unpack_keyspace_id(keyspace_id),
+        'keyspace_id': keyspace_id_int,
         'message': value,
       })
   cursor.commit()
