@@ -132,7 +132,7 @@ $ gcloud config set compute/zone us-central1-b
 1.  Create a Kubernetes cluster:
 
     ``` sh
-$ gcloud beta container clusters create example --machine-type n1-standard-1 --num-nodes 3
+$ gcloud beta container clusters create example --machine-type n1-standard-4 --num-nodes 5
 ```
 
 1.  While the cluster is starting, you will be prompted several
@@ -143,7 +143,7 @@ $ gcloud beta container clusters create example --machine-type n1-standard-1 --n
 
     ```
 NAME     ZONE           MASTER_VERSION  MASTER_IP     MACHINE_TYPE   STATUS
-example  us-central1-b  0.19.3          1.2.3.4       n1-standard-1  RUNNING
+example  us-central1-b  0.19.3          1.2.3.4       n1-standard-4  RUNNING
 ```
 
     1.  Open /ui on the MASTER_IP in a browser over *HTTPS*
