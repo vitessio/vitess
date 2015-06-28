@@ -185,6 +185,12 @@ $ kvtctl MigrateServedTypes test_keyspace/0 replica
 $ kvtctl MigrateServedTypes test_keyspace/0 master
 ```
 
+During the *master* migration, the original shard master will first stop
+accepting updates. Then the process will wait for the new shard masters to
+fully catch up on filtered replication before allowing them to begin serving.
+Since filtered replication has been following along with live updates, there
+should only be a few seconds of master unavailability.
+
 ## Remove the original shard
 
 Now that all traffic is being served from the new shards, we can remove the
