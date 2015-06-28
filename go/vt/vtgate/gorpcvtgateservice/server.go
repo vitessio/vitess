@@ -31,7 +31,12 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.Execute(ctx, query, reply)
+	vtgErr := vtg.server.Execute(ctx, query, reply)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -39,7 +44,12 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteShard(ctx, query, reply)
+	vtgErr := vtg.server.ExecuteShard(ctx, query, reply)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
@@ -47,7 +57,12 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
+	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
@@ -55,7 +70,12 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteKeyRanges(ctx, query, reply)
+	vtgErr := vtg.server.ExecuteKeyRanges(ctx, query, reply)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
@@ -63,7 +83,12 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteEntityIds(ctx, query, reply)
+	vtgErr := vtg.server.ExecuteEntityIds(ctx, query, reply)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method

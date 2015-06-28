@@ -43,6 +43,6 @@ func TestServerError(t *testing.T) {
 
 func TestOperationalError(t *testing.T) {
 	if OperationalError("error").Error() == "" {
-		t.Fatal("operational error is not mepty, should not return empty error")
+		t.Fatal("operational error is not empty, should not return empty error")
 	}
 }

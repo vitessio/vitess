@@ -121,6 +121,7 @@ type QueryResult struct {
 	Result  *mproto.QueryResult
 	Session *Session
 	Error   string
+	Err     *mproto.RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
