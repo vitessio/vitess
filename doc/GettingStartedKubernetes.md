@@ -493,7 +493,7 @@ vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 
     ``` sh
 # Make sure to run this from the examples/kubernetes dir, so it finds the file.
-vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ ./kvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
     <br>The SQL to create the table is shown below:
@@ -553,6 +553,11 @@ a later guide.
 
 ``` sh
 vitess/examples/kubernetes$ ./guestbook-up.sh
+### example output:
+# Creating guestbook service...
+# services/guestbook
+# Creating guestbook replicationcontroller...
+# replicationcontrollers/guestbook
 ```
 
 As with the <code>vtctld</code> service, to access the GuestBook
