@@ -16,5 +16,5 @@ if [[ -z "$server" ]]; then
 fi
 
 echo "Using $server"
-vtctlclient -server $server $*
+vtctlclient -server $server "$@"
 
