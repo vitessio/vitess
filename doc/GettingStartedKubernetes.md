@@ -646,6 +646,16 @@ The [GuestBook source code]
 (https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook)
 provides more detail about how the app server interacts with Vitess.
 
+## Try Vitess resharding
+
+Now that you have a full Vitess stack running, you may want to go on to the
+[Sharding in Kubernetes](http://vitess.io/user-guide/sharding-kubernetes.html)
+guide to try out
+[dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
+
+If so, you can skip the tear-down since the sharding guide picks up right here.
+If not, continue to the clean-up steps below.
+
 ## Tear down and clean up
 
 Before stopping the Container Engine cluster, you should tear down the Vitess
