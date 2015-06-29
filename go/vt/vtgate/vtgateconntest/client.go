@@ -389,7 +389,10 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	if err != nil {
+		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
+	}
 
 	testExecute(t, conn)
 	testExecuteShard(t, conn)

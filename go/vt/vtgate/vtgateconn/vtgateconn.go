@@ -314,8 +314,7 @@ var dialers = make(map[string]DialerFunc)
 // to self register.
 func RegisterDialer(name string, dialer DialerFunc) {
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists", name)
-		return
+		log.Warningf("Dialer %s already exists, overwriting it", name)
 	}
 	dialers[name] = dialer
 }
