@@ -27,12 +27,18 @@ import (
 
 // fakeVTGateService has the server side of this fake
 type fakeVTGateService struct {
-	t      *testing.T
-	panics bool
+	t        *testing.T
+	panics   bool
+	hasError bool
 }
+
+var testVtGateError = errors.New("test vtgate error")
 
 // Execute is part of the VTGateService interface
 func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -50,6 +56,9 @@ func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, rep
 
 // ExecuteShard is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -67,6 +76,9 @@ func (f *fakeVTGateService) ExecuteShard(ctx context.Context, query *proto.Query
 
 // ExecuteKeyspaceIds is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -84,6 +96,9 @@ func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto
 
 // ExecuteKeyRanges is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -101,6 +116,9 @@ func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.K
 
 // ExecuteEntityIds is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -118,6 +136,9 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.E
 
 // ExecuteBatchShard is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -139,6 +160,9 @@ func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *p
 
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -292,6 +316,9 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, query 
 
 // Begin is part of the VTGateService interface
 func (f *fakeVTGateService) Begin(ctx context.Context, outSession *proto.Session) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -301,6 +328,9 @@ func (f *fakeVTGateService) Begin(ctx context.Context, outSession *proto.Session
 
 // Commit is part of the VTGateService interface
 func (f *fakeVTGateService) Commit(ctx context.Context, inSession *proto.Session) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -312,6 +342,9 @@ func (f *fakeVTGateService) Commit(ctx context.Context, inSession *proto.Session
 
 // Rollback is part of the VTGateService interface
 func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Session) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -323,6 +356,9 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	if f.hasError {
+		return testVtGateError
+	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -371,6 +407,25 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testTxFail(t, conn)
 	testSplitQuery(t, conn)
 
+	// return an error for every call, make sure they're handled properly
+	fakeServer.(*fakeVTGateService).hasError = true
+	testExecuteError(t, conn)
+	testExecuteShardError(t, conn)
+	testExecuteKeyspaceIdsError(t, conn)
+	testExecuteKeyRangesError(t, conn)
+	testExecuteEntityIdsError(t, conn)
+	testExecuteBatchShardError(t, conn)
+	testExecuteBatchKeyspaceIdsError(t, conn)
+	// testStreamExecuteError(t, conn)
+	// testStreamExecuteShardError(t, conn)
+	// testStreamExecuteKeyRangesError(t, conn)
+	// testStreamExecuteKeyspaceIdsError(t, conn)
+	testBeginError(t, conn)
+	// testCommitError(t, conn)
+	// testRollbackError(t, conn)
+	testSplitQueryError(t, conn)
+	fakeServer.(*fakeVTGateService).hasError = false
+
 	// force a panic at every call, then test that works
 	fakeServer.(*fakeVTGateService).panics = true
 	testExecutePanic(t, conn)
@@ -386,6 +441,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testBeginPanic(t, conn)
 	testSplitQueryPanic(t, conn)
+	fakeServer.(*fakeVTGateService).panics = false
 }
 
 func expectPanic(t *testing.T, err error) {
@@ -393,6 +449,17 @@ func expectPanic(t *testing.T, err error) {
 	expected2 := "uncaught panic"
 	if err == nil || !strings.Contains(err.Error(), expected1) || !strings.Contains(err.Error(), expected2) {
 		t.Fatalf("Expected a panic error with '%v' or '%v' but got: %v", expected1, expected2, err)
+	}
+}
+
+// Verifies the returned error has the properties that we expect.
+func verifyError(t *testing.T, err error, method string) {
+	if err == nil {
+		t.Errorf("%s was expecting an error, didn't get one", method)
+		return
+	}
+	if !strings.Contains(err.Error(), testVtGateError.Error()) {
+		t.Errorf("Unexpected error from %s: got %v, wanted err containing %v", method, err, testVtGateError.Error())
 	}
 }
 
@@ -418,6 +485,13 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
+}
+
+func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	verifyError(t, err, "Execute")
 }
 
 func testExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -449,6 +523,13 @@ func testExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
+}
+
+func testExecuteShardError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
+	verifyError(t, err, "ExecuteShard")
 }
 
 func testExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -483,6 +564,13 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	verifyError(t, err, "ExecuteKeyspaceIds")
+}
+
 func testExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
@@ -513,6 +601,13 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
+}
+
+func testExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	verifyError(t, err, "ExecuteKeyRanges")
 }
 
 func testExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -547,6 +642,13 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testExecuteEntityIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
+	verifyError(t, err, "ExecuteEntityIds")
+}
+
 func testExecuteEntityIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
@@ -579,6 +681,13 @@ func testExecuteBatchShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testExecuteBatchShardError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.Keyspace, execCase.batchQueryShard.Shards, execCase.batchQueryShard.TabletType)
+	verifyError(t, err, "ExecuteBatchShard")
+}
+
 func testExecuteBatchShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
@@ -609,6 +718,13 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
+}
+
+func testExecuteBatchKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	execCase := execMap["request1"]
+	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType)
+	verifyError(t, err, "ExecuteBatchKeyspaceIds")
 }
 
 func testExecuteBatchKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -987,6 +1103,12 @@ func testTxPassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 	// no rollback necessary
 }
 
+func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.Begin(ctx)
+	verifyError(t, err, "Begin")
+}
+
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	_, err := conn.Begin(ctx)
@@ -1078,6 +1200,12 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if !reflect.DeepEqual(qsl, splitQueryResult.Splits) {
 		t.Errorf("SplitQuery returned worng result: got %v wanted %v", qsl, splitQueryResult.Splits)
 	}
+}
+
+func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
+	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
