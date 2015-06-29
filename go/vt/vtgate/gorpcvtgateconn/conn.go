@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -61,6 +62,9 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.Result, result.Session, nil
 }
 
@@ -84,6 +88,9 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.Result, result.Session, nil
 }
@@ -109,6 +116,9 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.Result, result.Session, nil
 }
 
@@ -132,6 +142,9 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.Result, result.Session, nil
 }
@@ -157,6 +170,9 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.Result, result.Session, nil
 }

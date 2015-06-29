@@ -33,6 +33,12 @@ func (queryResult *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 		(*queryResult.Session).MarshalBson(buf, "Session")
 	}
 	bson.EncodeString(buf, "Error", queryResult.Error)
+	// *mproto.RPCError
+	if queryResult.Err == nil {
+		bson.EncodePrefix(buf, bson.Null, "Err")
+	} else {
+		(*queryResult.Err).MarshalBson(buf, "Err")
+	}
 
 	lenWriter.Close()
 }
@@ -65,6 +71,12 @@ func (queryResult *QueryResult) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			}
 		case "Error":
 			queryResult.Error = bson.DecodeString(buf, kind)
+		case "Err":
+			// *mproto.RPCError
+			if kind != bson.Null {
+				queryResult.Err = new(mproto.RPCError)
+				(*queryResult.Err).UnmarshalBson(buf, kind)
+			}
 		default:
 			bson.Skip(buf, kind)
 		}
