@@ -27,7 +27,7 @@ The first step is to tell Vitess the name and type of our
 [keyspace_id](http://vitess.io/overview/concepts.html#keyspace-id) column:
 
 ``` sh
-$ kvtctl SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
+vitess/examples/kubernetes$ ./kvtctl.sh SetKeyspaceShardingInfo test_keyspace keyspace_id uint64
 ```
 
 This column was added in the original
@@ -69,21 +69,21 @@ These new shards will run in parallel with the original shard during the
 transition, but actual traffic will be served only by the original shard
 until we tell it to switch over.
 
-Check the `vtctld` **Topology** page, or the output of `kvtctl ListAllTablets test`,
+Check the `vtctld` **Topology** page, or the output of `kvtctl.sh ListAllTablets test`,
 to see when the tablets are ready. There should be 5 tablets in each shard.
 
 Once the tablets are ready, initialize replication by electing the first master
 for each of the new shards:
 
 ``` sh
-$ kvtctl InitShardMaster -force test_keyspace/-80 test-0000000200
-$ kvtctl InitShardMaster -force test_keyspace/80- test-0000000300
+vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/-80 test-0000000200
+vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/80- test-0000000300
 ```
 
 Now there should be a total of 15 tablets, with one master each:
 
 ``` sh
-$ kvtctl ListAllTablets test
+vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 ### example output:
 # test-0000000100 test_keyspace 0 master 10.64.3.4:15002 10.64.3.4:3306 []
 # ...
@@ -99,8 +99,8 @@ The new tablets start out empty, so we need to copy everything from the
 original shard to the two new ones, starting with the schema:
 
 ``` sh
-$ kvtctl CopySchemaShard test_keyspace/0 test_keyspace/-80
-$ kvtctl CopySchemaShard test_keyspace/0 test_keyspace/80-
+vitess/examples/kubernetes$ ./kvtctl.sh CopySchemaShard test_keyspace/0 test_keyspace/-80
+vitess/examples/kubernetes$ ./kvtctl.sh CopySchemaShard test_keyspace/0 test_keyspace/80-
 ```
 
 Since the amount of data to copy can be very large, we use a special
@@ -151,11 +151,11 @@ that live on that shard.
 
 ``` sh
 # See what's on shard test_keyspace/0:
-$ kvtctl ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
 # See what's on shard test_keyspace/-80:
-$ kvtctl ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000200 "SELECT * FROM messages"
 # See what's on shard test_keyspace/80-:
-$ kvtctl ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000300 "SELECT * FROM messages"
 ```
 
 ## Check copied data integrity
@@ -180,9 +180,9 @@ at a time. The process can be rolled back at any point *until* the master is
 switched over.
 
 ``` sh
-$ kvtctl MigrateServedTypes test_keyspace/0 rdonly
-$ kvtctl MigrateServedTypes test_keyspace/0 replica
-$ kvtctl MigrateServedTypes test_keyspace/0 master
+vitess/examples/kubernetes$ ./kvtctl.sh MigrateServedTypes test_keyspace/0 rdonly
+vitess/examples/kubernetes$ ./kvtctl.sh MigrateServedTypes test_keyspace/0 replica
+vitess/examples/kubernetes$ ./kvtctl.sh MigrateServedTypes test_keyspace/0 master
 ```
 
 During the *master* migration, the original shard master will first stop
@@ -195,15 +195,10 @@ should only be a few seconds of master unavailability.
 
 Now that all traffic is being served from the new shards, we can remove the
 original one. To do that, we use the `vttablet-down.sh` script from the
-unsharded example, and pass it the address for `vtctld` so it can clean up
-the [topology](http://vitess.io/overview/concepts.html#topology-service) data
-for each tablet.
+unsharded example:
 
 ``` sh
-vitess/examples/kubernetes$ alias kvtctl
-### example output:
-# alias kvtctl='vtctlclient -server 2.3.4.5:30000'
-vitess/examples/kubernetes$ VTCTLD_ADDR=2.3.4.5:30000 ./vttablet-down.sh
+vitess/examples/kubernetes$ ./vttablet-down.sh
 ### example output:
 # Removing tablet test-0000000100 from Vitess topology...
 # Deleting pod for tablet test-0000000100...
@@ -214,11 +209,11 @@ vitess/examples/kubernetes$ VTCTLD_ADDR=2.3.4.5:30000 ./vttablet-down.sh
 Then we can delete the now-empty shard:
 
 ``` sh
-$ kvtctl DeleteShard test_keyspace/0
+vitess/examples/kubernetes$ ./kvtctl.sh DeleteShard test_keyspace/0
 ```
 
 You should then see in the vtctld **Topology** page, or in the output of
-`kvtctl ListAllTablets test` that the tablets for shard *0* are gone.
+`kvtctl.sh ListAllTablets test` that the tablets for shard *0* are gone.
 
 ## Tear down and clean up
 
