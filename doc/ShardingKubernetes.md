@@ -169,6 +169,13 @@ vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitDiff test_keyspace/-80
 vitess/examples/kubernetes$ ./sharded-vtworker.sh SplitDiff test_keyspace/80-
 ```
 
+If any discrepancies are found, they will be printed.
+If everything is good, you should see something like this:
+
+```
+Table messages checks out (4 rows processed, 1072961 qps)
+```
+
 ## Switch over to the new shards
 
 Now we're ready to switch over to serving from the new shards.
@@ -221,9 +228,9 @@ Before stopping the Container Engine cluster, you should tear down the Vitess
 services. Kubernetes will then take care of cleaning up any entities it created
 for those services, like external load balancers.
 
-Since you already cleaned up the tablets from the original unsharded example,
-replace that step with `./sharded-vttablet-down.sh` to clean up the new sharded
-tablets.
+Since you already cleaned up the tablets from the original unsharded example by
+running `./vttablet-down.sh`, that step has been replaced with
+`./sharded-vttablet-down.sh` to clean up the new sharded tablets.
 
 ``` sh
 vitess/examples/kubernetes$ ./guestbook-down.sh
