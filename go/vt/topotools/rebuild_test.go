@@ -49,7 +49,7 @@ func addTablet(ctx context.Context, t *testing.T, ts topo.Server, uid int, cell 
 	return ti
 }
 
-func TestRebuildShardRace(t *testing.T) {
+func TestRebuildShard(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"test_cell"}
 	logger := logutil.NewMemoryLogger()
@@ -89,38 +89,16 @@ func TestRebuildShardRace(t *testing.T) {
 		t.Fatalf("len(Entries) = %v, want %v", got, want)
 	}
 
-	// Install a hook that hands out locks out of order to simulate a race.
-	trigger := make(chan struct{})
-	stalled := make(chan struct{})
-	done := make(chan struct{})
-	wait := make(chan bool, 2)
-	wait <- true  // first guy waits for trigger
-	wait <- false // second guy doesn't wait
-	ts.HookLockSrvShardForAction = func() {
-		if <-wait {
-			close(stalled)
-			<-trigger
-		}
-	}
-
-	// Make a change and start a rebuild that will stall when it
-	// tries to get the SrvShard lock.
+	// Make a change.
 	masterInfo.Type = topo.TYPE_SPARE
 	if err := topo.UpdateTablet(ctx, ts, masterInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
-	go func() {
-		if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
-			t.Fatalf("RebuildShard: %v", err)
-		}
-		close(done)
-	}()
+	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
+		t.Fatalf("RebuildShard: %v", err)
+	}
 
-	// Wait for first rebuild to stall.
-	<-stalled
-
-	// While the first rebuild is stalled, make another change and start a rebuild
-	// that doesn't stall.
+	// Make another change.
 	replicaInfo.Type = topo.TYPE_SPARE
 	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
@@ -128,11 +106,6 @@ func TestRebuildShardRace(t *testing.T) {
 	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
 		t.Fatalf("RebuildShard: %v", err)
 	}
-
-	// Now that the second rebuild is done, un-stall the first rebuild and wait
-	// for it to finish.
-	close(trigger)
-	<-done
 
 	// Check that the rebuild picked up both changes.
 	if _, _, err := ts.GetEndPoints(ctx, cells[0], testKeyspace, testShard, topo.TYPE_MASTER); err == nil || !strings.Contains(err.Error(), "node doesn't exist") {
