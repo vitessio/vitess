@@ -334,7 +334,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     Raises:
       AssertionError if things didn't go as expected.
     """
-    worker_proc, worker_port = utils.run_vtworker_bg(['--cell', 'test_nj',
+    worker_proc, worker_port, _ = utils.run_vtworker_bg(['--cell', 'test_nj',
                         'SplitClone',
                         '--source_reader_count', '1',
                         '--destination_pack_count', '1',
@@ -449,7 +449,7 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
 class TestVtworkerWebinterface(unittest.TestCase):
   def setUp(self):
     # Run vtworker without any optional arguments to start in interactive mode.
-    self.worker_proc, self.worker_port = utils.run_vtworker_bg([])
+    self.worker_proc, self.worker_port, _ = utils.run_vtworker_bg([])
 
   def tearDown(self):
     utils.kill_sub_process(self.worker_proc)

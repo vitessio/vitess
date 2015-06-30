@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtctlclient
+package vtworkerclient
 
 import (
 	"errors"
@@ -13,14 +13,15 @@ import (
 	"golang.org/x/net/context"
 )
 
-// RunCommandAndWait executes a single command on a given vtctld and blocks until the command did return or timed out.
-// Output from vtctld is streamed as logutil.LoggerEvent messages which have to be consumed by the caller who has to specify a "recv" function.
-func RunCommandAndWait(ctx context.Context, server string, args []string, dialTimeout, actionTimeout, lockWaitTimeout time.Duration, recv func(*logutil.LoggerEvent)) error {
+// RunCommandAndWait executes a single command on a given vtworker and blocks until the command did return or timed out.
+// Output from vtworker is streamed as logutil.LoggerEvent messages which have to be consumed by the caller who has to specify a "recv" function.
+func RunCommandAndWait(ctx context.Context, server string, args []string, actionTimeout time.Duration, recv func(*logutil.LoggerEvent)) error {
 	if recv == nil {
 		return errors.New("No function closure for LoggerEvent stream specified")
 	}
 	// create the client
-	client, err := New(server, dialTimeout)
+	// TODO(mberlin): vtctlclient exposes dialTimeout as flag. If there are no use cases, remove it there as well to be consistent?
+	client, err := New(server, 30*time.Second /* dialTimeout */)
 	if err != nil {
 		return fmt.Errorf("Cannot dial to server %v: %v", server, err)
 	}
@@ -29,7 +30,7 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, dialTi
 	// run the command
 	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	defer cancel()
-	c, errFunc := client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockWaitTimeout)
+	c, errFunc := client.ExecuteVtworkerCommand(ctx, args)
 	if err = errFunc(); err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
