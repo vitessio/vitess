@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -118,4 +119,24 @@ func (wi *Instance) InstallSignalHandlers() {
 			os.Exit(0)
 		}
 	}()
+}
+
+// Reset resets the state of a finished worker. It returns an error if the worker is still running.
+func (wi *Instance) Reset() error {
+	wi.currentWorkerMutex.Lock()
+	defer wi.currentWorkerMutex.Unlock()
+
+	// no worker, we go to the menu
+	if wi.currentWorker == nil {
+		return nil
+	}
+
+	// check the worker is really done
+	if wi.currentContext == nil {
+		wi.currentWorker = nil
+		wi.currentMemoryLogger = nil
+		return nil
+	}
+
+	return errors.New("worker still executing")
 }

@@ -1,4 +1,4 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -69,9 +69,16 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 	wr := s.wi.CreateWrangler(logger)
 
 	// execute the command
-	worker, done, err := s.wi.RunCommand(args.Args, wr)
-	if err == nil {
-		err = s.wi.WaitForCommand(worker, done)
+	if len(args.Args) >= 1 && args.Args[0] == "Reset" {
+		err = s.wi.Reset()
+	} else {
+		// Make sure we use the global "err" variable and do not redeclare it in this scope.
+		var worker worker.Worker
+		var done chan struct{}
+		worker, done, err = s.wi.RunCommand(args.Args, wr, false /*runFromCli*/)
+		if err == nil {
+			err = s.wi.WaitForCommand(worker, done)
+		}
 	}
 
 	// close the log channel, and wait for them all to be sent

@@ -105,26 +105,11 @@ func (wi *Instance) InitStatusHandling() {
 			return
 		}
 
-		wi.currentWorkerMutex.Lock()
-
-		// no worker, we go to the menu
-		if wi.currentWorker == nil {
-			wi.currentWorkerMutex.Unlock()
+		if err := wi.Reset(); err != nil {
+			httpError(w, err.Error(), nil)
+		} else {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
 		}
-
-		// check the worker is really done
-		if wi.currentContext == nil {
-			wi.currentWorker = nil
-			wi.currentMemoryLogger = nil
-			wi.currentWorkerMutex.Unlock()
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
-		}
-
-		wi.currentWorkerMutex.Unlock()
-		httpError(w, "worker still executing", nil)
 	})
 
 	// cancel handler
