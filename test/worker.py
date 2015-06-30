@@ -9,6 +9,8 @@ Tests the robustness and resiliency of vtworkers.
 
 import logging
 import unittest
+import urllib
+import urllib2
 from collections import namedtuple
 
 from vtdb import keyrange_constants
@@ -443,6 +445,46 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
   def test_mysql_down_during_worker_copy(self):
     """This test simulates MySQL being down on the destination masters."""
     self.verify_successful_worker_copy_with_reparent(mysql_down=True)
+
+class TestVtworkerWebinterface(unittest.TestCase):
+  def setUp(self):
+    # Run vtworker without any optional arguments to start in interactive mode.
+    self.worker_proc, self.worker_port = utils.run_vtworker_bg([])
+
+  def tearDown(self):
+    utils.kill_sub_process(self.worker_proc)
+
+  def test_webinterface(self):
+    worker_base_url = 'http://localhost:%u' % int(self.worker_port)
+    # Wait for /status to become available.
+    timeout = 10
+    while True:
+      done = False
+      try:
+        urllib2.urlopen(worker_base_url + '/status').read()
+        done = True
+      except:
+        pass
+      if done:
+        break
+      timeout = utils.wait_step('worker /status webpage must be available', timeout)
+      
+    # Run the command twice to make sure it's idempotent.
+    for _ in range(2):
+      # Run Ping command.
+      try:
+        urllib2.urlopen(worker_base_url + '/Debugging/Ping', data=urllib.urlencode({'message':'pong'})).read()
+        raise Exception("Should have thrown an HTTPError for the redirect.")
+      except urllib2.HTTPError as e:
+        self.assertEqual(e.code, 307)
+      # Verify that the command logged something and its available at /status.
+      status = urllib2.urlopen(worker_base_url + '/status').read()
+      self.assertIn("Ping command was called with message: 'pong'", status, "Command did not log output to /status")
+      
+      # Reset the job.
+      urllib2.urlopen(worker_base_url + '/reset').read()
+      status_after_reset = urllib2.urlopen(worker_base_url + '/status').read()
+      self.assertIn("This worker is idle.", status_after_reset, "/status does not indicate that the reset was successful")
 
 def add_test_options(parser):
   parser.add_option('--num_insert_rows', type="int", default=3000,
