@@ -321,7 +321,7 @@ func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
 	if err := vterrors.FromRPCError(reply.Err); err != nil {
 		return nil, err
 	}
-	// Return a session struct, not a pointer
+	// Return a non-nil pointer
 	session := &proto.Session{}
 	if reply.Session != nil {
 		session = reply.Session
