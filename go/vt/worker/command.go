@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -61,30 +62,40 @@ func addCommand(groupName string, c command) {
 	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
-func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell string) (Worker, error) {
+func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell string, runFromCli bool) (Worker, error) {
 	action := args[0]
 
 	actionLowerCase := strings.ToLower(action)
 	for _, group := range Commands {
 		for _, cmd := range group.Commands {
 			if strings.ToLower(cmd.Name) == actionLowerCase {
-				subFlags := flag.NewFlagSet(action, flag.ExitOnError)
+				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
+				if runFromCli {
+					subFlags = flag.NewFlagSet(action, flag.ExitOnError)
+				}
+				// The command may be run from an RPC and may not log to the console.
+				// The Wrangler logger defines where the output has to go.
+				subFlags.SetOutput(logutil.NewLoggerWriter(wr.Logger()))
 				subFlags.Usage = func() {
-					fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.Name, cmd.Params)
-					fmt.Fprintf(os.Stderr, "%s\n\n", cmd.Help)
+					wr.Logger().Printf("Usage: %s %s %s\n\n", os.Args[0], cmd.Name, cmd.Params)
+					wr.Logger().Printf("%s\n\n", cmd.Help)
 					subFlags.PrintDefaults()
 				}
 				return cmd.method(wi, wr, subFlags, args[1:])
 			}
 		}
 	}
-	flag.Usage()
+	if runFromCli {
+		flag.Usage()
+	} else {
+		PrintAllCommands(wr.Logger())
+	}
 	return nil, fmt.Errorf("unknown command: %v", action)
 }
 
 // RunCommand executes the vtworker command specified by "args". Use WaitForCommand() to block on the returned done channel.
-func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler) (Worker, chan struct{}, error) {
-	wrk, err := commandWorker(wi, wr, args, wi.cell)
+func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler, runFromCli bool) (Worker, chan struct{}, error) {
+	wrk, err := commandWorker(wi, wr, args, wi.cell, runFromCli)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -113,5 +124,19 @@ func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 		case <-timer:
 			log.Info(wrk.StatusAsText())
 		}
+	}
+}
+
+// PrintAllCommands prints a help text for all registered commands to the given Logger.
+func PrintAllCommands(logger logutil.Logger) {
+	for _, group := range Commands {
+		if group.Name == "Debugging" {
+			continue
+		}
+		logger.Printf("%v: %v\n", group.Name, group.Description)
+		for _, cmd := range group.Commands {
+			logger.Printf("  %v %v\n", cmd.Name, cmd.Params)
+		}
+		logger.Printf("\n")
 	}
 }

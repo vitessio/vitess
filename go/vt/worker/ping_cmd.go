@@ -37,8 +37,11 @@ const pingHTML = `
 var pingTemplate = mustParseTemplate("ping", pingHTML)
 
 func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return nil, err
+	}
 	if subFlags.NArg() != 1 {
+		subFlags.Usage()
 		return nil, fmt.Errorf("command Ping requires <message>")
 	}
 	message := subFlags.Arg(0)

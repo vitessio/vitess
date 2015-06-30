@@ -35,6 +35,15 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+	logger := logutil.NewConsoleLogger()
+	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
+	flag.Usage = func() {
+		logger.Printf("Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+		logger.Printf("\nThe global optional parameters are:\n")
+		flag.PrintDefaults()
+		logger.Printf("\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+		worker.PrintAllCommands(logger)
+	}
 }
 
 var (
@@ -65,7 +74,7 @@ func main() {
 		wi.InitInteractiveMode()
 	} else {
 		// In single command mode, just run it.
-		worker, done, err := wi.RunCommand(args, wi.Wr)
+		worker, done, err := wi.RunCommand(args, wi.Wr, true /*runFromCli*/)
 		if err != nil {
 			log.Error(err)
 			exit.Return(1)

@@ -59,8 +59,11 @@ var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
 func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return nil, err
+	}
 	if subFlags.NArg() != 1 {
+		subFlags.Usage()
 		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
 	}
 	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))

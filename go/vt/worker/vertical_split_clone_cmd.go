@@ -85,8 +85,11 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
 	minTableSizeForSplit := subFlags.Int("min_table_size_for_split", defaultMinTableSizeForSplit, "tables bigger than this size on disk in bytes will be split into source_reader_count chunks if possible")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return nil, err
+	}
 	if subFlags.NArg() != 1 {
+		subFlags.Usage()
 		return nil, fmt.Errorf("command VerticalSplitClone requires <destination keyspace/shard>")
 	}
 
