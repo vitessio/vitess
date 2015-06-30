@@ -178,4 +178,5 @@ type SplitQueryPart struct {
 // SplitQueryResult is the result for SplitQueryRequest
 type SplitQueryResult struct {
 	Splits []SplitQueryPart
+	Err    *mproto.RPCError
 }

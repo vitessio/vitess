@@ -181,7 +181,12 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.SplitQuery(ctx, req, reply)
+	vtgErr := vtg.server.SplitQuery(ctx, req, reply)
+	vtgate.AddVtGateErrorToSplitQueryResult(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // New returns a new VTGate service

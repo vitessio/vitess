@@ -41,3 +41,12 @@ func AddVtGateErrorToQueryResultList(err error, reply *proto.QueryResultList) {
 	}
 	reply.Err = rpcErrFromVtGateError(err)
 }
+
+// AddVtGateErrorToSplitQueryResult will mutate a SplitQueryResult struct to fill in the Err
+// field with details from the VTGate error.
+func AddVtGateErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromVtGateError(err)
+}

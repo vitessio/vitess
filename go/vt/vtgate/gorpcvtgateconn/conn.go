@@ -322,6 +322,9 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query t
 	if err := conn.rpcConn.Call(ctx, "VTGate.SplitQuery", request, result); err != nil {
 		return nil, err
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, err
+	}
 	return result.Splits, nil
 }
 
