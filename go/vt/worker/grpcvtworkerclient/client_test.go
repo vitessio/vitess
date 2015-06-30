@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package grpcvtctlclient
+package grpcvtworkerclient
 
 import (
 	"fmt"
@@ -10,36 +10,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclienttest"
+	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"google.golang.org/grpc"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
-// the test here creates a fake server implementation, a fake client
-// implementation, and runs the test suite against the setup.
-func TestVtctlServer(t *testing.T) {
-	ts := vtctlclienttest.CreateTopoServer(t)
+// Test gRPC interface using a vtworker and vtworkerclient.
+func TestVtworkerServer(t *testing.T) {
+	wi := vtworkerclient.CreateWorkerInstance(t)
 
-	// Listen on a random port
+	// Listen on a random port.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	// Create a gRPC server and listen on the port
+	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
-	pbs.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
+	pbs.RegisterVtworkerServer(server, grpcvtworkerserver.NewVtworkerServer(wi))
 	go server.Serve(listener)
 
-	// Create a VtctlClient gRPC client to talk to the fake server
-	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
+	// Create a VtworkerClient gRPC client to talk to the vtworker.
+	client, err := gRPCVtworkerClientFactory(fmt.Sprintf("localhost:%v", port), 30*time.Second)
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
 	}
 	defer client.Close()
 
-	vtctlclienttest.TestSuite(t, ts, client)
+	vtworkerclient.TestSuite(t, wi, client)
 }
