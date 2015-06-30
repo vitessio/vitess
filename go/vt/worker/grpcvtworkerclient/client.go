@@ -1,51 +1,49 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package grpcvtctlclient contains the gRPC version of the vtctl client protocol
-package grpcvtctlclient
+// Package grpcvtworkerclient contains the gRPC version of the vtworker client protocol.
+package grpcvtworkerclient
 
 import (
 	"io"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
+	pbs "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
 )
 
-type gRPCVtctlClient struct {
+type gRPCVtworkerClient struct {
 	cc *grpc.ClientConn
-	c  pbs.VtctlClient
+	c  pbs.VtworkerClient
 }
 
-func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
+func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworkerclient.VtworkerClient, error) {
 	// create the RPC client
 	cc, err := grpc.Dial(addr)
 	if err != nil {
 		return nil, err
 	}
-	c := pbs.NewVtctlClient(cc)
+	c := pbs.NewVtworkerClient(cc)
 
-	return &gRPCVtctlClient{
+	return &gRPCVtworkerClient{
 		cc: cc,
 		c:  c,
 	}, nil
 }
 
-// ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
-	query := &pb.ExecuteVtctlCommandRequest{
-		Args:          args,
-		ActionTimeout: int64(actionTimeout.Nanoseconds()),
-		LockTimeout:   int64(lockTimeout.Nanoseconds()),
+// ExecuteVtworkerCommand is part of the VtworkerClient interface.
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc) {
+	query := &pb.ExecuteVtworkerCommandRequest{
+		Args: args,
 	}
 
-	stream, err := client.c.ExecuteVtctlCommand(ctx, query)
+	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
 		return nil, func() error { return err }
 	}
@@ -76,11 +74,11 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 	}
 }
 
-// Close is part of the VtctlClient interface
-func (client *gRPCVtctlClient) Close() {
+// Close is part of the VtworkerClient interface.
+func (client *gRPCVtworkerClient) Close() {
 	client.cc.Close()
 }
 
 func init() {
-	vtctlclient.RegisterFactory("grpc", gRPCVtctlClientFactory)
+	vtworkerclient.RegisterFactory("grpc", gRPCVtworkerClientFactory)
 }

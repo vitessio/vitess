@@ -1,9 +1,9 @@
-// Copyright 2014, Google Inc. All rights reserved.
+// Copyright 2015, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package vtctlclient contains the generic client side of the remote vtctl protocol.
-package vtctlclient
+// Package vtworkerclient contains the generic client side of the remote vtworker protocol.
+package vtworkerclient
 
 import (
 	"flag"
@@ -15,28 +15,28 @@ import (
 	"golang.org/x/net/context"
 )
 
-// VtctlClientProtocol specifices which RPC client implementation should be used.
-var VtctlClientProtocol = flag.String("vtctl_client_protocol", "gorpc", "the protocol to use to talk to the vtctl server")
+// VtworkerClientProtocol specifices which RPC client implementation should be used.
+var VtworkerClientProtocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
 
 // ErrFunc is returned by streaming queries to get the error
 type ErrFunc func() error
 
-// VtctlClient defines the interface used to send remote vtctl commands
-type VtctlClient interface {
-	// ExecuteVtctlCommand will execute the command remotely
-	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
+// VtworkerClient defines the interface used to send remote vtworker commands
+type VtworkerClient interface {
+	// ExecuteVtworkerCommand will execute the command remotely.
+	ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, ErrFunc)
 
 	// Close will terminate the connection. This object won't be
 	// used after this.
 	Close()
 }
 
-// Factory functions are registered by client implementations
-type Factory func(addr string, connectTimeout time.Duration) (VtctlClient, error)
+// Factory functions are registered by client implementations.
+type Factory func(addr string, connectTimeout time.Duration) (VtworkerClient, error)
 
 var factories = make(map[string]Factory)
 
-// RegisterFactory allows a client implementation to register itself
+// RegisterFactory allows a client implementation to register itself.
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
 		log.Fatalf("RegisterFactory %s already exists", name)
@@ -45,10 +45,10 @@ func RegisterFactory(name string, factory Factory) {
 }
 
 // New allows a user of the client library to get its implementation.
-func New(addr string, connectTimeout time.Duration) (VtctlClient, error) {
-	factory, ok := factories[*VtctlClientProtocol]
+func New(addr string, connectTimeout time.Duration) (VtworkerClient, error) {
+	factory, ok := factories[*VtworkerClientProtocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown vtctl client protocol: %v", *VtctlClientProtocol)
+		return nil, fmt.Errorf("unknown vtworker client protocol: %v", *VtworkerClientProtocol)
 	}
 	return factory(addr, connectTimeout)
 }
