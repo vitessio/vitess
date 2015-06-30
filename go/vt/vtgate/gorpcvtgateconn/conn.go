@@ -312,6 +312,47 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return conn.rpcConn.Call(ctx, "VTGate.Rollback", s, &rpc.Unused{})
 }
 
+func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
+	request := new(proto.BeginRequest)
+	reply := new(proto.BeginResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Begin2", request, reply); err != nil {
+		return nil, err
+	}
+	if err := vterrors.FromRPCError(reply.Err); err != nil {
+		return nil, err
+	}
+	// Return a session struct, not a pointer
+	session := &proto.Session{}
+	if reply.Session != nil {
+		session = reply.Session
+	}
+	return session, nil
+}
+
+func (conn *vtgateConn) Commit2(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	request := &proto.CommitRequest{
+		Session: s,
+	}
+	reply := new(proto.CommitResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Commit2", request, reply); err != nil {
+		return err
+	}
+	return vterrors.FromRPCError(reply.Err)
+}
+
+func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	request := &proto.RollbackRequest{
+		Session: s,
+	}
+	reply := new(proto.RollbackResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Rollback2", request, reply); err != nil {
+		return err
+	}
+	return vterrors.FromRPCError(reply.Err)
+}
+
 func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
 	request := &proto.SplitQueryRequest{
 		Keyspace:   keyspace,

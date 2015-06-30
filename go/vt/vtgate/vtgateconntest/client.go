@@ -424,6 +424,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	// testStreamExecuteKeyRangesError(t, conn)
 	// testStreamExecuteKeyspaceIdsError(t, conn)
 	testBeginError(t, conn)
+	testBegin2Error(t, conn)
 	// testCommitError(t, conn)
 	// testRollbackError(t, conn)
 	testSplitQueryError(t, conn)
@@ -443,6 +444,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testBeginPanic(t, conn)
+	testBegin2Panic(t, conn)
 	testSplitQueryPanic(t, conn)
 	fakeServer.(*fakeVTGateService).panics = false
 }
@@ -1112,9 +1114,21 @@ func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	verifyError(t, err, "Begin")
 }
 
+func testBegin2Error(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.Begin2(ctx)
+	verifyError(t, err, "Begin2")
+}
+
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	_, err := conn.Begin(ctx)
+	expectPanic(t, err)
+}
+
+func testBegin2Panic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.Begin2(ctx)
 	expectPanic(t, err)
 }
 

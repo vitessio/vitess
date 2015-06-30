@@ -50,3 +50,30 @@ func AddVtGateErrorToSplitQueryResult(err error, reply *proto.SplitQueryResult) 
 	}
 	reply.Err = rpcErrFromVtGateError(err)
 }
+
+// AddVtGateErrorToBeginResponse will mutate a BeginResponse struct to fill in the Err
+// field with details from the VTGate error.
+func AddVtGateErrorToBeginResponse(err error, reply *proto.BeginResponse) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromVtGateError(err)
+}
+
+// AddVtGateErrorToCommitResponse will mutate a CommitResponse struct to fill in the Err
+// field with details from the VTGate error.
+func AddVtGateErrorToCommitResponse(err error, reply *proto.CommitResponse) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromVtGateError(err)
+}
+
+// AddVtGateErrorToRollbackResponse will mutate a RollbackResponse struct to fill in the Err
+// field with details from the VTGate error.
+func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) {
+	if err == nil {
+		return
+	}
+	reply.Err = rpcErrFromVtGateError(err)
+}

@@ -15,7 +15,7 @@ import (
 
 // Session represents the session state. It keeps track of
 // the shards on which transactions are in progress, along
-// with the corresponding tranaction ids.
+// with the corresponding transaction ids.
 type Session struct {
 	InTransaction bool
 	ShardSessions []*ShardSession
@@ -179,4 +179,43 @@ type SplitQueryPart struct {
 type SplitQueryResult struct {
 	Splits []SplitQueryPart
 	Err    *mproto.RPCError
+}
+
+// BeginRequest is the BSON implementation of the proto3 query.BeginkRequest
+type BeginRequest struct {
+	CallerID *tproto.CallerID
+}
+
+// BeginResponse is the BSON implementation of the proto3 vtgate.BeginResponse
+type BeginResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err     *mproto.RPCError
+	Session *Session
+}
+
+// CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
+type CommitRequest struct {
+	CallerID *tproto.CallerID
+	Session  *Session
+}
+
+// CommitResponse is the BSON implementation of the proto3 vtgate.CommitResponse
+type CommitResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}
+
+// RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
+type RollbackRequest struct {
+	CallerID *tproto.CallerID
+	Session  *Session
+}
+
+// RollbackResponse is the BSON implementation of the proto3 vtgate.RollbackResponse
+type RollbackResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
 }
