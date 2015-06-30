@@ -22,10 +22,8 @@ import (
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
-	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 var (
@@ -67,14 +65,12 @@ func main() {
 	wi.InstallSignalHandlers()
 	wi.InitStatusHandling()
 
-	// The logger will be replaced when we start a job.
-	wi.Wr = wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), wi.LockTimeout)
 	if len(args) == 0 {
 		// In interactive mode, initialize the web UI to choose a command.
 		wi.InitInteractiveMode()
 	} else {
 		// In single command mode, just run it.
-		worker, done, err := wi.RunCommand(args, wi.Wr, true /*runFromCli*/)
+		worker, done, err := wi.RunCommand(args, nil /*custom wrangler*/, true /*runFromCli*/)
 		if err != nil {
 			log.Error(err)
 			exit.Return(1)

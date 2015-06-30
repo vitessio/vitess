@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -21,8 +22,9 @@ import (
 
 // Instance encapsulate the execution state of vtworker.
 type Instance struct {
-	// global wrangler object we'll use
-	Wr *wrangler.Wrangler
+	// Default wrangler for all operations.
+	// Users can specify their own in RunCommand() e.g. the gRPC server does this.
+	wr *wrangler.Wrangler
 
 	// mutex is protecting all the following variables
 	// 3 states here:
@@ -40,21 +42,29 @@ type Instance struct {
 	currentCancelFunc   context.CancelFunc
 	lastRunError        error
 
-	TopoServer             topo.Server
+	topoServer             topo.Server
 	cell                   string
-	LockTimeout            time.Duration
+	lockTimeout            time.Duration
 	commandDisplayInterval time.Duration
 }
 
 // NewInstance creates a new Instance.
 func NewInstance(ts topo.Server, cell string, lockTimeout, commandDisplayInterval time.Duration) *Instance {
-	return &Instance{TopoServer: ts, cell: cell, LockTimeout: lockTimeout, commandDisplayInterval: commandDisplayInterval}
+	wi := &Instance{topoServer: ts, cell: cell, commandDisplayInterval: commandDisplayInterval}
+	// Note: setAndStartWorker() also adds a MemoryLogger for the webserver.
+	wi.wr = wi.CreateWrangler(logutil.NewConsoleLogger())
+	return wi
+}
+
+// CreateWrangler creates a new wrangler using the instance specific configuration.
+func (wi *Instance) CreateWrangler(logger logutil.Logger) *wrangler.Wrangler {
+	return wrangler.New(logger, wi.topoServer, tmclient.NewTabletManagerClient(), wi.lockTimeout)
 }
 
 // setAndStartWorker will set the current worker.
 // We always log to both memory logger (for display on the web) and
 // console logger (for records / display of command line worker).
-func (wi *Instance) setAndStartWorker(wrk Worker) (chan struct{}, error) {
+func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan struct{}, error) {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
 	if wi.currentWorker != nil {
@@ -66,7 +76,13 @@ func (wi *Instance) setAndStartWorker(wrk Worker) (chan struct{}, error) {
 	wi.currentContext, wi.currentCancelFunc = context.WithCancel(context.Background())
 	wi.lastRunError = nil
 	done := make(chan struct{})
-	wi.Wr.SetLogger(logutil.NewTeeLogger(wi.currentMemoryLogger, logutil.NewConsoleLogger()))
+	wranglerLogger := wr.Logger()
+	if wr == wi.wr {
+		// If it's the default wrangler, do not reuse its logger because it may have been set before.
+		// Resuing it would result into an endless recursion.
+		wranglerLogger = logutil.NewConsoleLogger()
+	}
+	wr.SetLogger(logutil.NewTeeLogger(wi.currentMemoryLogger, wranglerLogger))
 
 	// one go function runs the worker, changes state when done
 	go func() {

@@ -86,7 +86,7 @@ func (wi *Instance) InitInteractiveMode() {
 			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.Background()
-				wrk, template, data, err := pc.Interactive(wi, ctx, wi.Wr, w, r)
+				wrk, template, data, err := pc.Interactive(wi, ctx, wi.wr, w, r)
 				if err != nil {
 					httpError(w, "%s", err)
 				} else if template != nil && data != nil {

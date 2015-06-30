@@ -95,12 +95,17 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 }
 
 // RunCommand executes the vtworker command specified by "args". Use WaitForCommand() to block on the returned done channel.
+// If wr is nil, the default wrangler will be used.
+// If you pass a wr wrangler, note that a MemoryLogger will be added to its current logger.
 func (wi *Instance) RunCommand(args []string, wr *wrangler.Wrangler, runFromCli bool) (Worker, chan struct{}, error) {
+	if wr == nil {
+		wr = wi.wr
+	}
 	wrk, err := commandWorker(wi, wr, args, wi.cell, runFromCli)
 	if err != nil {
 		return nil, nil, err
 	}
-	done, err := wi.setAndStartWorker(wrk)
+	done, err := wi.setAndStartWorker(wrk, wr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot set worker: %v", err)
 	}

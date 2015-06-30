@@ -15,9 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
-	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pbvd "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	pb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
@@ -40,7 +38,7 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
-	logger := logutil.NewTeeLogger(logstream, logutil.NewConsoleLogger())
+	logger := logutil.NewTeeLogger(logstream, logutil.NewMemoryLogger())
 
 	// send logs to the caller
 	wg := sync.WaitGroup{}
@@ -68,7 +66,7 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 	}()
 
 	// create the wrangler
-	wr := wrangler.New(logger, s.wi.TopoServer, tmclient.NewTabletManagerClient(), s.wi.LockTimeout)
+	wr := s.wi.CreateWrangler(logger)
 
 	// execute the command
 	worker, done, err := s.wi.RunCommand(args.Args, wr)
