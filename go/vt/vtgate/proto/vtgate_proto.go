@@ -157,6 +157,7 @@ type QueryResultList struct {
 	List    []mproto.QueryResult
 	Session *Session
 	Error   string
+	Err     *mproto.RPCError
 }
 
 // SplitQueryRequest is a request to split a query into multiple parts

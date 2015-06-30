@@ -197,6 +197,9 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.List, result.Session, nil
 }
 
@@ -219,6 +222,9 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []t
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.List, result.Session, nil
 }

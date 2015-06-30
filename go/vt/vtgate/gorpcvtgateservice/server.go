@@ -96,7 +96,12 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteBatchShard(ctx, batchQuery, reply)
+	vtgErr := vtg.server.ExecuteBatchShard(ctx, batchQuery, reply)
+	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
@@ -105,7 +110,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *prot
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	return vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
+	if *vtgate.RPCErrorOnlyInReply {
+		return nil
+	}
+	return vtgErr
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
