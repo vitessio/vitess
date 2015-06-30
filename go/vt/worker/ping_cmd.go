@@ -7,9 +7,9 @@ package worker
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -53,31 +53,22 @@ func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	return worker, nil
 }
 
-func interactivePing(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactivePing(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		httpError(w, "Cannot parse form: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("Cannot parse form: %s", err)
 	}
 
 	message := r.FormValue("message")
 	if message == "" {
 		result := make(map[string]interface{})
-		executeTemplate(w, pingTemplate, result)
-		return
+		return nil, pingTemplate, result, nil
 	}
 
-	// start the clone job
 	wrk, err := NewPingWorker(wr, message)
 	if err != nil {
-		httpError(w, "Could not create Ping worker: %v", err)
-		return
+		return nil, nil, nil, fmt.Errorf("Could not create Ping worker: %v", err)
 	}
-	if _, err := wi.setAndStartWorker(wrk); err != nil {
-		httpError(w, "Could not set Ping worker: %s", err)
-		return
-	}
-
-	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+	return wrk, nil, nil, nil
 }
 
 func init() {

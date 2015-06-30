@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
 )
 
@@ -41,9 +42,9 @@ const subIndexHTML = `
 </body>
 `
 
-func httpError(w http.ResponseWriter, format string, err error) {
-	log.Errorf(format, err)
-	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
+func httpError(w http.ResponseWriter, format string, args ...interface{}) {
+	log.Errorf(format, args)
+	http.Error(w, fmt.Sprintf(format, args), http.StatusInternalServerError)
 }
 
 func mustParseTemplate(name, contents string) *template.Template {
@@ -81,12 +82,28 @@ func (wi *Instance) InitInteractiveMode() {
 		})
 
 		for _, c := range cg.Commands {
-			// keep a local copy of the Command pointer for the
-			// closure.
+			// keep a local copy of the Command pointer for the closure.
 			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.Background()
-				pc.Interactive(wi, ctx, wi.Wr, w, r)
+				wrk, template, data, err := pc.Interactive(wi, ctx, wi.Wr, w, r)
+				if err != nil {
+					httpError(w, "%s", err)
+				} else if template != nil && data != nil {
+					executeTemplate(w, template, data)
+					return
+				}
+
+				if wrk == nil {
+					httpError(w, "Internal server error. Command: %s did not return correct response.", c.Name)
+					return
+				}
+
+				if _, err := wi.setAndStartWorker(wrk, wi.wr); err != nil {
+					httpError(w, "Could not set %s worker: %s", c.Name, err)
+					return
+				}
+				http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 			})
 		}
 	}

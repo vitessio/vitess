@@ -7,12 +7,12 @@ package worker
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -130,10 +130,9 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		httpError(w, "cannot parse form: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
@@ -147,9 +146,7 @@ func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangle
 		} else {
 			result["Shards"] = shards
 		}
-
-		executeTemplate(w, verticalSplitDiffTemplate, result)
-		return
+		return nil, verticalSplitDiffTemplate, result, nil
 	}
 
 	submitButtonValue := r.FormValue("submit")
@@ -158,8 +155,7 @@ func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangle
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		executeTemplate(w, verticalSplitDiffTemplate2, result)
-		return
+		return nil, verticalSplitDiffTemplate2, result, nil
 	}
 
 	// Process input form.
@@ -171,12 +167,7 @@ func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangle
 
 	// start the diff job
 	wrk := NewVerticalSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
-	if _, err := wi.setAndStartWorker(wrk); err != nil {
-		httpError(w, "cannot set worker: %s", err)
-		return
-	}
-
-	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+	return wrk, nil, nil, nil
 }
 
 func init() {

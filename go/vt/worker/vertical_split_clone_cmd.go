@@ -7,13 +7,13 @@ package worker
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -147,10 +147,9 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 	return result, nil
 }
 
-func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		httpError(w, "cannot parse form: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
 
 	keyspace := r.FormValue("keyspace")
@@ -163,9 +162,7 @@ func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangl
 		} else {
 			result["Keyspaces"] = keyspaces
 		}
-
-		executeTemplate(w, verticalSplitCloneTemplate, result)
-		return
+		return nil, verticalSplitCloneTemplate, result, nil
 	}
 
 	tables := r.FormValue("tables")
@@ -177,8 +174,7 @@ func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangl
 		result["DefaultDestinationPackCount"] = fmt.Sprintf("%v", defaultDestinationPackCount)
 		result["DefaultMinTableSizeForSplit"] = fmt.Sprintf("%v", defaultMinTableSizeForSplit)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
-		executeTemplate(w, verticalSplitCloneTemplate2, result)
-		return
+		return nil, verticalSplitCloneTemplate2, result, nil
 	}
 	tableArray := strings.Split(tables, ",")
 
@@ -187,39 +183,30 @@ func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangl
 	sourceReaderCountStr := r.FormValue("sourceReaderCount")
 	sourceReaderCount, err := strconv.ParseInt(sourceReaderCountStr, 0, 64)
 	if err != nil {
-		httpError(w, "cannot parse sourceReaderCount: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse sourceReaderCount: %s", err)
 	}
 	destinationPackCountStr := r.FormValue("destinationPackCount")
 	destinationPackCount, err := strconv.ParseInt(destinationPackCountStr, 0, 64)
 	if err != nil {
-		httpError(w, "cannot parse destinationPackCount: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse destinationPackCount: %s", err)
 	}
 	minTableSizeForSplitStr := r.FormValue("minTableSizeForSplit")
 	minTableSizeForSplit, err := strconv.ParseInt(minTableSizeForSplitStr, 0, 64)
 	if err != nil {
-		httpError(w, "cannot parse minTableSizeForSplit: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse minTableSizeForSplit: %s", err)
 	}
 	destinationWriterCountStr := r.FormValue("destinationWriterCount")
 	destinationWriterCount, err := strconv.ParseInt(destinationWriterCountStr, 0, 64)
 	if err != nil {
-		httpError(w, "cannot parse destinationWriterCount: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse destinationWriterCount: %s", err)
 	}
 
 	// start the clone job
 	wrk, err := NewVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", tableArray, strategy, int(sourceReaderCount), int(destinationPackCount), uint64(minTableSizeForSplit), int(destinationWriterCount))
 	if err != nil {
-		httpError(w, "cannot create worker: %v", err)
+		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}
-	if _, err := wi.setAndStartWorker(wrk); err != nil {
-		httpError(w, "cannot set worker: %s", err)
-		return
-	}
-
-	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+	return wrk, nil, nil, nil
 }
 
 func init() {

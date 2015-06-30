@@ -7,12 +7,12 @@ package worker
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -131,10 +131,9 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	return result, nil
 }
 
-func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		httpError(w, "cannot parse form: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
@@ -148,9 +147,7 @@ func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangl
 		} else {
 			result["Shards"] = shards
 		}
-
-		executeTemplate(w, splitDiffTemplate, result)
-		return
+		return nil, splitDiffTemplate, result, nil
 	}
 
 	submitButtonValue := r.FormValue("submit")
@@ -159,8 +156,7 @@ func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangl
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		executeTemplate(w, splitDiffTemplate2, result)
-		return
+		return nil, splitDiffTemplate2, result, nil
 	}
 
 	// Process input form.
@@ -172,12 +168,10 @@ func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangl
 
 	// start the diff job
 	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
-	if _, err := wi.setAndStartWorker(wrk); err != nil {
-		httpError(w, "cannot set worker: %s", err)
-		return
+	if _, err := wi.setAndStartWorker(wrk, nil); err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot set worker: %s", err)
 	}
-
-	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+	return wrk, nil, nil, nil
 }
 
 func init() {
