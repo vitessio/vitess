@@ -87,17 +87,26 @@ func (wi *Instance) setAndStartWorker(wrk Worker, wr *wrangler.Wrangler) (chan s
 
 	// one go function runs the worker, changes state when done
 	go func() {
-		// run will take a long time
 		log.Infof("Starting worker...")
-		err := wrk.Run(wi.currentContext)
+		var err error
 
-		// it's done, let's save our state
-		wi.currentWorkerMutex.Lock()
-		wi.currentContext = nil
-		wi.currentCancelFunc = nil
-		wi.lastRunError = err
-		wi.currentWorkerMutex.Unlock()
-		close(done)
+		// Catch all panics and always save the execution state at the end.
+		defer func() {
+			// The recovery code is a copy of servenv.HandlePanic().
+			if x := recover(); x != nil {
+				err = fmt.Errorf("uncaught %v panic: %v", "vtworker", x)
+			}
+
+			wi.currentWorkerMutex.Lock()
+			wi.currentContext = nil
+			wi.currentCancelFunc = nil
+			wi.lastRunError = err
+			wi.currentWorkerMutex.Unlock()
+			close(done)
+		}()
+
+		// run will take a long time
+		err = wrk.Run(wi.currentContext)
 	}()
 
 	return done, nil
