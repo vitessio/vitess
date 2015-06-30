@@ -234,6 +234,13 @@ vitess/examples/kubernetes$ ./etcd-down.sh
 
     ``` sh
 vitess/examples/kubernetes$ ./vtctld-up.sh
+### example output:
+# Creating vtctld service...
+# services/vtctld
+# Creating vtctld pod...
+# pods/vtctld
+#
+# vtctld address: http://2.3.4.5:30000
 ```
 
     <br>To let you access vtctld from outside Kubernetes, the
@@ -241,6 +248,9 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
     option. This creates an
     [external service](https://github.com/GoogleCloudPlatform/kubernetes/blob/master/docs/services.md#external-services)
     by exposing a port on each node that forwards to the vtctld service.<br>
+
+    The **vtctld address** printed by `vtctld-up.sh` is thus the external IP
+    of one of the nodes, combined with the `nodePort` assigned for vtctld.
 
 1.  **Access vtctld**
 
@@ -256,48 +266,28 @@ vitess/examples/kubernetes$ ./vtctld-up.sh
 $ gcloud compute firewall-rules create vtctld --allow tcp:30000
 ```
 
-    <br>Then, get the <code>ExternalIP</code> of any Kubernetes node
-    (not the master):
-
-    ``` sh
-$ kubectl get -o yaml nodes
-### example output:
-# - apiVersion: v1
-#   kind: Node
-# ...
-#   status:
-#     addresses:
-#     - address: 2.3.4.5
-#       type: ExternalIP
-# ...
-```
-
-    <br>You can then access the <code>vtctld</code> web interface at port 30000
-    of the EXTERNAL_IP address returned in the above command.
-    In this example, the web UI would be at
-    <code>http://2.3.4.5:30000</code>.
+    <br>You can then access the vtctld web interface at the address printed
+    by `vtctld-up.sh` above. In this example, the web UI would be at
+    `http://2.3.4.5:30000`.
 
 1.  **Use <code>vtctlclient</code> to call <code>vtctld</code>**
 
     You can now run <code>vtctlclient</code> locally to issue commands
     to the <code>vtctld</code> service on your Kubernetes cluster.<br><br>
 
-    When you call <code>vtctlclient</code>, the command includes
+    When you call <code>vtctlclient</code>, the command requires
     the IP address and port for your <code>vtctld</code> service.
-    To avoid having to enter that for each command, create an alias
-    called <code>kvtctl</code> that points to the address from above:
+    To avoid having to enter that for each command, you can use the
+    provided `kvtctl.sh` script, which uses `kubectl` to discover the
+    proper address.
 
-    ``` sh
-$ alias kvtctl='vtctlclient -server 2.3.4.5:30000'
-```
-
-    <br>Now, running <code>kvtctl help</code> will test your connection to
+    <br>Now, running `kvtctl.sh help` will test your connection to
     <code>vtctld</code> and also list the <code>vtctlclient</code>
     commands that you can use to administer the Vitess cluster.
 
     ``` sh
 # Test the connection to vtctld and list available commands
-$ kvtctl help
+vitess/examples/kubernetes$ ./kvtctl.sh help
 ### example output:
 # Available commands:
 #
@@ -308,7 +298,7 @@ $ kvtctl help
 
     ``` sh
 # Get usage for a specific command:
-$ kvtctl help InitTablet
+vitess/examples/kubernetes$ ./kvtctl.sh help InitTablet
 ```
 
     <br>See the [vtctl reference](http://vitess.io/reference/vtctl.html) for a
@@ -347,10 +337,10 @@ vitess/examples/kubernetes$ ./vttablet-up.sh
     (e.g. <code>http://2.3.4.5:30000/dbtopo</code>).
     This can take some time if a pod was scheduled on a node that needs to
     download the latest Vitess Docker image. You can also check the status of
-    the tablets from the command line using <code>kvtctl</code>:
+    the tablets from the command line using `kvtctl.sh`:
 
     ``` sh
-$ kvtctl ListAllTablets test
+vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 ### example output:
 # test-0000000100 test_keyspace 0 replica 10.64.1.6:15002 10.64.1.6:3306 []
 # test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
@@ -371,10 +361,10 @@ $ kvtctl ListAllTablets test
     you have effectively just created a new
     [shard](http://vitess.io/overview/concepts.html#shard).
     To initialize the keyspace for the new
-    shard, call the <code>kvtctl RebuildKeyspaceGraph</code> command:
+    shard, call the `kvtctl.sh RebuildKeyspaceGraph` command:
 
     ``` sh
-$ kvtctl RebuildKeyspaceGraph test_keyspace
+vitess/examples/kubernetes$ ./kvtctl.sh RebuildKeyspaceGraph test_keyspace
 ```
 
     **Note:** Many <code>vtctlclient</code> commands produce no output on
@@ -415,7 +405,7 @@ https://1.2.3.4/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/st
 
     ``` sh
 # Send a query to tablet 100 in cell 'test'.
-$ kvtctl ExecuteFetchAsDba test-0000000100 "SELECT VERSION()"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT VERSION()"
 ### example output:
 # {
 #   "Fields": [],
@@ -467,7 +457,7 @@ vttablet-100:/# TERM=ansi mysql -u vt_dba -S /vt/vtdataroot/vt_0000000100/mysql.
 
 
     ``` sh
-$ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
+vitess/examples/kubernetes$ ./kvtctl.sh InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
     <br>**Note:** If you do not include the <code>-force</code> flag 
@@ -486,7 +476,7 @@ $ kvtctl InitShardMaster -force test_keyspace/0 test-0000000100
     same data:
 
     ``` sh
-$ kvtctl ListAllTablets test
+vitess/examples/kubernetes$ ./kvtctl.sh ListAllTablets test
 ### example output:
 # test-0000000100 test_keyspace 0 master 10.64.1.6:15002 10.64.1.6:3306 []
 # test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []
@@ -503,7 +493,7 @@ $ kvtctl ListAllTablets test
 
     ``` sh
 # Make sure to run this from the examples/kubernetes dir, so it finds the file.
-vitess/examples/kubernetes$ kvtctl ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+vitess/examples/kubernetes$ ./kvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
     <br>The SQL to create the table is shown below:
@@ -523,7 +513,7 @@ CREATE TABLE messages (
     is a tablet alias as shown by the <code>ListAllTablets</code> command:
 
     ``` sh
-$ kvtctl GetSchema test-0000000100
+vitess/examples/kubernetes$ ./kvtctl.sh GetSchema test-0000000100
 ### example output:
 # {
 #   "DatabaseSchema": "CREATE DATABASE `{{.DatabaseName}}` /*!40100 DEFAULT CHARACTER SET utf8 */",
@@ -563,6 +553,11 @@ a later guide.
 
 ``` sh
 vitess/examples/kubernetes$ ./guestbook-up.sh
+### example output:
+# Creating guestbook service...
+# services/guestbook
+# Creating guestbook replicationcontroller...
+# replicationcontrollers/guestbook
 ```
 
 As with the <code>vtctld</code> service, to access the GuestBook
@@ -612,7 +607,7 @@ that replication is working.
 You can also inspect the data stored by the app:
 
 ``` sh
-$ kvtctl ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
+vitess/examples/kubernetes$ ./kvtctl.sh ExecuteFetchAsDba test-0000000100 "SELECT * FROM messages"
 ### example output:
 # {
 #   "Fields": [],
