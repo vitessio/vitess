@@ -181,6 +181,7 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *proto.BeginRequest, repl
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
+	reply.Session = &proto.Session{}
 	vtgErr := vtg.server.Begin(ctx, reply.Session)
 	vtgate.AddVtGateErrorToBeginResponse(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
