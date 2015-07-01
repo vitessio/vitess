@@ -135,7 +135,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because conn.Exec failed",
-		ErrFatal,
+		ErrFail,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
 }
@@ -165,7 +165,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because NewTableInfo failed",
-		ErrFatal,
+		ErrFail,
 	)
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
 }

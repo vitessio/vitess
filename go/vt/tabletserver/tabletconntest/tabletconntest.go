@@ -47,6 +47,24 @@ var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, "generic
 
 const expectedErrMatch string = "error: generic error"
 
+// Verifies the returned error has the properties that we expect.
+func verifyError(t *testing.T, err error, method string) {
+	if err == nil {
+		t.Errorf("%s was expecting an error, didn't get one", method)
+		return
+	}
+	if se, ok := err.(*tabletconn.ServerError); ok {
+		if se.Code != tabletconn.ERR_NORMAL {
+			t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, se.Code, tabletconn.ERR_NORMAL)
+		}
+	} else {
+		t.Errorf("Unexpected error type from %s: got %v, wanted tabletconn.ServerError", method, reflect.TypeOf(err))
+	}
+	if !strings.Contains(err.Error(), expectedErrMatch) {
+		t.Errorf("Unexpected error from %s: got %v, wanted err containing %v", method, err, expectedErrMatch)
+	}
+}
+
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if sessionParams.Keyspace != TestKeyspace {
@@ -95,12 +113,7 @@ func testBeginError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBeginError")
 	ctx := context.Background()
 	_, err := conn.Begin(ctx)
-	if err == nil {
-		t.Fatalf("Begin was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from Begin: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "Begin")
 }
 
 func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -114,12 +127,12 @@ func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBegin2")
 	ctx := context.Background()
-	transactionId, err := conn.Begin2(ctx)
+	transactionID, err := conn.Begin2(ctx)
 	if err != nil {
 		t.Fatalf("Begin2 failed: %v", err)
 	}
-	if transactionId != beginTransactionID {
-		t.Errorf("Unexpected result from Begin2: got %v wanted %v", transactionId, beginTransactionID)
+	if transactionID != beginTransactionID {
+		t.Errorf("Unexpected result from Begin2: got %v wanted %v", transactionID, beginTransactionID)
 	}
 }
 
@@ -127,12 +140,7 @@ func testBegin2Error(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBegin2Error")
 	ctx := context.Background()
 	_, err := conn.Begin2(ctx)
-	if err == nil {
-		t.Fatalf("Begin2 was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from Begin2: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "Begin2")
 }
 
 func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
@@ -174,24 +182,38 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitError")
 	ctx := context.Background()
-	var err error
-	if *tabletserver.RPCErrorOnlyInReply {
-		err = conn.Commit2(ctx, commitTransactionID)
-	} else {
-		err = conn.Commit(ctx, commitTransactionID)
-	}
-	if err == nil {
-		t.Fatalf("Commit was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from Commit: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	err := conn.Commit(ctx, commitTransactionID)
+	verifyError(t, err, "Commit")
 }
 
 func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitPanics")
 	ctx := context.Background()
 	if err := conn.Commit(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
+func testCommit2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testCommit2")
+	ctx := context.Background()
+	err := conn.Commit2(ctx, commitTransactionID)
+	if err != nil {
+		t.Fatalf("Commit2 failed: %v", err)
+	}
+}
+
+func testCommit2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testCommit2Error")
+	ctx := context.Background()
+	err := conn.Commit2(ctx, commitTransactionID)
+	verifyError(t, err, "Commit2")
+}
+
+func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testCommit2Panics")
+	ctx := context.Background()
+	if err := conn.Commit2(ctx, commitTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -225,26 +247,40 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommitError")
+	t.Log("testRollbackError")
 	ctx := context.Background()
-	var err error
-	if *tabletserver.RPCErrorOnlyInReply {
-		err = conn.Rollback2(ctx, commitTransactionID)
-	} else {
-		err = conn.Rollback(ctx, commitTransactionID)
-	}
-	if err == nil {
-		t.Fatalf("Rollback was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from Rollback: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	err := conn.Rollback(ctx, commitTransactionID)
+	verifyError(t, err, "Rollback")
 }
 
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollbackPanics")
 	ctx := context.Background()
 	if err := conn.Rollback(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
+func testRollback2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testRollback2")
+	ctx := context.Background()
+	err := conn.Rollback2(ctx, rollbackTransactionID)
+	if err != nil {
+		t.Fatalf("Rollback2 failed: %v", err)
+	}
+}
+
+func testRollback2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testRollback2Error")
+	ctx := context.Background()
+	err := conn.Rollback2(ctx, commitTransactionID)
+	verifyError(t, err, "Rollback2")
+}
+
+func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testRollback2Panics")
+	ctx := context.Background()
+	if err := conn.Rollback2(ctx, rollbackTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -322,12 +358,7 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteError")
 	ctx := context.Background()
 	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
-	if err == nil {
-		t.Fatalf("Execute was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from Execute: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "Execute")
 }
 
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -470,12 +501,7 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
 	err = errFunc()
-	if err == nil {
-		t.Fatalf("StreamExecute was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from StreamExecute: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "StreamExecute")
 	// reset state for the test
 	errorWait = make(chan struct{})
 }
@@ -591,12 +617,7 @@ func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
 		t.Fatalf("StreamExecute2 channel wasn't closed")
 	}
 	err = errFunc()
-	if err == nil {
-		t.Fatalf("StreamExecute2 was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from StreamExecute2: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "StreamExecute2")
 	// reset state for the test
 	errorWait = make(chan struct{})
 }
@@ -744,12 +765,7 @@ func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBatchExecuteError")
 	ctx := context.Background()
 	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID)
-	if err == nil {
-		t.Fatalf("ExecuteBatch was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from ExecuteBatch: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "ExecuteBatch")
 }
 
 func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -816,12 +832,7 @@ func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testSplitQueryError")
 	ctx := context.Background()
 	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitCount)
-	if err == nil {
-		t.Fatalf("SplitQuery was expecting an error, didn't get one")
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from SplitQuery: got %v, wanted err containing %v", err, expectedErrMatch)
-	}
+	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -850,7 +861,9 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testBegin(t, conn)
 	testBegin2(t, conn)
 	testCommit(t, conn)
+	testCommit2(t, conn)
 	testRollback(t, conn)
+	testRollback2(t, conn)
 	testExecute(t, conn)
 	testStreamExecute(t, conn)
 	testStreamExecute2(t, conn)
@@ -862,7 +875,9 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testBeginError(t, conn)
 	testBegin2Error(t, conn)
 	testCommitError(t, conn)
+	testCommit2Error(t, conn)
 	testRollbackError(t, conn)
+	testRollback2Error(t, conn)
 	testExecuteError(t, conn)
 	testStreamExecuteError(t, conn)
 	testStreamExecute2Error(t, conn)
@@ -875,7 +890,9 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testBeginPanics(t, conn)
 	testBegin2Panics(t, conn)
 	testCommitPanics(t, conn)
+	testCommit2Panics(t, conn)
 	testRollbackPanics(t, conn)
+	testRollback2Panics(t, conn)
 	testExecutePanics(t, conn)
 	testStreamExecutePanics(t, conn, fake)
 	testStreamExecute2Panics(t, conn, fake)

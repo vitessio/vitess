@@ -86,6 +86,16 @@ func NewTabletErrorSql(errorType int, err error) *TabletError {
 	}
 }
 
+// PrefixTabletError attempts to add a string prefix to a TabletError, while preserving its
+// ErrorType. If the given error is not a TabletError, a new TabletError is returned
+// with the desired ErrorType.
+func PrefixTabletError(errorType int, err error, prefix string) error {
+	if terr, ok := err.(*TabletError); ok {
+		return NewTabletError(terr.ErrorType, "%s%s", prefix, terr.Message)
+	}
+	return NewTabletError(errorType, "%s%s", prefix, err)
+}
+
 func printable(in string) string {
 	if len(in) > maxErrLen {
 		in = in[:maxErrLen]

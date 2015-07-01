@@ -136,6 +136,19 @@ func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	}, nil
 }
 
+// Begin2 starts a transaction and returns a VTGateTX.
+func (conn *VTGateConn) Begin2(ctx context.Context) (*VTGateTx, error) {
+	session, err := conn.impl.Begin2(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &VTGateTx{
+		impl:    conn.impl,
+		session: session,
+	}, nil
+}
+
 // Close must be called for releasing resources.
 func (conn *VTGateConn) Close() {
 	conn.impl.Close()
@@ -245,6 +258,26 @@ func (tx *VTGateTx) Rollback(ctx context.Context) error {
 	return err
 }
 
+// Commit2 commits the current transaction.
+func (tx *VTGateTx) Commit2(ctx context.Context) error {
+	if tx.session == nil {
+		return fmt.Errorf("commit: not in transaction")
+	}
+	err := tx.impl.Commit2(ctx, tx.session)
+	tx.session = nil
+	return err
+}
+
+// Rollback2 rolls back the current transaction.
+func (tx *VTGateTx) Rollback2(ctx context.Context) error {
+	if tx.session == nil {
+		return nil
+	}
+	err := tx.impl.Rollback2(ctx, tx.session)
+	tx.session = nil
+	return err
+}
+
 // ErrFunc is used to check for streaming errors.
 type ErrFunc func() error
 
@@ -297,6 +330,15 @@ type Impl interface {
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
 
+	// New methods (that don't quite work yet) which will eventually replace the existing ones:
+
+	// Begin starts a transaction and returns a VTGateTX.
+	Begin2(ctx context.Context) (interface{}, error)
+	// Commit commits the current transaction.
+	Commit2(ctx context.Context, session interface{}) error
+	// Rollback rolls back the current transaction.
+	Rollback2(ctx context.Context, session interface{}) error
+
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
@@ -314,8 +356,7 @@ var dialers = make(map[string]DialerFunc)
 // to self register.
 func RegisterDialer(name string, dialer DialerFunc) {
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists", name)
-		return
+		log.Warningf("Dialer %s already exists, overwriting it", name)
 	}
 	dialers[name] = dialer
 }
