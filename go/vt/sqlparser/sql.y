@@ -7,15 +7,27 @@ package sqlparser
 
 import "bytes"
 
-func SetParseTree(yylex interface{}, stmt Statement) {
+func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
 
-func SetAllowComments(yylex interface{}, allow bool) {
+func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func ForceEOF(yylex interface{}) {
+func incNesting(yylex interface{}) bool {
+  yylex.(*Tokenizer).nesting++
+  if yylex.(*Tokenizer).nesting == 200 {
+    return true
+  }
+  return false
+}
+
+func decNesting(yylex interface{}) {
+  yylex.(*Tokenizer).nesting--
+}
+
+func forceEOF(yylex interface{}) {
   yylex.(*Tokenizer).ForceEOF = true
 }
 
@@ -149,7 +161,7 @@ var (
 any_command:
   command
   {
-    SetParseTree(yylex, $1)
+    setParseTree(yylex, $1)
   }
 
 command:
@@ -285,12 +297,12 @@ other_statement:
 
 comment_opt:
   {
-    SetAllowComments(yylex, true)
+    setAllowComments(yylex, true)
   }
   comment_list
   {
     $$ = $2
-    SetAllowComments(yylex, false)
+    setAllowComments(yylex, false)
   }
 
 comment_list:
@@ -708,7 +720,7 @@ value_expression:
   {
     $$ = &FuncExpr{Name: $1}
   }
-| sql_id '(' select_expression_list ')'
+| sql_id openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
@@ -1029,7 +1041,22 @@ sql_id:
     $$ = bytes.ToLower($1)
   }
 
+openb:
+  '('
+  {
+    if incNesting(yylex) {
+      yylex.Error("max nesting level reached")
+      return 1
+    }
+  }
+
+closeb:
+  ')'
+  {
+    decNesting(yylex)
+  }
+
 force_eof:
 {
-  ForceEOF(yylex)
+  forceEOF(yylex)
 }
