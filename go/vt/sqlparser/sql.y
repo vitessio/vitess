@@ -7,15 +7,27 @@ package sqlparser
 
 import "bytes"
 
-func SetParseTree(yylex interface{}, stmt Statement) {
+func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
 
-func SetAllowComments(yylex interface{}, allow bool) {
+func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func ForceEOF(yylex interface{}) {
+func incNesting(yylex interface{}) bool {
+  yylex.(*Tokenizer).nesting++
+  if yylex.(*Tokenizer).nesting == 200 {
+    return true
+  }
+  return false
+}
+
+func decNesting(yylex interface{}) {
+  yylex.(*Tokenizer).nesting--
+}
+
+func forceEOF(yylex interface{}) {
   yylex.(*Tokenizer).ForceEOF = true
 }
 
@@ -149,7 +161,7 @@ var (
 any_command:
   command
   {
-    SetParseTree(yylex, $1)
+    setParseTree(yylex, $1)
   }
 
 command:
@@ -285,12 +297,12 @@ other_statement:
 
 comment_opt:
   {
-    SetAllowComments(yylex, true)
+    setAllowComments(yylex, true)
   }
   comment_list
   {
     $$ = $2
-    SetAllowComments(yylex, false)
+    setAllowComments(yylex, false)
   }
 
 comment_list:
@@ -395,7 +407,7 @@ table_expression:
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
-| '(' table_expression ')'
+| openb table_expression closeb
   {
     $$ = &ParenTableExpr{Expr: $2}
   }
@@ -487,15 +499,15 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX '(' index_list ')'
+| USE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: AST_USE, Indexes: $4}
   }
-| IGNORE INDEX '(' index_list ')'
+| IGNORE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: AST_IGNORE, Indexes: $4}
   }
-| FORCE INDEX '(' index_list ')'
+| FORCE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: AST_FORCE, Indexes: $4}
   }
@@ -533,7 +545,7 @@ boolean_expression:
   {
     $$ = &NotExpr{Expr: $2}
   }
-| '(' boolean_expression ')'
+| openb boolean_expression closeb
   {
     $$ = &ParenBoolExpr{Expr: $2}
   }
@@ -579,7 +591,7 @@ condition:
   {
     $$ = &ExistsExpr{Subquery: $2}
   }
-| KEYRANGE '(' value ',' value ')'
+| KEYRANGE openb value ',' value closeb
   {
     $$ = &KeyrangeExpr{Start: $3, End: $5}
   }
@@ -615,7 +627,7 @@ compare:
   }
 
 col_tuple:
-  '(' value_expression_list ')'
+  openb value_expression_list closeb
   {
     $$ = ValTuple($2)
   }
@@ -629,7 +641,7 @@ col_tuple:
   }
 
 subquery:
-  '(' select_statement ')'
+  openb select_statement closeb
   {
     $$ = &Subquery{$2}
   }
@@ -704,19 +716,19 @@ value_expression:
       $$ = &UnaryExpr{Operator: $1, Expr: $2}
     }
   }
-| sql_id '(' ')'
+| sql_id openb closeb
   {
     $$ = &FuncExpr{Name: $1}
   }
-| sql_id '(' select_expression_list ')'
+| sql_id openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| sql_id '(' DISTINCT select_expression_list ')'
+| sql_id openb DISTINCT select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
-| keyword_as_func '(' select_expression_list ')'
+| keyword_as_func openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
@@ -911,7 +923,7 @@ column_list_opt:
   {
     $$ = nil
   }
-| '(' column_list ')'
+| openb column_list closeb
   {
     $$ = $2
   }
@@ -956,7 +968,7 @@ tuple_list:
   }
 
 row_tuple:
-  '(' value_expression_list ')'
+  openb value_expression_list closeb
   {
     $$ = ValTuple($2)
   }
@@ -1029,7 +1041,22 @@ sql_id:
     $$ = bytes.ToLower($1)
   }
 
+openb:
+  '('
+  {
+    if incNesting(yylex) {
+      yylex.Error("max nesting level reached")
+      return 1
+    }
+  }
+
+closeb:
+  ')'
+  {
+    decNesting(yylex)
+  }
+
 force_eof:
 {
-  ForceEOF(yylex)
+  forceEOF(yylex)
 }
