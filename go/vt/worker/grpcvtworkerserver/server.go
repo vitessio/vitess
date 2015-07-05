@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/worker"
 
 	pbvd "github.com/youtube/vitess/go/vt/proto/vtctldata"
@@ -33,8 +34,10 @@ func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 
 // ExecuteVtworkerCommand is part of the pb.VtworkerServer interface
 func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandRequest, stream pbs.Vtworker_ExecuteVtworkerCommandServer) (err error) {
-	// We are not catching panics here because it would be cumbersome to guarantee that the logger stream below is correctly closed.
-	// Instead, we catch panics in the actual execution of the worker code in Instance.setAndStartWorker() which launches a new go routine anyway.
+	// Please note that this panic handler catches only panics occuring in the code below.
+	// The actual execution of the vtworker command takes place in a new go routine
+	// (started in Instance.setAndStartWorker()) which has its own panic handler.
+	defer servenv.HandlePanic("vtworker", &err)
 
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
