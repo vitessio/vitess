@@ -648,8 +648,8 @@ def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
   """Starts a background vtworker process.
 
   Returns:
-    proc     - process returned by subprocess.Popen
-    port     - int with the port number that the vtworker is running with
+    proc - process returned by subprocess.Popen
+    port - int with the port number that the vtworker is running with
     rpc_port - int with the port number of the RPC interface
   """
   cmd, port, rpc_port = _get_vtworker_cmd(clargs, log_level, auto_log)
