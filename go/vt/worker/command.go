@@ -70,9 +70,11 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 	for _, group := range Commands {
 		for _, cmd := range group.Commands {
 			if strings.ToLower(cmd.Name) == actionLowerCase {
-				subFlags := flag.NewFlagSet(action, flag.ContinueOnError)
+				var subFlags *flag.FlagSet
 				if runFromCli {
 					subFlags = flag.NewFlagSet(action, flag.ExitOnError)
+				} else {
+					subFlags = flag.NewFlagSet(action, flag.ContinueOnError)
 				}
 				// The command may be run from an RPC and may not log to the console.
 				// The Wrangler logger defines where the output has to go.
