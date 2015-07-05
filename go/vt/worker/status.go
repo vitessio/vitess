@@ -108,6 +108,7 @@ func (wi *Instance) InitStatusHandling() {
 		if err := wi.Reset(); err != nil {
 			httpError(w, err.Error(), nil)
 		} else {
+			// No worker currently running, we go to the menu.
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		}
 	})

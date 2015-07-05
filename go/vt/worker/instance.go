@@ -135,7 +135,6 @@ func (wi *Instance) Reset() error {
 	wi.currentWorkerMutex.Lock()
 	defer wi.currentWorkerMutex.Unlock()
 
-	// no worker, we go to the menu
 	if wi.currentWorker == nil {
 		return nil
 	}
