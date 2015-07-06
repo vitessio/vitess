@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
@@ -36,7 +37,7 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 
 // ExecuteVtctlCommand is part of the pb.VtctlServer interface
 func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, stream pbs.Vtctl_ExecuteVtctlCommandServer) (err error) {
-	defer vtctl.HandlePanic(&err)
+	defer servenv.HandlePanic("vtctl", &err)
 
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)

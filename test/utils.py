@@ -640,7 +640,7 @@ def run_vtctl_json(clargs):
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr"""
-  cmd, _ = _get_vtworker_cmd(clargs, log_level, auto_log)
+  cmd, _, _ = _get_vtworker_cmd(clargs, log_level, auto_log)
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
@@ -651,9 +651,10 @@ def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
   Returns:
     proc - process returned by subprocess.Popen
     port - int with the port number that the vtworker is running with
+    rpc_port - int with the port number of the RPC interface
   """
-  cmd, port = _get_vtworker_cmd(clargs, log_level, auto_log)
-  return run_bg(cmd, **kwargs), port
+  cmd, port, rpc_port = _get_vtworker_cmd(clargs, log_level, auto_log)
+  return run_bg(cmd, **kwargs), port, rpc_port
 
 def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
   """Assembles the command that is needed to run a vtworker.
@@ -663,6 +664,7 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
     port - int with the port number that the vtworker is running with
   """
   port = environment.reserve_ports(1)
+  rpc_port = environment.reserve_ports(1)
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-min_healthy_rdonly_endpoints', '1',
@@ -673,6 +675,11 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
   args.extend(environment.topo_server().flags())
   args.extend(['-tablet_manager_protocol',
                protocols_flavor().tablet_manager_protocol()])
+  if protocols_flavor().service_map():
+    args.extend(['-service_map',
+                 ",".join(protocols_flavor().service_map())])
+  if protocols_flavor().vtworker_client_protocol() == 'grpc':
+    args.extend(['-grpc_port', str(rpc_port)])
 
   if auto_log:
     if options.verbose == 2:
@@ -685,7 +692,30 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
     args.append('--stderrthreshold=%s' % log_level)
 
   cmd = args + clargs
-  return cmd, port
+  return cmd, port, rpc_port
+
+# vtworker client helpers
+def run_vtworker_client(args, rpc_port):
+  """Runs vtworkerclient to execute a command on a remote vtworker.
+
+  Returns:
+    out  - stdout of the vtworkerclient invocation
+    err  - stderr of the vtworkerclient invocation
+  """
+  if options.verbose == 2:
+    log_level='INFO'
+  elif options.verbose == 1:
+    log_level='WARNING'
+  else:
+    log_level='ERROR'
+
+  out, err = run(environment.binary_args('vtworkerclient') +
+                 ['-vtworker_client_protocol',
+                  protocols_flavor().vtworker_client_protocol(),
+                  '-server', 'localhost:%u' % rpc_port,
+                  '-stderrthreshold', log_level] + args,
+                 trap_output=True)
+  return out, err
 
 # mysql helpers
 def mysql_query(uid, dbname, query):

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import logging
-import os
 
 class ProtocolsFlavor(object):
   """Base class for protocols"""
@@ -13,6 +12,10 @@ class ProtocolsFlavor(object):
   def vtctl_client_protocol(self):
     """Returns the protocol to use for vtctl connections.
     Needs to be supported both in python and go."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def vtworker_client_protocol(self):
+    """Returns the protocol to use for vtworker connections."""
     raise NotImplementedError('Not implemented in the base class')
 
   def tablet_manager_protocol(self):
@@ -47,6 +50,11 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def vtctl_client_protocol(self):
     return 'gorpc'
 
+  def vtworker_client_protocol(self):
+    # There is no GoRPC implementation for the vtworker RPC interface,
+    # so we use gRPC as well.
+    return 'grpc'
+
   def tablet_manager_protocol(self):
     return 'bson'
 
@@ -60,7 +68,7 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
     return 'timeout waiting for'
 
   def service_map(self):
-    return []
+    return ['grpc-vtworker']
 
 
 class GRpcProtocolsFlavor(ProtocolsFlavor):
@@ -71,6 +79,9 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return 'grpc'
 
   def vtctl_client_protocol(self):
+    return 'grpc'
+
+  def vtworker_client_protocol(self):
     return 'grpc'
 
   def tablet_manager_protocol(self):
@@ -90,6 +101,7 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
         'grpc-queryservice',
         'grpc-updatestream',
         'grpc-vtctl',
+        'grpc-vtworker',
         'grpc-tabletmanager',
         ]
 
