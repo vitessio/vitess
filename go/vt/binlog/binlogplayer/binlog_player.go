@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -79,7 +80,7 @@ func NewBinlogPlayerStats() *BinlogPlayerStats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	addr     string
+	endPoint topo.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
@@ -101,9 +102,9 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint topo.EndPoint, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:           addr,
+		endPoint:       endPoint,
 		dbClient:       dbClient,
 		keyspaceIdType: keyspaceIdType,
 		keyRange:       keyRange,
@@ -117,9 +118,9 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint topo.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:         addr,
+		endPoint:     endPoint,
 		dbClient:     dbClient,
 		tables:       tables,
 		blpPos:       *startPosition,
@@ -251,7 +252,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			blp.blpPos.Uid,
 			blp.tables,
 			blp.blpPos.Position,
-			blp.addr,
+			blp.endPoint,
 		)
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
@@ -259,7 +260,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			blp.keyRange.Start.Hex(),
 			blp.keyRange.End.Hex(),
 			blp.blpPos.Position,
-			blp.addr,
+			blp.endPoint,
 		)
 	}
 	if !blp.stopPosition.IsZero() {
@@ -280,7 +281,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
 	blplClient := binlogPlayerClientFactory()
-	err := blplClient.Dial(blp.addr, *binlogPlayerConnTimeout)
+	err := blplClient.Dial(blp.endPoint, *binlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)

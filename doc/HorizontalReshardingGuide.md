@@ -10,7 +10,9 @@ To complete these steps, you must have:
 1. Two or more <code>rdonly</code> tablets running on the source shard.<br><br>
     Having at least two <code>rdonly</code> tablets ensures that data updates that occur on the source shard during the resharding process propagate to the destination shard. Steps 3 and 4 of the resharding process discuss this in more detail.
 
-We recommend that you also review the [range-based sharding](/user-guide/sharding.html#range-based-sharding) section of the <i>Sharding</i> guide.
+We recommend that you also review the
+[range-based sharding](http://vitess.io/user-guide/sharding.html#range-based-sharding)
+section of the *Sharding* guide.
 
 ## Step 1: Define your Keyspace ID on the Source Shard
 ###### Note: Skip this step if your keyspace already has multiple shards.

@@ -8,7 +8,7 @@ package tabletmanagerdata;
 import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
-import "vtctldata.proto";
+import "logutil.proto";
 
 //
 // Data structures
@@ -413,5 +413,5 @@ message BackupRequest {
 }
 
 message BackupResponse {
-  vtctldata.LoggerEvent event = 1;
+  logutil.Event event = 1;
 }

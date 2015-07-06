@@ -259,11 +259,13 @@ func (worker *SQLDiffWorker) diff(ctx context.Context) error {
 	switch {
 	case err != nil:
 		worker.wr.Logger().Errorf("Differ.Go failed: %v", err)
+		return err
 	case report.HasDifferences():
-		worker.wr.Logger().Infof("Found differences: %v", report.String())
+		err = fmt.Errorf("Found differences: %v", report.String())
+		worker.wr.Logger().Infof(err.Error())
 	default:
 		worker.wr.Logger().Infof("No difference found (%v rows processed, %v qps)", report.processedRows, report.processingQPS)
 	}
 
-	return nil
+	return err
 }

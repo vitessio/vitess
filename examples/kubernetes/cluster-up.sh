@@ -19,6 +19,7 @@ GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 GKE_SSD_SIZE_GB=${GKE_SSD_SIZE_GB:-0}
 SHARDS=${SHARDS:-'-80,80-'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
+RDONLY_COUNT=${RDONLY_COUNT:-0}
 MAX_TASK_WAIT_RETRIES=${MAX_TASK_WAIT_RETRIES:-300}
 MAX_VTTABLET_TOPO_WAIT_RETRIES=${MAX_VTTABLET_TOPO_WAIT_RETRIES:-180}
 BENCHMARK_CLUSTER=${BENCHMARK_CLUSTER:-true}
@@ -36,6 +37,7 @@ fi
 # export for vttablet scripts
 export SHARDS=$SHARDS
 export TABLETS_PER_SHARD=$TABLETS_PER_SHARD
+export RDONLY_COUNT=$RDONLY_COUNT
 
 function update_spinner_value () {
   spinner='-\|/'
@@ -108,11 +110,12 @@ echo "*  Num nodes: $num_nodes"
 echo "*  SSD Size: $GKE_SSD_SIZE_GB"
 echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
+echo "*  Rdonly per shard: $RDONLY_COUNT"
 echo "*  VTGate count: $vtgate_count"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
-gcloud alpha container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
+gcloud beta container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
 gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 # We label the nodes so that we can force a 1:1 relationship between vttablets and nodes

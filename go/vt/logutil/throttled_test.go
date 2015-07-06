@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+func skippedCount(tl *ThrottledLogger) int {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	return tl.skippedCount
+}
+
 func TestThrottledLogger(t *testing.T) {
 	// Install a fake log func for testing.
 	log := make(chan string)
@@ -22,17 +28,12 @@ func TestThrottledLogger(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
-	go func() {
-		tl.Infof("test %v", 2)
-		if tl.skippedCount != 1 {
-			t.Errorf("skippedCount is %v but was expecting 1", tl.skippedCount)
-		}
-	}()
+	go tl.Infof("test %v", 2)
 	if got, want := <-log, "name: skipped 1 log messages"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if tl.skippedCount != 0 {
-		t.Errorf("skippedCount is %v but was expecting 0 after waiting", tl.skippedCount)
+	if got, want := skippedCount(tl), 0; got != want {
+		t.Errorf("skippedCount is %v but was expecting %v after waiting", got, want)
 	}
 	if got := time.Now().Sub(start); got < interval {
 		t.Errorf("didn't wait long enough before logging, got %v, want >= %v", got, interval)
@@ -42,7 +43,7 @@ func TestThrottledLogger(t *testing.T) {
 	if got, want := <-log, "name:test 3"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if tl.skippedCount != 0 {
-		t.Errorf("skippedCount is %v but was expecting 0", tl.skippedCount)
+	if got, want := skippedCount(tl), 0; got != want {
+		t.Errorf("skippedCount is %v but was expecting %v", got, want)
 	}
 }

@@ -6,6 +6,20 @@ $(document).ready(function() {
   var entryContentElement = $("#guestbook-entry-content");
   var hostAddressElement = $("#guestbook-host-address");
 
+  // Look for page number in the URL, if any.
+  var pageNum = -1;
+  var match = window.location.href.match(/\/page\/(\d+)$/);
+  if (match) {
+    pageNum = parseInt(match[1]);
+    headerTitleElement.text('Guestbook Page ' + pageNum);
+  } else {
+    // No page number provided. Link to a random one.
+    pageNum = Math.floor(Math.random() * 100);
+    entriesElement.html('<p>Pick a page to view by navigating to <code>/page/###</code> or go to a <a href="/page/' + pageNum + '">random page</a>.</p>');
+    formElement.remove();
+    return;
+  }
+
   var appendGuestbookEntries = function(data) {
     entriesElement.empty();
     $.each(data, function(key, val) {
@@ -18,7 +32,7 @@ $(document).ready(function() {
     var entryValue = entryContentElement.val()
     if (entryValue.length > 0) {
       entriesElement.append("<p>...</p>");
-      $.getJSON("rpush/guestbook/" + entryValue, appendGuestbookEntries);
+      $.getJSON("/rpush/guestbook/" + pageNum + "/" + entryValue, appendGuestbookEntries);
     }
     return false;
   }
@@ -38,7 +52,7 @@ $(document).ready(function() {
 
   // Poll every second.
   (function fetchGuestbook() {
-    $.getJSON("lrange/guestbook").done(appendGuestbookEntries).always(
+    $.getJSON("/lrange/guestbook/" + pageNum).done(appendGuestbookEntries).always(
       function() {
         setTimeout(fetchGuestbook, 1000);
       });

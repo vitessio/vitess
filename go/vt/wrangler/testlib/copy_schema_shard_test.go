@@ -137,19 +137,19 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
-	createTable := "CREATE TABLE `vt_ks`.`resharding1` (\n"+
-		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
-		"  `msg` varchar(64) DEFAULT NULL,\n"+
-		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-		"  PRIMARY KEY (`id`),\n"+
-		"  KEY `by_msg` (`msg`)\n"+
+	createTable := "CREATE TABLE `vt_ks`.`resharding1` (\n" +
+		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
+		"  `msg` varchar(64) DEFAULT NULL,\n" +
+		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n" +
+		"  PRIMARY KEY (`id`),\n" +
+		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
-	createTableView := "CREATE TABLE `view1` (\n"+
-		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n"+
-		"  `msg` varchar(64) DEFAULT NULL,\n"+
-		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n"+
-		"  PRIMARY KEY (`id`),\n"+
-		"  KEY `by_msg` (`msg`)\n"+
+	createTableView := "CREATE TABLE `view1` (\n" +
+		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
+		"  `msg` varchar(64) DEFAULT NULL,\n" +
+		"  `keyspace_id` bigint(20) unsigned NOT NULL,\n" +
+		"  PRIMARY KEY (`id`),\n" +
+		"  KEY `by_msg` (`msg`)\n" +
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8"
 	db.AddQuery("USE vt_ks", &mproto.QueryResult{})
 	db.AddQuery(createDb, &mproto.QueryResult{})

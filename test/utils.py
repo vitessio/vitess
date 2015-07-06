@@ -606,7 +606,8 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server().flags())
-  args.extend(protocols_flavor().tablet_manager_protocol_flags())
+  args.extend(['-tablet_manager_protocol',
+               protocols_flavor().tablet_manager_protocol()])
   args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
   args.extend(protocols_flavor().vtgate_protocol_flags())
 
@@ -672,7 +673,8 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
           '-executefetch_retry_time', '1s',
           ]
   args.extend(environment.topo_server().flags())
-  args.extend(protocols_flavor().tablet_manager_protocol_flags())
+  args.extend(['-tablet_manager_protocol',
+               protocols_flavor().tablet_manager_protocol()])
   if protocols_flavor().service_map():
     args.extend(['-service_map',
                  ",".join(protocols_flavor().service_map())])
@@ -902,9 +904,10 @@ class Vtctld(object):
             '--schema_change_dir', self.schema_change_dir,
             '--schema_change_controller', 'local',
             '--schema_change_check_interval', '1',
+            '-tablet_manager_protocol',
+            protocols_flavor().tablet_manager_protocol(),
             ] + \
             environment.topo_server().flags() + \
-            protocols_flavor().tablet_manager_protocol_flags() + \
             protocols_flavor().vtgate_protocol_flags()
     if protocols_flavor().service_map():
       args.extend(['-service_map', ",".join(protocols_flavor().service_map())])

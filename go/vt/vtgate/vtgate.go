@@ -8,6 +8,7 @@ package vtgate
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"math"
 	"strings"
@@ -83,6 +84,11 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
+
+var (
+	// RPCErrorOnlyInReply informs vtgateservice(s) about how to return errors.
+	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", false, "if true, supported RPC calls from vtgateservice(s) will only return errors as part of the RPC server response")
+)
 
 // Init initializes VTGate server.
 func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int) {

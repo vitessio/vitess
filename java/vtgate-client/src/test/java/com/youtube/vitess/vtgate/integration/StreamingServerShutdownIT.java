@@ -21,13 +21,13 @@ public class StreamingServerShutdownIT {
 
   @Before
   public void setUpVtGate() throws Exception {
-    Util.setupTestEnv(testEnv, true);
+    Util.setupTestEnv(testEnv);
     Util.createTable(testEnv);
   }
 
   @After
   public void tearDownVtGate() throws Exception {
-    Util.setupTestEnv(testEnv, false);
+    Util.teardownTestEnv(testEnv);
   }
 
   @Test
@@ -44,7 +44,7 @@ public class StreamingServerShutdownIT {
       while (cursor.hasNext()) {
         count++;
         if (count == 1) {
-          Util.setupTestEnv(testEnv, false);
+          Util.teardownTestEnv(testEnv);
         }
         cursor.next();
       }

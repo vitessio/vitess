@@ -25,7 +25,7 @@ type gRPCVtctlClient struct {
 
 func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
 	// create the RPC client
-	cc, err := grpc.Dial(addr)
+	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +62,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 				close(results)
 				return
 			}
-			results <- &logutil.LoggerEvent{
-				Time:  time.Unix(le.Event.Time.Seconds, le.Event.Time.Nanoseconds),
-				Level: int(le.Event.Level),
-				File:  le.Event.File,
-				Line:  int(le.Event.Line),
-				Value: le.Event.Value,
-			}
+			results <- logutil.ProtoToLoggerEvent(le.Event)
 		}
 	}()
 	return results, func() error {

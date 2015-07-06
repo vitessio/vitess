@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import base64
 import hmac
 import json
 import logging
@@ -651,7 +650,7 @@ class TestVTGateFunctions(unittest.TestCase):
     qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
     logging.debug('Original row: %s', str(qr))
     self.assertEqual(len(qr['Rows']), 1)
-    v = base64.b64decode(qr['Rows'][0][1])
+    v = qr['Rows'][0][1]
     self.assertEqual(v, 'test 11')
 
     utils.vtgate.execute('update vt_user_extra set email=:email where user_id = :user_id', bindvars={'user_id': 11, 'email':'test 1100'})
@@ -659,7 +658,7 @@ class TestVTGateFunctions(unittest.TestCase):
     qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
     logging.debug('Modified row: %s', str(qr))
     self.assertEqual(len(qr['Rows']), 1)
-    v = base64.b64decode(qr['Rows'][0][1])
+    v = qr['Rows'][0][1]
     self.assertEqual(v, 'test 1100')
 
     utils.vtgate.execute('delete from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})

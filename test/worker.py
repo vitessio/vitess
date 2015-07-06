@@ -385,7 +385,11 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
       'WorkerState == cleaning up',
       condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
       # We know that vars should already be ready, since we read them earlier
-      require_vars=True)
+      require_vars=True,
+      # We're willing to let the test run for longer to make it less flaky.
+      # This should still fail fast if something goes wrong with vtworker,
+      # because of the require_vars flag above.
+      timeout=5*60)
 
     # Verify that we were forced to reresolve and retry.
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)

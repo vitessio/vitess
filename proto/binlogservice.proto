@@ -11,13 +11,13 @@ import "binlogdata.proto";
 service UpdateStream {
 
   // StreamUpdate streams the binlog events, to know which objects have changed.
-  rpc StreamUpdate(binlogdata.StreamUpdateRequest) returns (binlogdata.StreamUpdateResponse) {};
+  rpc StreamUpdate(binlogdata.StreamUpdateRequest) returns (stream binlogdata.StreamUpdateResponse) {};
 
   // StreamKeyRange returns the binlog transactions related to
   // the specified Keyrange.
-  rpc StreamKeyRange(binlogdata.StreamKeyRangeRequest) returns (binlogdata.StreamKeyRangeResponse) {};
+  rpc StreamKeyRange(binlogdata.StreamKeyRangeRequest) returns (stream binlogdata.StreamKeyRangeResponse) {};
 
   // StreamTables returns the binlog transactions related to
   // the specified Tables.
-  rpc StreamTables(binlogdata.StreamTablesRequest) returns (binlogdata.StreamTablesResponse) {};
+  rpc StreamTables(binlogdata.StreamTablesRequest) returns (stream binlogdata.StreamTablesResponse) {};
 }

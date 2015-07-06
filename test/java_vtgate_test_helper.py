@@ -3,7 +3,8 @@
 Script to set up a Vitess environment for Java client integration
 tests. Every shard gets a master instance. For extra instances,
 use the tablet-config option. Upon successful start up, the port for
-VtGate is written to stdout.
+VtGate is written to stdout, and the program waits for a one line
+user input before shutting down.
 
 Start up steps include:
 - start MySQL instances
@@ -11,12 +12,9 @@ Start up steps include:
 - start VtTablets and ensure SERVING mode
 - start VtGate instance
 
-Usage:
-java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace  --vtgate-port=11111 setup
-starts 1 VtGate on the specified port and 6 vttablets - 1 master, replica and rdonly each per shard
-
-java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace teardown
-shuts down the tablets and VtGate instances
+Usage example:
+java_vtgate_test_helper.py --shards=-80,80- --tablet-config='{"rdonly":1, "replica":1}' --keyspace=test_keyspace  --vtgate-port=11111
+starts 1 VtGate on the specified port and 6 vttablets - 1 master, replica and rdonly each per shard.
 """
 
 import utils
@@ -28,7 +26,6 @@ import environment
 import tablet
 
 from vtdb import topology
-from zk import zkocc
 
 class Tablet(tablet.Tablet):
   def __init__(self, shard, type):
@@ -86,9 +83,6 @@ class TestEnv(object):
         else:
           utils.run_vtctl(['ApplyVSchema', "-vschema_file", self.vschema])
       utils.VtGate(port=self.vtgate_port).start(cache_ttl='500s')
-      vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj",
-                                            30.0)
-      topology.read_topology(vtgate_client)
     except:
       self.shutdown()
       raise
@@ -122,15 +116,13 @@ def parse_args():
 
 def main():
   env = TestEnv(options)
-  if args[0] == 'setup':
-    env.set_up()
-    sys.stdout.write(json.dumps({
-      "port": utils.vtgate.port,
-      }) + "\n")
-    sys.stdout.flush()
-  elif args[0] == 'teardown':
-    env.shutdown()
-
+  env.set_up()
+  sys.stdout.write(json.dumps({
+    "port": utils.vtgate.port,
+    }) + "\n")
+  sys.stdout.flush()
+  raw_input()
+  env.shutdown()
 
 if __name__ == '__main__':
   parse_args()

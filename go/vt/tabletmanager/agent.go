@@ -50,8 +50,6 @@ import (
 
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-
-	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -82,6 +80,10 @@ type ActionAgent struct {
 	// both agent.actionMutex and agent.mutex needs to be taken,
 	// take actionMutex first.
 	actionMutex sync.Mutex
+
+	// initReplication remembers whether an action has initialized replication.
+	// It is protected by actionMutex.
+	initReplication bool
 
 	// mutex protects the following fields
 	mutex            sync.Mutex

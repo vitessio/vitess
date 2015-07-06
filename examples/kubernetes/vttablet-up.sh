@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that creates a single shard vttablet deployment.
+# This is an example script that creates a vttablet deployment.
 
 set -e
 
@@ -11,12 +11,13 @@ source $script_root/env.sh
 cell='test'
 keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
-TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
+TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 port=15002
-uid_base=100
+UID_BASE=${UID_BASE:-100}
 FORCE_NODE=${FORCE_NODE:-false}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
+RDONLY_COUNT=${RDONLY_COUNT:-2}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
@@ -24,6 +25,7 @@ if [ -n "$VTDATAROOT_VOLUME" ]; then
 fi
 
 index=1
+uid_base=$UID_BASE
 for shard in $(echo $SHARDS | tr "," " "); do
   echo "Creating $keyspace.shard-$shard pods in cell $cell..."
   for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
@@ -37,9 +39,14 @@ for shard in $(echo $SHARDS | tr "," " "); do
     # leading or trailing dashes for labels
     shard_label=`echo $shard | sed s'/[-]$/-xx/' | sed s'/^-/xx-/'`
 
+    tablet_type=replica
+    if [ $uid_index -gt $(($TABLETS_PER_SHARD-$RDONLY_COUNT-1)) ]; then
+      tablet_type=rdonly
+    fi
+
     # Expand template variables
     sed_script=""
-    for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume; do
+    for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume tablet_type; do
       sed_script+="s,{{$var}},${!var},g;"
     done
 

@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 /*
@@ -27,7 +28,7 @@ type BinlogPlayerResponse interface {
 // BinlogPlayerClient is the interface all clients must satisfy
 type BinlogPlayerClient interface {
 	// Dial a server
-	Dial(addr string, connTimeout time.Duration) error
+	Dial(endPoint topo.EndPoint, connTimeout time.Duration) error
 
 	// Close the connection
 	Close()

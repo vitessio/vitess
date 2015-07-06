@@ -440,6 +440,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 		return myproto.ReplicationPosition{}, err
 	}
 
+	agent.initReplication = true
 	return rp, nil
 }
 
@@ -472,6 +473,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
+	agent.initReplication = true
 
 	// wait until we get the replicated row, or our context times out
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)

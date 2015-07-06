@@ -41,7 +41,7 @@ type gRPCQueryClient struct {
 func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["grpc"])
-	cc, err := grpc.Dial(addr)
+	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	if er.Error != nil {
 		return nil, tabletErrorFromRPCError(er.Error)
 	}
-	return tproto.Proto3ToQueryResult(er.Result), nil
+	return mproto.Proto3ToQueryResult(er.Result), nil
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
@@ -150,7 +150,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				close(sr)
 				return
 			}
-			sr <- tproto.Proto3ToQueryResult(ser.Result)
+			sr <- mproto.Proto3ToQueryResult(ser.Result)
 		}
 	}()
 	return sr, func() error {

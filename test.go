@@ -55,6 +55,7 @@ var (
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
+	pull     = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
@@ -158,6 +159,18 @@ func main() {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
 	log.Printf("Bootstrap flavor: %v", *flavor)
+
+	// Re-pull image.
+	if *pull {
+		image := "vitess/bootstrap:" + *flavor
+		pullTime := time.Now()
+		log.Printf("Pulling %v...", image)
+		cmd := exec.Command("docker", "pull", image)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Fatalf("Can't pull image: %v\n%s", err, out)
+		}
+		log.Printf("Image pulled in %v", time.Since(pullTime))
+	}
 
 	// Positional args specify which tests to run.
 	// If none specified, run all tests in alphabetical order.

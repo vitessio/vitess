@@ -236,12 +236,12 @@ public class MapReduceIT extends HadoopTestCase {
 
       @Override
       protected void setUp() throws Exception {
-        Util.setupTestEnv(testEnv, true);
+        Util.setupTestEnv(testEnv);
       }
 
       @Override
       protected void tearDown() throws Exception {
-        Util.setupTestEnv(testEnv, false);
+        Util.teardownTestEnv(testEnv);
       }
     };
 
