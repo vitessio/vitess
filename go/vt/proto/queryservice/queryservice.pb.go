@@ -27,9 +27,6 @@ var _ grpc.ClientConn
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-func init() {
-}
-
 // Client API for Query service
 
 type QueryClient interface {

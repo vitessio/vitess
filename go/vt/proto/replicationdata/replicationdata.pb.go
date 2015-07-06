@@ -121,6 +121,3 @@ func (m *Status) GetPosition() *Position {
 	}
 	return nil
 }
-
-func init() {
-}
