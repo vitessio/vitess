@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package vtworkerdata;
 
-import "vtctldata.proto";
+import "logutil.proto";
 
 // ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
 message ExecuteVtworkerCommandRequest {
@@ -13,5 +13,5 @@ message ExecuteVtworkerCommandRequest {
 
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 message ExecuteVtworkerCommandResponse {
-  vtctldata.LoggerEvent event = 1;
+  logutil.Event event = 1;
 }

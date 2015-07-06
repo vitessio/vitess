@@ -15,7 +15,7 @@ It has these top-level messages:
 package vtworkerdata
 
 import proto "github.com/golang/protobuf/proto"
-import vtctldata "github.com/youtube/vitess/go/vt/proto/vtctldata"
+import logutil "github.com/youtube/vitess/go/vt/proto/logutil"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -31,14 +31,14 @@ func (*ExecuteVtworkerCommandRequest) ProtoMessage()    {}
 
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandResponse struct {
-	Event *vtctldata.LoggerEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
 }
 
 func (m *ExecuteVtworkerCommandResponse) Reset()         { *m = ExecuteVtworkerCommandResponse{} }
 func (m *ExecuteVtworkerCommandResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteVtworkerCommandResponse) ProtoMessage()    {}
 
-func (m *ExecuteVtworkerCommandResponse) GetEvent() *vtctldata.LoggerEvent {
+func (m *ExecuteVtworkerCommandResponse) GetEvent() *logutil.Event {
 	if m != nil {
 		return m.Event
 	}

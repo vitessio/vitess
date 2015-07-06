@@ -61,7 +61,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 				return
 			}
 			results <- &logutil.LoggerEvent{
-				Time:  time.Unix(le.Event.Time.Seconds, le.Event.Time.Nanoseconds),
+				Time:  time.Unix(le.Event.Time.Seconds, int64(le.Event.Time.Nanoseconds)),
 				Level: int(le.Event.Level),
 				File:  le.Event.File,
 				Line:  int(le.Event.Line),
