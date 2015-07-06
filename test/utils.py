@@ -424,12 +424,11 @@ class VtGate(object):
       self.cert = cert
       self.key = key
     self.proc = None
-    self.socket_file = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
             auth=False, timeout_total="4s", timeout_per_conn="2s",
-            socket_file=None, extra_args=None):
+            extra_args=None):
     """Starts the process for thie vtgate instance. If no other instance has
        been started, saves it into the global vtgate variable.
     """
@@ -459,9 +458,6 @@ class VtGate(object):
       args.extend(['-secure-port', '%s' % self.secure_port,
                    '-cert', self.cert,
                    '-key', self.key])
-    if socket_file:
-      self.socket_file = socket_file
-      args.extend(['-socket_file', socket_file])
 
     if extra_args:
       args.extend(extra_args)

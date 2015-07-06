@@ -83,7 +83,7 @@ def setUpModule():
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
 
-    utils.VtGate().start(socket_file=environment.tmproot+'/vtgate.sock')
+    utils.VtGate().start()
 
     master_tablet.start_vttablet()
     replica_tablet.start_vttablet()
@@ -143,7 +143,7 @@ class TestUpdateStream(unittest.TestCase):
         (x, x, x) for x in xrange(count)]
 
   def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.socket_file,
+    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
                                                'test_nj', 30.0)
     topology.read_topology(self.vtgate_client)
 
