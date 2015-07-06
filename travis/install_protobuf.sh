@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This script downloads and installs the protobuf library, for
-# go and python, in the root of the image. It assumes we're running
+# C++ and python, in the root of the image. It assumes we're running
 # as root in the image.
 set -ex
 
@@ -11,9 +11,9 @@ if [ "$protobuf_dist" != "" ]; then
   cd $protobuf_dist
 fi
 
-wget https://github.com/google/protobuf/archive/v3.0.0-alpha-1.tar.gz
-tar -xvzf v3.0.0-alpha-1.tar.gz
-cd protobuf-3.0.0-alpha-1
+wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.tar.gz
+tar -xvzf v3.0.0-alpha-2.tar.gz
+cd protobuf-3.0.0-alpha-2
 ./autogen.sh
 if [ "$protobuf_dist" != "" ]; then
   ./configure --prefix=$protobuf_dist

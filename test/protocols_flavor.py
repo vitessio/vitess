@@ -12,7 +12,12 @@ class ProtocolsFlavor(object):
 
   def vtctl_client_protocol(self):
     """Returns the protocol to use for vtctl connections.
-    Needs to be supported both in python and go."""
+    This is just for the go client."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def vtctl_python_client_protocol(self):
+    """Returns the protocol to use for vtctl connections.
+    This is just for the python client."""
     raise NotImplementedError('Not implemented in the base class')
 
   def tablet_manager_protocol(self):
@@ -47,6 +52,9 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def vtctl_client_protocol(self):
     return 'gorpc'
 
+  def vtctl_python_client_protocol(self):
+    return 'gorpc'
+
   def tablet_manager_protocol(self):
     return 'bson'
 
@@ -71,6 +79,9 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return 'grpc'
 
   def vtctl_client_protocol(self):
+    return 'grpc'
+
+  def vtctl_python_client_protocol(self):
     return 'grpc'
 
   def tablet_manager_protocol(self):

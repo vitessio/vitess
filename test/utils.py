@@ -896,17 +896,17 @@ class Vtctld(object):
                           sleep_time=0.2)
 
     # save the running instance so vtctl commands can be remote executed now
-    protocol = protocols_flavor().vtctl_client_protocol()
+    protocol = protocols_flavor().vtctl_python_client_protocol()
+    port = self.port
     if protocol == "grpc":
-      # import the grpc vtctl client implementation, disabled for now:
-      # from vtctl import grpc_vtctl_client
-      # temporary protocol override until python client support works
-      protocol = "gorpc"
+      # import the grpc vtctl client implementation, change the port
+      from vtctl import grpc_vtctl_client
+      port = self.grpc_port
     global vtctld, vtctld_connection
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          protocol, 'localhost:%u' % self.port, 30)
+          protocol, 'localhost:%u' % port, 30)
 
     return self.proc
 
