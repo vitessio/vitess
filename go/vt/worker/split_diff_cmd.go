@@ -2,66 +2,69 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package worker
 
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 
-const verticalSplitDiffHTML = `
+const splitDiffHTML = `
 <!DOCTYPE html>
 <head>
-  <title>Vertical Split Diff Action</title>
+  <title>Split Diff Action</title>
 </head>
 <body>
-  <h1>Vertical Split Diff Action</h1>
+  <h1>Split Diff Action</h1>
 
     {{if .Error}}
       <b>Error:</b> {{.Error}}</br>
     {{else}}
       {{range $i, $si := .Shards}}
-        <li><a href="/Diffs/VerticalSplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
+        <li><a href="/Diffs/SplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
       {{end}}
     {{end}}
 </body>
 `
-const verticalSplitDiffHTML2 = `
+
+const splitDiffHTML2 = `
 <!DOCTYPE html>
 <head>
-  <title>Vertical Split Diff Action</title>
+  <title>Split Diff Action</title>
 </head>
 <body>
   <p>Shard involved: {{.Keyspace}}/{{.Shard}}</p>
-  <h1>Vertical Split Diff Action</h1>
-    <form action="/Diffs/VerticalSplitDiff" method="post">
+  <h1>Split Diff Action</h1>
+    <form action="/Diffs/SplitDiff" method="post">
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
         <INPUT type="text" id="excludeTables" name="excludeTables" value=""></BR>
       <INPUT type="hidden" name="keyspace" value="{{.Keyspace}}"/>
       <INPUT type="hidden" name="shard" value="{{.Shard}}"/>
-      <INPUT type="submit" name="submit" value="Vertical Split Diff"/>
+      <INPUT type="submit" name="submit" value="Split Diff"/>
     </form>
   </body>
 `
 
-var verticalSplitDiffTemplate = mustParseTemplate("verticalSplitDiff", verticalSplitDiffHTML)
-var verticalSplitDiffTemplate2 = mustParseTemplate("verticalSplitDiff2", verticalSplitDiffHTML2)
+var splitDiffTemplate = mustParseTemplate("splitDiff", splitDiffHTML)
+var splitDiffTemplate2 = mustParseTemplate("splitDiff2", splitDiffHTML2)
 
-func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (worker.Worker, error) {
+func commandSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		return nil, err
+	}
 	if subFlags.NArg() != 1 {
-		return nil, fmt.Errorf("command VerticalSplitDiff requires <keyspace/shard>")
+		subFlags.Usage()
+		return nil, fmt.Errorf("command SplitDiff requires <keyspace/shard>")
 	}
 	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err != nil {
@@ -71,12 +74,12 @@ func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray), nil
+	return NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray), nil
 }
 
-// shardsWithTablesSources returns all the shards that have SourceShards set
-// to one value, with an array of Tables.
-func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
+// shardsWithSources returns all the shards that have SourceShards set
+// with no Tables list.
+func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string]string, error) {
 	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
@@ -105,7 +108,7 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 						return
 					}
 
-					if len(si.SourceShards) == 1 && len(si.SourceShards[0].Tables) > 0 {
+					if len(si.SourceShards) > 0 && len(si.SourceShards[0].Tables) == 0 {
 						mu.Lock()
 						result = append(result, map[string]string{
 							"Keyspace": keyspace,
@@ -128,10 +131,9 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
-		httpError(w, "cannot parse form: %s", err)
-		return
+		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
 	keyspace := r.FormValue("keyspace")
 	shard := r.FormValue("shard")
@@ -139,15 +141,13 @@ func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w 
 	if keyspace == "" || shard == "" {
 		// display the list of possible shards to chose from
 		result := make(map[string]interface{})
-		shards, err := shardsWithTablesSources(ctx, wr)
+		shards, err := shardsWithSources(ctx, wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {
 			result["Shards"] = shards
 		}
-
-		executeTemplate(w, verticalSplitDiffTemplate, result)
-		return
+		return nil, splitDiffTemplate, result, nil
 	}
 
 	submitButtonValue := r.FormValue("submit")
@@ -156,8 +156,7 @@ func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w 
 		result := make(map[string]interface{})
 		result["Keyspace"] = keyspace
 		result["Shard"] = shard
-		executeTemplate(w, verticalSplitDiffTemplate2, result)
-		return
+		return nil, splitDiffTemplate2, result, nil
 	}
 
 	// Process input form.
@@ -168,18 +167,16 @@ func interactiveVerticalSplitDiff(ctx context.Context, wr *wrangler.Wrangler, w 
 	}
 
 	// start the diff job
-	wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard, excludeTableArray)
-	if _, err := setAndStartWorker(wrk); err != nil {
-		httpError(w, "cannot set worker: %s", err)
-		return
+	wrk := NewSplitDiffWorker(wr, wi.cell, keyspace, shard, excludeTableArray)
+	if _, err := wi.setAndStartWorker(wrk, nil); err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot set worker: %s", err)
 	}
-
-	http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
+	return wrk, nil, nil, nil
 }
 
 func init() {
-	addCommand("Diffs", command{"VerticalSplitDiff",
-		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
+	addCommand("Diffs", command{"SplitDiff",
+		commandSplitDiff, interactiveSplitDiff,
 		"[--exclude_tables=''] <keyspace/shard>",
-		"Diffs a rdonly destination keyspace against its SourceShard for a vertical split"})
+		"Diffs a rdonly destination shard against its SourceShards"})
 }

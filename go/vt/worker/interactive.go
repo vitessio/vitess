@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package worker
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
 )
 
@@ -41,9 +42,9 @@ const subIndexHTML = `
 </body>
 `
 
-func httpError(w http.ResponseWriter, format string, err error) {
-	log.Errorf(format, err)
-	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
+func httpError(w http.ResponseWriter, format string, args ...interface{}) {
+	log.Errorf(format, args)
+	http.Error(w, fmt.Sprintf(format, args), http.StatusInternalServerError)
 }
 
 func mustParseTemplate(name, contents string) *template.Template {
@@ -61,17 +62,18 @@ func executeTemplate(w http.ResponseWriter, t *template.Template, data interface
 	}
 }
 
-func initInteractiveMode() {
+// InitInteractiveMode installs webserver handlers for each known command.
+func (wi *Instance) InitInteractiveMode() {
 	indexTemplate := mustParseTemplate("index", indexHTML)
 	subIndexTemplate := mustParseTemplate("subIndex", subIndexHTML)
 
 	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		executeTemplate(w, indexTemplate, commands)
+		executeTemplate(w, indexTemplate, Commands)
 	})
 
 	// command group menus
-	for _, cg := range commands {
+	for _, cg := range Commands {
 		// keep a local copy of the Command pointer for the
 		// closure.
 		pcg := cg
@@ -80,12 +82,28 @@ func initInteractiveMode() {
 		})
 
 		for _, c := range cg.Commands {
-			// keep a local copy of the Command pointer for the
-			// closure.
+			// keep a local copy of the Command pointer for the closure.
 			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
 				ctx := context.Background()
-				pc.interactive(ctx, wr, w, r)
+				wrk, template, data, err := pc.Interactive(wi, ctx, wi.wr, w, r)
+				if err != nil {
+					httpError(w, "%s", err)
+				} else if template != nil && data != nil {
+					executeTemplate(w, template, data)
+					return
+				}
+
+				if wrk == nil {
+					httpError(w, "Internal server error. Command: %s did not return correct response.", c.Name)
+					return
+				}
+
+				if _, err := wi.setAndStartWorker(wrk, wi.wr); err != nil {
+					httpError(w, "Could not set %s worker: %s", c.Name, err)
+					return
+				}
+				http.Redirect(w, r, servenv.StatusURLPath(), http.StatusTemporaryRedirect)
 			})
 		}
 	}

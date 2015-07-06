@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	flag.Var(&serviceMapFlag, "service_map", "services to enable / disable")
+	flag.Var(&serviceMapFlag, "service_map", "comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtworker")
 	onInit(func() {
 		updateServiceMap()
 	})

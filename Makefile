@@ -196,6 +196,8 @@ proto:
 	cd go/vt/proto/logutil && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/logutil.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctldata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctldata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctlservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctlservice.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtworkerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerdata.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtworkerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanagerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerdata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanagerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.

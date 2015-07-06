@@ -2152,11 +2152,3 @@ func PrintAllCommands(logger logutil.Logger) {
 		logger.Printf("\n")
 	}
 }
-
-// HandlePanic should be called using 'defer' in the RPC code that executes
-// the command
-func HandlePanic(err *error) {
-	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught vtctl panic: %v", x)
-	}
-}

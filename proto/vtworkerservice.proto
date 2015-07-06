@@ -1,0 +1,13 @@
+// RPC interface for vtworker.
+// The interface is very similar to the vtctld interface (see vtctlservice.proto).
+
+syntax = "proto3";
+
+package vtworkerservice;
+
+import "vtworkerdata.proto";
+
+// Service Vtworker contains the vtworker RPC calls.
+service Vtworker {
+  rpc ExecuteVtworkerCommand (vtworkerdata.ExecuteVtworkerCommandRequest) returns (stream vtworkerdata.ExecuteVtworkerCommandResponse) {};
+}
