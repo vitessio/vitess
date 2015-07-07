@@ -14,7 +14,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
@@ -33,6 +32,7 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
+
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 	flag.Usage = func() {
@@ -51,7 +51,6 @@ var (
 func main() {
 	defer exit.Recover()
 
-	setUsage()
 	flag.Parse()
 	args := flag.Args()
 
@@ -87,23 +86,4 @@ func main() {
 	}
 
 	servenv.RunDefault()
-}
-
-func setUsage() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
-		for _, group := range worker.Commands {
-			if group.Name == "Debugging" {
-				continue
-			}
-			fmt.Fprintf(os.Stderr, "%v: %v\n", group.Name, group.Description)
-			for _, cmd := range group.Commands {
-				fmt.Fprintf(os.Stderr, "  %v %v\n", cmd.Name, cmd.Params)
-			}
-			fmt.Fprintf(os.Stderr, "\n")
-		}
-	}
 }

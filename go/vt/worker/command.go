@@ -37,8 +37,8 @@ type commandGroup struct {
 	Commands    []Command
 }
 
-// Commands is the list of available command groups.
-var Commands = []commandGroup{
+// commands is the list of available command groups.
+var commands = []commandGroup{
 	commandGroup{
 		"Diffs",
 		"Workers comparing and validating data",
@@ -58,9 +58,9 @@ var Commands = []commandGroup{
 
 // AddCommand registers a command and makes it available.
 func AddCommand(groupName string, c Command) {
-	for i, group := range Commands {
+	for i, group := range commands {
 		if group.Name == groupName {
-			Commands[i].Commands = append(Commands[i].Commands, c)
+			commands[i].Commands = append(commands[i].Commands, c)
 			return
 		}
 	}
@@ -71,7 +71,7 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 	action := args[0]
 
 	actionLowerCase := strings.ToLower(action)
-	for _, group := range Commands {
+	for _, group := range commands {
 		for _, cmd := range group.Commands {
 			if strings.ToLower(cmd.Name) == actionLowerCase {
 				var subFlags *flag.FlagSet
@@ -141,7 +141,7 @@ func (wi *Instance) WaitForCommand(wrk Worker, done chan struct{}) error {
 
 // PrintAllCommands prints a help text for all registered commands to the given Logger.
 func PrintAllCommands(logger logutil.Logger) {
-	for _, group := range Commands {
+	for _, group := range commands {
 		if group.Name == "Debugging" {
 			continue
 		}
