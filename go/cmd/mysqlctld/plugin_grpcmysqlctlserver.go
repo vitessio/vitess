@@ -4,15 +4,18 @@
 
 package main
 
-// Import and register the gorpc mysqlctl server
+// Import and register the gRPC mysqlctl server
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/gorpcmysqlctlserver"
+	"github.com/youtube/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 func init() {
+	servenv.ServiceMap["grpc-mysqlctl"] = true
 	servenv.OnRun(func() {
-		gorpcmysqlctlserver.StartServer(mysqld)
+		if servenv.GRPCCheckServiceMap("mysqlctl") {
+			grpcmysqlctlserver.StartServer(servenv.GRPCServer, mysqld)
+		}
 	})
 }

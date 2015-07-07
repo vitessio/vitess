@@ -11,7 +11,12 @@ class ProtocolsFlavor(object):
 
   def vtctl_client_protocol(self):
     """Returns the protocol to use for vtctl connections.
-    Needs to be supported both in python and go."""
+    This is just for the go client."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def vtctl_python_client_protocol(self):
+    """Returns the protocol to use for vtctl connections.
+    This is just for the python client."""
     raise NotImplementedError('Not implemented in the base class')
 
   def vtworker_client_protocol(self):
@@ -50,6 +55,9 @@ class GoRpcProtocolsFlavor(ProtocolsFlavor):
   def vtctl_client_protocol(self):
     return 'gorpc'
 
+  def vtctl_python_client_protocol(self):
+    return 'gorpc'
+
   def vtworker_client_protocol(self):
     # There is no GoRPC implementation for the vtworker RPC interface,
     # so we use gRPC as well.
@@ -79,6 +87,9 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return 'grpc'
 
   def vtctl_client_protocol(self):
+    return 'grpc'
+
+  def vtctl_python_client_protocol(self):
     return 'grpc'
 
   def vtworker_client_protocol(self):
