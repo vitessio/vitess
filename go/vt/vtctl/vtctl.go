@@ -1821,13 +1821,12 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	sourceKeyspace, sourceShard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
 	if err == nil {
 		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard)
-	} else {
-		sourceTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-		if err == nil {
-			return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
-		}
-		return err
 	}
+	sourceTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err == nil {
+		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
+	}
+	return err
 }
 
 func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
