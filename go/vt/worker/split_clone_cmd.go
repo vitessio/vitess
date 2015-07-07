@@ -150,7 +150,7 @@ func keyspacesWithOverlappingShards(ctx context.Context, wr *wrangler.Wrangler) 
 	return result, nil
 }
 
-func interactiveSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
@@ -219,7 +219,7 @@ func interactiveSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrang
 }
 
 func init() {
-	addCommand("Clones", command{"SplitClone",
+	AddCommand("Clones", Command{"SplitClone",
 		commandSplitClone, interactiveSplitClone,
 		"[--exclude_tables=''] [--strategy=''] <keyspace/shard>",
 		"Replicates the data and creates configuration for a horizontal split."})

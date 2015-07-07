@@ -130,7 +130,7 @@ func shardsWithTablesSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[
 	return result, nil
 }
 
-func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveVerticalSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
@@ -171,7 +171,7 @@ func interactiveVerticalSplitDiff(wi *Instance, ctx context.Context, wr *wrangle
 }
 
 func init() {
-	addCommand("Diffs", command{"VerticalSplitDiff",
+	AddCommand("Diffs", Command{"VerticalSplitDiff",
 		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
 		"[--exclude_tables=''] <keyspace/shard>",
 		"Diffs a rdonly destination keyspace against its SourceShard for a vertical split"})

@@ -131,7 +131,7 @@ func shardsWithSources(ctx context.Context, wr *wrangler.Wrangler) ([]map[string
 	return result, nil
 }
 
-func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveSplitDiff(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
@@ -175,7 +175,7 @@ func interactiveSplitDiff(wi *Instance, ctx context.Context, wr *wrangler.Wrangl
 }
 
 func init() {
-	addCommand("Diffs", command{"SplitDiff",
+	AddCommand("Diffs", Command{"SplitDiff",
 		commandSplitDiff, interactiveSplitDiff,
 		"[--exclude_tables=''] <keyspace/shard>",
 		"Diffs a rdonly destination shard against its SourceShards"})
