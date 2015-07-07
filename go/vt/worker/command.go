@@ -20,10 +20,13 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-type command struct {
+// Command contains the detail of a command which can be run in vtworker.
+// While "Method" is run from the command line or RPC, "Interactive" may contain
+// special logic to parse a web form and return templated HTML output.
+type Command struct {
 	Name        string
-	method      func(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error)
-	Interactive func(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error)
+	Method      func(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error)
+	Interactive func(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error)
 	Params      string
 	Help        string // if help is empty, won't list the command
 }
@@ -31,7 +34,7 @@ type command struct {
 type commandGroup struct {
 	Name        string
 	Description string
-	Commands    []command
+	Commands    []Command
 }
 
 // Commands is the list of available command groups.
@@ -39,21 +42,22 @@ var Commands = []commandGroup{
 	commandGroup{
 		"Diffs",
 		"Workers comparing and validating data",
-		[]command{},
+		[]Command{},
 	},
 	commandGroup{
 		"Clones",
 		"Workers copying data for backups and clones",
-		[]command{},
+		[]Command{},
 	},
 	commandGroup{
 		"Debugging",
 		"Internal commands to test the general worker functionality",
-		[]command{},
+		[]Command{},
 	},
 }
 
-func addCommand(groupName string, c command) {
+// AddCommand registers a command and makes it available.
+func AddCommand(groupName string, c Command) {
 	for i, group := range Commands {
 		if group.Name == groupName {
 			Commands[i].Commands = append(Commands[i].Commands, c)
@@ -84,7 +88,7 @@ func commandWorker(wi *Instance, wr *wrangler.Wrangler, args []string, cell stri
 					wr.Logger().Printf("%s\n\n", cmd.Help)
 					subFlags.PrintDefaults()
 				}
-				return cmd.method(wi, wr, subFlags, args[1:])
+				return cmd.Method(wi, wr, subFlags, args[1:])
 			}
 		}
 	}

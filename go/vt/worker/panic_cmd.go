@@ -22,7 +22,7 @@ func commandPanic(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	return worker, nil
 }
 
-func interactivePanic(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactivePanic(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	wrk, err := NewPanicWorker(wr)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Could not create Panic worker: %v", err)
@@ -31,7 +31,7 @@ func interactivePanic(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, 
 }
 
 func init() {
-	addCommand("Debugging", command{"Panic",
+	AddCommand("Debugging", Command{"Panic",
 		commandPanic, interactivePanic,
 		"<message>",
 		"For internal tests only. Will call panic() when executed."})

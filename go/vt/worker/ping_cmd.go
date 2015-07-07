@@ -53,7 +53,7 @@ func commandPing(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	return worker, nil
 }
 
-func interactivePing(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactivePing(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("Cannot parse form: %s", err)
 	}
@@ -72,7 +72,7 @@ func interactivePing(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w
 }
 
 func init() {
-	addCommand("Debugging", command{"Ping",
+	AddCommand("Debugging", Command{"Ping",
 		commandPing, interactivePing,
 		"<message>",
 		"For internal tests only. <message> will be logged as CONSOLE output."})

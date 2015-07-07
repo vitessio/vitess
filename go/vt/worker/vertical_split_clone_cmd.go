@@ -147,7 +147,7 @@ func keyspacesWithServedFrom(ctx context.Context, wr *wrangler.Wrangler) ([]stri
 	return result, nil
 }
 
-func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
+func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) (Worker, *template.Template, map[string]interface{}, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse form: %s", err)
 	}
@@ -210,7 +210,7 @@ func interactiveVerticalSplitClone(wi *Instance, ctx context.Context, wr *wrangl
 }
 
 func init() {
-	addCommand("Clones", command{"VerticalSplitClone",
+	AddCommand("Clones", Command{"VerticalSplitClone",
 		commandVerticalSplitClone, interactiveVerticalSplitClone,
 		"[--tables=''] [--strategy=''] <destination keyspace/shard>",
 		"Replicates the data and creates configuration for a vertical split."})
