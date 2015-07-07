@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -243,6 +245,21 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		hsr.HealthError = err.Error()
 	}
 	defer agent.BroadcastHealthStreamReply(hsr)
+
+	// send it to our other observers
+	// (the Target has already been updated when restarting the
+	// query service earlier)
+	// FIXME(alainjobart,liguo) add TabletExternallyReparentedTimestamp
+	// FIXME(alainjobart,liguo) add CpuUsage
+	stats := &pb.RealtimeStats{
+		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
+	}
+	if err != nil {
+		stats.HealthError = err.Error()
+	}
+	defer func() {
+		agent.QueryServiceControl.BroadcastHealth(0, stats)
+	}()
 
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type

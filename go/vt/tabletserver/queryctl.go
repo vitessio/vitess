@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -188,6 +190,9 @@ type QueryServiceControl interface {
 	// QueryService returns the QueryService object used by this
 	// QueryServiceControl
 	QueryService() queryservice.QueryService
+
+	// BroadcastHealth sends the current health to all listeners
+	BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 }
 
 // TestQueryServiceControl is a fake version of QueryServiceControl
@@ -258,6 +263,10 @@ func (tqsc *TestQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 // QueryService is part of the QueryServiceControl interface
 func (tqsc *TestQueryServiceControl) QueryService() queryservice.QueryService {
 	return nil
+}
+
+// BroadcastHealth is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
 }
 
 // realQueryServiceControl implements QueryServiceControl for real
@@ -357,6 +366,11 @@ func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 // QueryService is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) QueryService() queryservice.QueryService {
 	return rqsc.sqlQueryRPCService
+}
+
+// BroadcastHealth is part of the QueryServiceControl interface
+func (rqsc *realQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+	rqsc.sqlQueryRPCService.BroadcastHealth(terTimestamp, stats)
 }
 
 // IsHealthy returns nil if the query service is healthy (able to

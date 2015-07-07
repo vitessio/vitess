@@ -573,6 +573,25 @@ func (sq *SqlQuery) HandlePanic(err *error) {
 	}
 }
 
+// BroadcastHealth will broadcast the current health to all listeners
+func (sq *SqlQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+	// FIXME(alainjobart) also send Target
+	shr := &pb.StreamHealthResponse{
+		TabletExternallyReparentedTimestamp: terTimestamp,
+		RealtimeStats:                       stats,
+	}
+
+	sq.streamHealthMutex.Lock()
+	defer sq.streamHealthMutex.Unlock()
+	for _, c := range sq.streamHealthMap {
+		// do not block on any write
+		select {
+		case c <- shr:
+		default:
+		}
+	}
+}
+
 // startRequest validates the current state and sessionID and registers
 // the request (a waitgroup) as started. Every startRequest requires one
 // and only one corresponding endRequest. When the service shuts down,
