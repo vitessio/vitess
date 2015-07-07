@@ -172,7 +172,6 @@ func (s *server) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Tablet
 		}
 		wg.Wait()
 		return s.agent.UnregisterHealthStream(id)
-
 	})
 }
 

@@ -13,6 +13,8 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -92,6 +94,9 @@ type TabletConn interface {
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+
+	// StreamHealth streams StreamHealthResponse to the client
+	StreamHealth(context context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error

@@ -33,6 +33,9 @@ It has these top-level messages:
 	SplitQueryRequest
 	QuerySplit
 	SplitQueryResponse
+	StreamHealthRequest
+	RealtimeStats
+	StreamHealthResponse
 */
 package query
 
@@ -840,6 +843,66 @@ func (m *SplitQueryResponse) GetError() *vtrpc.RPCError {
 func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
 		return m.Queries
+	}
+	return nil
+}
+
+// StreamHealthRequest is the payload for StreamHealth
+type StreamHealthRequest struct {
+}
+
+func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
+func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthRequest) ProtoMessage()    {}
+
+// RealtimeStats contains information about the tablet status
+type RealtimeStats struct {
+	// health_error is the last error we got from health check,
+	// or empty is the server is healthy. This is used for subset selection,
+	// we do not send queries to servers that are not healthy.
+	HealthError string `protobuf:"bytes,1,opt,name=health_error" json:"health_error,omitempty"`
+	// seconds_behind_master is populated for slaves only. It indicates
+	// how far nehind on replication a slave currently is.  It is used
+	// by clients for subset selection (so we don't try to send traffic
+	// to tablets that are too far behind).
+	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
+	// cpu_usage is used for load-based balancing
+	CpuUsage float64 `protobuf:"fixed64,3,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+}
+
+func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
+func (m *RealtimeStats) String() string { return proto.CompactTextString(m) }
+func (*RealtimeStats) ProtoMessage()    {}
+
+// StreamHealthResponse is streamed by StreamHealth on a regular basis
+type StreamHealthResponse struct {
+	// target is the current server type. Only queries with that exact Target
+	// record will be accepted.
+	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	// tablet_externally_reparented_timestamp contains the last time
+	// tabletmanager.TabletExternallyReparented was called on this tablet,
+	// or 0 if it was never called. This is meant to differentiate two tablets
+	// that report a target.TabletType of MASTER, only the one with the latest
+	// timestamp should be trusted.
+	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,2,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
+	// realtime_stats contains information about the tablet status
+	RealtimeStats *RealtimeStats `protobuf:"bytes,3,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
+}
+
+func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
+func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthResponse) ProtoMessage()    {}
+
+func (m *StreamHealthResponse) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
+	if m != nil {
+		return m.RealtimeStats
 	}
 	return nil
 }

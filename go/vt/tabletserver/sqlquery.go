@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Allowed state transitions:
@@ -88,13 +90,19 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	sessionID int64
 	dbconfig  *dbconfigs.DBConfig
+
+	// healthStreamMutex protects all the following fields
+	streamHealthMutex sync.Mutex
+	streamHealthIndex int
+	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
 // of SqlQuery can be created per process.
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{
-		config: config,
+		config:          config,
+		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
 	}
 	sq.qe = NewQueryEngine(config)
 	if config.EnablePublishStats {
@@ -535,6 +543,26 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
 	}
+	return nil
+}
+
+// StreamHealthRegister is part of QueryService interface
+func (sq *SqlQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+	sq.streamHealthMutex.Lock()
+	defer sq.streamHealthMutex.Unlock()
+
+	id := sq.streamHealthIndex
+	sq.streamHealthIndex++
+	sq.streamHealthMap[id] = c
+	return id, nil
+}
+
+// StreamHealthUnregister is part of QueryService interface
+func (sq *SqlQuery) StreamHealthUnregister(id int) error {
+	sq.streamHealthMutex.Lock()
+	defer sq.streamHealthMutex.Unlock()
+
+	delete(sq.streamHealthMap, id)
 	return nil
 }
 

@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -430,6 +432,21 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return nil, tabletError(err)
 	}
 	return reply.Queries, nil
+}
+
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *TabletBson) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	healthStream := make(chan *pb.StreamHealthResponse, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, healthStream)
+	return healthStream, func() error {
+		return c.Error
+	}, nil
 }
 
 // Close closes underlying bsonrpc.

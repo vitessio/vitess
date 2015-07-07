@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -497,6 +499,11 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		splits = append(splits, split)
 	}
 	return splits, nil
+}
+
+// StreamHealth does nothing
+func (sbc *sandboxConn) StreamHealth(context context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("Not implemented in test")
 }
 
 // Close does not change ExecCount

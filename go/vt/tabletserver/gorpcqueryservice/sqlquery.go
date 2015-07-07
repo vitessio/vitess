@@ -5,6 +5,8 @@
 package gorpcqueryservice
 
 import (
+	"sync"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/rpc"
@@ -13,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // SqlQuery is the server object for gorpc SqlQuery
@@ -174,6 +178,34 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		return nil
 	}
 	return tErr
+}
+
+// StreamHealth is exposing tabletserver.SqlQuery.StreamHealthRegister and
+// tabletserver.SqlQuery.StreamHealthUnregister
+func (sq *SqlQuery) StreamHealth(ctx context.Context, query *rpc.Unused, sendReply func(reply interface{}) error) (err error) {
+	defer sq.server.HandlePanic(&err)
+
+	c := make(chan *pb.StreamHealthResponse, 10)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for shr := range c {
+			// we send until the client disconnects
+			if err := sendReply(shr); err != nil {
+				return
+			}
+		}
+	}()
+
+	id, err := sq.server.StreamHealthRegister(c)
+	if err != nil {
+		close(c)
+		wg.Wait()
+		return err
+	}
+	wg.Wait()
+	return sq.server.StreamHealthUnregister(id)
 }
 
 // New returns a new SqlQuery based on the QueryService implementation

@@ -267,6 +267,39 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
 
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	healthStream := make(chan *pb.StreamHealthResponse, 10)
+	stream, err := conn.c.StreamHealth(ctx, &pb.StreamHealthRequest{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var finalErr error
+	go func() {
+		for {
+			hsr, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF {
+					finalErr = err
+				}
+				close(healthStream)
+				return
+			}
+			healthStream <- hsr
+		}
+	}()
+	return healthStream, func() error {
+		return finalErr
+	}, nil
+}
+
 // Close closes underlying bsonrpc.
 func (conn *gRPCQueryClient) Close() {
 	conn.mu.Lock()
