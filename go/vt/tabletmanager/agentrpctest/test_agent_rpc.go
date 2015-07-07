@@ -444,11 +444,16 @@ var testHealthStreamHealthStreamReply = &actionnode.HealthStreamReply{
 }
 var testRegisterHealthStreamError = "to trigger a server error"
 
+// The server side should write the response to the stream, then wait for
+// this channel to close, then return the error
+var HealthStreamSynchronization = make(chan struct{})
+
 func (fra *fakeRPCAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) (int, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	c <- testHealthStreamHealthStreamReply
+	<-HealthStreamSynchronization
 	return 0, fmt.Errorf(testRegisterHealthStreamError)
 }
 
@@ -466,6 +471,11 @@ func agentRPCTestHealthStream(ctx context.Context, t *testing.T, client tmclient
 	if !ok {
 		t.Fatalf("HealthStream got no response")
 	}
+
+	// close HealthStreamSynchronization so server side knows we
+	// got the response, and it can send the error
+	close(HealthStreamSynchronization)
+
 	_, ok = <-c
 	if ok {
 		t.Fatalf("HealthStream wasn't closed")
