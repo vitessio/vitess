@@ -90,7 +90,7 @@ class GRpcProtocolsFlavor(ProtocolsFlavor):
     return 'grpc'
 
   def vtctl_python_client_protocol(self):
-    return 'grpc'
+    return 'gorpc'
 
   def vtworker_client_protocol(self):
     return 'grpc'
