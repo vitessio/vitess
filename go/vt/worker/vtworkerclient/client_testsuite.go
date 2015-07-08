@@ -55,6 +55,11 @@ func commandSucceeds(t *testing.T, client VtworkerClient) {
 	if err := errFunc(); err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
+
+	_, errFuncReset := client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
+	if err := errFuncReset(); err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
 }
 
 func commandErrors(t *testing.T, client VtworkerClient) {
@@ -84,11 +89,6 @@ func commandErrors(t *testing.T, client VtworkerClient) {
 }
 
 func commandPanics(t *testing.T, client VtworkerClient) {
-	_, errFuncReset := client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
-	if err := errFuncReset(); err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
-	}
-
 	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
 	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
