@@ -90,6 +90,7 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	sessionID int64
 	dbconfig  *dbconfigs.DBConfig
+	target    *pb.Target
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex sync.Mutex
@@ -140,7 +141,7 @@ func (sq *SqlQuery) setState(state int64) {
 // If waitForMysql is set to true, allowQueries will not return
 // until it's able to connect to mysql.
 // No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+func (sq *SqlQuery) allowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
 	sq.mu.Lock()
 	if sq.state == StateServing {
 		sq.mu.Unlock()
@@ -180,6 +181,7 @@ func (sq *SqlQuery) allowQueries(dbconfigs *dbconfigs.DBConfigs, schemaOverrides
 
 	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
 	sq.dbconfig = &dbconfigs.App
+	sq.target = target
 	sq.sessionID = Rand()
 	log.Infof("Session id: %d", sq.sessionID)
 	return nil
@@ -242,6 +244,7 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.qe.Close()
 	sq.sessionID = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
+	sq.target = nil
 }
 
 // checkMySQL returns true if we can connect to MySQL.
@@ -575,8 +578,8 @@ func (sq *SqlQuery) HandlePanic(err *error) {
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (sq *SqlQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-	// FIXME(alainjobart) also send Target
 	shr := &pb.StreamHealthResponse{
+		Target: sq.target,
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
 	}

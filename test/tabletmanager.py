@@ -482,9 +482,12 @@ class TestTabletManager(unittest.TestCase):
     lines = stdout.splitlines()
     self.assertEqual(len(lines), 2)
     for line in lines:
-      logging.debug("Got stats: %s", line)
+      logging.debug("Got health: %s", line)
       data = json.loads(line)
       self.assertIn('realtime_stats', data)
+      self.assertEqual('test_keyspace', data['target']['keyspace'])
+      self.assertEqual('0', data['target']['shard'])
+      self.assertEqual(3, data['target']['TabletType'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

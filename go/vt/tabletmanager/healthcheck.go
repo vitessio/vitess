@@ -175,8 +175,17 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
 	if shouldQueryServiceBeRunning {
 		if !isQueryServiceRunning {
+			// send the type we want to be, not the type we are
+			currentType := tablet.Type
+			if tablet.Type == topo.TYPE_SPARE {
+				tablet.Type = targetTabletType
+			}
+
 			// we remember this new possible error
 			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+
+			// restore the current type
+			tablet.Type = currentType
 		}
 	} else {
 		if isQueryServiceRunning {
