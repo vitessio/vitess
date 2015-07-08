@@ -75,11 +75,11 @@ func (wi *Instance) InitInteractiveMode() {
 			return
 		}
 
-		executeTemplate(w, indexTemplate, Commands)
+		executeTemplate(w, indexTemplate, commands)
 	})
 
 	// command group menus
-	for _, cg := range Commands {
+	for _, cg := range commands {
 		// keep a local copy of the Command pointer for the
 		// closure.
 		pcg := cg
