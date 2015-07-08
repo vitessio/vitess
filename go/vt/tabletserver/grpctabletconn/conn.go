@@ -47,25 +47,28 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 	}
 	c := pbs.NewQueryClient(cc)
 
-	gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
-		Keyspace: keyspace,
-		Shard:    shard,
-	})
-	if err != nil {
-		cc.Close()
-		return nil, err
+	result := &gRPCQueryClient{
+		endPoint: endPoint,
+		cc:       cc,
+		c:        c,
 	}
-	if gsir.Error != nil {
-		cc.Close()
-		return nil, tabletErrorFromRPCError(gsir.Error)
+	if keyspace != "" || shard != "" {
+		gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
+			Keyspace: keyspace,
+			Shard:    shard,
+		})
+		if err != nil {
+			cc.Close()
+			return nil, err
+		}
+		if gsir.Error != nil {
+			cc.Close()
+			return nil, tabletErrorFromRPCError(gsir.Error)
+		}
+		result.sessionID = gsir.SessionId
 	}
 
-	return &gRPCQueryClient{
-		endPoint:  endPoint,
-		cc:        cc,
-		c:         c,
-		sessionID: gsir.SessionId,
-	}, nil
+	return result, nil
 }
 
 // Execute sends the query to VTTablet.

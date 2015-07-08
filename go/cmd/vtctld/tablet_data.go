@@ -60,7 +60,8 @@ func (th *TabletHealth) update(thc *tabletHealthCache, tabletAlias topo.TabletAl
 		return
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, *ep, ti.Keyspace, ti.Shard, 30*time.Second)
+	// pass in empty keyspace and shard to not ask for sessionId
+	conn, err := tabletconn.GetDialer()(ctx, *ep, "", "", 30*time.Second)
 	if err != nil {
 		return
 	}

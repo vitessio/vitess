@@ -457,6 +457,12 @@ class TestTabletManager(unittest.TestCase):
     # make sure status web page is unhappy
     self.assertIn('>unhealthy: replication_reporter: Replication is not running</span></div>', tablet_62044.get_status())
 
+    # make sure the health stream is updated
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   tablet_62044.tablet_alias])
+    self.assertIn('replication_reporter: Replication is not running', health['realtime_stats']['health_error'])
+
     # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
@@ -485,6 +491,7 @@ class TestTabletManager(unittest.TestCase):
       logging.debug("Got health: %s", line)
       data = json.loads(line)
       self.assertIn('realtime_stats', data)
+      self.assertNotIn('health_error', data['realtime_stats'])
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
       self.assertEqual(3, data['target']['TabletType'])

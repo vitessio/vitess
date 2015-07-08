@@ -251,7 +251,7 @@ func (sq *SqlQuery) disallowQueries() {
 // The function returns false only if the query service is running
 // and we're unable to make a connection.
 func (sq *SqlQuery) checkMySQL() bool {
-	if err := sq.startRequest(0, true, false); err != nil {
+	if err := sq.startRequest(nil, 0, true, false); err != nil {
 		return true
 	}
 	defer sq.endRequest()
@@ -265,7 +265,7 @@ func (sq *SqlQuery) checkMySQL() bool {
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if err := sq.startRequest(0, true, false); err != nil {
+	if err := sq.startRequest(nil, 0, true, false); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -286,7 +286,7 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	logStats.OriginalSql = "begin"
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(session.SessionId, false, false); err != nil {
+	if err = sq.startRequest(nil, session.SessionId, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.txPool.PoolTimeout())
@@ -308,7 +308,7 @@ func (sq *SqlQuery) Commit(ctx context.Context, session *proto.Session) (err err
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(session.SessionId, false, true); err != nil {
+	if err = sq.startRequest(nil, session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -329,7 +329,7 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(session.SessionId, false, true); err != nil {
+	if err = sq.startRequest(nil, session.SessionId, false, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -382,7 +382,7 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 	defer sq.handleExecError(query, &err, logStats)
 
 	allowShutdown := (query.TransactionId != 0)
-	if err = sq.startRequest(query.SessionId, false, allowShutdown); err != nil {
+	if err = sq.startRequest(nil, query.SessionId, false, allowShutdown); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -420,7 +420,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 	logStats := newSqlQueryStats("StreamExecute", ctx)
 	defer sq.handleExecError(query, &err, logStats)
 
-	if err = sq.startRequest(query.SessionId, false, false); err != nil {
+	if err = sq.startRequest(nil, query.SessionId, false, false); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -451,7 +451,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
-	if err = sq.startRequest(queryList.SessionId, false, allowShutdown); err != nil {
+	if err = sq.startRequest(nil, queryList.SessionId, false, allowShutdown); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -515,7 +515,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
-	if err = sq.startRequest(req.SessionID, false, false); err != nil {
+	if err = sq.startRequest(nil, req.SessionID, false, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -549,7 +549,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	return nil
 }
 
-// StreamHealthRegister is part of QueryService interface
+// StreamHealthRegister is part of queryservice.QueryService interface
 func (sq *SqlQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
 	sq.streamHealthMutex.Lock()
 	defer sq.streamHealthMutex.Unlock()
@@ -560,7 +560,7 @@ func (sq *SqlQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int
 	return id, nil
 }
 
-// StreamHealthUnregister is part of QueryService interface
+// StreamHealthUnregister is part of queryservice.QueryService interface
 func (sq *SqlQuery) StreamHealthUnregister(id int) error {
 	sq.streamHealthMutex.Lock()
 	defer sq.streamHealthMutex.Unlock()
@@ -601,7 +601,7 @@ func (sq *SqlQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 // disallowQueries will wait on this waitgroup to ensure that there are
 // no requests in flight.
 // ignoreSession is passed in as true for valid internal requests that don't have a session id.
-func (sq *SqlQuery) startRequest(sessionID int64, ignoreSession, allowShutdown bool) (err error) {
+func (sq *SqlQuery) startRequest(target *pb.Target, sessionID int64, ignoreSession, allowShutdown bool) (err error) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state == StateServing {
@@ -614,6 +614,19 @@ func (sq *SqlQuery) startRequest(sessionID int64, ignoreSession, allowShutdown b
 
 verifySession:
 	if ignoreSession {
+		goto ok
+	}
+	if target != nil && sq.target != nil {
+		// a valid target can be used instead of a valid session
+		if target.Keyspace != sq.target.Keyspace {
+			return NewTabletError(ErrRetry, "Invalid keyspace %v", target.Keyspace)
+		}
+		if target.Shard != sq.target.Shard {
+			return NewTabletError(ErrRetry, "Invalid shard %v", target.Shard)
+		}
+		if target.TabletType != sq.target.TabletType {
+			return NewTabletError(ErrRetry, "Invalid tablet type %v", target.TabletType)
+		}
 		goto ok
 	}
 	if sessionID == 0 || sessionID != sq.sessionID {

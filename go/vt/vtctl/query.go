@@ -204,7 +204,8 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, *ep, tabletInfo.Keyspace, tabletInfo.Shard, *connectTimeout)
+	// pass in empty keyspace and shard to not ask for sessionId
+	conn, err := tabletconn.GetDialer()(ctx, *ep, "", "", *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

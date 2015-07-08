@@ -55,7 +55,10 @@ func (e OperationalError) Error() string { return string(e) }
 // protocol and outgoing protocols support forwarding information, use
 // context.
 
-// TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
+// TabletDialer represents a function that will return a TabletConn
+// object that can communicate with a tablet.
+// If both keyspace and shard are empty, we will not ask for a sessionId
+// (and assume we're using the target field for the queries).
 type TabletDialer func(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should

@@ -67,17 +67,19 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		return nil, tabletError(err)
 	}
 
-	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
+	if keyspace != "" || shard != "" {
+		var sessionInfo tproto.SessionInfo
+		if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+		if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		conn.sessionID = sessionInfo.SessionId
 	}
-	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
-	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
-	}
-	conn.sessionID = sessionInfo.SessionId
 	return conn, nil
 }
 
