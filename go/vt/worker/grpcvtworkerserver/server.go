@@ -27,7 +27,7 @@ type VtworkerServer struct {
 	wi *worker.Instance
 }
 
-// NewVtworkerServer returns a new Vtworker Server for the topo server.
+// NewVtworkerServer returns a new VtworkerServer for the given vtworker instance.
 func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 	return &VtworkerServer{wi}
 }
