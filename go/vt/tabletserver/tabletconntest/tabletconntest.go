@@ -903,7 +903,7 @@ func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
 		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *shr, *testStreamHealthStreamHealthResponse)
 	}
 
-	// close HealthStreamSynchronization so server side knows we
+	// close streamHealthSynchronization so server side knows we
 	// got the response, and it can send the error
 	close(streamHealthSynchronization)
 

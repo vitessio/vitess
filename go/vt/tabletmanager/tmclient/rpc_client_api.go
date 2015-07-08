@@ -67,10 +67,6 @@ type TabletManagerClient interface {
 	// RunHealthCheck asks the remote tablet to run a health check cycle
 	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
 
-	// HealthStream asks the tablet to stream its health status on
-	// a regular basis
-	HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, ErrFunc, error)
-
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
 

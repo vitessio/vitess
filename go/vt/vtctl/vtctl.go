@@ -173,9 +173,6 @@ var commands = []commandGroup{
 			command{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Runs a health check on a remote tablet with the specified target type."},
-			command{"HealthStream", commandHealthStream,
-				"<tablet alias>",
-				"Streams the health status of a tablet."},
 			command{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
@@ -884,31 +881,6 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
-}
-
-func commandHealthStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the HealthStream command.")
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	c, errFunc, err := wr.TabletManagerClient().HealthStream(ctx, tabletInfo)
-	if err != nil {
-		return err
-	}
-	for hsr := range c {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(hsr))
-	}
-	return errFunc()
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -91,7 +91,7 @@ type SqlQuery struct {
 	sessionID int64
 	dbconfig  *dbconfigs.DBConfig
 
-	// healthStreamMutex protects all the following fields
+	// streamHealthMutex protects all the following fields
 	streamHealthMutex sync.Mutex
 	streamHealthIndex int
 	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse

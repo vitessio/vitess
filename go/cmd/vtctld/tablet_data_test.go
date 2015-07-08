@@ -23,7 +23,7 @@ type streamHealthSQLQuery struct {
 	queryservice.ErrorQueryService
 	t *testing.T
 
-	// healthStreamMutex protects all the following fields
+	// streamHealthMutex protects all the following fields
 	streamHealthMutex sync.Mutex
 	streamHealthIndex int
 	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse

@@ -38,8 +38,6 @@ It has these top-level messages:
 	RefreshStateResponse
 	RunHealthCheckRequest
 	RunHealthCheckResponse
-	StreamHealthRequest
-	StreamHealthResponse
 	ReloadSchemaRequest
 	ReloadSchemaResponse
 	PreflightSchemaRequest
@@ -449,32 +447,6 @@ type RunHealthCheckResponse struct {
 func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{} }
 func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
 func (*RunHealthCheckResponse) ProtoMessage()    {}
-
-type StreamHealthRequest struct {
-}
-
-func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
-func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthRequest) ProtoMessage()    {}
-
-type StreamHealthResponse struct {
-	Tablet              *topodata.Tablet `protobuf:"bytes,1,opt,name=tablet" json:"tablet,omitempty"`
-	BinlogPlayerMapSize int64            `protobuf:"varint,2,opt,name=binlog_player_map_size" json:"binlog_player_map_size,omitempty"`
-	HealthError         string           `protobuf:"bytes,3,opt,name=health_error" json:"health_error,omitempty"`
-	// replication_delay is in nanoseconds
-	ReplicationDelay int64 `protobuf:"varint,4,opt,name=replication_delay" json:"replication_delay,omitempty"`
-}
-
-func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
-func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthResponse) ProtoMessage()    {}
-
-func (m *StreamHealthResponse) GetTablet() *topodata.Tablet {
-	if m != nil {
-		return m.Tablet
-	}
-	return nil
-}
 
 type ReloadSchemaRequest struct {
 }

@@ -151,53 +151,6 @@ func (client *GoRPCTabletManagerClient) RunHealthCheck(ctx context.Context, tabl
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRunHealthCheck, &targetTabletType, &rpc.Unused{})
 }
 
-// HealthStream is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, tmclient.ErrFunc, error) {
-	var connectTimeout time.Duration
-	deadline, ok := ctx.Deadline()
-	if ok {
-		connectTimeout = deadline.Sub(time.Now())
-		if connectTimeout < 0 {
-			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.HealthStream on %v", tablet.Alias)}
-		}
-	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logstream := make(chan *actionnode.HealthStreamReply, 10)
-	rpcstream := make(chan *actionnode.HealthStreamReply, 10)
-	c := rpcClient.StreamGo("TabletManager.HealthStream", "", rpcstream)
-	interrupted := false
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// context is done
-				interrupted = true
-				close(logstream)
-				rpcClient.Close()
-				return
-			case hsr, ok := <-rpcstream:
-				if !ok {
-					close(logstream)
-					rpcClient.Close()
-					return
-				}
-				logstream <- hsr
-			}
-		}
-	}()
-	return logstream, func() error {
-		// this is only called after streaming is done
-		if interrupted {
-			return fmt.Errorf("TabletManager.HealthStreamReply interrupted by context")
-		}
-		return c.Error
-	}, nil
-}
-
 // ReloadSchema is part of the tmclient.TabletManagerClient interface
 func (client *GoRPCTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionReloadSchema, &rpc.Unused{}, &rpc.Unused{})

@@ -45,8 +45,6 @@ service TabletManager {
 
   rpc RunHealthCheck(tabletmanagerdata.RunHealthCheckRequest) returns (tabletmanagerdata.RunHealthCheckResponse) {};
 
-  rpc StreamHealth(tabletmanagerdata.StreamHealthRequest) returns (stream tabletmanagerdata.StreamHealthResponse) {};
-
   rpc ReloadSchema(tabletmanagerdata.ReloadSchemaRequest) returns (tabletmanagerdata.ReloadSchemaResponse) {};
 
   rpc PreflightSchema(tabletmanagerdata.PreflightSchemaRequest) returns (tabletmanagerdata.PreflightSchemaResponse) {};

@@ -275,7 +275,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.Strea
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	healthStream := make(chan *pb.StreamHealthResponse, 10)
+	result := make(chan *pb.StreamHealthResponse, 10)
 	stream, err := conn.c.StreamHealth(ctx, &pb.StreamHealthRequest{})
 	if err != nil {
 		return nil, nil, err
@@ -289,13 +289,13 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.Strea
 				if err != io.EOF {
 					finalErr = err
 				}
-				close(healthStream)
+				close(result)
 				return
 			}
-			healthStream <- hsr
+			result <- hsr
 		}
 	}()
-	return healthStream, func() error {
+	return result, func() error {
 		return finalErr
 	}, nil
 }

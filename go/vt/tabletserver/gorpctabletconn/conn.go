@@ -442,9 +442,9 @@ func (conn *TabletBson) StreamHealth(ctx context.Context) (<-chan *pb.StreamHeal
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	healthStream := make(chan *pb.StreamHealthResponse, 10)
-	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, healthStream)
-	return healthStream, func() error {
+	result := make(chan *pb.StreamHealthResponse, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, result)
+	return result, func() error {
 		return c.Error
 	}, nil
 }

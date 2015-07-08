@@ -18,7 +18,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 
@@ -233,20 +232,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent._replicationDelay = replicationDelay
 	agent.mutex.Unlock()
 
-	// send it to our observers, after we've updated the tablet state
-	// (Tablet is a pointer, and below we will alter the Tablet
-	// record to be correct.
-	hsr := &actionnode.HealthStreamReply{
-		Tablet:              tablet.Tablet,
-		BinlogPlayerMapSize: agent.BinlogPlayerMap.size(),
-		ReplicationDelay:    replicationDelay,
-	}
-	if err != nil {
-		hsr.HealthError = err.Error()
-	}
-	defer agent.BroadcastHealthStreamReply(hsr)
-
-	// send it to our other observers
+	// send it to our observers
 	// (the Target has already been updated when restarting the
 	// query service earlier)
 	// FIXME(alainjobart,liguo) add TabletExternallyReparentedTimestamp
