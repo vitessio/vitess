@@ -256,7 +256,7 @@ func (x Field_Flag) String() string {
 type Target struct {
 	Keyspace   string              `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
 	Shard      string              `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
-	TabletType topodata.TabletType `protobuf:"varint,3,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *Target) Reset()         { *m = Target{} }

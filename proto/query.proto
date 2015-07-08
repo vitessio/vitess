@@ -13,7 +13,7 @@ import "vtrpc.proto";
 message Target {
   string keyspace = 1;
   string shard = 2;
-  topodata.TabletType TabletType = 3;
+  topodata.TabletType tablet_type = 3;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the

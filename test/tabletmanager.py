@@ -494,7 +494,7 @@ class TestTabletManager(unittest.TestCase):
       self.assertNotIn('health_error', data['realtime_stats'])
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
-      self.assertEqual(3, data['target']['TabletType'])
+      self.assertEqual(3, data['target']['tablet_type'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
