@@ -47,6 +47,3 @@ func (m *ExecuteVtctlCommandResponse) GetEvent() *logutil.Event {
 	}
 	return nil
 }
-
-func init() {
-}

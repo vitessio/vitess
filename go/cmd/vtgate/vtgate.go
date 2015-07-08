@@ -34,7 +34,6 @@ var topoReader *TopoReader
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSecureFlags()
-	servenv.RegisterDefaultSocketFileFlags()
 	servenv.InitServiceMapForBsonRpcService("toporeader")
 	servenv.InitServiceMapForBsonRpcService("vtgateservice")
 }

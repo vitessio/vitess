@@ -1141,6 +1141,3 @@ func (m *BackupResponse) GetEvent() *logutil.Event {
 	}
 	return nil
 }
-
-func init() {
-}

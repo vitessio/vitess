@@ -29,7 +29,6 @@ func Register(name string, rcvr interface{}) {
 	}
 
 	// register the other guys
-	socketFileRegister(name, rcvr)
 	secureRegister(name, rcvr)
 }
 

@@ -67,6 +67,7 @@ func (wi *Instance) InitStatusHandling() {
 			acl.SendError(w, err)
 			return
 		}
+
 		wi.currentWorkerMutex.Lock()
 		wrk := wi.currentWorker
 		logger := wi.currentMemoryLogger

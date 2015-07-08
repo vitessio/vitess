@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
 )
@@ -69,6 +70,11 @@ func (wi *Instance) InitInteractiveMode() {
 
 	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+
 		executeTemplate(w, indexTemplate, commands)
 	})
 
@@ -78,6 +84,11 @@ func (wi *Instance) InitInteractiveMode() {
 		// closure.
 		pcg := cg
 		http.HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
+			if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+				acl.SendError(w, err)
+				return
+			}
+
 			executeTemplate(w, subIndexTemplate, pcg)
 		})
 
@@ -85,6 +96,11 @@ func (wi *Instance) InitInteractiveMode() {
 			// keep a local copy of the Command pointer for the closure.
 			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
+				if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+					acl.SendError(w, err)
+					return
+				}
+
 				ctx := context.Background()
 				wrk, template, data, err := pc.Interactive(ctx, wi, wi.wr, w, r)
 				if err != nil {

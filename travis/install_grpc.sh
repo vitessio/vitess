@@ -13,7 +13,7 @@ fi
 
 git clone https://github.com/grpc/grpc.git
 cd grpc
-git checkout fa507530590944683a0c672fcd4ea5a54977c903
+git checkout 1528ba54d71ab477266c9ff4235446445d5de1c1
 git submodule update --init
 make
 if [ "$grpc_dist" != "" ]; then

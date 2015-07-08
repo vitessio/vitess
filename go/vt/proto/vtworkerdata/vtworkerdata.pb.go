@@ -44,6 +44,3 @@ func (m *ExecuteVtworkerCommandResponse) GetEvent() *logutil.Event {
 	}
 	return nil
 }
-
-func init() {
-}
