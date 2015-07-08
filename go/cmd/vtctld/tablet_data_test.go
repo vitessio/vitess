@@ -2,17 +2,82 @@ package main
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
+
+// streamHealthSQLQuery is a local QueryService implementation to support the tests
+type streamHealthSQLQuery struct {
+	queryservice.ErrorQueryService
+	t *testing.T
+
+	// healthStreamMutex protects all the following fields
+	streamHealthMutex sync.Mutex
+	streamHealthIndex int
+	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse
+}
+
+func newStreamHealthSQLQuery(t *testing.T) *streamHealthSQLQuery {
+	return &streamHealthSQLQuery{
+		t:               t,
+		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
+	}
+}
+
+func (s *streamHealthSQLQuery) count() int {
+	s.streamHealthMutex.Lock()
+	defer s.streamHealthMutex.Unlock()
+	return len(s.streamHealthMap)
+}
+
+func (s *streamHealthSQLQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+	s.streamHealthMutex.Lock()
+	defer s.streamHealthMutex.Unlock()
+
+	id := s.streamHealthIndex
+	s.streamHealthIndex++
+	s.streamHealthMap[id] = c
+	return id, nil
+}
+
+func (s *streamHealthSQLQuery) StreamHealthUnregister(id int) error {
+	s.streamHealthMutex.Lock()
+	defer s.streamHealthMutex.Unlock()
+
+	delete(s.streamHealthMap, id)
+	return nil
+}
+
+// BroadcastHealth will broadcast the current health to all listeners
+func (s *streamHealthSQLQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
+	// FIXME(alainjobart) also send Target
+	shr := &pb.StreamHealthResponse{
+		TabletExternallyReparentedTimestamp: terTimestamp,
+		RealtimeStats:                       stats,
+	}
+
+	s.streamHealthMutex.Lock()
+	defer s.streamHealthMutex.Unlock()
+	for _, c := range s.streamHealthMap {
+		// do not block on any write
+		select {
+		case c <- shr:
+		default:
+		}
+	}
+}
 
 func TestTabletData(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
@@ -21,8 +86,10 @@ func TestTabletData(t *testing.T) {
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
+	shsq := newStreamHealthSQLQuery(t)
+	tablet1.RPCServer.Register(gorpcqueryservice.New(shsq))
 
-	thc := newTabletHealthCache(ts, tmclient.NewTabletManagerClient())
+	thc := newTabletHealthCache(ts)
 
 	// get the first result, it's not containing any data but the alias
 	result, err := thc.get(tablet1.Tablet.Alias)
@@ -33,7 +100,7 @@ func TestTabletData(t *testing.T) {
 	if err := json.Unmarshal(result, &unpacked); err != nil {
 		t.Fatalf("bad json: %v", err)
 	}
-	if unpacked.HealthStreamReply.Tablet.Alias != tablet1.Tablet.Alias {
+	if unpacked.TabletAlias != tablet1.Tablet.Alias {
 		t.Fatalf("wrong alias: %v", &unpacked)
 	}
 	if unpacked.Version != 1 {
@@ -43,7 +110,7 @@ func TestTabletData(t *testing.T) {
 	// wait for the streaming RPC to be established
 	timeout := 5 * time.Second
 	for {
-		if tablet1.Agent.HealthStreamMapSize() > 0 {
+		if shsq.count() > 0 {
 			break
 		}
 		timeout -= 10 * time.Millisecond
@@ -54,10 +121,11 @@ func TestTabletData(t *testing.T) {
 	}
 
 	// feed some data from the tablet, with just a data marker
-	hsr := &actionnode.HealthStreamReply{
-		BinlogPlayerMapSize: 42,
-	}
-	tablet1.Agent.BroadcastHealthStreamReply(hsr)
+	shsq.BroadcastHealth(42, &pb.RealtimeStats{
+		HealthError:         "testHealthError",
+		SecondsBehindMaster: 72,
+		CpuUsage:            1.1,
+	})
 
 	// and wait for the cache to pick it up
 	timeout = 5 * time.Second
@@ -69,7 +137,11 @@ func TestTabletData(t *testing.T) {
 		if err := json.Unmarshal(result, &unpacked); err != nil {
 			t.Fatalf("bad json: %v", err)
 		}
-		if unpacked.HealthStreamReply.BinlogPlayerMapSize == 42 {
+		if unpacked.StreamHealthResponse != nil &&
+			unpacked.StreamHealthResponse.RealtimeStats != nil &&
+			unpacked.StreamHealthResponse.RealtimeStats.HealthError == "testHealthError" &&
+			unpacked.StreamHealthResponse.RealtimeStats.SecondsBehindMaster == 72 &&
+			unpacked.StreamHealthResponse.RealtimeStats.CpuUsage == 1.1 {
 			if unpacked.Version != 2 {
 				t.Errorf("wrong version, got %v was expecting 2", unpacked.Version)
 			}
