@@ -154,6 +154,11 @@ func main() {
 			return "", wr.DeleteTablet(ctx, tabletAlias)
 		})
 
+	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			return "", wr.ReloadSchema(ctx, tabletAlias)
+		})
+
 	// keyspace actions
 	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
