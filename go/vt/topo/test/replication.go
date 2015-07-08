@@ -75,4 +75,11 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err := ts.DeleteShardReplication(ctx, cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
 		t.Errorf("DeleteShardReplication(again) returned: %v", err)
 	}
+
+	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != nil {
+		t.Errorf("DeleteKeyspaceReplication(existing) failed: %v", err)
+	}
+	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != topo.ErrNoNode {
+		t.Errorf("DeleteKeyspaceReplication(again) returned: %v", err)
+	}
 }

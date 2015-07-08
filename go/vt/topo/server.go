@@ -81,6 +81,10 @@ type Server interface {
 	// Do not use directly, but instead use topo.UpdateKeyspace.
 	UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
 
+	// DeleteKeyspace deletes the specified keyspace.
+	// Can return ErrNoNode if the keyspace doesn't exist.
+	DeleteKeyspace(ctx context.Context, keyspace string) error
+
 	// GetKeyspace reads a keyspace and returns it.
 	// Can return ErrNoNode
 	GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error)
@@ -182,6 +186,10 @@ type Server interface {
 	// Can return ErrNoNode if the object doesn't exist.
 	DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error
 
+	// DeleteKeyspaceReplication deletes the replication data for all shards.
+	// Can return ErrNoNode if the object doesn't exist.
+	DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error
+
 	//
 	// Serving Graph management, per cell.
 	//
@@ -257,6 +265,10 @@ type Server interface {
 
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
 	UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *SrvKeyspace) error
+
+	// DeleteSrvKeyspace deletes the cell-local serving records for a keyspace.
+	// Can return ErrNoNode.
+	DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error
 
 	// GetSrvKeyspace reads a SrvKeyspace record.
 	// Can return ErrNoNode.

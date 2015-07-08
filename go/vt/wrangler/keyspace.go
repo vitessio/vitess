@@ -749,3 +749,34 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 
 	return nil
 }
+
+// DeleteKeyspace will do all the necessary changes in the topology server
+// to entirely remove a keyspace. It can only work if there are no shards
+// in that keyspace.
+func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	if len(shards) > 0 {
+		return fmt.Errorf("keyspace %v still has %v shards - can only delete an empty keyspace", keyspace, len(shards))
+	}
+
+	// Delete the cell-local keyspace entries.
+	cells, err := wr.ts.GetKnownCells(ctx)
+	if err != nil {
+		return err
+	}
+	for _, cell := range cells {
+		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && err != topo.ErrNoNode {
+			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
+		}
+
+		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && err != topo.ErrNoNode {
+			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
+		}
+	}
+
+	return wr.ts.DeleteKeyspace(ctx, keyspace)
+}

@@ -40,7 +40,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 	// Try to create again.
 	if err := ts.CreateEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != topo.ErrNodeExists {
-		t.Fatalf("UpdateEndPoints(master): err = %v, want topo.ErrNodeExists", err)
+		t.Fatalf("CreateEndPoints(master): err = %v, want topo.ErrNodeExists", err)
 	}
 
 	// Get version.
@@ -195,6 +195,14 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		k.ShardingColumnType != key.KIT_UINT64 ||
 		k.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
 		t.Errorf("GetSrvKeyspace(out of the blue): %v %v", err, *k)
+	}
+
+	// Delete the SrvKeyspace.
+	if err := ts.DeleteSrvKeyspace(ctx, cell, "unknown_keyspace_so_far"); err != nil {
+		t.Fatalf("DeleteSrvShard: %v", err)
+	}
+	if _, err := ts.GetSrvKeyspace(ctx, cell, "unknown_keyspace_so_far"); err != topo.ErrNoNode {
+		t.Errorf("GetSrvKeyspace(deleted) got %v, want ErrNoNode", err)
 	}
 }
 

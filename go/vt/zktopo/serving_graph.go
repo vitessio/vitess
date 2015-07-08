@@ -208,6 +208,19 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 	return err
 }
 
+// DeleteSrvKeyspace is part of the topo.Server interface
+func (zkts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	path := zkPathForVtKeyspace(cell, keyspace)
+	err := zkts.zconn.Delete(path, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
+}
+
 // GetSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	path := zkPathForVtKeyspace(cell, keyspace)

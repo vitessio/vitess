@@ -165,6 +165,20 @@ func (tee *Tee) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exist
 	return
 }
 
+// DeleteKeyspace is part of the topo.Server interface
+func (tee *Tee) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	err := tee.primary.DeleteKeyspace(ctx, keyspace)
+	if err != nil && err != topo.ErrNoNode {
+		return err
+	}
+
+	if err := tee.secondary.DeleteKeyspace(ctx, keyspace); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteKeyspace(%v) failed: %v", keyspace, err)
+	}
+	return err
+}
+
 // GetKeyspace is part of the topo.Server interface
 func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
 	ki, err := tee.readFrom.GetKeyspace(ctx, keyspace)
@@ -491,6 +505,19 @@ func (tee *Tee) DeleteShardReplication(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
+// DeleteKeyspaceReplication is part of the topo.Server interface
+func (tee *Tee) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+	if err := tee.primary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteKeyspaceReplication(%v, %v) failed: %v", cell, keyspace, err)
+	}
+	return nil
+}
+
 //
 // Serving Graph management, per cell.
 //
@@ -637,6 +664,20 @@ func (tee *Tee) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, sr
 		log.Warningf("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
 	}
 	return nil
+}
+
+// DeleteSrvKeyspace is part of the topo.Server interface
+func (tee *Tee) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	err := tee.primary.DeleteSrvKeyspace(ctx, cell, keyspace)
+	if err != nil && err != topo.ErrNoNode {
+		return err
+	}
+
+	if err := tee.secondary.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
+	}
+	return err
 }
 
 // GetSrvKeyspace is part of the topo.Server interface
