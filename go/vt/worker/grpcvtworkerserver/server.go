@@ -27,7 +27,7 @@ type VtworkerServer struct {
 	wi *worker.Instance
 }
 
-// NewVtworkerServer returns a new Vtworker Server for the topo server.
+// NewVtworkerServer returns a new VtworkerServer for the given vtworker instance.
 func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 	return &VtworkerServer{wi}
 }
@@ -72,16 +72,9 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *pb.ExecuteVtworkerCommandR
 	wr := s.wi.CreateWrangler(logger)
 
 	// execute the command
-	if len(args.Args) >= 1 && args.Args[0] == "Reset" {
-		err = s.wi.Reset()
-	} else {
-		// Make sure we use the global "err" variable and do not redeclare it in this scope.
-		var worker worker.Worker
-		var done chan struct{}
-		worker, done, err = s.wi.RunCommand(args.Args, wr, false /*runFromCli*/)
-		if err == nil {
-			err = s.wi.WaitForCommand(worker, done)
-		}
+	worker, done, err := s.wi.RunCommand(args.Args, wr, false /*runFromCli*/)
+	if err == nil && worker != nil && done != nil {
+		err = s.wi.WaitForCommand(worker, done)
 	}
 
 	// close the log channel, and wait for them all to be sent
