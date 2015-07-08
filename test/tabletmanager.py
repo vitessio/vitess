@@ -5,6 +5,7 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
+import json
 import logging
 import os
 import signal
@@ -472,6 +473,18 @@ class TestTabletManager(unittest.TestCase):
     # make sure the vars is updated
     v = utils.get_vars(tablet_62044.port)
     self.assertEqual(v['LastHealthMapCount'], 0)
+
+    # now test VtTabletStreamHealth returns the right thing
+    stdout, stderr = utils.run_vtctl(['VtTabletStreamHealth',
+                                      '-count', '2',
+                                      tablet_62044.tablet_alias],
+                                     trap_output=True, auto_log=True)
+    lines = stdout.splitlines()
+    self.assertEqual(len(lines), 2)
+    for line in lines:
+      logging.debug("Got stats: %s", line)
+      data = json.loads(line)
+      self.assertIn('realtime_stats', data)
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

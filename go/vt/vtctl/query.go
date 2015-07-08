@@ -13,6 +13,7 @@ import (
 
 	"github.com/youtube/vitess/go/jscfg"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -40,6 +41,11 @@ func init() {
 		commandVtGateSplitQuery,
 		"-server <vtgate> -keyspace <keyspace> -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
 		"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
+	addCommand(queriesGroupName, command{
+		"VtTabletStreamHealth",
+		commandVtTabletStreamHealth,
+		"[-count <count, default 1>] [-connect_timeout <connect timeout>] <tablet alias>",
+		"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
 }
 
 type bindvars map[string]interface{}
@@ -172,5 +178,52 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}
 	wr.Logger().Printf("%v\n", jscfg.ToJSON(r))
+	return nil
+}
+
+func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	count := subFlags.Int("count", 1, "number of responses to wait for")
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletStreamHealth command.")
+	}
+	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	ep, err := tabletInfo.EndPoint()
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
+	}
+
+	conn, err := tabletconn.GetDialer()(ctx, *ep, tabletInfo.Keyspace, tabletInfo.Shard, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
+	}
+
+	stream, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < *count; i++ {
+		shr, ok := <-stream
+		if !ok {
+			return fmt.Errorf("stream ended early: %v", errFunc())
+		}
+		data, err := json.Marshal(shr)
+		if err != nil {
+			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
+		} else {
+			wr.Logger().Printf("%v\n", string(data))
+		}
+	}
 	return nil
 }
