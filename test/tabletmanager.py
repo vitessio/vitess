@@ -492,6 +492,7 @@ class TestTabletManager(unittest.TestCase):
       data = json.loads(line)
       self.assertIn('realtime_stats', data)
       self.assertNotIn('health_error', data['realtime_stats'])
+      self.assertNotIn('tablet_externally_reparented_timestamp', data)
       self.assertEqual('test_keyspace', data['target']['keyspace'])
       self.assertEqual('0', data['target']['shard'])
       self.assertEqual(3, data['target']['tablet_type'])

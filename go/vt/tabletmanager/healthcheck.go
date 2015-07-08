@@ -253,7 +253,11 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		stats.HealthError = err.Error()
 	}
 	defer func() {
-		agent.QueryServiceControl.BroadcastHealth(terTime.Unix(), stats)
+		var ts int64
+		if !terTime.IsZero() {
+			ts = terTime.Unix()
+		}
+		agent.QueryServiceControl.BroadcastHealth(ts, stats)
 	}()
 
 	// Update our topo.Server state, start with no change

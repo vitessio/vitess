@@ -93,9 +93,10 @@ type SqlQuery struct {
 	target    *pb.Target
 
 	// streamHealthMutex protects all the following fields
-	streamHealthMutex sync.Mutex
-	streamHealthIndex int
-	streamHealthMap   map[int]chan<- *pb.StreamHealthResponse
+	streamHealthMutex        sync.Mutex
+	streamHealthIndex        int
+	streamHealthMap          map[int]chan<- *pb.StreamHealthResponse
+	lastStreamHealthResponse *pb.StreamHealthResponse
 }
 
 // NewSqlQuery creates an instance of SqlQuery. Only one instance
@@ -557,6 +558,9 @@ func (sq *SqlQuery) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int
 	id := sq.streamHealthIndex
 	sq.streamHealthIndex++
 	sq.streamHealthMap[id] = c
+	if sq.lastStreamHealthResponse != nil {
+		c <- sq.lastStreamHealthResponse
+	}
 	return id, nil
 }
 
@@ -593,6 +597,7 @@ func (sq *SqlQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 		default:
 		}
 	}
+	sq.lastStreamHealthResponse = shr
 }
 
 // startRequest validates the current state and sessionID and registers
