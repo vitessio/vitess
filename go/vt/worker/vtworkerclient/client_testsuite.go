@@ -55,49 +55,55 @@ func commandSucceeds(t *testing.T, client VtworkerClient) {
 	if err := errFunc(); err != nil {
 		t.Fatalf("Remote error: %v", err)
 	}
+
+	_, errFuncReset := client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
+	if err := errFuncReset(); err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
 }
 
 func commandErrors(t *testing.T, client VtworkerClient) {
 	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
-	if err := errFunc(); err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
-	}
+	err := errFunc()
+	// The expected error could already be seen now or after the output channel is closed.
+	// To avoid checking for the same error twice, we don't check it here yet.
 
-	outputNotEmpty := false
-	for {
-		// Consume all results to make sure we'll see the error at the end.
-		_, ok := <-logs
-		if ok {
-			outputNotEmpty = true
-		} else {
-			break
+	if err == nil {
+		// Don't check for errors until the output channel is closed.
+		// We expect the usage to be sent as output. However, we have to consider it
+		// optional and do not test for it because not all RPC implementations send
+		// the output after an error.
+		for {
+			if _, ok := <-logs; !ok {
+				break
+			}
 		}
-	}
-	if !outputNotEmpty {
-		t.Fatal("Expected usage as output, but received nothing.")
+		err = errFunc()
 	}
 
 	expected := "unknown command: NonexistingCommand"
-	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected) {
+	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v'", err, expected)
 	}
 }
 
 func commandPanics(t *testing.T, client VtworkerClient) {
-	_, errFuncReset := client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
-	if err := errFuncReset(); err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
+	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
+	err := errFunc()
+	// The expected error could already be seen now or after the output channel is closed.
+	// To avoid checking for the same error twice, we don't check it here yet.
+
+	if err == nil {
+		// Don't check for errors until the output channel is closed.
+		// No output expected in this case.
+		if e, ok := <-logs; ok {
+			t.Errorf("Got unexpected line for logs: %v", e.String())
+		}
+		err = errFunc()
 	}
 
-	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
-	if err := errFunc(); err != nil {
-		t.Fatalf("Cannot execute remote command: %v", err)
-	}
-	if e, ok := <-logs; ok {
-		t.Errorf("Got unexpected line for logs: %v", e.String())
-	}
 	expected := "uncaught vtworker panic: Panic command was called. This should be caught by the vtworker framework and logged as an error."
-	if err := errFunc(); err == nil || !strings.Contains(err.Error(), expected) {
+	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Unexpected remote error, got: '%v' was expecting to find '%v'", err, expected)
 	}
 }
