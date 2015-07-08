@@ -239,12 +239,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent._healthy = err
 	agent._healthyTime = time.Now()
 	agent._replicationDelay = replicationDelay
+	terTime := agent._tabletExternallyReparentedTime
 	agent.mutex.Unlock()
 
 	// send it to our observers
 	// (the Target has already been updated when restarting the
 	// query service earlier)
-	// FIXME(alainjobart,liguo) add TabletExternallyReparentedTimestamp
 	// FIXME(alainjobart,liguo) add CpuUsage
 	stats := &pb.RealtimeStats{
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
@@ -253,7 +253,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		stats.HealthError = err.Error()
 	}
 	defer func() {
-		agent.QueryServiceControl.BroadcastHealth(0, stats)
+		agent.QueryServiceControl.BroadcastHealth(terTime.Unix(), stats)
 	}()
 
 	// Update our topo.Server state, start with no change

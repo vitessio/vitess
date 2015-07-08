@@ -84,7 +84,8 @@ type ActionAgent struct {
 	// It is protected by actionMutex.
 	initReplication bool
 
-	// mutex protects the following fields
+	// mutex protects the following fields, only hold the mutex
+	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
@@ -99,6 +100,9 @@ type ActionAgent struct {
 
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
+
+	// last time we ran TabletExternallyReparented
+	_tabletExternallyReparentedTime time.Time
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {

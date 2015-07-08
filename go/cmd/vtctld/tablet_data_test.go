@@ -62,7 +62,6 @@ func (s *streamHealthSQLQuery) StreamHealthUnregister(id int) error {
 
 // BroadcastHealth will broadcast the current health to all listeners
 func (s *streamHealthSQLQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-	// FIXME(alainjobart) also send Target
 	shr := &pb.StreamHealthResponse{
 		TabletExternallyReparentedTimestamp: terTimestamp,
 		RealtimeStats:                       stats,
