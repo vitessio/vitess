@@ -237,8 +237,8 @@ var commands = []commandGroup{
 				"[-force] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
 			command{"DeleteShard", commandDeleteShard,
-				"<keyspace/shard> ...",
-				"Deletes the specified shard(s). There must be no tablets left in them."},
+				"[-recursive] <keyspace/shard> ...",
+				"Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard."},
 		},
 	},
 	commandGroup{
@@ -247,8 +247,8 @@ var commands = []commandGroup{
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
 				"Creates the specified keyspace."},
 			command{"DeleteKeyspace", commandDeleteKeyspace,
-				"<keyspace>",
-				"Deletes the specified keyspace. There must be no shards left in it."},
+				"[-recursive] <keyspace>",
+				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
 			command{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
@@ -1314,6 +1314,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets belonging to the shard.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1326,7 +1327,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard)
+		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive)
 		switch err {
 		case nil:
 			// keep going
@@ -1384,6 +1385,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also recursively delete all shards in the keyspace.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1391,7 +1393,7 @@ func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("Must specify the <keyspace> argument for DeleteKeyspace.")
 	}
 
-	return wr.DeleteKeyspace(ctx, subFlags.Arg(0))
+	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
 }
 
 func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
