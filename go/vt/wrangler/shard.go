@@ -157,13 +157,13 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		return err
 	}
 
-	tablets, err := topo.FindAllTabletAliasesInShardByCell(ctx, wr.ts, keyspace, shard, nil /* cells */)
+	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
 	if recursive {
 		wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
-		for _, tabletAlias := range tablets {
+		for tabletAlias := range tabletMap {
 			// We don't care about scrapping or updating the replication graph,
 			// because we're about to delete the entire replication graph.
 			wr.Logger().Infof("Deleting tablet %v", tabletAlias)
@@ -178,8 +178,8 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 				return fmt.Errorf("can't delete tablet %v: %v", tabletAlias, err)
 			}
 		}
-	} else if len(tablets) > 0 {
-		return fmt.Errorf("shard %v/%v still has %v tablets; use -recursive or remove them manually", keyspace, shard, len(tablets))
+	} else if len(tabletMap) > 0 {
+		return fmt.Errorf("shard %v/%v still has %v tablets; use -recursive or remove them manually", keyspace, shard, len(tabletMap))
 	}
 
 	// remove the replication graph and serving graph in each cell
