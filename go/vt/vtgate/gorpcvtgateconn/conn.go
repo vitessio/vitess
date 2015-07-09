@@ -177,18 +177,15 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.BatchQueryShard{
-		Queries:          queries,
-		Keyspace:         keyspace,
-		Shards:           shards,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		Queries:    queries,
+		TabletType: tabletType,
+		Session:    s,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {

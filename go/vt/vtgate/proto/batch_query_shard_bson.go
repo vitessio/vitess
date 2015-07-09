@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes BatchQueryShard.
@@ -20,22 +19,12 @@ func (batchQueryShard *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, k
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	// []tproto.BoundQuery
+	// []BoundShardQuery
 	{
 		bson.EncodePrefix(buf, bson.Array, "Queries")
 		lenWriter := bson.NewLenWriter(buf)
 		for _i, _v1 := range batchQueryShard.Queries {
 			_v1.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
-	bson.EncodeString(buf, "Keyspace", batchQueryShard.Keyspace)
-	// []string
-	{
-		bson.EncodePrefix(buf, bson.Array, "Shards")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range batchQueryShard.Shards {
-			bson.EncodeString(buf, bson.Itoa(_i), _v2)
 		}
 		lenWriter.Close()
 	}
@@ -46,7 +35,6 @@ func (batchQueryShard *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, k
 	} else {
 		(*batchQueryShard.Session).MarshalBson(buf, "Session")
 	}
-	bson.EncodeBool(buf, "NotInTransaction", batchQueryShard.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -66,35 +54,18 @@ func (batchQueryShard *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind by
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
 		case "Queries":
-			// []tproto.BoundQuery
+			// []BoundShardQuery
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for batchQueryShard.Queries", kind))
 				}
 				bson.Next(buf, 4)
-				batchQueryShard.Queries = make([]tproto.BoundQuery, 0, 8)
+				batchQueryShard.Queries = make([]BoundShardQuery, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v1 tproto.BoundQuery
+					var _v1 BoundShardQuery
 					_v1.UnmarshalBson(buf, kind)
 					batchQueryShard.Queries = append(batchQueryShard.Queries, _v1)
-				}
-			}
-		case "Keyspace":
-			batchQueryShard.Keyspace = bson.DecodeString(buf, kind)
-		case "Shards":
-			// []string
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for batchQueryShard.Shards", kind))
-				}
-				bson.Next(buf, 4)
-				batchQueryShard.Shards = make([]string, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v2 string
-					_v2 = bson.DecodeString(buf, kind)
-					batchQueryShard.Shards = append(batchQueryShard.Shards, _v2)
 				}
 			}
 		case "TabletType":
@@ -105,8 +76,6 @@ func (batchQueryShard *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind by
 				batchQueryShard.Session = new(Session)
 				(*batchQueryShard.Session).UnmarshalBson(buf, kind)
 			}
-		case "NotInTransaction":
-			batchQueryShard.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

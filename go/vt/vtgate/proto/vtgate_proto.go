@@ -126,15 +126,23 @@ type QueryResult struct {
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
 
+// BoundShardQuery represents a single query request for the
+// specified list of shards. This is used in a list for BatchQueryShard.
+type BoundShardQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	Shards        []string
+}
+
+//go:generate bsongen -file $GOFILE -type BoundShardQuery -o bound_shard_query_bson.go
+
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
-	Queries          []tproto.BoundQuery
-	Keyspace         string
-	Shards           []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []BoundShardQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 //go:generate bsongen -file $GOFILE -type BatchQueryShard -o batch_query_shard_bson.go
