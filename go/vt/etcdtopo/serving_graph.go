@@ -200,6 +200,17 @@ func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace strin
 	return convertError(err)
 }
 
+// DeleteSrvKeyspace implements topo.Server.
+func (s *Server) DeleteSrvKeyspace(ctx context.Context, cellName, keyspace string) error {
+	cell, err := s.getCell(cellName)
+	if err != nil {
+		return err
+	}
+
+	_, err = cell.Delete(srvKeyspaceDirPath(keyspace), true /* recursive */)
+	return convertError(err)
+}
+
 // GetSrvKeyspace implements topo.Server.
 func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*topo.SrvKeyspace, error) {
 	cell, err := s.getCell(cellName)

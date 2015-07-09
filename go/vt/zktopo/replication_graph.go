@@ -20,6 +20,10 @@ import (
 This file contains the replication graph management code for zktopo.Server
 */
 
+func keyspaceReplicationPath(cell, keyspace string) string {
+	return path.Join("/zk", cell, "vt", "replication", keyspace)
+}
+
 func shardReplicationPath(cell, keyspace, shard string) string {
 	return path.Join("/zk", cell, "vt", "replication", keyspace, shard)
 }
@@ -79,6 +83,19 @@ func (zkts *Server) GetShardReplication(ctx context.Context, cell, keyspace, sha
 // DeleteShardReplication is part of the topo.Server interface
 func (zkts *Server) DeleteShardReplication(ctx context.Context, cell, keyspace, shard string) error {
 	zkPath := shardReplicationPath(cell, keyspace, shard)
+	err := zkts.zconn.Delete(zkPath, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
+}
+
+// DeleteKeyspaceReplication is part of the topo.Server interface
+func (zkts *Server) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+	zkPath := keyspaceReplicationPath(cell, keyspace)
 	err := zkts.zconn.Delete(zkPath, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {

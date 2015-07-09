@@ -120,3 +120,14 @@ func (s *Server) DeleteShardReplication(ctx context.Context, cellName, keyspace,
 	_, err = cell.Delete(shardReplicationDirPath(keyspace, shard), true /* recursive */)
 	return convertError(err)
 }
+
+// DeleteKeyspaceReplication implements topo.Server.
+func (s *Server) DeleteKeyspaceReplication(ctx context.Context, cellName, keyspace string) error {
+	cell, err := s.getCell(cellName)
+	if err != nil {
+		return err
+	}
+
+	_, err = cell.Delete(keyspaceReplicationDirPath(keyspace), true /* recursive */)
+	return convertError(err)
+}

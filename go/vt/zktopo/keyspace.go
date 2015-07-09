@@ -82,6 +82,24 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, e
 	return int64(stat.Version()), nil
 }
 
+// DeleteKeyspace is part of the topo.Server interface.
+func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	err := zk.DeleteRecursive(zkts.zconn, keyspacePath, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		Status:       "deleted",
+	})
+	return nil
+}
+
 // GetKeyspace is part of the topo.Server interface
 func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)

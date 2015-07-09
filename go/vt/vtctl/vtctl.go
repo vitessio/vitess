@@ -241,7 +241,7 @@ var commands = []commandGroup{
 				"Removes the cell from the shard's Cells list."},
 			command{"DeleteShard", commandDeleteShard,
 				"<keyspace/shard> ...",
-				"Deletes the specified shard(s)."},
+				"Deletes the specified shard(s). There must be no tablets left in them."},
 		},
 	},
 	commandGroup{
@@ -249,6 +249,9 @@ var commands = []commandGroup{
 			command{"CreateKeyspace", commandCreateKeyspace,
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
 				"Creates the specified keyspace."},
+			command{"DeleteKeyspace", commandDeleteKeyspace,
+				"<keyspace>",
+				"Deletes the specified keyspace. There must be no shards left in it."},
 			command{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
@@ -1406,6 +1409,17 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		err = nil
 	}
 	return err
+}
+
+func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("Must specify the <keyspace> argument for DeleteKeyspace.")
+	}
+
+	return wr.DeleteKeyspace(ctx, subFlags.Arg(0))
 }
 
 func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

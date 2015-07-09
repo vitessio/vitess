@@ -125,3 +125,17 @@ func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) erro
 	})
 	return nil
 }
+
+// DeleteKeyspace implements topo.Server.
+func (s *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	_, err := s.getGlobal().Delete(keyspaceDirPath(keyspace), true /* recursive */)
+	if err != nil {
+		return convertError(err)
+	}
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		Status:       "deleted",
+	})
+	return nil
+}

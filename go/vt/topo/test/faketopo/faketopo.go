@@ -47,6 +47,11 @@ func (ft FakeTopo) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, ex
 	return 0, errNotImplemented
 }
 
+// DeleteKeyspace implements topo.Server.
+func (ft FakeTopo) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	return errNotImplemented
+}
+
 // GetKeyspace implements topo.Server.
 func (ft FakeTopo) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
 	return nil, errNotImplemented
@@ -137,6 +142,11 @@ func (ft FakeTopo) DeleteShardReplication(ctx context.Context, cell, keyspace, s
 	return errNotImplemented
 }
 
+// DeleteKeyspaceReplication implements topo.Server.
+func (ft FakeTopo) DeleteKeyspaceReplication(ctx context.Context, cell, keyspace string) error {
+	return errNotImplemented
+}
+
 // LockSrvShardForAction implements topo.Server.
 func (ft FakeTopo) LockSrvShardForAction(ctx context.Context, cell, keyspace, shard, contents string) (string, error) {
 	return "", errNotImplemented
@@ -189,6 +199,11 @@ func (ft FakeTopo) DeleteSrvShard(ctx context.Context, cell, keyspace, shard str
 
 // UpdateSrvKeyspace implements topo.Server.
 func (ft FakeTopo) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+	return errNotImplemented
+}
+
+// DeleteSrvKeyspace implements topo.Server.
+func (ft FakeTopo) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
 	return errNotImplemented
 }
 

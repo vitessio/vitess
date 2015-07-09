@@ -182,6 +182,16 @@ class TestKeyspace(unittest.TestCase):
     self.assertEqual('keyspace_id', ki['ShardingColumnName'])
     self.assertEqual('uint64', ki['ShardingColumnType'])
 
+  def test_delete_keyspace(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_delete_keyspace'])
+    utils.run_vtctl(['CreateShard', 'test_delete_keyspace/0'])
+
+    # Can't delete if there are shards present.
+    utils.run_vtctl(['DeleteKeyspace', 'test_delete_keyspace'], expect_fail=True)
+
+    utils.run_vtctl(['DeleteShard', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['DeleteKeyspace', 'test_delete_keyspace'])
+
   def test_shard_count(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
