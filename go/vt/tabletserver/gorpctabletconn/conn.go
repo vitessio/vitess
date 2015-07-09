@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -65,17 +67,19 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		return nil, tabletError(err)
 	}
 
-	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
+	if keyspace != "" || shard != "" {
+		var sessionInfo tproto.SessionInfo
+		if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+		if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		conn.sessionID = sessionInfo.SessionId
 	}
-	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
-	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
-	}
-	conn.sessionID = sessionInfo.SessionId
 	return conn, nil
 }
 
@@ -430,6 +434,21 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return nil, tabletError(err)
 	}
 	return reply.Queries, nil
+}
+
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *TabletBson) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	result := make(chan *pb.StreamHealthResponse, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, result)
+	return result, func() error {
+		return c.Error
+	}, nil
 }
 
 // Close closes underlying bsonrpc.

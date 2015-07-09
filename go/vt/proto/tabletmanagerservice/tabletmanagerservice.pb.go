@@ -47,7 +47,6 @@ type TabletManagerClient interface {
 	Scrap(ctx context.Context, in *tabletmanagerdata.ScrapRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ScrapResponse, error)
 	RefreshState(ctx context.Context, in *tabletmanagerdata.RefreshStateRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(ctx context.Context, in *tabletmanagerdata.RunHealthCheckRequest, opts ...grpc.CallOption) (*tabletmanagerdata.RunHealthCheckResponse, error)
-	StreamHealth(ctx context.Context, in *tabletmanagerdata.StreamHealthRequest, opts ...grpc.CallOption) (TabletManager_StreamHealthClient, error)
 	ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(ctx context.Context, in *tabletmanagerdata.PreflightSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(ctx context.Context, in *tabletmanagerdata.ApplySchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ApplySchemaResponse, error)
@@ -235,38 +234,6 @@ func (c *tabletManagerClient) RunHealthCheck(ctx context.Context, in *tabletmana
 		return nil, err
 	}
 	return out, nil
-}
-
-func (c *tabletManagerClient) StreamHealth(ctx context.Context, in *tabletmanagerdata.StreamHealthRequest, opts ...grpc.CallOption) (TabletManager_StreamHealthClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanagerservice.TabletManager/StreamHealth", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &tabletManagerStreamHealthClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type TabletManager_StreamHealthClient interface {
-	Recv() (*tabletmanagerdata.StreamHealthResponse, error)
-	grpc.ClientStream
-}
-
-type tabletManagerStreamHealthClient struct {
-	grpc.ClientStream
-}
-
-func (x *tabletManagerStreamHealthClient) Recv() (*tabletmanagerdata.StreamHealthResponse, error) {
-	m := new(tabletmanagerdata.StreamHealthResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
 }
 
 func (c *tabletManagerClient) ReloadSchema(ctx context.Context, in *tabletmanagerdata.ReloadSchemaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReloadSchemaResponse, error) {
@@ -522,7 +489,7 @@ func (c *tabletManagerClient) PromoteSlave(ctx context.Context, in *tabletmanage
 }
 
 func (c *tabletManagerClient) Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[1], c.cc, "/tabletmanagerservice.TabletManager/Backup", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_TabletManager_serviceDesc.Streams[0], c.cc, "/tabletmanagerservice.TabletManager/Backup", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -573,7 +540,6 @@ type TabletManagerServer interface {
 	Scrap(context.Context, *tabletmanagerdata.ScrapRequest) (*tabletmanagerdata.ScrapResponse, error)
 	RefreshState(context.Context, *tabletmanagerdata.RefreshStateRequest) (*tabletmanagerdata.RefreshStateResponse, error)
 	RunHealthCheck(context.Context, *tabletmanagerdata.RunHealthCheckRequest) (*tabletmanagerdata.RunHealthCheckResponse, error)
-	StreamHealth(*tabletmanagerdata.StreamHealthRequest, TabletManager_StreamHealthServer) error
 	ReloadSchema(context.Context, *tabletmanagerdata.ReloadSchemaRequest) (*tabletmanagerdata.ReloadSchemaResponse, error)
 	PreflightSchema(context.Context, *tabletmanagerdata.PreflightSchemaRequest) (*tabletmanagerdata.PreflightSchemaResponse, error)
 	ApplySchema(context.Context, *tabletmanagerdata.ApplySchemaRequest) (*tabletmanagerdata.ApplySchemaResponse, error)
@@ -790,27 +756,6 @@ func _TabletManager_RunHealthCheck_Handler(srv interface{}, ctx context.Context,
 		return nil, err
 	}
 	return out, nil
-}
-
-func _TabletManager_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(tabletmanagerdata.StreamHealthRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TabletManagerServer).StreamHealth(m, &tabletManagerStreamHealthServer{stream})
-}
-
-type TabletManager_StreamHealthServer interface {
-	Send(*tabletmanagerdata.StreamHealthResponse) error
-	grpc.ServerStream
-}
-
-type tabletManagerStreamHealthServer struct {
-	grpc.ServerStream
-}
-
-func (x *tabletManagerStreamHealthServer) Send(m *tabletmanagerdata.StreamHealthResponse) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 func _TabletManager_ReloadSchema_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
@@ -1332,11 +1277,6 @@ var _TabletManager_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "StreamHealth",
-			Handler:       _TabletManager_StreamHealth_Handler,
-			ServerStreams: true,
-		},
 		{
 			StreamName:    "Backup",
 			Handler:       _TabletManager_Backup_Handler,

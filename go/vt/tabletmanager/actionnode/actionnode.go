@@ -140,9 +140,6 @@ const (
 	// tablet record from the topo server.
 	TabletActionRunHealthCheck = "RunHealthCheck"
 
-	// TabletActionHealthStream will stream the health status
-	TabletActionHealthStream = "HealthStream"
-
 	// TabletActionReloadSchema tells the tablet to reload its schema.
 	TabletActionReloadSchema = "ReloadSchema"
 

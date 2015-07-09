@@ -468,7 +468,7 @@ func main() {
 	})
 
 	// handle tablet cache
-	tabletHealthCache := newTabletHealthCache(ts, tmclient.NewTabletManagerClient())
+	tabletHealthCache := newTabletHealthCache(ts)
 	http.HandleFunc("/json/TabletHealth", func(w http.ResponseWriter, r *http.Request) {
 		cell := r.FormValue("cell")
 		if cell == "" {

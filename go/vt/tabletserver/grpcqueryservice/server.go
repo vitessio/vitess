@@ -5,6 +5,8 @@
 package grpcqueryservice
 
 import (
+	"sync"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -179,6 +181,33 @@ func (q *Query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 	return &pb.SplitQueryResponse{
 		Queries: proto.QuerySplitsToProto3(reply.Queries),
 	}, nil
+}
+
+// StreamHealth is part of the queryservice.QueryServer interface
+func (q *Query) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Query_StreamHealthServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	c := make(chan *pb.StreamHealthResponse, 10)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for shr := range c {
+			// we send until the client disconnects
+			if err := stream.Send(shr); err != nil {
+				return
+			}
+		}
+	}()
+
+	id, err := q.server.StreamHealthRegister(c)
+	if err != nil {
+		close(c)
+		wg.Wait()
+		return err
+	}
+	wg.Wait()
+	return q.server.StreamHealthUnregister(id)
 }
 
 func init() {

@@ -13,6 +13,8 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -53,7 +55,10 @@ func (e OperationalError) Error() string { return string(e) }
 // protocol and outgoing protocols support forwarding information, use
 // context.
 
-// TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
+// TabletDialer represents a function that will return a TabletConn
+// object that can communicate with a tablet.
+// If both keyspace and shard are empty, we will not ask for a sessionId
+// (and assume we're using the target field for the queries).
 type TabletDialer func(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
@@ -92,6 +97,9 @@ type TabletConn interface {
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+
+	// StreamHealth streams StreamHealthResponse to the client
+	StreamHealth(context context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error

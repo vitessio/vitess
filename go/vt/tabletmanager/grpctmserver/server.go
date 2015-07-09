@@ -143,39 +143,6 @@ func (s *server) RunHealthCheck(ctx context.Context, request *pb.RunHealthCheckR
 	})
 }
 
-func (s *server) StreamHealth(request *pb.StreamHealthRequest, stream pbs.TabletManager_StreamHealthServer) error {
-	ctx := callinfo.GRPCCallInfo(stream.Context())
-	return s.agent.RPCWrap(ctx, actionnode.TabletActionHealthStream, request, nil, func() error {
-		c := make(chan *actionnode.HealthStreamReply, 10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for hsr := range c {
-				// we send until the client disconnects
-				if err := stream.Send(&pb.StreamHealthResponse{
-					Tablet:              topo.TabletToProto(hsr.Tablet),
-					BinlogPlayerMapSize: hsr.BinlogPlayerMapSize,
-					HealthError:         hsr.HealthError,
-					ReplicationDelay:    int64(hsr.ReplicationDelay),
-				}); err != nil {
-					return
-				}
-			}
-		}()
-
-		id, err := s.agent.RegisterHealthStream(c)
-		if err != nil {
-			close(c)
-			wg.Wait()
-			return err
-		}
-		wg.Wait()
-		return s.agent.UnregisterHealthStream(id)
-
-	})
-}
-
 func (s *server) ReloadSchema(ctx context.Context, request *pb.ReloadSchemaRequest) (*pb.ReloadSchemaResponse, error) {
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.ReloadSchemaResponse{}

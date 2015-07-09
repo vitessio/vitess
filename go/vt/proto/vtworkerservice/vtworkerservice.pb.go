@@ -30,6 +30,8 @@ var _ = proto.Marshal
 // Client API for Vtworker service
 
 type VtworkerClient interface {
+	// ExecuteVtworkerCommand allows to run a vtworker command by specifying the
+	// same arguments as on the command line.
 	ExecuteVtworkerCommand(ctx context.Context, in *vtworkerdata.ExecuteVtworkerCommandRequest, opts ...grpc.CallOption) (Vtworker_ExecuteVtworkerCommandClient, error)
 }
 
@@ -76,6 +78,8 @@ func (x *vtworkerExecuteVtworkerCommandClient) Recv() (*vtworkerdata.ExecuteVtwo
 // Server API for Vtworker service
 
 type VtworkerServer interface {
+	// ExecuteVtworkerCommand allows to run a vtworker command by specifying the
+	// same arguments as on the command line.
 	ExecuteVtworkerCommand(*vtworkerdata.ExecuteVtworkerCommandRequest, Vtworker_ExecuteVtworkerCommandServer) error
 }
 

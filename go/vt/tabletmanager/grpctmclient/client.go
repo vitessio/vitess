@@ -229,45 +229,6 @@ func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInf
 	return err
 }
 
-// HealthStream is part of the tmclient.TabletManagerClient interface
-func (client *Client) HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, tmclient.ErrFunc, error) {
-	cc, c, err := client.dial(ctx, tablet)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	logstream := make(chan *actionnode.HealthStreamReply, 10)
-	stream, err := c.StreamHealth(ctx, &pb.StreamHealthRequest{})
-	if err != nil {
-		cc.Close()
-		return nil, nil, err
-	}
-
-	var finalErr error
-	go func() {
-		for {
-			shr, err := stream.Recv()
-			if err != nil {
-				if err != io.EOF {
-					finalErr = err
-				}
-				close(logstream)
-				return
-			}
-			logstream <- &actionnode.HealthStreamReply{
-				Tablet:              topo.ProtoToTablet(shr.Tablet),
-				BinlogPlayerMapSize: shr.BinlogPlayerMapSize,
-				HealthError:         shr.HealthError,
-				ReplicationDelay:    time.Duration(shr.ReplicationDelay),
-			}
-		}
-	}()
-	return logstream, func() error {
-		cc.Close()
-		return finalErr
-	}, nil
-}
-
 // ReloadSchema is part of the tmclient.TabletManagerClient interface
 func (client *Client) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
 	cc, c, err := client.dial(ctx, tablet)

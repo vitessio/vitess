@@ -139,34 +139,6 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletTy
 	})
 }
 
-// HealthStream registers an agent health stream
-func (tm *TabletManager) HealthStream(ctx context.Context, args *rpc.Unused, sendReply func(interface{}) error) error {
-	ctx = callinfo.RPCWrapCallInfo(ctx)
-	return tm.agent.RPCWrap(ctx, actionnode.TabletActionHealthStream, args, nil, func() error {
-		c := make(chan *actionnode.HealthStreamReply, 10)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for hsr := range c {
-				// we send until the client disconnects
-				if err := sendReply(hsr); err != nil {
-					return
-				}
-			}
-		}()
-
-		id, err := tm.agent.RegisterHealthStream(c)
-		if err != nil {
-			close(c)
-			wg.Wait()
-			return err
-		}
-		wg.Wait()
-		return tm.agent.UnregisterHealthStream(id)
-	})
-}
-
 // ReloadSchema wraps RPCAgent.ReloadSchema
 func (tm *TabletManager) ReloadSchema(ctx context.Context, args *rpc.Unused, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)

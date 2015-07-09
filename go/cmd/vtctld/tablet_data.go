@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"reflect"
 	"sync"
+	"time"
 
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // This file maintains a tablet health cache. It establishes streaming
@@ -23,18 +25,17 @@ type TabletHealth struct {
 	// mu protects the entire data structure
 	mu sync.Mutex
 
-	Version           int
-	HealthStreamReply actionnode.HealthStreamReply
-	result            []byte
-	lastError         error
+	Version              int
+	TabletAlias          topo.TabletAlias
+	StreamHealthResponse *pb.StreamHealthResponse
+	result               []byte
+	lastError            error
 }
 
 func newTabletHealth(thc *tabletHealthCache, tabletAlias topo.TabletAlias) (*TabletHealth, error) {
 	th := &TabletHealth{
-		Version: 1,
-	}
-	th.HealthStreamReply.Tablet = &topo.Tablet{
-		Alias: tabletAlias,
+		Version:     1,
+		TabletAlias: tabletAlias,
 	}
 	var err error
 	th.result, err = json.MarshalIndent(th, "", "  ")
@@ -54,15 +55,26 @@ func (th *TabletHealth) update(thc *tabletHealthCache, tabletAlias topo.TabletAl
 		return
 	}
 
-	c, errFunc, err := thc.tmc.HealthStream(ctx, ti)
+	ep, err := ti.EndPoint()
 	if err != nil {
 		return
 	}
 
-	for hsr := range c {
+	// pass in empty keyspace and shard to not ask for sessionId
+	conn, err := tabletconn.GetDialer()(ctx, *ep, "", "", 30*time.Second)
+	if err != nil {
+		return
+	}
+
+	stream, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		return
+	}
+
+	for shr := range stream {
 		th.mu.Lock()
-		if !reflect.DeepEqual(hsr, &th.HealthStreamReply) {
-			th.HealthStreamReply = *hsr
+		if !reflect.DeepEqual(shr, th.StreamHealthResponse) {
+			th.StreamHealthResponse = shr
 			th.Version++
 			th.result, th.lastError = json.MarshalIndent(th, "", "  ")
 		}
@@ -81,17 +93,15 @@ func (th *TabletHealth) get() ([]byte, error) {
 }
 
 type tabletHealthCache struct {
-	ts  topo.Server
-	tmc tmclient.TabletManagerClient
+	ts topo.Server
 
 	mu        sync.Mutex
 	tabletMap map[topo.TabletAlias]*TabletHealth
 }
 
-func newTabletHealthCache(ts topo.Server, tmc tmclient.TabletManagerClient) *tabletHealthCache {
+func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
-		tmc:       tmc,
 		tabletMap: make(map[topo.TabletAlias]*TabletHealth),
 	}
 }
