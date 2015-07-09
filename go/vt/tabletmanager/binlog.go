@@ -56,8 +56,9 @@ type BinlogPlayerController struct {
 	// They will change depending on our state.
 	playerMutex sync.Mutex
 
-	// interrupted is the channel to close to stop the playback.
-	interrupted chan struct{}
+	// ctx is the context to cancel to stop the playback.
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// done is the channel to wait for to be sure the player is done.
 	done chan struct{}
@@ -95,29 +96,29 @@ func (bpc *BinlogPlayerController) String() string {
 func (bpc *BinlogPlayerController) Start(ctx context.Context) {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
-	if bpc.interrupted != nil {
+	if bpc.ctx != nil {
 		log.Warningf("%v: already started", bpc)
 		return
 	}
 	log.Infof("%v: starting binlog player", bpc)
-	bpc.interrupted = make(chan struct{}, 1)
+	bpc.ctx, bpc.cancel = context.WithCancel(ctx)
 	bpc.done = make(chan struct{}, 1)
 	bpc.stopPosition = myproto.ReplicationPosition{} // run forever
-	go bpc.Loop(ctx)
+	go bpc.Loop()
 }
 
 // StartUntil will start the Player until we reach the given position.
 func (bpc *BinlogPlayerController) StartUntil(ctx context.Context, stopPos myproto.ReplicationPosition) error {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
-	if bpc.interrupted != nil {
+	if bpc.ctx != nil {
 		return fmt.Errorf("%v: already started", bpc)
 	}
 	log.Infof("%v: starting binlog player until %v", bpc, stopPos)
-	bpc.interrupted = make(chan struct{}, 1)
+	bpc.ctx, bpc.cancel = context.WithCancel(ctx)
 	bpc.done = make(chan struct{}, 1)
 	bpc.stopPosition = stopPos
-	go bpc.Loop(ctx)
+	go bpc.Loop()
 	return nil
 }
 
@@ -125,7 +126,8 @@ func (bpc *BinlogPlayerController) StartUntil(ctx context.Context, stopPos mypro
 func (bpc *BinlogPlayerController) reset() {
 	bpc.playerMutex.Lock()
 	defer bpc.playerMutex.Unlock()
-	bpc.interrupted = nil
+	bpc.ctx = nil
+	bpc.cancel = nil
 	bpc.done = nil
 	bpc.sourceTablet = topo.TabletAlias{}
 	bpc.lastError = nil
@@ -135,7 +137,7 @@ func (bpc *BinlogPlayerController) reset() {
 func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error {
 	// take the lock, check the data, get what we need, release the lock.
 	bpc.playerMutex.Lock()
-	if bpc.interrupted == nil {
+	if bpc.ctx == nil {
 		bpc.playerMutex.Unlock()
 		log.Warningf("%v: not started", bpc)
 		return fmt.Errorf("WaitForStop called but player not started")
@@ -159,13 +161,13 @@ func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error 
 // Stop will ask the controller to stop playing, and wait until it is stopped.
 func (bpc *BinlogPlayerController) Stop() {
 	bpc.playerMutex.Lock()
-	if bpc.interrupted == nil {
+	if bpc.ctx == nil {
 		bpc.playerMutex.Unlock()
 		log.Warningf("%v: not started", bpc)
 		return
 	}
 	log.Infof("%v: stopping binlog player", bpc)
-	close(bpc.interrupted)
+	bpc.cancel()
 	done := bpc.done
 	bpc.playerMutex.Unlock()
 
@@ -177,9 +179,9 @@ func (bpc *BinlogPlayerController) Stop() {
 
 // Loop runs the main player loop: try to play, and in case of error,
 // sleep for 5 seconds and try again.
-func (bpc *BinlogPlayerController) Loop(ctx context.Context) {
+func (bpc *BinlogPlayerController) Loop() {
 	for {
-		err := bpc.Iteration(ctx)
+		err := bpc.Iteration()
 		if err == nil {
 			// this happens when we get interrupted
 			break
@@ -202,7 +204,7 @@ func (bpc *BinlogPlayerController) Loop(ctx context.Context) {
 
 // Iteration is a single iteration for the player: get the current status,
 // try to play, and plays until interrupted, or until an error occurs.
-func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
+func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("%v: caught panic: %v", bpc, x)
@@ -236,7 +238,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 	}
 
 	// Find the server list for the source shard in our cell
-	addrs, _, err := bpc.ts.GetEndPoints(ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
+	addrs, _, err := bpc.ts.GetEndPoints(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	if err != nil {
 		return fmt.Errorf("can't find any source tablet for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA, err)
 	}
@@ -265,7 +267,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 
 		// tables, just get them
 		player := binlogplayer.NewBinlogPlayerTables(vtClient, endPoint, tables, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
-		return player.ApplyBinlogEvents(bpc.interrupted)
+		return player.ApplyBinlogEvents(bpc.ctx)
 	}
 	// the data we have to replicate is the intersection of the
 	// source keyrange and our keyrange
@@ -275,7 +277,7 @@ func (bpc *BinlogPlayerController) Iteration(ctx context.Context) (err error) {
 	}
 
 	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
-	return player.ApplyBinlogEvents(bpc.interrupted)
+	return player.ApplyBinlogEvents(bpc.ctx)
 }
 
 // BlpPosition returns the current position for a controller, as read from the database.
@@ -623,7 +625,7 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 			Rates:               bpc.binlogPlayerStats.Rates.Get(),
 		}
 		bpc.playerMutex.Lock()
-		if bpc.interrupted == nil {
+		if bpc.ctx == nil {
 			bpcs.State = "Stopped"
 		} else {
 			bpcs.State = "Running"
