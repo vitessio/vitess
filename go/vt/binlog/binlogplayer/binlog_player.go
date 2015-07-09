@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
@@ -276,11 +278,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}
 	}
 
-	binlogPlayerClientFactory, ok := binlogPlayerClientFactories[*binlogPlayerProtocol]
+	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
 	if !ok {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
-	blplClient := binlogPlayerClientFactory()
+	blplClient := clientFactory()
 	err := blplClient.Dial(blp.endPoint, *binlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
@@ -307,15 +309,16 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}()
 	}
 
-	responseChan := make(chan *proto.BinlogTransaction)
-	var resp BinlogPlayerResponse
+	ctx := context.TODO()
+	var responseChan chan *proto.BinlogTransaction
+	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
 			Tables:   blp.tables,
 			Position: blp.blpPos.Position,
 			Charset:  &blp.defaultCharset,
 		}
-		resp = blplClient.StreamTables(req, responseChan)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, req)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
@@ -323,7 +326,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			Position:       blp.blpPos.Position,
 			Charset:        &blp.defaultCharset,
 		}
-		resp = blplClient.StreamKeyRange(req, responseChan)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, req)
+	}
+	if err != nil {
+		log.Errorf("Error sending streaming query to binlog server: %v", err)
+		return fmt.Errorf("error sending streaming query to binlog server: %v", err)
 	}
 
 processLoop:
@@ -354,10 +361,12 @@ processLoop:
 			return nil
 		}
 	}
-	if resp.Error() != nil {
-		return fmt.Errorf("Error received from ServeBinlog %v", resp.Error())
+	switch err := errFunc(); err {
+	case nil, context.Canceled:
+		return io.EOF
+	default:
+		return fmt.Errorf("Error received from ServeBinlog %v", err)
 	}
-	return io.EOF
 }
 
 // CreateBlpCheckpoint returns the statements required to create

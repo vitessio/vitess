@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -96,9 +98,12 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(req *proto.KeyRangeRequest, sendR
 	return nil
 }
 
-func testStreamKeyRange(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
-	c := make(chan *proto.BinlogTransaction)
-	bpr := bpc.StreamKeyRange(testKeyRangeRequest, c)
+func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
 	if se, ok := <-c; !ok {
 		t.Fatalf("got no response")
 	} else {
@@ -109,18 +114,21 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
 	if se, ok := <-c; ok {
 		t.Fatalf("got a response when error expected: %v", se)
 	}
-	if err := bpr.Error(); err != nil {
+	if err := errFunc(); err != nil {
 		t.Errorf("got unexpected error: %v", err)
 	}
 }
 
-func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
-	c := make(chan *proto.BinlogTransaction)
-	bpr := bpc.StreamKeyRange(testKeyRangeRequest, c)
+func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
 	if se, ok := <-c; ok {
 		t.Fatalf("got a response when error expected: %v", se)
 	}
-	err := bpr.Error()
+	err = errFunc()
 	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
 		t.Errorf("wrong error from panic: %v", err)
 	}
@@ -155,9 +163,12 @@ func (fake *FakeBinlogStreamer) StreamTables(req *proto.TablesRequest, sendReply
 	return nil
 }
 
-func testStreamTables(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
-	c := make(chan *proto.BinlogTransaction)
-	bpr := bpc.StreamTables(testTablesRequest, c)
+func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
 	if se, ok := <-c; !ok {
 		t.Fatalf("got no response")
 	} else {
@@ -168,18 +179,21 @@ func testStreamTables(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
 	if se, ok := <-c; ok {
 		t.Fatalf("got a response when error expected: %v", se)
 	}
-	if err := bpr.Error(); err != nil {
+	if err := errFunc(); err != nil {
 		t.Errorf("got unexpected error: %v", err)
 	}
 }
 
-func testStreamTablesPanics(t *testing.T, bpc binlogplayer.BinlogPlayerClient) {
-	c := make(chan *proto.BinlogTransaction)
-	bpr := bpc.StreamTables(testTablesRequest, c)
+func testStreamTablesPanics(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
 	if se, ok := <-c; ok {
 		t.Fatalf("got a response when error expected: %v", se)
 	}
-	err := bpr.Error()
+	err = errFunc()
 	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
 		t.Errorf("wrong error from panic: %v", err)
 	}
@@ -193,7 +207,7 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 }
 
 // Run runs the test suite
-func Run(t *testing.T, bpc binlogplayer.BinlogPlayerClient, endPoint topo.EndPoint, fake *FakeBinlogStreamer) {
+func Run(t *testing.T, bpc binlogplayer.Client, endPoint topo.EndPoint, fake *FakeBinlogStreamer) {
 	if err := bpc.Dial(endPoint, 30*time.Second); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}

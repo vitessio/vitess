@@ -5,6 +5,7 @@
 package grpcbinlogplayer
 
 import (
+	"fmt"
 	"io"
 	"time"
 
@@ -24,20 +25,10 @@ import (
 	pbs "github.com/youtube/vitess/go/vt/proto/binlogservice"
 )
 
-// response is the type returned by the Client for streaming
-type response struct {
-	err error
-}
-
-func (response *response) Error() error {
-	return response.err
-}
-
-// client implements a BinlogPlayerClient over go rpc
+// client implements a Client over go rpc
 type client struct {
-	cc  *grpc.ClientConn
-	c   pbs.UpdateStreamClient
-	ctx context.Context
+	cc *grpc.ClientConn
+	c  pbs.UpdateStreamClient
 }
 
 func (client *client) Dial(endPoint topo.EndPoint, connTimeout time.Duration) error {
@@ -48,7 +39,6 @@ func (client *client) Dial(endPoint topo.EndPoint, connTimeout time.Duration) er
 		return err
 	}
 	client.c = pbs.NewUpdateStreamClient(client.cc)
-	client.ctx = context.Background()
 	return nil
 }
 
@@ -56,11 +46,12 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-func (client *client) ServeUpdateStream(req *proto.UpdateStreamRequest, responseChan chan *proto.StreamEvent) binlogplayer.BinlogPlayerResponse {
-	return nil
+func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateStreamRequest) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("NYI")
 }
 
-func (client *client) StreamKeyRange(req *proto.KeyRangeRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
 		Position:       myproto.ReplicationPositionToProto(req.Position),
 		KeyspaceIdType: key.KeyspaceIdTypeToProto(req.KeyspaceIdType),
@@ -68,62 +59,63 @@ func (client *client) StreamKeyRange(req *proto.KeyRangeRequest, responseChan ch
 		Charset:        mproto.CharsetToProto(req.Charset),
 	}
 
-	response := &response{}
-	stream, err := client.c.StreamKeyRange(client.ctx, query)
+	stream, err := client.c.StreamKeyRange(ctx, query)
 	if err != nil {
-		response.err = err
-		close(responseChan)
-		return response
+		return nil, nil, err
 	}
+	var finalErr error
 	go func() {
 		for {
 			r, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					response.err = err
+					finalErr = err
 				}
-				close(responseChan)
+				close(response)
 				return
 			}
-			responseChan <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
+			response <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
 		}
 	}()
-	return response
+	return response, func() error {
+		return finalErr
+	}, nil
 }
 
-func (client *client) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+func (client *client) StreamTables(ctx context.Context, req *proto.TablesRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamTablesRequest{
 		Position: myproto.ReplicationPositionToProto(req.Position),
 		Tables:   req.Tables,
 		Charset:  mproto.CharsetToProto(req.Charset),
 	}
 
-	response := &response{}
-	stream, err := client.c.StreamTables(client.ctx, query)
+	stream, err := client.c.StreamTables(ctx, query)
 	if err != nil {
-		response.err = err
-		close(responseChan)
-		return response
+		return nil, nil, err
 	}
+	var finalErr error
 	go func() {
 		for {
 			r, err := stream.Recv()
 			if err != nil {
 				if err != io.EOF {
-					response.err = err
+					finalErr = err
 				}
-				close(responseChan)
+				close(response)
 				return
 			}
-			responseChan <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
+			response <- proto.ProtoToBinlogTransaction(r.BinlogTransaction)
 		}
 	}()
-	return response
+	return response, func() error {
+		return finalErr
+	}, nil
 }
 
 // Registration as a factory
 func init() {
-	binlogplayer.RegisterBinlogPlayerClientFactory("grpc", func() binlogplayer.BinlogPlayerClient {
+	binlogplayer.RegisterClientFactory("grpc", func() binlogplayer.Client {
 		return &client{}
 	})
 }
