@@ -127,7 +127,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
 	conn := qre.getConn(qre.qe.streamConnPool)
 	defer conn.Recycle()
 
-	qd := NewQueryDetail(qre.logStats.context, conn)
+	qd := NewQueryDetail(qre.logStats.ctx, conn)
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 

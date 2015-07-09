@@ -502,7 +502,7 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 }
 
 // StreamHealth does nothing
-func (sbc *sandboxConn) StreamHealth(context context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	return nil, nil, fmt.Errorf("Not implemented in test")
 }
 

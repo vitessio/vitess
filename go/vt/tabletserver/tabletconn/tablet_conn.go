@@ -59,34 +59,34 @@ func (e OperationalError) Error() string { return string(e) }
 // object that can communicate with a tablet.
 // If both keyspace and shard are empty, we will not ask for a sessionId
 // (and assume we're using the target field for the queries).
-type TabletDialer func(context context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
+type TabletDialer func(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(context context.Context, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
 	// you can pull values from the channel till it's closed. Following this, you can call ErrFunc
 	// to see if the stream ended normally or due to a failure.
-	StreamExecute(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Transaction support
-	Begin(context context.Context) (transactionId int64, err error)
-	Commit(context context.Context, transactionId int64) error
-	Rollback(context context.Context, transactionId int64) error
+	Begin(ctx context.Context) (transactionId int64, err error)
+	Commit(ctx context.Context, transactionId int64) error
+	Rollback(ctx context.Context, transactionId int64) error
 
 	// These should not be used for anything except tests for now; they will eventually
 	// replace the existing methods.
-	Begin2(context context.Context) (transactionId int64, err error)
-	Commit2(context context.Context, transactionId int64) error
-	Rollback2(context context.Context, transactionId int64) error
-	StreamExecute2(context context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
+	Begin2(ctx context.Context) (transactionId int64, err error)
+	Commit2(ctx context.Context, transactionId int64) error
+	Rollback2(ctx context.Context, transactionId int64) error
+	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Close must be called for releasing resources.
 	Close()
@@ -96,10 +96,10 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(context context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
+	SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) ([]tproto.QuerySplit, error)
 
 	// StreamHealth streams StreamHealthResponse to the client
-	StreamHealth(context context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
+	StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, ErrFunc, error)
 }
 
 type ErrFunc func() error
