@@ -357,6 +357,16 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	case context.Canceled:
 		return nil
 	default:
+		// if the context is canceled, we return nil (some RPC
+		// implementations will remap the context error to their own
+		// errors)
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.Canceled {
+				return nil
+			}
+		default:
+		}
 		return fmt.Errorf("Error received from ServeBinlog %v", err)
 	}
 }
