@@ -223,6 +223,65 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'], expect_fail=True)
     utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'master'], expect_fail=True)
 
+  def test_remove_keyspace_cell(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_delete_keyspace'])
+    utils.run_vtctl(['CreateShard', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['CreateShard', 'test_delete_keyspace/1'])
+    utils.run_vtctl(['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace', '-shard=0', 'test_ca-0000000100', 'master'])
+    utils.run_vtctl(['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace', '-shard=0', 'test_nj-0000000100', 'replica'])
+    utils.run_vtctl(['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace', '-shard=1', 'test_nj-0000000101', 'replica'])
+
+    # Create the serving/replication entries and check that they exist,
+    # so we can later check they're deleted.
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/1'])
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
+    utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
+    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/1'])
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'replica'])
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_delete_keyspace/1', 'replica'])
+
+    # Just remove the shard from one cell (including tablets),
+    # but leaving the global records and other cells/shards alone.
+    utils.run_vtctl(['RemoveShardCell', '-recursive', 'test_delete_keyspace/0', 'test_nj'])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
+
+    utils.run_vtctl(['GetKeyspace', 'test_delete_keyspace'])
+    utils.run_vtctl(['GetShard', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetTablet', 'test_ca-0000000100'])
+    utils.run_vtctl(['GetTablet', 'test_nj-0000000100'], expect_fail=True)
+    utils.run_vtctl(['GetTablet', 'test_nj-0000000101'])
+    utils.run_vtctl(['GetShardReplication', 'test_ca', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'], expect_fail=True)
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
+    utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
+    utils.run_vtctl(['GetSrvShard', 'test_nj', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_delete_keyspace/1', 'replica'])
+    utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_delete_keyspace/0', 'replica'], expect_fail=True)
+
+    # Add it back to do another test.
+    utils.run_vtctl(['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace', '-shard=0', 'test_nj-0000000100', 'replica'])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
+
+    # Now use RemoveKeyspaceCell to remove all shards.
+    utils.run_vtctl(['RemoveKeyspaceCell', '-recursive', 'test_delete_keyspace', 'test_nj'])
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['RebuildShardGraph', 'test_delete_keyspace/1'])
+
+    utils.run_vtctl(['GetShardReplication', 'test_ca', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'], expect_fail=True)
+    utils.run_vtctl(['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'], expect_fail=True)
+
+    # Clean up.
+    utils.run_vtctl(['DeleteKeyspace', '-recursive', 'test_delete_keyspace'])
+
   def test_shard_count(self):
     sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
