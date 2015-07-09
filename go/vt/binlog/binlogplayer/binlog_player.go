@@ -243,12 +243,12 @@ func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 	return qr, err
 }
 
-// ApplyBinlogEvents makes a gob rpc request to BinlogServer
-// and processes the events. It will return nil if 'interrupted'
-// was closed, or if we reached the stopping point.
+// ApplyBinlogEvents makes an RPC request to BinlogServer
+// and processes the events. It will return nil if the provided context
+// was canceled, or if we reached the stopping point.
 // It will return io.EOF if the server stops sending us updates.
 // It may return any other error it encounters.
-func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
+func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
 			blp.blpPos.Uid,
@@ -309,7 +309,6 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}()
 	}
 
-	ctx := context.TODO()
 	var responseChan chan *proto.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
@@ -333,37 +332,30 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		return fmt.Errorf("error sending streaming query to binlog server: %v", err)
 	}
 
-processLoop:
-	for {
-		select {
-		case response, ok := <-responseChan:
-			if !ok {
-				break processLoop
+	for response := range responseChan {
+		for {
+			ok, err = blp.processTransaction(response)
+			if err != nil {
+				return fmt.Errorf("Error in processing binlog event %v", err)
 			}
-			for {
-				ok, err = blp.processTransaction(response)
-				if err != nil {
-					return fmt.Errorf("Error in processing binlog event %v", err)
-				}
-				if ok {
-					if !blp.stopPosition.IsZero() {
-						if blp.blpPos.Position.AtLeast(blp.stopPosition) {
-							log.Infof("Reached stopping position, done playing logs")
-							return nil
-						}
+			if ok {
+				if !blp.stopPosition.IsZero() {
+					if blp.blpPos.Position.AtLeast(blp.stopPosition) {
+						log.Infof("Reached stopping position, done playing logs")
+						return nil
 					}
-					break
 				}
-				log.Infof("Retrying txn")
-				time.Sleep(1 * time.Second)
+				break
 			}
-		case <-interrupted:
-			return nil
+			log.Infof("Retrying txn")
+			time.Sleep(1 * time.Second)
 		}
 	}
 	switch err := errFunc(); err {
-	case nil, context.Canceled:
+	case nil:
 		return io.EOF
+	case context.Canceled:
+		return nil
 	default:
 		return fmt.Errorf("Error received from ServeBinlog %v", err)
 	}
