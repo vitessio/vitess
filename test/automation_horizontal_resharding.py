@@ -18,7 +18,7 @@ def setUpModule():
 def tearDownModule():
   worker.tearDownModule()
 
-class TestAutomationHorizontalResharding(worker.TestBaseSplitCloneResiliency):
+class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
   """This test reuses worker.py because worker.py also covers the happy path
   of the horizontal resharding code. Instead of running the different resharding
   steps "manually" as part of the test, they will be run by the automation
