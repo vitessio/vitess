@@ -700,6 +700,24 @@ def run_vtworker_client(args, rpc_port):
                  trap_output=True)
   return out, err
 
+def run_automation_server(auto_log=False):
+  """Starts a background automation_server process.
+
+  Returns:
+    rpc_port - int with the port number of the RPC interface
+  """
+  rpc_port = environment.reserve_ports(1)
+  args = environment.binary_args('automation_server') + [
+          '-log_dir', environment.vtlogroot,
+          '-port', str(rpc_port),
+          '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
+          '-vtworker_client_protocol', protocols_flavor().vtworker_client_protocol(),
+          ]
+  if auto_log:
+    args.append('--stderrthreshold=%s' % get_log_level())
+
+  return run_bg(args), rpc_port
+
 # mysql helpers
 def mysql_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
