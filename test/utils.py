@@ -909,19 +909,31 @@ class Vtctld(object):
                           sleep_time=0.2)
 
     # save the running instance so vtctl commands can be remote executed now
-    protocol = protocols_flavor().vtctl_python_client_protocol()
-    port = self.port
-    if protocol == "grpc":
-      # import the grpc vtctl client implementation, change the port
-      from vtctl import grpc_vtctl_client
-      port = self.grpc_port
     global vtctld, vtctld_connection
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          protocol, 'localhost:%u' % port, 30)
+          protocols_flavor().vtctl_python_client_protocol(),
+          self.rpc_endpoint(), 30)
 
     return self.proc
+
+  def rpc_endpoint(self):
+    """RPC endpoint to vtctld.
+    
+    The RPC endpoint may differ from the webinterface URL e.g. because gRPC
+    requires a dedicated port.
+
+    Returns:
+      endpoint - string e.g. localhost:15001
+    """
+    protocol = protocols_flavor().vtctl_python_client_protocol()
+    rpc_port = self.port
+    if protocol == "grpc":
+      # import the grpc vtctl client implementation, change the port
+      from vtctl import grpc_vtctl_client
+      rpc_port = self.grpc_port
+    return 'localhost:%u' % rpc_port
 
   def process_args(self):
     return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
@@ -934,13 +946,10 @@ class Vtctld(object):
     else:
       log_level='ERROR'
 
-    port = self.port
-    if protocols_flavor().vtctl_client_protocol() == 'grpc':
-      port = self.grpc_port
     out, err = run(environment.binary_args('vtctlclient') +
                    ['-vtctl_client_protocol',
                     protocols_flavor().vtctl_client_protocol(),
-                    '-server', 'localhost:%u' % port,
+                    '-server', self.rpc_endpoint(),
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out
