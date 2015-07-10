@@ -31,15 +31,6 @@ RUN mkdir -p /go/src/github.com/coreos && \
     go install github.com/coreos/etcd && \
     rm -rf /go/src/*
 
-# Install gRPC as root
-RUN cd /tmp && \
-    git clone https://github.com/grpc/grpc.git && cd grpc && \
-    git submodule update --init && \
-    make install && \
-    CONFIG=opt tools/run_tests/build_python.sh && \
-    pip install -r src/python/requirements.txt && \
-    pip install src/python/src
-
 # Set up Vitess environment (equivalent to '. dev.env')
 ENV VTTOP /vt/src/github.com/youtube/vitess
 ENV VTROOT /vt
@@ -59,6 +50,10 @@ ENV LD_LIBRARY_PATH $VTROOT/dist/vt-zookeeper-3.3.5/lib
 
 # Copy files needed for bootstrap
 COPY . /vt/src/github.com/youtube/vitess
+
+# Install gRPC and protobuf as root
+RUN $VTTOP/travis/install_grpc.sh
+RUN $VTTOP/travis/install_protobuf.sh
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
