@@ -307,7 +307,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)

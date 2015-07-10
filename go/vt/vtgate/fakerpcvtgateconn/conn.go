@@ -173,7 +173,7 @@ func (conn *FakeVTGateConn) ExecuteBatchShard(ctx context.Context, queries []pro
 }
 
 // ExecuteBatchKeyspaceIds please see vtgateconn.Impl.ExecuteBatchKeyspaceIds
-func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	panic("not implemented")
 }
 

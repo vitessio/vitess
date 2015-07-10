@@ -147,15 +147,23 @@ type BatchQueryShard struct {
 
 //go:generate bsongen -file $GOFILE -type BatchQueryShard -o batch_query_shard_bson.go
 
+// BoundKeyspaceIdQuery represents a single query request for the
+// specified list of keyspace ids. This is used in a list for KeyspaceIdBatchQuery.
+type BoundKeyspaceIdQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyspaceIds   []key.KeyspaceId
+}
+
+//go:generate bsongen -file $GOFILE -type BoundKeyspaceIdQuery -o bound_keyspace_id_query_bson.go
+
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
-	Queries          []tproto.BoundQuery
-	Keyspace         string
-	KeyspaceIds      []key.KeyspaceId
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []BoundKeyspaceIdQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspaceIdBatchQuery -o keyspace_id_batch_query_bson.go

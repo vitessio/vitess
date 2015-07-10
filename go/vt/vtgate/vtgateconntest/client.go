@@ -729,7 +729,7 @@ func testExecuteBatchShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	ql, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType)
+	ql, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -737,14 +737,14 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []tproto.BoundQuery{tproto.BoundQuery{Sql: "none"}}, "", []key.KeyspaceId{}, "")
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: []key.KeyspaceId{}}}, "")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType)
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -754,14 +754,14 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteBatchKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType)
+	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	verifyError(t, err, "ExecuteBatchKeyspaceIds")
 }
 
 func testExecuteBatchKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType)
+	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	expectPanic(t, err)
 }
 
@@ -1085,7 +1085,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1127,7 +1127,7 @@ func testTxPassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType, true)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1228,7 +1228,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType, false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1271,7 +1271,7 @@ func testTx2PassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.Keyspace, execCase.keyspaceIdBatchQuery.KeyspaceIds, execCase.keyspaceIdBatchQuery.TabletType, true)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, execCase.keyspaceIdBatchQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1430,7 +1430,7 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "", nil, "", false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "")
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
@@ -1507,7 +1507,7 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "", nil, "", false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "")
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
@@ -1646,17 +1646,17 @@ var execMap = map[string]struct {
 			Session:    nil,
 		},
 		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
-			Queries: []tproto.BoundQuery{
-				tproto.BoundQuery{
+			Queries: []proto.BoundKeyspaceIdQuery{
+				proto.BoundKeyspaceIdQuery{
 					Sql: "request1",
 					BindVariables: map[string]interface{}{
 						"bind1": int64(0),
 					},
+					Keyspace: "ks",
+					KeyspaceIds: []key.KeyspaceId{
+						key.KeyspaceId("ki1"),
+					},
 				},
-			},
-			Keyspace: "ks",
-			KeyspaceIds: []key.KeyspaceId{
-				key.KeyspaceId("ki1"),
 			},
 			TabletType: topo.TYPE_RDONLY,
 			Session:    nil,
@@ -1740,17 +1740,17 @@ var execMap = map[string]struct {
 			Session:    nil,
 		},
 		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
-			Queries: []tproto.BoundQuery{
-				tproto.BoundQuery{
+			Queries: []proto.BoundKeyspaceIdQuery{
+				proto.BoundKeyspaceIdQuery{
 					Sql: "errorRequst",
 					BindVariables: map[string]interface{}{
 						"bind1": int64(0),
 					},
+					Keyspace: "ks",
+					KeyspaceIds: []key.KeyspaceId{
+						key.KeyspaceId("ki1"),
+					},
 				},
-			},
-			Keyspace: "ks",
-			KeyspaceIds: []key.KeyspaceId{
-				key.KeyspaceId("ki1"),
 			},
 			TabletType: topo.TYPE_RDONLY,
 			Session:    nil,
@@ -1834,17 +1834,17 @@ var execMap = map[string]struct {
 			Session:    session1,
 		},
 		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
-			Queries: []tproto.BoundQuery{
-				tproto.BoundQuery{
+			Queries: []proto.BoundKeyspaceIdQuery{
+				proto.BoundKeyspaceIdQuery{
 					Sql: "txRequest",
 					BindVariables: map[string]interface{}{
 						"bind1": int64(0),
 					},
+					Keyspace: "ks",
+					KeyspaceIds: []key.KeyspaceId{
+						key.KeyspaceId("ki1"),
+					},
 				},
-			},
-			Keyspace: "ks",
-			KeyspaceIds: []key.KeyspaceId{
-				key.KeyspaceId("ki1"),
 			},
 			TabletType: topo.TYPE_RDONLY,
 			Session:    session1,
@@ -1933,21 +1933,20 @@ var execMap = map[string]struct {
 			Session:    session1,
 		},
 		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
-			Queries: []tproto.BoundQuery{
-				tproto.BoundQuery{
+			Queries: []proto.BoundKeyspaceIdQuery{
+				proto.BoundKeyspaceIdQuery{
 					Sql: "txRequestNIT",
 					BindVariables: map[string]interface{}{
 						"bind1": int64(0),
 					},
+					Keyspace: "ks",
+					KeyspaceIds: []key.KeyspaceId{
+						key.KeyspaceId("ki1"),
+					},
 				},
 			},
-			Keyspace: "ks",
-			KeyspaceIds: []key.KeyspaceId{
-				key.KeyspaceId("ki1"),
-			},
-			TabletType:       topo.TYPE_RDONLY,
-			Session:          session1,
-			NotInTransaction: true,
+			TabletType: topo.TYPE_RDONLY,
+			Session:    session1,
 		},
 		reply: &proto.QueryResult{
 			Result:  nil,
