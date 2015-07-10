@@ -340,9 +340,12 @@ class TestUpdateStream(unittest.TestCase):
     while data:
       if data['Category'] == 'POS':
         break
-      self.assertEqual(data['PkRows'][0][0][1], expected_id)
+      self.assertEqual(data['Fields'][0], 'id')
+      self.assertEqual(data['PkRows'][0][0], expected_id)
       expected_id += 1
       data = master_conn.stream_next()
+    if expected_id != 1000004:
+      self.fail("did not get my foru values!")
 
   def test_database_filter(self):
     start_position = _get_master_current_position()

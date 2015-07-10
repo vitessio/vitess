@@ -5,6 +5,8 @@
 package proto
 
 import (
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -14,9 +16,9 @@ type StreamEvent struct {
 	Category string
 
 	// DML
-	TableName  string
-	PKColNames []string
-	PKValues   [][]interface{}
+	TableName        string
+	PrimaryKeyFields []mproto.Field
+	PrimaryKeyValues [][]sqltypes.Value
 
 	// DDL or ERR
 	Sql string

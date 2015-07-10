@@ -12,6 +12,8 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // MarshalBson bson-encodes StreamEvent.
@@ -21,26 +23,26 @@ func (streamEvent *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 
 	bson.EncodeString(buf, "Category", streamEvent.Category)
 	bson.EncodeString(buf, "TableName", streamEvent.TableName)
-	// []string
+	// []mproto.Field
 	{
-		bson.EncodePrefix(buf, bson.Array, "PKColNames")
+		bson.EncodePrefix(buf, bson.Array, "PrimaryKeyFields")
 		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v1 := range streamEvent.PKColNames {
-			bson.EncodeString(buf, bson.Itoa(_i), _v1)
+		for _i, _v1 := range streamEvent.PrimaryKeyFields {
+			_v1.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
 	}
-	// [][]interface{}
+	// [][]sqltypes.Value
 	{
-		bson.EncodePrefix(buf, bson.Array, "PKValues")
+		bson.EncodePrefix(buf, bson.Array, "PrimaryKeyValues")
 		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range streamEvent.PKValues {
-			// []interface{}
+		for _i, _v2 := range streamEvent.PrimaryKeyValues {
+			// []sqltypes.Value
 			{
 				bson.EncodePrefix(buf, bson.Array, bson.Itoa(_i))
 				lenWriter := bson.NewLenWriter(buf)
 				for _i, _v3 := range _v2 {
-					bson.EncodeInterface(buf, bson.Itoa(_i), _v3)
+					_v3.MarshalBson(buf, bson.Itoa(_i))
 				}
 				lenWriter.Close()
 			}
@@ -72,47 +74,47 @@ func (streamEvent *StreamEvent) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			streamEvent.Category = bson.DecodeString(buf, kind)
 		case "TableName":
 			streamEvent.TableName = bson.DecodeString(buf, kind)
-		case "PKColNames":
-			// []string
+		case "PrimaryKeyFields":
+			// []mproto.Field
 			if kind != bson.Null {
 				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for streamEvent.PKColNames", kind))
+					panic(bson.NewBsonError("unexpected kind %v for streamEvent.PrimaryKeyFields", kind))
 				}
 				bson.Next(buf, 4)
-				streamEvent.PKColNames = make([]string, 0, 8)
+				streamEvent.PrimaryKeyFields = make([]mproto.Field, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v1 string
-					_v1 = bson.DecodeString(buf, kind)
-					streamEvent.PKColNames = append(streamEvent.PKColNames, _v1)
+					var _v1 mproto.Field
+					_v1.UnmarshalBson(buf, kind)
+					streamEvent.PrimaryKeyFields = append(streamEvent.PrimaryKeyFields, _v1)
 				}
 			}
-		case "PKValues":
-			// [][]interface{}
+		case "PrimaryKeyValues":
+			// [][]sqltypes.Value
 			if kind != bson.Null {
 				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for streamEvent.PKValues", kind))
+					panic(bson.NewBsonError("unexpected kind %v for streamEvent.PrimaryKeyValues", kind))
 				}
 				bson.Next(buf, 4)
-				streamEvent.PKValues = make([][]interface{}, 0, 8)
+				streamEvent.PrimaryKeyValues = make([][]sqltypes.Value, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v2 []interface{}
-					// []interface{}
+					var _v2 []sqltypes.Value
+					// []sqltypes.Value
 					if kind != bson.Null {
 						if kind != bson.Array {
 							panic(bson.NewBsonError("unexpected kind %v for _v2", kind))
 						}
 						bson.Next(buf, 4)
-						_v2 = make([]interface{}, 0, 8)
+						_v2 = make([]sqltypes.Value, 0, 8)
 						for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 							bson.SkipIndex(buf)
-							var _v3 interface{}
-							_v3 = bson.DecodeInterface(buf, kind)
+							var _v3 sqltypes.Value
+							_v3.UnmarshalBson(buf, kind)
 							_v2 = append(_v2, _v3)
 						}
 					}
-					streamEvent.PKValues = append(streamEvent.PKValues, _v2)
+					streamEvent.PrimaryKeyValues = append(streamEvent.PrimaryKeyValues, _v2)
 				}
 			}
 		case "Sql":
