@@ -577,7 +577,7 @@ VTCTL_AUTO        = 0
 VTCTL_VTCTL       = 1
 VTCTL_VTCTLCLIENT = 2
 VTCTL_RPC         = 3
-def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+def run_vtctl(clargs, auto_log=False, expect_fail=False,
               mode=VTCTL_AUTO, **kwargs):
   if mode == VTCTL_AUTO:
     if not expect_fail and vtctld:
@@ -586,7 +586,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
       mode = VTCTL_VTCTL
 
   if mode == VTCTL_VTCTL:
-    return run_vtctl_vtctl(clargs, log_level=log_level, auto_log=auto_log,
+    return run_vtctl_vtctl(clargs, auto_log=auto_log,
                            expect_fail=expect_fail, **kwargs)
   elif mode == VTCTL_VTCTLCLIENT:
     result = vtctld.vtctl_client(clargs)
@@ -598,7 +598,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
 
   raise Exception('Unknown mode: %s', mode)
 
-def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server().flags())
@@ -608,15 +608,7 @@ def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
   args.extend(protocols_flavor().vtgate_protocol_flags())
 
   if auto_log:
-    if options.verbose == 2:
-      log_level='INFO'
-    elif options.verbose == 1:
-      log_level='WARNING'
-    else:
-      log_level='ERROR'
-
-  if log_level:
-    args.append('--stderrthreshold=%s' % log_level)
+    args.append('--stderrthreshold=%s' % get_log_level())
 
   if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
@@ -633,15 +625,23 @@ def run_vtctl_json(clargs):
   stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
   return json.loads(stdout)
 
+def get_log_level():
+  if options.verbose == 2:
+    return 'INFO'
+  elif options.verbose == 1:
+    return 'WARNING'
+  else:
+    return 'ERROR'
+
 # vtworker helpers
-def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
+def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr"""
-  cmd, _, _ = _get_vtworker_cmd(clargs, log_level, auto_log)
+  cmd, _, _ = _get_vtworker_cmd(clargs, auto_log)
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
-def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
+def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """Starts a background vtworker process.
 
   Returns:
@@ -649,10 +649,10 @@ def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
     port - int with the port number that the vtworker is running with
     rpc_port - int with the port number of the RPC interface
   """
-  cmd, port, rpc_port = _get_vtworker_cmd(clargs, log_level, auto_log)
+  cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
   return run_bg(cmd, **kwargs), port, rpc_port
 
-def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
+def _get_vtworker_cmd(clargs, auto_log=False):
   """Assembles the command that is needed to run a vtworker.
 
   Returns:
@@ -678,14 +678,7 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
     args.extend(['-grpc_port', str(rpc_port)])
 
   if auto_log:
-    if options.verbose == 2:
-      log_level='INFO'
-    elif options.verbose == 1:
-      log_level='WARNING'
-    else:
-      log_level='ERROR'
-  if log_level:
-    args.append('--stderrthreshold=%s' % log_level)
+    args.append('--stderrthreshold=%s' % get_log_level())
 
   cmd = args + clargs
   return cmd, port, rpc_port
@@ -698,18 +691,11 @@ def run_vtworker_client(args, rpc_port):
     out  - stdout of the vtworkerclient invocation
     err  - stderr of the vtworkerclient invocation
   """
-  if options.verbose == 2:
-    log_level='INFO'
-  elif options.verbose == 1:
-    log_level='WARNING'
-  else:
-    log_level='ERROR'
-
   out, err = run(environment.binary_args('vtworkerclient') +
                  ['-vtworker_client_protocol',
                   protocols_flavor().vtworker_client_protocol(),
                   '-server', 'localhost:%u' % rpc_port,
-                  '-stderrthreshold', log_level] + args,
+                  '-stderrthreshold', get_log_level()] + args,
                  trap_output=True)
   return out, err
 
