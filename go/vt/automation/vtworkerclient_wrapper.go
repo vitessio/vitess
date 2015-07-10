@@ -9,20 +9,18 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 )
 
-// ExecuteVtctl runs vtctl using vtctlclient. The stream of LoggerEvent messages is concatenated into one output string.
-func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
+// ExecuteVtworker runs vtworker using vtworkerclient. The stream of LoggerEvent messages is concatenated into one output string.
+func ExecuteVtworker(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
 
-	err := vtctlclient.RunCommandAndWait(
+	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
-		// TODO(mberlin): Should these values be configurable as flags?
+		// TODO(mberlin): Should this value be configurable as flag?
 		30*time.Second, // dialTimeout
-		time.Hour,      // actionTimeout
-		10*time.Second, // lockWaitTimeout
 		func(e *logutil.LoggerEvent) {
 			e.ToBuffer(&output)
 		})
