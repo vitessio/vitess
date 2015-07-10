@@ -285,14 +285,6 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     self.run_shard_tablets('80-', shard_1_tablets, create_db=False,
       create_table=False, wait_state='NOT_SERVING')
 
-    # Copy the schema to the destination shards
-    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
-      utils.run_vtctl(['CopySchemaShard',
-                       '--exclude_tables', 'unrelated',
-                       shard_rdonly1.tablet_alias,
-                       keyspace_shard],
-                      auto_log=True)
-
     logging.debug("Start inserting initial data: %s rows", utils.options.num_insert_rows)
     self.insert_values(shard_master, utils.options.num_insert_rows, 2)
     logging.debug("Done inserting initial data, waiting for replication to catch up")
@@ -319,13 +311,14 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     """Verifies that vtworker can successfully copy data for a SplitClone.
 
     Order of operations:
-    1. Run a background vtworker
-    2. Wait until the worker successfully resolves the destination masters.
-    3. Reparent the destination tablets
-    4. Wait until the vtworker copy is finished
-    5. Verify that the worker was forced to reresolve topology and retry writes
+    1. Copy the schema to the destination shards.
+    2. Run a background vtworker.
+    3. Wait until the worker successfully resolves the destination masters.
+    4. Reparent the destination tablets.
+    5. Wait until the vtworker copy is finished.
+    6. Verify that the worker was forced to reresolve topology and retry writes
       due to the reparent.
-    6. Verify that the data was copied successfully to both new shards
+    7. Verify that the data was copied successfully to both new shards.
 
     Args:
       mysql_down - boolean, True iff we expect the MySQL instances on the
@@ -334,6 +327,14 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     Raises:
       AssertionError if things didn't go as expected.
     """
+    # Copy the schema to the destination shards.
+    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+      utils.run_vtctl(['CopySchemaShard',
+                       '--exclude_tables', 'unrelated',
+                       shard_rdonly1.tablet_alias,
+                       keyspace_shard],
+                      auto_log=True)
+
     worker_proc, worker_port, _ = utils.run_vtworker_bg(['--cell', 'test_nj',
                         'SplitClone',
                         '--source_reader_count', '1',
@@ -384,7 +385,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     worker_vars = utils.poll_for_vars('vtworker', worker_port,
       'WorkerState == cleaning up',
       condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
-      # We know that vars should already be ready, since we read them earlier
+      # We know that vars should already be ready, since we read them earlier.
       require_vars=True,
       # We're willing to let the test run for longer to make it less flaky.
       # This should still fail fast if something goes wrong with vtworker,
@@ -402,7 +403,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                      auto_log=True)
 
-    # Make sure that everything is caught up to the same replication point
+    # Make sure that everything is caught up to the same replication point.
     self.run_split_diff('test_keyspace/-80', shard_tablets, shard_0_tablets)
     self.run_split_diff('test_keyspace/80-', shard_tablets, shard_1_tablets)
 
