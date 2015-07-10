@@ -20,8 +20,10 @@ It has these top-level messages:
 	ExecuteKeyRangesResponse
 	ExecuteEntityIdsRequest
 	ExecuteEntityIdsResponse
+	BoundShardQuery
 	ExecuteBatchShardsRequest
 	ExecuteBatchShardsResponse
+	BoundKeyspaceIdQuery
 	ExecuteBatchKeyspaceIdsRequest
 	ExecuteBatchKeyspaceIdsResponse
 	StreamExecuteRequest
@@ -481,15 +483,32 @@ func (m *ExecuteEntityIdsResponse) GetResult() *query.QueryResult {
 	return nil
 }
 
+// BoundShardQuery represents a single query request for the
+// specified list of shards. This is used in a list for
+// ExecuteBatchShardsRequest.
+type BoundShardQuery struct {
+	Query    *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Keyspace string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shards   []string          `protobuf:"bytes,3,rep,name=shards" json:"shards,omitempty"`
+}
+
+func (m *BoundShardQuery) Reset()         { *m = BoundShardQuery{} }
+func (m *BoundShardQuery) String() string { return proto.CompactTextString(m) }
+func (*BoundShardQuery) ProtoMessage()    {}
+
+func (m *BoundShardQuery) GetQuery() *query.BoundQuery {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 type ExecuteBatchShardsRequest struct {
-	CallerId         *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Queries          []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	Keyspace         string              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shards           []string            `protobuf:"bytes,5,rep,name=shards" json:"shards,omitempty"`
-	TabletType       topodata.TabletType `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
+	CallerId   *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Session    *Session            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Queries    []*BoundShardQuery  `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
 }
 
 func (m *ExecuteBatchShardsRequest) Reset()         { *m = ExecuteBatchShardsRequest{} }
@@ -510,7 +529,7 @@ func (m *ExecuteBatchShardsRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteBatchShardsRequest) GetQueries() []*query.BoundQuery {
+func (m *ExecuteBatchShardsRequest) GetQueries() []*BoundShardQuery {
 	if m != nil {
 		return m.Queries
 	}
@@ -549,15 +568,32 @@ func (m *ExecuteBatchShardsResponse) GetResults() []*query.QueryResult {
 	return nil
 }
 
+// BoundKeyspaceIdQuery represents a single query request for the
+// specified list of keyspace ids. This is used in a list for
+// ExecuteBatchKeyspaceIdsRequest.
+type BoundKeyspaceIdQuery struct {
+	Query       *query.BoundQuery `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
+	Keyspace    string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	KeyspaceIds [][]byte          `protobuf:"bytes,3,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
+}
+
+func (m *BoundKeyspaceIdQuery) Reset()         { *m = BoundKeyspaceIdQuery{} }
+func (m *BoundKeyspaceIdQuery) String() string { return proto.CompactTextString(m) }
+func (*BoundKeyspaceIdQuery) ProtoMessage()    {}
+
+func (m *BoundKeyspaceIdQuery) GetQuery() *query.BoundQuery {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
 type ExecuteBatchKeyspaceIdsRequest struct {
-	CallerId         *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Session          *Session            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	Queries          []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	Keyspace         string              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
-	KeyspaceIds      [][]byte            `protobuf:"bytes,5,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType       topodata.TabletType `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
-	NotInTransaction bool                `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
+	CallerId   *vtrpc.CallerID         `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Session    *Session                `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	Queries    []*BoundKeyspaceIdQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
+	TabletType topodata.TabletType     `protobuf:"varint,4,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
 }
 
 func (m *ExecuteBatchKeyspaceIdsRequest) Reset()         { *m = ExecuteBatchKeyspaceIdsRequest{} }
@@ -578,7 +614,7 @@ func (m *ExecuteBatchKeyspaceIdsRequest) GetSession() *Session {
 	return nil
 }
 
-func (m *ExecuteBatchKeyspaceIdsRequest) GetQueries() []*query.BoundQuery {
+func (m *ExecuteBatchKeyspaceIdsRequest) GetQueries() []*BoundKeyspaceIdQuery {
 	if m != nil {
 		return m.Queries
 	}

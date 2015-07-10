@@ -125,15 +125,21 @@ message ExecuteEntityIdsResponse {
   query.QueryResult result = 3;
 }
 
+// BoundShardQuery represents a single query request for the
+// specified list of shards. This is used in a list for
+// ExecuteBatchShardsRequest.
+message BoundShardQuery {
+  query.BoundQuery query = 1;
+  string keyspace = 2;
+  repeated string shards = 3;
+}
+
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 message ExecuteBatchShardsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  repeated query.BoundQuery queries = 3;
-  string keyspace = 4;
-  repeated string shards = 5;
+  repeated BoundShardQuery queries = 3;
   topodata.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
 }
 
 // ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards
@@ -143,15 +149,21 @@ message ExecuteBatchShardsResponse {
   repeated query.QueryResult results = 3;
 }
 
+// BoundKeyspaceIdQuery represents a single query request for the
+// specified list of keyspace ids. This is used in a list for
+// ExecuteBatchKeyspaceIdsRequest.
+message BoundKeyspaceIdQuery {
+  query.BoundQuery query = 1;
+  string keyspace = 2;
+  repeated bytes keyspace_ids = 3;
+}
+
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId
 message ExecuteBatchKeyspaceIdsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
-  repeated query.BoundQuery queries = 3;
-  string keyspace = 4;
-  repeated bytes keyspace_ids = 5;
-  topodata.TabletType TabletType = 6;
-  bool not_in_transaction = 7;
+  repeated BoundKeyspaceIdQuery queries = 3;
+  topodata.TabletType TabletType = 4;
 }
 
 // ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId
