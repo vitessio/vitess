@@ -21,7 +21,7 @@ type FakeVtworkerClient struct {
 	fakevtctlclient.FakeLoggerEventStreamingClient
 }
 
-// NewFakeVtworkerClient creates a FakeVtclClient struct.
+// NewFakeVtworkerClient creates a FakeVtworkerClient struct.
 func NewFakeVtworkerClient() *FakeVtworkerClient {
 	return &FakeVtworkerClient{fakevtctlclient.NewFakeLoggerEventStreamingClient()}
 }
