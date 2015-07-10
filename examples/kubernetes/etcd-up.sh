@@ -6,7 +6,7 @@
 # For automatic discovery, an etcd cluster can be bootstrapped from an
 # existing cluster. In this example, we use an externally-run discovery
 # service, but you can use your own. See the etcd docs for more:
-# https://github.com/coreos/etcd/blob/v0.4.6/Documentation/cluster-discovery.md
+# https://github.com/coreos/etcd/blob/v2.0.13/Documentation/clustering.md
 
 set -e
 
