@@ -81,14 +81,14 @@ func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 }
 
 // ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, false, nil)
+func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, tabletType, nil)
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, false, nil)
+func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, nil)
 	return res, err
 }
 
@@ -219,21 +219,21 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 }
 
 // ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool) ([]mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchShard: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, notInTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, tabletType, tx.session)
 	tx.session = session
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool) ([]mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, notInTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, tx.session)
 	tx.session = session
 	return res, err
 }
@@ -304,10 +304,10 @@ type Impl interface {
 	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-	ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-	ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)

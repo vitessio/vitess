@@ -8,6 +8,7 @@ package vtgate
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -226,16 +227,8 @@ func (res *Resolver) ExecuteEntityIds(
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
-	mapToShards := func(keyspace string) (string, []string, error) {
-		return mapKeyspaceIdsToShards(
-			ctx,
-			res.scatterConn.toposerv,
-			res.scatterConn.cell,
-			keyspace,
-			query.TabletType,
-			query.KeyspaceIds)
-	}
-	return res.ExecuteBatch(ctx, query.Queries, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
+	// TODO(sougou): implement (also revisit mapKeyspaceIdsToShards.
+	return nil, errors.New("unimplemented")
 }
 
 // ExecuteBatch executes a group of queries based on shards resolved by given func.

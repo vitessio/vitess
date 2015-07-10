@@ -12,7 +12,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -202,38 +201,34 @@ func TestQueryResult(t *testing.T) {
 	}
 }
 
-type reflectBoundQuery struct {
+type reflectBoundShardQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
+	Keyspace      string
+	Shards        []string
 }
 
 type reflectBatchQueryShard struct {
-	Queries          []reflectBoundQuery
-	Keyspace         string
-	Shards           []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []reflectBoundShardQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 type extraBatchQueryShard struct {
-	Extra            int
-	Queries          []reflectBoundQuery
-	Keyspace         string
-	Shards           []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Extra      int
+	Queries    []reflectBoundShardQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 func TestBatchQueryShard(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectBatchQueryShard{
-		Queries: []reflectBoundQuery{{
+		Queries: []reflectBoundShardQuery{{
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
+			Keyspace:      "keyspace",
+			Shards:        []string{"shard1", "shard2"},
 		}},
-		Keyspace: "keyspace",
-		Shards:   []string{"shard1", "shard2"},
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -254,13 +249,13 @@ func TestBatchQueryShard(t *testing.T) {
 	want := string(reflected)
 
 	custom := BatchQueryShard{
-		Queries: []tproto.BoundQuery{{
+		Queries: []BoundShardQuery{{
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
+			Keyspace:      "keyspace",
+			Shards:        []string{"shard1", "shard2"},
 		}},
-		Keyspace: "keyspace",
-		Shards:   []string{"shard1", "shard2"},
-		Session:  &commonSession,
+		Session: &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -537,33 +532,34 @@ func TestKeyRangeQuery(t *testing.T) {
 	}
 }
 
+type reflectBoundKeyspaceIdQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyspaceIds   []kproto.KeyspaceId
+}
+
 type reflectKeyspaceIdBatchQuery struct {
-	Queries          []reflectBoundQuery
-	Keyspace         string
-	KeyspaceIds      []kproto.KeyspaceId
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []reflectBoundKeyspaceIdQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 type extraKeyspaceIdBatchQuery struct {
-	Extra            int
-	Queries          []reflectBoundQuery
-	Keyspace         string
-	KeyspaceIds      []kproto.KeyspaceId
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Extra      int
+	Queries    []reflectBoundKeyspaceIdQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 func TestKeyspaceIdBatchQuery(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectKeyspaceIdBatchQuery{
-		Queries: []reflectBoundQuery{{
+		Queries: []reflectBoundKeyspaceIdQuery{{
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
+			Keyspace:      "keyspace",
+			KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		}},
-		Keyspace:    "keyspace",
-		KeyspaceIds: []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -584,13 +580,13 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 	want := string(reflected)
 
 	custom := KeyspaceIdBatchQuery{
-		Queries: []tproto.BoundQuery{{
+		Queries: []BoundKeyspaceIdQuery{{
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
+			Keyspace:      "keyspace",
+			KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		}},
-		Keyspace:    "keyspace",
-		KeyspaceIds: []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
-		Session:     &commonSession,
+		Session: &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {

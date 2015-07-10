@@ -12,8 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
-	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes KeyspaceIdBatchQuery.
@@ -21,22 +19,12 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	// []tproto.BoundQuery
+	// []BoundKeyspaceIdQuery
 	{
 		bson.EncodePrefix(buf, bson.Array, "Queries")
 		lenWriter := bson.NewLenWriter(buf)
 		for _i, _v1 := range keyspaceIdBatchQuery.Queries {
 			_v1.MarshalBson(buf, bson.Itoa(_i))
-		}
-		lenWriter.Close()
-	}
-	bson.EncodeString(buf, "Keyspace", keyspaceIdBatchQuery.Keyspace)
-	// []key.KeyspaceId
-	{
-		bson.EncodePrefix(buf, bson.Array, "KeyspaceIds")
-		lenWriter := bson.NewLenWriter(buf)
-		for _i, _v2 := range keyspaceIdBatchQuery.KeyspaceIds {
-			_v2.MarshalBson(buf, bson.Itoa(_i))
 		}
 		lenWriter.Close()
 	}
@@ -47,7 +35,6 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 	} else {
 		(*keyspaceIdBatchQuery.Session).MarshalBson(buf, "Session")
 	}
-	bson.EncodeBool(buf, "NotInTransaction", keyspaceIdBatchQuery.NotInTransaction)
 
 	lenWriter.Close()
 }
@@ -67,35 +54,18 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
 		case "Queries":
-			// []tproto.BoundQuery
+			// []BoundKeyspaceIdQuery
 			if kind != bson.Null {
 				if kind != bson.Array {
 					panic(bson.NewBsonError("unexpected kind %v for keyspaceIdBatchQuery.Queries", kind))
 				}
 				bson.Next(buf, 4)
-				keyspaceIdBatchQuery.Queries = make([]tproto.BoundQuery, 0, 8)
+				keyspaceIdBatchQuery.Queries = make([]BoundKeyspaceIdQuery, 0, 8)
 				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 					bson.SkipIndex(buf)
-					var _v1 tproto.BoundQuery
+					var _v1 BoundKeyspaceIdQuery
 					_v1.UnmarshalBson(buf, kind)
 					keyspaceIdBatchQuery.Queries = append(keyspaceIdBatchQuery.Queries, _v1)
-				}
-			}
-		case "Keyspace":
-			keyspaceIdBatchQuery.Keyspace = bson.DecodeString(buf, kind)
-		case "KeyspaceIds":
-			// []key.KeyspaceId
-			if kind != bson.Null {
-				if kind != bson.Array {
-					panic(bson.NewBsonError("unexpected kind %v for keyspaceIdBatchQuery.KeyspaceIds", kind))
-				}
-				bson.Next(buf, 4)
-				keyspaceIdBatchQuery.KeyspaceIds = make([]key.KeyspaceId, 0, 8)
-				for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
-					bson.SkipIndex(buf)
-					var _v2 key.KeyspaceId
-					_v2.UnmarshalBson(buf, kind)
-					keyspaceIdBatchQuery.KeyspaceIds = append(keyspaceIdBatchQuery.KeyspaceIds, _v2)
 				}
 			}
 		case "TabletType":
@@ -106,8 +76,6 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 				keyspaceIdBatchQuery.Session = new(Session)
 				(*keyspaceIdBatchQuery.Session).UnmarshalBson(buf, kind)
 			}
-		case "NotInTransaction":
-			keyspaceIdBatchQuery.NotInTransaction = bson.DecodeBool(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}
