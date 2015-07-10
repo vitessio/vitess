@@ -658,6 +658,7 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   Returns:
     cmd - list of cmd arguments, can be passed to any `run`-like functions
     port - int with the port number that the vtworker is running with
+    rpc_port - int with the port number of the RPC interface
   """
   port = environment.reserve_ports(1)
   rpc_port = environment.reserve_ports(1)
