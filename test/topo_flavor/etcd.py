@@ -23,17 +23,21 @@ class EtcdCluster:
     self.hostname = 'localhost'
     self.client_port = self.port_base
     self.peer_port = self.port_base + 1
-    self.client_addr = '%s:%u' % (self.hostname, self.client_port)
-    self.peer_addr = '%s:%u' % (self.hostname, self.peer_port)
-    self.api_url = 'http://%s/v2' % (self.client_addr)
+    self.client_addr = 'http://%s:%u' % (self.hostname, self.client_port)
+    self.peer_addr = 'http://%s:%u' % (self.hostname, self.peer_port)
+    self.api_url = self.client_addr + '/v2'
 
     dirname = 'etcd_' + self.name
     self.data_dir = os.path.join(environment.vtdataroot, dirname)
 
     self.proc = utils.run_bg([
-        'etcd', '-name', self.name, '-addr',
-        self.client_addr, '-peer-addr',
-        self.peer_addr, '-data-dir', self.data_dir],
+        'etcd', '-name', self.name,
+        '-advertise-client-urls', self.client_addr,
+        '-initial-advertise-peer-urls', self.peer_addr,
+        '-listen-client-urls', self.client_addr,
+        '-listen-peer-urls', self.peer_addr,
+        '-initial-cluster', '%s=%s' % (self.name, self.peer_addr),
+        '-data-dir', self.data_dir],
                              stdout=open(os.path.join(
                                  environment.vtlogroot,
                                  dirname + '.stdout'),
@@ -66,7 +70,7 @@ class EtcdTopoServer(server.TopoServer):
         utils.curl(
             '%s/keys/vt/cells/%s' %
             (self.clusters['global'].api_url, cell), request='PUT',
-            data='value=http://' + cluster.client_addr)
+            data='value=' + cluster.client_addr)
 
   def teardown(self):
     import utils
@@ -79,7 +83,7 @@ class EtcdTopoServer(server.TopoServer):
   def flags(self):
     return [
         '-topo_implementation', 'etcd',
-        '-etcd_global_addrs', 'http://' + self.clusters['global'].client_addr,
+        '-etcd_global_addrs', self.clusters['global'].client_addr,
     ]
 
   def wipe(self):
