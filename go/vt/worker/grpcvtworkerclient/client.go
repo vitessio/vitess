@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -39,7 +38,7 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 }
 
 // ExecuteVtworkerCommand is part of the VtworkerClient interface.
-func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc) {
 	query := &pb.ExecuteVtworkerCommandRequest{
 		Args: args,
 	}

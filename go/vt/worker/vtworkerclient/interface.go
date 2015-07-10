@@ -12,18 +12,20 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 )
 
 // VtworkerClientProtocol specifices which RPC client implementation should be used.
 var VtworkerClientProtocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
 
+// ErrFunc is returned by streaming queries to get the error
+type ErrFunc func() error
+
 // VtworkerClient defines the interface used to send remote vtworker commands
 type VtworkerClient interface {
 	// ExecuteVtworkerCommand will execute the command remotely.
 	// NOTE: ErrFunc should only be checked after the returned channel was closed to avoid races.
-	ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc)
+	ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, ErrFunc)
 
 	// Close will terminate the connection. This object won't be
 	// used after this.
