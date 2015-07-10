@@ -5,6 +5,7 @@ syntax = "proto3";
 
 package binlogdata;
 
+import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
 
@@ -51,6 +52,32 @@ message BinlogTransaction {
   string gtid = 3;
 }
 
+// StreamEvent describes an update stream event inside the binlogs.
+message StreamEvent {
+  // the category of this event
+  enum Category {
+    SE_ERR = 0;
+    SE_DML = 1;
+    SE_DDL = 2;
+    SE_POS = 3;
+  }
+  Category category = 1;
+
+  // table_name, primary_key_fields and primary_key_values are set for SE_DML
+  string table_name = 2;
+  repeated query.Field primary_key_fields = 3;
+  repeated query.Row primary_key_values = 4;
+
+  // sql is set for SE_DDL or SE_ERR
+  string sql = 5;
+
+  // timestamp is set for SE_DML, SE_DDL or SE_ERR
+  int64 timestamp = 6;
+
+  // the Global Transaction ID after the statements have been applied
+  string gtid = 7;
+}
+
 // StreamUpdateRequest is the payload to StreamUpdate
 message StreamUpdateRequest{
   // where to start
@@ -59,6 +86,7 @@ message StreamUpdateRequest{
 
 // StreamUpdateResponse is the response from StreamUpdate
 message StreamUpdateResponse{
+  StreamEvent stream_event = 1;
 }
 
 // StreamKeyRangeRequest is the payload to StreamKeyRange

@@ -7,8 +7,6 @@
 package grpcbinlogstreamer
 
 import (
-	"fmt"
-
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -31,9 +29,15 @@ func New(updateStream proto.UpdateStream) *UpdateStream {
 }
 
 // StreamUpdate is part of the pbs.UpdateStreamServer interface
-func (server *UpdateStream) StreamUpdate(*pb.StreamUpdateRequest, pbs.UpdateStream_StreamUpdateServer) (err error) {
+func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs.UpdateStream_StreamUpdateServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return fmt.Errorf("NYI")
+	return server.updateStream.ServeUpdateStream(&proto.UpdateStreamRequest{
+		Position: myproto.ProtoToReplicationPosition(req.Position),
+	}, func(reply *proto.StreamEvent) error {
+		return stream.Send(&pb.StreamUpdateResponse{
+			StreamEvent: proto.StreamEventToProto(reply),
+		})
+	})
 }
 
 // StreamKeyRange is part of the pbs.UpdateStreamServer interface
