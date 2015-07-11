@@ -17,8 +17,6 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 		"keyspace":                 "test_keyspace",
 		"source_shard_list":        "10-20",
 		"dest_shard_list":          "10-18,18-20",
-		"source_shard_rdonly_list": "cell1-0000062352",
-		"dest_shard_rdonly_list":   "cell1-0000062349,cell1-0000062352",
 		"vtctld_endpoint":          "localhost:15000",
 		"vtworker_endpoint":        "localhost:15001",
 	}

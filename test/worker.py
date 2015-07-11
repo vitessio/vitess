@@ -297,11 +297,6 @@ class TestBaseSplitClone(unittest.TestCase):
     stdout, stderr = utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
       keyspace_shard], auto_log=True)
 
-    for shard_tablets in (source_tablets, destination_tablets):
-      for tablet in shard_tablets.rdonlys:
-        utils.run_vtctl(['ChangeSlaveType', tablet.tablet_alias, 'rdonly'],
-          auto_log=True)
-
   def setUp(self):
     """Creates the necessary shards, starts the tablets, and inserts some data."""
     self.run_shard_tablets('0', shard_tablets)
@@ -427,9 +422,6 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       "expected vtworker to retry, but it didn't")
 
     utils.wait_procs([worker_proc])
-
-    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
-                     auto_log=True)
 
     # Make sure that everything is caught up to the same replication point
     self.run_split_diff('test_keyspace/-80', shard_tablets, shard_0_tablets)
