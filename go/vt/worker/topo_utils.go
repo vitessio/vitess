@@ -28,10 +28,16 @@ var (
 // minHealthyEndPoints servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	waitDeadline := time.Now().Add(*waitForHealthyEndPointsTimeout)
+	newCtx, _ := context.WithTimeout(ctx, *waitForHealthyEndPointsTimeout)
+	busyWaitTimer := time.NewTimer(0 * time.Second)
 	var healthyEndpoints []topo.EndPoint
 	for {
-		newCtx, _ := context.WithTimeout(ctx, waitDeadline.Sub(time.Now()))
+		select {
+		case <-newCtx.Done():
+			return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context Error: %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints, newCtx.Err())
+		case <-busyWaitTimer.C:
+		}
+
 		endPoints, _, err := wr.TopoServer().GetEndPoints(newCtx, cell, keyspace, shard, topo.TYPE_RDONLY)
 		if err != nil {
 			if err == topo.ErrNoNode {
@@ -48,15 +54,13 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 			}
 		}
 		if len(healthyEndpoints) < *minHealthyEndPoints {
-			if time.Now().After(waitDeadline) {
-				return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones, need at least %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints)
-			}
-			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, waitDeadline.Sub(time.Now()).Seconds())
+			deadlineForLog, _ := newCtx.Deadline()
+			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
 			// Block for 1 second because 2 seconds is the -health_check_interval in integration tests.
-			time.Sleep(1 * time.Second)
-			continue
+			busyWaitTimer.Reset(1 * time.Second)
+		} else {
+			break
 		}
-		break
 	}
 
 	// random server in the list is what we want
