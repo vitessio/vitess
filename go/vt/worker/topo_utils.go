@@ -31,7 +31,8 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 	waitDeadline := time.Now().Add(*waitForHealthyEndPointsTimeout)
 	var healthyEndpoints []topo.EndPoint
 	for {
-		endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
+		newCtx, _ := context.WithTimeout(ctx, waitDeadline.Sub(time.Now()))
+		endPoints, _, err := wr.TopoServer().GetEndPoints(newCtx, cell, keyspace, shard, topo.TYPE_RDONLY)
 		if err != nil {
 			if err == topo.ErrNoNode {
 				// If the node doesn't exist, count that as 0 available rdonly instances.
