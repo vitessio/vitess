@@ -8,7 +8,7 @@ FROM golang:1.4-wheezy
 
 RUN mkdir -p src/github.com/coreos && \
     cd src/github.com/coreos && \
-    curl -sL https://github.com/coreos/etcd/archive/v0.4.6.tar.gz | tar -xz && \
-    mv etcd-0.4.6 etcd && \
-    go install github.com/coreos/etcd
+    curl -sL https://github.com/coreos/etcd/archive/v2.0.13.tar.gz | tar -xz && \
+    mv etcd-2.0.13 etcd && \
+    go install github.com/coreos/etcd github.com/coreos/etcd/etcdctl
 CMD ["etcd"]
