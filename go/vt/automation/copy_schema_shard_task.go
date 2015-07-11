@@ -16,9 +16,10 @@ type CopySchemaShardTask struct {
 }
 
 func (t *CopySchemaShardTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
-	sourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
-	destShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
-	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], []string{"CopySchemaShard", sourceShard, destShard})
+	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
+	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
+	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
+		[]string{"CopySchemaShard", keyspaceAndSourceShard, keyspaceAndDestShard})
 	return nil, output, err
 }
 

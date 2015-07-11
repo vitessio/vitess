@@ -193,6 +193,12 @@ func defaultTaskCreator(taskName string) Task {
 		return &HorizontalReshardingTask{}
 	case "CopySchemaShardTask":
 		return &CopySchemaShardTask{}
+	case "ChangeSlaveTypeTask":
+		return &ChangeSlaveTypeTask{}
+	case "SplitCloneTask":
+		return &SplitCloneTask{}
+	case "SplitDiffTask":
+		return &SplitDiffTask{}
 	default:
 		return nil
 	}
