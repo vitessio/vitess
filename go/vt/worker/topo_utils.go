@@ -18,24 +18,44 @@ import (
 
 var (
 	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
+	// The intent of this timeout is to wait for the healthcheck to automatically return rdonly instances which have been taken out by previous *Clone or *Diff runs.
+	// Therefore, the default for this variable must be higher than -health_check_interval.
+	waitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
 )
 
 // FindHealthyRdonlyEndPoint returns a random healthy endpoint.
 // Since we don't want to use them all, we require at least
 // minHealthyEndPoints servers to be healthy.
+// May block up to -wait_for_healthy_rdonly_endpoints_timeout.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
-	}
-	healthyEndpoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
-	for _, entry := range endPoints.Entries {
-		if len(entry.Health) == 0 {
-			healthyEndpoints = append(healthyEndpoints, entry)
+	waitDeadline := time.Now().Add(*waitForHealthyEndPointsTimeout)
+	var healthyEndpoints []topo.EndPoint
+	for {
+		endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, cell, keyspace, shard, topo.TYPE_RDONLY)
+		if err != nil {
+			if err == topo.ErrNoNode {
+				// If the node doesn't exist, count that as 0 available rdonly instances.
+				endPoints = &topo.EndPoints{}
+			} else {
+				return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
+			}
 		}
-	}
-	if len(healthyEndpoints) < *minHealthyEndPoints {
-		return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones, need at least %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints)
+		healthyEndpoints = make([]topo.EndPoint, 0, len(endPoints.Entries))
+		for _, entry := range endPoints.Entries {
+			if len(entry.Health) == 0 {
+				healthyEndpoints = append(healthyEndpoints, entry)
+			}
+		}
+		if len(healthyEndpoints) < *minHealthyEndPoints {
+			if time.Now().After(waitDeadline) {
+				return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to chose from in (%v,%v/%v), have %v healthy ones, need at least %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints)
+			}
+			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, waitDeadline.Sub(time.Now()).Seconds())
+			// Block for 1 second because 2 seconds is the -health_check_interval in integration tests.
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
 	}
 
 	// random server in the list is what we want
