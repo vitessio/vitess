@@ -34,7 +34,7 @@ public class Util {
    * script to start and stop instances.
    */
   public static void setupTestEnv(TestEnv testEnv) throws Exception {
-    ProcessBuilder pb = new ProcessBuilder(SetupCommand.get(testEnv));
+    ProcessBuilder pb = new ProcessBuilder(testEnv.getSetupCommand());
     pb.redirectErrorStream(true);
     Process p = pb.start();
     BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
@@ -80,7 +80,7 @@ public class Util {
 
   public static void insertRows(TestEnv testEnv, int startId, int count, DateTime dateTime)
       throws ConnectionException, DatabaseException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
 
     vtgate.begin();
     String insertSql = "insert into vtgate_test "
@@ -111,7 +111,7 @@ public class Util {
    */
   public static void insertRowsInShard(TestEnv testEnv, String shardName, int count)
       throws DatabaseException, ConnectionException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     String sql = "insert into vtgate_test " + "(id, name, keyspace_id) "
         + "values (:id, :name, :keyspace_id)";
@@ -131,7 +131,7 @@ public class Util {
   }
 
   public static void createTable(TestEnv testEnv) throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(new QueryBuilder("drop table if exists vtgate_test", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build());
@@ -154,7 +154,7 @@ public class Util {
   public static void waitForTablet(String tabletType, int rowCount, int attempts, TestEnv testEnv)
       throws Exception {
     String sql = "select * from vtgate_test";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     for (int i = 0; i < attempts; i++) {
       try {
         Cursor cursor = vtgate.execute(new QueryBuilder(sql, testEnv.keyspace, tabletType)

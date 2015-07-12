@@ -33,7 +33,7 @@ public class StreamingServerShutdownIT {
   @Test
   public void testShutdownServerWhileStreaming() throws Exception {
     Util.insertRows(testEnv, 1, 2000);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String selectSql = "select A.* from vtgate_test A join vtgate_test B";
     Query joinQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();

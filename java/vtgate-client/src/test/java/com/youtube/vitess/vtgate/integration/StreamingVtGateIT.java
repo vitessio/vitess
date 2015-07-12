@@ -51,7 +51,7 @@ public class StreamingVtGateIT {
 
   @Test
   public void testStreamCursorType() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
     Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
@@ -69,7 +69,7 @@ public class StreamingVtGateIT {
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     for (String shardName : testEnv.shardKidMap.keySet()) {
       String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
       Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
@@ -90,7 +90,7 @@ public class StreamingVtGateIT {
    */
   @Test
   public void testStreamExecuteKeyRanges() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     int rowCount = 10;
     for (String shardName : testEnv.shardKidMap.keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
@@ -124,7 +124,7 @@ public class StreamingVtGateIT {
     String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
     Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     Cursor cursor = vtgate.execute(query);
     int count = 0;
     for (Row row : cursor) {
@@ -137,7 +137,7 @@ public class StreamingVtGateIT {
   @Test
   @Ignore("currently failing as vtgate doesn't set the error")
   public void testStreamingWrites() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
 
     vtgate.begin();
     String insertSql = "insert into vtgate_test " + "(id, name, age, percent, keyspace_id) "

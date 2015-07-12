@@ -2,9 +2,9 @@ package com.youtube.vitess.vtgate.integration.util;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
-
 import com.youtube.vitess.vtgate.KeyspaceId;
-
+import com.youtube.vitess.vtgate.rpcclient.BsonRpcClientFactory;
+import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.ArrayList;
@@ -71,5 +71,29 @@ public class TestEnv {
       return kids;
     }
     return null;
+  }
+
+  /**
+   * Get setup command to launch a cluster.
+   */
+  public List<String> getSetupCommand() {
+    String vtTop = System.getenv("VTTOP");
+    if (vtTop == null) {
+      throw new RuntimeException("cannot find env variable: VTTOP");
+    }
+    List<String> command = new ArrayList<String>();
+    command.add("python");
+    command.add(vtTop + "/test/java_vtgate_test_helper.py");
+    command.add("--shards");
+    command.add(getShardNames());
+    command.add("--tablet-config");
+    command.add(getTabletConfig());
+    command.add("--keyspace");
+    command.add(keyspace);
+    return command;
+  }
+
+  public Class<? extends RpcClientFactory> getRpcClientFactory() {
+    return BsonRpcClientFactory.class;
   }
 }

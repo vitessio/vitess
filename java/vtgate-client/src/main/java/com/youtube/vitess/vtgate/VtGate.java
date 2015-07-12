@@ -50,11 +50,16 @@ public class VtGate {
    * @param timeoutMs connection timeout in milliseconds, 0 for no timeout
    * @throws ConnectionException
    */
-  public static VtGate connect(String addresses, int timeoutMs) throws ConnectionException {
+  public static VtGate connect(String addresses, int timeoutMs, Class<? extends RpcClientFactory> rpcFactoryClass) throws ConnectionException {
     List<String> addressList = Arrays.asList(addresses.split(","));
     int index = new Random().nextInt(addressList.size());
-    RpcClient client = RpcClientFactory.get(addressList.get(index), timeoutMs);
-    return new VtGate(client);
+    try {
+      RpcClientFactory rpcFactory = rpcFactoryClass.newInstance();
+      RpcClient client = rpcFactory.create(addressList.get(index), timeoutMs);
+      return new VtGate(client);
+    } catch (InstantiationException|IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private VtGate(RpcClient client) {

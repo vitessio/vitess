@@ -2,10 +2,8 @@ package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
-
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
-import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -17,7 +15,6 @@ import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
-
 import org.apache.commons.codec.binary.Hex;
 import org.joda.time.DateTime;
 import org.junit.AfterClass;
@@ -28,12 +25,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -64,7 +60,7 @@ public class VtGateIT {
    */
   @Test
   public void testExecuteKeyspaceIds() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
 
     // Ensure empty table
     String selectSql = "select * from vtgate_test";
@@ -80,7 +76,7 @@ public class VtGateIT {
     // Insert 10 rows
     Util.insertRows(testEnv, 1000, 10);
 
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(10, cursor.getRowsAffected());
     Assert.assertEquals(0, cursor.getLastRowId());
@@ -122,7 +118,7 @@ public class VtGateIT {
       Util.insertRowsInShard(testEnv, shardName, 10);
     }
 
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String allRowsSql = "select * from vtgate_test";
 
     for (String shardName : testEnv.shardKidMap.keySet()) {
@@ -138,7 +134,7 @@ public class VtGateIT {
   public void testDateFieldTypes() throws Exception {
     DateTime dt = DateTime.now().minusDays(2).withMillisOfSecond(0);
     Util.insertRows(testEnv, 10, 1, dt);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     Query allRowsQuery = new QueryBuilder("select * from vtgate_test", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
     Row row = vtgate.execute(allRowsQuery).next();
@@ -159,7 +155,7 @@ public class VtGateIT {
   public void testAllKeyRange() throws Exception {
     // Insert 10 rows across the shards
     Util.insertRows(testEnv, 1000, 10);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
     Query allRowsQuery =
         new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
@@ -180,7 +176,7 @@ public class VtGateIT {
       Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
     }
 
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
 
     // Check ALL KeyRange query returns rows from both shards
@@ -224,7 +220,7 @@ public class VtGateIT {
   @Test
   public void testKeyRangeWrites() throws Exception {
     Random random = new Random();
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     String sql = "insert into vtgate_test " + "(id, name, keyspace_id, age) "
         + "values (:id, :name, :keyspace_id, :age)";
@@ -252,7 +248,7 @@ public class VtGateIT {
     vtgate.close();
 
     // Check 40 rows exist in total
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
     Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master").setKeyspaceIds(
         testEnv.getAllKeyspaceIds()).build();
@@ -278,7 +274,7 @@ public class VtGateIT {
       Util.insertRowsInShard(testEnv, shardName, 20);
     }
     Util.waitForTablet("rdonly", 40, 3, testEnv);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     Map<Query, Long> queries =
         vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", 1, "");
     vtgate.close();
@@ -313,7 +309,7 @@ public class VtGateIT {
             "select id, keyspace_id from vtgate_test where id >= 19",
             "select id, keyspace_id from vtgate_test where id >= 19");
     Util.waitForTablet("rdonly", rowCount, 3, testEnv);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     int splitCount = 6;
     Map<Query, Long> queries =
         vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitCount, "");
@@ -342,7 +338,7 @@ public class VtGateIT {
 
   @Test
   public void testSplitQueryInvalidTable() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     try {
       vtgate.splitQuery("test_keyspace", "select id from invalid_table", 1, "");
       Assert.fail("failed to raise connection exception");

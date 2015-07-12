@@ -6,7 +6,7 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
-
+import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -31,7 +31,14 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
   public List<InputSplit> getSplits(JobContext context) {
     try {
       VitessConf conf = new VitessConf(context.getConfiguration());
-      VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs());
+      Class<? extends RpcClientFactory> rpcFactoryClass = null;
+      try {
+        rpcFactoryClass = (Class<? extends RpcClientFactory>)Class.forName(conf.getRpcFactoryClass());
+      } catch (ClassNotFoundException e) {
+        throw new RuntimeException(e);
+      }
+
+      VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass);
       Map<Query, Long> queries =
           vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplits(), conf.getSplitColumn());
       List<InputSplit> splits = new LinkedList<>();
@@ -62,12 +69,14 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
       String hosts,
       String keyspace,
       String query,
-      int splits) {
+      int splits,
+      Class<? extends RpcClientFactory> rpcFactoryClass) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(hosts);
     vtConf.setKeyspace(keyspace);
     vtConf.setInputQuery(query);
     vtConf.setSplits(splits);
+    vtConf.setRpcFactoryClass(rpcFactoryClass);
   }
 }

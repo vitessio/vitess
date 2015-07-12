@@ -80,7 +80,8 @@ public class MapReduceIT extends HadoopTestCase {
         "localhost:" + testEnv.port,
         testEnv.keyspace,
         "select keyspace_id, name from vtgate_test",
-        4);
+        4,
+        testEnv.getRpcClientFactory());
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(RowWritable.class);
     job.setOutputFormatClass(TextOutputFormat.class);
@@ -158,7 +159,8 @@ public class MapReduceIT extends HadoopTestCase {
         "localhost:" + testEnv.port,
         testEnv.keyspace,
         "select keyspace_id, name from vtgate_test",
-        1);
+        1,
+        testEnv.getRpcClientFactory());
 
     job.setMapOutputKeyClass(KeyspaceIdWritable.class);
     job.setMapOutputValueClass(RowWritable.class);

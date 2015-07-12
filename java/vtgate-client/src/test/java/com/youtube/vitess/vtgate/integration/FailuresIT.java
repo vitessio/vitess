@@ -52,7 +52,7 @@ public class FailuresIT {
 
   @Test
   public void testIntegrityException() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
     KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
     Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
@@ -75,7 +75,7 @@ public class FailuresIT {
 
   @Test
   public void testTimeout() throws ConnectionException, DatabaseException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 200, testEnv.getRpcClientFactory());
     // Check timeout error raised for slow query
     Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
@@ -85,7 +85,7 @@ public class FailuresIT {
     } catch (ConnectionException e) {
     }
     vtgate.close();
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 2000);
+    vtgate = VtGate.connect("localhost:" + testEnv.port, 2000, testEnv.getRpcClientFactory());
     // Check no timeout error for fast query
     sleepQuery = new QueryBuilder("select sleep(0.01) from dual", testEnv.keyspace, "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
@@ -100,7 +100,7 @@ public class FailuresIT {
     try {
       // Transaction cap is 20
       for (int i = 0; i < 25; i++) {
-        VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+        VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
         vtgates.add(vtgate);
         vtgate.begin();
         // Run a query to actually begin a transaction with the tablets

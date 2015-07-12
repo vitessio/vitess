@@ -48,7 +48,7 @@ public class DataTypesIT {
   public void testInts() throws Exception {
     String createTable =
         "create table vtocc_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, year year, primary key(tiny)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
@@ -97,7 +97,7 @@ public class DataTypesIT {
   public void testFracts() throws Exception {
     String createTable =
         "create table vtocc_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
@@ -133,7 +133,7 @@ public class DataTypesIT {
   public void testStrings() throws Exception {
     String createTable =
         "create table vtocc_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
@@ -182,7 +182,7 @@ public class DataTypesIT {
   public void testMisc() throws Exception {
     String createTable =
         "create table vtocc_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
