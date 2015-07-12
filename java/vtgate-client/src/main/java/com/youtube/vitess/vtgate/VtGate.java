@@ -86,28 +86,6 @@ public class VtGate {
     return new CursorImpl(response.getResult());
   }
 
-  public List<Cursor> execute(BatchQuery query) throws DatabaseException, ConnectionException {
-    if (session != null) {
-      query.setSession(session);
-    }
-    BatchQueryResponse response = client.batchExecute(query);
-    if (response.getSession() != null) {
-      session = response.getSession();
-    }
-    String error = response.getError();
-    if (error != null) {
-      if (error.contains(INTEGRITY_ERROR_MSG)) {
-        throw new IntegrityException(error);
-      }
-      throw new DatabaseException(response.getError());
-    }
-    List<Cursor> cursors = new LinkedList<>();
-    for (QueryResult qr : response.getResults()) {
-      cursors.add(new CursorImpl(qr));
-    }
-    return cursors;
-  }
-
   /**
    * Split a query into primary key range query parts. Rows corresponding to the sub queries will
    * add up to original queries' rows. Sub queries are by default built to run against 'rdonly'
