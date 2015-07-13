@@ -11,6 +11,8 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -137,7 +139,7 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 
 	// then parse the PK names
 	var err error
-	dmlEvent.PKColNames, err = parsePkNames(tokenizer)
+	dmlEvent.PrimaryKeyFields, err = parsePkNames(tokenizer)
 	if err != nil {
 		return nil, insertid, err
 	}
@@ -147,15 +149,12 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 		switch typ {
 		case '(':
 			// pkTuple is a list of pk values
-			var pkTuple []interface{}
-			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid)
+			var pkTuple []sqltypes.Value
+			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlEvent.PrimaryKeyFields)
 			if err != nil {
 				return nil, insertid, err
 			}
-			if len(pkTuple) != len(dmlEvent.PKColNames) {
-				return nil, insertid, fmt.Errorf("length mismatch in values")
-			}
-			dmlEvent.PKValues = append(dmlEvent.PKValues, pkTuple)
+			dmlEvent.PrimaryKeyValues = append(dmlEvent.PrimaryKeyValues, pkTuple)
 		default:
 			return nil, insertid, fmt.Errorf("expecting '('")
 		}
@@ -165,15 +164,17 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.Stre
 }
 
 // parsePkNames parses something like (eid id name )
-func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]string, error) {
-	var columns []string
+func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]mproto.Field, error) {
+	var columns []mproto.Field
 	if typ, _ := tokenizer.Scan(); typ != '(' {
 		return nil, fmt.Errorf("expecting '('")
 	}
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
 		switch typ {
 		case sqlparser.ID:
-			columns = append(columns, string(val))
+			columns = append(columns, mproto.Field{
+				Name: string(val),
+			})
 		default:
 			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
@@ -182,11 +183,16 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]string, error) {
 }
 
 // parsePkTuple parses something like (null 1 'bmFtZQ==' )
-func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64) ([]interface{}, int64, error) {
-	var result []interface{}
+func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []mproto.Field) ([]sqltypes.Value, int64, error) {
+	var result []sqltypes.Value
 
 	// start scanning the list
+	index := 0
 	for typ, val := tokenizer.Scan(); typ != ')'; typ, val = tokenizer.Scan() {
+		if index >= len(fields) {
+			return nil, insertid, fmt.Errorf("length mismatch in values")
+		}
+
 		switch typ {
 		case '-':
 			// handle negative numbers
@@ -194,34 +200,93 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64) ([]interface{}
 			if typ2 != sqlparser.NUMBER {
 				return nil, insertid, fmt.Errorf("expecting number after '-'")
 			}
-			valstr := string(val2)
-			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
-				result = append(result, -ival)
-			} else {
+
+			// check value
+			fullVal := append([]byte{'-'}, val2...)
+			if _, err := strconv.ParseInt(string(fullVal), 0, 64); err != nil {
 				return nil, insertid, err
 			}
+
+			// update type
+			switch fields[index].Type {
+			case mproto.VT_DECIMAL:
+				// we haven't updated the type yet
+				fields[index].Type = mproto.VT_LONGLONG
+			case mproto.VT_LONGLONG:
+				// nothing to do there
+			default:
+				// we already set this to something incompatible!
+				return nil, insertid, fmt.Errorf("incompatible negative number field with type %v", fields[index].Type)
+			}
+
+			// update value
+			result = append(result, sqltypes.MakeNumeric(fullVal))
+
 		case sqlparser.NUMBER:
-			valstr := string(val)
-			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
-				result = append(result, ival)
-			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
-				result = append(result, uval)
-			} else {
+			// check value
+			if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
 				return nil, insertid, err
 			}
+
+			// update type
+			switch fields[index].Type {
+			case mproto.VT_DECIMAL:
+				// we haven't updated the type yet
+				fields[index].Type = mproto.VT_LONGLONG
+			case mproto.VT_LONGLONG:
+				// nothing to do there
+			default:
+				// we already set this to something incompatible!
+				return nil, insertid, fmt.Errorf("incompatible number field with type %v", fields[index].Type)
+			}
+
+			// update value
+			result = append(result, sqltypes.MakeNumeric(val))
 		case sqlparser.NULL:
-			result = append(result, insertid)
+			// update type
+			switch fields[index].Type {
+			case mproto.VT_DECIMAL:
+				// we haven't updated the type yet
+				fields[index].Type = mproto.VT_LONGLONG
+			case mproto.VT_LONGLONG:
+				// nothing to do there
+			default:
+				// we already set this to something incompatible!
+				return nil, insertid, fmt.Errorf("incompatible auto-increment field with type %v", fields[index].Type)
+			}
+
+			// update value
+			result = append(result, sqltypes.MakeNumeric(strconv.AppendInt(nil, insertid, 10)))
 			insertid++
 		case sqlparser.STRING:
+			// update type
+			switch fields[index].Type {
+			case mproto.VT_DECIMAL:
+				// we haven't updated the type yet
+				fields[index].Type = mproto.VT_VARCHAR
+			case mproto.VT_VARCHAR:
+				// nothing to do there
+			default:
+				// we already set this to something incompatible!
+				return nil, insertid, fmt.Errorf("incompatible string field with type %v", fields[index].Type)
+			}
+
+			// update value
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
 			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
 			if err != nil {
 				return nil, insertid, err
 			}
-			result = append(result, decoded[:numDecoded])
+			result = append(result, sqltypes.MakeString(decoded[:numDecoded]))
 		default:
 			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
 		}
+
+		index++
+	}
+
+	if index != len(fields) {
+		return nil, insertid, fmt.Errorf("length mismatch in values")
 	}
 	return result, insertid, nil
 }

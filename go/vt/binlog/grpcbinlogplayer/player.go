@@ -5,7 +5,6 @@
 package grpcbinlogplayer
 
 import (
-	"fmt"
 	"io"
 	"time"
 
@@ -47,7 +46,32 @@ func (client *client) Close() {
 }
 
 func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateStreamRequest) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
-	return nil, nil, fmt.Errorf("NYI")
+	response := make(chan *proto.StreamEvent, 10)
+	query := &pb.StreamUpdateRequest{
+		Position: myproto.ReplicationPositionToProto(req.Position),
+	}
+
+	stream, err := client.c.StreamUpdate(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	var finalErr error
+	go func() {
+		for {
+			r, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF {
+					finalErr = err
+				}
+				close(response)
+				return
+			}
+			response <- proto.ProtoToStreamEvent(r.StreamEvent)
+		}
+	}()
+	return response, func() error {
+		return finalErr
+	}, nil
 }
 
 func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
