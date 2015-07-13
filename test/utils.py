@@ -932,24 +932,28 @@ class Vtctld(object):
       vtctld = self
       vtctld_connection = vtctl_client.connect(
           protocols_flavor().vtctl_python_client_protocol(),
-          self.rpc_endpoint(), 30)
+          self.rpc_endpoint(True), 30)
 
     return self.proc
 
-  def rpc_endpoint(self):
+  def rpc_endpoint(self, python=False):
     """RPC endpoint to vtctld.
-    
+
     The RPC endpoint may differ from the webinterface URL e.g. because gRPC
     requires a dedicated port.
 
     Returns:
       endpoint - string e.g. localhost:15001
     """
-    protocol = protocols_flavor().vtctl_python_client_protocol()
+    if python:
+      protocol = protocols_flavor().vtctl_python_client_protocol()
+    else:
+      protocol = protocols_flavor().vtctl_client_protocol()
     rpc_port = self.port
     if protocol == "grpc":
       # import the grpc vtctl client implementation, change the port
-      from vtctl import grpc_vtctl_client
+      if python:
+        from vtctl import grpc_vtctl_client
       rpc_port = self.grpc_port
     return 'localhost:%u' % rpc_port
 
