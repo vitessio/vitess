@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
@@ -35,12 +36,89 @@ func NewFakeBinlogStreamer(t *testing.T) *FakeBinlogStreamer {
 	}
 }
 
+//
+// ServeUpdateStream tests
+//
+
+var testUpdateStreamRequest = &proto.UpdateStreamRequest{
+	Position: myproto.ReplicationPosition{
+		GTIDSet: myproto.MariadbGTID{
+			Domain:   1,
+			Server:   4567,
+			Sequence: 6789,
+		},
+	},
+}
+
+var testStreamEvent = &proto.StreamEvent{
+	Category:  "DML",
+	TableName: "table1",
+	PrimaryKeyFields: []mproto.Field{
+		mproto.Field{
+			Name:  "id",
+			Type:  254,
+			Flags: 16515,
+		},
+	},
+	PrimaryKeyValues: [][]sqltypes.Value{
+		[]sqltypes.Value{
+			sqltypes.MakeString([]byte("123")),
+		},
+	},
+	Sql:       "test sql",
+	Timestamp: 372,
+	GTIDField: myproto.GTIDField{
+		Value: myproto.MariadbGTID{
+			Domain:   1,
+			Server:   4567,
+			Sequence: 6789,
+		},
+	},
+}
+
 // ServeUpdateStream is part of the the UpdateStream interface
 func (fake *FakeBinlogStreamer) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
+	sendReply(testStreamEvent)
 	return nil
+}
+
+func testServeUpdateStream(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+	if se, ok := <-c; !ok {
+		t.Fatalf("got no response")
+	} else {
+		if !reflect.DeepEqual(*se, *testStreamEvent) {
+			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+		}
+	}
+	if se, ok := <-c; ok {
+		t.Fatalf("got a response when error expected: %v", se)
+	}
+	if err := errFunc(); err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+}
+
+func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
+	ctx := context.Background()
+	c, errFunc, err := bpc.ServeUpdateStream(ctx, testUpdateStreamRequest)
+	if err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+	if se, ok := <-c; ok {
+		t.Fatalf("got a response when error expected: %v", se)
+	}
+	err = errFunc()
+	if err == nil || !strings.Contains(err.Error(), "test-triggered panic") {
+		t.Errorf("wrong error from panic: %v", err)
+	}
 }
 
 //
@@ -213,11 +291,13 @@ func Run(t *testing.T, bpc binlogplayer.Client, endPoint topo.EndPoint, fake *Fa
 	}
 
 	// no panic
+	testServeUpdateStream(t, bpc)
 	testStreamKeyRange(t, bpc)
 	testStreamTables(t, bpc)
 
 	// panic now, and test
 	fake.panics = true
+	testServeUpdateStreamPanics(t, bpc)
 	testStreamKeyRangePanics(t, bpc)
 	testStreamTablesPanics(t, bpc)
 }
