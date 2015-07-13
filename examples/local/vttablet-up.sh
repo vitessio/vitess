@@ -45,6 +45,7 @@ case "$MYSQL_FLAVOR" in
 esac
 
 mkdir -p $VTDATAROOT/tmp
+mkdir -p $VTDATAROOT/backups
 
 # Try to find mysqld_safe on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then
@@ -63,8 +64,11 @@ if [ -z "$memcached_path" ]; then
   exit 1
 fi
 
-# Start 3 vttablets.
-for uid_index in 0 1 2; do
+# Start 3 vttablets by default.
+# Pass a list of UID indices on the command line to override.
+uids=${@:-'0 1 2'}
+
+for uid_index in $uids; do
   uid=$[$uid_base + $uid_index]
   port=$[$port_base + $uid_index]
   mysql_port=$[$mysql_port_base + $uid_index]
@@ -88,6 +92,9 @@ for uid_index in 0 1 2; do
     -enable-rowcache \
     -rowcache-bin $memcached_path \
     -rowcache-socket $VTDATAROOT/$tablet_dir/memcache.sock \
+    -backup_storage_implementation file \
+    -file_backup_storage_root $VTDATAROOT/backups \
+    -restore_from_backup \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"
