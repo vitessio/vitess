@@ -1,0 +1,34 @@
+// This package contains the data structures for the logging service.
+
+syntax = "proto3";
+
+package logutil;
+
+// Time represents a time stamp in nanoseconds. In go, use logutil library
+// to convert times.
+message Time {
+  int64 seconds = 1;
+  int32 nanoseconds = 2;
+}
+
+// Level is the level of the log messages.
+enum Level {
+  // The usual logging levels.
+  // Should be logged using logging facility.
+  INFO = 0;
+  WARNING = 1;
+  ERROR = 2;
+
+  // For messages that may contains non-logging events.
+  // Should be logged to console directly.
+  CONSOLE = 3;
+}
+
+// Event is a single logging event
+message Event {
+  Time time = 1;
+  Level level = 2;
+  string file = 3;
+  int64 line = 4;
+  string value = 5;
+}

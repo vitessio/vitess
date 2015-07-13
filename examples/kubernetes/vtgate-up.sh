@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This is an example script that starts a vtgate replicationController.
+# This is an example script that starts a vtgate replicationcontroller.
 
 set -e
 
@@ -26,5 +26,5 @@ for var in replicas vtdataroot_volume; do
   sed_script+="s,{{$var}},${!var},g;"
 done
 
-echo "Creating vtgate replicationController..."
+echo "Creating vtgate replicationcontroller..."
 cat $VTGATE_TEMPLATE | sed -e "$sed_script" | $KUBECTL create -f -

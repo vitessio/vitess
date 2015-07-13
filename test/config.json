@@ -82,6 +82,12 @@
     },
     "worker": {
       "File": "worker.py"
+    },
+    "automation_horizontal_resharding": {
+      "File": "automation_horizontal_resharding.py"
+    },
+    "tablet": {
+      "File": "tablet_test.py"
     }
   }
 }

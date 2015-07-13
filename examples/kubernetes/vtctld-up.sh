@@ -12,3 +12,8 @@ $KUBECTL create -f vtctld-service.yaml
 
 echo "Creating vtctld pod..."
 $KUBECTL create -f vtctld-pod.yaml
+
+server=$(get_vtctld_addr)
+echo
+echo "vtctld address: http://$server"
+

@@ -36,12 +36,12 @@ public class StreamingVtGateIT {
 
   @BeforeClass
   public static void setUpVtGate() throws Exception {
-    Util.setupTestEnv(testEnv, true);
+    Util.setupTestEnv(testEnv);
   }
 
   @AfterClass
   public static void tearDownVtGate() throws Exception {
-    Util.setupTestEnv(testEnv, false);
+    Util.teardownTestEnv(testEnv);
   }
 
   @Before

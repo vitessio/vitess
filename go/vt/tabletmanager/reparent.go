@@ -93,6 +93,10 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
 	}
 
+	agent.mutex.Lock()
+	agent._tabletExternallyReparentedTime = time.Now()
+	agent.mutex.Unlock()
+
 	// Directly write the new master endpoint in the serving graph.
 	// We will do a true rebuild in the background soon, but in the meantime,
 	// this will be enough for clients to re-resolve the new master.

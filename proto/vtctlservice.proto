@@ -5,9 +5,9 @@ syntax = "proto3";
 
 package vtctlservice;
 
-import "vtctl.proto";
+import "vtctldata.proto";
 
 // Service Vtctl allows you to call vt commands through gRPC.
 service Vtctl {
-  rpc ExecuteVtctlCommand (vtctl.ExecuteVtctlCommandRequest) returns (stream vtctl.ExecuteVtctlCommandResponse) {};
+  rpc ExecuteVtctlCommand (vtctldata.ExecuteVtctlCommandRequest) returns (stream vtctldata.ExecuteVtctlCommandResponse) {};
 }

@@ -1,77 +1,121 @@
 #!/usr/bin/env python
 
 import logging
-import os
 
 class ProtocolsFlavor(object):
   """Base class for protocols"""
 
-  def binlog_player_protocol_flags(self):
-    """Returns the flags to pass to process to set the binlog player protocol."""
-    return []
+  def binlog_player_protocol(self):
+    """Returns the name of the binlog player protocol to use."""
+    raise NotImplementedError('Not implemented in the base class')
 
   def vtctl_client_protocol(self):
-    """Returns the protocol to use for vtctl connections. Needs to be supported both in python and go."""
-    return ""
+    """Returns the protocol to use for vtctl connections.
+    This is just for the go client."""
+    raise NotImplementedError('Not implemented in the base class')
 
-  def tablet_manager_protocol_flags(self):
-    """Returns the flags to use for specifying the tablet manager protocol."""
-    return ['-tablet_manager_protocol', 'bson']
+  def vtctl_python_client_protocol(self):
+    """Returns the protocol to use for vtctl connections.
+    This is just for the python client."""
+    raise NotImplementedError('Not implemented in the base class')
 
-  def tabletconn_protocol_flags(self):
-    """Returns the flags to use for specifying the query service protocol."""
-    return ['-tablet_protocol', 'gorpc']
+  def vtworker_client_protocol(self):
+    """Returns the protocol to use for vtworker connections."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def tablet_manager_protocol(self):
+    """Returns the protocol to use for the tablet manager protocol."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def tabletconn_protocol(self):
+    """Returns the protocol to use for connections from vtctl/vtgate to
+    vttablet."""
+    raise NotImplementedError('Not implemented in the base class')
 
   def vtgate_protocol_flags(self):
     """Returns the flags to use for specifying the vtgate protocol."""
-    return ['-vtgate_protocol', 'gorpc']
+    raise NotImplementedError('Not implemented in the base class')
 
   def rpc_timeout_message(self):
     """Returns the error message used by the protocol to indicate a timeout."""
-    raise NotImplementedError('Implementations need to overwrite this')
+    raise NotImplementedError('Not implemented in the base class')
+
+  def service_map(self):
+    """Returns a list of entries for the service map to enable all
+    relevant protocols in all servers."""
+    raise NotImplementedError('Not implemented in the base class')
+
 
 class GoRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use go rpc everywhere"""
 
-  def binlog_player_protocol_flags(self):
-    return ['-binlog_player_protocol', 'gorpc']
+  def binlog_player_protocol(self):
+    return 'gorpc'
 
   def vtctl_client_protocol(self):
     return 'gorpc'
 
-  def tablet_manager_protocol_flags(self):
-    return ['-tablet_manager_protocol', 'bson']
+  def vtctl_python_client_protocol(self):
+    return 'gorpc'
 
-  def tabletconn_protocol_flags(self):
-    return ['-tablet_protocol', 'gorpc']
+  def vtworker_client_protocol(self):
+    # There is no GoRPC implementation for the vtworker RPC interface,
+    # so we use gRPC as well.
+    return 'grpc'
+
+  def tablet_manager_protocol(self):
+    return 'bson'
+
+  def tabletconn_protocol(self):
+    return 'gorpc'
 
   def vtgate_protocol_flags(self):
     return ['-vtgate_protocol', 'gorpc']
 
   def rpc_timeout_message(self):
     return 'timeout waiting for'
+
+  def service_map(self):
+    return ['grpc-vtworker']
+
 
 class GRpcProtocolsFlavor(ProtocolsFlavor):
   """Overrides to use gRPC everywhere where it is supported.
   If not supported yet, use GoRPC."""
 
-  def binlog_player_protocol_flags(self):
-    return ['-binlog_player_protocol', 'gorpc']
+  def binlog_player_protocol(self):
+    return 'grpc'
 
   def vtctl_client_protocol(self):
     return 'grpc'
 
-  def tablet_manager_protocol_flags(self):
-    return ['-tablet_manager_protocol', 'bson']
+  def vtctl_python_client_protocol(self):
+    return 'gorpc'
 
-  def tabletconn_protocol_flags(self):
-    return ['-tablet_protocol', 'gorpc']
+  def vtworker_client_protocol(self):
+    return 'grpc'
+
+  def tablet_manager_protocol(self):
+    return 'grpc'
+
+  def tabletconn_protocol(self):
+    return 'grpc'
 
   def vtgate_protocol_flags(self):
     return ['-vtgate_protocol', 'gorpc']
 
   def rpc_timeout_message(self):
-    return 'timeout waiting for'
+    return 'context deadline exceeded'
+
+  def service_map(self):
+    return [
+        'grpc-queryservice',
+        'grpc-updatestream',
+        'grpc-vtctl',
+        'grpc-vtworker',
+        'grpc-tabletmanager',
+        ]
+
 
 __knows_protocols_flavor_map = {
   'gorpc': GoRpcProtocolsFlavor,

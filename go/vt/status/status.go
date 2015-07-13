@@ -19,7 +19,6 @@ import (
 
 var (
 	vtctldAddr = flag.String("vtctld_addr", "", "address of a vtctld instance")
-	_          = flag.String("vtctld_topo_explorer", "", "this flag is no longer used")
 )
 
 // MakeVtctldRedirect returns an absolute vtctld url that will

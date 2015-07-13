@@ -75,6 +75,7 @@ class Tablet(object):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (environment.reserve_ports(1))
     self.mysql_port = mysql_port or (environment.reserve_ports(1))
+    self.grpc_port = environment.reserve_ports(1)
     self.use_mysqlctld = use_mysqlctld
     Tablet.seq += 1
 
@@ -331,6 +332,11 @@ class Tablet(object):
   def tablet_dir(self):
     return '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
 
+  def grpc_enabled(self):
+    return protocols_flavor().tabletconn_protocol() == 'grpc' or \
+      protocols_flavor().tablet_manager_protocol() == 'grpc' or \
+      protocols_flavor().binlog_player_protocol() == 'grpc'
+
   def flush(self):
     utils.curl('http://localhost:%s%s' %
                (self.port, environment.flush_logs_url),
@@ -381,6 +387,10 @@ class Tablet(object):
                    '-key', key])
       if ca_cert:
         args.extend(['-ca_cert', ca_cert])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
+    if self.grpc_enabled():
+      args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
       args.extend(['-lameduck-period', lameduck_period])
     if security_policy:
@@ -422,8 +432,10 @@ class Tablet(object):
     args = []
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server().flags())
-    args.extend(protocols_flavor().binlog_player_protocol_flags())
-    args.extend(protocols_flavor().tablet_manager_protocol_flags())
+    args.extend(['-binlog_player_protocol',
+                protocols_flavor().binlog_player_protocol()])
+    args.extend(['-tablet_manager_protocol',
+                 protocols_flavor().tablet_manager_protocol()])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
       args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])

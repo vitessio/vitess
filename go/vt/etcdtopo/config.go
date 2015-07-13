@@ -73,8 +73,12 @@ func tabletFilePath(tablet string) string {
 	return path.Join(tabletDirPath(tablet), tabletFilename)
 }
 
+func keyspaceReplicationDirPath(keyspace string) string {
+	return path.Join(replicationDirPath, keyspace)
+}
+
 func shardReplicationDirPath(keyspace, shard string) string {
-	return path.Join(replicationDirPath, keyspace, shard)
+	return path.Join(keyspaceReplicationDirPath(keyspace), shard)
 }
 
 func shardReplicationFilePath(keyspace, shard string) string {

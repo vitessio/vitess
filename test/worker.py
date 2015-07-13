@@ -9,6 +9,8 @@ Tests the robustness and resiliency of vtworkers.
 
 import logging
 import unittest
+import urllib
+import urllib2
 from collections import namedtuple
 
 from vtdb import keyrange_constants
@@ -131,9 +133,8 @@ def tearDownModule():
   shard_1_replica.remove_tree()
   shard_1_rdonly1.remove_tree()
 
-
-class TestBaseSplitCloneResiliency(unittest.TestCase):
-  """Tests that the SplitClone worker is resilient to particular failures."""
+class TestBaseSplitClone(unittest.TestCase):
+  """Abstract test base class for testing the SplitClone worker."""
 
   def run_shard_tablets(self, shard_name, shard_tablets, create_db=True, create_table=True, wait_state='SERVING'):
     """Handles all the necessary work for initially running a shard's tablets.
@@ -190,6 +191,14 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
       utils.run_vtctl(['ApplySchema',
                        '-sql=' + create_table_sql,
                        'test_keyspace'],
+                      auto_log=True)
+
+  def copy_schema_to_destination_shards(self):
+    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
+      utils.run_vtctl(['CopySchemaShard',
+                       '--exclude_tables', 'unrelated',
+                       shard_rdonly1.tablet_alias,
+                       keyspace_shard],
                       auto_log=True)
 
   def _insert_values(self, tablet, id_offset, msg, keyspace_id, num_values):
@@ -283,14 +292,6 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     self.run_shard_tablets('80-', shard_1_tablets, create_db=False,
       create_table=False, wait_state='NOT_SERVING')
 
-    # Copy the schema to the destination shards
-    for keyspace_shard in ('test_keyspace/-80', 'test_keyspace/80-'):
-      utils.run_vtctl(['CopySchemaShard',
-                       '--exclude_tables', 'unrelated',
-                       shard_rdonly1.tablet_alias,
-                       keyspace_shard],
-                      auto_log=True)
-
     logging.debug("Start inserting initial data: %s rows", utils.options.num_insert_rows)
     self.insert_values(shard_master, utils.options.num_insert_rows, 2)
     logging.debug("Done inserting initial data, waiting for replication to catch up")
@@ -313,6 +314,16 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     for shard in ['0', '-80', '80-']:
       utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
+class TestBaseSplitCloneResiliency(TestBaseSplitClone):
+  """Tests that the SplitClone worker is resilient to particular failures."""
+  
+  def setUp(self):
+    super(TestBaseSplitCloneResiliency, self).setUp()
+    self.copy_schema_to_destination_shards()
+    
+  def tearDown(self):
+    super(TestBaseSplitCloneResiliency, self).tearDown()
+  
   def verify_successful_worker_copy_with_reparent(self, mysql_down=False):
     """Verifies that vtworker can successfully copy data for a SplitClone.
 
@@ -332,7 +343,7 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
     Raises:
       AssertionError if things didn't go as expected.
     """
-    worker_proc, worker_port = utils.run_vtworker_bg(['--cell', 'test_nj',
+    worker_proc, worker_port, _ = utils.run_vtworker_bg(['--cell', 'test_nj',
                         'SplitClone',
                         '--source_reader_count', '1',
                         '--destination_pack_count', '1',
@@ -383,7 +394,11 @@ class TestBaseSplitCloneResiliency(unittest.TestCase):
       'WorkerState == cleaning up',
       condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
       # We know that vars should already be ready, since we read them earlier
-      require_vars=True)
+      require_vars=True,
+      # We're willing to let the test run for longer to make it less flaky.
+      # This should still fail fast if something goes wrong with vtworker,
+      # because of the require_vars flag above.
+      timeout=5*60)
 
     # Verify that we were forced to reresolve and retry.
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)
@@ -426,6 +441,8 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
     """Shuts down MySQL on the destination masters (in addition to the base setup)"""
     logging.debug("Starting base setup for MysqlDownDuringWorkerCopy")
     super(TestMysqlDownDuringWorkerCopy, self).setUp()
+    self.copy_schema_to_destination_shards()
+
     logging.debug("Starting MysqlDownDuringWorkerCopy-specific setup")
     utils.wait_procs([shard_0_master.shutdown_mysql(),
       shard_1_master.shutdown_mysql()])
@@ -437,12 +454,53 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
     utils.wait_procs([shard_0_master.start_mysql(),
       shard_1_master.start_mysql()])
     logging.debug("Finished MysqlDownDuringWorkerCopy-specific tearDown")
+
     super(TestMysqlDownDuringWorkerCopy, self).tearDown()
     logging.debug("Finished base tearDown for MysqlDownDuringWorkerCopy")
 
   def test_mysql_down_during_worker_copy(self):
     """This test simulates MySQL being down on the destination masters."""
     self.verify_successful_worker_copy_with_reparent(mysql_down=True)
+
+class TestVtworkerWebinterface(unittest.TestCase):
+  def setUp(self):
+    # Run vtworker without any optional arguments to start in interactive mode.
+    self.worker_proc, self.worker_port, _ = utils.run_vtworker_bg([])
+
+  def tearDown(self):
+    utils.kill_sub_process(self.worker_proc)
+
+  def test_webinterface(self):
+    worker_base_url = 'http://localhost:%u' % int(self.worker_port)
+    # Wait for /status to become available.
+    timeout = 10
+    while True:
+      done = False
+      try:
+        urllib2.urlopen(worker_base_url + '/status').read()
+        done = True
+      except:
+        pass
+      if done:
+        break
+      timeout = utils.wait_step('worker /status webpage must be available', timeout)
+      
+    # Run the command twice to make sure it's idempotent.
+    for _ in range(2):
+      # Run Ping command.
+      try:
+        urllib2.urlopen(worker_base_url + '/Debugging/Ping', data=urllib.urlencode({'message':'pong'})).read()
+        raise Exception("Should have thrown an HTTPError for the redirect.")
+      except urllib2.HTTPError as e:
+        self.assertEqual(e.code, 307)
+      # Verify that the command logged something and its available at /status.
+      status = urllib2.urlopen(worker_base_url + '/status').read()
+      self.assertIn("Ping command was called with message: 'pong'", status, "Command did not log output to /status")
+      
+      # Reset the job.
+      urllib2.urlopen(worker_base_url + '/reset').read()
+      status_after_reset = urllib2.urlopen(worker_base_url + '/status').read()
+      self.assertIn("This worker is idle.", status_after_reset, "/status does not indicate that the reset was successful")
 
 def add_test_options(parser):
   parser.add_option('--num_insert_rows', type="int", default=3000,

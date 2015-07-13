@@ -57,8 +57,9 @@ func RegisterGRPCFlags() {
 // GRPCCheckServiceMap returns if we should register a gRPC service
 // (and also logs how to enable / disable it)
 func GRPCCheckServiceMap(name string) bool {
-	// Silently fail individual services if gRPC is not enabled in the first place
-	if GRPCPort == nil || *GRPCPort == 0 {
+	// Silently fail individual services if gRPC is not enabled in
+	// the first place (either on a grpc port or on the socket file)
+	if (GRPCPort == nil || *GRPCPort == 0) && (SocketFile == nil || *SocketFile == "") {
 		return false
 	}
 

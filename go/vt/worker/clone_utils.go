@@ -298,7 +298,7 @@ func FindChunks(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo,
 	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24:
 		minNumeric := sqltypes.MakeNumeric(qr.Rows[0][0].Raw())
 		maxNumeric := sqltypes.MakeNumeric(qr.Rows[0][1].Raw())
-		if qr.Rows[0][0].Raw()[0] == '-' {
+		if (qr.Fields[0].Flags & mproto.VT_UNSIGNED_FLAG) == 0 {
 			// signed values, use int64
 			min, err := minNumeric.ParseInt64()
 			if err != nil {

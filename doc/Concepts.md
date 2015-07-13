@@ -38,8 +38,9 @@ To shard a database, all of the tables in a keyspace must contain a
 <code>keyspace_id</code> column. Vitess sharding ensures that all rows that have
 a common keyspace ID are always placed in the same shard.
 
-It is recommended, but not required, for the <code>keyspace_id</code> column
-to be the leading primary key column of all tables in a keyspace.
+The <code>keyspace_id</code> column does not need to be in the primary key or even an index
+for the table. The Vitess tools will either walk through all the rows (to copy
+data during dynamic resharding for instance), or not use the keyspace_id.
 
 If you do not intend to shard a database, you do not have to designated a
 keyspace ID. However, you must designate a keyspace ID if you decide to

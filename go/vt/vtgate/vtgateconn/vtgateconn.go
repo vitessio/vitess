@@ -81,14 +81,14 @@ func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 }
 
 // ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, false, nil)
+func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, tabletType, nil)
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, false, nil)
+func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, nil)
 	return res, err
 }
 
@@ -126,6 +126,19 @@ func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	session, err := conn.impl.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &VTGateTx{
+		impl:    conn.impl,
+		session: session,
+	}, nil
+}
+
+// Begin2 starts a transaction and returns a VTGateTX.
+func (conn *VTGateConn) Begin2(ctx context.Context) (*VTGateTx, error) {
+	session, err := conn.impl.Begin2(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,21 +219,21 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 }
 
 // ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool) ([]mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchShard: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, keyspace, shards, tabletType, notInTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, tabletType, tx.session)
 	tx.session = session
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool) ([]mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, keyspace, keyspaceIds, tabletType, notInTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, tx.session)
 	tx.session = session
 	return res, err
 }
@@ -241,6 +254,26 @@ func (tx *VTGateTx) Rollback(ctx context.Context) error {
 		return nil
 	}
 	err := tx.impl.Rollback(ctx, tx.session)
+	tx.session = nil
+	return err
+}
+
+// Commit2 commits the current transaction.
+func (tx *VTGateTx) Commit2(ctx context.Context) error {
+	if tx.session == nil {
+		return fmt.Errorf("commit: not in transaction")
+	}
+	err := tx.impl.Commit2(ctx, tx.session)
+	tx.session = nil
+	return err
+}
+
+// Rollback2 rolls back the current transaction.
+func (tx *VTGateTx) Rollback2(ctx context.Context) error {
+	if tx.session == nil {
+		return nil
+	}
+	err := tx.impl.Rollback2(ctx, tx.session)
 	tx.session = nil
 	return err
 }
@@ -271,10 +304,10 @@ type Impl interface {
 	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-	ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-	ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
@@ -297,6 +330,15 @@ type Impl interface {
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
 
+	// New methods (that don't quite work yet) which will eventually replace the existing ones:
+
+	// Begin starts a transaction and returns a VTGateTX.
+	Begin2(ctx context.Context) (interface{}, error)
+	// Commit commits the current transaction.
+	Commit2(ctx context.Context, session interface{}) error
+	// Rollback rolls back the current transaction.
+	Rollback2(ctx context.Context, session interface{}) error
+
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
 	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
@@ -314,8 +356,7 @@ var dialers = make(map[string]DialerFunc)
 // to self register.
 func RegisterDialer(name string, dialer DialerFunc) {
 	if _, ok := dialers[name]; ok {
-		log.Warningf("Dialer %s already exists", name)
-		return
+		log.Warningf("Dialer %s already exists, overwriting it", name)
 	}
 	dialers[name] = dialer
 }

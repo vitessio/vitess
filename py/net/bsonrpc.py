@@ -29,12 +29,7 @@ class BsonRpcClient(gorpc.GoRpcClient):
   def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     if bool(user) != bool(password):
       raise ValueError("You must provide either both or none of user and password.")
-    if addr.startswith('/'):
-      socket_file = addr
-      self.addr = 'localhost'
-    else:
-      socket_file = None
-      self.addr = addr
+    self.addr = addr
     self.user = user
     self.password = password
     if encrypted:
@@ -45,7 +40,7 @@ class BsonRpcClient(gorpc.GoRpcClient):
       uri = '%s://%s/_bson_rpc_/auth' % (protocol, self.addr)
     else:
       uri = '%s://%s/_bson_rpc_' % (protocol, self.addr)
-    gorpc.GoRpcClient.__init__(self, uri, timeout, keyfile=keyfile, certfile=certfile, socket_file=socket_file)
+    gorpc.GoRpcClient.__init__(self, uri, timeout, keyfile=keyfile, certfile=certfile)
 
   def dial(self):
     gorpc.GoRpcClient.dial(self)

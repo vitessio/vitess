@@ -4,11 +4,7 @@
 
 package actionnode
 
-import (
-	"time"
-
-	"github.com/youtube/vitess/go/vt/topo"
-)
+import "github.com/youtube/vitess/go/vt/topo"
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -22,27 +18,6 @@ Note it's OK to rename the structures as the type name is not saved in json.
 */
 
 // tablet action node structures
-
-// HealthStreamReply is the structure we stream from HealthStream
-type HealthStreamReply struct {
-	// Tablet is the current tablet record, as cached by tabletmanager
-	Tablet *topo.Tablet
-
-	// BinlogPlayerMapSize is the size of the binlog player map.
-	// If non zero, the ReplicationDelay is the binlog players' maximum
-	// replication delay.
-	BinlogPlayerMapSize int64
-
-	// HealthError is the last error we got from health check,
-	// or empty is the server is healthy.
-	HealthError string
-
-	// ReplicationDelay is either from MySQL replication, or from
-	// filtered replication
-	ReplicationDelay time.Duration
-
-	// TODO(alainjobart) add some QPS reporting data here
-}
 
 // SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
 type SlaveWasRestartedArgs struct {

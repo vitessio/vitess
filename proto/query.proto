@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package query;
 
-import "topo.proto";
+import "topodata.proto";
 import "vtrpc.proto";
 
 // Target describes what the client expects the tablet is.
@@ -13,7 +13,7 @@ import "vtrpc.proto";
 message Target {
   string keyspace = 1;
   string shard = 2;
-  topo.TabletType TabletType = 3;
+  topodata.TabletType tablet_type = 3;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
@@ -147,6 +147,20 @@ message QueryResult {
   repeated Row rows = 4;
 }
 
+// GetSessionIdRequest is the payload to GetSessionId
+message GetSessionIdRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  string keyspace = 3;
+  string shard = 4;
+}
+
+// GetSessionIdResponse is the returned value from GetSessionId
+message GetSessionIdResponse {
+  vtrpc.RPCError error = 1;
+  int64 session_id = 2;
+}
+
 // ExecuteRequest is the payload to Execute
 message ExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -154,6 +168,7 @@ message ExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   int64 transaction_id = 5;
+  int64 session_id = 6;
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -169,6 +184,7 @@ message ExecuteBatchRequest {
   Target target = 3;
   repeated BoundQuery queries = 4;
   int64 transaction_id = 5;
+  int64 session_id = 6;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
@@ -183,6 +199,7 @@ message StreamExecuteRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
+  int64 session_id = 5;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -196,6 +213,7 @@ message BeginRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  int64 session_id = 4;
 }
 
 // BeginResponse is the returned value from Begin
@@ -210,6 +228,7 @@ message CommitRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 session_id = 5;
 }
 
 // CommitResponse is the returned value from Commit
@@ -223,6 +242,7 @@ message RollbackRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   int64 transaction_id = 4;
+  int64 session_id = 5;
 }
 
 // RollbackResponse is the returned value from Rollback
@@ -236,7 +256,9 @@ message SplitQueryRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   BoundQuery query = 4;
-  int64 split_count = 5;
+  string split_column = 5;
+  int64 split_count = 6;
+  int64 session_id = 7;
 }
 
 // QuerySplit represents one query to execute on the tablet
@@ -253,4 +275,42 @@ message QuerySplit {
 message SplitQueryResponse {
   vtrpc.RPCError error = 1;
   repeated QuerySplit queries = 2;
+}
+
+// StreamHealthRequest is the payload for StreamHealth
+message StreamHealthRequest {
+}
+
+// RealtimeStats contains information about the tablet status
+message RealtimeStats {
+  // health_error is the last error we got from health check,
+  // or empty is the server is healthy. This is used for subset selection,
+  // we do not send queries to servers that are not healthy.
+  string health_error = 1;
+
+  // seconds_behind_master is populated for slaves only. It indicates
+  // how far nehind on replication a slave currently is.  It is used
+  // by clients for subset selection (so we don't try to send traffic
+  // to tablets that are too far behind).
+  uint32 seconds_behind_master = 2;
+
+  // cpu_usage is used for load-based balancing
+  double cpu_usage = 3;
+}
+
+// StreamHealthResponse is streamed by StreamHealth on a regular basis
+message StreamHealthResponse {
+  // target is the current server type. Only queries with that exact Target
+  // record will be accepted.
+  Target target = 1;
+
+  // tablet_externally_reparented_timestamp contains the last time
+  // tabletmanager.TabletExternallyReparented was called on this tablet,
+  // or 0 if it was never called. This is meant to differentiate two tablets
+  // that report a target.TabletType of MASTER, only the one with the latest
+  // timestamp should be trusted.
+  int64 tablet_externally_reparented_timestamp = 2;
+
+  // realtime_stats contains information about the tablet status
+  RealtimeStats realtime_stats = 3;
 }

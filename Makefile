@@ -83,6 +83,7 @@ site_integration_test_files = \
 # - medium: 30 secs - 1 min
 # - large: over 1 min
 small_integration_test_files = \
+	tablet_test.py \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	schema.py \
@@ -102,7 +103,8 @@ medium_integration_test_files = \
 	vtdb_test.py \
 	vtgate_utils_test.py \
 	rowcache_invalidator.py \
-	worker.py
+	worker.py \
+	automation_horizontal_resharding.py
 
 large_integration_test_files = \
 	vtgatev2_test.py \
@@ -183,35 +185,41 @@ bson:
 # FIXME(alainjobart) also add support for python gRPC stubs, right now
 # it's only the proto files without gRPC
 proto:
+	cd go/vt/proto/mysqlctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/mysqlctl.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtrpc && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtrpc.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/topo && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topo.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/replication && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/replication.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/binlog && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlog.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/topodata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topodata.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/replicationdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/replicationdata.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/binlogdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlogdata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/binlogservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlogservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/query && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/query.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgate && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgate.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtgateservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgateservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctl.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/logutil && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/logutil.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtctldata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctldata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/vtctlservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctlservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/tabletmanager && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanager.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtworkerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerdata.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/vtworkerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerservice.proto --go_out=plugins=grpc:.
+	cd go/vt/proto/tabletmanagerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerdata.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/tabletmanagerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerservice.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.
 	cd go/vt/proto/automationservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automationservice.proto --go_out=plugins=grpc:.
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
-	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctl.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/logutil.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctldata.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctlservice.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
-# This rule builds a bootstrap image of the given flavor.
-# Example: $ make docker_bootstrap flavor=mariadb
+# This rule builds the bootstrap images for all flavors.
 docker_bootstrap:
-	docker/bootstrap/build.sh $(flavor)
+	docker/bootstrap/build.sh common
+	docker/bootstrap/build.sh mariadb
+	docker/bootstrap/build.sh mysql56
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
 docker_test:
-	docker/test/run.sh $(flavor) 'make test'
+	go run test.go -flavor $(flavor)
 
 docker_unit_test:
-	docker/test/run.sh $(flavor) 'make unit_test'
+	go run test.go -flavor $(flavor) unit

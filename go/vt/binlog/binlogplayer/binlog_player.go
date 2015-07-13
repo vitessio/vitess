@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
@@ -21,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -79,7 +82,7 @@ func NewBinlogPlayerStats() *BinlogPlayerStats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	addr     string
+	endPoint topo.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
@@ -101,9 +104,9 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint topo.EndPoint, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:           addr,
+		endPoint:       endPoint,
 		dbClient:       dbClient,
 		keyspaceIdType: keyspaceIdType,
 		keyRange:       keyRange,
@@ -117,9 +120,9 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint topo.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:         addr,
+		endPoint:     endPoint,
 		dbClient:     dbClient,
 		tables:       tables,
 		blpPos:       *startPosition,
@@ -240,18 +243,18 @@ func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 	return qr, err
 }
 
-// ApplyBinlogEvents makes a gob rpc request to BinlogServer
-// and processes the events. It will return nil if 'interrupted'
-// was closed, or if we reached the stopping point.
+// ApplyBinlogEvents makes an RPC request to BinlogServer
+// and processes the events. It will return nil if the provided context
+// was canceled, or if we reached the stopping point.
 // It will return io.EOF if the server stops sending us updates.
 // It may return any other error it encounters.
-func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
+func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
 			blp.blpPos.Uid,
 			blp.tables,
 			blp.blpPos.Position,
-			blp.addr,
+			blp.endPoint,
 		)
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
@@ -259,7 +262,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			blp.keyRange.Start.Hex(),
 			blp.keyRange.End.Hex(),
 			blp.blpPos.Position,
-			blp.addr,
+			blp.endPoint,
 		)
 	}
 	if !blp.stopPosition.IsZero() {
@@ -275,12 +278,12 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}
 	}
 
-	binlogPlayerClientFactory, ok := binlogPlayerClientFactories[*binlogPlayerProtocol]
+	clientFactory, ok := clientFactories[*binlogPlayerProtocol]
 	if !ok {
 		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
 	}
-	blplClient := binlogPlayerClientFactory()
-	err := blplClient.Dial(blp.addr, *binlogPlayerConnTimeout)
+	blplClient := clientFactory()
+	err := blplClient.Dial(blp.endPoint, *binlogPlayerConnTimeout)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)
@@ -306,15 +309,15 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}()
 	}
 
-	responseChan := make(chan *proto.BinlogTransaction)
-	var resp BinlogPlayerResponse
+	var responseChan chan *proto.BinlogTransaction
+	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
 			Tables:   blp.tables,
 			Position: blp.blpPos.Position,
 			Charset:  &blp.defaultCharset,
 		}
-		resp = blplClient.StreamTables(req, responseChan)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, req)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
@@ -322,41 +325,50 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 			Position:       blp.blpPos.Position,
 			Charset:        &blp.defaultCharset,
 		}
-		resp = blplClient.StreamKeyRange(req, responseChan)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, req)
+	}
+	if err != nil {
+		log.Errorf("Error sending streaming query to binlog server: %v", err)
+		return fmt.Errorf("error sending streaming query to binlog server: %v", err)
 	}
 
-processLoop:
-	for {
-		select {
-		case response, ok := <-responseChan:
-			if !ok {
-				break processLoop
+	for response := range responseChan {
+		for {
+			ok, err = blp.processTransaction(response)
+			if err != nil {
+				return fmt.Errorf("Error in processing binlog event %v", err)
 			}
-			for {
-				ok, err = blp.processTransaction(response)
-				if err != nil {
-					return fmt.Errorf("Error in processing binlog event %v", err)
-				}
-				if ok {
-					if !blp.stopPosition.IsZero() {
-						if blp.blpPos.Position.AtLeast(blp.stopPosition) {
-							log.Infof("Reached stopping position, done playing logs")
-							return nil
-						}
+			if ok {
+				if !blp.stopPosition.IsZero() {
+					if blp.blpPos.Position.AtLeast(blp.stopPosition) {
+						log.Infof("Reached stopping position, done playing logs")
+						return nil
 					}
-					break
 				}
-				log.Infof("Retrying txn")
-				time.Sleep(1 * time.Second)
+				break
 			}
-		case <-interrupted:
-			return nil
+			log.Infof("Retrying txn")
+			time.Sleep(1 * time.Second)
 		}
 	}
-	if resp.Error() != nil {
-		return fmt.Errorf("Error received from ServeBinlog %v", resp.Error())
+	switch err := errFunc(); err {
+	case nil:
+		return io.EOF
+	case context.Canceled:
+		return nil
+	default:
+		// if the context is canceled, we return nil (some RPC
+		// implementations will remap the context error to their own
+		// errors)
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.Canceled {
+				return nil
+			}
+		default:
+		}
+		return fmt.Errorf("Error received from ServeBinlog %v", err)
 	}
-	return io.EOF
 }
 
 // CreateBlpCheckpoint returns the statements required to create

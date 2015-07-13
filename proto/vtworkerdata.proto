@@ -1,0 +1,17 @@
+// Data structures for the vtworker RPC interface.
+
+syntax = "proto3";
+
+package vtworkerdata;
+
+import "logutil.proto";
+
+// ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
+message ExecuteVtworkerCommandRequest {
+  repeated string args = 1;
+}
+
+// ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
+message ExecuteVtworkerCommandResponse {
+  logutil.Event event = 1;
+}

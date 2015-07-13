@@ -13,12 +13,11 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 
-var lockSrvShard = flag.Bool("lock_srvshard", true, "serialize serving graph updates by locking the SrvShard")
+var _ = flag.Bool("lock_srvshard", false, "Unused")
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
 //
@@ -65,19 +64,6 @@ func RebuildShard(ctx context.Context, log logutil.Logger, ts topo.Server, keysp
 // single cell
 func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server, si *topo.ShardInfo, cell string) (err error) {
 	log.Infof("rebuildCellSrvShard %v/%v in cell %v", si.Keyspace(), si.ShardName(), cell)
-
-	if *lockSrvShard {
-		// This lock is only necessary until all tablets are upgraded to lock-free.
-		actionNode := actionnode.RebuildSrvShard()
-		lockPath, err := actionNode.LockSrvShard(ctx, ts, cell, si.Keyspace(), si.ShardName())
-		if err != nil {
-			return fmt.Errorf("can't lock SrvShard for rebuild: %v", err)
-		}
-
-		defer func() {
-			actionNode.UnlockSrvShard(ctx, ts, cell, si.Keyspace(), si.ShardName(), lockPath, err)
-		}()
-	}
 
 	for {
 		select {
@@ -367,19 +353,6 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 // UpdateTabletEndpoints fixes up any entries in the serving graph that relate
 // to a given tablet.
 func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tablet) (err error) {
-	if *lockSrvShard {
-		// This lock is only necessary until all tablets are upgraded to lock-free.
-		actionNode := actionnode.RebuildSrvShard()
-		lockPath, err := actionNode.LockSrvShard(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return fmt.Errorf("can't lock shard for UpdateTabletEndpoints(%v): %v", tablet, err)
-		}
-
-		defer func() {
-			actionNode.UnlockSrvShard(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, lockPath, err)
-		}()
-	}
-
 	srvTypes, err := ts.GetSrvTabletTypesPerShard(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		if err != topo.ErrNoNode {

@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -67,7 +69,11 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		return err
 	}
 
-	return agent.QueryServiceControl.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
+	return agent.QueryServiceControl.AllowQueries(&pb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: topo.TabletTypeToProto(tablet.Type),
+	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:
@@ -182,22 +188,33 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	}
 
 	if allowQuery {
-		// There are a few transitions when we're
-		// going to need to restart the query service:
-		// - transitioning from replica to master, so clients
-		//   that were already connected don't keep on using
-		//   the master as replica or rdonly.
-		// - having different parameters for the query
-		//   service. It needs to stop and restart with the
-		//   new parameters. That includes:
+		// There are a few transitions when we need to restart the query service:
+		switch {
+		// If either InitMaster or InitSlave was called, because those calls
+		// (or a prior call to ResetReplication) may have silently broken the
+		// rowcache invalidator by executing RESET MASTER.
+		// Note that we don't care about fixing it after ResetReplication itself
+		// since that call breaks everything on purpose, and we don't expect
+		// anything to start working until either InitMaster or InitSlave.
+		case agent.initReplication:
+			agent.initReplication = false
+			agent.disallowQueries()
+
+		// Transitioning from replica to master, so clients that were already
+		// connected don't keep on using the master as replica or rdonly.
+		case newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER:
+			agent.disallowQueries()
+
+		// Having different parameters for the query service.
+		// It needs to stop and restart with the new parameters.
+		// That includes:
 		//   - changing KeyRange
 		//   - changing the BlacklistedTables list
-		if (newTablet.Type == topo.TYPE_MASTER &&
-			oldTablet.Type != topo.TYPE_MASTER) ||
-			(newTablet.KeyRange != oldTablet.KeyRange) ||
-			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()) {
+		case (newTablet.KeyRange != oldTablet.KeyRange),
+			!reflect.DeepEqual(blacklistedTables, agent.BlacklistedTables()):
 			agent.disallowQueries()
 		}
+
 		if err := agent.allowQueries(newTablet, blacklistedTables); err != nil {
 			log.Errorf("Cannot start query service: %v", err)
 		}

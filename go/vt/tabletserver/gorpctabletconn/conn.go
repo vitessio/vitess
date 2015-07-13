@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -65,17 +67,19 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		return nil, tabletError(err)
 	}
 
-	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
+	if keyspace != "" || shard != "" {
+		var sessionInfo tproto.SessionInfo
+		if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+		if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		conn.sessionID = sessionInfo.SessionId
 	}
-	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
-	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
-	}
-	conn.sessionID = sessionInfo.SessionId
 	return conn, nil
 }
 
@@ -287,7 +291,7 @@ func (conn *TabletBson) Begin(ctx context.Context) (transactionID int64, err err
 }
 
 // Begin2 should not be used for anything except tests for now;
-// it will eventually replace the existing Commit.
+// it will eventually replace the existing Begin.
 // Begin2 starts a transaction.
 func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err error) {
 	conn.mu.RLock()
@@ -432,6 +436,21 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 	return reply.Queries, nil
 }
 
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *TabletBson) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	result := make(chan *pb.StreamHealthResponse, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, result)
+	return result, func() error {
+		return c.Error
+	}, nil
+}
+
 // Close closes underlying bsonrpc.
 func (conn *TabletBson) Close() {
 	conn.mu.Lock()
@@ -458,15 +477,10 @@ func tabletError(err error) error {
 	// TODO(aaijazi): tabletconn is in an intermediate state right now, where application errors
 	// can be returned as rpcplus.ServerError or vterrors.VitessError. Soon, it will be standardized
 	// to only VitessError.
-	isServerError := false
-	switch err.(type) {
-	case rpcplus.ServerError:
-		isServerError = true
-	case *vterrors.VitessError:
-		isServerError = true
-	default:
+	if ve, ok := err.(*vterrors.VitessError); ok {
+		return tabletErrorFromVitessError(ve)
 	}
-	if isServerError {
+	if _, ok := err.(rpcplus.ServerError); ok {
 		var code int
 		errStr := err.Error()
 		switch {
@@ -487,4 +501,16 @@ func tabletError(err error) error {
 		return tabletconn.Cancelled
 	}
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
+}
+
+func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
+	// see if the range is in the tablet error range
+	if ve.Code >= vterrors.TabletError && ve.Code <= vterrors.UnknownTabletError {
+		return &tabletconn.ServerError{
+			Code: int(ve.Code - vterrors.TabletError),
+			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
+		}
+	}
+
+	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }

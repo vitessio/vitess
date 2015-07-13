@@ -31,6 +31,14 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("CreateKeyspace(again) is not ErrNodeExists: %v", err)
 	}
 
+	// Delete and re-create.
+	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != nil {
+		t.Errorf("DeleteKeyspace: %v", err)
+	}
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+		t.Errorf("CreateKeyspace: %v", err)
+	}
+
 	keyspaces, err = ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces: %v", err)

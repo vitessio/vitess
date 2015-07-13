@@ -36,7 +36,11 @@ echo "*  SSD Size: $GKE_SSD_SIZE_GB"
 echo "*  Cluster name: $GKE_CLUSTER_NAME"
 echo "*  Project ID: $project_id"
 echo "****************************"
+<<<<<<< HEAD
 gcloud beta container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $GKE_NUM_NODES
+=======
+gcloud beta container clusters create $GKE_CLUSTER_NAME --machine-type $GKE_MACHINE_TYPE --num-nodes $num_nodes
+>>>>>>> upstream/master
 gcloud config set container/cluster $GKE_CLUSTER_NAME
 
 if [ $GKE_SSD_SIZE_GB -gt 0 ]

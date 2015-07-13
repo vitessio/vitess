@@ -424,12 +424,11 @@ class VtGate(object):
       self.cert = cert
       self.key = key
     self.proc = None
-    self.socket_file = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
             auth=False, timeout_total="4s", timeout_per_conn="2s",
-            socket_file=None, extra_args=None):
+            extra_args=None):
     """Starts the process for thie vtgate instance. If no other instance has
        been started, saves it into the global vtgate variable.
     """
@@ -443,7 +442,8 @@ class VtGate(object):
           '-conn-timeout-total', timeout_total,
           '-conn-timeout-per-conn', timeout_per_conn,
           '-bsonrpc_timeout', '5s',
-          ] + protocols_flavor().tabletconn_protocol_flags()
+          '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+          ]
     if topo_impl:
       args.extend(['-topo_implementation', topo_impl])
     else:
@@ -458,9 +458,6 @@ class VtGate(object):
       args.extend(['-secure-port', '%s' % self.secure_port,
                    '-cert', self.cert,
                    '-key', self.key])
-    if socket_file:
-      self.socket_file = socket_file
-      args.extend(['-socket_file', socket_file])
 
     if extra_args:
       args.extend(extra_args)
@@ -580,7 +577,7 @@ VTCTL_AUTO        = 0
 VTCTL_VTCTL       = 1
 VTCTL_VTCTLCLIENT = 2
 VTCTL_RPC         = 3
-def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+def run_vtctl(clargs, auto_log=False, expect_fail=False,
               mode=VTCTL_AUTO, **kwargs):
   if mode == VTCTL_AUTO:
     if not expect_fail and vtctld:
@@ -589,7 +586,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
       mode = VTCTL_VTCTL
 
   if mode == VTCTL_VTCTL:
-    return run_vtctl_vtctl(clargs, log_level=log_level, auto_log=auto_log,
+    return run_vtctl_vtctl(clargs, auto_log=auto_log,
                            expect_fail=expect_fail, **kwargs)
   elif mode == VTCTL_VTCTLCLIENT:
     result = vtctld.vtctl_client(clargs)
@@ -601,24 +598,17 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
 
   raise Exception('Unknown mode: %s', mode)
 
-def run_vtctl_vtctl(clargs, log_level='', auto_log=False, expect_fail=False,
+def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server().flags())
-  args.extend(protocols_flavor().tablet_manager_protocol_flags())
-  args.extend(protocols_flavor().tabletconn_protocol_flags())
+  args.extend(['-tablet_manager_protocol',
+               protocols_flavor().tablet_manager_protocol()])
+  args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
   args.extend(protocols_flavor().vtgate_protocol_flags())
 
   if auto_log:
-    if options.verbose == 2:
-      log_level='INFO'
-    elif options.verbose == 1:
-      log_level='WARNING'
-    else:
-      log_level='ERROR'
-
-  if log_level:
-    args.append('--stderrthreshold=%s' % log_level)
+    args.append('--stderrthreshold=%s' % get_log_level())
 
   if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
@@ -635,32 +625,43 @@ def run_vtctl_json(clargs):
   stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
   return json.loads(stdout)
 
+def get_log_level():
+  if options.verbose == 2:
+    return 'INFO'
+  elif options.verbose == 1:
+    return 'WARNING'
+  else:
+    return 'ERROR'
+
 # vtworker helpers
-def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
+def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr"""
-  cmd, _ = _get_vtworker_cmd(clargs, log_level, auto_log)
+  cmd, _, _ = _get_vtworker_cmd(clargs, auto_log)
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
-def run_vtworker_bg(clargs, log_level='', auto_log=False, **kwargs):
+def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """Starts a background vtworker process.
 
   Returns:
     proc - process returned by subprocess.Popen
     port - int with the port number that the vtworker is running with
+    rpc_port - int with the port number of the RPC interface
   """
-  cmd, port = _get_vtworker_cmd(clargs, log_level, auto_log)
-  return run_bg(cmd, **kwargs), port
+  cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
+  return run_bg(cmd, **kwargs), port, rpc_port
 
-def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
+def _get_vtworker_cmd(clargs, auto_log=False):
   """Assembles the command that is needed to run a vtworker.
 
   Returns:
     cmd - list of cmd arguments, can be passed to any `run`-like functions
     port - int with the port number that the vtworker is running with
+    rpc_port - int with the port number of the RPC interface
   """
   port = environment.reserve_ports(1)
+  rpc_port = environment.reserve_ports(1)
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-min_healthy_rdonly_endpoints', '1',
@@ -669,20 +670,53 @@ def _get_vtworker_cmd(clargs, log_level='', auto_log=False):
           '-executefetch_retry_time', '1s',
           ]
   args.extend(environment.topo_server().flags())
-  args.extend(protocols_flavor().tablet_manager_protocol_flags())
+  args.extend(['-tablet_manager_protocol',
+               protocols_flavor().tablet_manager_protocol()])
+  if protocols_flavor().service_map():
+    args.extend(['-service_map',
+                 ",".join(protocols_flavor().service_map())])
+  if protocols_flavor().vtworker_client_protocol() == 'grpc':
+    args.extend(['-grpc_port', str(rpc_port)])
 
   if auto_log:
-    if options.verbose == 2:
-      log_level='INFO'
-    elif options.verbose == 1:
-      log_level='WARNING'
-    else:
-      log_level='ERROR'
-  if log_level:
-    args.append('--stderrthreshold=%s' % log_level)
+    args.append('--stderrthreshold=%s' % get_log_level())
 
   cmd = args + clargs
-  return cmd, port
+  return cmd, port, rpc_port
+
+# vtworker client helpers
+def run_vtworker_client(args, rpc_port):
+  """Runs vtworkerclient to execute a command on a remote vtworker.
+
+  Returns:
+    out  - stdout of the vtworkerclient invocation
+    err  - stderr of the vtworkerclient invocation
+  """
+  out, err = run(environment.binary_args('vtworkerclient') +
+                 ['-vtworker_client_protocol',
+                  protocols_flavor().vtworker_client_protocol(),
+                  '-server', 'localhost:%u' % rpc_port,
+                  '-stderrthreshold', get_log_level()] + args,
+                 trap_output=True)
+  return out, err
+
+def run_automation_server(auto_log=False):
+  """Starts a background automation_server process.
+
+  Returns:
+    rpc_port - int with the port number of the RPC interface
+  """
+  rpc_port = environment.reserve_ports(1)
+  args = environment.binary_args('automation_server') + [
+          '-log_dir', environment.vtlogroot,
+          '-port', str(rpc_port),
+          '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
+          '-vtworker_client_protocol', protocols_flavor().vtworker_client_protocol(),
+          ]
+  if auto_log:
+    args.append('--stderrthreshold=%s' % get_log_level())
+
+  return run_bg(args), rpc_port
 
 # mysql helpers
 def mysql_query(uid, dbname, query):
@@ -871,14 +905,16 @@ class Vtctld(object):
             '--schema_change_dir', self.schema_change_dir,
             '--schema_change_controller', 'local',
             '--schema_change_check_interval', '1',
+            '-tablet_manager_protocol',
+            protocols_flavor().tablet_manager_protocol(),
             ] + \
             environment.topo_server().flags() + \
-            protocols_flavor().tablet_manager_protocol_flags() + \
             protocols_flavor().vtgate_protocol_flags()
-    if protocols_flavor().vtctl_client_protocol() == "grpc":
-      args += ['-grpc_port', str(self.grpc_port),
-              '-service_map', 'grpc-vtctl']
-    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
+    if protocols_flavor().vtctl_client_protocol() == 'grpc':
+      args.extend(['-grpc_port', str(self.grpc_port)])
+    stderr_fd = open(os.path.join(environment.tmproot, 'vtctld.stderr'), 'w')
     self.proc = run_bg(args, stderr=stderr_fd)
 
     # wait for the process to listen to RPC
@@ -891,19 +927,31 @@ class Vtctld(object):
                           sleep_time=0.2)
 
     # save the running instance so vtctl commands can be remote executed now
-    protocol = protocols_flavor().vtctl_client_protocol()
-    if protocol == "grpc":
-      # import the grpc vtctl client implementation, disabled for now:
-      # from vtctl import grpc_vtctl_client
-      # temporary protocol override until python client support works
-      protocol = "gorpc"
     global vtctld, vtctld_connection
     if not vtctld:
       vtctld = self
       vtctld_connection = vtctl_client.connect(
-          protocol, 'localhost:%u' % self.port, 30)
+          protocols_flavor().vtctl_python_client_protocol(),
+          self.rpc_endpoint(), 30)
 
     return self.proc
+
+  def rpc_endpoint(self):
+    """RPC endpoint to vtctld.
+    
+    The RPC endpoint may differ from the webinterface URL e.g. because gRPC
+    requires a dedicated port.
+
+    Returns:
+      endpoint - string e.g. localhost:15001
+    """
+    protocol = protocols_flavor().vtctl_python_client_protocol()
+    rpc_port = self.port
+    if protocol == "grpc":
+      # import the grpc vtctl client implementation, change the port
+      from vtctl import grpc_vtctl_client
+      rpc_port = self.grpc_port
+    return 'localhost:%u' % rpc_port
 
   def process_args(self):
     return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
@@ -916,13 +964,10 @@ class Vtctld(object):
     else:
       log_level='ERROR'
 
-    port = self.port
-    if protocols_flavor().vtctl_client_protocol() == 'grpc':
-      port = self.grpc_port
     out, err = run(environment.binary_args('vtctlclient') +
                    ['-vtctl_client_protocol',
                     protocols_flavor().vtctl_client_protocol(),
-                    '-server', 'localhost:%u' % port,
+                    '-server', self.rpc_endpoint(),
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out

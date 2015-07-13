@@ -52,9 +52,6 @@ type RPCAgent interface {
 
 	RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType)
 
-	RegisterHealthStream(chan<- *actionnode.HealthStreamReply) (int, error)
-	UnregisterHealthStream(int) error
-
 	ReloadSchema(ctx context.Context)
 
 	PreflightSchema(ctx context.Context, change string) (*myproto.SchemaChangeResult, error)
@@ -188,26 +185,6 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 // Should be called under RPCWrap.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType) {
 	agent.runHealthCheck(targetTabletType)
-}
-
-// RegisterHealthStream adds a health stream channel to our list
-func (agent *ActionAgent) RegisterHealthStream(c chan<- *actionnode.HealthStreamReply) (int, error) {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-
-	id := agent.healthStreamIndex
-	agent.healthStreamIndex++
-	agent.healthStreamMap[id] = c
-	return id, nil
-}
-
-// UnregisterHealthStream removes a health stream channel from our list
-func (agent *ActionAgent) UnregisterHealthStream(id int) error {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-
-	delete(agent.healthStreamMap, id)
-	return nil
 }
 
 // ReloadSchema will reload the schema
@@ -440,6 +417,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 		return myproto.ReplicationPosition{}, err
 	}
 
+	agent.initReplication = true
 	return rp, nil
 }
 
@@ -472,6 +450,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err
 	}
+	agent.initReplication = true
 
 	// wait until we get the replicated row, or our context times out
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)

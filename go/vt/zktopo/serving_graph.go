@@ -149,7 +149,19 @@ func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard s
 func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data := jscfg.ToJSON(srvShard)
-	_, err := zkts.zconn.Set(path, data, -1)
+
+	// Update or create unconditionally.
+	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			// Node already exists - just stomp away. Multiple writers shouldn't be here.
+			// We use RetryChange here because it won't update the node unnecessarily.
+			f := func(oldValue string, oldStat zk.Stat) (string, error) {
+				return data, nil
+			}
+			err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
+		}
+	}
 	return err
 }
 
@@ -194,6 +206,19 @@ func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string
 		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	}
 	return err
+}
+
+// DeleteSrvKeyspace is part of the topo.Server interface
+func (zkts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string) error {
+	path := zkPathForVtKeyspace(cell, keyspace)
+	err := zkts.zconn.Delete(path, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
 }
 
 // GetSrvKeyspace is part of the topo.Server interface

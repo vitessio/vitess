@@ -5,6 +5,7 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
+import json
 import logging
 import os
 import signal
@@ -184,9 +185,10 @@ class TestTabletManager(unittest.TestCase):
     # it started to run
     args = (environment.binary_args('vtctl') +
             environment.topo_server().flags() +
-            protocols_flavor().tablet_manager_protocol_flags() +
-            protocols_flavor().tabletconn_protocol_flags() +
-            ['-log_dir', environment.vtlogroot,
+            ['-tablet_manager_protocol',
+             protocols_flavor().tablet_manager_protocol(),
+             '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+             '-log_dir', environment.vtlogroot,
              'Sleep', tablet_62344.tablet_alias, '10s'])
     bg = utils.run_bg(args)
     time.sleep(3)
@@ -312,8 +314,21 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.kill_vttablet()
 
   def test_restart(self):
+    """test_restart tests that when starting a second vttablet with the same
+    configuration as another one, it will kill the previous process
+    and take over listening on the socket.
+
+    If vttablet listens to other ports (like gRPC), this feature will
+    break. We believe it is not widely used, so we're OK with this for now.
+    (container based installations usually handle tablet restarts
+    by using a different set of servers, and do not rely on this feature
+    at all).
+    """
     if environment.topo_server().flavor() != 'zookeeper':
       logging.info("Skipping this test in non-github tree")
+      return
+    if tablet_62344.grpc_enabled():
+      logging.info("Skipping this test as second gRPC port interferes")
       return
 
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -442,6 +457,12 @@ class TestTabletManager(unittest.TestCase):
     # make sure status web page is unhappy
     self.assertIn('>unhealthy: replication_reporter: Replication is not running</span></div>', tablet_62044.get_status())
 
+    # make sure the health stream is updated
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   tablet_62044.tablet_alias])
+    self.assertIn('replication_reporter: Replication is not running', health['realtime_stats']['health_error'])
+
     # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
@@ -458,6 +479,23 @@ class TestTabletManager(unittest.TestCase):
     # make sure the vars is updated
     v = utils.get_vars(tablet_62044.port)
     self.assertEqual(v['LastHealthMapCount'], 0)
+
+    # now test VtTabletStreamHealth returns the right thing
+    stdout, stderr = utils.run_vtctl(['VtTabletStreamHealth',
+                                      '-count', '2',
+                                      tablet_62044.tablet_alias],
+                                     trap_output=True, auto_log=True)
+    lines = stdout.splitlines()
+    self.assertEqual(len(lines), 2)
+    for line in lines:
+      logging.debug("Got health: %s", line)
+      data = json.loads(line)
+      self.assertIn('realtime_stats', data)
+      self.assertNotIn('health_error', data['realtime_stats'])
+      self.assertNotIn('tablet_externally_reparented_timestamp', data)
+      self.assertEqual('test_keyspace', data['target']['keyspace'])
+      self.assertEqual('0', data['target']['shard'])
+      self.assertEqual(3, data['target']['tablet_type'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

@@ -15,7 +15,7 @@ import (
 
 // Session represents the session state. It keeps track of
 // the shards on which transactions are in progress, along
-// with the corresponding tranaction ids.
+// with the corresponding transaction ids.
 type Session struct {
 	InTransaction bool
 	ShardSessions []*ShardSession
@@ -121,32 +121,49 @@ type QueryResult struct {
 	Result  *mproto.QueryResult
 	Session *Session
 	Error   string
+	Err     *mproto.RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
 
+// BoundShardQuery represents a single query request for the
+// specified list of shards. This is used in a list for BatchQueryShard.
+type BoundShardQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	Shards        []string
+}
+
+//go:generate bsongen -file $GOFILE -type BoundShardQuery -o bound_shard_query_bson.go
+
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
-	Queries          []tproto.BoundQuery
-	Keyspace         string
-	Shards           []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []BoundShardQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 //go:generate bsongen -file $GOFILE -type BatchQueryShard -o batch_query_shard_bson.go
 
+// BoundKeyspaceIdQuery represents a single query request for the
+// specified list of keyspace ids. This is used in a list for KeyspaceIdBatchQuery.
+type BoundKeyspaceIdQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyspaceIds   []key.KeyspaceId
+}
+
+//go:generate bsongen -file $GOFILE -type BoundKeyspaceIdQuery -o bound_keyspace_id_query_bson.go
+
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
-	Queries          []tproto.BoundQuery
-	Keyspace         string
-	KeyspaceIds      []key.KeyspaceId
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries    []BoundKeyspaceIdQuery
+	TabletType topo.TabletType
+	Session    *Session
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspaceIdBatchQuery -o keyspace_id_batch_query_bson.go
@@ -156,6 +173,7 @@ type QueryResultList struct {
 	List    []mproto.QueryResult
 	Session *Session
 	Error   string
+	Err     *mproto.RPCError
 }
 
 // SplitQueryRequest is a request to split a query into multiple parts
@@ -176,4 +194,44 @@ type SplitQueryPart struct {
 // SplitQueryResult is the result for SplitQueryRequest
 type SplitQueryResult struct {
 	Splits []SplitQueryPart
+	Err    *mproto.RPCError
+}
+
+// BeginRequest is the BSON implementation of the proto3 query.BeginkRequest
+type BeginRequest struct {
+	CallerID *tproto.CallerID
+}
+
+// BeginResponse is the BSON implementation of the proto3 vtgate.BeginResponse
+type BeginResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err     *mproto.RPCError
+	Session *Session
+}
+
+// CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
+type CommitRequest struct {
+	CallerID *tproto.CallerID
+	Session  *Session
+}
+
+// CommitResponse is the BSON implementation of the proto3 vtgate.CommitResponse
+type CommitResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
+}
+
+// RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
+type RollbackRequest struct {
+	CallerID *tproto.CallerID
+	Session  *Session
+}
+
+// RollbackResponse is the BSON implementation of the proto3 vtgate.RollbackResponse
+type RollbackResponse struct {
+	// Err is named 'Err' instead of 'Error' (as the proto3 version is) to remain
+	// consistent with other BSON structs.
+	Err *mproto.RPCError
 }

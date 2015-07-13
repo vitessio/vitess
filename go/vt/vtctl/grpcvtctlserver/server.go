@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/golang/glog"
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -22,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtctl"
+	pb "github.com/youtube/vitess/go/vt/proto/vtctldata"
 	pbs "github.com/youtube/vitess/go/vt/proto/vtctlservice"
 )
 
@@ -38,7 +37,7 @@ func NewVtctlServer(ts topo.Server) *VtctlServer {
 
 // ExecuteVtctlCommand is part of the pb.VtctlServer interface
 func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, stream pbs.Vtctl_ExecuteVtctlCommandServer) (err error) {
-	defer vtctl.HandlePanic(&err)
+	defer servenv.HandlePanic("vtctl", &err)
 
 	// create a logger, send the result back to the caller
 	logstream := logutil.NewChannelLogger(10)
@@ -54,16 +53,7 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 			// command, even if the channel to the client
 			// has been broken. We'll just keep trying.
 			stream.Send(&pb.ExecuteVtctlCommandResponse{
-				Event: &pb.LoggerEvent{
-					Time: &pb.Time{
-						Seconds:     e.Time.Unix(),
-						Nanoseconds: int64(e.Time.Nanosecond()),
-					},
-					Level: int64(e.Level),
-					File:  e.File,
-					Line:  int64(e.Line),
-					Value: e.Value,
-				},
+				Event: logutil.LoggerEventToProto(&e),
 			})
 		}
 		wg.Done()
@@ -84,9 +74,5 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *pb.ExecuteVtctlCommandRequest, s
 
 // StartServer registers the VtctlServer for RPCs
 func StartServer(s *grpc.Server, ts topo.Server) {
-	if !servenv.ServiceMap["grpc-vtctl"] {
-		log.Infof("Disabling gRPC vtctl service")
-		return
-	}
 	pbs.RegisterVtctlServer(s, NewVtctlServer(ts))
 }

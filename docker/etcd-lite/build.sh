@@ -5,10 +5,10 @@
 
 # Extract files from vitess/etcd image
 mkdir base
-sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/etcd:v0.4.6 bash -c 'cp -R /go/bin/etcd /base/'
+sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/etcd:v2.0.13 bash -c 'cp -R /go/bin/etcd /go/bin/etcdctl /base/'
 
 # Build vitess/etcd-lite image
-sudo docker build -t vitess/etcd:v0.4.6-lite .
+sudo docker build -t vitess/etcd:v2.0.13-lite .
 
 # Clean up temporary files
 sudo rm -rf base

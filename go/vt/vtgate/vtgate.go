@@ -8,6 +8,7 @@ package vtgate
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"math"
 	"strings"
@@ -83,6 +84,11 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 
 // RegisterVTGates stores register funcs for VTGate server.
 var RegisterVTGates []RegisterVTGate
+
+var (
+	// RPCErrorOnlyInReply informs vtgateservice(s) about how to return errors.
+	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", false, "if true, supported RPC calls from vtgateservice(s) will only return errors as part of the RPC server response")
+)
 
 // Init initializes VTGate server.
 func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, maxInFlight int) {
@@ -273,7 +279,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 // ExecuteBatchShard executes a group of queries on the specified shards.
 func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteBatchShard", batchQuery.Keyspace, string(batchQuery.TabletType)}
+	statsKey := []string{"ExecuteBatchShard", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -282,17 +288,8 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		return errTooManyInFlight
 	}
 
-	qrs, err := vtg.resolver.ExecuteBatch(
-		ctx,
-		batchQuery.Queries,
-		batchQuery.Keyspace,
-		batchQuery.TabletType,
-		batchQuery.Session,
-		func(keyspace string) (string, []string, error) {
-			return batchQuery.Keyspace, batchQuery.Shards, nil
-		},
-		batchQuery.NotInTransaction,
-	)
+	// TODO(sougou): implement functionality
+	qrs, err := &proto.QueryResultList{}, error(nil)
 	if err == nil {
 		reply.List = qrs.List
 		var rowCount int64
@@ -310,7 +307,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteBatchKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)

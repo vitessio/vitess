@@ -16,6 +16,8 @@ It has these top-level messages:
 	Field
 	Row
 	QueryResult
+	GetSessionIdRequest
+	GetSessionIdResponse
 	ExecuteRequest
 	ExecuteResponse
 	ExecuteBatchRequest
@@ -31,11 +33,14 @@ It has these top-level messages:
 	SplitQueryRequest
 	QuerySplit
 	SplitQueryResponse
+	StreamHealthRequest
+	RealtimeStats
+	StreamHealthResponse
 */
 package query
 
 import proto "github.com/golang/protobuf/proto"
-import topo "github.com/youtube/vitess/go/vt/proto/topo"
+import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
 import vtrpc "github.com/youtube/vitess/go/vt/proto/vtrpc"
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -249,9 +254,9 @@ func (x Field_Flag) String() string {
 // Target describes what the client expects the tablet is.
 // If the tablet does not match, an error is returned.
 type Target struct {
-	Keyspace   string          `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
-	Shard      string          `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
-	TabletType topo.TabletType `protobuf:"varint,3,opt,enum=topo.TabletType" json:"TabletType,omitempty"`
+	Keyspace   string              `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shard      string              `protobuf:"bytes,2,opt,name=shard" json:"shard,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *Target) Reset()         { *m = Target{} }
@@ -365,6 +370,49 @@ func (m *QueryResult) GetRows() []*Row {
 	return nil
 }
 
+// GetSessionIdRequest is the payload to GetSessionId
+type GetSessionIdRequest struct {
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
+	Keyspace          string          `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
+	Shard             string          `protobuf:"bytes,4,opt,name=shard" json:"shard,omitempty"`
+}
+
+func (m *GetSessionIdRequest) Reset()         { *m = GetSessionIdRequest{} }
+func (m *GetSessionIdRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSessionIdRequest) ProtoMessage()    {}
+
+func (m *GetSessionIdRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.EffectiveCallerId
+	}
+	return nil
+}
+
+func (m *GetSessionIdRequest) GetImmediateCallerId() *VTGateCallerID {
+	if m != nil {
+		return m.ImmediateCallerId
+	}
+	return nil
+}
+
+// GetSessionIdResponse is the returned value from GetSessionId
+type GetSessionIdResponse struct {
+	Error     *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	SessionId int64           `protobuf:"varint,2,opt,name=session_id" json:"session_id,omitempty"`
+}
+
+func (m *GetSessionIdResponse) Reset()         { *m = GetSessionIdResponse{} }
+func (m *GetSessionIdResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSessionIdResponse) ProtoMessage()    {}
+
+func (m *GetSessionIdResponse) GetError() *vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
@@ -372,6 +420,7 @@ type ExecuteRequest struct {
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
 	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
@@ -437,6 +486,7 @@ type ExecuteBatchRequest struct {
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
 	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
@@ -501,6 +551,7 @@ type StreamExecuteRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
@@ -564,6 +615,7 @@ type BeginRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id" json:"effective_caller_id,omitempty"`
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
+	SessionId         int64           `protobuf:"varint,4,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
@@ -614,6 +666,7 @@ type CommitRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
@@ -663,6 +716,7 @@ type RollbackRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,5,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
@@ -712,7 +766,9 @@ type SplitQueryRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query" json:"query,omitempty"`
-	SplitCount        int64           `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
+	SplitColumn       string          `protobuf:"bytes,5,opt,name=split_column" json:"split_column,omitempty"`
+	SplitCount        int64           `protobuf:"varint,6,opt,name=split_count" json:"split_count,omitempty"`
+	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
@@ -787,6 +843,66 @@ func (m *SplitQueryResponse) GetError() *vtrpc.RPCError {
 func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
 		return m.Queries
+	}
+	return nil
+}
+
+// StreamHealthRequest is the payload for StreamHealth
+type StreamHealthRequest struct {
+}
+
+func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
+func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthRequest) ProtoMessage()    {}
+
+// RealtimeStats contains information about the tablet status
+type RealtimeStats struct {
+	// health_error is the last error we got from health check,
+	// or empty is the server is healthy. This is used for subset selection,
+	// we do not send queries to servers that are not healthy.
+	HealthError string `protobuf:"bytes,1,opt,name=health_error" json:"health_error,omitempty"`
+	// seconds_behind_master is populated for slaves only. It indicates
+	// how far nehind on replication a slave currently is.  It is used
+	// by clients for subset selection (so we don't try to send traffic
+	// to tablets that are too far behind).
+	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
+	// cpu_usage is used for load-based balancing
+	CpuUsage float64 `protobuf:"fixed64,3,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+}
+
+func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
+func (m *RealtimeStats) String() string { return proto.CompactTextString(m) }
+func (*RealtimeStats) ProtoMessage()    {}
+
+// StreamHealthResponse is streamed by StreamHealth on a regular basis
+type StreamHealthResponse struct {
+	// target is the current server type. Only queries with that exact Target
+	// record will be accepted.
+	Target *Target `protobuf:"bytes,1,opt,name=target" json:"target,omitempty"`
+	// tablet_externally_reparented_timestamp contains the last time
+	// tabletmanager.TabletExternallyReparented was called on this tablet,
+	// or 0 if it was never called. This is meant to differentiate two tablets
+	// that report a target.TabletType of MASTER, only the one with the latest
+	// timestamp should be trusted.
+	TabletExternallyReparentedTimestamp int64 `protobuf:"varint,2,opt,name=tablet_externally_reparented_timestamp" json:"tablet_externally_reparented_timestamp,omitempty"`
+	// realtime_stats contains information about the tablet status
+	RealtimeStats *RealtimeStats `protobuf:"bytes,3,opt,name=realtime_stats" json:"realtime_stats,omitempty"`
+}
+
+func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
+func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
+func (*StreamHealthResponse) ProtoMessage()    {}
+
+func (m *StreamHealthResponse) GetTarget() *Target {
+	if m != nil {
+		return m.Target
+	}
+	return nil
+}
+
+func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
+	if m != nil {
+		return m.RealtimeStats
 	}
 	return nil
 }

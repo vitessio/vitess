@@ -51,15 +51,15 @@ type SQLQueryStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
-	context              context.Context
+	ctx                  context.Context
 	Error                error
 }
 
-func newSqlQueryStats(methodName string, context context.Context) *SQLQueryStats {
+func newSqlQueryStats(methodName string, ctx context.Context) *SQLQueryStats {
 	return &SQLQueryStats{
 		Method:    methodName,
 		StartTime: time.Now(),
-		context:   context,
+		ctx:       ctx,
 	}
 }
 
@@ -162,7 +162,7 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 // This is a method on SQLQueryStats instead of a field so that it doesn't need
 // to be passed by value everywhere.
 func (stats *SQLQueryStats) ContextHTML() template.HTML {
-	return callinfo.HTMLFromContext(stats.context)
+	return callinfo.HTMLFromContext(stats.ctx)
 }
 
 // ErrorStr returns the error string or ""
@@ -175,7 +175,7 @@ func (stats *SQLQueryStats) ErrorStr() string {
 
 // RemoteAddrUsername returns some parts of CallInfo if set
 func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
-	ci, ok := callinfo.FromContext(stats.context)
+	ci, ok := callinfo.FromContext(stats.ctx)
 	if !ok {
 		return "", ""
 	}

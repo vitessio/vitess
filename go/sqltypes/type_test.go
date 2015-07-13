@@ -142,13 +142,13 @@ func TestString(t *testing.T) {
 	if b.String() != HARDASCII {
 		t.Errorf("Expecting %s, received %#v", HARDASCII, b.String())
 	}
-	s = Value{String([]byte("abcd"))}
+	s = Value{String([]byte("ab\x01cd"))}
 	js, err := s.MarshalJSON()
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
-	if string(js) != "\"YWJjZA==\"" {
-		t.Errorf("Expecting \"YWJjZA==\", received %s", js)
+	if got, want := string(js), "\"ab\\u0001cd\""; got != want {
+		t.Errorf("%#v.MarshalJSON() = %#v, want %#v", s, got, want)
 	}
 }
 

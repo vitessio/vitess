@@ -1,0 +1,405 @@
+// This file contains all the types and servers necessary to make
+// RPC calls to VtTablet for the management API.
+
+syntax = "proto3";
+
+package tabletmanagerdata;
+
+import "query.proto";
+import "topodata.proto";
+import "replicationdata.proto";
+import "logutil.proto";
+
+//
+// Data structures
+//
+
+message TableDefinition {
+  // the table name
+  string name = 1;
+
+  // the SQL to run to create the table
+  string schema = 2;
+
+  // the columns in the order that will be used to dump and load the data
+  repeated string columns = 3;
+
+  // the primary key columns in the primary key order
+  repeated string primary_key_columns = 4;
+
+  // type is either mysqlctl.TableBaseTable or mysqlctl.TableView
+  string type = 5;
+
+  // how much space the data file takes.
+  uint64 data_length = 6;
+
+  // approximate number of rows
+  uint64 row_count = 7;
+}
+
+message SchemaDefinition {
+  string database_schema = 1;
+  repeated TableDefinition table_definitions = 2;
+  string version = 3;
+}
+
+// UserPermission describes a single row in the mysql.user table
+// Primary key is Host+User
+// PasswordChecksum is the crc64 of the password, for security reasons
+message UserPermission {
+  string host = 1;
+  string user = 2;
+  uint64 password_checksum = 3;
+  map<string, string> privileges = 4;
+}
+
+// DbPermission describes a single row in the mysql.db table
+// Primary key is Host+Db+User
+message DbPermission {
+  string host = 1;
+  string db = 2;
+  string user = 3;
+  map<string, string> privileges = 4;
+}
+
+// HostPermission describes a single row in the mysql.host table
+// Primary key is Host+Db
+message HostPermission {
+  string host = 1;
+  string db = 2;
+  map<string, string> privileges = 3;
+}
+
+// Permissions have all the rows in mysql.{user,db,host} tables,
+// (all rows are sorted by primary key)
+message Permissions {
+  repeated UserPermission user_permissions = 1;
+  repeated DbPermission db_permissions = 2;
+  repeated HostPermission host_permissions = 3;
+}
+
+// BlpPosition is a replication position for a given binlog player
+message BlpPosition {
+  uint32 uid = 1;
+  replicationdata.Position position = 2;
+}
+
+//
+// RPC payloads
+//
+
+message PingRequest {
+  string payload = 1;
+}
+
+message PingResponse {
+  string payload = 1;
+}
+
+message SleepRequest {
+  // duration is in nanoseconds
+  int64 duration = 1;
+}
+
+message SleepResponse {
+}
+
+message ExecuteHookRequest {
+  string name = 1;
+  repeated string parameters = 2;
+  map<string, string> extra_env = 3;
+}
+
+message ExecuteHookResponse {
+  int64 exit_status = 1;
+  string stdout = 2;
+  string stderr = 3;
+}
+
+message GetSchemaRequest {
+  repeated string tables = 1;
+  bool include_views = 2;
+  repeated string exclude_tables = 3;
+}
+
+message GetSchemaResponse {
+  SchemaDefinition schema_definition = 1;
+}
+
+message GetPermissionsRequest {
+}
+
+message GetPermissionsResponse {
+  Permissions permissions = 1;
+}
+
+message SetReadOnlyRequest {
+}
+
+message SetReadOnlyResponse {
+}
+
+message SetReadWriteRequest {
+}
+
+message SetReadWriteResponse {
+}
+
+message ChangeTypeRequest {
+  topodata.TabletType tablet_type = 1;
+}
+
+message ChangeTypeResponse {
+}
+
+message ScrapRequest {
+}
+
+message ScrapResponse {
+}
+
+message RefreshStateRequest {
+}
+
+message RefreshStateResponse {
+}
+
+message RunHealthCheckRequest {
+  topodata.TabletType tablet_type = 1;
+}
+
+message RunHealthCheckResponse {
+}
+
+message ReloadSchemaRequest {
+}
+
+message ReloadSchemaResponse {
+}
+
+message PreflightSchemaRequest {
+  string change = 1;
+}
+
+message PreflightSchemaResponse {
+  SchemaDefinition before_schema = 1;
+  SchemaDefinition after_schema = 2;
+}
+
+message ApplySchemaRequest {
+  string sql = 1;
+  bool force = 2;
+  bool allow_replication = 3;
+  SchemaDefinition before_schema = 4;
+  SchemaDefinition after_schema = 5;
+}
+
+message ApplySchemaResponse {
+  SchemaDefinition before_schema = 1;
+  SchemaDefinition after_schema = 2;
+}
+
+message ExecuteFetchAsDbaRequest {
+  string query = 1;
+  string db_name = 2;
+  uint64 max_rows = 3;
+  bool want_fields = 4;
+  bool disable_binlogs = 5;
+  bool reload_schema = 6;
+}
+
+message ExecuteFetchAsDbaResponse {
+  query.QueryResult result = 1;
+}
+
+message ExecuteFetchAsAppRequest {
+  string query = 1;
+  uint64 max_rows = 2;
+  bool want_fields = 3;
+}
+
+message ExecuteFetchAsAppResponse {
+  query.QueryResult result = 1;
+}
+
+message SlaveStatusRequest {
+}
+
+message SlaveStatusResponse {
+  replicationdata.Status status = 1;
+}
+
+message MasterPositionRequest {
+}
+
+message MasterPositionResponse {
+  replicationdata.Position position = 1;
+}
+
+message StopSlaveRequest {
+}
+
+message StopSlaveResponse {
+}
+
+message StopSlaveMinimumRequest {
+  replicationdata.Position position = 1;
+  int64 wait_timeout = 2;
+}
+
+message StopSlaveMinimumResponse {
+  replicationdata.Position position = 1;
+}
+
+message StartSlaveRequest {
+}
+
+message StartSlaveResponse {
+}
+
+message TabletExternallyReparentedRequest {
+  // external_id is an string value that may be provided by an external
+  // agent for tracking purposes. The tablet will emit this string in
+  // events triggered by TabletExternallyReparented, such as VitessReparent.
+  string external_id = 1;
+}
+
+message TabletExternallyReparentedResponse {
+}
+
+message TabletExternallyElectedRequest {
+}
+
+message TabletExternallyElectedResponse {
+}
+
+message GetSlavesRequest {
+}
+
+message GetSlavesResponse {
+  repeated string addrs = 1;
+}
+
+message WaitBlpPositionRequest {
+  BlpPosition blp_position = 1;
+  int64 wait_timeout = 2;
+}
+
+message WaitBlpPositionResponse {
+}
+
+message StopBlpRequest {
+}
+
+message StopBlpResponse {
+  repeated BlpPosition blp_positions = 1;
+}
+
+message StartBlpRequest {
+}
+
+message StartBlpResponse {
+}
+
+message RunBlpUntilRequest {
+  repeated BlpPosition blp_positions = 1;
+  int64 wait_timeout = 2;
+}
+
+message RunBlpUntilResponse {
+  replicationdata.Position position = 1;
+}
+
+message ResetReplicationRequest {
+}
+
+message ResetReplicationResponse {
+}
+
+message InitMasterRequest {
+}
+
+message InitMasterResponse {
+  replicationdata.Position position = 1;
+}
+
+message PopulateReparentJournalRequest {
+  int64 time_created_ns = 1;
+  string action_name = 2;
+  topodata.TabletAlias master_alias = 3;
+  replicationdata.Position replication_position = 4;
+}
+
+message PopulateReparentJournalResponse {
+}
+
+message InitSlaveRequest {
+  topodata.TabletAlias parent = 1;
+  replicationdata.Position replication_position = 2;
+  int64 time_created_ns = 3;
+}
+
+message InitSlaveResponse {
+}
+
+message DemoteMasterRequest {
+}
+
+message DemoteMasterResponse {
+  replicationdata.Position position = 1;
+}
+
+message PromoteSlaveWhenCaughtUpRequest {
+  replicationdata.Position position = 1;
+}
+
+message PromoteSlaveWhenCaughtUpResponse {
+  replicationdata.Position position = 1;
+}
+
+message SlaveWasPromotedRequest {
+}
+
+message SlaveWasPromotedResponse {
+}
+
+message SetMasterRequest {
+  topodata.TabletAlias parent = 1;
+  int64 time_created_ns = 2;
+  bool force_start_slave = 3;
+}
+
+message SetMasterResponse {
+}
+
+message SlaveWasRestartedRequest {
+  // the parent alias the tablet should have
+  topodata.TabletAlias parent = 1;
+}
+
+message SlaveWasRestartedResponse {
+}
+
+message StopReplicationAndGetStatusRequest {
+}
+
+message StopReplicationAndGetStatusResponse {
+  replicationdata.Status status = 1;
+}
+
+message PromoteSlaveRequest {
+}
+
+message PromoteSlaveResponse {
+  replicationdata.Position position = 1;
+}
+
+// Backup / Restore related messages
+
+message BackupRequest {
+  int64 concurrency = 1;
+}
+
+message BackupResponse {
+  logutil.Event event = 1;
+}

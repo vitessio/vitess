@@ -8,6 +8,11 @@ import "query.proto";
 
 // Query defines the tablet query service, implemented by vttablet.
 service Query {
+  // GetSessionId gets a session id from the server. This call is being
+  // deprecated in favor of using the Target field of the subsequent
+  // queries, but is still here for backward compatibility.
+  rpc GetSessionId(query.GetSessionIdRequest) returns (query.GetSessionIdResponse) {};
+
   // Execute executes the specified SQL query (might be in a
   // transaction context, if Query.transaction_id is set).
   rpc Execute(query.ExecuteRequest) returns (query.ExecuteResponse) {};
@@ -34,4 +39,8 @@ service Query {
   // SplitQuery is the API to facilitate MapReduce-type iterations
   // over large data sets (like full table dumps).
   rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};
+
+  // StreamHealth runs a streaming RPC to the tablet, that returns the
+  // current health of the tablet on a regular basis.
+  rpc StreamHealth(query.StreamHealthRequest) returns (stream query.StreamHealthResponse) {};
 }

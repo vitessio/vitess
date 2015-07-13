@@ -32,6 +32,10 @@ type cmdParams struct {
 // String implements flag.Value to return the default value.
 func (*cmdParams) String() string { return "\"key=value\"" }
 
+func (p *cmdParams) Get() interface{} {
+	return p
+}
+
 func (p *cmdParams) Set(v string) error {
 	if v != "" {
 		keyAndValue := strings.SplitN(v, "=", 2)

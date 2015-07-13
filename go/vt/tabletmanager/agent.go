@@ -41,7 +41,6 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -50,8 +49,6 @@ import (
 
 var (
 	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-
-	_ = flag.String("vtaction_binary_path", "", "(DEPRECATED) Full path (including filename) to vtaction binary. If not set, tries VTROOT/bin/vtaction.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -83,7 +80,12 @@ type ActionAgent struct {
 	// take actionMutex first.
 	actionMutex sync.Mutex
 
-	// mutex protects the following fields
+	// initReplication remembers whether an action has initialized replication.
+	// It is protected by actionMutex.
+	initReplication bool
+
+	// mutex protects the following fields, only hold the mutex
+	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
@@ -99,10 +101,8 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// healthStreamMutex protects all the following fields
-	healthStreamMutex sync.Mutex
-	healthStreamIndex int
-	healthStreamMap   map[int]chan<- *actionnode.HealthStreamReply
+	// last time we ran TabletExternallyReparented
+	_tabletExternallyReparentedTime time.Time
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -131,7 +131,7 @@ func NewActionAgent(
 	tabletAlias topo.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
-	port, securePort int,
+	port, securePort, gRPCPort int,
 	overridesFile string,
 	lockTimeout time.Duration,
 ) (agent *ActionAgent, err error) {
@@ -152,11 +152,10 @@ func NewActionAgent(
 		History:             history.New(historyLength),
 		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 
 	// try to initialize the tablet if we have to
-	if err := agent.InitTablet(port, securePort); err != nil {
+	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
 		return nil, fmt.Errorf("agent.InitTablet failed: %v", err)
 	}
 
@@ -180,7 +179,7 @@ func NewActionAgent(
 		}
 	}
 
-	if err := agent.Start(batchCtx, mysqlPort, port, securePort); err != nil {
+	if err := agent.Start(batchCtx, mysqlPort, port, securePort, gRPCPort); err != nil {
 		return nil, err
 	}
 
@@ -227,9 +226,8 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		History:             history.New(historyLength),
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
-	if err := agent.Start(batchCtx, 0, port, 0); err != nil {
+	if err := agent.Start(batchCtx, 0, port, 0, 0); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -386,7 +384,7 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort int) error {
+func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort, gRPCPort int) error {
 	var err error
 	if _, err = agent.readTablet(ctx); err != nil {
 		return err
@@ -423,6 +421,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort 
 			tablet.Portmap["vts"] = vtsPort
 		} else {
 			delete(tablet.Portmap, "vts")
+		}
+		if gRPCPort != 0 {
+			tablet.Portmap["grpc"] = gRPCPort
+		} else {
+			delete(tablet.Portmap, "grpc")
 		}
 		return nil
 	}
@@ -486,26 +489,4 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	return tablet
-}
-
-// BroadcastHealthStreamReply will send the HealthStreamReply to all
-// listening clients.
-func (agent *ActionAgent) BroadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-	for _, c := range agent.healthStreamMap {
-		// do not block on any write
-		select {
-		case c <- hsr:
-		default:
-		}
-	}
-}
-
-// HealthStreamMapSize returns the size of the healthStreamMap
-// (used for tests).
-func (agent *ActionAgent) HealthStreamMapSize() int {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-	return len(agent.healthStreamMap)
 }

@@ -15,7 +15,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-var protocol = flag.String("mysqlctl_client_protocol", "gorpc", "the protocol to use to talk to the mysqlctl server")
+var protocol = flag.String("mysqlctl_client_protocol", "grpc", "the protocol to use to talk to the mysqlctl server")
 var connectionTimeout = flag.Duration("mysqlctl_client_connection_timeout", 30*time.Second, "the connection timeout to use to talk to the mysqlctl server")
 
 // MysqlctlClient defines the interface used to send remote mysqlctl commands

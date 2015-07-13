@@ -79,11 +79,19 @@ func testQuery(t *testing.T, query, result string) {
 	}
 	defer outpr.Close()
 
+	// It seems the outpw.Close() below (in the go routine) triggers EOF
+	// on outpr before the FD is totally closed. Then in turn the defer
+	// outpr.Close can hit early, and cause data integrity issues.
+	// So using a synchronization channel to make sure the Close()
+	// fully returns before we exit this method.
+	sync := make(chan struct{})
+
 	zr1 := newZknsResolver(zconn, fqdn, ".zkns.test.zk", "/zk/test/zkns")
 	pd := &pdns{zr1}
 	go func() {
 		pd.Serve(inpr, outpw)
 		outpw.Close()
+		close(sync)
 	}()
 
 	_, err = io.WriteString(inpw, "HELO\t2\n")
@@ -106,6 +114,7 @@ func testQuery(t *testing.T, query, result string) {
 	if qresult != result {
 		t.Fatalf("data mismatch found for %#v:\n%#v\nexpected:\n%#v", query, qresult, result)
 	}
+	<-sync
 }
 
 func TestQueries(t *testing.T) {

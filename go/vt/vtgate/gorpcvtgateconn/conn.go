@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
@@ -61,6 +62,9 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.Result, result.Session, nil
 }
 
@@ -84,6 +88,9 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.Result, result.Session, nil
 }
@@ -109,6 +116,9 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.Result, result.Session, nil
 }
 
@@ -132,6 +142,9 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.Result, result.Session, nil
 }
@@ -158,21 +171,21 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.BoundQuery, keyspace string, shards []string, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.BatchQueryShard{
-		Queries:          queries,
-		Keyspace:         keyspace,
-		Shards:           shards,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		Queries:    queries,
+		TabletType: tabletType,
+		Session:    s,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {
@@ -181,21 +194,21 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []tproto.
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
 	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
+	}
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []tproto.BoundQuery, keyspace string, keyspaceIds []key.KeyspaceId, tabletType topo.TabletType, notInTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.KeyspaceIdBatchQuery{
-		Queries:          queries,
-		Keyspace:         keyspace,
-		KeyspaceIds:      keyspaceIds,
-		TabletType:       tabletType,
-		Session:          s,
-		NotInTransaction: notInTransaction,
+		Queries:    queries,
+		TabletType: tabletType,
+		Session:    s,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchKeyspaceIds", request, &result); err != nil {
@@ -203,6 +216,9 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []t
 	}
 	if result.Error != "" {
 		return nil, result.Session, errors.New(result.Error)
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
+		return nil, result.Session, err
 	}
 	return result.List, result.Session, nil
 }
@@ -290,6 +306,47 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return conn.rpcConn.Call(ctx, "VTGate.Rollback", s, &rpc.Unused{})
 }
 
+func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
+	request := new(proto.BeginRequest)
+	reply := new(proto.BeginResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Begin2", request, reply); err != nil {
+		return nil, err
+	}
+	if err := vterrors.FromRPCError(reply.Err); err != nil {
+		return nil, err
+	}
+	// Return a non-nil pointer
+	session := &proto.Session{}
+	if reply.Session != nil {
+		session = reply.Session
+	}
+	return session, nil
+}
+
+func (conn *vtgateConn) Commit2(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	request := &proto.CommitRequest{
+		Session: s,
+	}
+	reply := new(proto.CommitResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Commit2", request, reply); err != nil {
+		return err
+	}
+	return vterrors.FromRPCError(reply.Err)
+}
+
+func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) error {
+	s := session.(*proto.Session)
+	request := &proto.RollbackRequest{
+		Session: s,
+	}
+	reply := new(proto.RollbackResponse)
+	if err := conn.rpcConn.Call(ctx, "VTGate.Rollback2", request, reply); err != nil {
+		return err
+	}
+	return vterrors.FromRPCError(reply.Err)
+}
+
 func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
 	request := &proto.SplitQueryRequest{
 		Keyspace:   keyspace,
@@ -298,6 +355,9 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query t
 	}
 	result := &proto.SplitQueryResult{}
 	if err := conn.rpcConn.Call(ctx, "VTGate.SplitQuery", request, result); err != nil {
+		return nil, err
+	}
+	if err := vterrors.FromRPCError(result.Err); err != nil {
 		return nil, err
 	}
 	return result.Splits, nil

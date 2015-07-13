@@ -10,7 +10,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -177,19 +176,8 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 		return
 	}
 
-	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
-	for _, pkTuple := range event.PKValues {
-		sqlTypeKeys = sqlTypeKeys[:0]
-		for _, pkVal := range pkTuple {
-			key, err := sqltypes.BuildValue(pkVal)
-			if err != nil {
-				log.Errorf("Error building invalidation key for %#v: '%v'", event, err)
-				rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)
-				return
-			}
-			sqlTypeKeys = append(sqlTypeKeys, key)
-		}
-		newKey := validateKey(tableInfo, buildKey(sqlTypeKeys), rci.qe.queryServiceStats)
+	for _, pkTuple := range event.PrimaryKeyValues {
+		newKey := validateKey(tableInfo, buildKey(pkTuple), rci.qe.queryServiceStats)
 		if newKey == "" {
 			continue
 		}

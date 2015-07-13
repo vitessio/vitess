@@ -88,7 +88,7 @@ func main() {
 	// back up if it went down.
 	go func() {
 		for {
-			_ = qsc.AllowQueries(dbConfigs, schemaOverrides, mysqld)
+			_ = qsc.AllowQueries(nil, dbConfigs, schemaOverrides, mysqld)
 			time.Sleep(30 * time.Second)
 		}
 	}()
