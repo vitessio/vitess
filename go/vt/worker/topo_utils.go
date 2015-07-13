@@ -28,14 +28,15 @@ var (
 // minHealthyEndPoints servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	newCtx, _ := context.WithTimeout(ctx, *waitForHealthyEndPointsTimeout)
-	busyWaitTimer := time.NewTimer(0 * time.Second)
+	newCtx, cancel := context.WithTimeout(ctx, *waitForHealthyEndPointsTimeout)
+	defer cancel()
+
 	var healthyEndpoints []topo.EndPoint
 	for {
 		select {
 		case <-newCtx.Done():
 			return topo.TabletAlias{}, fmt.Errorf("Not enough endpoints to choose from in (%v,%v/%v), have %v healthy ones, need at least %v Context Error: %v", cell, keyspace, shard, len(healthyEndpoints), *minHealthyEndPoints, newCtx.Err())
-		case <-busyWaitTimer.C:
+		default:
 		}
 
 		endPoints, _, err := wr.TopoServer().GetEndPoints(newCtx, cell, keyspace, shard, topo.TYPE_RDONLY)
@@ -56,8 +57,13 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 		if len(healthyEndpoints) < *minHealthyEndPoints {
 			deadlineForLog, _ := newCtx.Deadline()
 			wr.Logger().Infof("Waiting for enough endpoints to become available. available: %v required: %v Waiting up to %.1f more seconds.", len(healthyEndpoints), *minHealthyEndPoints, deadlineForLog.Sub(time.Now()).Seconds())
-			// Block for 1 second because 2 seconds is the -health_check_interval in integration tests.
-			busyWaitTimer.Reset(1 * time.Second)
+			// Block for 1 second because 2 seconds is the -health_check_interval flag value in integration tests.
+			timer := time.NewTimer(1 * time.Second)
+			select {
+			case <-newCtx.Done():
+				timer.Stop()
+			case <-timer.C:
+			}
 		} else {
 			break
 		}
