@@ -76,7 +76,7 @@ func HandleExplorer(name, url, templateName string, exp Explorer) {
 	indexContent.ToplevelLinks[name+" Explorer"] = url
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		topoPath := r.URL.Path[strings.Index(r.URL.Path, url):]
