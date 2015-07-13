@@ -103,7 +103,8 @@ medium_integration_test_files = \
 	vtdb_test.py \
 	vtgate_utils_test.py \
 	rowcache_invalidator.py \
-	worker.py
+	worker.py \
+	automation_horizontal_resharding.py
 
 large_integration_test_files = \
 	vtgatev2_test.py \

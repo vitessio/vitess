@@ -4,8 +4,6 @@ import com.youtube.vitess.gorpc.Client;
 import com.youtube.vitess.gorpc.Exceptions.ApplicationException;
 import com.youtube.vitess.gorpc.Exceptions.GoRpcException;
 import com.youtube.vitess.gorpc.Response;
-import com.youtube.vitess.vtgate.BatchQuery;
-import com.youtube.vitess.vtgate.BatchQueryResponse;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Field;
 import com.youtube.vitess.vtgate.Query;
@@ -78,13 +76,6 @@ public class GoRpcClient implements RpcClient {
       return Bsonify.bsonToQueryResult(result, fields);
     }
     return null;
-  }
-
-  @Override
-  public BatchQueryResponse batchExecute(BatchQuery batchQuery) throws ConnectionException {
-    String callMethod = "VTGate.ExecuteBatchKeyspaceIds";
-    Response response = call(callMethod, Bsonify.batchQueryToBson(batchQuery));
-    return Bsonify.bsonToBatchQueryResponse((BSONObject) response.getReply());
   }
 
   @Override

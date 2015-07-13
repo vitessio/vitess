@@ -1,7 +1,5 @@
 package com.youtube.vitess.vtgate.rpcclient;
 
-import com.youtube.vitess.vtgate.BatchQuery;
-import com.youtube.vitess.vtgate.BatchQueryResponse;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.Field;
 import com.youtube.vitess.vtgate.Query;
@@ -23,8 +21,6 @@ public interface RpcClient {
   public QueryResponse execute(Query query) throws ConnectionException;
 
   public QueryResult streamNext(List<Field> fields) throws ConnectionException;
-
-  public BatchQueryResponse batchExecute(BatchQuery query) throws ConnectionException;
 
   public SplitQueryResponse splitQuery(SplitQueryRequest request) throws ConnectionException;
 
