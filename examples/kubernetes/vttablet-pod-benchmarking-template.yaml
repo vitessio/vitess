@@ -11,6 +11,10 @@ spec:
   containers:
     - name: vttablet
       image: vitess/root
+      resources:
+        limits:
+          memory: "4Gi"
+          cpu: "2"
       volumeMounts:
         - name: syslog
           mountPath: /dev/log
@@ -71,6 +75,10 @@ spec:
           value: "16"
     - name: mysql
       image: vitess/root
+      resources:
+        limits:
+          memory: "4Gi"
+          cpu: "2"
       volumeMounts:
         - name: syslog
           mountPath: /dev/log
