@@ -26,9 +26,11 @@ var (
 func main() {
 	flag.Parse()
 
+	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
+	defer cancel()
+
 	err := vtworkerclient.RunCommandAndWait(
-		context.Background(), *server, flag.Args(),
-		*actionTimeout,
+		ctx, *server, flag.Args(),
 		func(e *logutil.LoggerEvent) {
 			switch e.Level {
 			case logutil.LOGGER_INFO:

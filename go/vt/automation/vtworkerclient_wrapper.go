@@ -6,7 +6,6 @@ package automation
 
 import (
 	"bytes"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
@@ -19,8 +18,6 @@ func ExecuteVtworker(ctx context.Context, server string, args []string) (string,
 
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
-		// TODO(mberlin): Should this value be configurable as flag?
-		30*time.Second, // dialTimeout
 		func(e *logutil.LoggerEvent) {
 			e.ToBuffer(&output)
 		})
