@@ -177,15 +177,16 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.BatchQueryShard{
-		Queries:    queries,
-		TabletType: tabletType,
-		Session:    s,
+		Queries:       queries,
+		TabletType:    tabletType,
+		AsTransaction: asTransaction,
+		Session:       s,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchShard", request, &result); err != nil {
@@ -200,15 +201,16 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.B
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
 	request := proto.KeyspaceIdBatchQuery{
-		Queries:    queries,
-		TabletType: tabletType,
-		Session:    s,
+		Queries:       queries,
+		TabletType:    tabletType,
+		AsTransaction: asTransaction,
+		Session:       s,
 	}
 	var result proto.QueryResultList
 	if err := conn.rpcConn.Call(ctx, "VTGate.ExecuteBatchKeyspaceIds", request, &result); err != nil {
