@@ -15,8 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
-
-	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
 )
 
 // This test makes sure the go rpc service works
@@ -34,7 +32,7 @@ func TestGoRPCTabletConn(t *testing.T) {
 
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
-	pbs.RegisterQueryServer(server, grpcqueryservice.New(service))
+	grpcqueryservice.RegisterForTest(server, service)
 	go server.Serve(listener)
 
 	// Create a gRPC client connecting to the server

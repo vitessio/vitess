@@ -212,7 +212,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, vtPort, grpcPort int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletserver.NewTestQueryServiceControl(),
 		HealthReporter:      health.DefaultAggregator,
@@ -227,7 +227,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
-	if err := agent.Start(batchCtx, 0, port, 0, 0); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, 0, grpcPort); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -416,7 +416,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort,
 			// leave it as is.
 			tablet.Portmap["mysql"] = mysqlPort
 		}
-		tablet.Portmap["vt"] = vtPort
+		if vtPort != 0 {
+			tablet.Portmap["vt"] = vtPort
+		} else {
+			delete(tablet.Portmap, "vt")
+		}
 		if vtsPort != 0 {
 			tablet.Portmap["vts"] = vtsPort
 		} else {

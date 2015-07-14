@@ -139,7 +139,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 	}
 
 	mysqlDaemon := &mysqlctl.FakeMysqlDaemon{MysqlPort: 3306}
-	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, mysqlDaemon)
+	agent := NewTestActionAgent(ctx, ts, tabletAlias, port, 0, mysqlDaemon)
 	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, nil, nil)
 	agent.HealthReporter = &fakeHealthCheck{}
 
