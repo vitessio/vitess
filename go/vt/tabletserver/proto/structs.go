@@ -18,6 +18,15 @@ type SessionParams struct {
 	Shard    string
 }
 
+// GetSessionIdRequest is the CallerID enabled version of SessionParams. It
+// contains SessionParams, which is passed to GetSessionId. The server will
+// double-check the keyspace and shard are what the tablet is serving.
+type GetSessionIdRequest struct {
+	Params            SessionParams
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+}
+
 // SessionInfo is returned by GetSessionId. Use the provided
 // session_id in the Session object for any subsequent call.
 type SessionInfo struct {
@@ -33,6 +42,14 @@ type Query struct {
 	BindVariables map[string]interface{}
 	SessionId     int64
 	TransactionId int64
+}
+
+// ExecuteRequest contains Query and CallerIDs. it is the payload to
+// Execute2, which is the CallerID enabled version of Execute
+type ExecuteRequest struct {
+	QueryRequest      Query
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
 }
 
 //go:generate bsongen -file $GOFILE -type Query -o query_bson.go
@@ -79,6 +96,14 @@ type QueryList struct {
 	TransactionId int64
 }
 
+// ExecuteBatchRequest is the payload to ExecuteBatch2, it contains
+// both QueryList which is the actual payload and the CallerIDs
+type ExecuteBatchRequest struct {
+	QueryBatch        QueryList
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
+}
+
 //go:generate bsongen -file $GOFILE -type QueryList -o query_list_bson.go
 
 // QueryResultList is the return type for ExecuteBatch.
@@ -113,10 +138,12 @@ type TransactionInfo struct {
 //              if this field is empty or returns an error if this field is not
 //              empty but not found in schema info or not be indexed.
 type SplitQueryRequest struct {
-	Query       BoundQuery
-	SplitColumn string
-	SplitCount  int
-	SessionID   int64
+	Query             BoundQuery
+	SplitColumn       string
+	SplitCount        int
+	SessionID         int64
+	EffectiveCallerID *CallerID
+	ImmediateCallerID *VTGateCallerID
 }
 
 // QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only

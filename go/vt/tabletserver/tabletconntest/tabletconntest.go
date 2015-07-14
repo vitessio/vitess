@@ -357,6 +357,18 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2")
+	ctx := context.Background()
+	qr, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !reflect.DeepEqual(*qr, executeQueryResult) {
+		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, executeQueryResult)
+	}
+}
+
 func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteError")
 	ctx := context.Background()
@@ -364,10 +376,25 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	verifyError(t, err, "Execute")
 }
 
+func testExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2Error")
+	ctx := context.Background()
+	_, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
+	verifyError(t, err, "Execute")
+}
+
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecutePanics")
 	ctx := context.Background()
 	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
+func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2Panics")
+	ctx := context.Background()
+	if _, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -779,6 +806,33 @@ func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecuteBatch2")
+	ctx := context.Background()
+	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	if err != nil {
+		t.Fatalf("ExecuteBatch failed: %v", err)
+	}
+	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
+	}
+}
+
+func testExecuteBatch2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testBatchExecute2Error")
+	ctx := context.Background()
+	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	verifyError(t, err, "ExecuteBatch")
+}
+
+func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecuteBatch2Panics")
+	ctx := context.Background()
+	if _, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.hasError {
@@ -958,9 +1012,11 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollback(t, conn)
 	testRollback2(t, conn)
 	testExecute(t, conn)
+	testExecute2(t, conn)
 	testStreamExecute(t, conn)
 	testStreamExecute2(t, conn)
 	testExecuteBatch(t, conn)
+	testExecuteBatch2(t, conn)
 	testSplitQuery(t, conn)
 	testStreamHealth(t, conn)
 
@@ -973,9 +1029,11 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackError(t, conn)
 	testRollback2Error(t, conn)
 	testExecuteError(t, conn)
+	testExecute2Error(t, conn)
 	testStreamExecuteError(t, conn)
 	testStreamExecute2Error(t, conn)
 	testExecuteBatchError(t, conn)
+	testExecuteBatch2Error(t, conn)
 	testSplitQueryError(t, conn)
 	fake.hasError = false
 
@@ -988,9 +1046,11 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackPanics(t, conn)
 	testRollback2Panics(t, conn)
 	testExecutePanics(t, conn)
+	testExecute2Panics(t, conn)
 	testStreamExecutePanics(t, conn, fake)
 	testStreamExecute2Panics(t, conn, fake)
 	testExecuteBatchPanics(t, conn)
+	testExecuteBatch2Panics(t, conn)
 	testSplitQueryPanics(t, conn)
 	testStreamHealthPanics(t, conn)
 	fake.panics = false

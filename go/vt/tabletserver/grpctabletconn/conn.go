@@ -94,6 +94,11 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	return mproto.Proto3ToQueryResult(er.Result), nil
 }
 
+// Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
+func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return conn.Execute(ctx, query, bindVars, transactionID)
+}
+
 // ExecuteBatch sends a batch query to VTTablet.
 func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
@@ -118,6 +123,11 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 		return nil, tabletErrorFromRPCError(ebr.Error)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
+}
+
+// ExecuteBatch2 is the same with ExecuteBatch in gRPC, which is already CallerID enabled
+func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+	return conn.ExecuteBatch(ctx, queries, transactionID)
 }
 
 // StreamExecute starts a streaming query to VTTablet.

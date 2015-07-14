@@ -35,6 +35,19 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return tErr
 }
 
+// GetSessionId2 should not be used by anything other than tests.
+// It will eventually replace GetSessionId, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) GetSessionId2(sessionIdReq *proto.GetSessionIdRequest, sessionInfo *proto.SessionInfo) (err error) {
+	defer sq.server.HandlePanic(&err)
+	tErr := sq.server.GetSessionId(&sessionIdReq.Params, sessionInfo)
+	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
 // Begin is exposing tabletserver.SqlQuery.Begin
 func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	defer sq.server.HandlePanic(&err)
@@ -122,6 +135,19 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 	return tErr
 }
 
+// Execute2 should not be used by anything other than tests
+// It will eventually replace Execute, but it breaks compatibility with older clients
+// Once all clients are upgraded, it can be replaced
+func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteRequest, reply *mproto.QueryResult) (err error) {
+	defer sq.server.HandlePanic(&err)
+	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), &executeRequest.QueryRequest, reply)
+	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
 func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
 	defer sq.server.HandlePanic(&err)
@@ -162,6 +188,22 @@ func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecute
 func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), queryList, reply)
+	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
+// ExecuteBatch2 should not be used by anything other than tests
+// It will eventually replace ExecuteBatch, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRequest, reply *proto.QueryResultList) (err error) {
+	defer sq.server.HandlePanic(&err)
+	if req == nil {
+		return nil
+	}
+	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), &req.QueryBatch, reply)
 	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
