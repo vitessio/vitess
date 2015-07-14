@@ -9,7 +9,6 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcplus"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/hook"
@@ -472,9 +471,4 @@ func init() {
 	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
 		servenv.Register("tabletmanager", &TabletManager{agent})
 	})
-}
-
-// RegisterForTest will register the RPC, to be used by test instances only
-func RegisterForTest(server *rpcplus.Server, agent *tabletmanager.ActionAgent) {
-	server.Register(&TabletManager{agent})
 }

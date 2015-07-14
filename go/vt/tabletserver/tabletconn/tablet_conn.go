@@ -31,7 +31,8 @@ const (
 )
 
 var (
-	tabletProtocol = flag.String("tablet_protocol", "gorpc", "how to talk to the vttablets")
+	// TabletProtocol is exported for unit tests
+	TabletProtocol = flag.String("tablet_protocol", "gorpc", "how to talk to the vttablets")
 )
 
 // ServerError represents an error that was returned from
@@ -117,9 +118,9 @@ func RegisterDialer(name string, dialer TabletDialer) {
 
 // GetDialer returns the dialer to use, described by the command line flag
 func GetDialer() TabletDialer {
-	td, ok := dialers[*tabletProtocol]
+	td, ok := dialers[*TabletProtocol]
 	if !ok {
-		log.Fatalf("No dialer registered for tablet protocol %s", *tabletProtocol)
+		log.Fatalf("No dialer registered for tablet protocol %s", *TabletProtocol)
 	}
 	return td
 }

@@ -17,10 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
+	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -298,7 +296,7 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 			"STOP SLAVE",
 			"START SLAVE",
 		}
-		sourceRdonly.RPCServer.Register(gorpcqueryservice.New(&verticalSqlQuery{t: t}))
+		grpcqueryservice.RegisterForTest(sourceRdonly.RPCServer, &verticalSqlQuery{t: t})
 	}
 
 	// We read 100 source rows. sourceReaderCount is set to 10, so

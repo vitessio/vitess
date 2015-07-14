@@ -12,12 +12,20 @@ import (
 	"testing"
 	"time"
 
-	// register the go rpc tablet manager client
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
+
+func init() {
+	// enforce we will use the right protocol (gRPC) (note the
+	// client is unused, but it is initialized, so it needs to exist)
+	*tmclient.TabletManagerProtocol = "grpc"
+}
 
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {

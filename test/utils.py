@@ -931,9 +931,8 @@ class Vtctld(object):
     global vtctld, vtctld_connection
     if not vtctld:
       vtctld = self
-      vtctld_connection = vtctl_client.connect(
-          protocols_flavor().vtctl_python_client_protocol(),
-          self.rpc_endpoint(True), 30)
+      protocol, endpoint = self.rpc_endpoint(python=True)
+      vtctld_connection = vtctl_client.connect(protocol, endpoint, 30)
 
     return self.proc
 
@@ -944,7 +943,8 @@ class Vtctld(object):
     requires a dedicated port.
 
     Returns:
-      endpoint - string e.g. localhost:15001
+      protocol - string e.g. 'grpc'
+      endpoint - string e.g. 'localhost:15001'
     """
     if python:
       protocol = protocols_flavor().vtctl_python_client_protocol()
@@ -956,7 +956,7 @@ class Vtctld(object):
       if python:
         from vtctl import grpc_vtctl_client
       rpc_port = self.grpc_port
-    return 'localhost:%u' % rpc_port
+    return (protocol, 'localhost:%u' % rpc_port)
 
   def process_args(self):
     return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
@@ -969,10 +969,10 @@ class Vtctld(object):
     else:
       log_level='ERROR'
 
+    protocol, endpoint = self.rpc_endpoint()
     out, err = run(environment.binary_args('vtctlclient') +
-                   ['-vtctl_client_protocol',
-                    protocols_flavor().vtctl_client_protocol(),
-                    '-server', self.rpc_endpoint(),
+                   ['-vtctl_client_protocol', protocol,
+                    '-server', endpoint,
                     '-stderrthreshold', log_level] + args,
                    trap_output=True)
     return out

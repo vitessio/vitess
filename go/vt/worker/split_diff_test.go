@@ -16,9 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
+	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -216,10 +214,10 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	leftRdonly1.RPCServer.Register(gorpcqueryservice.New(&destinationSqlQuery{t: t, excludedTable: excludedTable}))
-	leftRdonly2.RPCServer.Register(gorpcqueryservice.New(&destinationSqlQuery{t: t, excludedTable: excludedTable}))
-	sourceRdonly1.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
-	sourceRdonly2.RPCServer.Register(gorpcqueryservice.New(&sourceSqlQuery{t: t, excludedTable: excludedTable}))
+	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationSqlQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationSqlQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceSqlQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceSqlQuery{t: t, excludedTable: excludedTable})
 
 	err := wrk.Run(ctx)
 	status := wrk.StatusAsText()

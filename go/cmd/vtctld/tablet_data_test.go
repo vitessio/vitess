@@ -8,7 +8,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -86,7 +86,7 @@ func TestTabletData(t *testing.T) {
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthSQLQuery(t)
-	tablet1.RPCServer.Register(gorpcqueryservice.New(shsq))
+	grpcqueryservice.RegisterForTest(tablet1.RPCServer, shsq)
 
 	thc := newTabletHealthCache(ts)
 

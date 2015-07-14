@@ -14,14 +14,22 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmserver"
+	"github.com/youtube/vitess/go/vt/tabletmanager/grpctmserver"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+
+	// import the gRPC client implementation for query service
+	_ "github.com/youtube/vitess/go/vt/tabletserver/grpctabletconn"
 )
 
 // This file contains utility methods for unit tests.
@@ -39,10 +47,16 @@ type FakeTablet struct {
 
 	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
-	Agent      *tabletmanager.ActionAgent
-	Listener   net.Listener
-	HTTPServer http.Server
-	RPCServer  *rpcplus.Server
+	// The Listener and RPCServer are used by the gRPC server.
+	Agent     *tabletmanager.ActionAgent
+	Listener  net.Listener
+	RPCServer *grpc.Server
+
+	// These optional fields are used if the tablet also needs to
+	// listen on the 'vt' port.
+	StartHttpServer bool
+	HTTPListener    net.Listener
+	HTTPServer      http.Server
 }
 
 // TabletOption is an interface for changing tablet parameters.
@@ -70,6 +84,15 @@ func ForceInitTablet() TabletOption {
 	}
 }
 
+// StartHTTPServer is the tablet option to start the HTTP server when
+// starting a tablet.
+func StartHTTPServer() TabletOption {
+	return func(tablet *topo.Tablet) {
+		// set the start_http_server field into the portmap as a hack
+		tablet.Portmap["start_http_server"] = 1
+	}
+}
+
 // NewFakeTablet creates the test tablet in the topology.  'uid'
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
@@ -94,7 +117,8 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	for _, option := range options {
 		option(tablet)
 	}
-	delete(tablet.Portmap, "parent_uid")
+	_, startHTTPServer := tablet.Portmap["start_http_server"]
+	delete(tablet.Portmap, "start_http_server")
 	_, force := tablet.Portmap["force_init"]
 	delete(tablet.Portmap, "force_init")
 	if err := wr.InitTablet(context.Background(), tablet, force, true, false); err != nil {
@@ -108,6 +132,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	return &FakeTablet{
 		Tablet:          tablet,
 		FakeMysqlDaemon: fakeMysqlDaemon,
+		StartHttpServer: startHTTPServer,
 	}
 }
 
@@ -118,30 +143,38 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		t.Fatalf("Agent for %v is already running", ft.Tablet.Alias)
 	}
 
-	// Listen on a random port
+	// Listen on a random port for gRPC
 	var err error
 	ft.Listener, err = net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
-	port := ft.Listener.Addr().(*net.TCPAddr).Port
+	gRPCPort := ft.Listener.Addr().(*net.TCPAddr).Port
+
+	// if needed, listen on a random port for HTTP
+	vtPort := ft.Tablet.Portmap["vt"]
+	if ft.StartHttpServer {
+		ft.HTTPListener, err = net.Listen("tcp", ":0")
+		if err != nil {
+			t.Fatalf("Cannot listen on http port: %v", err)
+		}
+		handler := http.NewServeMux()
+		ft.HTTPServer = http.Server{
+			Handler: handler,
+		}
+		go ft.HTTPServer.Serve(ft.HTTPListener)
+		vtPort = ft.HTTPListener.Addr().(*net.TCPAddr).Port
+	}
 
 	// create a test agent on that port, and re-read the record
 	// (it has new ports and IP)
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, port, ft.FakeMysqlDaemon)
+	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon)
 	ft.Tablet = ft.Agent.Tablet().Tablet
 
-	// create the RPC server
-	ft.RPCServer = rpcplus.NewServer()
-	gorpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
-
-	// create the HTTP server, serve the server from it
-	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, ft.RPCServer, false)
-	ft.HTTPServer = http.Server{
-		Handler: handler,
-	}
-	go ft.HTTPServer.Serve(ft.Listener)
+	// create the gRPC server
+	ft.RPCServer = grpc.NewServer()
+	grpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
+	go ft.RPCServer.Serve(ft.Listener)
 }
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
@@ -149,8 +182,18 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 	if ft.Agent == nil {
 		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
 	}
+	if ft.StartHttpServer {
+		ft.HTTPListener.Close()
+	}
 	ft.Listener.Close()
 	ft.Agent.Stop()
 	ft.Agent = nil
 	ft.Listener = nil
+	ft.HTTPListener = nil
+}
+
+func init() {
+	// enforce we will use the right protocol (gRPC) in all unit tests
+	*tmclient.TabletManagerProtocol = "grpc"
+	*tabletconn.TabletProtocol = "grpc"
 }

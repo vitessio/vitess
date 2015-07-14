@@ -11,13 +11,21 @@ import (
 	"testing"
 	"time"
 
-	// register the go rpc tablet manager client
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
+
+func init() {
+	// enforce we will use the right protocol (gRPC) (note the
+	// client is unused, but it is initialized, so it needs to exist)
+	*tmclient.TabletManagerProtocol = "grpc"
+}
 
 // CreateTopoServer returns the test topo server properly configured
 func CreateTopoServer(t *testing.T) topo.Server {

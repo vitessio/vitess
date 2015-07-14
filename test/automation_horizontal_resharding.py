@@ -36,6 +36,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
     keyspace = 'test_keyspace'
     source_shard_list = "0"
     dest_shard_list = "-80,80-"
+    _protocol, endpoint = utils.vtctld.rpc_endpoint()
     utils.run(environment.binary_argstr('automation_client') +
               ' --server localhost:' + str(automation_server_port) +
               ' --task HorizontalReshardingTask' +
@@ -44,12 +45,12 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
               ' --param dest_shard_list=' + dest_shard_list +
               ' --param source_shard_rdonly_list=' + worker.shard_rdonly1.tablet_alias +
               ' --param dest_shard_rdonly_list=' + worker.shard_0_rdonly1.tablet_alias + ',' + worker.shard_1_rdonly1.tablet_alias +
-              ' --param vtctld_endpoint=' + utils.vtctld.rpc_endpoint() +
+              ' --param vtctld_endpoint=' + endpoint +
               ' --param vtworker_endpoint=localhost:' + str(worker_rpc_port))
-    
+
     self.assert_shard_data_equal(0, worker.shard_master, worker.shard_0_tablets.replica)
     self.assert_shard_data_equal(1, worker.shard_master, worker.shard_1_tablets.replica)
-    
+
     utils.kill_sub_process(automation_server_proc, soft=True)
     utils.kill_sub_process(worker_proc, soft=True)
 

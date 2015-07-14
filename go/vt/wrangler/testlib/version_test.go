@@ -55,9 +55,11 @@ func TestVersion(t *testing.T) {
 
 	// couple tablets is enough
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topo.TYPE_MASTER,
-		TabletKeyspaceShard(t, "source", "0"))
+		TabletKeyspaceShard(t, "source", "0"),
+		StartHTTPServer())
 	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topo.TYPE_REPLICA,
-		TabletKeyspaceShard(t, "source", "0"))
+		TabletKeyspaceShard(t, "source", "0"),
+		StartHTTPServer())
 
 	// sourceMaster loop
 	sourceMasterGitRev := "fake git rev"
