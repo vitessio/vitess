@@ -140,12 +140,11 @@ class TestBaseSplitClone(unittest.TestCase):
     """Handles all the necessary work for initially running a shard's tablets.
 
     This encompasses the following steps:
-      1. InitTablet for the appropriate tablets and types
-      2. (optional) Create db
-      3. Starting vttablets
-      4. Waiting for the appropriate vttablet state
-      5. Force reparent to the master tablet
-      6. RebuildKeyspaceGraph
+      1. (optional) Create db
+      2. Starting vttablets and let themselves init them
+      3. Waiting for the appropriate vttablet state
+      4. Force reparent to the master tablet
+      5. RebuildKeyspaceGraph
       7. (optional) Running initial schema setup
 
     Args:
@@ -155,27 +154,47 @@ class TestBaseSplitClone(unittest.TestCase):
       create_db - boolean, True iff we should create a db on the tablets
       create_table - boolean, True iff we should create a table on the tablets
     """
-    shard_tablets.master.init_tablet('master', 'test_keyspace', shard_name)
-    for tablet in shard_tablets.replicas:
-      tablet.init_tablet('replica', 'test_keyspace', shard_name)
-    for tablet in shard_tablets.rdonlys:
-      tablet.init_tablet('rdonly', 'test_keyspace', shard_name)
-
-    # Start tablets (and possibly create databases)
+    # If requested, create databases.
     for tablet in shard_tablets.all_tablets:
       if create_db:
         tablet.create_db('vt_test_keyspace')
-      tablet.start_vttablet(wait_for_state=None)
+
+    # Start tablets.
+    # Specifying "target_tablet_type" enables the health check i.e. tablets will
+    # be automatically returned to the serving graph after a SplitClone or SplitDiff.
+    # NOTE: The future master has to be started with type "replica".
+    shard_tablets.master.start_vttablet(wait_for_state=None, target_tablet_type='replica',
+                                        init_keyspace='test_keyspace', init_shard=shard_name)
+    for tablet in shard_tablets.replicas:
+      tablet.start_vttablet(wait_for_state=None, target_tablet_type='replica',
+                            init_keyspace='test_keyspace', init_shard=shard_name)
+    for tablet in shard_tablets.rdonlys:
+      tablet.start_vttablet(wait_for_state=None, target_tablet_type='rdonly',
+                            init_keyspace='test_keyspace', init_shard=shard_name)
+    # Block until tablets are up and we can enable replication.
+    # We don't care about the tablets' state which may have been changed by the
+    # health check from SERVING to NOT_SERVING anyway.
+    for tablet in shard_tablets.all_tablets:
+      tablet.wait_for_vttablet_state('NOT_SERVING')
+
+    # Reparent to choose an initial master and enable replication.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/%s' % shard_name,
+                     shard_tablets.master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+    # Enforce a health check instead of waiting for the next periodic one.
+    # (saves up to 1 second execution time on average)
+    if wait_state == 'SERVING':
+      for tablet in shard_tablets.replicas:
+        utils.run_vtctl(["RunHealthCheck", tablet.tablet_alias, "replica"])
+      for tablet in shard_tablets.rdonlys:
+        utils.run_vtctl(["RunHealthCheck", tablet.tablet_alias, "rdonly"])
 
     # Wait for tablet state to change after starting all tablets. This allows
     # us to start all tablets at once, instead of sequentially waiting.
+    # NOTE: Replication has to be enabled first or the health check will
+    #       set a a replica or rdonly tablet back to NOT_SERVING. 
     for tablet in shard_tablets.all_tablets:
       tablet.wait_for_vttablet_state(wait_state)
-
-    # Reparent to choose an initial master
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/%s' % shard_name,
-                     shard_tablets.master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     create_table_sql = (
       'create table worker_test('
@@ -278,11 +297,6 @@ class TestBaseSplitClone(unittest.TestCase):
     stdout, stderr = utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
       keyspace_shard], auto_log=True)
 
-    for shard_tablets in (source_tablets, destination_tablets):
-      for tablet in shard_tablets.rdonlys:
-        utils.run_vtctl(['ChangeSlaveType', tablet.tablet_alias, 'rdonly'],
-          auto_log=True)
-
   def setUp(self):
     """Creates the necessary shards, starts the tablets, and inserts some data."""
     self.run_shard_tablets('0', shard_tablets)
@@ -306,6 +320,7 @@ class TestBaseSplitClone(unittest.TestCase):
     """
     for shard_tablet in [shard_tablets, shard_0_tablets, shard_1_tablets]:
       for tablet in shard_tablet.all_tablets:
+        tablet.reset_replication()
         tablet.clean_dbs()
         tablet.scrap(force=True, skip_rebuild=True)
         utils.run_vtctl(['DeleteTablet', tablet.tablet_alias], auto_log=True)
@@ -407,9 +422,6 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
       "expected vtworker to retry, but it didn't")
 
     utils.wait_procs([worker_proc])
-
-    utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
-                     auto_log=True)
 
     # Make sure that everything is caught up to the same replication point
     self.run_split_diff('test_keyspace/-80', shard_tablets, shard_0_tablets)
