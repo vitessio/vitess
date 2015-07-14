@@ -12,17 +12,25 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
 
 var (
 	errControllerOpen = errors.New("Open Fail")
 	errControllerRead = errors.New("Read Fail")
 )
+
+func init() {
+	// enforce we will use the right protocol (gRPC) (note the
+	// client is unused, but it is initialized, so it needs to exist)
+	*tmclient.TabletManagerProtocol = "grpc"
+}
 
 func TestSchemaManagerControllerOpenFail(t *testing.T) {
 	controller := newFakeController(
