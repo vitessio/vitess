@@ -399,6 +399,10 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	return sbc.getNextResult(), nil
 }
 
+func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return sbc.Execute(ctx, query, bindVars, transactionID)
+}
+
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -413,6 +417,10 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 		qrl.List = append(qrl.List, *(sbc.getNextResult()))
 	}
 	return qrl, nil
+}
+
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+	return sbc.ExecuteBatch(ctx, queries, transactionID)
 }
 
 func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
