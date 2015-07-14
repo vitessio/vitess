@@ -51,3 +51,7 @@ md-toolbar h1 {
 	text-decoration: none;
 	text-align: center;
 }
+
+.card-table-row {
+  padding: 8px 0px 8px 0px;
+}
