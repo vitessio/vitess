@@ -63,6 +63,10 @@ func (agent *ActionAgent) InitTablet(port, securePort, gRPCPort int) error {
 		}
 
 	} else if *targetTabletType != "" {
+		if tabletType := topo.TabletType(*targetTabletType); tabletType == topo.TYPE_MASTER {
+			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, topo.TYPE_REPLICA)
+		}
+
 		// use spare, the healthcheck will turn us into what
 		// we need to be eventually
 		tabletType = topo.TYPE_SPARE
