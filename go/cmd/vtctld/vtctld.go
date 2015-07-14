@@ -490,35 +490,6 @@ func main() {
 		cellShardTabletsCache.Flush()
 	})
 
-	// handle tablet cache
-	tabletHealthCache := newTabletHealthCache(ts)
-	http.HandleFunc("/json/TabletHealth", func(w http.ResponseWriter, r *http.Request) {
-		cell := r.FormValue("cell")
-		if cell == "" {
-			http.Error(w, "no cell provided", http.StatusBadRequest)
-			return
-		}
-		uid := r.FormValue("uid")
-		if uid == "" {
-			http.Error(w, "no uid provided", http.StatusBadRequest)
-			return
-		}
-		tabletAlias := topo.TabletAlias{
-			Cell: cell,
-		}
-		var err error
-		tabletAlias.Uid, err = topo.ParseUID(uid)
-		if err != nil {
-			http.Error(w, "cannot parse uid", http.StatusBadRequest)
-			return
-		}
-		result, err := tabletHealthCache.get(tabletAlias)
-		if err != nil {
-			httpErrorf(w, r, "error getting tablet health: %v", err)
-			return
-		}
-		w.Write(result)
-	})
 	http.HandleFunc("/json/schema-manager", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpErrorf(w, r, "cannot parse form: %s", err)

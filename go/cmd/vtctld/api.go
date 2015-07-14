@@ -61,6 +61,8 @@ func getItemPath(url string) string {
 }
 
 func initAPI(ctx context.Context, ts topo.Server) {
+	tabletHealthCache := newTabletHealthCache(ts)
+
 	// Get Cells
 	handleGet("cells", func(r *http.Request) (interface{}, error) {
 		if getItemPath(r.URL.Path) != "" {
@@ -121,6 +123,15 @@ func initAPI(ctx context.Context, ts topo.Server) {
 				return nil, errors.New("cell param required")
 			}
 			return ts.GetTabletsByCell(ctx, cell)
+		}
+
+		// Tablet Health
+		if parts := strings.Split(tabletPath, "/"); len(parts) == 2 && parts[1] == "health" {
+			tabletAlias, err := topo.ParseTabletAliasString(parts[0])
+			if err != nil {
+				return nil, err
+			}
+			return tabletHealthCache.Get(ctx, tabletAlias)
 		}
 
 		// Get a specific tablet.
