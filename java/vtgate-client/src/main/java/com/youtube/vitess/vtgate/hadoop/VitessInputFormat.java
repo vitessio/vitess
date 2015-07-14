@@ -32,13 +32,14 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
     try {
       VitessConf conf = new VitessConf(context.getConfiguration());
       Class<? extends RpcClientFactory> rpcFactoryClass = null;
+      VtGate vtgate;
       try {
         rpcFactoryClass = (Class<? extends RpcClientFactory>)Class.forName(conf.getRpcFactoryClass());
-      } catch (ClassNotFoundException e) {
+        vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass.newInstance());
+      } catch (ClassNotFoundException|InstantiationException|IllegalAccessException e) {
         throw new RuntimeException(e);
       }
 
-      VtGate vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass);
       Map<Query, Long> queries =
           vtgate.splitQuery(conf.getKeyspace(), conf.getInputQuery(), conf.getSplits(), conf.getSplitColumn());
       List<InputSplit> splits = new LinkedList<>();

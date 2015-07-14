@@ -13,7 +13,7 @@ public class VitessConf {
   public static final String INPUT_QUERY = "vitess.vtgate.hadoop.input_query";
   public static final String SPLITS = "vitess.vtgate.hadoop.splits";
   public static final String SPLIT_COLUMN = "vitess.vtgate.hadoop.splitcolumn";
-  public static final String RPC_FACTORY_CLASS = "vitess.rpc.factory.class";
+  public static final String RPC_FACTORY_CLASS = "vtgate.rpcclient.factory";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;

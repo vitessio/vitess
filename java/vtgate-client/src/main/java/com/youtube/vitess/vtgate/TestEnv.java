@@ -1,9 +1,8 @@
-package com.youtube.vitess.vtgate.integration.util;
+package com.youtube.vitess.vtgate;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.Gson;
 import com.youtube.vitess.vtgate.KeyspaceId;
-import com.youtube.vitess.vtgate.rpcclient.BsonRpcClientFactory;
 import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 import org.apache.commons.lang.StringUtils;
 
@@ -16,17 +15,44 @@ import java.util.Map;
  * Helper class to hold the configurations for VtGate setup used in integration tests
  */
 public class TestEnv {
-  public Map<String, List<String>> shardKidMap;
-  public Map<String, Integer> tablets;
-  public String keyspace;
-  public Process pythonScriptProcess;
-  public int port;
-  public List<KeyspaceId> kids;
+  public static final String PROPERTY_KEY_RPCCLIENT_FACTORY_CLASS = "vtgate.rpcclient.factory";
+  private Map<String, List<String>> shardKidMap;
+  private Map<String, Integer> tablets = new HashMap<>();
+  private String keyspace;
+  private Process pythonScriptProcess;
+  private int port;
+  private List<KeyspaceId> kids;
 
-  public TestEnv(Map<String, List<String>> shardKidMap, String keyspace_name) {
+  public void setKeyspace(String keyspace) {
+    this.keyspace = keyspace;
+  }
+
+  public String getKeyspace() {
+    return this.keyspace;
+  }
+
+  public int getPort() {
+    return this.port;
+  }
+
+  public void setPort(int port) {
+    this.port = port;
+  }
+
+  public Process getPythonScriptProcess() {
+    return this.pythonScriptProcess;
+  }
+
+  public void setPythonScriptProcess(Process process) {
+    this.pythonScriptProcess = process;
+  }
+
+  public void setShardKidMap(Map<String, List<String>> shardKidMap) {
     this.shardKidMap = shardKidMap;
-    this.keyspace = keyspace_name;
-    this.tablets = new HashMap<String, Integer>();
+  }
+
+  public Map<String, List<String>> getShardKidMap() {
+    return this.shardKidMap;
   }
 
   public void addTablet(String type, int count) {
@@ -93,7 +119,13 @@ public class TestEnv {
     return command;
   }
 
-  public Class<? extends RpcClientFactory> getRpcClientFactory() {
-    return BsonRpcClientFactory.class;
+  public RpcClientFactory getRpcClientFactory() {
+    String rpcClientFactoryClass = System.getProperty(PROPERTY_KEY_RPCCLIENT_FACTORY_CLASS);
+    try {
+      Class<?> clazz = Class.forName(rpcClientFactoryClass);
+      return (RpcClientFactory)clazz.newInstance();
+    } catch (ClassNotFoundException|IllegalAccessException|InstantiationException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

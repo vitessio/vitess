@@ -33,8 +33,8 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
     conf = new VitessConf(context.getConfiguration());
     try {
       Class<? extends RpcClientFactory> rpcFactoryClass = (Class<? extends RpcClientFactory>)Class.forName(conf.getRpcFactoryClass());
-      vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass);
-    } catch (ConnectionException|ClassNotFoundException  e) {
+      vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass.newInstance());
+    } catch (ConnectionException|ClassNotFoundException|InstantiationException|IllegalAccessException e) {
       throw new RuntimeException(e);
     }
   }
