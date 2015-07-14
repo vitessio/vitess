@@ -18,9 +18,14 @@ import (
 
 var (
 	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
-	// The intent of this timeout is to wait for the healthcheck to automatically return rdonly instances which have been taken out by previous *Clone or *Diff runs.
-	// Therefore, the default for this variable must be higher than -health_check_interval.
-	waitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
+
+	// WaitForHealthyEndPointsTimeout intent is to wait for the
+	// healthcheck to automatically return rdonly instances which
+	// have been taken out by previous *Clone or *Diff runs.
+	// Therefore, the default for this variable must be higher
+	// than -health_check_interval.
+	// (it is public for tests to override it)
+	WaitForHealthyEndPointsTimeout = flag.Duration("wait_for_healthy_rdonly_endpoints_timeout", 60*time.Second, "maximum time to wait if less than --min_healthy_rdonly_endpoints are available")
 )
 
 // FindHealthyRdonlyEndPoint returns a random healthy endpoint.
@@ -28,7 +33,7 @@ var (
 // minHealthyEndPoints servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_endpoints_timeout.
 func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell, keyspace, shard string) (topo.TabletAlias, error) {
-	newCtx, cancel := context.WithTimeout(ctx, *waitForHealthyEndPointsTimeout)
+	newCtx, cancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
 	defer cancel()
 
 	var healthyEndpoints []topo.EndPoint
