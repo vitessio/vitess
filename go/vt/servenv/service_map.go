@@ -7,17 +7,20 @@ package servenv
 import (
 	"flag"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/flagutil"
 )
 
 var (
 	serviceMapFlag flagutil.StringListValue
 
-	// ServiceMap is the exported version of the service map.
-	// init() functions will add default values to it.
+	// serviceMap is the used version of the service map.
+	// init() functions will add default values to it (using
+	// InitServiceMap and InitServiceMapForBsonRpcService).
 	// service_map command line parameter will alter the map.
 	// Can only be used after servenv.Init has been called.
-	ServiceMap = make(map[string]bool)
+	serviceMap = make(map[string]bool)
 )
 
 func init() {
@@ -27,23 +30,41 @@ func init() {
 	})
 }
 
+// InitServiceMap will set the default value for a protocol/name to be served.
+func InitServiceMap(protocol, name string) {
+	serviceMap[protocol+"-"+name] = true
+}
+
 // InitServiceMapForBsonRpcService will set the default entries for a
 // bson rpc to serve the service.
 func InitServiceMapForBsonRpcService(name string) {
-	ServiceMap["bsonrpc-vt-"+name] = true
-	ServiceMap["bsonrpc-auth-vt-"+name] = true
-	ServiceMap["bsonrpc-vts-"+name] = true
-	ServiceMap["bsonrpc-auth-vts-"+name] = true
-	ServiceMap["bsonrpc-unix-"+name] = true
-	ServiceMap["bsonrpc-auth-unix-"+name] = true
+	serviceMap["bsonrpc-vt-"+name] = true
+	serviceMap["bsonrpc-auth-vt-"+name] = true
+	serviceMap["bsonrpc-vts-"+name] = true
+	serviceMap["bsonrpc-auth-vts-"+name] = true
+	serviceMap["bsonrpc-unix-"+name] = true
+	serviceMap["bsonrpc-auth-unix-"+name] = true
 }
 
+// updateServiceMap takes the command line parameter, and updates the
+// ServiceMap accordingly
 func updateServiceMap() {
 	for _, s := range serviceMapFlag {
 		if s[0] == '-' {
-			delete(ServiceMap, s[1:])
+			delete(serviceMap, s[1:])
 		} else {
-			ServiceMap[s] = true
+			serviceMap[s] = true
 		}
 	}
+}
+
+// CheckServiceMap returns if we should register a RPC service
+// (and also logs how to enable / disable it)
+func CheckServiceMap(protocol, name string) bool {
+	if serviceMap[protocol+"-"+name] {
+		log.Infof("Registering %v for %v, disable it with -%v-%v service_map parameter", name, protocol, protocol, name)
+		return true
+	}
+	log.Infof("Not registering %v for %v, enable it with %v-%v service_map parameter", name, protocol, protocol, name)
+	return false
 }

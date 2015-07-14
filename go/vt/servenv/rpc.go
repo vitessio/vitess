@@ -14,14 +14,15 @@ var (
 	authConfig = flag.String("auth-credentials", "", "name of file containing auth credentials")
 )
 
+// Register registers a bsonrpc service according to serviceMap
 func Register(name string, rcvr interface{}) {
-	if ServiceMap["bsonrpc-vt-"+name] {
+	if serviceMap["bsonrpc-vt-"+name] {
 		log.Infof("Registering %v for bsonrpc over vt port, disable it with -bsonrpc-vt-%v service_map parameter", name, name)
 		rpc.Register(rcvr)
 	} else {
 		log.Infof("Not registering %v for bsonrpc over vt port, enable it with bsonrpc-vt-%v service_map parameter", name, name)
 	}
-	if ServiceMap["bsonrpc-auth-vt-"+name] {
+	if serviceMap["bsonrpc-auth-vt-"+name] {
 		log.Infof("Registering %v for SASL bsonrpc over vt port, disable it with -bsonrpc-auth-vt-%v service_map parameter", name, name)
 		rpcwrap.AuthenticatedServer.Register(rcvr)
 	} else {
@@ -32,15 +33,16 @@ func Register(name string, rcvr interface{}) {
 	secureRegister(name, rcvr)
 }
 
+// ServeRPC will deal with bson rpc serving
 func ServeRPC() {
 	// rpc.HandleHTTP registers the default GOB handler at /_goRPC_
 	// and the debug RPC service at /debug/rpc (it displays a list
 	// of registered services and their methods).
-	if ServiceMap["gob-vt"] {
+	if serviceMap["gob-vt"] {
 		log.Infof("Registering GOB handler and /debug/rpc URL for vt port")
 		rpc.HandleHTTP()
 	}
-	if ServiceMap["gob-auth-vt"] {
+	if serviceMap["gob-auth-vt"] {
 		log.Infof("Registering GOB handler and /debug/rpcs URL for SASL vt port")
 		rpcwrap.AuthenticatedServer.HandleHTTP(rpc.DefaultRPCPath, rpc.DefaultDebugPath+"s")
 	}

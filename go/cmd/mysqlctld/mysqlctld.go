@@ -40,9 +40,6 @@ var (
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
-
-	// Enable only for unix socket by default, can be changed on the command-line.
-	servenv.ServiceMap["bsonrpc-unix-mysqlctl"] = true
 }
 
 func main() {
