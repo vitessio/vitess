@@ -661,7 +661,7 @@ def _get_vtworker_cmd(clargs, auto_log=False):
     rpc_port - int with the port number of the RPC interface
   """
   port = environment.reserve_ports(1)
-  rpc_port = environment.reserve_ports(1)
+  rpc_port = port
   args = environment.binary_args('vtworker') + [
           '-log_dir', environment.vtlogroot,
           '-min_healthy_rdonly_endpoints', '1',
@@ -676,6 +676,7 @@ def _get_vtworker_cmd(clargs, auto_log=False):
     args.extend(['-service_map',
                  ",".join(protocols_flavor().service_map())])
   if protocols_flavor().vtworker_client_protocol() == 'grpc':
+    rpc_port = environment.reserve_ports(1)
     args.extend(['-grpc_port', str(rpc_port)])
 
   if auto_log:
