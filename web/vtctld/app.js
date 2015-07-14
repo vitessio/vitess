@@ -64,7 +64,10 @@ app.config(function($mdThemingProvider, $mdIconProvider, $routeProvider,
 app.controller('AppCtrl', function($scope, $mdSidenav, $route, $location,
                             routes) {
   $scope.routes = routes;
-	$scope.reload = $route.reload;
+
+	$scope.refreshRoute = function() {
+		$route.current.locals.$scope.refreshData();
+	};
 
   $scope.toggleNav = function() { $mdSidenav('left').toggle(); }
 
@@ -89,17 +92,20 @@ app.controller('KeyspacesCtrl', function($scope, $mdDialog, keyspaces, shards) {
 		'Validate Version'
 	];
 
-	// Get list of keyspace names.
-  keyspaces.query(function(ksnames) {
-	  $scope.keyspaces = [];
-		ksnames.forEach(function(name) {
-			// Get a list of shards for each keyspace.
-			$scope.keyspaces.push({
-				name: name,
-				shards: shards.query({keyspace: name})
+	$scope.refreshData = function() {
+		// Get list of keyspace names.
+		keyspaces.query(function(ksnames) {
+			$scope.keyspaces = [];
+			ksnames.forEach(function(name) {
+				// Get a list of shards for each keyspace.
+				$scope.keyspaces.push({
+					name: name,
+					shards: shards.query({keyspace: name})
+				});
 			});
 		});
-	});
+	};
+	$scope.refreshData();
 });
 
 app.controller('ShardCtrl', function($scope, $routeParams, shards, tablets) {
@@ -121,49 +127,52 @@ app.controller('ShardCtrl', function($scope, $routeParams, shards, tablets) {
 		}
 	};
 
-	// Get the shard data.
-	shards.get({keyspace: keyspace, shard: shard}, function(shardData) {
-		shardData.name = shard;
-		$scope.shard = shardData;
-	});
-
-	// Get a list of tablet aliases in the shard, in all cells.
-	tablets.query({shard: keyspace+'/'+shard}, function(tabletAliases) {
-		// Group them by cell.
-		cellMap = {};
-		tabletAliases.forEach(function(tabletAlias) {
-			if (cellMap[tabletAlias.Cell] === undefined)
-				cellMap[tabletAlias.Cell] = [];
-
-			cellMap[tabletAlias.Cell].push(tabletAlias);
+	$scope.refreshData = function() {
+		// Get the shard data.
+		shards.get({keyspace: keyspace, shard: shard}, function(shardData) {
+			shardData.name = shard;
+			$scope.shard = shardData;
 		});
 
-		// Turn the cell map into a list, sorted by cell name.
-		cellList = [];
-		$scope.cells = cellList;
-		Object.keys(cellMap).sort().forEach(function(cellName) {
-			// Sort the tablets within each cell.
-			tabletAliases = cellMap[cellName];
-			tabletAliases.sort(function(a, b) { return a.Uid - b.Uid; });
-
-			// Fetch tablet data.
-			tabletData = [];
+		// Get a list of tablet aliases in the shard, in all cells.
+		tablets.query({shard: keyspace+'/'+shard}, function(tabletAliases) {
+			// Group them by cell.
+			cellMap = {};
 			tabletAliases.forEach(function(tabletAlias) {
-				tabletData.push(
-					tablets.get({tablet: tabletAlias.Cell+'-'+tabletAlias.Uid}, function(tablet) {
-						// Annotate result with some extra stuff.
-						tablet.links = vtconfig.tabletLinks(tablet);
-					})
-				);
+				if (cellMap[tabletAlias.Cell] === undefined)
+					cellMap[tabletAlias.Cell] = [];
+
+				cellMap[tabletAlias.Cell].push(tabletAlias);
 			});
 
-			// Add tablet data to the cell list.
-			cellList.push({
-				name: cellName,
-				tablets: tabletData
+			// Turn the cell map into a list, sorted by cell name.
+			cellList = [];
+			$scope.cells = cellList;
+			Object.keys(cellMap).sort().forEach(function(cellName) {
+				// Sort the tablets within each cell.
+				tabletAliases = cellMap[cellName];
+				tabletAliases.sort(function(a, b) { return a.Uid - b.Uid; });
+
+				// Fetch tablet data.
+				tabletData = [];
+				tabletAliases.forEach(function(tabletAlias) {
+					tabletData.push(
+						tablets.get({tablet: tabletAlias.Cell+'-'+tabletAlias.Uid}, function(tablet) {
+							// Annotate result with some extra stuff.
+							tablet.links = vtconfig.tabletLinks(tablet);
+						})
+					);
+				});
+
+				// Add tablet data to the cell list.
+				cellList.push({
+					name: cellName,
+					tablets: tabletData
+				});
 			});
 		});
-	});
+	};
+	$scope.refreshData();
 });
 
 app.controller('SchemaCtrl', function() {
