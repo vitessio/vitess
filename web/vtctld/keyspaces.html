@@ -27,7 +27,7 @@
 
 	<md-card-content>
 
-	<h3>Shards</h3>
+	<h3 ng-bind="keyspace.shards.length == 0 ? 'No shards found.' : 'Shards'"></h3>
 
   <md-grid-list md-cols-sm="2" md-cols-md="4" md-cols-gt-md="8"
       md-row-height="2:1" md-gutter="1em">

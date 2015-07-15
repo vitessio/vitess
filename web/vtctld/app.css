@@ -40,6 +40,12 @@ md-toolbar h1 {
   font-weight: 400;
 }
 
+/* Primary content area */
+
+#content {
+  overflow: hidden;
+}
+
 /* Vitess */
 
 .shard-tile {
@@ -50,4 +56,8 @@ md-toolbar h1 {
 	color: inherit;
 	text-decoration: none;
 	text-align: center;
+}
+
+.card-table-row {
+  padding: 8px 0px 8px 0px;
 }

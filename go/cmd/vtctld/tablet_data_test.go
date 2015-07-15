@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
@@ -70,11 +72,7 @@ func (s *streamHealthSQLQuery) BroadcastHealth(terTimestamp int64, stats *pb.Rea
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 	for _, c := range s.streamHealthMap {
-		// do not block on any write
-		select {
-		case c <- shr:
-		default:
-		}
+		c <- shr
 	}
 }
 
@@ -90,66 +88,35 @@ func TestTabletData(t *testing.T) {
 
 	thc := newTabletHealthCache(ts)
 
-	// get the first result, it's not containing any data but the alias
-	result, err := thc.get(tablet1.Tablet.Alias)
-	if err != nil {
-		t.Fatalf("thc.get failed: %v", err)
-	}
-	var unpacked TabletHealth
-	if err := json.Unmarshal(result, &unpacked); err != nil {
-		t.Fatalf("bad json: %v", err)
-	}
-	if unpacked.TabletAlias != tablet1.Tablet.Alias {
-		t.Fatalf("wrong alias: %v", &unpacked)
-	}
-	if unpacked.Version != 1 {
-		t.Errorf("wrong version, got %v was expecting 1", unpacked.Version)
-	}
-
-	// wait for the streaming RPC to be established
-	timeout := 5 * time.Second
-	for {
-		if shsq.count() > 0 {
-			break
-		}
-		timeout -= 10 * time.Millisecond
-		if timeout < 0 {
-			t.Fatalf("timeout waiting for streaming RPC to be established")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// feed some data from the tablet, with just a data marker
-	shsq.BroadcastHealth(42, &pb.RealtimeStats{
+	stats := &pb.RealtimeStats{
 		HealthError:         "testHealthError",
 		SecondsBehindMaster: 72,
 		CpuUsage:            1.1,
-	})
+	}
 
-	// and wait for the cache to pick it up
-	timeout = 5 * time.Second
-	for {
-		result, err = thc.get(tablet1.Tablet.Alias)
-		if err != nil {
-			t.Fatalf("thc.get failed: %v", err)
-		}
-		if err := json.Unmarshal(result, &unpacked); err != nil {
-			t.Fatalf("bad json: %v", err)
-		}
-		if unpacked.StreamHealthResponse != nil &&
-			unpacked.StreamHealthResponse.RealtimeStats != nil &&
-			unpacked.StreamHealthResponse.RealtimeStats.HealthError == "testHealthError" &&
-			unpacked.StreamHealthResponse.RealtimeStats.SecondsBehindMaster == 72 &&
-			unpacked.StreamHealthResponse.RealtimeStats.CpuUsage == 1.1 {
-			if unpacked.Version != 2 {
-				t.Errorf("wrong version, got %v was expecting 2", unpacked.Version)
+	// Keep broadcasting until the first result goes through.
+	stop := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				shsq.BroadcastHealth(42, stats)
 			}
-			break
 		}
-		timeout -= 10 * time.Millisecond
-		if timeout < 0 {
-			t.Fatalf("timeout waiting for streaming RPC to be established")
-		}
-		time.Sleep(10 * time.Millisecond)
+	}()
+
+	// Start streaming and wait for the first result.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	result, err := thc.Get(ctx, tablet1.Tablet.Alias)
+	cancel()
+	close(stop)
+
+	if err != nil {
+		t.Fatalf("thc.Get failed: %v", err)
+	}
+	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
+		t.Errorf("RealtimeStats = %#v, want %#v", got, want)
 	}
 }
