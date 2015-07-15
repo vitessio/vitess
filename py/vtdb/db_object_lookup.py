@@ -6,7 +6,6 @@ extends the functionality for getting, creating, updating and deleting
 the lookup relationship.
 """
 import functools
-import logging
 import struct
 
 from vtdb import db_object

@@ -17,7 +17,6 @@ management.
 
 import contextlib
 import functools
-import logging
 
 from vtdb import dbexceptions
 from vtdb import shard_constants

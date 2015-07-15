@@ -13,7 +13,6 @@
 # soon.
 #
 
-import logging
 import random
 import time
 
