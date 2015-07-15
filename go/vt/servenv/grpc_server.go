@@ -64,10 +64,5 @@ func GRPCCheckServiceMap(name string) bool {
 	}
 
 	// then check ServiceMap
-	if ServiceMap["grpc-"+name] {
-		log.Infof("Registering %v for gRPC, disable it with -grpc-%v service_map parameter", name, name)
-		return true
-	}
-	log.Infof("Not registering %v for gRPC, enable it with grpc-%v service_map parameter", name, name)
-	return false
+	return CheckServiceMap("grpc", name)
 }

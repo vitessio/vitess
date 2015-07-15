@@ -21,9 +21,18 @@ import (
 
 var (
 	// The flags used when calling RegisterDefaultSecureFlags.
+
+	// SecurePort is the port to listen on for SSL bson RPC
 	SecurePort *int
-	CertFile   *string
-	KeyFile    *string
+
+	// CertFile is the certificate to use for encrypted server
+	CertFile *string
+
+	// KeyFile is the private key to use for encrypted server
+	KeyFile *string
+
+	// CACertFile is the chain of authority certificate to use for
+	// encrypted server
 	CACertFile *string
 
 	// Flags to alter the behavior of the library.
@@ -31,8 +40,8 @@ var (
 	secureMaxBuffer = flag.Int("secure-max-buffer", 1500, "Maximum number of secure accepts allowed to accumulate")
 
 	// The rpc servers to use
-	secureRpcServer              = rpcplus.NewServer()
-	authenticatedSecureRpcServer = rpcplus.NewServer()
+	secureRPCServer              = rpcplus.NewServer()
+	authenticatedSecureRPCServer = rpcplus.NewServer()
 )
 
 // secureRegister registers the provided server to be served on the
@@ -41,21 +50,21 @@ func secureRegister(name string, rcvr interface{}) {
 	if SecurePort == nil || *SecurePort == 0 {
 		return
 	}
-	if ServiceMap["bsonrpc-vts-"+name] {
+	if serviceMap["bsonrpc-vts-"+name] {
 		log.Infof("Registering %v for bsonrpc over vts port, disable it with -bsonrpc-vts-%v service_map parameter", name, name)
-		secureRpcServer.Register(rcvr)
+		secureRPCServer.Register(rcvr)
 	} else {
 		log.Infof("Not registering %v for bsonrpc over vts port, enable it with bsonrpc-vts-%v service_map parameter", name, name)
 	}
-	if ServiceMap["bsonrpc-auth-vts-"+name] {
+	if serviceMap["bsonrpc-auth-vts-"+name] {
 		log.Infof("Registering %v for SASL bsonrpc over vts port, disable it with -bsonrpc-auth-vts-%v service_map parameter", name, name)
-		authenticatedSecureRpcServer.Register(rcvr)
+		authenticatedSecureRPCServer.Register(rcvr)
 	} else {
 		log.Infof("Not registering %v for SASL bsonrpc over vts port, enable it with bsonrpc-auth-vts-%v service_map parameter", name, name)
 	}
 }
 
-// ServerSecurePort obtains a listener that accepts secure connections.
+// ServeSecurePort obtains a listener that accepts secure connections.
 // If the provided port is zero, the listening is disabled.
 func ServeSecurePort(securePort int, certFile, keyFile, caCertFile string) {
 	if securePort == 0 {
@@ -99,18 +108,18 @@ func ServeSecurePort(securePort int, certFile, keyFile, caCertFile string) {
 	// rpc.HandleHTTP registers the default GOB handler at /_goRPC_
 	// and the debug RPC service at /debug/rpc (it displays a list
 	// of registered services and their methods).
-	if ServiceMap["gob-vts"] {
+	if serviceMap["gob-vts"] {
 		log.Infof("Registering GOB handler and /debug/rpc URL for vts port")
-		secureRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", false), rpcplus.DefaultDebugPath)
+		secureRPCServer.HandleHTTP(rpcwrap.GetRpcPath("gob", false), rpcplus.DefaultDebugPath)
 	}
-	if ServiceMap["gob-auth-vts"] {
+	if serviceMap["gob-auth-vts"] {
 		log.Infof("Registering GOB handler and /debug/rpcs URL for SASL vts port")
-		authenticatedSecureRpcServer.HandleHTTP(rpcwrap.GetRpcPath("gob", true), rpcplus.DefaultDebugPath+"s")
+		authenticatedSecureRPCServer.HandleHTTP(rpcwrap.GetRpcPath("gob", true), rpcplus.DefaultDebugPath+"s")
 	}
 
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, secureRpcServer, false)
-	bsonrpc.ServeCustomRPC(handler, authenticatedSecureRpcServer, true)
+	bsonrpc.ServeCustomRPC(handler, secureRPCServer, false)
+	bsonrpc.ServeCustomRPC(handler, authenticatedSecureRPCServer, true)
 	httpServer := http.Server{
 		Handler: handler,
 	}
