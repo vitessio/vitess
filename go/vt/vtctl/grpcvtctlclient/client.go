@@ -38,7 +38,7 @@ func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient
 }
 
 // ExecuteVtctlCommand is part of the VtctlClient interface
-func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc) {
+func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, vtctlclient.ErrFunc, error) {
 	query := &pb.ExecuteVtctlCommandRequest{
 		Args:          args,
 		ActionTimeout: int64(actionTimeout.Nanoseconds()),
@@ -47,7 +47,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 
 	stream, err := client.c.ExecuteVtctlCommand(ctx, query)
 	if err != nil {
-		return nil, func() error { return err }
+		return nil, nil, err
 	}
 
 	results := make(chan *logutil.LoggerEvent, 1)
@@ -67,7 +67,7 @@ func (client *gRPCVtctlClient) ExecuteVtctlCommand(ctx context.Context, args []s
 	}()
 	return results, func() error {
 		return finalError
-	}
+	}, nil
 }
 
 // Close is part of the VtctlClient interface

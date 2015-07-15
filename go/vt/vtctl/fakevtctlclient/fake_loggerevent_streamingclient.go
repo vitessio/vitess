@@ -50,10 +50,10 @@ func (f *FakeLoggerEventStreamingClient) RegisterResult(args []string, output st
 }
 
 // StreamResult returns a channel which streams back a registered result as logging events.
-func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutil.LoggerEvent, func() error) {
+func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *logutil.LoggerEvent, func() error, error) {
 	result, ok := f.results[fromSlice(args)]
 	if !ok {
-		return nil, func() error { return fmt.Errorf("No response was registered for args: %v", args) }
+		return nil, nil, fmt.Errorf("No response was registered for args: %v", args)
 	}
 
 	stream := make(chan *logutil.LoggerEvent)
@@ -71,9 +71,5 @@ func (f *FakeLoggerEventStreamingClient) StreamResult(args []string) (<-chan *lo
 		close(stream)
 	}()
 
-	if result.err != nil {
-		return stream, func() error { return result.err }
-	}
-
-	return stream, func() error { return nil }
+	return stream, func() error { return result.err }, nil
 }

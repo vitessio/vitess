@@ -29,8 +29,8 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, dialTi
 	// run the command
 	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 	defer cancel()
-	c, errFunc := client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockWaitTimeout)
-	if err = errFunc(); err != nil {
+	c, errFunc, err := client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockWaitTimeout)
+	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
 

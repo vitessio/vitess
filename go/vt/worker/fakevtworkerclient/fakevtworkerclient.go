@@ -32,7 +32,7 @@ func (f *FakeVtworkerClient) FakeVtworkerClientFactory(addr string, dialTimeout 
 }
 
 // ExecuteVtworkerCommand is part of the vtworkerclient interface.
-func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc) {
+func (f *FakeVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc, error) {
 	return f.FakeLoggerEventStreamingClient.StreamResult(args)
 }
 

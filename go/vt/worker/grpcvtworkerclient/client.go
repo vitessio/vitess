@@ -38,14 +38,14 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 }
 
 // ExecuteVtworkerCommand is part of the VtworkerClient interface.
-func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc) {
+func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, args []string) (<-chan *logutil.LoggerEvent, vtworkerclient.ErrFunc, error) {
 	query := &pb.ExecuteVtworkerCommandRequest{
 		Args: args,
 	}
 
 	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
-		return nil, func() error { return err }
+		return nil, nil, err
 	}
 
 	results := make(chan *logutil.LoggerEvent, 1)
@@ -71,7 +71,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 	}()
 	return results, func() error {
 		return finalError
-	}
+	}, nil
 }
 
 // Close is part of the VtworkerClient interface.

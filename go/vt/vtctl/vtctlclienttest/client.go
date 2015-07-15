@@ -55,7 +55,10 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna return something on the log channel
-	logs, errFunc := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err := client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell1"}, 30*time.Second, 10*time.Second)
+	if err != nil {
+		t.Fatalf("Remote error: %v", err)
+	}
 	count := 0
 	for e := range logs {
 		expected := "cell1-0000000001 test_keyspace <null> master localhost:3333 localhost:3334 [tag: \"value\"]\n"
@@ -73,7 +76,10 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna fail
-	logs, errFunc = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"ListAllTablets", "cell2"}, 30*time.Second, 10*time.Second)
+	if err != nil {
+		t.Fatalf("Remote error: %v", err)
+	}
 	if e, ok := <-logs; ok {
 		t.Errorf("Got unexpected line for logs: %v", e.String())
 	}
@@ -84,7 +90,10 @@ func TestSuite(t *testing.T, ts topo.Server, client vtctlclient.VtctlClient) {
 	}
 
 	// run a command that's gonna panic
-	logs, errFunc = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second, 10*time.Second)
+	logs, errFunc, err = client.ExecuteVtctlCommand(ctx, []string{"Panic"}, 30*time.Second, 10*time.Second)
+	if err != nil {
+		t.Fatalf("Remote error: %v", err)
+	}
 	if e, ok := <-logs; ok {
 		t.Errorf("Got unexpected line for logs: %v", e.String())
 	}

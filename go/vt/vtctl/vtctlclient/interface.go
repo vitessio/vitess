@@ -25,7 +25,7 @@ type ErrFunc func() error
 type VtctlClient interface {
 	// ExecuteVtctlCommand will execute the command remotely
 	// NOTE: ErrFunc should only be checked after the returned channel was closed to avoid races.
-	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc)
+	ExecuteVtctlCommand(ctx context.Context, args []string, actionTimeout, lockTimeout time.Duration) (<-chan *logutil.LoggerEvent, ErrFunc, error)
 
 	// Close will terminate the connection. This object won't be
 	// used after this.
