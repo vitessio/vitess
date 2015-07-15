@@ -28,8 +28,8 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, recv f
 	defer client.Close()
 
 	// run the command
-	c, errFunc := client.ExecuteVtworkerCommand(ctx, args)
-	if err = errFunc(); err != nil {
+	c, errFunc, err := client.ExecuteVtworkerCommand(ctx, args)
+	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
 
