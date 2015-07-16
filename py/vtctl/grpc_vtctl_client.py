@@ -10,8 +10,8 @@ import datetime
 from urlparse import urlparse
 
 import vtctl_client
-import vtctldata_pb2
-import vtctlservice_pb2
+from vtproto import vtctldata_pb2
+from vtproto import vtctlservice_pb2
 
 class GRPCVtctlClient(vtctl_client.VctlClient):
   """GoRpcVtctlClient is the gRPC implementation of VctlClient.
