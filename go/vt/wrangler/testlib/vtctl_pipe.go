@@ -73,7 +73,10 @@ func (vp *VtctlPipe) Run(args []string) error {
 	lockTimeout := 10 * time.Second
 	ctx := context.Background()
 
-	c, errFunc := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	if err != nil {
+		return err
+	}
 	for le := range c {
 		vp.t.Logf(le.String())
 	}

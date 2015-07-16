@@ -14,6 +14,10 @@ import topo_flavor.etcd
 
 from topo_flavor.server import topo_server
 
+# import the protocol flavors we want to use
+import gorpc_protocols_flavor
+import grpc_protocols_flavor
+
 # sanity check the environment
 if os.environ['USER'] == 'root':
   sys.stderr.write('ERROR: Vitess and its dependencies (mysqld and memcached) should not be run as root.\n')

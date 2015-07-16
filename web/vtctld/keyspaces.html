@@ -15,11 +15,13 @@
 	  <h2>{{keyspace.name}}</h2>
 		<span flex></span>
 		<md-menu>
-		<md-button class="md-icon-button" aria-label="Actions" ng-click="$mdOpenMenu()" md-menu-origin>
+		<md-button class="md-icon-button" aria-label="Keyspace actions" ng-click="$mdOpenMenu()" md-menu-origin>
 			<md-icon md-svg-icon="more_vert"></md-icon>
 		</md-button>
 		<md-menu-content>
-		<md-menu-item ng-repeat="action in keyspaceActions"><md-button>{{action}}</md-button></md-menu-item>
+		<md-menu-item ng-repeat="action in keyspaceActions">
+      <md-button ng-click="actions.applyKeyspace($event,action,keyspace.name)">{{actions.label(action)}}</md-button>
+    </md-menu-item>
 		</md-menu-content>
 		</md-menu>
 	</div>
@@ -27,7 +29,7 @@
 
 	<md-card-content>
 
-	<h3>Shards</h3>
+	<h3 ng-bind="keyspace.shards.length == 0 ? 'No shards found.' : 'Shards'"></h3>
 
   <md-grid-list md-cols-sm="2" md-cols-md="4" md-cols-gt-md="8"
       md-row-height="2:1" md-gutter="1em">

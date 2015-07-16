@@ -1,7 +1,22 @@
 <md-content class="md-padding">
 
 <md-card>
-<md-toolbar><div class="md-toolbar-tools"><h2>Shard Record</h2></div></md-toolbar>
+<md-toolbar>
+<div class="md-toolbar-tools">
+  <h2>Shard Record</h2>
+  <span flex></span>
+    <md-menu>
+    <md-button class="md-icon-button" aria-label="Shard actions" ng-click="$mdOpenMenu()" md-menu-origin>
+      <md-icon md-svg-icon="more_vert"></md-icon>
+    </md-button>
+    <md-menu-content>
+    <md-menu-item ng-repeat="action in shardActions">
+      <md-button ng-click="actions.applyShard($event, action, keyspace.name, shard.name)">{{actions.label(action)}}</md-button>
+    </md-menu-item>
+    </md-menu-content>
+    </md-menu>
+</div>
+</md-toolbar>
 <md-card-content>
 
 <div layout="column">
@@ -21,13 +36,6 @@
 				ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></a>
 		</div>
 	</div>
-
-	<md-divider></md-divider>
-
-	<div layout="row" layout-align="start center">
-		<h3 flex="50">Key Range</h3>
-		<div flex ng-bind="shard.KeyRange.Start+'-'+shard.KeyRange.End"></div>
-	</div>
 </div>
 
 </md-card-content>
@@ -36,33 +44,60 @@
 <md-card>
 <md-toolbar><div class="md-toolbar-tools"><h2>Tablets (by cell)</h2></div></md-toolbar>
 
+<md-content ng-if="cells.length == 0" class="md-padding">
+  <h3>No tablets found.</h3>
+</md-content>
+
 <md-tabs md-border-bottom md-dynamic-height md-center-tabs="false" ng-if="cells.length">
-<md-tab ng-repeat="cell in cells" label="{{cell.name}}">
+<md-tab ng-repeat="cell in cells" label="{{cell.name}}" md-on-select="setSelectedCell(cell)">
 <md-content class="md-padding" layout="row" layout-wrap>
 
 <md-card ng-repeat="tablet in cell.tablets" flex-sm="95" flex-md="95" flex-gt-md="45">
 
 	 <md-toolbar ng-class="tabletAccent(tablet)">
 	 <div class="md-toolbar-tools">
-		<h3>{{tablet.Alias.Cell}}-{{tablet.Alias.Uid}} [{{tablet.Type}}]</h3>
+		<h3>{{tablet.Alias.Cell}}-{{tablet.Alias.Uid}} [{{tabletType(tablet)}}]</h3>
 		<span flex></span>
 		<md-menu>
-		<md-button class="md-icon-button" aria-label="Actions" ng-click="$mdOpenMenu()" md-menu-origin>
+		<md-button class="md-icon-button" aria-label="Tablet actions" ng-click="$mdOpenMenu()" md-menu-origin>
 			<md-icon md-svg-icon="more_vert"></md-icon>
 		</md-button>
 		<md-menu-content>
-		<md-menu-item ng-repeat="action in tabletActions"><md-button>{{action}}</md-button></md-menu-item>
+		<md-menu-item ng-repeat="action in tabletActions">
+      <md-button ng-click="actions.applyTablet($event, action, tablet.Alias)">{{actions.label(action)}}</md-button>
+    </md-menu-item>
 		</md-menu-content>
 		</md-menu>
 	</div>
 	</md-toolbar>
 
-	<md-card-content>
+	<md-card-content layout="column">
 
-	<div><strong>Host:</strong>
-		<a href="http://{{tablet.Hostname}}:{{tablet.Portmap.vt}}">{{tablet.Hostname}}:{{tablet.Portmap.vt}}</a>
+	<div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
+  <strong>Host</strong>
+	<a href="http://{{tablet.Hostname}}:{{tablet.Portmap.vt}}">{{tablet.Hostname}}:{{tablet.Portmap.vt}}</a>
 	</div>
-	<div><strong>IP Address:</strong> {{tablet.IPAddr}}</div>
+
+  <md-divider></md-divider>
+
+  <div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
+  <strong>IP Address</strong>
+  <a href="http://{{tablet.IPAddr}}:{{tablet.Portmap.vt}}">{{tablet.IPAddr}}:{{tablet.Portmap.vt}}</a>
+  </div>
+
+  <md-divider></md-divider>
+
+	<div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
+  <strong>Seconds Behind Master</strong>
+  <span ng-bind="tablet.streamHealth.realtime_stats.second_behind_master || 0"></span>
+  </div>
+
+  <md-divider></md-divider>
+
+  <div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
+  <strong>Health Error</strong>
+  <span ng-bind="tablet.streamHealth.realtime_stats.health_error || 'None'"></span>
+  </div>
 
 	</md-card-content>
 

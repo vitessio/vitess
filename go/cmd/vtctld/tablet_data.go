@@ -1,8 +1,7 @@
 package main
 
 import (
-	"encoding/json"
-	"reflect"
+	"flag"
 	"sync"
 	"time"
 
@@ -10,117 +9,153 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
+	log "github.com/golang/glog"
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // This file maintains a tablet health cache. It establishes streaming
 // connections with tablets, and updates its internal state with the
-// result. The first time something is requested, the returned data is
-// empty.  We assume the frontend will ask again a few seconds later
-// and get the up-to-date data then.
+// result.
 
-// TabletHealth is the structure we export via json.
-// Private fields are not exported.
-type TabletHealth struct {
-	// mu protects the entire data structure
+var (
+	tabletHealthKeepAlive = flag.Duration("tablet_health_keep_alive", 5*time.Minute, "close streaming tablet health connection if there are no requests for this long")
+)
+
+type tabletHealth struct {
 	mu sync.Mutex
 
-	Version              int
-	TabletAlias          topo.TabletAlias
-	StreamHealthResponse *pb.StreamHealthResponse
-	result               []byte
-	lastError            error
+	// result stores the most recent response.
+	result *pb.StreamHealthResponse
+	// accessed stores the time of the most recent access.
+	accessed time.Time
+
+	// err stores the result of the stream attempt.
+	err error
+	// done is closed when the stream attempt ends.
+	done chan struct{}
+	// ready is closed when there is at least one result to read.
+	ready chan struct{}
 }
 
-func newTabletHealth(thc *tabletHealthCache, tabletAlias topo.TabletAlias) (*TabletHealth, error) {
-	th := &TabletHealth{
-		Version:     1,
-		TabletAlias: tabletAlias,
+func newTabletHealth() *tabletHealth {
+	return &tabletHealth{
+		accessed: time.Now(),
+		ready:    make(chan struct{}),
+		done:     make(chan struct{}),
 	}
-	var err error
-	th.result, err = json.MarshalIndent(th, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	go th.update(thc, tabletAlias)
-	return th, nil
 }
 
-func (th *TabletHealth) update(thc *tabletHealthCache, tabletAlias topo.TabletAlias) {
-	defer thc.delete(tabletAlias)
-
-	ctx := context.Background()
-	ti, err := thc.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return
+func (th *tabletHealth) lastResult(ctx context.Context) (*pb.StreamHealthResponse, error) {
+	// Wait until at least the first result comes in, or the stream ends.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-th.ready:
+	case <-th.done:
 	}
 
+	th.mu.Lock()
+	defer th.mu.Unlock()
+
+	th.accessed = time.Now()
+	return th.result, th.err
+}
+
+func (th *tabletHealth) lastAccessed() time.Time {
+	th.mu.Lock()
+	defer th.mu.Unlock()
+
+	return th.accessed
+}
+
+func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias) (err error) {
+	defer func() {
+		th.mu.Lock()
+		th.err = err
+		th.mu.Unlock()
+		close(th.done)
+	}()
+
+	ti, err := ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
 	ep, err := ti.EndPoint()
 	if err != nil {
-		return
+		return err
 	}
 
 	// pass in empty keyspace and shard to not ask for sessionId
 	conn, err := tabletconn.GetDialer()(ctx, *ep, "", "", 30*time.Second)
 	if err != nil {
-		return
+		return err
 	}
+	defer conn.Close()
 
 	stream, errFunc, err := conn.StreamHealth(ctx)
 	if err != nil {
-		return
+		return err
 	}
 
-	for shr := range stream {
-		th.mu.Lock()
-		if !reflect.DeepEqual(shr, th.StreamHealthResponse) {
-			th.StreamHealthResponse = shr
-			th.Version++
-			th.result, th.lastError = json.MarshalIndent(th, "", "  ")
+	first := true
+	for time.Since(th.lastAccessed()) < *tabletHealthKeepAlive {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case result, ok := <-stream:
+			if !ok {
+				return errFunc()
+			}
+
+			th.mu.Lock()
+			th.result = result
+			th.mu.Unlock()
+
+			if first {
+				// We got the first result, so we're ready to be accessed.
+				close(th.ready)
+				first = false
+			}
 		}
-		th.mu.Unlock()
 	}
 
-	// we call errFunc as some implementations may use this to
-	// free resources.
-	errFunc()
-}
-
-func (th *TabletHealth) get() ([]byte, error) {
-	th.mu.Lock()
-	defer th.mu.Unlock()
-	return th.result, th.lastError
+	return nil
 }
 
 type tabletHealthCache struct {
 	ts topo.Server
 
 	mu        sync.Mutex
-	tabletMap map[topo.TabletAlias]*TabletHealth
+	tabletMap map[topo.TabletAlias]*tabletHealth
 }
 
 func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
-		tabletMap: make(map[topo.TabletAlias]*TabletHealth),
+		tabletMap: make(map[topo.TabletAlias]*tabletHealth),
 	}
 }
 
-func (thc *tabletHealthCache) get(tabletAlias topo.TabletAlias) ([]byte, error) {
+func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias topo.TabletAlias) (*pb.StreamHealthResponse, error) {
 	thc.mu.Lock()
+
 	th, ok := thc.tabletMap[tabletAlias]
 	if !ok {
-		var err error
-		th, err = newTabletHealth(thc, tabletAlias)
-		if err != nil {
-			thc.mu.Unlock()
-			return nil, err
-		}
+		// No existing stream, so start one.
+		th = newTabletHealth()
 		thc.tabletMap[tabletAlias] = th
+
+		go func() {
+			log.Infof("starting health stream for tablet %v", tabletAlias)
+			err := th.stream(context.Background(), thc.ts, tabletAlias)
+			log.Infof("tablet %v health stream ended, error: %v", tabletAlias, err)
+			thc.delete(tabletAlias)
+		}()
 	}
+
 	thc.mu.Unlock()
 
-	return th.get()
+	return th.lastResult(ctx)
 }
 
 func (thc *tabletHealthCache) delete(tabletAlias topo.TabletAlias) {
