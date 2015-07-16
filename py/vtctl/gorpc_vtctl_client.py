@@ -19,7 +19,7 @@ class GoRpcVtctlClient(vtctl_client.VctlClient):
     self.connected = False
 
   def __str__(self):
-    return '<VtctlClient %s>' % self.addr
+    return '<GoRpcVtctlClient %s>' % self.addr
 
   def dial(self):
     if self.connected:

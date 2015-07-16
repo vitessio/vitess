@@ -21,14 +21,14 @@ def register_conn_class(protocol, c):
 
 
 def connect(protocol, *pargs, **kargs):
-  """connect will return a dialed VctlClient connection to a vtctl server.
+  """connect will return a dialed VtctlClient connection to a vtctl server.
 
   Args:
     protocol: the registered protocol to use.
     arsg: passed to the registered protocol __init__ method.
 
   Returns:
-    A dialed VctlClient.
+    A dialed VtctlClient.
   """
   if not protocol in vtctl_client_conn_classes:
     raise Exception('Unknown vtclient protocol', protocol)
@@ -97,7 +97,7 @@ class VctlClient(object):
       lock_timeout: timeout for locking topology (float, in seconds).
 
     Returns:
-      This is a generator method that yeilds Event objects.
+      This is a generator method that yields Event objects.
     """
     pass
 
