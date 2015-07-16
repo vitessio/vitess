@@ -436,7 +436,7 @@ class TestTabletManager(unittest.TestCase):
                      "unexpected master type: %s" % ti['Type'])
 
     # stop replication, make sure we go unhealthy.
-    tablet_62044.mquery('', 'stop slave')
+    utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
     self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "spare")
     self.check_healthz(tablet_62044, False)
 
@@ -461,7 +461,7 @@ class TestTabletManager(unittest.TestCase):
     self.assertIn('replication_reporter: Replication is not running', health['realtime_stats']['health_error'])
 
     # then restart replication, and write data, make sure we go back to healthy
-    tablet_62044.mquery('', 'start slave')
+    utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
     self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "replica")
 
     # make sure status web page is healthy
