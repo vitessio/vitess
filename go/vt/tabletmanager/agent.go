@@ -200,11 +200,11 @@ func NewActionAgent(
 			}
 
 			// after the restore is done, start health check
-			agent.initHeathCheck()
+			agent.initHealthCheck()
 		}()
 	} else {
 		// synchronously start health check if needed
-		agent.initHeathCheck()
+		agent.initHealthCheck()
 	}
 
 	return agent, nil

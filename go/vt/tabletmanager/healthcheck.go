@@ -96,7 +96,7 @@ func (agent *ActionAgent) IsRunningHealthCheck() bool {
 	return *targetTabletType != ""
 }
 
-func (agent *ActionAgent) initHeathCheck() {
+func (agent *ActionAgent) initHealthCheck() {
 	if !agent.IsRunningHealthCheck() {
 		log.Infof("No target_tablet_type specified, disabling any health check")
 		return
