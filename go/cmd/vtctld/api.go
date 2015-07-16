@@ -16,7 +16,7 @@ import (
 
 const apiPrefix = "/api/"
 
-func handleGet(collection string, getFunc func(*http.Request) (interface{}, error)) {
+func handleCollection(collection string, getFunc func(*http.Request) (interface{}, error)) {
 	http.HandleFunc(apiPrefix+collection+"/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the requested object.
 		obj, err := getFunc(r)
@@ -60,46 +60,79 @@ func getItemPath(url string) string {
 	return parts[1]
 }
 
-func initAPI(ctx context.Context, ts topo.Server) {
+func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
 
-	// Get Cells
-	handleGet("cells", func(r *http.Request) (interface{}, error) {
+	// Cells
+	handleCollection("cells", func(r *http.Request) (interface{}, error) {
 		if getItemPath(r.URL.Path) != "" {
 			return nil, errors.New("cells can only be listed, not retrieved")
 		}
 		return ts.GetKnownCells(ctx)
 	})
 
-	// Get Keyspaces
-	handleGet("keyspaces", func(r *http.Request) (interface{}, error) {
+	// Keyspaces
+	handleCollection("keyspaces", func(r *http.Request) (interface{}, error) {
 		keyspace := getItemPath(r.URL.Path)
+
+		// List all keyspaces.
 		if keyspace == "" {
 			return ts.GetKeyspaces(ctx)
 		}
+
+		// Perform an action on a keyspace.
+		if r.Method == "POST" {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			action := r.FormValue("action")
+			if action == "" {
+				return nil, errors.New("must specify action")
+			}
+			return actions.ApplyKeyspaceAction(ctx, action, keyspace, r), nil
+		}
+
+		// Get the keyspace record.
 		return ts.GetKeyspace(ctx, keyspace)
 	})
 
-	// Get Shards
-	handleGet("shards", func(r *http.Request) (interface{}, error) {
+	// Shards
+	handleCollection("shards", func(r *http.Request) (interface{}, error) {
 		shardPath := getItemPath(r.URL.Path)
 		if !strings.Contains(shardPath, "/") {
 			return nil, fmt.Errorf("invalid shard path: %q", shardPath)
 		}
 		parts := strings.SplitN(shardPath, "/", 2)
-		if parts[1] == "" {
-			// It's just a keyspace. List the shards.
-			return ts.GetShardNames(ctx, parts[0])
+		keyspace := parts[0]
+		shard := parts[1]
+
+		// List the shards in a keyspace.
+		if shard == "" {
+			return ts.GetShardNames(ctx, keyspace)
 		}
-		// It's a keyspace/shard reference.
-		return ts.GetShard(ctx, parts[0], parts[1])
+
+		// Perform an action on a shard.
+		if r.Method == "POST" {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			action := r.FormValue("action")
+			if action == "" {
+				return nil, errors.New("must specify action")
+			}
+			return actions.ApplyShardAction(ctx, action, keyspace, shard, r), nil
+		}
+
+		// Get the shard record.
+		return ts.GetShard(ctx, keyspace, shard)
 	})
 
-	// Get Tablets
-	handleGet("tablets", func(r *http.Request) (interface{}, error) {
+	// Tablets
+	handleCollection("tablets", func(r *http.Request) (interface{}, error) {
 		tabletPath := getItemPath(r.URL.Path)
+
+		// List tablets based on query params.
 		if tabletPath == "" {
-			// List tablets based on query params.
 			if err := r.ParseForm(); err != nil {
 				return nil, err
 			}
@@ -125,7 +158,7 @@ func initAPI(ctx context.Context, ts topo.Server) {
 			return ts.GetTabletsByCell(ctx, cell)
 		}
 
-		// Tablet Health
+		// Get tablet health.
 		if parts := strings.Split(tabletPath, "/"); len(parts) == 2 && parts[1] == "health" {
 			tabletAlias, err := topo.ParseTabletAliasString(parts[0])
 			if err != nil {
@@ -134,16 +167,29 @@ func initAPI(ctx context.Context, ts topo.Server) {
 			return tabletHealthCache.Get(ctx, tabletAlias)
 		}
 
-		// Get a specific tablet.
 		tabletAlias, err := topo.ParseTabletAliasString(tabletPath)
 		if err != nil {
 			return nil, err
 		}
+
+		// Perform an action on a tablet.
+		if r.Method == "POST" {
+			if err := r.ParseForm(); err != nil {
+				return nil, err
+			}
+			action := r.FormValue("action")
+			if action == "" {
+				return nil, errors.New("must specify action")
+			}
+			return actions.ApplyTabletAction(ctx, action, tabletAlias, r), nil
+		}
+
+		// Get the tablet record.
 		return ts.GetTablet(ctx, tabletAlias)
 	})
 
-	// Get EndPoints
-	handleGet("endpoints", func(r *http.Request) (interface{}, error) {
+	// EndPoints
+	handleCollection("endpoints", func(r *http.Request) (interface{}, error) {
 		// We expect cell/keyspace/shard/tabletType.
 		epPath := getItemPath(r.URL.Path)
 		parts := strings.Split(epPath, "/")

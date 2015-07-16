@@ -89,13 +89,15 @@ app.controller('AppCtrl', function($scope, $mdSidenav, $route, $location,
   };
 });
 
-app.controller('KeyspacesCtrl', function($scope, $mdDialog, keyspaces, shards) {
+app.controller('KeyspacesCtrl', function($scope, keyspaces, shards, actions) {
   $scope.keyspaceActions = [
-    'Validate Keyspace',
-    'Validate Permissions',
-    'Validate Schema',
-    'Validate Version'
+    {name: 'ValidateKeyspace', title: 'Validate Keyspace'},
+    {name: 'ValidateSchemaKeyspace', title: 'Validate Schema'},
+    {name: 'ValidateVersionKeyspace', title: 'Validate Version'},
+    {name: 'ValidatePermissionsKeyspace', title: 'Validate Permissions'},
   ];
+
+  $scope.actions = actions;
 
   $scope.refreshData = function() {
     // Get list of keyspace names.
@@ -114,15 +116,30 @@ app.controller('KeyspacesCtrl', function($scope, $mdDialog, keyspaces, shards) {
 });
 
 app.controller('ShardCtrl', function($scope, $routeParams, $timeout,
-                 shards, tablets, tabletinfo) {
+                 shards, tablets, tabletinfo, actions) {
   var keyspace = $routeParams.keyspace;
   var shard = $routeParams.shard;
 
   $scope.keyspace = {name: keyspace};
   $scope.shard = {name: shard};
+  $scope.actions = actions;
+
+  $scope.shardActions = [
+    {name: 'ValidateShard', title: 'Validate Shard'},
+    {name: 'ValidateSchemaShard', title: 'Validate Schema'},
+    {name: 'ValidateVersionShard', title: 'Validate Version'},
+    {name: 'ValidatePermissionsShard', title: 'Validate Permissions'},
+  ];
 
   $scope.tabletActions = [
-    'Ping', 'Scrap', 'Delete', 'Reload Schema'
+    {name: 'Ping', title: 'Ping'},
+
+    {name: 'RefreshState', title: 'Refresh State', confirm: 'This will tell the tablet to re-read its topology record and adjust its state accordingly.'},
+    {name: 'ReloadSchema', title: 'Reload Schema', confirm: 'This will tell the tablet to refresh its schema cache by querying mysqld.'},
+
+    {name: 'ScrapTablet', title: 'Scrap', confirm: 'This will tell the tablet to remove itself from serving.'},
+    {name: 'ScrapTabletForce', title: 'Scrap (force)', confirm: 'This will externally remove the tablet from serving, without telling the tablet.'},
+    {name: 'DeleteTablet', title: 'Delete', confirm: 'This will delete the tablet record from topology.'},
   ];
 
   $scope.tabletType = function(tablet) {
@@ -240,20 +257,101 @@ app.controller('TopoCtrl', function($scope, $routeParams) {
   $scope.path = $routeParams.path;
 });
 
+app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
+  var svc = {};
+
+  function actionDialogController($scope, $mdDialog, action, result) {
+    $scope.hide = function() { $mdDialog.hide(); };
+    $scope.action = action;
+    $scope.result = result;
+  }
+
+  function showResult(ev, action, result) {
+    $mdDialog.show({
+      controller: actionDialogController,
+      templateUrl: 'action-dialog.html',
+      parent: angular.element(document.body),
+      targetEvent: ev,
+      locals: {
+        action: action,
+        result: result
+      }
+    });
+  }
+
+  function confirm(ev, action, doIt) {
+    if (action.confirm) {
+      var dialog = $mdDialog.confirm()
+        .parent(angular.element(document.body))
+        .title('Confirm ' + action.title)
+        .content(action.confirm)
+        .ariaLabel('Confirm action')
+        .ok('OK')
+        .cancel('Cancel')
+        .targetEvent(ev);
+      $mdDialog.show(dialog).then(doIt);
+    } else {
+      doIt();
+    }
+  }
+
+  svc.applyKeyspace = function(ev, action, keyspace) {
+    confirm(ev, action, function() {
+      var result = keyspaces.action({
+        keyspace: keyspace, action: action.name
+      }, '');
+      showResult(ev, action, result);
+    });
+  };
+
+  svc.applyShard = function(ev, action, keyspace, shard) {
+    confirm(ev, action, function() {
+      var result = shards.action({
+        keyspace: keyspace,
+        shard: shard,
+        action: action.name
+        }, ''); 
+      showResult(ev, action, result);
+    });
+  };
+
+  svc.applyTablet = function(ev, action, tabletAlias) {
+    confirm(ev, action, function() {
+      var result = tablets.action({
+        tablet: tabletAlias.Cell+'-'+tabletAlias.Uid,
+        action: action.name
+        }, '');
+      showResult(ev, action, result);
+    });
+  };
+
+  svc.label = function(action) {
+    return action.confirm ? action.title + '...' : action.title;
+  };
+
+  return svc;
+});
+
 app.factory('cells', function($resource) {
   return $resource('/api/cells/');
 });
 
 app.factory('keyspaces', function($resource) {
-  return $resource('/api/keyspaces/:keyspace');
+  return $resource('/api/keyspaces/:keyspace', {}, {
+      'action': {method: 'POST'}
+  });
 });
 
 app.factory('shards', function($resource) {
-  return $resource('/api/shards/:keyspace/:shard');
+  return $resource('/api/shards/:keyspace/:shard', {}, {
+      'action': {method: 'POST'}
+  });
 });
 
 app.factory('tablets', function($resource) {
-  return $resource('/api/tablets/:tablet');
+  return $resource('/api/tablets/:tablet', {}, {
+      'action': {method: 'POST'}
+  });
 });
 
 app.factory('tabletinfo', function($resource) {

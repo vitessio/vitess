@@ -126,6 +126,15 @@ func main() {
 			return "", wr.TabletManagerClient().Ping(ctx, ti)
 		})
 
+	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			return "", wr.TabletManagerClient().RefreshState(ctx, ti)
+		})
+
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
@@ -310,7 +319,7 @@ func main() {
 	}
 
 	// Serve the REST API for the vtctld web app.
-	initAPI(context.Background(), ts)
+	initAPI(context.Background(), ts, actionRepo)
 
 	// vschema viewer
 	http.HandleFunc("/vschema", func(w http.ResponseWriter, r *http.Request) {
@@ -320,7 +329,7 @@ func main() {
 		}
 		schemafier, ok := ts.(topo.Schemafier)
 		if !ok {
-			httpErrorf(w, r, "%s", fmt.Errorf("%T doesn's support schemafier API", ts))
+			httpErrorf(w, r, "%s", fmt.Errorf("%T doesn't support schemafier API", ts))
 		}
 		var data struct {
 			Error         error
