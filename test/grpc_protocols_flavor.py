@@ -9,6 +9,9 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def binlog_player_protocol(self):
     return 'grpc'
 
+  def binlog_player_python_protocol(self):
+    return 'gorpc'
+
   def vtctl_client_protocol(self):
     return 'grpc'
 

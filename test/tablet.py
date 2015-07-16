@@ -94,6 +94,17 @@ class Tablet(object):
     self.zk_tablet_path = (
         '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid))
 
+  def update_stream_python_endpoint(self):
+    protocol = protocols_flavor().binlog_player_python_protocol()
+    port = self.port
+    if protocol == "gorpc":
+      from vtdb import gorpc_update_stream
+    elif protocol == "grpc":
+      # import the grpc update stream client implementation, change the port
+      from vtdb import grpc_update_stream
+      rpc_port = self.grpc_port
+    return (protocol, 'localhost:%u' % port)
+
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)

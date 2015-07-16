@@ -18,7 +18,7 @@ import utils
 from mysql_flavor import mysql_flavor
 
 from vtdb import keyrange_constants
-from vtdb import update_stream_service
+from vtdb import update_stream
 
 src_master = tablet.Tablet()
 src_replica = tablet.Tablet()
@@ -146,8 +146,8 @@ def tearDownModule():
 
 
 def _get_update_stream(tblt):
-  return update_stream_service.UpdateStreamConnection('localhost:%u' %
-                                                      tblt.port, 30)
+  protocol, endpoint = tblt.update_stream_python_endpoint()
+  return update_stream.connect(protocol, endpoint, 30)
 
 
 class TestBinlog(unittest.TestCase):
@@ -169,11 +169,9 @@ class TestBinlog(unittest.TestCase):
     # Wait for it to replicate.
     stream = _get_update_stream(dst_replica)
     stream.dial()
-    data = stream.stream_start(start_position)
-    while data:
-      if data['Category'] == 'POS':
+    for stream_event in stream.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         break
-      data = stream.stream_next()
     stream.close()
 
     # Check the value.
@@ -203,15 +201,13 @@ class TestBinlog(unittest.TestCase):
     # dst_replica, which now has binlog_checksum enabled.
     stream = _get_update_stream(dst_replica)
     stream.dial()
-    data = stream.stream_start(start_position)
     found = False
-    while data:
-      if data['Category'] == 'POS':
+    for stream_event in stream.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         break
-      if data['Sql'] == sql:
+      if stream_event.sql == sql:
         found = True
         break
-      data = stream.stream_next()
     stream.close()
     self.assertEqual(found, True, 'expected query not found in update stream')
 
@@ -234,15 +230,13 @@ class TestBinlog(unittest.TestCase):
     # dst_replica, which now has binlog_checksum disabled.
     stream = _get_update_stream(dst_replica)
     stream.dial()
-    data = stream.stream_start(start_position)
     found = False
-    while data:
-      if data['Category'] == 'POS':
+    for stream_event in stream.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         break
-      if data['Sql'] == sql:
+      if stream_event.sql == sql:
         found = True
         break
-      data = stream.stream_next()
     stream.close()
     self.assertEqual(found, True, 'expected query not found in update stream')
 
