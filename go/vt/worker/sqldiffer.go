@@ -140,7 +140,7 @@ func (worker *SQLDiffWorker) run(ctx context.Context) error {
 // findTargets phase:
 // - find one rdonly in superset
 // - find one rdonly in subset
-// - mark them all as 'checker' pointing back to us
+// - mark them all as 'worker' pointing back to us
 func (worker *SQLDiffWorker) findTargets(ctx context.Context) error {
 	worker.SetState(WorkerStateFindTargets)
 
@@ -225,7 +225,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 }
 
 // diff phase: will create a list of messages regarding the diff.
-// - get the schema on all checkers
+// - get the schema on all tablets
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 

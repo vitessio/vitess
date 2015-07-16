@@ -236,7 +236,7 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 
 // findTargets phase:
 // - find one rdonly in the source shard
-// - mark it as 'checker' pointing back to us
+// - mark it as 'worker' pointing back to us
 // - get the aliases of all the targets
 func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	vscw.setState(WorkerStateFindTargets)
@@ -245,7 +245,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	var err error
 	vscw.sourceAlias, err = FindWorkerTablet(ctx, vscw.wr, vscw.cleaner, vscw.cell, vscw.sourceKeyspace, "0")
 	if err != nil {
-		return fmt.Errorf("cannot find checker for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
+		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
 	vscw.wr.Logger().Infof("Using tablet %v as the source", vscw.sourceAlias)
 
