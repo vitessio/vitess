@@ -14,8 +14,20 @@ type ACL interface {
 type Factory interface {
 	// New creates a new ACL instance.
 	New(entries []string) (ACL, error)
-	// All returns an ACL instance that contains all users.
-	All() ACL
-	// AllString returns a string representation of all users.
-	AllString() string
+}
+
+// DenyAllACL implements ACL interface and alway deny access request.
+type DenyAllACL struct{}
+
+// IsMember implements ACL.IsMember and always return fasle.
+func (acl DenyAllACL) IsMember(principal string) bool {
+	return false
+}
+
+// AcceptAllACL implements ACL interface and alway accept access request.
+type AcceptAllACL struct{}
+
+// IsMember implements ACL.IsMember and always return true.
+func (acl AcceptAllACL) IsMember(principal string) bool {
+	return true
 }

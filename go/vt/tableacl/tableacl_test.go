@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/testfiles"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 )
@@ -20,15 +21,6 @@ type fakeAclFactory struct{}
 
 func (factory *fakeAclFactory) New(entries []string) (acl.ACL, error) {
 	return nil, fmt.Errorf("unable to create a new ACL")
-}
-
-func (factory *fakeAclFactory) All() acl.ACL {
-	return &fakeACL{}
-}
-
-// AllString returns a string representation of all users.
-func (factory *fakeAclFactory) AllString() string {
-	return ""
 }
 
 type fakeACL struct{}
@@ -48,65 +40,97 @@ func TestInitWithInvalidFilePath(t *testing.T) {
 	Init("/invalid_file_path")
 }
 
-func TestInitWithInvalidConfigFile(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Fatalf("init should fail for an invalid config file")
-		}
-	}()
-	Init(testfiles.Locate("tableacl/invalid_tableacl_config.json"))
-}
-
 func TestInitWithValidConfig(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
 	Init(testfiles.Locate("tableacl/test_table_tableacl_config.json"))
 }
 
-func TestInitFromBytes(t *testing.T) {
-	aclFactory := &simpleacl.Factory{}
-	setUpTableACL(aclFactory)
-	acl := Authorized("test_table", READER)
-	if acl != nil {
-		t.Fatalf("tableacl has not been initialized, should get nil ACL")
+func TestInitFromProto(t *testing.T) {
+	setUpTableACL(&simpleacl.Factory{})
+	readerACL := Authorized("my_test_table", READER)
+	if !reflect.DeepEqual(readerACL, acl.AcceptAllACL{}) {
+		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, acl.AcceptAllACL{})
 	}
-	err := InitFromBytes([]byte(`{"test_table":{"Reader": "vt"}}`))
-	if err != nil {
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"vt"},
+		}},
+	}
+	if err := InitFromProto(config); err != nil {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
 
-	acl = Authorized("unknown_table", READER)
-	if !reflect.DeepEqual(aclFactory.All(), acl) {
-		t.Fatalf("there is no config for unknown_table, should grand all permission")
+	readerACL = Authorized("unknown_table", READER)
+	if !reflect.DeepEqual(acl.AcceptAllACL{}, readerACL) {
+		t.Fatalf("there is no config for unknown_table, should grand all permissions")
 	}
 
-	acl = Authorized("test_table", READER)
-	if !acl.IsMember("vt") {
+	readerACL = Authorized("test_table", READER)
+	if !readerACL.IsMember("vt") {
 		t.Fatalf("user: vt should have reader permission to table: test_table")
 	}
 }
 
-func TestInvalidTableRegex(t *testing.T) {
+func TestTableACLAuthorize(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
-	err := InitFromBytes([]byte(`{"table(":{"Reader": "vt", "WRITER":"vt"}}`))
-	if err == nil {
-		t.Fatalf("tableacl init should fail because config file has an invalid table regex")
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{
+			{
+				Name:                 "group01",
+				TableNamesOrPrefixes: []string{"test_music"},
+				Readers:              []string{"u1", "u2"},
+				Writers:              []string{"u1", "u3"},
+				Admins:               []string{"u1"},
+			},
+			{
+				Name:                 "group02",
+				TableNamesOrPrefixes: []string{"test_music", "test_video"},
+				Readers:              []string{"u1", "u2"},
+				Writers:              []string{"u3"},
+				Admins:               []string{"u4"},
+			},
+			{
+				Name:                 "group03",
+				TableNamesOrPrefixes: []string{"test_other%"},
+				Readers:              []string{"u2"},
+				Writers:              []string{"u2", "u3"},
+				Admins:               []string{"u3"},
+			},
+			{
+				Name:                 "group04",
+				TableNamesOrPrefixes: []string{"test_data%"},
+				Readers:              []string{"u1", "u2"},
+				Writers:              []string{"u1", "u3"},
+				Admins:               []string{"u1"},
+			},
+		},
 	}
-}
+	if err := InitFromProto(config); err != nil {
+		t.Fatalf("InitFromProto(<data>) = %v, want: nil", err)
+	}
 
-func TestInvalidRole(t *testing.T) {
-	setUpTableACL(&simpleacl.Factory{})
-	err := InitFromBytes([]byte(`{"test_table":{"InvalidRole": "vt", "Reader": "vt", "WRITER":"vt"}}`))
-	if err == nil {
-		t.Fatalf("tableacl init should fail because config file has an invalid role")
+	readerACL := Authorized("test_data_any", READER)
+	if !readerACL.IsMember("u1") {
+		t.Fatalf("user u1 should have reader permission to table test_data_any")
+	}
+	if !readerACL.IsMember("u2") {
+		t.Fatalf("user u2 should have reader permission to table test_data_any")
 	}
 }
 
 func TestFailedToCreateACL(t *testing.T) {
 	setUpTableACL(&fakeAclFactory{})
-	err := InitFromBytes([]byte(`{"test_table":{"Reader": "vt", "WRITER":"vt"}}`))
-	if err == nil {
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"vt"},
+			Writers:              []string{"vt"},
+		}},
+	}
+	if err := InitFromProto(config); err == nil {
 		t.Fatalf("tableacl init should fail because fake ACL returns an error")
 	}
 }
@@ -161,7 +185,6 @@ func TestGetAclFactoryWithWrongDefault(t *testing.T) {
 }
 
 func setUpTableACL(factory acl.Factory) {
-	tableAcl = nil
 	name := fmt.Sprintf("tableacl-name-%d", rand.Int63())
 	Register(name, factory)
 	SetDefaultACL(name)
