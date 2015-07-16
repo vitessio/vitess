@@ -394,6 +394,15 @@ class TestTabletManager(unittest.TestCase):
       with self.assertRaises(urllib2.HTTPError):
         tablet.get_healthz()
 
+  def wait_for_tablet_type_change(self, tablet_alias, expected_type):
+    timeout = 10
+    while True:
+      ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
+      if ti['Type'] == expected_type:
+        logging.debug("Slave tablet went to %s, good" % expected_type)
+        break
+      timeout = utils.wait_step('slave becomes ' + expected_type, timeout)
+
   def test_health_check(self):
     # one master, one replica that starts in spare
     # (for the replica, we let vttablet do the InitTablet)
@@ -418,13 +427,7 @@ class TestTabletManager(unittest.TestCase):
                      tablet_62344.tablet_alias])
 
     # make sure the 'spare' slave goes to 'replica'
-    timeout = 10
-    while True:
-      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if ti['Type'] == "replica":
-        logging.debug("Slave tablet went to replica, good")
-        break
-      timeout = utils.wait_step('slave tablet going to replica', timeout)
+    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "replica")
     self.check_healthz(tablet_62044, True)
 
     # make sure the master is still master
@@ -434,13 +437,7 @@ class TestTabletManager(unittest.TestCase):
 
     # stop replication, make sure we go unhealthy.
     tablet_62044.mquery('', 'stop slave')
-    timeout = 10
-    while True:
-      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if ti['Type'] == "spare":
-        logging.debug("Slave tablet went to spare, good")
-        break
-      timeout = utils.wait_step('slave is spare', timeout)
+    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "spare")
     self.check_healthz(tablet_62044, False)
 
     # make sure the serving graph was updated
@@ -465,13 +462,7 @@ class TestTabletManager(unittest.TestCase):
 
     # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
-    timeout = 10
-    while True:
-      ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-      if ti['Type'] == "replica":
-        logging.debug("Slave tablet went to replica, good")
-        break
-      timeout = utils.wait_step('slave is not healthy', timeout)
+    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "replica")
 
     # make sure status web page is healthy
     self.assertIn('>healthy</span></div>', tablet_62044.get_status())
