@@ -1,7 +1,22 @@
 <md-content class="md-padding">
 
 <md-card>
-<md-toolbar><div class="md-toolbar-tools"><h2>Shard Record</h2></div></md-toolbar>
+<md-toolbar>
+<div class="md-toolbar-tools">
+  <h2>Shard Record</h2>
+  <span flex></span>
+    <md-menu>
+    <md-button class="md-icon-button" aria-label="Shard actions" ng-click="$mdOpenMenu()" md-menu-origin>
+      <md-icon md-svg-icon="more_vert"></md-icon>
+    </md-button>
+    <md-menu-content>
+    <md-menu-item ng-repeat="action in shardActions">
+      <md-button ng-click="actions.applyShard($event, action, keyspace.name, shard.name)">{{actions.label(action)}}</md-button>
+    </md-menu-item>
+    </md-menu-content>
+    </md-menu>
+</div>
+</md-toolbar>
 <md-card-content>
 
 <div layout="column">
@@ -44,11 +59,13 @@
 		<h3>{{tablet.Alias.Cell}}-{{tablet.Alias.Uid}} [{{tabletType(tablet)}}]</h3>
 		<span flex></span>
 		<md-menu>
-		<md-button class="md-icon-button" aria-label="Actions" ng-click="$mdOpenMenu()" md-menu-origin>
+		<md-button class="md-icon-button" aria-label="Tablet actions" ng-click="$mdOpenMenu()" md-menu-origin>
 			<md-icon md-svg-icon="more_vert"></md-icon>
 		</md-button>
 		<md-menu-content>
-		<md-menu-item ng-repeat="action in tabletActions"><md-button>{{action}}</md-button></md-menu-item>
+		<md-menu-item ng-repeat="action in tabletActions">
+      <md-button ng-click="actions.applyTablet($event, action, tablet.Alias)">{{actions.label(action)}}</md-button>
+    </md-menu-item>
 		</md-menu-content>
 		</md-menu>
 	</div>

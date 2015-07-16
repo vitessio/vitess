@@ -404,7 +404,13 @@ class Tablet(object):
     if not self.proc:
       Tablet.tablets_running += 1
     self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
+
+    log_message = "Started vttablet: %s (%s) with pid: %s - Log files: %s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s" % \
+        (self.tablet_uid, self.tablet_alias, self.proc.pid, environment.vtlogroot, self.proc.pid)
+    # This may race with the stderr output from the process (though that's usually empty).
+    stderr_fd.write(log_message + '\n')
     stderr_fd.close()
+    logging.debug(log_message)
 
     # wait for query service to be in the right state
     if wait_for_state:
