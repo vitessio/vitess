@@ -6,7 +6,7 @@
 # It is untested and doesn't work just yet: ExecuteVtctlCommand
 # just seems to time out.
 
-import logging
+import datetime
 from urlparse import urlparse
 
 import vtctl_client
@@ -14,66 +14,44 @@ import vtctldata_pb2
 import vtctlservice_pb2
 
 class GRPCVtctlClient(vtctl_client.VctlClient):
-    """GoRpcVtctlClient is the gRPC implementation of VctlClient.
-    It is registered as 'grpc' protocol.
-    """
+  """GoRpcVtctlClient is the gRPC implementation of VctlClient.
+  It is registered as 'grpc' protocol.
+  """
 
-    def __init__(self, addr, timeout, user=None, password=None, encrypted=False,
-                keyfile=None, certfile=None):
-        self.addr = addr
-        self.timeout = timeout
-        self.stub = None
+  def __init__(self, addr, timeout, user=None, password=None, encrypted=False,
+               keyfile=None, certfile=None):
+    self.addr = addr
+    self.timeout = timeout
+    self.stub = None
 
-    def __str__(self):
-        return '<VtctlClient %s>' % self.addr
+  def __str__(self):
+    return '<VtctlClient %s>' % self.addr
 
-    def dial(self):
-        if self.stub:
-            self.stub.close()
+  def dial(self):
+    if self.stub:
+      self.stub.close()
 
-        p = urlparse("http://" + self.addr)
-        self.stub = vtctlservice_pb2.early_adopter_create_Vtctl_stub(p.hostname,
-                                                                     p.port)
+    p = urlparse("http://" + self.addr)
+    self.stub = vtctlservice_pb2.early_adopter_create_Vtctl_stub(p.hostname,
+                                                                 p.port)
 
-    def close(self):
-        self.stub.close()
-        self.stub = None
+  def close(self):
+    self.stub.close()
+    self.stub = None
 
-    def is_closed(self):
-        return self.stub == None
+  def is_closed(self):
+    return self.stub == None
 
-    def execute_vtctl_command(self, args, action_timeout=30.0,
-                              lock_timeout=5.0, info_to_debug=False):
-        """Executes a remote command on the vtctl server.
+  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
+    req = vtctldata_pb2.ExecuteVtctlCommandRequest(
+        args=args,
+        action_timeout=long(action_timeout * 1000000000),
+        lock_timeout=long(lock_timeout * 1000000000))
+    with self.stub as stub:
+      for response in stub.ExecuteVtctlCommand(req, action_timeout):
+        t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)
+        yield vtctl_client.Event(t, response.event.level, response.event.file,
+                                 response.event.line, response.event.value)
 
-        Args:
-            args: Command line to run.
-            action_timeout: total timeout for the action (float, in seconds).
-            lock_timeout: timeout for locking topology (float, in seconds).
-            info_to_debug: if set, changes the info messages to debug.
-
-        Returns:
-            The console output of the action.
-        """
-        req = vtctldata_pb2.ExecuteVtctlCommandRequest(
-            args=args,
-            action_timeout=long(action_timeout * 1000000000),
-            lock_timeout=long(lock_timeout * 1000000000))
-        console_result = ''
-        with self.stub as stub:
-            for response in stub.ExecuteVtctlCommand(req, action_timeout):
-                if response.event.level == 0:
-                    if info_to_debug:
-                        logging.debug('%s', response.event.value)
-                    else:
-                        logging.info('%s', response.event.value)
-                elif response.event.level == 1:
-                    logging.warning('%s', response.event.value)
-                elif response.event.level == 2:
-                    logging.error('%s', response.event.value)
-                elif response.event.level == 3:
-                    console_result += response.event.value
-
-        return console_result
 
 vtctl_client.register_conn_class("grpc", GRPCVtctlClient)

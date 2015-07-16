@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import logging
+
 
 # mapping from protocol to python class. The protocol matches the string
 # used by vtctlclient as a -vtctl_client_protocol parameter.
@@ -33,6 +35,24 @@ def connect(protocol, *pargs, **kargs):
   conn = vtctl_client_conn_classes[protocol](*pargs, **kargs)
   conn.dial()
   return conn
+
+
+class Event(object):
+  """Event is streamed by VctlClient.
+  Eventually, we will just use the proto3 definition for logutil.proto/Event.
+  """
+
+  INFO = 0
+  WARNING = 1
+  ERROR = 2
+  CONSOLE = 3
+
+  def __init__(self, time, level, file, line, value):
+    self.time = time
+    self.level = level
+    self.file = file
+    self.line = line
+    self.value = value
 
 
 class VctlClient(object):
@@ -68,17 +88,49 @@ class VctlClient(object):
     """
     pass
 
-  def execute_vtctl_command(self, args, action_timeout=30.0,
-                            lock_timeout=5.0, info_to_debug=False):
+  def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
     """Executes a remote command on the vtctl server.
 
     Args:
       args: Command line to run.
       action_timeout: total timeout for the action (float, in seconds).
       lock_timeout: timeout for locking topology (float, in seconds).
-      info_to_debug: if set, changes the info messages to debug.
 
     Returns:
-      The console output of the action.
+      This is a generator method that yeilds Event objects.
     """
     pass
+
+
+def execute_vtctl_command(client, args, action_timeout=30.0,
+                          lock_timeout=5.0, info_to_debug=False):
+  """This is a helper method that executes a remote vtctl command, logs
+  the output to the logging module, and returns the console output.
+
+  Args:
+    client: VtctlClient object to use.
+    args: Command line to run.
+    action_timeout: total timeout for the action (float, in seconds).
+    lock_timeout: timeout for locking topology (float, in seconds).
+    info_to_debug: if set, changes the info messages to debug.
+
+  Returns:
+    The console output of the action.
+  """
+
+  console_result = ''
+  for e in client.execute_vtctl_command(args, action_timeout=action_timeout,
+                                        lock_timeout=lock_timeout):
+      if e.level == Event.INFO:
+        if info_to_debug:
+          logging.debug('%s', e.value)
+        else:
+          logging.info('%s', e.value)
+      elif e.level == Event.WARNING:
+        logging.warning('%s', e.value)
+      elif e.level == Event.ERROR:
+        logging.error('%s', e.value)
+      elif e.level == Event.CONSOLE:
+        console_result += e.value
+
+  return console_result
