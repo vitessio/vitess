@@ -264,7 +264,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 
 // findTargets phase:
 // - find one rdonly in the source shard
-// - mark it as 'checker' pointing back to us
+// - mark it as 'worker' pointing back to us
 // - get the aliases of all the targets
 func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	scw.setState(WorkerStateFindTargets)
@@ -275,7 +275,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for i, si := range scw.sourceShards {
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
-			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
+			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
 		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", scw.sourceAliases[i], si.Keyspace(), si.ShardName())
 	}

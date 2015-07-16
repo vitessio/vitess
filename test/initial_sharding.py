@@ -385,7 +385,7 @@ index by_msg (msg)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
 
-    # use the vtworker checker to compare the data
+    # use vtworker to compare the data
     logging.debug("Running vtworker SplitDiff for -80")
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/-80'],
                        auto_log=True)
