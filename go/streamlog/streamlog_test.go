@@ -61,6 +61,15 @@ func TestHTTP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if i == 0 && val == "val1\n" {
+			// the value that was sent has been in the
+			// channels and was actually processed after the
+			// subscription took effect. This is fine.
+			val, err = body.ReadString('\n')
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		if want := msg + "\n"; val != want {
 			t.Errorf("want %q, got %q", msg, val)
 		}
@@ -71,18 +80,24 @@ func TestHTTP(t *testing.T) {
 	resp = nil
 	body = nil
 
-	// Due to multiple layers of buffering in http.Server, we must send 4 messages to detect the client has gone away.
+	// Due to multiple layers of buffering in http.Server, we must
+	// send multiple messages to detect the client has gone away.
+	// 4 seems to be a minimum, but doesn't always work. So 10 it is.
+	logger.mu.Lock()
 	if want, got := 1, len(logger.subscribed); want != got {
 		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
 	}
-	for i := 0; i < 4; i++ {
+	logger.mu.Unlock()
+	for i := 0; i < 10; i++ {
 		logger.Send(&logMessage{"val3"})
 		// Allow time for propagation (loopback interface - expected to be fast).
 		time.Sleep(1 * time.Millisecond)
 	}
+	logger.mu.Lock()
 	if want, got := 0, len(logger.subscribed); want != got {
 		t.Errorf("len(logger.subscribed) = %v, want %v", got, want)
 	}
+	logger.mu.Unlock()
 }
 
 func TestChannel(t *testing.T) {
