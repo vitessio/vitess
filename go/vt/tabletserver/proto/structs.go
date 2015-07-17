@@ -93,6 +93,7 @@ type BoundQuery struct {
 type QueryList struct {
 	Queries       []BoundQuery
 	SessionId     int64
+	AsTransaction bool
 	TransactionId int64
 }
 

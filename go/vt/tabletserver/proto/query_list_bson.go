@@ -29,6 +29,7 @@ func (queryList *QueryList) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 		lenWriter.Close()
 	}
 	bson.EncodeInt64(buf, "SessionId", queryList.SessionId)
+	bson.EncodeBool(buf, "AsTransaction", queryList.AsTransaction)
 	bson.EncodeInt64(buf, "TransactionId", queryList.TransactionId)
 
 	lenWriter.Close()
@@ -65,6 +66,8 @@ func (queryList *QueryList) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			}
 		case "SessionId":
 			queryList.SessionId = bson.DecodeInt64(buf, kind)
+		case "AsTransaction":
+			queryList.AsTransaction = bson.DecodeBool(buf, kind)
 		case "TransactionId":
 			queryList.TransactionId = bson.DecodeInt64(buf, kind)
 		default:

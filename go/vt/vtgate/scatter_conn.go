@@ -258,7 +258,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		session,
 		notInTransaction,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqrs, err := sdc.ExecuteBatch(ctx, queries, transactionId)
+			innerqrs, err := sdc.ExecuteBatch(ctx, queries, false, transactionId)
 			if err != nil {
 				return err
 			}

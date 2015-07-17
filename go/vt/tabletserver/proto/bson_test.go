@@ -192,6 +192,7 @@ func TestBoundQuery(t *testing.T) {
 type reflectQueryList struct {
 	Queries       []BoundQuery
 	SessionId     int64
+	AsTransaction bool
 	TransactionId int64
 }
 
@@ -199,6 +200,7 @@ type extraQueryList struct {
 	Extra         int
 	Queries       []BoundQuery
 	SessionId     int64
+	AsTransaction bool
 	TransactionId int64
 }
 

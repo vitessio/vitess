@@ -140,7 +140,7 @@ message ExecuteBatchShardsRequest {
   Session session = 2;
   repeated BoundShardQuery queries = 3;
   topodata.TabletType TabletType = 4;
-  bool as_transaction = 5
+  bool as_transaction = 5;
 }
 
 // ExecuteBatchShardsResponse is the returned value from ExecuteBatchShards
@@ -165,7 +165,7 @@ message ExecuteBatchKeyspaceIdsRequest {
   Session session = 2;
   repeated BoundKeyspaceIdQuery queries = 3;
   topodata.TabletType TabletType = 4;
-  bool as_transaction = 5
+  bool as_transaction = 5;
 }
 
 // ExecuteBatchKeyspaceIdsResponse is the returned value from ExecuteBatchKeyspaceId
