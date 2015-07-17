@@ -19,7 +19,7 @@ import tablet
 import utils
 from vtdb import dbexceptions
 from vtdb import topology
-from vtdb import update_stream_service
+from vtdb import update_stream
 from vtdb import vtclient
 from zk import zkocc
 from mysql_flavor import mysql_flavor
@@ -151,11 +151,12 @@ class TestUpdateStream(unittest.TestCase):
     self.vtgate_client.close()
 
   def _get_master_stream_conn(self):
-    return update_stream_service.UpdateStreamConnection(master_host, 30)
+    protocol, endpoint = master_tablet.update_stream_python_endpoint()
+    return update_stream.connect(protocol, endpoint, 30)
 
   def _get_replica_stream_conn(self):
-    return update_stream_service.UpdateStreamConnection('localhost:%u' %
-                                                        replica_tablet.port, 30)
+    protocol, endpoint = replica_tablet.update_stream_python_endpoint()
+    return update_stream.connect(protocol, endpoint, 30)
 
   def _test_service_disabled(self):
     start_position = _get_repl_current_position()
@@ -164,18 +165,14 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
-    replica_conn = self._get_replica_stream_conn()
     logging.debug('dialing replica update stream service')
-    replica_conn.dial()
+    replica_conn = self._get_replica_stream_conn()
     try:
-      data = replica_conn.stream_start(start_position)
+      for stream_event in replica_conn.stream_update(start_position):
+        break
     except Exception, e:
       logging.debug(str(e))
-      if str(e) == 'update stream service is not enabled':
-        logging.debug('Test Service Disabled: Pass')
-      else:
-        self.fail(
-            'Test Service Disabled: Fail - did not throw the correct exception')
+      self.assertIn('update stream service is not enabled', str(e))
 
     v = utils.get_vars(replica_tablet.port)
     if v['UpdateStreamState'] != 'Disabled':
@@ -198,13 +195,10 @@ class TestUpdateStream(unittest.TestCase):
     thd.daemon = True
     thd.start()
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
 
     try:
-      data = replica_conn.stream_start(start_position)
-      for i in xrange(10):
-        data = replica_conn.stream_next()
-        if data['Category'] == 'DML' and utils.options.verbose == 2:
+      for stream_event in replica_conn.stream_update(start_position):
+        if stream_event.category == update_stream.StreamEvent.DML:
           logging.debug('Test Service Enabled: Pass')
           break
     except Exception, e:
@@ -222,19 +216,19 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('Testing enable -> disable switch starting @ %s',
                   start_position)
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
-    disabled_err = False
+    first = True
     txn_count = 0
     try:
-      data = replica_conn.stream_start(start_position)
-      utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-      utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
-      while data:
-        data = replica_conn.stream_next()
-        if data is not None and data['Category'] == 'POS':
-          txn_count += 1
-      logging.debug('Test Service Switch: FAIL')
-      return
+      for stream_event in replica_conn.stream_update(start_position):
+        if first:
+          utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
+          utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
+          first = False
+        else:
+          if stream_event.category == update_stream.StreamEvent.POS:
+            txn_count += 1
+        logging.debug('Test Service Switch: FAIL')
+        return
     except dbexceptions.DatabaseError, e:
       self.assertEqual(
           'Fatal Service Error: Disconnecting because the Update Stream '
@@ -246,27 +240,24 @@ class TestUpdateStream(unittest.TestCase):
       self.fail("Update stream returned error '%s'" % str(e))
     logging.debug('Streamed %d transactions before exiting', txn_count)
 
-  def _vtdb_conn(self, host):
-    conn = vtclient.VtOCCConnection(self.vtgate_client, 'test_keyspace', '0',
-                                    'master', 30)
-    conn.connect()
-    return conn
-
   def _exec_vt_txn(self, query_list=None):
     if not query_list:
       return
-    vtdb_conn = self._vtdb_conn('localhost:%u' % master_tablet.port)
+    vtdb_conn = vtclient.VtOCCConnection(self.vtgate_client,
+                                         'test_keyspace', '0', 'master', 30)
+    vtdb_conn.connect()
     vtdb_cursor = vtdb_conn.cursor()
     vtdb_conn.begin()
     for q in query_list:
       vtdb_cursor.execute(q, {})
     vtdb_conn.commit()
 
-  # The function below checks the parity of streams received
-  # from master and replica for the same writes. Also tests
-  # transactions are retrieved properly.
   def test_stream_parity(self):
-    timeout = 30#s
+    """test_stream_parity checks the parity of streams received
+    from master and replica for the same writes. Also tests
+    transactions are retrieved properly.
+    """
+    timeout = 30
     while True:
       master_start_position = _get_master_current_position()
       replica_start_position = _get_repl_current_position()
@@ -285,25 +276,17 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_a'])
     self._exec_vt_txn(['delete from vt_b'])
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     master_events = []
-    data = master_conn.stream_start(master_start_position)
-    master_events.append(data)
-    for i in xrange(21):
-      data = master_conn.stream_next()
-      master_events.append(data)
-      if data['Category'] == 'POS':
+    for stream_event in master_conn.stream_update(master_start_position):
+      master_events.append(stream_event)
+      if stream_event.category == update_stream.StreamEvent.POS:
         master_txn_count += 1
         break
     replica_events = []
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
-    data = replica_conn.stream_start(replica_start_position)
-    replica_events.append(data)
-    for i in xrange(21):
-      data = replica_conn.stream_next()
-      replica_events.append(data)
-      if data['Category'] == 'POS':
+    for stream_event in replica_conn.stream_update(replica_start_position):
+      replica_events.append(stream_event)
+      if stream_event.category == update_stream.StreamEvent.POS:
         replica_txn_count += 1
         break
     if len(master_events) != len(replica_events):
@@ -311,8 +294,8 @@ class TestUpdateStream(unittest.TestCase):
           'Test Failed - # of records mismatch, master %s replica %s',
           master_events, replica_events)
     for master_val, replica_val in zip(master_events, replica_events):
-      master_data = master_val
-      replica_data = replica_val
+      master_data = master_val.__dict__
+      replica_data = replica_val.__dict__
       self.assertEqual(
           master_data, replica_data,
           "Test failed, data mismatch - master '%s' and replica position '%s'" %
@@ -324,28 +307,26 @@ class TestUpdateStream(unittest.TestCase):
     start_position = master_start_position
     logging.debug('test_ddl: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
-    data = master_conn.stream_start(start_position)
-    self.assertEqual(data['Sql'], _create_vt_insert_test,
-                     "DDL didn't match original")
+    for stream_event in master_conn.stream_update(start_position):
+      self.assertEqual(stream_event.sql, _create_vt_insert_test,
+                       "DDL didn't match original")
+      return
+    self.fail("didn't get right sql")
 
   def test_set_insert_id(self):
     start_position = _get_master_current_position()
     self._exec_vt_txn(['SET INSERT_ID=1000000'] + self._populate_vt_insert_test)
     logging.debug('test_set_insert_id: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
-    data = master_conn.stream_start(start_position)
     expected_id = 1000000
-    while data:
-      if data['Category'] == 'POS':
+    for stream_event in master_conn.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         break
-      self.assertEqual(data['Fields'][0], 'id')
-      self.assertEqual(data['PkRows'][0][0], expected_id)
+      self.assertEqual(stream_event.fields[0], 'id')
+      self.assertEqual(stream_event.rows[0][0], expected_id)
       expected_id += 1
-      data = master_conn.stream_next()
     if expected_id != 1000004:
-      self.fail("did not get my foru values!")
+      self.fail("did not get my four values!")
 
   def test_database_filter(self):
     start_position = _get_master_current_position()
@@ -353,18 +334,15 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     logging.debug('test_database_filter: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
-    data = master_conn.stream_start(start_position)
-    while data:
-      if data['Category'] == 'POS':
+    for stream_event in master_conn.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         break
       self.assertNotEqual(
-          data['Category'], 'DDL',
+          stream_event.category, update_stream.StreamEvent.DDL,
           "query using other_database wasn't filted out")
-      data = master_conn.stream_next()
 
-  # This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
+    """tests the service switch from disable -> enable -> disable"""
     self._test_service_disabled()
     self._test_service_enabled()
     # The above tests leaves the service in disabled state, hence enabling it.
@@ -378,19 +356,18 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(['delete from vt_a'])
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
-    data = master_conn.stream_start(start_position)
     master_txn_count = 0
     logs_correct = False
-    while master_txn_count <= 2:
-      data = master_conn.stream_next()
-      if data['Category'] == 'POS':
+    for stream_event in master_conn.stream_update(start_position):
+      if stream_event.category == update_stream.StreamEvent.POS:
         master_txn_count += 1
-        position = mysql_flavor().position_append(position, data['GTIDField'])
+        position = mysql_flavor().position_append(position, stream_event.position)
         if mysql_flavor().position_after(position, start_position):
           logs_correct = True
           logging.debug('Log rotation correctly interpreted')
           break
+        if master_txn_count == 2:
+          self.fail("ran out of logs")
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
 

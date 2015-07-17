@@ -181,18 +181,15 @@ v3_test:
 bson:
 	go generate ./go/...
 
-# This rule rebuilds all the go files from the proto definitions for gRPC
-# FIXME(alainjobart) also add support for python gRPC stubs, right now
-# it's only the proto files without gRPC
+# This rule rebuilds all the go files from the proto definitions for gRPC.
 # 1. list all proto files.
 # 2. remove 'proto/' prefix and '.proto' suffix.
-# 3. run protoc for each proto and put in go/vt/proto/${proto_file_name}
+# 3. (go) run protoc for each proto and put in go/vt/proto/${proto_file_name}/
+# 4. (python) run protoc for each proto and put in py/vtproto/
 proto:
 	find proto -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
-	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/logutil.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
-	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctldata.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
-	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctlservice.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
+	find proto -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --python_out=py/vtproto --grpc_out=py/vtproto --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 
 # This rule builds the bootstrap images for all flavors.
 docker_bootstrap:
