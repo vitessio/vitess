@@ -57,7 +57,8 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
   def is_closed(self):
     return self.client.is_closed()
 
-  def stream_update(self, position):
+  def stream_update(self, position, timeout=3600.0):
+    """Note this implementation doesn't honor the timeout."""
     try:
       self.client.stream_call('UpdateStream.ServeUpdateStream',
                               {"Position": position})

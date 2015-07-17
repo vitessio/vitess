@@ -102,7 +102,7 @@ class Tablet(object):
     elif protocol == "grpc":
       # import the grpc update stream client implementation, change the port
       from vtdb import grpc_update_stream
-      rpc_port = self.grpc_port
+      port = self.grpc_port
     return (protocol, 'localhost:%u' % port)
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):

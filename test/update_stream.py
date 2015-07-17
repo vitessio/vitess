@@ -165,9 +165,8 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
-    replica_conn = self._get_replica_stream_conn()
     logging.debug('dialing replica update stream service')
-    replica_conn.dial()
+    replica_conn = self._get_replica_stream_conn()
     try:
       for stream_event in replica_conn.stream_update(start_position):
         break
@@ -196,7 +195,6 @@ class TestUpdateStream(unittest.TestCase):
     thd.daemon = True
     thd.start()
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
 
     try:
       for stream_event in replica_conn.stream_update(start_position):
@@ -218,7 +216,6 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('Testing enable -> disable switch starting @ %s',
                   start_position)
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
     first = True
     txn_count = 0
     try:
@@ -279,7 +276,6 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['delete from vt_a'])
     self._exec_vt_txn(['delete from vt_b'])
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     master_events = []
     for stream_event in master_conn.stream_update(master_start_position):
       master_events.append(stream_event)
@@ -288,7 +284,6 @@ class TestUpdateStream(unittest.TestCase):
         break
     replica_events = []
     replica_conn = self._get_replica_stream_conn()
-    replica_conn.dial()
     for stream_event in replica_conn.stream_update(replica_start_position):
       replica_events.append(stream_event)
       if stream_event.category == update_stream.StreamEvent.POS:
@@ -312,7 +307,6 @@ class TestUpdateStream(unittest.TestCase):
     start_position = master_start_position
     logging.debug('test_ddl: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     for stream_event in master_conn.stream_update(start_position):
       self.assertEqual(stream_event.sql, _create_vt_insert_test,
                        "DDL didn't match original")
@@ -324,7 +318,6 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(['SET INSERT_ID=1000000'] + self._populate_vt_insert_test)
     logging.debug('test_set_insert_id: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     expected_id = 1000000
     for stream_event in master_conn.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
@@ -333,7 +326,7 @@ class TestUpdateStream(unittest.TestCase):
       self.assertEqual(stream_event.rows[0][0], expected_id)
       expected_id += 1
     if expected_id != 1000004:
-      self.fail("did not get my foru values!")
+      self.fail("did not get my four values!")
 
   def test_database_filter(self):
     start_position = _get_master_current_position()
@@ -341,7 +334,6 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     logging.debug('test_database_filter: starting @ %s', start_position)
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     for stream_event in master_conn.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
         break
@@ -364,7 +356,6 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_a(15))
     self._exec_vt_txn(['delete from vt_a'])
     master_conn = self._get_master_stream_conn()
-    master_conn.dial()
     master_txn_count = 0
     logs_correct = False
     for stream_event in master_conn.stream_update(start_position):

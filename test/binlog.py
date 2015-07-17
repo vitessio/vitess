@@ -168,11 +168,9 @@ class TestBinlog(unittest.TestCase):
 
     # Wait for it to replicate.
     stream = _get_update_stream(dst_replica)
-    stream.dial()
     for stream_event in stream.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
         break
-    stream.close()
 
     # Check the value.
     data = dst_master.mquery("vt_test_keyspace",
@@ -200,7 +198,6 @@ class TestBinlog(unittest.TestCase):
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum enabled.
     stream = _get_update_stream(dst_replica)
-    stream.dial()
     found = False
     for stream_event in stream.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
@@ -229,7 +226,6 @@ class TestBinlog(unittest.TestCase):
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum disabled.
     stream = _get_update_stream(dst_replica)
-    stream.dial()
     found = False
     for stream_event in stream.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:

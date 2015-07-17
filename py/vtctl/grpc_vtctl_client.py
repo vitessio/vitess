@@ -18,20 +18,19 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
   It is registered as 'grpc' protocol.
   """
 
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False,
-               keyfile=None, certfile=None):
+  def __init__(self, addr, timeout):
     self.addr = addr
     self.timeout = timeout
     self.stub = None
 
   def __str__(self):
-    return '<VtctlClient %s>' % self.addr
+    return '<GRPCVtctlClient %s>' % self.addr
 
   def dial(self):
     if self.stub:
       self.stub.close()
 
-    p = urlparse("http://" + self.addr)
+    p = urlparse('http://' + self.addr)
     self.stub = vtctlservice_pb2.early_adopter_create_Vtctl_stub(p.hostname,
                                                                  p.port)
 
@@ -48,10 +47,22 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
         action_timeout=long(action_timeout * 1000000000),
         lock_timeout=long(lock_timeout * 1000000000))
     with self.stub as stub:
-      for response in stub.ExecuteVtctlCommand(req, action_timeout):
+      it = stub.ExecuteVtctlCommand(req, action_timeout)
+      for response in it:
         t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)
-        yield vtctl_client.Event(t, response.event.level, response.event.file,
-                                 response.event.line, response.event.value)
+        try:
+          yield vtctl_client.Event(t, response.event.level, response.event.file,
+                                   response.event.line, response.event.value)
+        except GeneratorExit:
+          # if the loop is interrupted for any reason, we need to
+          # cancel the iterator, so we close the RPC connection,
+          # and the with __exit__ statement is executed.
+
+          # FIXME(alainjobart) this is flaky. It sometimes doesn't stop
+          # the iterator, and we don't get out of the 'with'.
+          # Sending a Ctrl-C to the process then works for some reason.
+          it.cancel()
+          break
 
 
-vtctl_client.register_conn_class("grpc", GRPCVtctlClient)
+vtctl_client.register_conn_class('grpc', GRPCVtctlClient)

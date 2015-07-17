@@ -93,11 +93,12 @@ class UpdateStreamConnection(object):
     """
     pass
 
-  def stream_update(self, position):
+  def stream_update(self, position, timeout=3600.0):
     """Generator method to stream the updates from a given replication point.
 
     Args:
       position: Starting position to stream from.
+      timeout: Should stop streaming after we reach this timeout.
 
     Returns:
       This is a generator method that yields StreamEvent objects.
