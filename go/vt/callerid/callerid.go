@@ -95,19 +95,19 @@ func NewContext(ctx context.Context, ef *EffectiveCallerID, im *ImmediateCallerI
 }
 
 // EffectiveCallerIDFromContext returns the EffectiveCallerID stored in the Context, if any
-func EffectiveCallerIDFromContext(ctx context.Context) (*EffectiveCallerID, bool) {
+func EffectiveCallerIDFromContext(ctx context.Context) *EffectiveCallerID {
 	ef, ok := ctx.Value(effectiveCallerIDKey).(*EffectiveCallerID)
-	if ef != nil {
-		return ef, ok
+	if ok && ef != nil {
+		return ef
 	}
-	return nil, false
+	return nil
 }
 
 // ImmediateCallerIDFromContext returns the ImmediateCallerID stored in the Context, if any
-func ImmediateCallerIDFromContext(ctx context.Context) (*ImmediateCallerID, bool) {
+func ImmediateCallerIDFromContext(ctx context.Context) *ImmediateCallerID {
 	im, ok := ctx.Value(immediateCallerIDKey).(*ImmediateCallerID)
-	if im != nil {
-		return im, ok
+	if ok && im != nil {
+		return im
 	}
-	return nil, false
+	return nil
 }
