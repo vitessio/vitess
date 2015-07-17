@@ -18,7 +18,7 @@ const (
 	FakeUsername = "TestUsername"
 )
 
-// Tests performs the necessary testsuite for a CallerID implementation
+// Tests performs the necessary testsuite for CallerID operations
 func Tests(t *testing.T, im *ImmediateCallerID, ef *EffectiveCallerID) {
 	ctx := context.TODO()
 	ctxim, ok := ImmediateCallerIDFromContext(ctx)
