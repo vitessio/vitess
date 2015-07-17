@@ -92,10 +92,13 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
             row = tuple(_make_row(pk_list, conversions))
             rows.append(row)
 
-        yield update_stream.StreamEvent(category, reply['TableName'],
-                                        fields, rows, reply['Sql'],
-                                        reply['Timestamp'],
-                                        reply['GTIDField'])
+        yield update_stream.StreamEvent(category=category,
+                                        table_name=reply['TableName'],
+                                        fields=fields,
+                                        rows=rows,
+                                        sql=reply['Sql'],
+                                        timestamp=reply['Timestamp'],
+                                        position=reply['GTIDField'])
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:
