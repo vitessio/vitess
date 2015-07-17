@@ -89,7 +89,8 @@ func NewContext(ctx context.Context, ef *EffectiveCallerID, im *ImmediateCallerI
 	ctx = context.WithValue(
 		context.WithValue(ctx, effectiveCallerIDKey, ef),
 		immediateCallerIDKey,
-		im)
+		im,
+	)
 	return ctx
 }
 
