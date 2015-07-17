@@ -13,8 +13,8 @@ import vtctl_client
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
 
-class GRPCVtctlClient(vtctl_client.VctlClient):
-  """GoRpcVtctlClient is the gRPC implementation of VctlClient.
+class GRPCVtctlClient(vtctl_client.VtctlClient):
+  """GoRpcVtctlClient is the gRPC implementation of VtctlClient.
   It is registered as 'grpc' protocol.
   """
 
@@ -44,8 +44,8 @@ class GRPCVtctlClient(vtctl_client.VctlClient):
   def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
         args=args,
-        action_timeout=long(action_timeout * 1000000000),
-        lock_timeout=long(lock_timeout * 1000000000))
+        action_timeout=long(action_timeout * 1e9),
+        lock_timeout=long(lock_timeout * 1e9))
     with self.stub as stub:
       it = stub.ExecuteVtctlCommand(req, action_timeout)
       for response in it:

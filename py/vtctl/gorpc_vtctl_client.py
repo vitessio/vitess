@@ -6,8 +6,8 @@ from net import bsonrpc
 from vtctl import vtctl_client
 
 
-class GoRpcVtctlClient(vtctl_client.VctlClient):
-  """GoRpcVtctlClient is the go rpc implementation of VctlClient.
+class GoRpcVtctlClient(vtctl_client.VtctlClient):
+  """GoRpcVtctlClient is the go rpc implementation of VtctlClient.
   It is registered as 'gorpc' protocol.
   """
 
@@ -38,8 +38,8 @@ class GoRpcVtctlClient(vtctl_client.VctlClient):
   def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
     req = {
       'Args':          args,
-      'ActionTimeout': long(action_timeout * 1000000000),
-      'LockTimeout':   long(lock_timeout * 1000000000),
+      'ActionTimeout': long(action_timeout * 1e9),
+      'LockTimeout':   long(lock_timeout * 1e9),
     }
     self.client.stream_call('VtctlServer.ExecuteVtctlCommand', req)
     while True:

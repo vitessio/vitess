@@ -38,7 +38,7 @@ def connect(protocol, *pargs, **kargs):
 
 
 class Event(object):
-  """Event is streamed by VctlClient.
+  """Event is streamed by VtctlClient.
   Eventually, we will just use the proto3 definition for logutil.proto/Event.
   """
 
@@ -55,8 +55,8 @@ class Event(object):
     self.value = value
 
 
-class VctlClient(object):
-  """VctlClient is the interface for the vtctl client implementations.
+class VtctlClient(object):
+  """VtctlClient is the interface for the vtctl client implementations.
   All implementations must implement all these methods.
   If something goes wrong with the connection, this object will be thrown out.
   """

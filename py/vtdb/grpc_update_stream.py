@@ -86,12 +86,13 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
             rows.append(row)
 
         try:
-          yield update_stream.StreamEvent(int(stream_event.category),
-                                          stream_event.table_name,
-                                          fields, rows,
-                                          stream_event.sql,
-                                          stream_event.timestamp,
-                                          stream_event.gtid)
+          yield update_stream.StreamEvent(category=int(stream_event.category),
+                                          table_name=stream_event.table_name,
+                                          fields=fields,
+                                          rows=rows,
+                                          sql=stream_event.sql,
+                                          timestamp=stream_event.timestamp,
+                                          position=stream_event.gtid)
         except GeneratorExit:
           # if the loop is interrupted for any reason, we need to
           # cancel the iterator, so we close the RPC connection,

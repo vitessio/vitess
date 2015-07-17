@@ -23,7 +23,7 @@ def connect(protocol, *pargs, **kargs):
 
   Args:
     protocol: the registered protocol to use.
-    arsg: passed to the registered protocol __init__ method.
+    args: passed to the registered protocol __init__ method.
 
   Returns:
     A dialed UpdateStreamConnection.
