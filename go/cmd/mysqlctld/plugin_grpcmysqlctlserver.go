@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	servenv.ServiceMap["grpc-mysqlctl"] = true
+	servenv.InitServiceMap("grpc", "mysqlctl")
 	servenv.OnRun(func() {
 		if servenv.GRPCCheckServiceMap("mysqlctl") {
 			grpcmysqlctlserver.StartServer(servenv.GRPCServer, mysqld)

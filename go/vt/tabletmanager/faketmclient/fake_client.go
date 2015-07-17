@@ -116,14 +116,6 @@ func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, table
 	return nil
 }
 
-// HealthStream is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, tmclient.ErrFunc, error) {
-	logstream := make(chan *actionnode.HealthStreamReply, 10)
-	return logstream, func() error {
-		return nil
-	}, nil
-}
-
 // ReloadSchema is part of the tmclient.TabletManagerClient interface
 func (client *FakeTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error {
 	return nil

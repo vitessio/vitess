@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 )
 
 var (
+	webDir                    = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
 	templateDir               = flag.String("templates", "", "directory containing templates")
 	debug                     = flag.Bool("debug", false, "recompile templates for every request")
 	schemaChangeDir           = flag.String("schema_change_dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
@@ -34,9 +36,10 @@ func init() {
 	servenv.InitServiceMapForBsonRpcService("vtctl")
 }
 
-func httpError(w http.ResponseWriter, format string, err error) {
-	log.Errorf(format, err)
-	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
+func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+	errMsg := fmt.Sprintf(format, args...)
+	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 
 // DbTopologyResult encapsulates a topotools.Topology and the possible error
@@ -123,6 +126,15 @@ func main() {
 			return "", wr.TabletManagerClient().Ping(ctx, ti)
 		})
 
+	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+			if err != nil {
+				return "", err
+			}
+			return "", wr.TabletManagerClient().RefreshState(ctx, ti)
+		})
+
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
@@ -162,7 +174,7 @@ func main() {
 	// keyspace actions
 	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		action := r.FormValue("action")
@@ -185,7 +197,7 @@ func main() {
 	// shard actions
 	http.HandleFunc("/shard_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		action := r.FormValue("action")
@@ -213,7 +225,7 @@ func main() {
 	// tablet actions
 	http.HandleFunc("/tablet_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		action := r.FormValue("action")
@@ -241,7 +253,7 @@ func main() {
 	// topology server
 	http.HandleFunc("/dbtopo", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		result := DbTopologyResult{}
@@ -267,7 +279,7 @@ func main() {
 		if cell == "" {
 			cells, err := ts.GetKnownCells(ctx)
 			if err != nil {
-				httpError(w, "cannot get known cells: %v", err)
+				httpErrorf(w, r, "cannot get known cells: %v", err)
 				return
 			}
 			templateLoader.ServeTemplate("serving_graph_cells.html", cells, w, r)
@@ -289,15 +301,35 @@ func main() {
 		http.ServeFile(w, r, *templateDir+r.URL.Path[8:])
 	})
 
+	// Serve the static files for the vtctld web app.
+	if *webDir != "" {
+		http.HandleFunc("/app/", func(w http.ResponseWriter, r *http.Request) {
+			// Strip the prefix.
+			parts := strings.SplitN(r.URL.Path, "/", 3)
+			if len(parts) != 3 {
+				http.NotFound(w, r)
+				return
+			}
+			rest := parts[2]
+			if rest == "" {
+				rest = "index.html"
+			}
+			http.ServeFile(w, r, path.Join(*webDir, rest))
+		})
+	}
+
+	// Serve the REST API for the vtctld web app.
+	initAPI(context.Background(), ts, actionRepo)
+
 	// vschema viewer
 	http.HandleFunc("/vschema", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		schemafier, ok := ts.(topo.Schemafier)
 		if !ok {
-			httpError(w, "%s", fmt.Errorf("%T doesn's support schemafier API", ts))
+			httpErrorf(w, r, "%s", fmt.Errorf("%T doesn't support schemafier API", ts))
 		}
 		var data struct {
 			Error         error
@@ -326,7 +358,7 @@ func main() {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 
@@ -345,7 +377,7 @@ func main() {
 		ctx := context.Background()
 		result, err := knownCellsCache.Get(ctx)
 		if err != nil {
-			httpError(w, "error getting known cells: %v", err)
+			httpErrorf(w, r, "error getting known cells: %v", err)
 			return
 		}
 		w.Write(result)
@@ -356,7 +388,7 @@ func main() {
 		ctx := context.Background()
 		result, err := keyspacesCache.Get(ctx)
 		if err != nil {
-			httpError(w, "error getting keyspaces: %v", err)
+			httpErrorf(w, r, "error getting keyspaces: %v", err)
 			return
 		}
 		w.Write(result)
@@ -365,7 +397,7 @@ func main() {
 	keyspaceCache := newKeyspaceCache(ts)
 	http.HandleFunc("/json/Keyspace", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		keyspace := r.FormValue("keyspace")
@@ -376,7 +408,7 @@ func main() {
 		ctx := context.Background()
 		result, err := keyspaceCache.Get(ctx, keyspace)
 		if err != nil {
-			httpError(w, "error getting keyspace: %v", err)
+			httpErrorf(w, r, "error getting keyspace: %v", err)
 			return
 		}
 		w.Write(result)
@@ -385,7 +417,7 @@ func main() {
 	shardNamesCache := newShardNamesCache(ts)
 	http.HandleFunc("/json/ShardNames", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		keyspace := r.FormValue("keyspace")
@@ -396,7 +428,7 @@ func main() {
 		ctx := context.Background()
 		result, err := shardNamesCache.Get(ctx, keyspace)
 		if err != nil {
-			httpError(w, "error getting shardNames: %v", err)
+			httpErrorf(w, r, "error getting shardNames: %v", err)
 			return
 		}
 		w.Write(result)
@@ -405,7 +437,7 @@ func main() {
 	shardCache := newShardCache(ts)
 	http.HandleFunc("/json/Shard", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		keyspace := r.FormValue("keyspace")
@@ -421,7 +453,7 @@ func main() {
 		ctx := context.Background()
 		result, err := shardCache.Get(ctx, keyspace+"/"+shard)
 		if err != nil {
-			httpError(w, "error getting shard: %v", err)
+			httpErrorf(w, r, "error getting shard: %v", err)
 			return
 		}
 		w.Write(result)
@@ -430,7 +462,7 @@ func main() {
 	cellShardTabletsCache := newCellShardTabletsCache(ts)
 	http.HandleFunc("/json/CellShardTablets", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		cell := r.FormValue("cell")
@@ -451,7 +483,7 @@ func main() {
 		ctx := context.Background()
 		result, err := cellShardTabletsCache.Get(ctx, cell+"/"+keyspace+"/"+shard)
 		if err != nil {
-			httpError(w, "error getting shard: %v", err)
+			httpErrorf(w, r, "error getting shard: %v", err)
 			return
 		}
 		w.Write(result)
@@ -467,38 +499,9 @@ func main() {
 		cellShardTabletsCache.Flush()
 	})
 
-	// handle tablet cache
-	tabletHealthCache := newTabletHealthCache(ts, tmclient.NewTabletManagerClient())
-	http.HandleFunc("/json/TabletHealth", func(w http.ResponseWriter, r *http.Request) {
-		cell := r.FormValue("cell")
-		if cell == "" {
-			http.Error(w, "no cell provided", http.StatusBadRequest)
-			return
-		}
-		uid := r.FormValue("uid")
-		if uid == "" {
-			http.Error(w, "no uid provided", http.StatusBadRequest)
-			return
-		}
-		tabletAlias := topo.TabletAlias{
-			Cell: cell,
-		}
-		var err error
-		tabletAlias.Uid, err = topo.ParseUID(uid)
-		if err != nil {
-			http.Error(w, "cannot parse uid", http.StatusBadRequest)
-			return
-		}
-		result, err := tabletHealthCache.get(tabletAlias)
-		if err != nil {
-			httpError(w, "error getting tablet health: %v", err)
-			return
-		}
-		w.Write(result)
-	})
 	http.HandleFunc("/json/schema-manager", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
+			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
 		sqlStr := r.FormValue("data")

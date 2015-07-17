@@ -5,7 +5,6 @@
 package automation
 
 import (
-	"fmt"
 	"strings"
 
 	pb "github.com/youtube/vitess/go/vt/proto/automation"
@@ -15,11 +14,6 @@ import (
 type HorizontalReshardingTask struct {
 }
 
-// TODO(mberlin): Uncomment/remove when "ForceReparent" and "CopySchemaShard" will be implemented.
-//func selectAnyTabletFromShardByType(shard string, tabletType string) string {
-//	return ""
-//}
-
 func (t *HorizontalReshardingTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	// Example: test_keyspace
 	keyspace := parameters["keyspace"]
@@ -27,65 +21,45 @@ func (t *HorizontalReshardingTask) run(parameters map[string]string) ([]*pb.Task
 	sourceShards := strings.Split(parameters["source_shard_list"], ",")
 	// Example: 10-18,18-20
 	destShards := strings.Split(parameters["dest_shard_list"], ",")
-	// Example: cell1-0000062352
-	sourceRdonlyTablets := strings.Split(parameters["source_shard_rdonly_list"], ",")
+	// Example: localhost:15000
+	vtctldEndpoint := parameters["vtctld_endpoint"]
+	// Example: localhost:15001
+	vtworkerEndpoint := parameters["vtworker_endpoint"]
 
 	var newTasks []*pb.TaskContainer
-	// TODO(mberlin): Implement "ForceParent" task and uncomment this.
-	//	reparentTasks := NewTaskContainer()
-	//	for _, destShard := range destShards {
-	//		newMaster := selectAnyTabletFromShardByType(destShard, "master")
-	//		AddTask(reparentTasks, "ForceReparent", map[string]string{
-	//			"shard":  destShard,
-	//			"master": newMaster,
-	//		})
-	//	}
-	//	newTasks = append(newTasks, reparentTasks)
-
-	// TODO(mberlin): Implement "CopySchemaShard" task and uncomment this.
-	//	copySchemaTasks := NewTaskContainer()
-	//	sourceRdonlyTablet := selectAnyTabletFromShardByType(sourceShards[0], "rdonly")
-	//	for _, destShard := range destShards {
-	//		AddTask(copySchemaTasks, "CopySchemaShard", map[string]string{
-	//			"shard":                destShard,
-	//			"source_rdonly_tablet": sourceRdonlyTablet,
-	//		})
-	//	}
-	//	newTasks = append(newTasks, copySchemaTasks)
+	copySchemaTasks := NewTaskContainer()
+	for _, destShard := range destShards {
+		AddTask(copySchemaTasks, "CopySchemaShardTask", map[string]string{
+			"keyspace":        keyspace,
+			"source_shard":    sourceShards[0],
+			"dest_shard":      destShard,
+			"vtctld_endpoint": vtctldEndpoint,
+		})
+	}
+	newTasks = append(newTasks, copySchemaTasks)
 
 	splitCloneTasks := NewTaskContainer()
 	for _, sourceShard := range sourceShards {
 		// TODO(mberlin): Add a semaphore as argument to limit the parallism.
-		AddTask(splitCloneTasks, "vtworker", map[string]string{
-			"command":           "SplitClone",
+		AddTask(splitCloneTasks, "SplitCloneTask", map[string]string{
 			"keyspace":          keyspace,
-			"shard":             sourceShard,
-			"vtworker_endpoint": parameters["vtworker_endpoint"],
+			"source_shard":      sourceShard,
+			"vtworker_endpoint": vtworkerEndpoint,
 		})
 	}
 	newTasks = append(newTasks, splitCloneTasks)
 
-	// TODO(mberlin): Remove this once SplitClone does this on its own.
-	restoreTypeTasks := NewTaskContainer()
-	for _, sourceRdonlyTablet := range sourceRdonlyTablets {
-		AddTask(restoreTypeTasks, "vtctl", map[string]string{
-			"command": fmt.Sprintf("ChangeSlaveType %v rdonly", sourceRdonlyTablet),
-		})
-	}
-	newTasks = append(newTasks, restoreTypeTasks)
-
-	splitDiffTasks := NewTaskContainer()
 	for _, destShard := range destShards {
-		AddTask(splitDiffTasks, "vtworker", map[string]string{
-			"command":           "SplitDiff",
+		splitDiffTask := NewTaskContainer()
+		AddTask(splitDiffTask, "SplitDiffTask", map[string]string{
 			"keyspace":          keyspace,
-			"shard":             destShard,
-			"vtworker_endpoint": parameters["vtworker_endpoint"],
+			"dest_shard":        destShard,
+			"vtworker_endpoint": vtworkerEndpoint,
 		})
+		newTasks = append(newTasks, splitDiffTask)
 	}
-	newTasks = append(newTasks, splitDiffTasks)
 
-	// TODO(mberlin): Implement "CopySchemaShard" task and uncomment this.
+	// TODO(mberlin): Implement "MigrateServedTypes" task and uncomment this.
 	//	for _, servedType := range []string{"rdonly", "replica", "master"} {
 	//		migrateServedTypesTasks := NewTaskContainer()
 	//		for _, sourceShard := range sourceShards {
@@ -102,5 +76,6 @@ func (t *HorizontalReshardingTask) run(parameters map[string]string) ([]*pb.Task
 }
 
 func (t *HorizontalReshardingTask) requiredParameters() []string {
-	return []string{"keyspace", "source_shard_list", "source_shard_rdonly_list", "dest_shard_list"}
+	return []string{"keyspace", "source_shard_list", "dest_shard_list",
+		"vtctld_endpoint", "vtworker_endpoint"}
 }

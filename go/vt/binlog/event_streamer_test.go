@@ -54,7 +54,7 @@ func TestEventErrors(t *testing.T) {
 			Sql:      sql,
 		}
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("got: %+v, want: %+v", got, want)
+			t.Errorf("error for SQL: '%v' got: %+v, want: %+v", sql, got, want)
 		}
 	}
 }
@@ -108,7 +108,7 @@ func TestDMLEvent(t *testing.T) {
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [eid id name] [[10 -1 [110 97 109 101]] [11 18446744073709551615 [110 97 109 101]]]  1 <nil>}`
+				want := `&{DML vtocc_e [{eid 8 0} {id 8 0} {name 15 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 <nil>}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)

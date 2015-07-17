@@ -10,10 +10,7 @@
     <url>https://github.com/youtube/vitess/</url>
     <description>Umbrella project for all Java activities for Vitess</description>
     <inceptionYear>2014</inceptionYear>
-
     <modules>
-        <module>vtocc-client</module>
-        <module>vtocc-jdbc-driver</module>
         <module>gorpc</module>
         <module>vtgate-client</module>
     </modules>

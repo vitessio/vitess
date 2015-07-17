@@ -6,6 +6,7 @@ import logging
 from net import gorpc
 from net import bsonrpc
 from vtdb import dbexceptions
+from vtdb import field_types
 
 class Coord(object):
   Position = None
@@ -16,11 +17,24 @@ class Coord(object):
     self.ServerId = server_id
 
 
+def _make_row(row, conversions):
+  converted_row = []
+  for conversion_func, field_data in izip(conversions, row):
+    if field_data is None:
+      v = None
+    elif conversion_func:
+      v = conversion_func(field_data)
+    else:
+      v = field_data
+    converted_row.append(v)
+  return converted_row
+
+
 class EventData(object):
   Category = None
   TableName = None
-  PKColNames = None
-  PKValues = None
+  PrimaryKeyFields = None
+  PrimaryKeyValues = None
   Sql = None
   Timestamp = None
   GTIDField = None
@@ -29,16 +43,25 @@ class EventData(object):
     for key, val in raw_response.iteritems():
       self.__dict__[key] = val
     self.PkRows = []
-    del self.__dict__['PKColNames']
-    del self.__dict__['PKValues']
+    del self.__dict__['PrimaryKeyFields']
+    del self.__dict__['PrimaryKeyValues']
 
-    if not raw_response['PKColNames']:
+    # build the conversions
+    if not raw_response['PrimaryKeyFields']:
       return
-    for pkList in raw_response['PKValues']:
+    self.Fields = []
+    conversions = []
+    for field in raw_response['PrimaryKeyFields']:
+      self.Fields.append(field['Name'])
+      conversions.append(field_types.conversions.get(field['Type']))
+
+    # and parse the results
+    for pkList in raw_response['PrimaryKeyValues']:
       if not pkList:
         continue
-      pk_row = [(col_name, col_value) for col_name, col_value in izip(raw_response['PKColNames'], pkList)]
+      pk_row = tuple(_make_row(pkList, conversions))
       self.PkRows.append(pk_row)
+
 
 class UpdateStreamConnection(object):
   def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):

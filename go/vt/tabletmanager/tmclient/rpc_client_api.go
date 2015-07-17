@@ -19,7 +19,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
+// TabletManagerProtocol is the implementation to use for tablet
+// manager protocol. It is exported for tests only.
+var TabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 // ErrFunc is used by streaming RPCs that don't return a specific result
 type ErrFunc func() error
@@ -66,10 +68,6 @@ type TabletManagerClient interface {
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
 	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
-
-	// HealthStream asks the tablet to stream its health status on
-	// a regular basis
-	HealthStream(ctx context.Context, tablet *topo.TabletInfo) (<-chan *actionnode.HealthStreamReply, ErrFunc, error)
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
@@ -213,9 +211,9 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 // NewTabletManagerClient creates a new TabletManagerClient. Should be
 // called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
-	f, ok := tabletManagerClientFactories[*tabletManagerProtocol]
+	f, ok := tabletManagerClientFactories[*TabletManagerProtocol]
 	if !ok {
-		log.Fatalf("No TabletManagerProtocol registered with name %s", *tabletManagerProtocol)
+		log.Fatalf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
 	}
 
 	return f()

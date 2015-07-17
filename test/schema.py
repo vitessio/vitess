@@ -140,7 +140,6 @@ class TestSchema(unittest.TestCase):
                                '-sql='+sql,
                                keyspace],
                                trap_output=True,
-                               log_level='INFO',
                                raise_on_error=True)
     return out
 
@@ -148,7 +147,6 @@ class TestSchema(unittest.TestCase):
     out, _ = utils.run_vtctl(['GetSchema',
                               tablet_alias],
                               trap_output=True,
-                              log_level='INFO',
                               raise_on_error=True)
     return out
 

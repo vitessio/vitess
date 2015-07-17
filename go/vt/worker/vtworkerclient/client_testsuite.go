@@ -12,12 +12,20 @@ import (
 	"testing"
 	"time"
 
-	// register the go rpc tablet manager client
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
+
+func init() {
+	// enforce we will use the right protocol (gRPC) (note the
+	// client is unused, but it is initialized, so it needs to exist)
+	*tmclient.TabletManagerProtocol = "grpc"
+}
 
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
@@ -35,8 +43,8 @@ func TestSuite(t *testing.T, wi *worker.Instance, c VtworkerClient) {
 }
 
 func commandSucceeds(t *testing.T, client VtworkerClient) {
-	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"Ping", "pong"})
-	if err := errFunc(); err != nil {
+	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Ping", "pong"})
+	if err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
 
@@ -56,15 +64,19 @@ func commandSucceeds(t *testing.T, client VtworkerClient) {
 		t.Fatalf("Remote error: %v", err)
 	}
 
-	_, errFuncReset := client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
-	if err := errFuncReset(); err != nil {
+	logs, errFunc, err = client.ExecuteVtworkerCommand(context.Background(), []string{"Reset"})
+	if err != nil {
+		t.Fatalf("Cannot execute remote command: %v", err)
+	}
+	for _ = range logs {
+	}
+	if err := errFunc(); err != nil {
 		t.Fatalf("Cannot execute remote command: %v", err)
 	}
 }
 
 func commandErrors(t *testing.T, client VtworkerClient) {
-	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
-	err := errFunc()
+	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"NonexistingCommand"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
 
@@ -88,8 +100,7 @@ func commandErrors(t *testing.T, client VtworkerClient) {
 }
 
 func commandPanics(t *testing.T, client VtworkerClient) {
-	logs, errFunc := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
-	err := errFunc()
+	logs, errFunc, err := client.ExecuteVtworkerCommand(context.Background(), []string{"Panic"})
 	// The expected error could already be seen now or after the output channel is closed.
 	// To avoid checking for the same error twice, we don't check it here yet.
 

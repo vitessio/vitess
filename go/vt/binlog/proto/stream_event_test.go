@@ -9,41 +9,60 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectStreamEvent struct {
-	Category   string
-	TableName  string
-	PKColNames []string
-	PKValues   [][]interface{}
-	Sql        string
-	Timestamp  int64
-	GTIDField  myproto.GTIDField
+	Category         string
+	TableName        string
+	PrimaryKeyFields []mproto.Field
+	PrimaryKeyValues [][]sqltypes.Value
+	Sql              string
+	Timestamp        int64
+	GTIDField        myproto.GTIDField
 }
 
 type extraStreamEvent struct {
-	Extra      int
-	Category   string
-	TableName  string
-	PKColNames []string
-	PKValues   [][]interface{}
-	Sql        string
-	Timestamp  int64
-	GTIDField  myproto.GTIDField
+	Extra            int
+	Category         string
+	TableName        string
+	PrimaryKeyFields []mproto.Field
+	PrimaryKeyValues [][]sqltypes.Value
+	Sql              string
+	Timestamp        int64
+	GTIDField        myproto.GTIDField
 }
 
 func TestStreamEvent(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectStreamEvent{
-		Category:   "str1",
-		TableName:  "str2",
-		PKColNames: []string{"str3", "str4"},
-		PKValues: [][]interface{}{
-			[]interface{}{
-				[]byte("str5"), 1, uint64(0xffffffffffffffff),
+		Category:  "str1",
+		TableName: "str2",
+		PrimaryKeyFields: []mproto.Field{
+			mproto.Field{
+				Name: "str2",
+				Type: mproto.VT_VARCHAR,
 			},
-			[]interface{}{
-				[]byte("str6"), 2, uint64(0xfffffffffffffffe),
+			mproto.Field{
+				Name: "str3",
+				Type: mproto.VT_LONGLONG,
+			},
+			mproto.Field{
+				Name: "str4",
+				Type: mproto.VT_LONGLONG,
+			},
+		},
+		PrimaryKeyValues: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("str5")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("18446744073709551615")),
+			},
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("str6")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("18446744073709551614")),
 			},
 		},
 		Sql:       "str7",
@@ -55,15 +74,32 @@ func TestStreamEvent(t *testing.T) {
 	want := string(reflected)
 
 	custom := StreamEvent{
-		Category:   "str1",
-		TableName:  "str2",
-		PKColNames: []string{"str3", "str4"},
-		PKValues: [][]interface{}{
-			[]interface{}{
-				[]byte("str5"), 1, uint64(0xffffffffffffffff),
+		Category:  "str1",
+		TableName: "str2",
+		PrimaryKeyFields: []mproto.Field{
+			mproto.Field{
+				Name: "str2",
+				Type: mproto.VT_VARCHAR,
 			},
-			[]interface{}{
-				[]byte("str6"), 2, uint64(0xfffffffffffffffe),
+			mproto.Field{
+				Name: "str3",
+				Type: mproto.VT_LONGLONG,
+			},
+			mproto.Field{
+				Name: "str4",
+				Type: mproto.VT_LONGLONG,
+			},
+		},
+		PrimaryKeyValues: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("str5")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("18446744073709551615")),
+			},
+			[]sqltypes.Value{
+				sqltypes.MakeString([]byte("str6")),
+				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeString([]byte("18446744073709551614")),
 			},
 		},
 		Sql:       "str7",

@@ -171,18 +171,6 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
-message StreamHealthRequest {
-}
-
-message StreamHealthResponse {
-  topodata.Tablet tablet = 1;
-  int64 binlog_player_map_size = 2;
-  string health_error = 3;
-
-  // replication_delay is in nanoseconds
-  int64 replication_delay = 4;
-}
-
 message ReloadSchemaRequest {
 }
 

@@ -103,7 +103,8 @@ medium_integration_test_files = \
 	vtdb_test.py \
 	vtgate_utils_test.py \
 	rowcache_invalidator.py \
-	worker.py
+	worker.py \
+	automation_horizontal_resharding.py
 
 large_integration_test_files = \
 	vtgatev2_test.py \
@@ -183,26 +184,11 @@ bson:
 # This rule rebuilds all the go files from the proto definitions for gRPC
 # FIXME(alainjobart) also add support for python gRPC stubs, right now
 # it's only the proto files without gRPC
+# 1. list all proto files.
+# 2. remove 'proto/' prefix and '.proto' suffix.
+# 3. run protoc for each proto and put in go/vt/proto/${proto_file_name}
 proto:
-	cd go/vt/proto/mysqlctl && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/mysqlctl.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtrpc && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtrpc.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/topodata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/topodata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/replicationdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/replicationdata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/binlogdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlogdata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/binlogservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/binlogservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/queryservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/queryservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/query && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/query.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtgate && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgate.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtgateservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtgateservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/logutil && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/logutil.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtctldata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctldata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtctlservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtctlservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtworkerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerdata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/vtworkerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/vtworkerservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/tabletmanagerdata && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerdata.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/tabletmanagerservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/tabletmanagerservice.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/automation && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automation.proto --go_out=plugins=grpc:.
-	cd go/vt/proto/automationservice && $$VTROOT/dist/protobuf/bin/protoc -I../../../../proto ../../../../proto/automationservice.proto --go_out=plugins=grpc:.
+	find proto -name '*.proto' -print | sed 's/^proto\///' | sed 's/\.proto//' | xargs -I{} $$VTROOT/dist/protobuf/bin/protoc -Iproto proto/{}.proto --go_out=plugins=grpc:go/vt/proto/{}
 	find go/vt/proto -name "*.pb.go" | xargs sed --in-place -r -e 's,import ([a-z0-9_]+) ".",import \1 "github.com/youtube/vitess/go/vt/proto/\1",g'
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/logutil.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin
 	cd py/vtctl && $$VTROOT/dist/protobuf/bin/protoc -I../../proto ../../proto/vtctldata.proto --python_out=. --grpc_out=. --plugin=protoc-gen-grpc=$$VTROOT/dist/grpc/bin/grpc_python_plugin

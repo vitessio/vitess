@@ -47,8 +47,8 @@ COMMAND ARGUMENT DEFINITIONS
              for backup purposes
   -- batch: A slaved copy of data for OLAP load patterns (typically for
             MapReduce jobs)
-  -- checker: A tablet that is running a checker process. The tablet is likely
-              lagging in replication.
+  -- worker: A tablet that is in use by a vtworker process. The tablet is likely
+             lagging in replication.
   -- experimental: A slaved copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
@@ -173,9 +173,6 @@ var commands = []commandGroup{
 			command{"RunHealthCheck", commandRunHealthCheck,
 				"<tablet alias> <target tablet type>",
 				"Runs a health check on a remote tablet with the specified target type."},
-			command{"HealthStream", commandHealthStream,
-				"<tablet alias>",
-				"Streams the health status of a tablet."},
 			command{"Sleep", commandSleep,
 				"<tablet alias> <duration>",
 				"Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing."},
@@ -237,11 +234,11 @@ var commands = []commandGroup{
 				"<cell> <keyspace/shard>",
 				"Walks through a ShardReplication object and fixes the first error that it encounters."},
 			command{"RemoveShardCell", commandRemoveShardCell,
-				"[-force] <keyspace/shard> <cell>",
+				"[-force] [-recursive] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
 			command{"DeleteShard", commandDeleteShard,
-				"<keyspace/shard> ...",
-				"Deletes the specified shard(s). There must be no tablets left in them."},
+				"[-recursive] <keyspace/shard> ...",
+				"Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard."},
 		},
 	},
 	commandGroup{
@@ -250,8 +247,11 @@ var commands = []commandGroup{
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2,ks2,...] [-split_shard_count=N] [-force] <keyspace name>",
 				"Creates the specified keyspace."},
 			command{"DeleteKeyspace", commandDeleteKeyspace,
-				"<keyspace>",
-				"Deletes the specified keyspace. There must be no shards left in it."},
+				"[-recursive] <keyspace>",
+				"Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace."},
+			command{"RemoveKeyspaceCell", commandRemoveKeyspaceCell,
+				"[-force] [-recursive] <keyspace> <cell>",
+				"Removes the cell from the Cells list for all shards in the keyspace."},
 			command{"GetKeyspace", commandGetKeyspace,
 				"<keyspace>",
 				"Outputs a JSON structure that contains information about the Keyspace."},
@@ -889,31 +889,6 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
-func commandHealthStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the HealthStream command.")
-	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	c, errFunc, err := wr.TabletManagerClient().HealthStream(ctx, tabletInfo)
-	if err != nil {
-		return err
-	}
-	for hsr := range c {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(hsr))
-	}
-	return errFunc()
-}
-
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1326,7 +1301,8 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached to check for tablets")
+	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets in that cell belonging to the specified shard.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1338,10 +1314,11 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force)
+	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force, *recursive)
 }
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets belonging to the shard.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1354,7 +1331,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard)
+		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive)
 		switch err {
 		case nil:
 			// keep going
@@ -1412,6 +1389,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	recursive := subFlags.Bool("recursive", false, "Also recursively delete all shards in the keyspace.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1419,7 +1397,20 @@ func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("Must specify the <keyspace> argument for DeleteKeyspace.")
 	}
 
-	return wr.DeleteKeyspace(ctx, subFlags.Arg(0))
+	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
+}
+
+func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	force := subFlags.Bool("force", false, "Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
+	recursive := subFlags.Bool("recursive", false, "Also delete all tablets in that cell belonging to the specified keyspace.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("The <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command.")
+	}
+
+	return wr.RemoveKeyspaceCell(ctx, subFlags.Arg(0), subFlags.Arg(1), *force, *recursive)
 }
 
 func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

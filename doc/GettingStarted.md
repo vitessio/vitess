@@ -57,7 +57,7 @@ Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy). It requires 
     possible to use another lock server, but plugins currently exist only
     for ZooKeeper and etcd.
     - ZooKeeper 3.3.5 is included by default. 
-    - [Install etcd 0.4.6](https://github.com/coreos/etcd/releases/tag/v0.4.6).
+    - [Install etcd v2.0+](https://github.com/coreos/etcd/releases).
       If you use etcd, remember to include the <code>etcd</code> command
       on your path.
 

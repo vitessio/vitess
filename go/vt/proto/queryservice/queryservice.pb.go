@@ -54,6 +54,9 @@ type QueryClient interface {
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
 	SplitQuery(ctx context.Context, in *query.SplitQueryRequest, opts ...grpc.CallOption) (*query.SplitQueryResponse, error)
+	// StreamHealth runs a streaming RPC to the tablet, that returns the
+	// current health of the tablet on a regular basis.
+	StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error)
 }
 
 type queryClient struct {
@@ -159,6 +162,38 @@ func (c *queryClient) SplitQuery(ctx context.Context, in *query.SplitQueryReques
 	return out, nil
 }
 
+func (c *queryClient) StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Query_serviceDesc.Streams[1], c.cc, "/queryservice.Query/StreamHealth", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryStreamHealthClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_StreamHealthClient interface {
+	Recv() (*query.StreamHealthResponse, error)
+	grpc.ClientStream
+}
+
+type queryStreamHealthClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryStreamHealthClient) Recv() (*query.StreamHealthResponse, error) {
+	m := new(query.StreamHealthResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Server API for Query service
 
 type QueryServer interface {
@@ -186,6 +221,9 @@ type QueryServer interface {
 	// SplitQuery is the API to facilitate MapReduce-type iterations
 	// over large data sets (like full table dumps).
 	SplitQuery(context.Context, *query.SplitQueryRequest) (*query.SplitQueryResponse, error)
+	// StreamHealth runs a streaming RPC to the tablet, that returns the
+	// current health of the tablet on a regular basis.
+	StreamHealth(*query.StreamHealthRequest, Query_StreamHealthServer) error
 }
 
 func RegisterQueryServer(s *grpc.Server, srv QueryServer) {
@@ -297,6 +335,27 @@ func _Query_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc.
 	return out, nil
 }
 
+func _Query_StreamHealth_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(query.StreamHealthRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).StreamHealth(m, &queryStreamHealthServer{stream})
+}
+
+type Query_StreamHealthServer interface {
+	Send(*query.StreamHealthResponse) error
+	grpc.ServerStream
+}
+
+type queryStreamHealthServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryStreamHealthServer) Send(m *query.StreamHealthResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 var _Query_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "queryservice.Query",
 	HandlerType: (*QueryServer)(nil),
@@ -334,6 +393,11 @@ var _Query_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamExecute",
 			Handler:       _Query_StreamExecute_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamHealth",
+			Handler:       _Query_StreamHealth_Handler,
 			ServerStreams: true,
 		},
 	},

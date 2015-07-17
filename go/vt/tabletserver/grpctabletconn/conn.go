@@ -47,25 +47,28 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 	}
 	c := pbs.NewQueryClient(cc)
 
-	gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
-		Keyspace: keyspace,
-		Shard:    shard,
-	})
-	if err != nil {
-		cc.Close()
-		return nil, err
+	result := &gRPCQueryClient{
+		endPoint: endPoint,
+		cc:       cc,
+		c:        c,
 	}
-	if gsir.Error != nil {
-		cc.Close()
-		return nil, tabletErrorFromRPCError(gsir.Error)
+	if keyspace != "" || shard != "" {
+		gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
+			Keyspace: keyspace,
+			Shard:    shard,
+		})
+		if err != nil {
+			cc.Close()
+			return nil, err
+		}
+		if gsir.Error != nil {
+			cc.Close()
+			return nil, tabletErrorFromRPCError(gsir.Error)
+		}
+		result.sessionID = gsir.SessionId
 	}
 
-	return &gRPCQueryClient{
-		endPoint:  endPoint,
-		cc:        cc,
-		c:         c,
-		sessionID: gsir.SessionId,
-	}, nil
+	return result, nil
 }
 
 // Execute sends the query to VTTablet.
@@ -89,6 +92,11 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 		return nil, tabletErrorFromRPCError(er.Error)
 	}
 	return mproto.Proto3ToQueryResult(er.Result), nil
+}
+
+// Execute2 is the same with Execute in gRPC, since Execute is already CallerID enabled
+func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return conn.Execute(ctx, query, bindVars, transactionID)
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
@@ -115,6 +123,11 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 		return nil, tabletErrorFromRPCError(ebr.Error)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
+}
+
+// ExecuteBatch2 is the same with ExecuteBatch in gRPC, which is already CallerID enabled
+func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+	return conn.ExecuteBatch(ctx, queries, transactionID)
 }
 
 // StreamExecute starts a streaming query to VTTablet.
@@ -265,6 +278,39 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 		return nil, tabletErrorFromRPCError(sqr.Error)
 	}
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
+}
+
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	result := make(chan *pb.StreamHealthResponse, 10)
+	stream, err := conn.c.StreamHealth(ctx, &pb.StreamHealthRequest{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var finalErr error
+	go func() {
+		for {
+			hsr, err := stream.Recv()
+			if err != nil {
+				if err != io.EOF {
+					finalErr = err
+				}
+				close(result)
+				return
+			}
+			result <- hsr
+		}
+	}()
+	return result, func() error {
+		return finalErr
+	}, nil
 }
 
 // Close closes underlying bsonrpc.

@@ -567,7 +567,7 @@ primary key (name)
     self._check_binlog_player_vars(shard_2_master, seconds_behind_master_max=30)
     self._check_binlog_player_vars(shard_3_master, seconds_behind_master_max=30)
 
-    # use the vtworker checker to compare the data
+    # use vtworker to compare the data
     logging.debug("Running vtworker SplitDiff")
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
                         'unrelated', 'test_keyspace/c0-'],
@@ -705,7 +705,7 @@ primary key (name)
     logging.debug("Checking 80 percent of data was sent fairly quickly")
     self._check_lots_timeout(3000, 80, 10, base=2000)
 
-    # use the vtworker checker to compare the data again
+    # use vtworker to compare the data again
     logging.debug("Running vtworker SplitDiff")
     utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', '--exclude_tables',
                         'unrelated', 'test_keyspace/c0-'],

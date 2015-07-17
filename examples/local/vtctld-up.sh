@@ -19,6 +19,7 @@ mkdir -p $VTDATAROOT/tmp
 
 echo "Starting vtctld..."
 $VTROOT/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates \
+  -web_dir $VTTOP/web/vtctld \
   -log_dir $VTDATAROOT/tmp -port $port > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 disown -a
 

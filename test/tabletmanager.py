@@ -5,6 +5,7 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
+import json
 import logging
 import os
 import signal
@@ -456,6 +457,12 @@ class TestTabletManager(unittest.TestCase):
     # make sure status web page is unhappy
     self.assertIn('>unhealthy: replication_reporter: Replication is not running</span></div>', tablet_62044.get_status())
 
+    # make sure the health stream is updated
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   tablet_62044.tablet_alias])
+    self.assertIn('replication_reporter: Replication is not running', health['realtime_stats']['health_error'])
+
     # then restart replication, and write data, make sure we go back to healthy
     tablet_62044.mquery('', 'start slave')
     timeout = 10
@@ -472,6 +479,23 @@ class TestTabletManager(unittest.TestCase):
     # make sure the vars is updated
     v = utils.get_vars(tablet_62044.port)
     self.assertEqual(v['LastHealthMapCount'], 0)
+
+    # now test VtTabletStreamHealth returns the right thing
+    stdout, stderr = utils.run_vtctl(['VtTabletStreamHealth',
+                                      '-count', '2',
+                                      tablet_62044.tablet_alias],
+                                     trap_output=True, auto_log=True)
+    lines = stdout.splitlines()
+    self.assertEqual(len(lines), 2)
+    for line in lines:
+      logging.debug("Got health: %s", line)
+      data = json.loads(line)
+      self.assertIn('realtime_stats', data)
+      self.assertNotIn('health_error', data['realtime_stats'])
+      self.assertNotIn('tablet_externally_reparented_timestamp', data)
+      self.assertEqual('test_keyspace', data['target']['keyspace'])
+      self.assertEqual('0', data['target']['shard'])
+      self.assertEqual(3, data['target']['tablet_type'])
 
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])

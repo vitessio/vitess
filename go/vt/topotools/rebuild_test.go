@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	. "github.com/youtube/vitess/go/vt/topotools"
 )
 

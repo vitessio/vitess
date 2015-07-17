@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -67,7 +69,11 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		return err
 	}
 
-	return agent.QueryServiceControl.AllowQueries(agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
+	return agent.QueryServiceControl.AllowQueries(&pb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: topo.TabletTypeToProto(tablet.Type),
+	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:

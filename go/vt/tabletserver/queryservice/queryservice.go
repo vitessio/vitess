@@ -12,6 +12,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // QueryService is the interface implemented by the tablet's query service.
@@ -31,6 +33,12 @@ type QueryService interface {
 
 	// Map reduce helper
 	SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+
+	// StreamHealthRegister registers a listener for StreamHealth
+	StreamHealthRegister(chan<- *pb.StreamHealthResponse) (int, error)
+
+	// StreamHealthUnregister unregisters a listener for StreamHealth
+	StreamHealthUnregister(int) error
 
 	// Helper for RPC panic handling: call this in a defer statement
 	// at the beginning of each RPC handling method.
@@ -80,6 +88,16 @@ func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, queryList *proto.Q
 
 // SplitQuery is part of QueryService interface
 func (e *ErrorQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// StreamHealthRegister is part of QueryService interface
+func (e *ErrorQueryService) StreamHealthRegister(chan<- *pb.StreamHealthResponse) (int, error) {
+	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// StreamHealthUnregister is part of QueryService interface
+func (e *ErrorQueryService) StreamHealthUnregister(int) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

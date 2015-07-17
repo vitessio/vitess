@@ -13,10 +13,10 @@ import (
 
 // QueryDetail is a simple wrapper for Query, Context and a killable conn.
 type QueryDetail struct {
-	context context.Context
-	conn    killable
-	connID  int64
-	start   time.Time
+	ctx    context.Context
+	conn   killable
+	connID int64
+	start  time.Time
 }
 
 type killable interface {
@@ -26,8 +26,8 @@ type killable interface {
 }
 
 // NewQueryDetail creates a new QueryDetail
-func NewQueryDetail(context context.Context, conn killable) *QueryDetail {
-	return &QueryDetail{context: context, conn: conn, connID: conn.ID(), start: time.Now()}
+func NewQueryDetail(ctx context.Context, conn killable) *QueryDetail {
+	return &QueryDetail{ctx: ctx, conn: conn, connID: conn.ID(), start: time.Now()}
 }
 
 // QueryList holds a thread safe list of QueryDetails
@@ -100,7 +100,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	for _, qd := range ql.queryDetails {
 		row := QueryDetailzRow{
 			Query:       qd.conn.Current(),
-			ContextHTML: callinfo.HTMLFromContext(qd.context),
+			ContextHTML: callinfo.HTMLFromContext(qd.ctx),
 			Start:       qd.start,
 			Duration:    time.Now().Sub(qd.start),
 			ConnID:      qd.connID,

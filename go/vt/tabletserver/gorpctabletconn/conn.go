@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var (
@@ -65,17 +67,19 @@ func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard str
 		return nil, tabletError(err)
 	}
 
-	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
+	if keyspace != "" || shard != "" {
+		var sessionInfo tproto.SessionInfo
+		if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		// SqlQuery.GetSessionId might return an application error inside the SessionInfo
+		if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
+			conn.rpcClient.Close()
+			return nil, tabletError(err)
+		}
+		conn.sessionID = sessionInfo.SessionId
 	}
-	// SqlQuery.GetSessionId might return an application error inside the SessionInfo
-	if err = vterrors.FromRPCError(sessionInfo.Err); err != nil {
-		conn.rpcClient.Close()
-		return nil, tabletError(err)
-	}
-	conn.sessionID = sessionInfo.SessionId
 	return conn, nil
 }
 
@@ -125,6 +129,40 @@ func (conn *TabletBson) Execute(ctx context.Context, query string, bindVars map[
 	return qr, nil
 }
 
+// Execute2 should not be used now other than in tests.
+// It is the CallerID enabled version of Execute
+// Execute2 sends to query to VTTablet
+func (conn *TabletBson) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
+	req := &tproto.ExecuteRequest{
+		QueryRequest: tproto.Query{
+			Sql:           query,
+			BindVariables: bindVars,
+			TransactionId: transactionID,
+			SessionId:     conn.sessionID,
+		},
+		// TODO::Fill in EffectiveCallerID and ImmediateCallerID
+	}
+	qr := new(mproto.QueryResult)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.Execute2", req, qr)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.Execute2 might return an application error inside the QueryRequest
+		return vterrors.FromRPCError(qr.Err)
+	}
+	if err := conn.withTimeout(ctx, action); err != nil {
+		return nil, tabletError(err)
+	}
+	return qr, nil
+}
+
 // ExecuteBatch sends a batch query to VTTablet.
 func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
@@ -141,6 +179,39 @@ func (conn *TabletBson) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	qrs := new(tproto.QueryResultList)
 	action := func() error {
 		err := conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch", req, qrs)
+		if err != nil {
+			return err
+		}
+		// SqlQuery.ExecuteBatch might return an application error inside the QueryResultList
+		return vterrors.FromRPCError(qrs.Err)
+	}
+	if err := conn.withTimeout(ctx, action); err != nil {
+		return nil, tabletError(err)
+	}
+	return qrs, nil
+}
+
+// ExecuteBatch2 should not be used now other than in tests.
+// It is the CallerID enabled version of ExecuteBatch
+// ExecuteBatch2 sends a batch query to VTTablet
+func (conn *TabletBson) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, tabletconn.ConnClosed
+	}
+
+	req := tproto.ExecuteBatchRequest{
+		QueryBatch: tproto.QueryList{
+			Queries:       queries,
+			TransactionId: transactionID,
+			SessionId:     conn.sessionID,
+		},
+		//TODO::Add CallerID information after it is passed down by context
+	}
+	qrs := new(tproto.QueryResultList)
+	action := func() error {
+		err := conn.rpcClient.Call(ctx, "SqlQuery.ExecuteBatch2", req, qrs)
 		if err != nil {
 			return err
 		}
@@ -430,6 +501,21 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return nil, tabletError(err)
 	}
 	return reply.Queries, nil
+}
+
+// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+func (conn *TabletBson) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, nil, tabletconn.ConnClosed
+	}
+
+	result := make(chan *pb.StreamHealthResponse, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamHealth", &rpc.Unused{}, result)
+	return result, func() error {
+		return c.Error
+	}, nil
 }
 
 // Close closes underlying bsonrpc.

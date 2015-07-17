@@ -6,7 +6,7 @@ metadata:
     name: etcd
     cell: {{cell}}
 spec:
-  replicas: 3
+  replicas: {{replicas}}
   selector:
     name: etcd
     cell: {{cell}}
@@ -16,9 +16,16 @@ spec:
         name: etcd
         cell: {{cell}}
     spec:
+      volumes:
+        - name: certs
+          hostPath: {path: /etc/ssl/certs}
       containers:
         - name: etcd
-          image: vitess/etcd:v0.4.6-lite
+          image: vitess/etcd:v2.0.13-lite
+          volumeMounts:
+            - name: certs
+              readOnly: true
+              mountPath: /etc/ssl/certs
           command:
             - bash
             - "-c"
@@ -33,12 +40,16 @@ spec:
               local_etcd=${!local_etcd_host_var}:${!local_etcd_port_var}
 
               if [ "{{cell}}" != "global" ]; then
-              until curl -L http://$global_etcd/v2/keys/vt/cells/{{cell}}
-              -XPUT -d value=http://$local_etcd; do
+              until etcdctl -C "http://$global_etcd"
+              set "/vt/cells/{{cell}}" "http://$local_etcd"; do
               echo "[$(date)] waiting for global etcd to register cell '{{cell}}'";
               sleep 1;
               done;
               fi
 
-              etcd -name $HOSTNAME -peer-addr $ipaddr:7001 -addr $ipaddr:4001 -discovery {{discovery}}
+              etcd -name $HOSTNAME -discovery {{discovery}}
+              -advertise-client-urls http://$ipaddr:4001
+              -initial-advertise-peer-urls http://$ipaddr:7001
+              -listen-client-urls http://$ipaddr:4001
+              -listen-peer-urls http://$ipaddr:7001
 

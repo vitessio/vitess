@@ -6,21 +6,25 @@ package testlib
 
 import (
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"google.golang.org/grpc"
+
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlserver"
+	"github.com/youtube/vitess/go/vt/vtctl/grpcvtctlserver"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 
-	// we need to import the gorpcvtctlclient library so the go rpc
+	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
-	_ "github.com/youtube/vitess/go/vt/vtctl/gorpcvtctlclient"
+	_ "github.com/youtube/vitess/go/vt/vtctl/grpcvtctlclient"
 )
+
+func init() {
+	// make sure we use the right protocol
+	*vtctlclient.VtctlClientProtocol = "grpc"
+}
 
 // VtctlPipe is a vtctl server based on a topo server, and a client that
 // is connected to it via bson rpc.
@@ -38,19 +42,12 @@ func NewVtctlPipe(t *testing.T, ts topo.Server) *VtctlPipe {
 		t.Fatalf("Cannot listen: %v", err)
 	}
 
-	// Create a Go Rpc server and listen on the port
-	server := rpcplus.NewServer()
-	server.Register(gorpcvtctlserver.NewVtctlServer(ts))
+	// Create a gRPC server and listen on the port
+	server := grpc.NewServer()
+	grpcvtctlserver.StartServer(server, ts)
+	go server.Serve(listener)
 
-	// Create the HTTP server, serve the server from it
-	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
-	httpServer := http.Server{
-		Handler: handler,
-	}
-	go httpServer.Serve(listener)
-
-	// Create a VtctlClient Go Rpc client to talk to the fake server
+	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := vtctlclient.New(listener.Addr().String(), 30*time.Second)
 	if err != nil {
 		t.Fatalf("Cannot create client: %v", err)
@@ -76,7 +73,10 @@ func (vp *VtctlPipe) Run(args []string) error {
 	lockTimeout := 10 * time.Second
 	ctx := context.Background()
 
-	c, errFunc := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
+	if err != nil {
+		return err
+	}
 	for le := range c {
 		vp.t.Logf(le.String())
 	}

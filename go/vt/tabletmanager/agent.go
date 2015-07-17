@@ -41,7 +41,6 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -85,7 +84,8 @@ type ActionAgent struct {
 	// It is protected by actionMutex.
 	initReplication bool
 
-	// mutex protects the following fields
+	// mutex protects the following fields, only hold the mutex
+	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
 	_tabletControl   *topo.TabletControl
@@ -101,10 +101,8 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// healthStreamMutex protects all the following fields
-	healthStreamMutex sync.Mutex
-	healthStreamIndex int
-	healthStreamMap   map[int]chan<- *actionnode.HealthStreamReply
+	// last time we ran TabletExternallyReparented
+	_tabletExternallyReparentedTime time.Time
 }
 
 func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
@@ -154,7 +152,6 @@ func NewActionAgent(
 		History:             history.New(historyLength),
 		lastHealthMapCount:  stats.NewInt("LastHealthMapCount"),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
 
 	// try to initialize the tablet if we have to
@@ -203,11 +200,11 @@ func NewActionAgent(
 			}
 
 			// after the restore is done, start health check
-			agent.initHeathCheck()
+			agent.initHealthCheck()
 		}()
 	} else {
 		// synchronously start health check if needed
-		agent.initHeathCheck()
+		agent.initHealthCheck()
 	}
 
 	return agent, nil
@@ -215,7 +212,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, port int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, vtPort, grpcPort int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletserver.NewTestQueryServiceControl(),
 		HealthReporter:      health.DefaultAggregator,
@@ -229,9 +226,8 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 		History:             history.New(historyLength),
 		lastHealthMapCount:  new(stats.Int),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
-		healthStreamMap:     make(map[int]chan<- *actionnode.HealthStreamReply),
 	}
-	if err := agent.Start(batchCtx, 0, port, 0, 0); err != nil {
+	if err := agent.Start(batchCtx, 0, vtPort, 0, grpcPort); err != nil {
 		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
 	}
 	return agent
@@ -420,7 +416,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, vtsPort,
 			// leave it as is.
 			tablet.Portmap["mysql"] = mysqlPort
 		}
-		tablet.Portmap["vt"] = vtPort
+		if vtPort != 0 {
+			tablet.Portmap["vt"] = vtPort
+		} else {
+			delete(tablet.Portmap, "vt")
+		}
 		if vtsPort != 0 {
 			tablet.Portmap["vts"] = vtsPort
 		} else {
@@ -493,26 +493,4 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 	}
 
 	return tablet
-}
-
-// BroadcastHealthStreamReply will send the HealthStreamReply to all
-// listening clients.
-func (agent *ActionAgent) BroadcastHealthStreamReply(hsr *actionnode.HealthStreamReply) {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-	for _, c := range agent.healthStreamMap {
-		// do not block on any write
-		select {
-		case c <- hsr:
-		default:
-		}
-	}
-}
-
-// HealthStreamMapSize returns the size of the healthStreamMap
-// (used for tests).
-func (agent *ActionAgent) HealthStreamMapSize() int {
-	agent.healthStreamMutex.Lock()
-	defer agent.healthStreamMutex.Unlock()
-	return len(agent.healthStreamMap)
 }

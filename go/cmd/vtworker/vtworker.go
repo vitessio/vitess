@@ -78,9 +78,11 @@ func main() {
 		go func() {
 			if err := wi.WaitForCommand(worker, done); err != nil {
 				log.Error(err)
+				logutil.Flush()
 				// We cannot use exit.Return() here because we are in a different go routine now.
 				os.Exit(1)
 			}
+			logutil.Flush()
 			os.Exit(0)
 		}()
 	}

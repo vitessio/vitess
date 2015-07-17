@@ -217,18 +217,18 @@ func (loader *TemplateLoader) ServeTemplate(templateName string, data interface{
 	case "json":
 		j, err := json.MarshalIndent(data, "", "  ")
 		if err != nil {
-			httpError(w, "JSON error%s", err)
+			httpErrorf(w, r, "JSON error%s", err)
 			return
 		}
 		w.Write(j)
 	default:
 		tmpl, err := loader.Lookup(templateName)
 		if err != nil {
-			httpError(w, "error in template loader: %v", err)
+			httpErrorf(w, r, "error in template loader: %v", err)
 			return
 		}
 		if err := tmpl.Execute(w, data); err != nil {
-			httpError(w, "error executing template: %v", err)
+			httpErrorf(w, r, "error executing template: %v", err)
 		}
 	}
 }

@@ -14,9 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
-	_ "github.com/youtube/vitess/go/vt/tabletserver/gorpctabletconn"
+	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -127,7 +125,7 @@ func TestSqlDiffer(t *testing.T) {
 				},
 			},
 		}
-		rdonly.RPCServer.Register(gorpcqueryservice.New(&sqlDifferSqlQuery{t: t}))
+		grpcqueryservice.RegisterForTest(rdonly.RPCServer, &sqlDifferSqlQuery{t: t})
 	}
 
 	err := wrk.Run(ctx)

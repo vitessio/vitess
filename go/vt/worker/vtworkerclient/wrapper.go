@@ -15,7 +15,7 @@ import (
 
 // RunCommandAndWait executes a single command on a given vtworker and blocks until the command did return or timed out.
 // Output from vtworker is streamed as logutil.LoggerEvent messages which have to be consumed by the caller who has to specify a "recv" function.
-func RunCommandAndWait(ctx context.Context, server string, args []string, actionTimeout time.Duration, recv func(*logutil.LoggerEvent)) error {
+func RunCommandAndWait(ctx context.Context, server string, args []string, recv func(*logutil.LoggerEvent)) error {
 	if recv == nil {
 		return errors.New("No function closure for LoggerEvent stream specified")
 	}
@@ -28,10 +28,8 @@ func RunCommandAndWait(ctx context.Context, server string, args []string, action
 	defer client.Close()
 
 	// run the command
-	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
-	defer cancel()
-	c, errFunc := client.ExecuteVtworkerCommand(ctx, args)
-	if err = errFunc(); err != nil {
+	c, errFunc, err := client.ExecuteVtworkerCommand(ctx, args)
+	if err != nil {
 		return fmt.Errorf("Cannot execute remote command: %v", err)
 	}
 

@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -397,6 +399,10 @@ func (sbc *sandboxConn) Execute(ctx context.Context, query string, bindVars map[
 	return sbc.getNextResult(), nil
 }
 
+func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error) {
+	return sbc.Execute(ctx, query, bindVars, transactionID)
+}
+
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -411,6 +417,10 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 		qrl.List = append(qrl.List, *(sbc.getNextResult()))
 	}
 	return qrl, nil
+}
+
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+	return sbc.ExecuteBatch(ctx, queries, transactionID)
 }
 
 func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {
@@ -497,6 +507,11 @@ func (sbc *sandboxConn) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		splits = append(splits, split)
 	}
 	return splits, nil
+}
+
+// StreamHealth does nothing
+func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
+	return nil, nil, fmt.Errorf("Not implemented in test")
 }
 
 // Close does not change ExecCount

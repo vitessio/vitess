@@ -150,9 +150,8 @@ func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard s
 }
 
 // DeleteShard will do all the necessary changes in the topology server
-// to entirely remove a shard. It can only work if there are no tablets
-// in that shard.
-func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) error {
+// to entirely remove a shard.
+func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive bool) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -162,13 +161,30 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) err
 	if err != nil {
 		return err
 	}
-	if len(tabletMap) > 0 {
-		return fmt.Errorf("shard %v/%v still has %v tablets", keyspace, shard, len(tabletMap))
+	if recursive {
+		wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
+		for tabletAlias := range tabletMap {
+			// We don't care about scrapping or updating the replication graph,
+			// because we're about to delete the entire replication graph.
+			wr.Logger().Infof("Deleting tablet %v", tabletAlias)
+			if err := wr.TopoServer().DeleteTablet(ctx, tabletAlias); err != nil && err != topo.ErrNoNode {
+				// Unlike the errors below in non-recursive steps, we don't want to
+				// continue if a DeleteTablet fails. If we continue and delete the
+				// replication graph, the tablet record will be orphaned, since we'll
+				// no longer know it belongs to this shard.
+				//
+				// If the problem is temporary, or resolved externally, re-running
+				// DeleteShard will skip over tablets that were already deleted.
+				return fmt.Errorf("can't delete tablet %v: %v", tabletAlias, err)
+			}
+		}
+	} else if len(tabletMap) > 0 {
+		return fmt.Errorf("shard %v/%v still has %v tablets; use -recursive or remove them manually", keyspace, shard, len(tabletMap))
 	}
 
 	// remove the replication graph and serving graph in each cell
 	for _, cell := range shardInfo.Cells {
-		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 
@@ -191,22 +207,26 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string) err
 }
 
 // RemoveShardCell will remove a cell from the Cells list in a shard.
-// It will first check the shard has no tablets there.  if 'force' is
+//
+// It will first check the shard has no tablets there. If 'force' is
 // specified, it will remove the cell even when the tablet map cannot
 // be retrieved. This is intended to be used when a cell is completely
 // down and its topology server cannot even be reached.
-func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell string, force bool) error {
+//
+// If 'recursive' is specified, it will delete any tablets in the cell/shard,
+// with the assumption that the tablet processes have already been terminated.
+func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell string, force, recursive bool) error {
 	actionNode := actionnode.UpdateShard()
 	lockPath, err := wr.lockShard(ctx, keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.removeShardCell(ctx, keyspace, shard, cell, force)
+	err = wr.removeShardCell(ctx, keyspace, shard, cell, force, recursive)
 	return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell string, force bool) error {
+func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell string, force, recursive bool) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -226,13 +246,30 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 	sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
 	switch err {
 	case nil:
-		if len(sri.ReplicationLinks) > 0 {
+		if recursive {
+			wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
+			for _, rl := range sri.ReplicationLinks {
+				// We don't care about scrapping or updating the replication graph,
+				// because we're about to delete the entire replication graph.
+				wr.Logger().Infof("Deleting tablet %v", rl.TabletAlias)
+				if err := wr.TopoServer().DeleteTablet(ctx, rl.TabletAlias); err != nil && err != topo.ErrNoNode {
+					return fmt.Errorf("can't delete tablet %v: %v", rl.TabletAlias, err)
+				}
+			}
+		} else if len(sri.ReplicationLinks) > 0 {
 			return fmt.Errorf("cell %v has %v possible tablets in replication graph", cell, len(sri.ReplicationLinks))
 		}
 
 		// ShardReplication object is now useless, remove it
-		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil {
+		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			return fmt.Errorf("error deleting ShardReplication object in cell %v: %v", cell, err)
+		}
+
+		// Rebuild the shard serving graph to reflect the tablets we deleted.
+		// This must be done before removing the cell from the global shard record,
+		// since this cell will be skipped by all future rebuilds.
+		if _, err := wr.RebuildShardGraph(ctx, keyspace, shard, []string{cell}); err != nil {
+			return fmt.Errorf("can't rebuild serving graph for shard %v/%v in cell %v: %v", keyspace, shard, cell, err)
 		}
 
 		// we keep going

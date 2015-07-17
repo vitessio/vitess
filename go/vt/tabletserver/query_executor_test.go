@@ -886,7 +886,7 @@ func newTestQueryExecutor(sql string, ctx context.Context, flags executorFlags) 
 	if flags&enableSchemaOverrides > 0 {
 		schemaOverrides = getTestTableSchemaOverrides()
 	}
-	sqlQuery.allowQueries(&dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
+	sqlQuery.allowQueries(nil, &dbconfigs, schemaOverrides, testUtils.newMysqld(&dbconfigs))
 	if flags&enableTx > 0 {
 		session := proto.Session{
 			SessionId:     sqlQuery.sessionID,

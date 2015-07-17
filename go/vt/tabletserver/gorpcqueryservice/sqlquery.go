@@ -5,6 +5,8 @@
 package gorpcqueryservice
 
 import (
+	"sync"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/rpc"
@@ -13,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // SqlQuery is the server object for gorpc SqlQuery
@@ -24,6 +28,19 @@ type SqlQuery struct {
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) (err error) {
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.GetSessionId(sessionParams, sessionInfo)
+	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
+// GetSessionId2 should not be used by anything other than tests.
+// It will eventually replace GetSessionId, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) GetSessionId2(sessionIdReq *proto.GetSessionIdRequest, sessionInfo *proto.SessionInfo) (err error) {
+	defer sq.server.HandlePanic(&err)
+	tErr := sq.server.GetSessionId(&sessionIdReq.Params, sessionInfo)
 	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
@@ -118,6 +135,19 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 	return tErr
 }
 
+// Execute2 should not be used by anything other than tests
+// It will eventually replace Execute, but it breaks compatibility with older clients
+// Once all clients are upgraded, it can be replaced
+func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteRequest, reply *mproto.QueryResult) (err error) {
+	defer sq.server.HandlePanic(&err)
+	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), &executeRequest.QueryRequest, reply)
+	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
 func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
 	defer sq.server.HandlePanic(&err)
@@ -165,6 +195,22 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 	return tErr
 }
 
+// ExecuteBatch2 should not be used by anything other than tests
+// It will eventually replace ExecuteBatch, but it breaks compatibility with older clients.
+// Once all clients are upgraded, it can be replaced.
+func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRequest, reply *proto.QueryResultList) (err error) {
+	defer sq.server.HandlePanic(&err)
+	if req == nil {
+		return nil
+	}
+	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), &req.QueryBatch, reply)
+	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
+	if *tabletserver.RPCErrorOnlyInReply {
+		return nil
+	}
+	return tErr
+}
+
 // SplitQuery is exposing tabletserver.SqlQuery.SplitQuery
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	defer sq.server.HandlePanic(&err)
@@ -174,6 +220,34 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		return nil
 	}
 	return tErr
+}
+
+// StreamHealth is exposing tabletserver.SqlQuery.StreamHealthRegister and
+// tabletserver.SqlQuery.StreamHealthUnregister
+func (sq *SqlQuery) StreamHealth(ctx context.Context, query *rpc.Unused, sendReply func(reply interface{}) error) (err error) {
+	defer sq.server.HandlePanic(&err)
+
+	c := make(chan *pb.StreamHealthResponse, 10)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for shr := range c {
+			// we send until the client disconnects
+			if err := sendReply(shr); err != nil {
+				return
+			}
+		}
+	}()
+
+	id, err := sq.server.StreamHealthRegister(c)
+	if err != nil {
+		close(c)
+		wg.Wait()
+		return err
+	}
+	wg.Wait()
+	return sq.server.StreamHealthUnregister(id)
 }
 
 // New returns a new SqlQuery based on the QueryService implementation

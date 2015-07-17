@@ -18,6 +18,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // FakeQueryService has the server side of this fake
@@ -354,6 +357,18 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2")
+	ctx := context.Background()
+	qr, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !reflect.DeepEqual(*qr, executeQueryResult) {
+		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, executeQueryResult)
+	}
+}
+
 func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteError")
 	ctx := context.Background()
@@ -361,10 +376,25 @@ func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
 	verifyError(t, err, "Execute")
 }
 
+func testExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2Error")
+	ctx := context.Background()
+	_, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
+	verifyError(t, err, "Execute")
+}
+
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecutePanics")
 	ctx := context.Background()
 	if _, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
+func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecute2Panics")
+	ctx := context.Background()
+	if _, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -776,6 +806,33 @@ func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecuteBatch2")
+	ctx := context.Background()
+	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	if err != nil {
+		t.Fatalf("ExecuteBatch failed: %v", err)
+	}
+	if !reflect.DeepEqual(*qrl, executeBatchQueryResultList) {
+		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, executeBatchQueryResultList)
+	}
+}
+
+func testExecuteBatch2Error(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testBatchExecute2Error")
+	ctx := context.Background()
+	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	verifyError(t, err, "ExecuteBatch")
+}
+
+func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testExecuteBatch2Panics")
+	ctx := context.Background()
+	if _, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.hasError {
@@ -843,6 +900,96 @@ func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
+// this test is a bit of a hack: we write something on the channel
+// upon registration, and we also return an error, so the streaming query
+// ends right there. Otherwise we have no real way to trigger a real
+// communication error, that ends the streaming.
+var testStreamHealthStreamHealthResponse = &pb.StreamHealthResponse{
+	Target: &pb.Target{
+		Keyspace:   "test_keyspace",
+		Shard:      "test_shard",
+		TabletType: pbt.TabletType_RDONLY,
+	},
+	TabletExternallyReparentedTimestamp: 1234589,
+	RealtimeStats: &pb.RealtimeStats{
+		HealthError:         "random error",
+		SecondsBehindMaster: 234,
+		CpuUsage:            1.0,
+	},
+}
+var testStreamHealthError = "to trigger a server error"
+
+// The server side should write the response to the stream, then wait for
+// this channel to close, then return the error
+var streamHealthSynchronization chan struct{}
+
+// StreamHealthRegister is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StreamHealthRegister(c chan<- *pb.StreamHealthResponse) (int, error) {
+	if f.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	c <- testStreamHealthStreamHealthResponse
+	<-streamHealthSynchronization
+	return 0, fmt.Errorf(testStreamHealthError)
+}
+
+// StreamHealthUnregister is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StreamHealthUnregister(int) error {
+	return nil
+}
+
+func testStreamHealth(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testStreamHealth")
+	streamHealthSynchronization = make(chan struct{})
+	ctx := context.Background()
+
+	c, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		t.Fatalf("StreamHealth failed: %v", err)
+	}
+	// channel should have one response, then closed
+	shr, ok := <-c
+	if !ok {
+		t.Fatalf("StreamHealth got no response")
+	}
+
+	if !reflect.DeepEqual(*shr, *testStreamHealthStreamHealthResponse) {
+		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *shr, *testStreamHealthStreamHealthResponse)
+	}
+
+	// close streamHealthSynchronization so server side knows we
+	// got the response, and it can send the error
+	close(streamHealthSynchronization)
+
+	_, ok = <-c
+	if ok {
+		t.Fatalf("StreamHealth wasn't closed")
+	}
+	err = errFunc()
+	if !strings.Contains(err.Error(), testStreamHealthError) {
+		t.Fatalf("StreamHealth failed with the wrong error: %v", err)
+	}
+}
+
+func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn) {
+	t.Log("testStreamHealthPanics")
+	ctx := context.Background()
+
+	c, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		t.Fatalf("StreamHealth failed: %v", err)
+	}
+	// channel should have no response, just closed
+	_, ok := <-c
+	if ok {
+		t.Fatalf("StreamHealth wasn't closed")
+	}
+	err = errFunc()
+	if err == nil || !strings.Contains(err.Error(), "caught test panic") {
+		t.Fatalf("unexpected panic error: %v", err)
+	}
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
 	// Make the synchronization channels on init, so there's no state shared between servers
@@ -865,10 +1012,13 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollback(t, conn)
 	testRollback2(t, conn)
 	testExecute(t, conn)
+	testExecute2(t, conn)
 	testStreamExecute(t, conn)
 	testStreamExecute2(t, conn)
 	testExecuteBatch(t, conn)
+	testExecuteBatch2(t, conn)
 	testSplitQuery(t, conn)
+	testStreamHealth(t, conn)
 
 	// fake should return an error, make sure errors are handled properly
 	fake.hasError = true
@@ -879,9 +1029,11 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackError(t, conn)
 	testRollback2Error(t, conn)
 	testExecuteError(t, conn)
+	testExecute2Error(t, conn)
 	testStreamExecuteError(t, conn)
 	testStreamExecute2Error(t, conn)
 	testExecuteBatchError(t, conn)
+	testExecuteBatch2Error(t, conn)
 	testSplitQueryError(t, conn)
 	fake.hasError = false
 
@@ -894,9 +1046,12 @@ func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService)
 	testRollbackPanics(t, conn)
 	testRollback2Panics(t, conn)
 	testExecutePanics(t, conn)
+	testExecute2Panics(t, conn)
 	testStreamExecutePanics(t, conn, fake)
 	testStreamExecute2Panics(t, conn, fake)
 	testExecuteBatchPanics(t, conn)
+	testExecuteBatch2Panics(t, conn)
 	testSplitQueryPanics(t, conn)
+	testStreamHealthPanics(t, conn)
 	fake.panics = false
 }

@@ -18,9 +18,10 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 const (
@@ -95,7 +96,7 @@ func (agent *ActionAgent) IsRunningHealthCheck() bool {
 	return *targetTabletType != ""
 }
 
-func (agent *ActionAgent) initHeathCheck() {
+func (agent *ActionAgent) initHealthCheck() {
 	if !agent.IsRunningHealthCheck() {
 		log.Infof("No target_tablet_type specified, disabling any health check")
 		return
@@ -174,8 +175,17 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
 	if shouldQueryServiceBeRunning {
 		if !isQueryServiceRunning {
+			// send the type we want to be, not the type we are
+			currentType := tablet.Type
+			if tablet.Type == topo.TYPE_SPARE {
+				tablet.Type = targetTabletType
+			}
+
 			// we remember this new possible error
 			err = agent.allowQueries(tablet.Tablet, blacklistedTables)
+
+			// restore the current type
+			tablet.Type = currentType
 		}
 	} else {
 		if isQueryServiceRunning {
@@ -229,20 +239,26 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	agent._healthy = err
 	agent._healthyTime = time.Now()
 	agent._replicationDelay = replicationDelay
+	terTime := agent._tabletExternallyReparentedTime
 	agent.mutex.Unlock()
 
-	// send it to our observers, after we've updated the tablet state
-	// (Tablet is a pointer, and below we will alter the Tablet
-	// record to be correct.
-	hsr := &actionnode.HealthStreamReply{
-		Tablet:              tablet.Tablet,
-		BinlogPlayerMapSize: agent.BinlogPlayerMap.size(),
-		ReplicationDelay:    replicationDelay,
+	// send it to our observers
+	// (the Target has already been updated when restarting the
+	// query service earlier)
+	// FIXME(alainjobart,liguo) add CpuUsage
+	stats := &pb.RealtimeStats{
+		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
 	if err != nil {
-		hsr.HealthError = err.Error()
+		stats.HealthError = err.Error()
 	}
-	defer agent.BroadcastHealthStreamReply(hsr)
+	defer func() {
+		var ts int64
+		if !terTime.IsZero() {
+			ts = terTime.Unix()
+		}
+		agent.QueryServiceControl.BroadcastHealth(ts, stats)
+	}()
 
 	// Update our topo.Server state, start with no change
 	newTabletType := tablet.Type

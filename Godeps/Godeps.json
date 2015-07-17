@@ -8,8 +8,8 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/coreos/go-etcd/etcd",
-			"Comment": "v0.2.0-rc1-127-g6fe04d5",
-			"Rev": "6fe04d580dfb71c9e34cbce2f4df9eefd1e1241e"
+			"Comment": "v2.0.0",
+			"Rev": "f02171fbd43c7b9b53ce8679b03235a1ef3c7b12"
 		},
 		{
 			"ImportPath": "github.com/influxdb/influxdb/client",
