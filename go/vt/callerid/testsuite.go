@@ -31,8 +31,20 @@ func Tests(t *testing.T, im *ImmediateCallerID, ef *EffectiveCallerID) {
 	if ctxef != nil {
 		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
 	}
-	ctx = NewContext(ctx, ef, im)
 
+	ctx = NewContext(ctx, nil, nil)
+	ctxim = ImmediateCallerIDFromContext(ctx)
+	// For Contexts with nil ImmediateCallerID, ImmediateCallerIDFromContext should fail
+	if ctxim != nil {
+		t.Errorf("Expect nil from ImmediateCallerIDFromContext, but got %v", ctxim)
+	}
+	// For Contexts with nil EffectiveCallerID, EffectiveCallerIDFromContext should fail
+	ctxef = EffectiveCallerIDFromContext(ctx)
+	if ctxef != nil {
+		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
+	}
+
+	ctx = NewContext(ctx, ef, im)
 	ctxim = ImmediateCallerIDFromContext(ctx)
 	// retrieved ImmediateCallerID should be equal to the one we put into Context
 	if !reflect.DeepEqual(ctxim, im) {
