@@ -174,7 +174,7 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 // findTargets phase:
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
-// - mark them all as 'checker' pointing back to us
+// - mark them all as 'worker' pointing back to us
 func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	sdw.SetState(WorkerStateFindTargets)
 
@@ -182,7 +182,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	var err error
 	sdw.destinationAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
 	if err != nil {
-		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
+		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shards
@@ -190,7 +190,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	for i, ss := range sdw.shardInfo.SourceShards {
 		sdw.sourceAliases[i], err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
-			return fmt.Errorf("cannot find checker for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
+			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", sdw.cell, sdw.keyspace, ss.Shard, err)
 		}
 	}
 
@@ -201,19 +201,19 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 // 1 - ask the master of the destination shard to pause filtered replication,
 //   and return the source binlog positions
 //   (add a cleanup task to restart filtered replication on master)
-// 2 - stop all the source 'checker' at a binlog position higher than the
+// 2 - stop all the source tablets at a binlog position higher than the
 //   destination master. Get that new list of positions.
 //   (add a cleanup task to restart binlog replication on them, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
 // 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination checker is equal or passed that master binlog
-//   position, and stop its replication.
+// 4 - wait until the destination tablet is equal or passed that master
+//   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
 // 5 - restart filtered replication on destination master.
 //   (remove the cleanup task that does the same)
-// At this point, all checker instances are stopped at the same point.
+// At this point, all source and destination tablets are stopped at the same point.
 
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
@@ -233,7 +233,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, masterInfo)
 
-	// 2 - stop all the source 'checker' at a binlog position
+	// 2 - stop all the source tablets at a binlog position
 	//     higher than the destination master
 	stopPositionList := blproto.BlpPositionList{
 		Entries: make([]blproto.BlpPosition, len(sdw.shardInfo.SourceShards)),
@@ -282,9 +282,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		return fmt.Errorf("RunBlpUntil for %v until %v failed: %v", sdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
-	// 4 - wait until the destination checker is equal or passed
+	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
-	sdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos)
+	sdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", sdw.destinationAlias, masterPos)
 	destinationTablet, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.destinationAlias)
 	if err != nil {
 		return err
@@ -318,7 +318,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 }
 
 // diff phase: will log messages regarding the diff.
-// - get the schema on all checkers
+// - get the schema on all tablets
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 
