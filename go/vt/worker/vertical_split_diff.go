@@ -183,7 +183,7 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 // findTargets phase:
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
-// - mark them all as 'checker' pointing back to us
+// - mark them all as 'worker' pointing back to us
 func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 	vsdw.SetState(WorkerStateFindTargets)
 
@@ -191,13 +191,13 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 	var err error
 	vsdw.destinationAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.keyspace, vsdw.shard)
 	if err != nil {
-		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
+		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.keyspace, vsdw.shard, err)
 	}
 
 	// find an appropriate endpoint in the source shard
 	vsdw.sourceAlias, err = FindWorkerTablet(ctx, vsdw.wr, vsdw.cleaner, vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard)
 	if err != nil {
-		return fmt.Errorf("cannot find checker for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
+		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", vsdw.cell, vsdw.shardInfo.SourceShards[0].Keyspace, vsdw.shardInfo.SourceShards[0].Shard, err)
 	}
 
 	return nil
@@ -207,19 +207,19 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 // 1 - ask the master of the destination shard to pause filtered replication,
 //   and return the source binlog positions
 //   (add a cleanup task to restart filtered replication on master)
-// 2 - stop the source 'checker' at a binlog position higher than the
+// 2 - stop the source tablet at a binlog position higher than the
 //   destination master. Get that new position.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
 // 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// 4 - wait until the destination checker is equal or passed that master binlog
-//   position, and stop its replication.
+// 4 - wait until the destination tablet is equal or passed that master
+//   binlog position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
 // 5 - restart filtered replication on destination master.
 //   (remove the cleanup task that does the same)
-// At this point, all checker instances are stopped at the same point.
+// At this point, all source and destination tablets are stopped at the same point.
 
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
@@ -239,7 +239,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	}
 	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo)
 
-	// 2 - stop the source 'checker' at a binlog position
+	// 2 - stop the source tablet at a binlog position
 	//     higher than the destination master
 	stopPositionList := blproto.BlpPositionList{
 		Entries: make([]blproto.BlpPosition, 1),
@@ -285,9 +285,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
 	}
 
-	// 4 - wait until the destination checker is equal or passed
+	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
-	vsdw.wr.Logger().Infof("Waiting for destination checker %v to catch up to %v", vsdw.destinationAlias, masterPos)
+	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", vsdw.destinationAlias, masterPos)
 	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.destinationAlias)
 	if err != nil {
 		return err
@@ -321,7 +321,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 }
 
 // diff phase: will create a list of messages regarding the diff.
-// - get the schema on all checkers
+// - get the schema on all tablets
 // - if some table schema mismatches, record them (use existing schema diff tools).
 // - for each table in destination, run a diff pipeline.
 

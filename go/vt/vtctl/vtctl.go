@@ -47,8 +47,8 @@ COMMAND ARGUMENT DEFINITIONS
              for backup purposes
   -- batch: A slaved copy of data for OLAP load patterns (typically for
             MapReduce jobs)
-  -- checker: A tablet that is running a checker process. The tablet is likely
-              lagging in replication.
+  -- worker: A tablet that is in use by a vtworker process. The tablet is likely
+             lagging in replication.
   -- experimental: A slaved copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be

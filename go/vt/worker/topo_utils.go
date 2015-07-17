@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints required for checker")
+	minHealthyEndPoints = flag.Int("min_healthy_rdonly_endpoints", 2, "minimum number of healthy rdonly endpoints before taking out one")
 
 	// WaitForHealthyEndPointsTimeout intent is to wait for the
 	// healthcheck to automatically return rdonly instances which
@@ -110,7 +110,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
-	wr.Logger().Infof("Changing tablet %v to 'checker'", tabletAlias)
+	wr.Logger().Infof("Changing tablet %v to '%v'", tabletAlias, topo.TYPE_WORKER)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = wr.ChangeType(shortCtx, tabletAlias, topo.TYPE_WORKER, false /*force*/)
 	cancel()
