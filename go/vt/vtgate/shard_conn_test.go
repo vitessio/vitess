@@ -43,13 +43,13 @@ func TestShardConnExecuteBatch(t *testing.T) {
 	testShardConnGeneric(t, "TestShardConnExecuteBatch", func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, 24*time.Hour, connectTimings)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(context.Background(), queries, 0)
+		_, err := sdc.ExecuteBatch(context.Background(), queries, false, 0)
 		return err
 	})
 	testShardConnTransact(t, "TestShardConnExecuteBatch", func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", "", 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, 24*time.Hour, connectTimings)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		_, err := sdc.ExecuteBatch(context.Background(), queries, 1)
+		_, err := sdc.ExecuteBatch(context.Background(), queries, false, 1)
 		return err
 	})
 }

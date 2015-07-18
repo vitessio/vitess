@@ -485,8 +485,9 @@ type ExecuteBatchRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target" json:"target,omitempty"`
 	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries" json:"queries,omitempty"`
-	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id" json:"transaction_id,omitempty"`
-	SessionId         int64           `protobuf:"varint,6,opt,name=session_id" json:"session_id,omitempty"`
+	AsTransaction     bool            `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
+	TransactionId     int64           `protobuf:"varint,6,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	SessionId         int64           `protobuf:"varint,7,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }

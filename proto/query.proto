@@ -183,8 +183,9 @@ message ExecuteBatchRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   repeated BoundQuery queries = 4;
-  int64 transaction_id = 5;
-  int64 session_id = 6;
+  bool  as_transaction = 5;
+  int64 transaction_id = 6;
+  int64 session_id = 7;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch

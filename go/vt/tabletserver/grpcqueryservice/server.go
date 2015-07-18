@@ -74,6 +74,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 	execErr := q.server.ExecuteBatch(ctx, &proto.QueryList{
 		Queries:       proto.Proto3ToBoundQueryList(request.Queries),
 		SessionId:     request.SessionId,
+		AsTransaction: request.AsTransaction,
 		TransactionId: request.TransactionId,
 	}, reply)
 	if execErr != nil {

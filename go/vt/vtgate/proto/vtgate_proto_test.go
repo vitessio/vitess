@@ -209,16 +209,18 @@ type reflectBoundShardQuery struct {
 }
 
 type reflectBatchQueryShard struct {
-	Queries    []reflectBoundShardQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Queries       []reflectBoundShardQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 type extraBatchQueryShard struct {
-	Extra      int
-	Queries    []reflectBoundShardQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Extra         int
+	Queries       []reflectBoundShardQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 func TestBatchQueryShard(t *testing.T) {
@@ -229,6 +231,7 @@ func TestBatchQueryShard(t *testing.T) {
 			Keyspace:      "keyspace",
 			Shards:        []string{"shard1", "shard2"},
 		}},
+		AsTransaction: true,
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -255,7 +258,8 @@ func TestBatchQueryShard(t *testing.T) {
 			Keyspace:      "keyspace",
 			Shards:        []string{"shard1", "shard2"},
 		}},
-		Session: &commonSession,
+		AsTransaction: true,
+		Session:       &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -286,12 +290,12 @@ func TestBatchQueryShard(t *testing.T) {
 }
 
 type badTypeBatchQueryShard struct {
-	Queries          string
-	Keyspace         string
-	Shards           []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries       string
+	Keyspace      string
+	Shards        []string
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 func TestBatchQueryShardBadType(t *testing.T) {
@@ -540,16 +544,18 @@ type reflectBoundKeyspaceIdQuery struct {
 }
 
 type reflectKeyspaceIdBatchQuery struct {
-	Queries    []reflectBoundKeyspaceIdQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Queries       []reflectBoundKeyspaceIdQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 type extraKeyspaceIdBatchQuery struct {
-	Extra      int
-	Queries    []reflectBoundKeyspaceIdQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Extra         int
+	Queries       []reflectBoundKeyspaceIdQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 func TestKeyspaceIdBatchQuery(t *testing.T) {
@@ -560,6 +566,7 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			Keyspace:      "keyspace",
 			KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		}},
+		AsTransaction: true,
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -586,7 +593,8 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 			Keyspace:      "keyspace",
 			KeyspaceIds:   []kproto.KeyspaceId{kproto.KeyspaceId("10"), kproto.KeyspaceId("20")},
 		}},
-		Session: &commonSession,
+		AsTransaction: true,
+		Session:       &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -617,12 +625,12 @@ func TestKeyspaceIdBatchQuery(t *testing.T) {
 }
 
 type badTypeKeyspaceIdsBatchQuery struct {
-	Queries          string
-	Keyspace         string
-	KeyspaceIds      []string
-	TabletType       topo.TabletType
-	Session          *Session
-	NotInTransaction bool
+	Queries       string
+	Keyspace      string
+	KeyspaceIds   []string
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 func TestKeyspaceIdsBatchQueryBadType(t *testing.T) {

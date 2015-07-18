@@ -243,11 +243,7 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 	batchQuery := proto.QueryList{
 		Queries: []proto.BoundQuery{
 			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           "commit",
+				Sql:           "noquery",
 				BindVariables: nil,
 			},
 		},
@@ -451,19 +447,12 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
 			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
 				Sql:           sql,
 				BindVariables: nil,
 			},
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
 		},
-		SessionId: sqlQuery.sessionID,
+		AsTransaction: true,
+		SessionId:     sqlQuery.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -494,6 +483,37 @@ func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 	query := proto.QueryList{
 		Queries:   []proto.BoundQuery{},
 		SessionId: sqlQuery.sessionID,
+	}
+
+	reply := proto.QueryResultList{
+		List: []mproto.QueryResult{},
+	}
+	err = sqlQuery.ExecuteBatch(ctx, &query, &reply)
+	verifyTabletError(t, err, ErrFail)
+}
+
+func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
+	setUpSqlQueryTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	dbconfigs := testUtils.newDBConfigs()
+	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("allowQueries failed: %v", err)
+	}
+	defer sqlQuery.disallowQueries()
+	ctx := context.Background()
+	query := proto.QueryList{
+		Queries: []proto.BoundQuery{
+			proto.BoundQuery{
+				Sql:           "begin",
+				BindVariables: nil,
+			},
+		},
+		SessionId:     sqlQuery.sessionID,
+		AsTransaction: true,
+		TransactionId: 1,
 	}
 
 	reply := proto.QueryResultList{
@@ -602,19 +622,12 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
 			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
 				Sql:           sql,
 				BindVariables: nil,
 			},
-			proto.BoundQuery{
-				Sql:           "commit",
-				BindVariables: nil,
-			},
 		},
-		SessionId: sqlQuery.sessionID,
+		AsTransaction: true,
+		SessionId:     sqlQuery.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -622,59 +635,6 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 			mproto.QueryResult{},
 			*sqlResult,
 			mproto.QueryResult{},
-		},
-	}
-
-	if db.GetQueryCalledNum("rollback") != 0 {
-		t.Fatalf("rollback should not be executed.")
-	}
-
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
-	}
-
-	if db.GetQueryCalledNum("rollback") != 1 {
-		t.Fatalf("rollback should be executed only once.")
-	}
-}
-
-func TestSqlQueryExecuteBatchFailBeginWithoutCommit(t *testing.T) {
-	db := setUpSqlQueryTest()
-	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2)"
-	sqlResult := &mproto.QueryResult{}
-	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
-
-	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSql, sqlResult)
-
-	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
-	}
-	defer sqlQuery.disallowQueries()
-	ctx := context.Background()
-	query := proto.QueryList{
-		Queries: []proto.BoundQuery{
-			proto.BoundQuery{
-				Sql:           "begin",
-				BindVariables: nil,
-			},
-			proto.BoundQuery{
-				Sql:           sql,
-				BindVariables: nil,
-			},
-		},
-		SessionId: sqlQuery.sessionID,
-	}
-
-	reply := proto.QueryResultList{
-		List: []mproto.QueryResult{
-			mproto.QueryResult{},
-			*sqlResult,
 		},
 	}
 
