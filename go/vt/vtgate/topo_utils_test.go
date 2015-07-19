@@ -5,11 +5,14 @@
 package vtgate
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 )
 
@@ -97,6 +100,87 @@ func TestMapExactShards(t *testing.T) {
 		}
 		if !reflect.DeepEqual(testCase.shards, gotShards) {
 			t.Errorf("want \n%#v, got \n%#v", testCase.shards, gotShards)
+		}
+	}
+}
+
+func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
+	var testCases = []struct {
+		boundQueries []proto.BoundShardQuery
+		requests     *scatterBatchRequest
+	}{
+		{
+			boundQueries: []proto.BoundShardQuery{
+				{
+					Sql:           "q1",
+					BindVariables: map[string]interface{}{"q1var": 1},
+					Keyspace:      "ks1",
+					Shards:        []string{"0", "1"},
+				}, {
+					Sql:           "q2",
+					BindVariables: map[string]interface{}{"q2var": 2},
+					Keyspace:      "ks1",
+					Shards:        []string{"1"},
+				}, {
+					Sql:           "q3",
+					BindVariables: map[string]interface{}{"q3var": 3},
+					Keyspace:      "ks2",
+					Shards:        []string{"1"},
+				},
+			},
+			requests: &scatterBatchRequest{
+				Length: 3,
+				Requests: map[string]*shardBatchRequest{
+					"ks1:0": &shardBatchRequest{
+						Queries: []tproto.BoundQuery{
+							{
+								Sql:           "q1",
+								BindVariables: map[string]interface{}{"q1var": 1},
+							},
+						},
+						Keyspace:      "ks1",
+						Shard:         "0",
+						ResultIndexes: []int{0},
+					},
+					"ks1:1": &shardBatchRequest{
+						Queries: []tproto.BoundQuery{
+							{
+								Sql:           "q1",
+								BindVariables: map[string]interface{}{"q1var": 1},
+							}, {
+								Sql:           "q2",
+								BindVariables: map[string]interface{}{"q2var": 2},
+							},
+						},
+						Keyspace:      "ks1",
+						Shard:         "1",
+						ResultIndexes: []int{0, 1},
+					},
+					"ks2:1": &shardBatchRequest{
+						Queries: []tproto.BoundQuery{
+							{
+								Sql:           "q3",
+								BindVariables: map[string]interface{}{"q3var": 3},
+							},
+						},
+						Keyspace:      "ks2",
+						Shard:         "1",
+						ResultIndexes: []int{2},
+					},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
+		if err != nil {
+			t.Error(err)
+		}
+		if !reflect.DeepEqual(testCase.requests, scatterRequest) {
+			got, _ := json.Marshal(scatterRequest)
+			want, _ := json.Marshal(testCase.requests)
+			t.Errorf("Bound Query: %#v\nResponse:   %s\nExepecting: %s", testCase.boundQueries, got, want)
 		}
 	}
 }

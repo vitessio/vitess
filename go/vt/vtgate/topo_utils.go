@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -150,4 +151,30 @@ func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace 
 		shardnum++
 	}
 	return keyspace, nil, fmt.Errorf("keyrange %v does not exactly match shards", kr)
+}
+
+func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery) (*scatterBatchRequest, error) {
+	requests := &scatterBatchRequest{
+		Length:   len(boundQueries),
+		Requests: make(map[string]*shardBatchRequest),
+	}
+	for i, boundQuery := range boundQueries {
+		for _, shard := range boundQuery.Shards {
+			key := boundQuery.Keyspace + ":" + shard
+			request := requests.Requests[key]
+			if request == nil {
+				request = &shardBatchRequest{
+					Keyspace: boundQuery.Keyspace,
+					Shard:    shard,
+				}
+				requests.Requests[key] = request
+			}
+			request.Queries = append(request.Queries, tproto.BoundQuery{
+				Sql:           boundQuery.Sql,
+				BindVariables: boundQuery.BindVariables,
+			})
+			request.ResultIndexes = append(request.ResultIndexes, i)
+		}
+	}
+	return requests, nil
 }
