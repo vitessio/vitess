@@ -48,8 +48,8 @@ func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdReques
 func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (response *pb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	reply := new(mproto.QueryResult)
 	execErr := q.server.Execute(ctx, &proto.Query{
@@ -72,8 +72,8 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchRequest) (response *pb.ExecuteBatchResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	reply := new(proto.QueryResultList)
 	execErr := q.server.ExecuteBatch(ctx, &proto.QueryList{
@@ -96,8 +96,8 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query_StreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	seErr := q.server.StreamExecute(ctx, &proto.Query{
 		Sql:           string(request.Query.Sql),
@@ -123,8 +123,8 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *pb.BeginResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	txInfo := new(proto.TransactionInfo)
 	if beginErr := q.server.Begin(ctx, &proto.Session{
@@ -144,8 +144,8 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response *pb.CommitResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	commitErr := q.server.Commit(ctx, &proto.Session{
 		SessionId:     request.SessionId,
@@ -160,8 +160,8 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (response *pb.RollbackResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	rollbackErr := q.server.Rollback(ctx, &proto.Session{
 		SessionId:     request.SessionId,
@@ -177,8 +177,8 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (response *pb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		callerid.GRPCEffectiveCallerID(request.GetEffectiveCallerId()),
-		callerid.GRPCImmediateCallerID(request.GetImmediateCallerId()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
 	)
 	reply := &proto.SplitQueryResult{}
 	if sqErr := q.server.SplitQuery(ctx, &proto.SplitQueryRequest{
