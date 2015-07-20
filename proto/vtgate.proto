@@ -26,7 +26,7 @@ message ExecuteRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
   query.BoundQuery query = 3;
-  topodata.TabletType TabletType = 4;
+  topodata.TabletType tablet_type = 4;
   bool not_in_transaction = 5;
 }
 
@@ -44,7 +44,7 @@ message ExecuteShardsRequest {
   query.BoundQuery query = 3;
   string keyspace = 4;
   repeated string shards = 5;
-  topodata.TabletType TabletType = 6;
+  topodata.TabletType tablet_type = 6;
   bool not_in_transaction = 7;
 }
 
@@ -62,7 +62,7 @@ message ExecuteKeyspaceIdsRequest {
   query.BoundQuery query = 3;
   string keyspace = 4;
   repeated bytes keyspace_ids = 5;
-  topodata.TabletType TabletType = 6;
+  topodata.TabletType tablet_type = 6;
   bool not_in_transaction = 7;
 }
 
@@ -80,7 +80,7 @@ message ExecuteKeyRangesRequest {
   query.BoundQuery query = 3;
   string keyspace = 4;
   repeated topodata.KeyRange key_ranges = 5;
-  topodata.TabletType TabletType = 6;
+  topodata.TabletType tablet_type = 6;
   bool not_in_transaction = 7;
 }
 
@@ -114,7 +114,7 @@ message ExecuteEntityIdsRequest {
     bytes keyspace_id = 6;
   }
   repeated EntityId entity_keyspace_ids = 6;
-  topodata.TabletType TabletType = 7;
+  topodata.TabletType tablet_type = 7;
   bool not_in_transaction = 8;
 }
 
@@ -139,7 +139,7 @@ message ExecuteBatchShardsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
   repeated BoundShardQuery queries = 3;
-  topodata.TabletType TabletType = 4;
+  topodata.TabletType tablet_type = 4;
   bool as_transaction = 5;
 }
 
@@ -164,7 +164,7 @@ message ExecuteBatchKeyspaceIdsRequest {
   vtrpc.CallerID caller_id = 1;
   Session session = 2;
   repeated BoundKeyspaceIdQuery queries = 3;
-  topodata.TabletType TabletType = 4;
+  topodata.TabletType tablet_type = 4;
   bool as_transaction = 5;
 }
 
@@ -179,7 +179,7 @@ message ExecuteBatchKeyspaceIdsResponse {
 message StreamExecuteRequest {
   vtrpc.CallerID caller_id = 1;
   query.BoundQuery query = 2;
-  topodata.TabletType TabletType = 3;
+  topodata.TabletType tablet_type = 3;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -194,7 +194,7 @@ message StreamExecuteShardsRequest {
   query.BoundQuery query = 2;
   string keyspace = 3;
   repeated string shards = 4;
-  topodata.TabletType TabletType = 5;
+  topodata.TabletType tablet_type = 5;
 }
 
 // StreamExecuteShardsResponse is the returned value from StreamExecuteShards
@@ -209,7 +209,7 @@ message StreamExecuteKeyspaceIdsRequest {
   query.BoundQuery query = 2;
   string keyspace = 3;
   repeated bytes keyspace_ids = 4;
-  topodata.TabletType TabletType = 5;
+  topodata.TabletType tablet_type = 5;
 }
 
 // StreamExecuteKeyspaceIdsResponse is the returned value from StreamExecuteKeyspaceIds
@@ -224,7 +224,7 @@ message StreamExecuteKeyRangesRequest {
   query.BoundQuery query = 2;
   string keyspace = 3;
   repeated topodata.KeyRange key_ranges = 4;
-  topodata.TabletType TabletType = 5;
+  topodata.TabletType tablet_type = 5;
 }
 
 // StreamExecuteKeyRangesResponse is the returned value from StreamExecuteKeyRanges
