@@ -6,7 +6,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-// GoRPCImmediateCallerID creates new ImmediateCallerID structure
+// GoRPCImmediateCallerID creates new ImmediateCallerID(qrpb.VTGateCallerID)
 // from GoRPC's VTGateCallerID
 func GoRPCImmediateCallerID(v *proto.VTGateCallerID) *qrpb.VTGateCallerID {
 	if v == nil {
@@ -15,7 +15,7 @@ func GoRPCImmediateCallerID(v *proto.VTGateCallerID) *qrpb.VTGateCallerID {
 	return NewImmediateCallerID(v.Username)
 }
 
-// GoRPCEffectiveCallerID creates new EffectiveCallerID structure
+// GoRPCEffectiveCallerID creates new EffectiveCallerID(vtpb.CallerID)
 // from GoRPC's CallerID
 func GoRPCEffectiveCallerID(c *proto.CallerID) *vtpb.CallerID {
 	if c == nil {
