@@ -1,6 +1,8 @@
-# Copyright 2014, Google Inc. All rights reserved.
+# Copyright 2014 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+"""This is the go rpc client implementation of the vtctl client interface.
+"""
 
 from net import bsonrpc
 from vtctl import vtctl_client
@@ -8,6 +10,7 @@ from vtctl import vtctl_client
 
 class GoRpcVtctlClient(vtctl_client.VtctlClient):
   """GoRpcVtctlClient is the go rpc implementation of VtctlClient.
+
   It is registered as 'gorpc' protocol.
   """
 
@@ -15,7 +18,9 @@ class GoRpcVtctlClient(vtctl_client.VtctlClient):
                keyfile=None, certfile=None):
     self.addr = addr
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,
+                                        encrypted=encrypted, keyfile=keyfile,
+                                        certfile=certfile)
     self.connected = False
 
   def __str__(self):
@@ -37,9 +42,9 @@ class GoRpcVtctlClient(vtctl_client.VtctlClient):
 
   def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
     req = {
-      'Args':          args,
-      'ActionTimeout': long(action_timeout * 1e9),
-      'LockTimeout':   long(lock_timeout * 1e9),
+        'Args': args,
+        'ActionTimeout': long(action_timeout * 1e9),
+        'LockTimeout': long(lock_timeout * 1e9),
     }
     self.client.stream_call('VtctlServer.ExecuteVtctlCommand', req)
     while True:

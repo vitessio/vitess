@@ -1,9 +1,10 @@
-# Copyright 2014, Google Inc. All rights reserved.
+# Copyright 2014 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
+"""This module defines the vtctl client interface.
+"""
 
 import logging
-
 
 # mapping from protocol to python class. The protocol matches the string
 # used by vtctlclient as a -vtctl_client_protocol parameter.
@@ -25,12 +26,16 @@ def connect(protocol, *pargs, **kargs):
 
   Args:
     protocol: the registered protocol to use.
-    arsg: passed to the registered protocol __init__ method.
+    *pargs: passed to the registered protocol __init__ method.
+    **kargs: passed to the registered protocol __init__ method.
 
   Returns:
     A dialed VtctlClient.
+
+  Raises:
+    Exception: if the protocol is unknown.
   """
-  if not protocol in vtctl_client_conn_classes:
+  if protocol not in vtctl_client_conn_classes:
     raise Exception('Unknown vtclient protocol', protocol)
   conn = vtctl_client_conn_classes[protocol](*pargs, **kargs)
   conn.dial()
@@ -39,6 +44,7 @@ def connect(protocol, *pargs, **kargs):
 
 class Event(object):
   """Event is streamed by VtctlClient.
+
   Eventually, we will just use the proto3 definition for logutil.proto/Event.
   """
 
@@ -57,6 +63,7 @@ class Event(object):
 
 class VtctlClient(object):
   """VtctlClient is the interface for the vtctl client implementations.
+
   All implementations must implement all these methods.
   If something goes wrong with the connection, this object will be thrown out.
   """
@@ -104,8 +111,9 @@ class VtctlClient(object):
 
 def execute_vtctl_command(client, args, action_timeout=30.0,
                           lock_timeout=5.0, info_to_debug=False):
-  """This is a helper method that executes a remote vtctl command, logs
-  the output to the logging module, and returns the console output.
+  """This is a helper method that executes a remote vtctl command.
+
+  It logs the output to the logging module, and returns the console output.
 
   Args:
     client: VtctlClient object to use.
@@ -121,16 +129,16 @@ def execute_vtctl_command(client, args, action_timeout=30.0,
   console_result = ''
   for e in client.execute_vtctl_command(args, action_timeout=action_timeout,
                                         lock_timeout=lock_timeout):
-      if e.level == Event.INFO:
-        if info_to_debug:
-          logging.debug('%s', e.value)
-        else:
-          logging.info('%s', e.value)
-      elif e.level == Event.WARNING:
-        logging.warning('%s', e.value)
-      elif e.level == Event.ERROR:
-        logging.error('%s', e.value)
-      elif e.level == Event.CONSOLE:
-        console_result += e.value
+    if e.level == Event.INFO:
+      if info_to_debug:
+        logging.debug('%s', e.value)
+      else:
+        logging.info('%s', e.value)
+    elif e.level == Event.WARNING:
+      logging.warning('%s', e.value)
+    elif e.level == Event.ERROR:
+      logging.error('%s', e.value)
+    elif e.level == Event.CONSOLE:
+      console_result += e.value
 
   return console_result
