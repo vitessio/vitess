@@ -849,6 +849,9 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQuery
 	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
 	}
+	if req.SplitColumn != splitQuerySplitColumn {
+		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitColumn: got %v expected %v", req.SplitColumn, splitQuerySplitColumn)
+	}
 	if req.SplitCount != splitQuerySplitCount {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.SplitCount: got %v expected %v", req.SplitCount, splitQuerySplitCount)
 	}
@@ -863,6 +866,7 @@ var splitQueryBoundQuery = proto.BoundQuery{
 	},
 }
 
+const splitQuerySplitColumn = "nice_column_to_split"
 const splitQuerySplitCount = 372
 
 var splitQueryQuerySplitList = []proto.QuerySplit{
@@ -881,7 +885,7 @@ var splitQueryQuerySplitList = []proto.QuerySplit{
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testSplitQuery")
 	ctx := context.Background()
-	qsl, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitCount)
+	qsl, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
@@ -893,14 +897,14 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testSplitQueryError")
 	ctx := context.Background()
-	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testSplitQueryPanics")
 	ctx := context.Background()
-	if _, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitCount); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }

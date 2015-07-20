@@ -478,7 +478,7 @@ func (conn *TabletBson) Rollback2(ctx context.Context, transactionID int64) erro
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC
-func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -486,9 +486,10 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return
 	}
 	req := &tproto.SplitQueryRequest{
-		Query:      query,
-		SplitCount: splitCount,
-		SessionID:  conn.sessionID,
+		Query:       query,
+		SplitColumn: splitColumn,
+		SplitCount:  splitCount,
+		SessionID:   conn.sessionID,
 	}
 	reply := new(tproto.SplitQueryResult)
 	action := func() error {

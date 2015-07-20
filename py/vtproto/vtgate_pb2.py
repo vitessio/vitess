@@ -22,7 +22,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgate.proto',
   package='vtgate',
   syntax='proto3',
-  serialized_pb=_b('\n\x0cvtgate.proto\x12\x06vtgate\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x0bvtrpc.proto\"\x9e\x01\n\x07Session\x12\x16\n\x0ein_transaction\x18\x01 \x01(\x08\x12\x34\n\x0eshard_sessions\x18\x02 \x03(\x0b\x32\x1c.vtgate.Session.ShardSession\x1a\x45\n\x0cShardSession\x12\x1d\n\x06target\x18\x01 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x02 \x01(\x03\"\xbe\x01\n\x0e\x45xecuteRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12(\n\nTabletType\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x05 \x01(\x08\"w\n\x0f\x45xecuteResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xe6\x01\n\x14\x45xecuteShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x0e\n\x06shards\x18\x05 \x03(\t\x12(\n\nTabletType\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"}\n\x15\x45xecuteShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xf1\x01\n\x19\x45xecuteKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x05 \x03(\x0c\x12(\n\nTabletType\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"\x82\x01\n\x1a\x45xecuteKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\x81\x02\n\x17\x45xecuteKeyRangesRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12&\n\nkey_ranges\x18\x05 \x03(\x0b\x32\x12.topodata.KeyRange\x12(\n\nTabletType\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"\x80\x01\n\x18\x45xecuteKeyRangesResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xbc\x04\n\x17\x45xecuteEntityIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x1a\n\x12\x65ntity_column_name\x18\x05 \x01(\t\x12\x45\n\x13\x65ntity_keyspace_ids\x18\x06 \x03(\x0b\x32(.vtgate.ExecuteEntityIdsRequest.EntityId\x12(\n\nTabletType\x18\x07 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x08 \x01(\x08\x1a\xfd\x01\n\x08\x45ntityId\x12?\n\x08xid_type\x18\x01 \x01(\x0e\x32-.vtgate.ExecuteEntityIdsRequest.EntityId.Type\x12\x11\n\txid_bytes\x18\x02 \x01(\x0c\x12\x0f\n\x07xid_int\x18\x03 \x01(\x03\x12\x10\n\x08xid_uint\x18\x04 \x01(\x04\x12\x11\n\txid_float\x18\x05 \x01(\x01\x12\x13\n\x0bkeyspace_id\x18\x06 \x01(\x0c\"R\n\x04Type\x12\r\n\tTYPE_NULL\x10\x00\x12\x0e\n\nTYPE_BYTES\x10\x01\x12\x0c\n\x08TYPE_INT\x10\x02\x12\r\n\tTYPE_UINT\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\"\x80\x01\n\x18\x45xecuteEntityIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"U\n\x0f\x42oundShardQuery\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\x0e\n\x06shards\x18\x03 \x03(\t\"\xb5\x01\n\x19\x45xecuteBatchShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12(\n\x07queries\x18\x03 \x03(\x0b\x32\x17.vtgate.BoundShardQuery\x12(\n\nTabletType\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\"\x83\x01\n\x1a\x45xecuteBatchShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12#\n\x07results\x18\x03 \x03(\x0b\x32\x12.query.QueryResult\"`\n\x14\x42oundKeyspaceIdQuery\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x03 \x03(\x0c\"\xbf\x01\n\x1e\x45xecuteBatchKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12-\n\x07queries\x18\x03 \x03(\x0b\x32\x1c.vtgate.BoundKeyspaceIdQuery\x12(\n\nTabletType\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\"\x88\x01\n\x1f\x45xecuteBatchKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12#\n\x07results\x18\x03 \x03(\x0b\x32\x12.query.QueryResult\"\x86\x01\n\x14StreamExecuteRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12(\n\nTabletType\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\"[\n\x15StreamExecuteResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xae\x01\n\x1aStreamExecuteShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\x0e\n\x06shards\x18\x04 \x03(\t\x12(\n\nTabletType\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"a\n\x1bStreamExecuteShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xb9\x01\n\x1fStreamExecuteKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x04 \x03(\x0c\x12(\n\nTabletType\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"f\n StreamExecuteKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xc9\x01\n\x1dStreamExecuteKeyRangesRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12&\n\nkey_ranges\x18\x04 \x03(\x0b\x32\x12.topodata.KeyRange\x12(\n\nTabletType\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"d\n\x1eStreamExecuteKeyRangesResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"2\n\x0c\x42\x65ginRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\"Q\n\rBeginResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"U\n\rCommitRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"0\n\x0e\x43ommitResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\"W\n\x0fRollbackRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"2\n\x10RollbackResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\"\x80\x01\n\x11SplitQueryRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x13\n\x0bsplit_count\x18\x04 \x01(\x03\"\xf2\x02\n\x12SplitQueryResponse\x12/\n\x06splits\x18\x01 \x03(\x0b\x32\x1f.vtgate.SplitQueryResponse.Part\x1aH\n\x0cKeyRangePart\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12&\n\nkey_ranges\x18\x02 \x03(\x0b\x32\x12.topodata.KeyRange\x1a-\n\tShardPart\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\x0e\n\x06shards\x18\x02 \x03(\t\x1a\xb1\x01\n\x04Part\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12?\n\x0ekey_range_part\x18\x02 \x01(\x0b\x32\'.vtgate.SplitQueryResponse.KeyRangePart\x12\x38\n\nshard_part\x18\x03 \x01(\x0b\x32$.vtgate.SplitQueryResponse.ShardPart\x12\x0c\n\x04size\x18\x04 \x01(\x03\x62\x06proto3')
+  serialized_pb=_b('\n\x0cvtgate.proto\x12\x06vtgate\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x0bvtrpc.proto\"\x9e\x01\n\x07Session\x12\x16\n\x0ein_transaction\x18\x01 \x01(\x08\x12\x34\n\x0eshard_sessions\x18\x02 \x03(\x0b\x32\x1c.vtgate.Session.ShardSession\x1a\x45\n\x0cShardSession\x12\x1d\n\x06target\x18\x01 \x01(\x0b\x32\r.query.Target\x12\x16\n\x0etransaction_id\x18\x02 \x01(\x03\"\xbf\x01\n\x0e\x45xecuteRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12)\n\x0btablet_type\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x05 \x01(\x08\"w\n\x0f\x45xecuteResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xe7\x01\n\x14\x45xecuteShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x0e\n\x06shards\x18\x05 \x03(\t\x12)\n\x0btablet_type\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"}\n\x15\x45xecuteShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xf2\x01\n\x19\x45xecuteKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x05 \x03(\x0c\x12)\n\x0btablet_type\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"\x82\x01\n\x1a\x45xecuteKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\x82\x02\n\x17\x45xecuteKeyRangesRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12&\n\nkey_ranges\x18\x05 \x03(\x0b\x32\x12.topodata.KeyRange\x12)\n\x0btablet_type\x18\x06 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x07 \x01(\x08\"\x80\x01\n\x18\x45xecuteKeyRangesResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"\xbd\x04\n\x17\x45xecuteEntityIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x04 \x01(\t\x12\x1a\n\x12\x65ntity_column_name\x18\x05 \x01(\t\x12\x45\n\x13\x65ntity_keyspace_ids\x18\x06 \x03(\x0b\x32(.vtgate.ExecuteEntityIdsRequest.EntityId\x12)\n\x0btablet_type\x18\x07 \x01(\x0e\x32\x14.topodata.TabletType\x12\x1a\n\x12not_in_transaction\x18\x08 \x01(\x08\x1a\xfd\x01\n\x08\x45ntityId\x12?\n\x08xid_type\x18\x01 \x01(\x0e\x32-.vtgate.ExecuteEntityIdsRequest.EntityId.Type\x12\x11\n\txid_bytes\x18\x02 \x01(\x0c\x12\x0f\n\x07xid_int\x18\x03 \x01(\x03\x12\x10\n\x08xid_uint\x18\x04 \x01(\x04\x12\x11\n\txid_float\x18\x05 \x01(\x01\x12\x13\n\x0bkeyspace_id\x18\x06 \x01(\x0c\"R\n\x04Type\x12\r\n\tTYPE_NULL\x10\x00\x12\x0e\n\nTYPE_BYTES\x10\x01\x12\x0c\n\x08TYPE_INT\x10\x02\x12\r\n\tTYPE_UINT\x10\x03\x12\x0e\n\nTYPE_FLOAT\x10\x04\"\x80\x01\n\x18\x45xecuteEntityIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12\"\n\x06result\x18\x03 \x01(\x0b\x32\x12.query.QueryResult\"U\n\x0f\x42oundShardQuery\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\x0e\n\x06shards\x18\x03 \x03(\t\"\xce\x01\n\x19\x45xecuteBatchShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12(\n\x07queries\x18\x03 \x03(\x0b\x32\x17.vtgate.BoundShardQuery\x12)\n\x0btablet_type\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\x16\n\x0e\x61s_transaction\x18\x05 \x01(\x08\"\x83\x01\n\x1a\x45xecuteBatchShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12#\n\x07results\x18\x03 \x03(\x0b\x32\x12.query.QueryResult\"`\n\x14\x42oundKeyspaceIdQuery\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x03 \x03(\x0c\"\xd8\x01\n\x1e\x45xecuteBatchKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12-\n\x07queries\x18\x03 \x03(\x0b\x32\x1c.vtgate.BoundKeyspaceIdQuery\x12)\n\x0btablet_type\x18\x04 \x01(\x0e\x32\x14.topodata.TabletType\x12\x16\n\x0e\x61s_transaction\x18\x05 \x01(\x08\"\x88\x01\n\x1f\x45xecuteBatchKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\x12#\n\x07results\x18\x03 \x03(\x0b\x32\x12.query.QueryResult\"\x87\x01\n\x14StreamExecuteRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\"[\n\x15StreamExecuteResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xaf\x01\n\x1aStreamExecuteShardsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\x0e\n\x06shards\x18\x04 \x03(\t\x12)\n\x0btablet_type\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"a\n\x1bStreamExecuteShardsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xba\x01\n\x1fStreamExecuteKeyspaceIdsRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12\x14\n\x0ckeyspace_ids\x18\x04 \x03(\x0c\x12)\n\x0btablet_type\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"f\n StreamExecuteKeyspaceIdsResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"\xca\x01\n\x1dStreamExecuteKeyRangesRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x05query\x18\x02 \x01(\x0b\x32\x11.query.BoundQuery\x12\x10\n\x08keyspace\x18\x03 \x01(\t\x12&\n\nkey_ranges\x18\x04 \x03(\x0b\x32\x12.topodata.KeyRange\x12)\n\x0btablet_type\x18\x05 \x01(\x0e\x32\x14.topodata.TabletType\"d\n\x1eStreamExecuteKeyRangesResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12\"\n\x06result\x18\x02 \x01(\x0b\x32\x12.query.QueryResult\"2\n\x0c\x42\x65ginRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\"Q\n\rBeginResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"U\n\rCommitRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"0\n\x0e\x43ommitResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\"W\n\x0fRollbackRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12 \n\x07session\x18\x02 \x01(\x0b\x32\x0f.vtgate.Session\"2\n\x10RollbackResponse\x12\x1e\n\x05\x65rror\x18\x01 \x01(\x0b\x32\x0f.vtrpc.RPCError\"\x96\x01\n\x11SplitQueryRequest\x12\"\n\tcaller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12 \n\x05query\x18\x03 \x01(\x0b\x32\x11.query.BoundQuery\x12\x14\n\x0csplit_column\x18\x04 \x01(\t\x12\x13\n\x0bsplit_count\x18\x05 \x01(\x03\"\xf2\x02\n\x12SplitQueryResponse\x12/\n\x06splits\x18\x01 \x03(\x0b\x32\x1f.vtgate.SplitQueryResponse.Part\x1aH\n\x0cKeyRangePart\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12&\n\nkey_ranges\x18\x02 \x03(\x0b\x32\x12.topodata.KeyRange\x1a-\n\tShardPart\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\x0e\n\x06shards\x18\x02 \x03(\t\x1a\xb1\x01\n\x04Part\x12 \n\x05query\x18\x01 \x01(\x0b\x32\x11.query.BoundQuery\x12?\n\x0ekey_range_part\x18\x02 \x01(\x0b\x32\'.vtgate.SplitQueryResponse.KeyRangePart\x12\x38\n\nshard_part\x18\x03 \x01(\x0b\x32$.vtgate.SplitQueryResponse.ShardPart\x12\x0c\n\x04size\x18\x04 \x01(\x03\x62\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,vtrpc__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -58,8 +58,8 @@ _EXECUTEENTITYIDSREQUEST_ENTITYID_TYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=2160,
-  serialized_end=2242,
+  serialized_start=2165,
+  serialized_end=2247,
 )
 _sym_db.RegisterEnumDescriptor(_EXECUTEENTITYIDSREQUEST_ENTITYID_TYPE)
 
@@ -168,7 +168,7 @@ _EXECUTEREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteRequest.TabletType', index=3,
+      name='tablet_type', full_name='vtgate.ExecuteRequest.tablet_type', index=3,
       number=4, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -194,7 +194,7 @@ _EXECUTEREQUEST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=228,
-  serialized_end=418,
+  serialized_end=419,
 )
 
 
@@ -238,8 +238,8 @@ _EXECUTERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=420,
-  serialized_end=539,
+  serialized_start=421,
+  serialized_end=540,
 )
 
 
@@ -286,7 +286,7 @@ _EXECUTESHARDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteShardsRequest.TabletType', index=5,
+      name='tablet_type', full_name='vtgate.ExecuteShardsRequest.tablet_type', index=5,
       number=6, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -311,8 +311,8 @@ _EXECUTESHARDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=542,
-  serialized_end=772,
+  serialized_start=543,
+  serialized_end=774,
 )
 
 
@@ -356,8 +356,8 @@ _EXECUTESHARDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=774,
-  serialized_end=899,
+  serialized_start=776,
+  serialized_end=901,
 )
 
 
@@ -404,7 +404,7 @@ _EXECUTEKEYSPACEIDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteKeyspaceIdsRequest.TabletType', index=5,
+      name='tablet_type', full_name='vtgate.ExecuteKeyspaceIdsRequest.tablet_type', index=5,
       number=6, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -429,8 +429,8 @@ _EXECUTEKEYSPACEIDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=902,
-  serialized_end=1143,
+  serialized_start=904,
+  serialized_end=1146,
 )
 
 
@@ -474,8 +474,8 @@ _EXECUTEKEYSPACEIDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1146,
-  serialized_end=1276,
+  serialized_start=1149,
+  serialized_end=1279,
 )
 
 
@@ -522,7 +522,7 @@ _EXECUTEKEYRANGESREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteKeyRangesRequest.TabletType', index=5,
+      name='tablet_type', full_name='vtgate.ExecuteKeyRangesRequest.tablet_type', index=5,
       number=6, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -547,8 +547,8 @@ _EXECUTEKEYRANGESREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1279,
-  serialized_end=1536,
+  serialized_start=1282,
+  serialized_end=1540,
 )
 
 
@@ -592,8 +592,8 @@ _EXECUTEKEYRANGESRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1539,
-  serialized_end=1667,
+  serialized_start=1543,
+  serialized_end=1671,
 )
 
 
@@ -659,8 +659,8 @@ _EXECUTEENTITYIDSREQUEST_ENTITYID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1989,
-  serialized_end=2242,
+  serialized_start=1994,
+  serialized_end=2247,
 )
 
 _EXECUTEENTITYIDSREQUEST = _descriptor.Descriptor(
@@ -713,7 +713,7 @@ _EXECUTEENTITYIDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteEntityIdsRequest.TabletType', index=6,
+      name='tablet_type', full_name='vtgate.ExecuteEntityIdsRequest.tablet_type', index=6,
       number=7, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -738,8 +738,8 @@ _EXECUTEENTITYIDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1670,
-  serialized_end=2242,
+  serialized_start=1674,
+  serialized_end=2247,
 )
 
 
@@ -783,8 +783,8 @@ _EXECUTEENTITYIDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2245,
-  serialized_end=2373,
+  serialized_start=2250,
+  serialized_end=2378,
 )
 
 
@@ -828,8 +828,8 @@ _BOUNDSHARDQUERY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2375,
-  serialized_end=2460,
+  serialized_start=2380,
+  serialized_end=2465,
 )
 
 
@@ -862,9 +862,16 @@ _EXECUTEBATCHSHARDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteBatchShardsRequest.TabletType', index=3,
-      number=6, type=14, cpp_type=8, label=1,
+      name='tablet_type', full_name='vtgate.ExecuteBatchShardsRequest.tablet_type', index=3,
+      number=4, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='as_transaction', full_name='vtgate.ExecuteBatchShardsRequest.as_transaction', index=4,
+      number=5, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -880,8 +887,8 @@ _EXECUTEBATCHSHARDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2463,
-  serialized_end=2644,
+  serialized_start=2468,
+  serialized_end=2674,
 )
 
 
@@ -925,8 +932,8 @@ _EXECUTEBATCHSHARDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2647,
-  serialized_end=2778,
+  serialized_start=2677,
+  serialized_end=2808,
 )
 
 
@@ -970,8 +977,8 @@ _BOUNDKEYSPACEIDQUERY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2780,
-  serialized_end=2876,
+  serialized_start=2810,
+  serialized_end=2906,
 )
 
 
@@ -1004,9 +1011,16 @@ _EXECUTEBATCHKEYSPACEIDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.ExecuteBatchKeyspaceIdsRequest.TabletType', index=3,
+      name='tablet_type', full_name='vtgate.ExecuteBatchKeyspaceIdsRequest.tablet_type', index=3,
       number=4, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='as_transaction', full_name='vtgate.ExecuteBatchKeyspaceIdsRequest.as_transaction', index=4,
+      number=5, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -1022,8 +1036,8 @@ _EXECUTEBATCHKEYSPACEIDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2879,
-  serialized_end=3070,
+  serialized_start=2909,
+  serialized_end=3125,
 )
 
 
@@ -1067,8 +1081,8 @@ _EXECUTEBATCHKEYSPACEIDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3073,
-  serialized_end=3209,
+  serialized_start=3128,
+  serialized_end=3264,
 )
 
 
@@ -1094,7 +1108,7 @@ _STREAMEXECUTEREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.StreamExecuteRequest.TabletType', index=2,
+      name='tablet_type', full_name='vtgate.StreamExecuteRequest.tablet_type', index=2,
       number=3, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -1112,8 +1126,8 @@ _STREAMEXECUTEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3212,
-  serialized_end=3346,
+  serialized_start=3267,
+  serialized_end=3402,
 )
 
 
@@ -1150,8 +1164,8 @@ _STREAMEXECUTERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3348,
-  serialized_end=3439,
+  serialized_start=3404,
+  serialized_end=3495,
 )
 
 
@@ -1191,7 +1205,7 @@ _STREAMEXECUTESHARDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.StreamExecuteShardsRequest.TabletType', index=4,
+      name='tablet_type', full_name='vtgate.StreamExecuteShardsRequest.tablet_type', index=4,
       number=5, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -1209,8 +1223,8 @@ _STREAMEXECUTESHARDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3442,
-  serialized_end=3616,
+  serialized_start=3498,
+  serialized_end=3673,
 )
 
 
@@ -1247,8 +1261,8 @@ _STREAMEXECUTESHARDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3618,
-  serialized_end=3715,
+  serialized_start=3675,
+  serialized_end=3772,
 )
 
 
@@ -1288,7 +1302,7 @@ _STREAMEXECUTEKEYSPACEIDSREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.StreamExecuteKeyspaceIdsRequest.TabletType', index=4,
+      name='tablet_type', full_name='vtgate.StreamExecuteKeyspaceIdsRequest.tablet_type', index=4,
       number=5, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -1306,8 +1320,8 @@ _STREAMEXECUTEKEYSPACEIDSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3718,
-  serialized_end=3903,
+  serialized_start=3775,
+  serialized_end=3961,
 )
 
 
@@ -1344,8 +1358,8 @@ _STREAMEXECUTEKEYSPACEIDSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3905,
-  serialized_end=4007,
+  serialized_start=3963,
+  serialized_end=4065,
 )
 
 
@@ -1385,7 +1399,7 @@ _STREAMEXECUTEKEYRANGESREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='TabletType', full_name='vtgate.StreamExecuteKeyRangesRequest.TabletType', index=4,
+      name='tablet_type', full_name='vtgate.StreamExecuteKeyRangesRequest.tablet_type', index=4,
       number=5, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -1403,8 +1417,8 @@ _STREAMEXECUTEKEYRANGESREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4010,
-  serialized_end=4211,
+  serialized_start=4068,
+  serialized_end=4270,
 )
 
 
@@ -1441,8 +1455,8 @@ _STREAMEXECUTEKEYRANGESRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4213,
-  serialized_end=4313,
+  serialized_start=4272,
+  serialized_end=4372,
 )
 
 
@@ -1472,8 +1486,8 @@ _BEGINREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4315,
-  serialized_end=4365,
+  serialized_start=4374,
+  serialized_end=4424,
 )
 
 
@@ -1510,8 +1524,8 @@ _BEGINRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4367,
-  serialized_end=4448,
+  serialized_start=4426,
+  serialized_end=4507,
 )
 
 
@@ -1548,8 +1562,8 @@ _COMMITREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4450,
-  serialized_end=4535,
+  serialized_start=4509,
+  serialized_end=4594,
 )
 
 
@@ -1579,8 +1593,8 @@ _COMMITRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4537,
-  serialized_end=4585,
+  serialized_start=4596,
+  serialized_end=4644,
 )
 
 
@@ -1617,8 +1631,8 @@ _ROLLBACKREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4587,
-  serialized_end=4674,
+  serialized_start=4646,
+  serialized_end=4733,
 )
 
 
@@ -1648,8 +1662,8 @@ _ROLLBACKRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4676,
-  serialized_end=4726,
+  serialized_start=4735,
+  serialized_end=4785,
 )
 
 
@@ -1682,8 +1696,15 @@ _SPLITQUERYREQUEST = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='split_count', full_name='vtgate.SplitQueryRequest.split_count', index=3,
-      number=4, type=3, cpp_type=2, label=1,
+      name='split_column', full_name='vtgate.SplitQueryRequest.split_column', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='split_count', full_name='vtgate.SplitQueryRequest.split_count', index=4,
+      number=5, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -1700,8 +1721,8 @@ _SPLITQUERYREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4729,
-  serialized_end=4857,
+  serialized_start=4788,
+  serialized_end=4938,
 )
 
 
@@ -1738,8 +1759,8 @@ _SPLITQUERYRESPONSE_KEYRANGEPART = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4931,
-  serialized_end=5003,
+  serialized_start=5012,
+  serialized_end=5084,
 )
 
 _SPLITQUERYRESPONSE_SHARDPART = _descriptor.Descriptor(
@@ -1775,8 +1796,8 @@ _SPLITQUERYRESPONSE_SHARDPART = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5005,
-  serialized_end=5050,
+  serialized_start=5086,
+  serialized_end=5131,
 )
 
 _SPLITQUERYRESPONSE_PART = _descriptor.Descriptor(
@@ -1826,8 +1847,8 @@ _SPLITQUERYRESPONSE_PART = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5053,
-  serialized_end=5230,
+  serialized_start=5134,
+  serialized_end=5311,
 )
 
 _SPLITQUERYRESPONSE = _descriptor.Descriptor(
@@ -1856,8 +1877,8 @@ _SPLITQUERYRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4860,
-  serialized_end=5230,
+  serialized_start=4941,
+  serialized_end=5311,
 )
 
 _SESSION_SHARDSESSION.fields_by_name['target'].message_type = query__pb2._TARGET
@@ -1866,21 +1887,21 @@ _SESSION.fields_by_name['shard_sessions'].message_type = _SESSION_SHARDSESSION
 _EXECUTEREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _EXECUTEREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_EXECUTEREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTERESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTERESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTERESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _EXECUTESHARDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _EXECUTESHARDSREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTESHARDSREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_EXECUTESHARDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTESHARDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTESHARDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTESHARDSRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTESHARDSRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _EXECUTEKEYSPACEIDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _EXECUTEKEYSPACEIDSREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEKEYSPACEIDSREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_EXECUTEKEYSPACEIDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEKEYSPACEIDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTEKEYSPACEIDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTEKEYSPACEIDSRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTEKEYSPACEIDSRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
@@ -1888,7 +1909,7 @@ _EXECUTEKEYRANGESREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._
 _EXECUTEKEYRANGESREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEKEYRANGESREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
 _EXECUTEKEYRANGESREQUEST.fields_by_name['key_ranges'].message_type = topodata__pb2._KEYRANGE
-_EXECUTEKEYRANGESREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEKEYRANGESREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTEKEYRANGESRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTEKEYRANGESRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTEKEYRANGESRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
@@ -1899,7 +1920,7 @@ _EXECUTEENTITYIDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._
 _EXECUTEENTITYIDSREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEENTITYIDSREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
 _EXECUTEENTITYIDSREQUEST.fields_by_name['entity_keyspace_ids'].message_type = _EXECUTEENTITYIDSREQUEST_ENTITYID
-_EXECUTEENTITYIDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEENTITYIDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTEENTITYIDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTEENTITYIDSRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTEENTITYIDSRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
@@ -1907,7 +1928,7 @@ _BOUNDSHARDQUERY.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
 _EXECUTEBATCHSHARDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _EXECUTEBATCHSHARDSREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEBATCHSHARDSREQUEST.fields_by_name['queries'].message_type = _BOUNDSHARDQUERY
-_EXECUTEBATCHSHARDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEBATCHSHARDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTEBATCHSHARDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTEBATCHSHARDSRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTEBATCHSHARDSRESPONSE.fields_by_name['results'].message_type = query__pb2._QUERYRESULT
@@ -1915,29 +1936,29 @@ _BOUNDKEYSPACEIDQUERY.fields_by_name['query'].message_type = query__pb2._BOUNDQU
 _EXECUTEBATCHKEYSPACEIDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _EXECUTEBATCHKEYSPACEIDSREQUEST.fields_by_name['session'].message_type = _SESSION
 _EXECUTEBATCHKEYSPACEIDSREQUEST.fields_by_name['queries'].message_type = _BOUNDKEYSPACEIDQUERY
-_EXECUTEBATCHKEYSPACEIDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_EXECUTEBATCHKEYSPACEIDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _EXECUTEBATCHKEYSPACEIDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _EXECUTEBATCHKEYSPACEIDSRESPONSE.fields_by_name['session'].message_type = _SESSION
 _EXECUTEBATCHKEYSPACEIDSRESPONSE.fields_by_name['results'].message_type = query__pb2._QUERYRESULT
 _STREAMEXECUTEREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _STREAMEXECUTEREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_STREAMEXECUTEREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_STREAMEXECUTEREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _STREAMEXECUTERESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _STREAMEXECUTERESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _STREAMEXECUTESHARDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _STREAMEXECUTESHARDSREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_STREAMEXECUTESHARDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_STREAMEXECUTESHARDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _STREAMEXECUTESHARDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _STREAMEXECUTESHARDSRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _STREAMEXECUTEKEYSPACEIDSREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _STREAMEXECUTEKEYSPACEIDSREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
-_STREAMEXECUTEKEYSPACEIDSREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_STREAMEXECUTEKEYSPACEIDSREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _STREAMEXECUTEKEYSPACEIDSRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _STREAMEXECUTEKEYSPACEIDSRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _STREAMEXECUTEKEYRANGESREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID
 _STREAMEXECUTEKEYRANGESREQUEST.fields_by_name['query'].message_type = query__pb2._BOUNDQUERY
 _STREAMEXECUTEKEYRANGESREQUEST.fields_by_name['key_ranges'].message_type = topodata__pb2._KEYRANGE
-_STREAMEXECUTEKEYRANGESREQUEST.fields_by_name['TabletType'].enum_type = topodata__pb2._TABLETTYPE
+_STREAMEXECUTEKEYRANGESREQUEST.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _STREAMEXECUTEKEYRANGESRESPONSE.fields_by_name['error'].message_type = vtrpc__pb2._RPCERROR
 _STREAMEXECUTEKEYRANGESRESPONSE.fields_by_name['result'].message_type = query__pb2._QUERYRESULT
 _BEGINREQUEST.fields_by_name['caller_id'].message_type = vtrpc__pb2._CALLERID

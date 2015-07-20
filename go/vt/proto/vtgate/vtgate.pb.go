@@ -122,7 +122,7 @@ type ExecuteRequest struct {
 	CallerId         *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	Session          *Session            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	Query            *query.BoundQuery   `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	TabletType       topodata.TabletType `protobuf:"varint,4,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType       topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction bool                `protobuf:"varint,5,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
@@ -190,7 +190,7 @@ type ExecuteShardsRequest struct {
 	Query            *query.BoundQuery   `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	Keyspace         string              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	Shards           []string            `protobuf:"bytes,5,rep,name=shards" json:"shards,omitempty"`
-	TabletType       topodata.TabletType `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType       topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction bool                `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
@@ -258,7 +258,7 @@ type ExecuteKeyspaceIdsRequest struct {
 	Query            *query.BoundQuery   `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	Keyspace         string              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	KeyspaceIds      [][]byte            `protobuf:"bytes,5,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType       topodata.TabletType `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType       topodata.TabletType `protobuf:"varint,6,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction bool                `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
@@ -326,7 +326,7 @@ type ExecuteKeyRangesRequest struct {
 	Query            *query.BoundQuery    `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	Keyspace         string               `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	KeyRanges        []*topodata.KeyRange `protobuf:"bytes,5,rep,name=key_ranges" json:"key_ranges,omitempty"`
-	TabletType       topodata.TabletType  `protobuf:"varint,6,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType       topodata.TabletType  `protobuf:"varint,6,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction bool                 `protobuf:"varint,7,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
@@ -402,7 +402,7 @@ type ExecuteEntityIdsRequest struct {
 	Keyspace          string                              `protobuf:"bytes,4,opt,name=keyspace" json:"keyspace,omitempty"`
 	EntityColumnName  string                              `protobuf:"bytes,5,opt,name=entity_column_name" json:"entity_column_name,omitempty"`
 	EntityKeyspaceIds []*ExecuteEntityIdsRequest_EntityId `protobuf:"bytes,6,rep,name=entity_keyspace_ids" json:"entity_keyspace_ids,omitempty"`
-	TabletType        topodata.TabletType                 `protobuf:"varint,7,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType        topodata.TabletType                 `protobuf:"varint,7,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction  bool                                `protobuf:"varint,8,opt,name=not_in_transaction" json:"not_in_transaction,omitempty"`
 }
 
@@ -508,7 +508,7 @@ type ExecuteBatchShardsRequest struct {
 	CallerId      *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	Session       *Session            `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	Queries       []*BoundShardQuery  `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	TabletType    topodata.TabletType `protobuf:"varint,4,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType    topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	AsTransaction bool                `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
@@ -594,7 +594,7 @@ type ExecuteBatchKeyspaceIdsRequest struct {
 	CallerId      *vtrpc.CallerID         `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	Session       *Session                `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
 	Queries       []*BoundKeyspaceIdQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	TabletType    topodata.TabletType     `protobuf:"varint,4,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType    topodata.TabletType     `protobuf:"varint,4,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	AsTransaction bool                    `protobuf:"varint,5,opt,name=as_transaction" json:"as_transaction,omitempty"`
 }
 
@@ -659,7 +659,7 @@ func (m *ExecuteBatchKeyspaceIdsResponse) GetResults() []*query.QueryResult {
 type StreamExecuteRequest struct {
 	CallerId   *vtrpc.CallerID     `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
 	Query      *query.BoundQuery   `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
-	TabletType topodata.TabletType `protobuf:"varint,3,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
@@ -710,7 +710,7 @@ type StreamExecuteShardsRequest struct {
 	Query      *query.BoundQuery   `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	Keyspace   string              `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	Shards     []string            `protobuf:"bytes,4,rep,name=shards" json:"shards,omitempty"`
-	TabletType topodata.TabletType `protobuf:"varint,5,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *StreamExecuteShardsRequest) Reset()         { *m = StreamExecuteShardsRequest{} }
@@ -761,7 +761,7 @@ type StreamExecuteKeyspaceIdsRequest struct {
 	Query       *query.BoundQuery   `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	Keyspace    string              `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	KeyspaceIds [][]byte            `protobuf:"bytes,4,rep,name=keyspace_ids,proto3" json:"keyspace_ids,omitempty"`
-	TabletType  topodata.TabletType `protobuf:"varint,5,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType  topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *StreamExecuteKeyspaceIdsRequest) Reset()         { *m = StreamExecuteKeyspaceIdsRequest{} }
@@ -812,7 +812,7 @@ type StreamExecuteKeyRangesRequest struct {
 	Query      *query.BoundQuery    `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	Keyspace   string               `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 	KeyRanges  []*topodata.KeyRange `protobuf:"bytes,4,rep,name=key_ranges" json:"key_ranges,omitempty"`
-	TabletType topodata.TabletType  `protobuf:"varint,5,opt,enum=topodata.TabletType" json:"TabletType,omitempty"`
+	TabletType topodata.TabletType  `protobuf:"varint,5,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
 func (m *StreamExecuteKeyRangesRequest) Reset()         { *m = StreamExecuteKeyRangesRequest{} }
@@ -986,10 +986,11 @@ func (m *RollbackResponse) GetError() *vtrpc.RPCError {
 
 // SplitQueryRequest is the payload to SplitQuery
 type SplitQueryRequest struct {
-	CallerId   *vtrpc.CallerID   `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Keyspace   string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
-	Query      *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	SplitCount int64             `protobuf:"varint,4,opt,name=split_count" json:"split_count,omitempty"`
+	CallerId    *vtrpc.CallerID   `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Keyspace    string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Query       *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	SplitColumn string            `protobuf:"bytes,4,opt,name=split_column" json:"split_column,omitempty"`
+	SplitCount  int64             `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }

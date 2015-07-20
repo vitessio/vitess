@@ -535,7 +535,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}
-		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, req.Query, perShardSplitCount, keyRangeByShard, keyspace)
+		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, req.Query, req.SplitColumn, perShardSplitCount, keyRangeByShard, keyspace)
 		if err != nil {
 			return err
 		}
@@ -549,7 +549,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	for i, shard := range shards {
 		shardNames[i] = shard.Name
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, req.Query, perShardSplitCount, shardNames, keyspace)
+	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, req.Query, req.SplitColumn, perShardSplitCount, shardNames, keyspace)
 	if err != nil {
 		return err
 	}

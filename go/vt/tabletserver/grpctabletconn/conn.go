@@ -258,7 +258,7 @@ func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64)
 }
 
 // SplitQuery is the stub for SqlQuery.SplitQuery RPC
-func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -267,9 +267,10 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 
 	req := &pb.SplitQueryRequest{
-		Query:      tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
-		SplitCount: int64(splitCount),
-		SessionId:  conn.sessionID,
+		Query:       tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
+		SplitColumn: splitColumn,
+		SplitCount:  int64(splitCount),
+		SessionId:   conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
