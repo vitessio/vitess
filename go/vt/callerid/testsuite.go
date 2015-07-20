@@ -44,6 +44,20 @@ func Tests(t *testing.T, im *ImmediateCallerID, ef *EffectiveCallerID) {
 		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
 	}
 
+	// Test GetXxx on nil receivers, should get all empty strings
+	if u := ctxim.GetUsername(); u != "" {
+		t.Errorf("Expect empty string from (nil).GetUsername(), but got %v", u)
+	}
+	if p := ctxef.GetPrincipal(); p != "" {
+		t.Errorf("Expect empty string from (nil).GetPrincipal(), but got %v", p)
+	}
+	if c := ctxef.GetComponent(); c != "" {
+		t.Errorf("Expect empty string from (nil).GetComponent(), but got %v", c)
+	}
+	if s := ctxef.GetSubcomponent(); s != "" {
+		t.Errorf("Expect empty string from (nil).GetSubcomponent(), but got %v", s)
+	}
+
 	ctx = NewContext(ctx, ef, im)
 	ctxim = ImmediateCallerIDFromContext(ctx)
 	// retrieved ImmediateCallerID should be equal to the one we put into Context
