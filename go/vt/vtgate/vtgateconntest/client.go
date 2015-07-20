@@ -505,13 +505,13 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.Execute(ctx, "none", nil, "")
+	_, err = conn.Execute(ctx, "none", nil, "replica")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	_, err = conn.Execute(ctx, "errorRequst", nil, "")
+	_, err = conn.Execute(ctx, "errorRequst", nil, "replica")
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -543,13 +543,13 @@ func testExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteShard(ctx, "none", "", []string{}, nil, "")
+	_, err = conn.ExecuteShard(ctx, "none", "", []string{}, nil, "replica")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	_, err = conn.ExecuteShard(ctx, "errorRequst", "", []string{}, nil, "")
+	_, err = conn.ExecuteShard(ctx, "errorRequst", "", []string{}, nil, "replica")
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -581,7 +581,7 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "")
+	_, err = conn.ExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "replica")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -620,7 +620,7 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "")
+	_, err = conn.ExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "replica")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -659,7 +659,7 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []proto.EntityId{}, nil, "")
+	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []proto.EntityId{}, nil, "replica")
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -698,7 +698,7 @@ func testExecuteBatchShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchShard(ctx, []proto.BoundShardQuery{proto.BoundShardQuery{Sql: "none"}}, "", true)
+	_, err = conn.ExecuteBatchShard(ctx, []proto.BoundShardQuery{proto.BoundShardQuery{Sql: "none"}}, "replica", true)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -737,7 +737,7 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: []key.KeyspaceId{}}}, "", false)
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []proto.BoundKeyspaceIdQuery{proto.BoundKeyspaceIdQuery{Sql: "none", KeyspaceIds: []key.KeyspaceId{}}}, "replica", false)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -791,7 +791,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecute(ctx, "none", nil, "")
+	packets, errFunc, err = conn.StreamExecute(ctx, "none", nil, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -804,7 +804,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	packets, errFunc, err = conn.StreamExecute(ctx, "errorRequst", nil, "")
+	packets, errFunc, err = conn.StreamExecute(ctx, "errorRequst", nil, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -858,7 +858,7 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteShard(ctx, "none", "", []string{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteShard(ctx, "none", "", []string{}, nil, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -926,7 +926,7 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -994,7 +994,7 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "replica")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1438,43 +1438,43 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Commit: %v, want %v", err, want)
 	}
 
-	_, err = tx.Execute(ctx, "", nil, "", false)
+	_, err = tx.Execute(ctx, "", nil, "replica", false)
 	want = "execute: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, "replica", false)
 	want = "executeShard: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, "replica", false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, "replica", false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, "", false)
+	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, "replica", false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShard(ctx, nil, "", false)
+	_, err = tx.ExecuteBatchShard(ctx, nil, "replica", false)
 	want = "executeBatchShard: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "", false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "replica", false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
@@ -1515,43 +1515,43 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Commit2: %v, want %v", err, want)
 	}
 
-	_, err = tx.Execute(ctx, "", nil, "", false)
+	_, err = tx.Execute(ctx, "", nil, "replica", false)
 	want = "execute: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, "replica", false)
 	want = "executeShard: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, "replica", false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, "", false)
+	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, "replica", false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, "", false)
+	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, "replica", false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchShard(ctx, nil, "", false)
+	_, err = tx.ExecuteBatchShard(ctx, nil, "replica", false)
 	want = "executeBatchShard: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "", false)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, "replica", false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("ExecuteShard: %v, want %v", err, want)

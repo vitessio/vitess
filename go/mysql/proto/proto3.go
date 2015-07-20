@@ -126,3 +126,16 @@ func Proto3ToQueryResult(qr *pbq.QueryResult) *QueryResult {
 		Rows:         Proto3ToRows(qr.Rows),
 	}
 }
+
+// Proto3ToQueryResults converts an array os proto3 QueryResult to an
+// internal data structure.
+func Proto3ToQueryResults(qr []*pbq.QueryResult) []QueryResult {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]QueryResult, len(qr))
+	for i, q := range qr {
+		result[i] = *Proto3ToQueryResult(q)
+	}
+	return result
+}
