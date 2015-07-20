@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -68,6 +69,10 @@ func (sq *SqlQuery) Begin2(ctx context.Context, beginRequest *proto.BeginRequest
 		SessionId: beginRequest.SessionId,
 	}
 	txInfo := new(proto.TransactionInfo)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(beginRequest.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(beginRequest.ImmediateCallerID),
+	)
 	tErr := sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), session, txInfo)
 	// Convert from TxInfo => beginResponse for the output
 	beginResponse.TransactionId = txInfo.TransactionId
@@ -93,6 +98,10 @@ func (sq *SqlQuery) Commit2(ctx context.Context, commitRequest *proto.CommitRequ
 		SessionId:     commitRequest.SessionId,
 		TransactionId: commitRequest.TransactionId,
 	}
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(commitRequest.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(commitRequest.ImmediateCallerID),
+	)
 	tErr := sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), session)
 	tabletserver.AddTabletErrorToCommitResponse(tErr, commitResponse)
 	if *tabletserver.RPCErrorOnlyInReply {
@@ -116,6 +125,10 @@ func (sq *SqlQuery) Rollback2(ctx context.Context, rollbackRequest *proto.Rollba
 		SessionId:     rollbackRequest.SessionId,
 		TransactionId: rollbackRequest.TransactionId,
 	}
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(rollbackRequest.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(rollbackRequest.ImmediateCallerID),
+	)
 	tErr := sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), session)
 	tabletserver.AddTabletErrorToRollbackResponse(tErr, rollbackResponse)
 	if *tabletserver.RPCErrorOnlyInReply {
@@ -140,6 +153,10 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 // Once all clients are upgraded, it can be replaced
 func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteRequest, reply *mproto.QueryResult) (err error) {
 	defer sq.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(executeRequest.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(executeRequest.ImmediateCallerID),
+	)
 	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), &executeRequest.QueryRequest, reply)
 	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
@@ -164,6 +181,10 @@ func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecute
 	if req == nil || req.Query == nil {
 		return nil
 	}
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(req.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
+	)
 	tErr := sq.server.StreamExecute(callinfo.RPCWrapCallInfo(ctx), req.Query, func(reply *mproto.QueryResult) error {
 		return sendReply(reply)
 	})
@@ -203,6 +224,10 @@ func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRe
 	if req == nil {
 		return nil
 	}
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(req.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
+	)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), &req.QueryBatch, reply)
 	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
@@ -214,6 +239,10 @@ func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRe
 // SplitQuery is exposing tabletserver.SqlQuery.SplitQuery
 func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	defer sq.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(req.EffectiveCallerID),
+		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
+	)
 	tErr := sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), req, reply)
 	tabletserver.AddTabletErrorToSplitQueryResult(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {

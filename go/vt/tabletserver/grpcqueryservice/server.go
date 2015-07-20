@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -46,8 +47,10 @@ func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdReques
 // Execute is part of the queryservice.QueryServer interface
 func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (response *pb.ExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	reply := new(mproto.QueryResult)
 	execErr := q.server.Execute(ctx, &proto.Query{
 		Sql:           string(request.Query.Sql),
@@ -68,8 +71,10 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 // ExecuteBatch is part of the queryservice.QueryServer interface
 func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchRequest) (response *pb.ExecuteBatchResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	reply := new(proto.QueryResultList)
 	execErr := q.server.ExecuteBatch(ctx, &proto.QueryList{
 		Queries:       proto.Proto3ToBoundQueryList(request.Queries),
@@ -90,8 +95,10 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 // StreamExecute is part of the queryservice.QueryServer interface
 func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query_StreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)
-	ctx := callinfo.GRPCCallInfo(stream.Context())
-
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	seErr := q.server.StreamExecute(ctx, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
@@ -115,8 +122,10 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 // Begin is part of the queryservice.QueryServer interface
 func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *pb.BeginResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	txInfo := new(proto.TransactionInfo)
 	if beginErr := q.server.Begin(ctx, &proto.Session{
 		SessionId: request.SessionId,
@@ -134,8 +143,10 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 // Commit is part of the queryservice.QueryServer interface
 func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response *pb.CommitResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	commitErr := q.server.Commit(ctx, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
@@ -148,8 +159,10 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 // Rollback is part of the queryservice.QueryServer interface
 func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (response *pb.RollbackResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	rollbackErr := q.server.Rollback(ctx, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
@@ -163,8 +176,10 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 // SplitQuery is part of the queryservice.QueryServer interface
 func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (response *pb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.GetEffectiveCallerId(),
+		request.GetImmediateCallerId(),
+	)
 	reply := &proto.SplitQueryResult{}
 	if sqErr := q.server.SplitQuery(ctx, &proto.SplitQueryRequest{
 		Query:       *proto.Proto3ToBoundQuery(request.Query),
