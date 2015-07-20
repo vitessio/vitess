@@ -16,10 +16,10 @@ import (
 // The datatype for CallerID Context Keys
 type callerIDKey int
 
-// Reuse gRPC's CallerID for EffectiveCallerID
+// EffectiveCallerID reuses gRPC's CallerID
 type EffectiveCallerID vtpb.CallerID
 
-// Reuse gRPC's VTGateCallerID for ImmediateCallerID
+// ImmediateCallerID reuses gRPC's VTGateCallerID
 type ImmediateCallerID qrpb.VTGateCallerID
 
 var (
