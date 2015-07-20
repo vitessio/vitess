@@ -271,7 +271,8 @@ message SplitQueryRequest {
   vtrpc.CallerID caller_id = 1;
   string keyspace = 2;
   query.BoundQuery query = 3;
-  int64 split_count = 4;
+  string split_column = 4;
+  int64 split_count = 5;
 }
 
 // SplitQueryResponse is the returned value from SplitQuery

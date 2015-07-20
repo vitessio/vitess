@@ -986,10 +986,11 @@ func (m *RollbackResponse) GetError() *vtrpc.RPCError {
 
 // SplitQueryRequest is the payload to SplitQuery
 type SplitQueryRequest struct {
-	CallerId   *vtrpc.CallerID   `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
-	Keyspace   string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
-	Query      *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
-	SplitCount int64             `protobuf:"varint,4,opt,name=split_count" json:"split_count,omitempty"`
+	CallerId    *vtrpc.CallerID   `protobuf:"bytes,1,opt,name=caller_id" json:"caller_id,omitempty"`
+	Keyspace    string            `protobuf:"bytes,2,opt,name=keyspace" json:"keyspace,omitempty"`
+	Query       *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	SplitColumn string            `protobuf:"bytes,4,opt,name=split_column" json:"split_column,omitempty"`
+	SplitCount  int64             `protobuf:"varint,5,opt,name=split_count" json:"split_count,omitempty"`
 }
 
 func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
