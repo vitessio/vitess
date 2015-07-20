@@ -6,12 +6,12 @@ import (
 
 func TestFakeCallerID(t *testing.T) {
 	im := ImmediateCallerID{
-		username: FakeUsername,
+		Username: FakeUsername,
 	}
 	ef := EffectiveCallerID{
-		principal:    FakePrincipal,
-		component:    FakeComponent,
-		subComponent: FakeSubcomponent,
+		Principal:    FakePrincipal,
+		Component:    FakeComponent,
+		Subcomponent: FakeSubcomponent,
 	}
 	Tests(t, &im, &ef)
 }

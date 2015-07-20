@@ -8,11 +8,30 @@ package callerid
 
 import (
 	"golang.org/x/net/context"
+
+	qrpb "github.com/youtube/vitess/go/vt/proto/query"
+	vtpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// ImmediateCallerID is the username of immediate caller to VTGate
-type ImmediateCallerID struct {
-	username string
+// The datatype for CallerID Context Keys
+type callerIDKey int
+
+// Reuse gRPC's CallerID for EffectiveCallerID
+type EffectiveCallerID vtpb.CallerID
+
+// Reuse gRPC's VTGateCallerID for ImmediateCallerID
+type ImmediateCallerID qrpb.VTGateCallerID
+
+var (
+	// internal Context key for immediate CallerID
+	immediateCallerIDKey callerIDKey = 0
+	// internal Context key for effective CallerID
+	effectiveCallerIDKey callerIDKey = 1
+)
+
+// NewImmediateCallerID creates a ImmediateCallerID initialized with username
+func NewImmediateCallerID(username string) *ImmediateCallerID {
+	return &ImmediateCallerID{Username: username}
 }
 
 // GetUsername returns the immediate caller of VTGate
@@ -20,22 +39,13 @@ func (im *ImmediateCallerID) GetUsername() string {
 	if im == nil {
 		return ""
 	}
-	return im.username
+	return im.Username
 }
 
-// NewImmediateCallerID creates a ImmediateCallerID initialized with username
-func NewImmediateCallerID(username string) *ImmediateCallerID {
-	return &ImmediateCallerID{username: username}
-}
-
-// EffectiveCallerID is the identity of the actual caller to Vitess, for example,
-// if the actual caller sends requests to Vitess through a proxy, then the EffectiveCallerID
-// will contain information about the actual caller while the ImmediatieCallerID has
-// the username running the proxy
-type EffectiveCallerID struct {
-	principal    string
-	component    string
-	subComponent string
+// NewEffectiveCallerID creates a new effective CallerID with principal, component and
+// subComponent
+func NewEffectiveCallerID(principal string, component string, subComponent string) *EffectiveCallerID {
+	return &EffectiveCallerID{Principal: principal, Component: component, Subcomponent: subComponent}
 }
 
 // GetPrincipal returns the effective user identifier, which is usually filled in
@@ -48,7 +58,7 @@ func (ef *EffectiveCallerID) GetPrincipal() string {
 	if ef == nil {
 		return ""
 	}
-	return ef.principal
+	return ef.Principal
 }
 
 // GetComponent returns the running process of the effective caller.
@@ -58,7 +68,7 @@ func (ef *EffectiveCallerID) GetComponent() string {
 	if ef == nil {
 		return ""
 	}
-	return ef.component
+	return ef.Component
 }
 
 // GetSubcomponent returns a component inisde the process of effective caller,
@@ -68,21 +78,8 @@ func (ef *EffectiveCallerID) GetSubcomponent() string {
 	if ef == nil {
 		return ""
 	}
-	return ef.subComponent
+	return ef.Subcomponent
 }
-
-// NewEffectiveCallerID creates a new effective CallerID with principal, component and
-// subComponent
-func NewEffectiveCallerID(principal string, component string, subComponent string) *EffectiveCallerID {
-	return &EffectiveCallerID{principal: principal, component: component, subComponent: subComponent}
-}
-
-var (
-	// internal Context key for immediate CallerID
-	immediateCallerIDKey = "vtImmdiateCallerID"
-	// internal Context key for effective CallerID
-	effectiveCallerIDKey = "vtEffectiveCallerID"
-)
 
 // NewContext adds the provided EffectiveCallerID and ImmediateCallerID into the Context
 func NewContext(ctx context.Context, ef *EffectiveCallerID, im *ImmediateCallerID) context.Context {

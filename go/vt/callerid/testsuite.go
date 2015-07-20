@@ -50,8 +50,8 @@ func Tests(t *testing.T, im *ImmediateCallerID, ef *EffectiveCallerID) {
 	if !reflect.DeepEqual(ctxim, im) {
 		t.Errorf("Expect %v from ImmediateCallerIDFromContext, but got %v", im, ctxim)
 	}
-	if im.GetUsername() != FakeUsername {
-		t.Errorf("Expect %v from im.Username(), but got %v", FakeUsername, im.GetUsername())
+	if im.Username != FakeUsername {
+		t.Errorf("Expect %v from im.Username(), but got %v", FakeUsername, im.Username)
 	}
 
 	ctxef = EffectiveCallerIDFromContext(ctx)

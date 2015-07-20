@@ -6,19 +6,13 @@ import (
 )
 
 // GRPCImmediateCallerID creates new ImmediateCallerID structure
-// from GRPC's VTGateCallerID
+// by type-conversion from GRPC's VTGateCallerID
 func GRPCImmediateCallerID(v *query.VTGateCallerID) *ImmediateCallerID {
-	if v == nil {
-		return nil
-	}
-	return NewImmediateCallerID(v.Username)
+	return (*ImmediateCallerID)(v)
 }
 
 // GRPCEffectiveCallerID creates new EffectiveCallerID structure
-// from GRPC's CallerID
+// from GRPC's CallerID by type-conversion from GRPC's CallerID
 func GRPCEffectiveCallerID(c *vtrpc.CallerID) *EffectiveCallerID {
-	if c == nil {
-		return nil
-	}
-	return NewEffectiveCallerID(c.Principal, c.Component, c.Subcomponent)
+	return (*EffectiveCallerID)(c)
 }
