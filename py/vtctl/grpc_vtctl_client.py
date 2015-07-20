@@ -1,20 +1,20 @@
-# Copyright 2015, Google Inc. All rights reserved.
+# Copyright 2015 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
-
-# This file contains the grpc implementation of the vtctl client.
-# It is untested and doesn't work just yet: ExecuteVtctlCommand
-# just seems to time out.
+"""This file contains the grpc implementation of the vtctl client.
+"""
 
 import datetime
 from urlparse import urlparse
 
-import vtctl_client
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
+import vtctl_client
+
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):
   """GoRpcVtctlClient is the gRPC implementation of VtctlClient.
+
   It is registered as 'grpc' protocol.
   """
 
@@ -39,7 +39,7 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
     self.stub = None
 
   def is_closed(self):
-    return self.stub == None
+    return self.stub is None
 
   def execute_vtctl_command(self, args, action_timeout=30.0, lock_timeout=5.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
