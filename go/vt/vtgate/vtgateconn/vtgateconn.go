@@ -92,34 +92,39 @@ func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	return res, err
 }
 
-// StreamExecute executes a streaming query on vtgate. It returns a channel, and ErrFunc.
-// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
-// to see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+// StreamExecute executes a streaming query on vtgate. It returns a
+// channel, an ErrFunc, and error. First check the error. Then you can
+// pull values from the channel till it's closed. Following this, you
+// can call ErrFunc to see if the stream ended normally or due to a
+// failure.
+func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecute(ctx, query, bindVars, tabletType)
 }
 
-// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
-// It returns a channel, and ErrFunc.
-// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
-// to see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+// StreamExecuteShard executes a streaming query on vtgate, on a set
+// of shards.  It returns a channel, an ErrFunc, and error. First
+// check the error. Then you can pull values from the channel till
+// it's closed. Following this, you can call ErrFunc to see if the
+// stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType)
 }
 
-// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
-// It returns a channel, and ErrFunc.
-// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
-// to see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+// StreamExecuteKeyRanges executes a streaming query on vtgate, on a
+// set of keyranges.  It returns a channel, an ErrFunc, and
+// error. First check the error. Then you can pull values from the
+// channel till it's closed. Following this, you can call ErrFunc to
+// see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
 }
 
-// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
-// It returns a channel, and ErrFunc.
-// You can pull values from the channel till it's closed. Following this, you can call ErrFunc
-// to see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc) {
+// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for
+// the given keyspaceIds.  It returns a channel, an ErrFunc, and
+// error. First check the error. Then you can pull values from the
+// channel till it's closed. Following this, you can call ErrFunc to
+// see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
 }
 
@@ -310,16 +315,16 @@ type Impl interface {
 	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
-	StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
-	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
-	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Begin starts a transaction and returns a VTGateTX.
 	Begin(ctx context.Context) (interface{}, error)

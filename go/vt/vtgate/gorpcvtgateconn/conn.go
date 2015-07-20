@@ -225,7 +225,7 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -237,7 +237,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.QueryShard{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -251,7 +251,7 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyRangeQuery{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -265,7 +265,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyspaceIdQuery{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -279,7 +279,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return sendStreamResults(c, sr)
 }
 
-func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc) {
+func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	srout := make(chan *mproto.QueryResult, 1)
 	go func() {
 		defer close(srout)
@@ -287,7 +287,7 @@ func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mpr
 			srout <- r.Result
 		}
 	}()
-	return srout, func() error { return c.Error }
+	return srout, func() error { return c.Error }, nil
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {

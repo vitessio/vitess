@@ -768,7 +768,10 @@ func testExecuteBatchKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn)
 func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var qr mproto.QueryResult
 	for packet := range packets {
 		if len(packet.Fields) != 0 {
@@ -784,12 +787,14 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if !reflect.DeepEqual(qr, wantResult) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
 	}
-	err := errFunc()
-	if err != nil {
+	if err = errFunc(); err != nil {
 		t.Error(err)
 	}
 
-	packets, errFunc = conn.StreamExecute(ctx, "none", nil, "")
+	packets, errFunc, err = conn.StreamExecute(ctx, "none", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -799,7 +804,10 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
-	packets, errFunc = conn.StreamExecute(ctx, "errorRequst", nil, "")
+	packets, errFunc, err = conn.StreamExecute(ctx, "errorRequst", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -813,18 +821,24 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := <-packets; ok {
 		t.Fatalf("Received packets instead of panic?")
 	}
-	err := errFunc()
+	err = errFunc()
 	expectPanic(t, err)
 }
 
 func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var qr mproto.QueryResult
 	for packet := range packets {
 		if len(packet.Fields) != 0 {
@@ -840,12 +854,14 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if !reflect.DeepEqual(qr, wantResult) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
 	}
-	err := errFunc()
-	if err != nil {
+	if err = errFunc(); err != nil {
 		t.Error(err)
 	}
 
-	packets, errFunc = conn.StreamExecuteShard(ctx, "none", "", []string{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteShard(ctx, "none", "", []string{}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -856,7 +872,10 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc = conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	packets, errFunc, err = conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -870,18 +889,24 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := <-packets; ok {
 		t.Fatalf("Received packets instead of panic?")
 	}
-	err := errFunc()
+	err = errFunc()
 	expectPanic(t, err)
 }
 
 func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var qr mproto.QueryResult
 	for packet := range packets {
 		if len(packet.Fields) != 0 {
@@ -897,12 +922,14 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if !reflect.DeepEqual(qr, wantResult) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
 	}
-	err := errFunc()
-	if err != nil {
+	if err = errFunc(); err != nil {
 		t.Error(err)
 	}
 
-	packets, errFunc = conn.StreamExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, "none", "", []key.KeyRange{}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -913,7 +940,10 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc = conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -927,18 +957,24 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := <-packets; ok {
 		t.Fatalf("Received packets instead of panic?")
 	}
-	err := errFunc()
+	err = errFunc()
 	expectPanic(t, err)
 }
 
 func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var qr mproto.QueryResult
 	for packet := range packets {
 		if len(packet.Fields) != 0 {
@@ -954,12 +990,14 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if !reflect.DeepEqual(qr, wantResult) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, wantResult)
 	}
-	err := errFunc()
-	if err != nil {
+	if err = errFunc(); err != nil {
 		t.Error(err)
 	}
 
-	packets, errFunc = conn.StreamExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "")
+	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, "none", "", []key.KeyspaceId{}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -970,7 +1008,10 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc = conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for packet := range packets {
 		t.Errorf("packet: %+v, want none", packet)
 	}
@@ -984,11 +1025,14 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	execCase := execMap["request1"]
-	packets, errFunc := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := <-packets; ok {
 		t.Fatalf("Received packets instead of panic?")
 	}
-	err := errFunc()
+	err = errFunc()
 	expectPanic(t, err)
 }
 
