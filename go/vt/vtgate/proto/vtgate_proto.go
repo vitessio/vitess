@@ -180,9 +180,10 @@ type QueryResultList struct {
 
 // SplitQueryRequest is a request to split a query into multiple parts
 type SplitQueryRequest struct {
-	Keyspace   string
-	Query      tproto.BoundQuery
-	SplitCount int
+	Keyspace    string
+	Query       tproto.BoundQuery
+	SplitColumn string
+	SplitCount  int
 }
 
 // SplitQueryPart is a sub query of SplitQueryRequest.Query

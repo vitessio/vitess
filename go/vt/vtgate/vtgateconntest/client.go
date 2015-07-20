@@ -1581,7 +1581,7 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
-	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
+	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
@@ -1592,13 +1592,13 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	expectPanic(t, err)
 }
 
@@ -2058,7 +2058,8 @@ var splitQueryRequest = &proto.SplitQueryRequest{
 			"bind1": int64(43),
 		},
 	},
-	SplitCount: 13,
+	SplitColumn: "split_column",
+	SplitCount:  13,
 }
 
 var splitQueryResult = &proto.SplitQueryResult{

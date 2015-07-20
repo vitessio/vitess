@@ -39,7 +39,7 @@ func init() {
 	addCommand(queriesGroupName, command{
 		"VtGateSplitQuery",
 		commandVtGateSplitQuery,
-		"-server <vtgate> -keyspace <keyspace> -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
+		"-server <vtgate> -keyspace <keyspace> [-split_column <split_column>] -split_count <split_count> [-bind_variables <JSON map>] [-connect_timeout <connect timeout>] <sql>",
 		"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
 	addCommand(queriesGroupName, command{
 		"VtTabletStreamHealth",
@@ -156,6 +156,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
+	splitColumn := subFlags.String("split_column", "", "force the use of this column to split the query")
 	splitCount := subFlags.Int("split_count", 16, "number of splits to generate")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
 	if err := subFlags.Parse(args); err != nil {
@@ -173,7 +174,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	r, err := vtgateConn.SplitQuery(ctx, *keyspace, tproto.BoundQuery{
 		Sql:           subFlags.Arg(0),
 		BindVariables: *bindVariables,
-	}, *splitCount)
+	}, *splitColumn, *splitCount)
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}

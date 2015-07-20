@@ -162,8 +162,8 @@ func (conn *VTGateConn) Close() {
 
 // SplitQuery splits a query into equally sized smaller queries by
 // appending primary key range clauses to the original query
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, splitCount)
+func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+	return conn.impl.SplitQuery(ctx, keyspace, query, splitColumn, splitCount)
 }
 
 // VTGateTx defines an ongoing transaction.
@@ -345,8 +345,8 @@ type Impl interface {
 	Rollback2(ctx context.Context, session interface{}) error
 
 	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitCount int) ([]proto.SplitQueryPart, error)
+	// appending primary key range clauses to the original query.
+	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
 
 	// Close must be called for releasing resources.
 	Close()
