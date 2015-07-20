@@ -5,11 +5,13 @@
 package testlib
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 )
@@ -20,98 +22,99 @@ func TestSuite(t *testing.T, factory acl.Factory) {
 	tableacl.Register(name, factory)
 	tableacl.SetDefaultACL(name)
 
-	testParseInvalidJSON(t)
-	testInvalidRoleName(t)
-	testInvalidRegex(t)
 	testValidConfigs(t)
 	testDenyReaderInsert(t)
 	testAllowReaderSelect(t)
 	testDenyReaderDDL(t)
-	testAllowUnmatchedTable(t)
-	testAllUserReadAccess(t)
-	testAllUserWriteAccess(t)
+	//testAllowUnmatchedTable(t)
 }
 
 func currentUser() string {
 	return "DummyUser"
 }
 
-func testParseInvalidJSON(t *testing.T) {
-	checkLoad([]byte(`{1:2}`), false, t)
-	checkLoad([]byte(`{"1":"2"}`), false, t)
-	checkLoad([]byte(`{"table1":{1:2}}`), false, t)
-}
-
-func testInvalidRoleName(t *testing.T) {
-	checkLoad([]byte(`{"table1":{"SOMEROLE":"u1"}}`), false, t)
-}
-
-func testInvalidRegex(t *testing.T) {
-	checkLoad([]byte(`{"table(1":{"READER":"u1"}}`), false, t)
-}
-
 func testValidConfigs(t *testing.T) {
-	checkLoad([]byte(`{"table1":{"READER":"u1"}}`), true, t)
-	checkLoad([]byte(`{"table1":{"READER":"u1,u2", "WRITER":"u3"}}`), true, t)
-	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,u2", "WRITER":"u3"}}`), true, t)
-	checkLoad([]byte(`{"table[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3"}}`), true, t)
-	checkLoad([]byte(`{
-		"table[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3"},
-		"tbl[0-9]+":{"Reader":"u1,`+allString()+`", "WRITER":"u3", "ADMIN":"u4"}
-	}`), true, t)
+	config := newConfigProto("group01", []string{"table1"}, []string{"u1"}, []string{"vt"}, []string{})
+	if err := checkLoad(config, true); err != nil {
+		t.Fatal(err)
+	}
+	config = newConfigProto(
+		"group01", []string{"table1"}, []string{"u1", "u2"}, []string{"u3"}, []string{})
+	if err := checkLoad(config, true); err != nil {
+		t.Fatal(err)
+	}
+	config = newConfigProto(
+		"group01", []string{"table%"}, []string{"u1", "u2"}, []string{"u3"}, []string{})
+	if err := checkLoad(config, true); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testDenyReaderInsert(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"u3"}}`)
-	checkAccess(configData, "table1", tableacl.WRITER, t, false)
+	config := newConfigProto(
+		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+	if err := checkAccess(config, "table1", tableacl.WRITER, false); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testAllowReaderSelect(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"u3"}}`)
-	checkAccess(configData, "table1", tableacl.READER, t, true)
+	config := newConfigProto(
+		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+	if err := checkAccess(config, "table1", tableacl.READER, true); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testDenyReaderDDL(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"u3"}}`)
-	checkAccess(configData, "table1", tableacl.ADMIN, t, false)
+	config := newConfigProto(
+		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+	if err := checkAccess(config, "table1", tableacl.ADMIN, false); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testAllowUnmatchedTable(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"u3"}}`)
-	checkAccess(configData, "UNMATCHED_TABLE", tableacl.ADMIN, t, true)
+	config := newConfigProto(
+		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+	if err := checkAccess(config, "UNMATCHED_TABLE", tableacl.ADMIN, false); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func testAllUserReadAccess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + allString() + `", "WRITER":"u3"}}`)
-	checkAccess(configData, "table1", tableacl.READER, t, true)
+func newConfigProto(groupName string, tableNamesOrPrefixes, readers, writers, admins []string) *tableaclpb.Config {
+	return &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 groupName,
+			TableNamesOrPrefixes: tableNamesOrPrefixes,
+			Readers:              readers,
+			Writers:              writers,
+			Admins:               admins,
+		}},
+	}
 }
 
-func testAllUserWriteAccess(t *testing.T) {
-	configData := []byte(`{"table[0-9]+":{"Reader":"` + currentUser() + `", "WRITER":"` + allString() + `"}}`)
-	checkAccess(configData, "table1", tableacl.WRITER, t, true)
-}
-
-func checkLoad(configData []byte, valid bool, t *testing.T) {
-	err := tableacl.InitFromBytes(configData)
+func checkLoad(config *tableaclpb.Config, valid bool) error {
+	err := tableacl.InitFromProto(config)
 	if !valid && err == nil {
-		t.Errorf("expecting parse error none returned")
+		return errors.New("expecting parse error none returned")
 	}
 
 	if valid && err != nil {
-		t.Errorf("unexpected load error: %v", err)
+		return fmt.Errorf("unexpected load error: %v", err)
 	}
+	return nil
 }
 
-func checkAccess(configData []byte, tableName string, role tableacl.Role, t *testing.T, want bool) {
-	checkLoad(configData, true, t)
+func checkAccess(config *tableaclpb.Config, tableName string, role tableacl.Role, want bool) error {
+	if err := checkLoad(config, true); err != nil {
+		return err
+	}
 	got := tableacl.Authorized(tableName, role).IsMember(currentUser())
 	if want != got {
-		t.Errorf("got %v, want %v", got, want)
+		return fmt.Errorf("got %v, want %v", got, want)
 	}
-}
-
-func allString() string {
-	return tableacl.GetCurrentAclFactory().AllString()
+	return nil
 }
 
 func init() {

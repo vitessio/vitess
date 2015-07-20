@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
@@ -707,8 +708,14 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		username:   username,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	if err := tableacl.InitFromBytes(
-		[]byte(fmt.Sprintf(`{"test_table":{"READER":"%s"}}`, username))); err != nil {
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{username},
+		}},
+	}
+	if err := tableacl.InitFromProto(config); err != nil {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 
@@ -718,7 +725,15 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	testUtils.checkEqual(t, expected, qre.Execute())
 	sqlQuery.disallowQueries()
 
-	if err := tableacl.InitFromBytes([]byte(`{"test_table":{"READER":"superuser"}}`)); err != nil {
+	config = &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+
+	if err := tableacl.InitFromProto(config); err != nil {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 	// without enabling Config.StrictTableAcl

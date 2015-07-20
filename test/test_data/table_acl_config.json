@@ -1,7 +1,31 @@
 {
-      "vtocc_acl_no_access": {},
-      "vtocc_acl_read_only": {"Reader": "youtube-dev-dedicated"},
-      "vtocc_acl_read_write": {"Writer": "youtube-dev-dedicated"},
-      "vtocc_acl_admin": {"Admin": "youtube-dev-dedicated"},
-      "vtocc_acl_all_user_read_only": {"READER":"*"}
+  "table_groups": [
+    {
+      "name": "vtocc_acl_no_access",
+      "table_names_or_prefixes": ["vtocc_acl_no_access"]
+    },
+    {
+      "name": "vtocc_acl_read_only",
+      "table_names_or_prefixes": ["vtocc_acl_read_only"],
+      "readers": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_acl_read_write",
+      "table_names_or_prefixes": ["vtocc_acl_read_write"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_acl_admin",
+      "table_names_or_prefixes": ["vtocc_acl_admin"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_acl_all_user_read_only",
+      "table_names_or_prefixes": ["vtocc_acl_all_user_read_only"],
+      "readers": ["youtube-dev-dedicated"]
+    }
+  ]
 }

@@ -1,6 +1,10 @@
 {
-  "test_table": {
-    "READER": "vt",
-    "WRITER": "vt"
-  }
+  "table_groups": [
+    {
+      "name": "group01",
+      "table_names_or_prefixes": ["test_table"],
+      "readers": ["vt"],
+      "writers": ["vt"]
+    }
+  ]
 }
