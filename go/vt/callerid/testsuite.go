@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	// FakePrincipal is the principal of testing EffectiveCallerID
+	// FakePrincipal is the principal of testing effective CallerID
 	FakePrincipal = "TestPrincipal"
-	// FakeComponent is the component of testing EffectiveCallerID
+	// FakeComponent is the component of testing effective CallerID
 	FakeComponent = "TestComponent"
-	// FakeSubcomponent is the subcomponent of testing EffectiveCallerID
+	// FakeSubcomponent is the subcomponent of testing effective CallerID
 	FakeSubcomponent = "TestSubcomponent"
-	// FakeUsername is the username of testing ImmediateCallerID
+	// FakeUsername is the username of testing immediate CallerID
 	FakeUsername = "TestUsername"
 )
 
@@ -25,11 +25,11 @@ const (
 func Tests(t *testing.T, im *qrpb.VTGateCallerID, ef *vtpb.CallerID) {
 	ctx := context.TODO()
 	ctxim := ImmediateCallerIDFromContext(ctx)
-	// For Contexts without ImmediateCallerID, ImmediateCallerIDFromContext should fail
+	// For Contexts without immediate CallerID, ImmediateCallerIDFromContext should fail
 	if ctxim != nil {
 		t.Errorf("Expect nil from ImmediateCallerIDFromContext, but got %v", ctxim)
 	}
-	// For Contexts without EffectiveCallerID, EffectiveCallerIDFromContext should fail
+	// For Contexts without effective CallerID, EffectiveCallerIDFromContext should fail
 	ctxef := EffectiveCallerIDFromContext(ctx)
 	if ctxef != nil {
 		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
@@ -37,11 +37,11 @@ func Tests(t *testing.T, im *qrpb.VTGateCallerID, ef *vtpb.CallerID) {
 
 	ctx = NewContext(ctx, nil, nil)
 	ctxim = ImmediateCallerIDFromContext(ctx)
-	// For Contexts with nil ImmediateCallerID, ImmediateCallerIDFromContext should fail
+	// For Contexts with nil immediate CallerID, ImmediateCallerIDFromContext should fail
 	if ctxim != nil {
 		t.Errorf("Expect nil from ImmediateCallerIDFromContext, but got %v", ctxim)
 	}
-	// For Contexts with nil EffectiveCallerID, EffectiveCallerIDFromContext should fail
+	// For Contexts with nil effective CallerID, EffectiveCallerIDFromContext should fail
 	ctxef = EffectiveCallerIDFromContext(ctx)
 	if ctxef != nil {
 		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
@@ -63,7 +63,7 @@ func Tests(t *testing.T, im *qrpb.VTGateCallerID, ef *vtpb.CallerID) {
 
 	ctx = NewContext(ctx, ef, im)
 	ctxim = ImmediateCallerIDFromContext(ctx)
-	// retrieved ImmediateCallerID should be equal to the one we put into Context
+	// retrieved immediate CallerID should be equal to the one we put into Context
 	if !reflect.DeepEqual(ctxim, im) {
 		t.Errorf("Expect %v from ImmediateCallerIDFromContext, but got %v", im, ctxim)
 	}
@@ -72,7 +72,7 @@ func Tests(t *testing.T, im *qrpb.VTGateCallerID, ef *vtpb.CallerID) {
 	}
 
 	ctxef = EffectiveCallerIDFromContext(ctx)
-	// retrieved EffectiveCallerID should be equal to the one we put into Context
+	// retrieved effective CallerID should be equal to the one we put into Context
 	if !reflect.DeepEqual(ctxef, ef) {
 		t.Errorf("Expect %v from EffectiveCallerIDFromContext, but got %v", ef, ctxef)
 	}
