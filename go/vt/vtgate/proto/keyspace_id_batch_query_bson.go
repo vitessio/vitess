@@ -29,6 +29,7 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 		lenWriter.Close()
 	}
 	keyspaceIdBatchQuery.TabletType.MarshalBson(buf, "TabletType")
+	bson.EncodeBool(buf, "AsTransaction", keyspaceIdBatchQuery.AsTransaction)
 	// *Session
 	if keyspaceIdBatchQuery.Session == nil {
 		bson.EncodePrefix(buf, bson.Null, "Session")
@@ -70,6 +71,8 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 			}
 		case "TabletType":
 			keyspaceIdBatchQuery.TabletType.UnmarshalBson(buf, kind)
+		case "AsTransaction":
+			keyspaceIdBatchQuery.AsTransaction = bson.DecodeBool(buf, kind)
 		case "Session":
 			// *Session
 			if kind != bson.Null {

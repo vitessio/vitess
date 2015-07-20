@@ -69,7 +69,7 @@ type TabletConn interface {
 	Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute executes a streaming query on vttablet. It returns a channel, ErrFunc and error.
 	// If error is non-nil, it means that the StreamExecute failed to send the request. Otherwise,
@@ -85,7 +85,7 @@ type TabletConn interface {
 	// These should not be used for anything except tests for now; they will eventually
 	// replace the existing methods.
 	Execute2(ctx context.Context, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
-	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionId int64) (*tproto.QueryResultList, error)
 	Begin2(ctx context.Context) (transactionId int64, err error)
 	Commit2(ctx context.Context, transactionId int64) error
 	Rollback2(ctx context.Context, transactionId int64) error

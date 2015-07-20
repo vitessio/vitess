@@ -116,7 +116,8 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 				Keyspace:      "TestResolverExecuteBatchKeyspaceIds",
 				KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
 			}},
-			TabletType: topo.TYPE_MASTER,
+			TabletType:    topo.TYPE_MASTER,
+			AsTransaction: true,
 		}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(), query)

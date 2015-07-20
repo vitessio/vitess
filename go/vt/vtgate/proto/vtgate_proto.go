@@ -140,9 +140,10 @@ type BoundShardQuery struct {
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
-	Queries    []BoundShardQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Queries       []BoundShardQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 //go:generate bsongen -file $GOFILE -type BatchQueryShard -o batch_query_shard_bson.go
@@ -161,9 +162,10 @@ type BoundKeyspaceIdQuery struct {
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
-	Queries    []BoundKeyspaceIdQuery
-	TabletType topo.TabletType
-	Session    *Session
+	Queries       []BoundKeyspaceIdQuery
+	TabletType    topo.TabletType
+	AsTransaction bool
+	Session       *Session
 }
 
 //go:generate bsongen -file $GOFILE -type KeyspaceIdBatchQuery -o keyspace_id_batch_query_bson.go

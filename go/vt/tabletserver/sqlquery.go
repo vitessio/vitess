@@ -444,11 +444,15 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 }
 
 // ExecuteBatch executes a group of queries and returns their results as a list.
-// ExecuteBatch can be called for an existing transaction, or it can also begin
-// its own transaction, in which case it's expected to commit it also.
+// ExecuteBatch can be called for an existing transaction, or it can be called with
+// the AsTransaction flag which will execute all statements inside an independent
+// transaction. If AsTransaction is true, TransactionId must be 0.
 func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
 		return NewTabletError(ErrFail, "Empty query list")
+	}
+	if queryList.AsTransaction && queryList.TransactionId != 0 {
+		return NewTabletError(ErrFail, "cannot start a new transaction in the scope of an existing one")
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
@@ -458,56 +462,44 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 	defer sq.endRequest()
 	defer handleError(&err, nil, sq.qe.queryServiceStats)
 
-	beginCalled := false
 	session := proto.Session{
 		TransactionId: queryList.TransactionId,
 		SessionId:     queryList.SessionId,
 	}
+	if queryList.AsTransaction {
+		var txInfo proto.TransactionInfo
+		if err = sq.Begin(ctx, &session, &txInfo); err != nil {
+			return err
+		}
+		session.TransactionId = txInfo.TransactionId
+		// If transaction was not committed by the end, it means
+		// that there was an error, roll it back.
+		defer func() {
+			if session.TransactionId != 0 {
+				sq.Rollback(ctx, &session)
+			}
+		}()
+	}
 	reply.List = make([]mproto.QueryResult, 0, len(queryList.Queries))
 	for _, bound := range queryList.Queries {
-		trimmed := strings.ToLower(strings.Trim(bound.Sql, " \t\r\n"))
-		switch trimmed {
-		case "begin":
-			if session.TransactionId != 0 {
-				panic(NewTabletError(ErrFail, "Nested transactions disallowed"))
-			}
-			var txInfo proto.TransactionInfo
-			if err = sq.Begin(ctx, &session, &txInfo); err != nil {
-				return err
-			}
-			session.TransactionId = txInfo.TransactionId
-			beginCalled = true
-			reply.List = append(reply.List, mproto.QueryResult{})
-		case "commit":
-			if !beginCalled {
-				panic(NewTabletError(ErrFail, "Cannot commit without begin"))
-			}
-			if err = sq.Commit(ctx, &session); err != nil {
-				return err
-			}
-			session.TransactionId = 0
-			beginCalled = false
-			reply.List = append(reply.List, mproto.QueryResult{})
-		default:
-			query := proto.Query{
-				Sql:           bound.Sql,
-				BindVariables: bound.BindVariables,
-				TransactionId: session.TransactionId,
-				SessionId:     session.SessionId,
-			}
-			var localReply mproto.QueryResult
-			if err = sq.Execute(ctx, &query, &localReply); err != nil {
-				if beginCalled {
-					sq.Rollback(ctx, &session)
-				}
-				return err
-			}
-			reply.List = append(reply.List, localReply)
+		query := proto.Query{
+			Sql:           bound.Sql,
+			BindVariables: bound.BindVariables,
+			TransactionId: session.TransactionId,
+			SessionId:     session.SessionId,
 		}
+		var localReply mproto.QueryResult
+		if err = sq.Execute(ctx, &query, &localReply); err != nil {
+			return err
+		}
+		reply.List = append(reply.List, localReply)
 	}
-	if beginCalled {
-		sq.Rollback(ctx, &session)
-		panic(NewTabletError(ErrFail, "begin called with no commit"))
+	if queryList.AsTransaction {
+		if err = sq.Commit(ctx, &session); err != nil {
+			session.TransactionId = 0
+			return err
+		}
+		session.TransactionId = 0
 	}
 	return nil
 }

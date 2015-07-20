@@ -4,8 +4,6 @@ Vitess sharding scheme is range-sharded. Vitess supports routing for
 other sharding schemes by allowing explicit shard_name addressing.
 This implementation is not fully complete as yet.
 """
-import logging
-
 from vtdb import db_object
 from vtdb import dbexceptions
 from vtdb import shard_constants

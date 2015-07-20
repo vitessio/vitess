@@ -100,7 +100,7 @@ func (conn *gRPCQueryClient) Execute2(ctx context.Context, query string, bindVar
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -109,6 +109,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 
 	req := &pb.ExecuteBatchRequest{
 		Queries:       make([]*pb.BoundQuery, len(queries)),
+		AsTransaction: asTransaction,
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
 	}
@@ -126,8 +127,8 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 }
 
 // ExecuteBatch2 is the same with ExecuteBatch in gRPC, which is already CallerID enabled
-func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
-	return conn.ExecuteBatch(ctx, queries, transactionID)
+func (conn *gRPCQueryClient) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+	return conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 // StreamExecute starts a streaming query to VTTablet.

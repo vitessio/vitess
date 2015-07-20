@@ -403,7 +403,7 @@ func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map
 	return sbc.Execute(ctx, query, bindVars, transactionID)
 }
 
-func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -419,8 +419,8 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, transactionID int64) (*tproto.QueryResultList, error) {
-	return sbc.ExecuteBatch(ctx, queries, transactionID)
+func (sbc *sandboxConn) ExecuteBatch2(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
+	return sbc.ExecuteBatch(ctx, queries, asTransaction, transactionID)
 }
 
 func (sbc *sandboxConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc, error) {

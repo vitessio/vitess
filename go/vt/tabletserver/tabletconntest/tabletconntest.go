@@ -44,6 +44,8 @@ const TestKeyspace = "test_keyspace"
 // TestShard is the Shard we use for this test
 const TestShard = "test_shard"
 
+const testAsTransaction bool = true
+
 const testSessionID int64 = 5678
 
 var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, "generic error")
@@ -716,6 +718,9 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, queryList *proto.Qu
 	if queryList.SessionId != testSessionID {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
 	}
+	if queryList.AsTransaction != testAsTransaction {
+		f.t.Errorf("invalid ExecuteBatch.QueryList.AsTransaction: got %v expected %v", queryList.AsTransaction, testAsTransaction)
+	}
 	if queryList.TransactionId != executeBatchTransactionID {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.TransactionId: got %v expected %v", queryList.TransactionId, executeBatchTransactionID)
 	}
@@ -782,7 +787,7 @@ var executeBatchQueryResultList = proto.QueryResultList{
 func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch")
 	ctx := context.Background()
-	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID)
+	qrl, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
@@ -794,14 +799,14 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBatchExecuteError")
 	ctx := context.Background()
-	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID)
+	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	verifyError(t, err, "ExecuteBatch")
 }
 
 func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatchPanics")
 	ctx := context.Background()
-	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
@@ -809,7 +814,7 @@ func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch2")
 	ctx := context.Background()
-	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
 	}
@@ -821,14 +826,14 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 func testExecuteBatch2Error(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBatchExecute2Error")
 	ctx := context.Background()
-	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID)
+	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	verifyError(t, err, "ExecuteBatch")
 }
 
 func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch2Panics")
 	ctx := context.Background()
-	if _, err := conn.ExecuteBatch2(ctx, executeBatchQueries, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
+	if _, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }

@@ -5,7 +5,6 @@ for the common database operations is defined in DBObjectBase.
 DBObjectUnsharded defines the cursor creation methods for the same.
 """
 import functools
-import logging
 import struct
 
 from vtdb import db_object

@@ -169,8 +169,12 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 	// Figure out if we should be running QueryService, see if we are,
 	// and reconcile.
 	if err != nil {
-		// we are not healthy, we should not be running QueryService
-		shouldQueryServiceBeRunning = false
+		if tablet.Type != topo.TYPE_WORKER {
+			// We are not healthy and must shut down QueryService.
+			// At the moment, the only exception to this are "worker" tablets which
+			// still must serve queries e.g. as source tablet during a "SplitClone".
+			shouldQueryServiceBeRunning = false
+		}
 	}
 	isQueryServiceRunning := agent.QueryServiceControl.IsServing()
 	if shouldQueryServiceBeRunning {

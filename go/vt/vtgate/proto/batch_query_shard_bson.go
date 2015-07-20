@@ -29,6 +29,7 @@ func (batchQueryShard *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter, k
 		lenWriter.Close()
 	}
 	batchQueryShard.TabletType.MarshalBson(buf, "TabletType")
+	bson.EncodeBool(buf, "AsTransaction", batchQueryShard.AsTransaction)
 	// *Session
 	if batchQueryShard.Session == nil {
 		bson.EncodePrefix(buf, bson.Null, "Session")
@@ -70,6 +71,8 @@ func (batchQueryShard *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer, kind by
 			}
 		case "TabletType":
 			batchQueryShard.TabletType.UnmarshalBson(buf, kind)
+		case "AsTransaction":
+			batchQueryShard.AsTransaction = bson.DecodeBool(buf, kind)
 		case "Session":
 			// *Session
 			if kind != bson.Null {
