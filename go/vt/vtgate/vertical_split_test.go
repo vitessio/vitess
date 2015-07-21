@@ -9,7 +9,6 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -27,8 +26,17 @@ func TestExecuteKeyspaceAlias(t *testing.T) {
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(context.Background(), queries, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil, false)
+		queries := []proto.BoundShardQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      KsTestUnshardedServedFrom,
+			Shards:        shards,
+		}}
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+		if err != nil {
+			t.Error(err)
+		}
+		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topo.TYPE_RDONLY, false, nil)
 		if err != nil {
 			return nil, err
 		}
