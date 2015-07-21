@@ -186,6 +186,9 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			}
 
 			if oldMasterTablet != nil {
+				// We now know more about the old master, so add it to event data.
+				ev.OldMaster = *oldMasterTablet
+
 				// Update the serving graph.
 				errs.RecordError(
 					topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, oldMasterTablet))
