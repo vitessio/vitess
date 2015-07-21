@@ -28,8 +28,8 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def tabletconn_protocol(self):
     return 'gorpc'
 
-  def vtgate_protocol_flags(self):
-    return ['-vtgate_protocol', 'gorpc']
+  def vtgate_protocol(self):
+    return 'gorpc'
 
   def rpc_timeout_message(self):
     return 'timeout waiting for'

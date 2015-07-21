@@ -418,6 +418,8 @@ class VtGate(object):
     """Creates the Vtgate instance and reserve the ports if necessary.
     """
     self.port = port or environment.reserve_ports(1)
+    if protocols_flavor().vtgate_protocol() == 'grpc':
+      self.grpc_port = environment.reserve_ports(1)
     self.secure_port = None
     if cert:
       self.secure_port = environment.reserve_ports(1)
@@ -444,6 +446,10 @@ class VtGate(object):
           '-bsonrpc_timeout', '5s',
           '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
           ]
+    if protocols_flavor().vtgate_protocol() == 'grpc':
+      args.extend(['-grpc_port', str(self.grpc_port)])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if topo_impl:
       args.extend(['-topo_implementation', topo_impl])
     else:
@@ -501,6 +507,13 @@ class VtGate(object):
     """
     return 'localhost:%u' % self.secure_port
 
+  def rpc_endpoint(self):
+    """rpc_endpoint returns the endpoint to use for RPCs.
+    """
+    if protocols_flavor().vtgate_protocol() == 'grpc':
+      return 'localhost:%u' % self.grpc_port
+    return self.addr()
+
   def get_status(self):
     """get_status returns the status page for this process.
     """
@@ -516,8 +529,9 @@ class VtGate(object):
     """vtclient uses the vtclient binary to send a query to vtgate.
     """
     args = environment.binary_args('vtclient') + [
-      '-server', self.addr(),
-      '-tablet_type', tablet_type] + protocols_flavor().vtgate_protocol_flags()
+      '-server', self.rpc_endpoint(),
+      '-tablet_type', tablet_type,
+      '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -534,7 +548,7 @@ class VtGate(object):
     """execute uses 'vtctl VtGateExecute' to execute a command.
     """
     args = ['VtGateExecute',
-            '-server', self.addr(),
+            '-server', self.rpc_endpoint(),
             '-tablet_type', tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
@@ -546,7 +560,7 @@ class VtGate(object):
     """execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
     """
     args = ['VtGateExecuteShard',
-            '-server', self.addr(),
+            '-server', self.rpc_endpoint(),
             '-keyspace', keyspace,
             '-shards', shards,
             '-tablet_type', tablet_type]
@@ -560,7 +574,7 @@ class VtGate(object):
     in chunks.
     """
     args = ['VtGateSplitQuery',
-            '-server', self.addr(),
+            '-server', self.rpc_endpoint(),
             '-keyspace', keyspace,
             '-split_count', str(split_count)]
     if bindvars:
@@ -605,7 +619,7 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
   args.extend(['-tablet_manager_protocol',
                protocols_flavor().tablet_manager_protocol()])
   args.extend(['-tablet_protocol', protocols_flavor().tabletconn_protocol()])
-  args.extend(protocols_flavor().vtgate_protocol_flags())
+  args.extend(['-vtgate_protocol', protocols_flavor().vtgate_protocol()])
 
   if auto_log:
     args.append('--stderrthreshold=%s' % get_log_level())
@@ -908,9 +922,9 @@ class Vtctld(object):
             '--schema_change_check_interval', '1',
             '-tablet_manager_protocol',
             protocols_flavor().tablet_manager_protocol(),
+            '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
             ] + \
-            environment.topo_server().flags() + \
-            protocols_flavor().vtgate_protocol_flags()
+            environment.topo_server().flags()
     if protocols_flavor().service_map():
       args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':

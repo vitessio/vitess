@@ -664,7 +664,7 @@ class TestVTGateFunctions(unittest.TestCase):
     utils.vtgate.execute('delete from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
 
     qr = utils.vtgate.execute('select user_id, email from vt_user_extra where user_id = :user_id', bindvars={'user_id': 11})
-    self.assertEqual(len(qr['Rows']), 0)
+    self.assertEqual(len(qr['Rows'] or []), 0)
 
 if __name__ == '__main__':
   utils.main()

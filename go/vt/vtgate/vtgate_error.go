@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -76,4 +77,21 @@ func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 		return
 	}
 	reply.Err = rpcErrFromVtGateError(err)
+}
+
+// VtGateErrorToVtRPCError converts a vtgate error into a vtrpc error.
+func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
+	if err == nil && errString == "" {
+		return nil
+	}
+	message := ""
+	if err != nil {
+		message = err.Error()
+	} else {
+		message = errString
+	}
+	return &vtrpc.RPCError{
+		Code:    vtrpc.ErrorCode_UnknownVtgateError,
+		Message: message,
+	}
 }
