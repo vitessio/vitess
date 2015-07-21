@@ -48,6 +48,7 @@ var defaultACL string
 type tableACL struct {
 	sync.RWMutex
 	entries aclEntries
+	config  tableaclpb.Config
 }
 
 // currentACL stores current effective ACL information.
@@ -120,6 +121,7 @@ func load(config *tableaclpb.Config) error {
 	currentACL.Lock()
 	defer currentACL.Unlock()
 	currentACL.entries = entries
+	currentACL.config = *config
 	return nil
 }
 
@@ -150,6 +152,15 @@ func Authorized(table string, role Role) acl.ACL {
 		}
 	}
 	return acl.AcceptAllACL{}
+}
+
+// GetCurrentConfig returns a copy of current tableacl configuration.
+func GetCurrentConfig() *tableaclpb.Config {
+	config := &tableaclpb.Config{}
+	currentACL.RLock()
+	defer currentACL.RUnlock()
+	*config = currentACL.config
+	return config
 }
 
 // Register registers a AclFactory.
