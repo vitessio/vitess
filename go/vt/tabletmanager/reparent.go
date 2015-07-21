@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	_ = flag.Bool("fast_external_reparent", false, "Unused.")
-
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 10*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 
 	externalReparentStats = stats.NewTimings("ExternalReparents", "NewMasterVisible", "FullRebuild")
