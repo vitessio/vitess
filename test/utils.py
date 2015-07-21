@@ -448,6 +448,8 @@ class VtGate(object):
           ]
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if topo_impl:
       args.extend(['-topo_implementation', topo_impl])
     else:

@@ -40,6 +40,7 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'grpc-vtctl',
         'grpc-vtworker',
         'grpc-tabletmanager',
+        'grpc-vtgateservice',
         ]
 
 protocols_flavor.__knows_protocols_flavor_map['grpc'] = GRpcProtocolsFlavor
