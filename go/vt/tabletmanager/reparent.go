@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	_ = flag.Bool("fast_external_reparent", false, "Unused.")
-
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 10*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 
 	externalReparentStats = stats.NewTimings("ExternalReparents", "NewMasterVisible", "FullRebuild")
@@ -186,6 +184,9 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			}
 
 			if oldMasterTablet != nil {
+				// We now know more about the old master, so add it to event data.
+				ev.OldMaster = *oldMasterTablet
+
 				// Update the serving graph.
 				errs.RecordError(
 					topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, oldMasterTablet))
