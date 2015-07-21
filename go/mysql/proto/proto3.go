@@ -109,6 +109,9 @@ func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 
 // QueryResultToProto3 converts an internal QueryResult to the proto3 version
 func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
+	if qr == nil {
+		return nil
+	}
 	return &pbq.QueryResult{
 		Fields:       FieldsToProto3(qr.Fields),
 		RowsAffected: qr.RowsAffected,
@@ -119,6 +122,9 @@ func QueryResultToProto3(qr *QueryResult) *pbq.QueryResult {
 
 // Proto3ToQueryResult converts a proto3 QueryResult to an internal data structure.
 func Proto3ToQueryResult(qr *pbq.QueryResult) *QueryResult {
+	if qr == nil {
+		return nil
+	}
 	return &QueryResult{
 		Fields:       Proto3ToFields(qr.Fields),
 		RowsAffected: qr.RowsAffected,

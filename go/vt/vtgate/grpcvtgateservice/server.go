@@ -40,7 +40,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	reply := new(proto.QueryResult)
 	executeErr := vtg.server.Execute(ctx, query, reply)
 	response = &pb.ExecuteResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(executeErr),
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
 	if executeErr == nil {
 		response.Result = mproto.QueryResultToProto3(reply.Result)
@@ -68,7 +68,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	reply := new(proto.QueryResult)
 	executeErr := vtg.server.ExecuteShard(ctx, query, reply)
 	response = &pb.ExecuteShardsResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(executeErr),
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
 	if executeErr == nil {
 		response.Result = mproto.QueryResultToProto3(reply.Result)
@@ -96,7 +96,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	reply := new(proto.QueryResult)
 	executeErr := vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
 	response = &pb.ExecuteKeyspaceIdsResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(executeErr),
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
 	if executeErr == nil {
 		response.Result = mproto.QueryResultToProto3(reply.Result)
@@ -124,7 +124,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	reply := new(proto.QueryResult)
 	executeErr := vtg.server.ExecuteKeyRanges(ctx, query, reply)
 	response = &pb.ExecuteKeyRangesResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(executeErr),
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
 	if executeErr == nil {
 		response.Result = mproto.QueryResultToProto3(reply.Result)
@@ -141,19 +141,19 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEntityIdsRequest) (response *pb.ExecuteEntityIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	query := &proto.EntityIdsQuery{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-
-		// FIXME
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
+		Sql:               string(request.Query.Sql),
+		BindVariables:     tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		Keyspace:          request.Keyspace,
+		EntityColumnName:  request.EntityColumnName,
+		EntityKeyspaceIDs: proto.ProtoToEntityIds(request.EntityKeyspaceIds),
+		TabletType:        topo.ProtoToTabletType(request.TabletType),
+		Session:           proto.ProtoToSession(request.Session),
+		NotInTransaction:  request.NotInTransaction,
 	}
 	reply := new(proto.QueryResult)
 	executeErr := vtg.server.ExecuteEntityIds(ctx, query, reply)
 	response = &pb.ExecuteEntityIdsResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(executeErr),
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
 	if executeErr == nil {
 		response.Result = mproto.QueryResultToProto3(reply.Result)
@@ -169,45 +169,126 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 // ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBatchShardsRequest) (response *pb.ExecuteBatchShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil, nil
+
+	query := &proto.BatchQueryShard{
+		Session:       proto.ProtoToSession(request.Session),
+		Queries:       proto.ProtoToBoundShardQueries(request.Queries),
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+		AsTransaction: request.AsTransaction,
+	}
+	reply := new(proto.QueryResultList)
+	executeErr := vtg.server.ExecuteBatchShard(ctx, query, reply)
+	response = &pb.ExecuteBatchShardsResponse{
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
+	}
+	if executeErr == nil {
+		response.Results = tproto.QueryResultListToProto3(reply.List)
+		response.Session = proto.SessionToProto(reply.Session)
+		return response, nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		return response, nil
+	}
+	return nil, executeErr
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
 // vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.ExecuteBatchKeyspaceIdsRequest) (response *pb.ExecuteBatchKeyspaceIdsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil, nil
+
+	query := &proto.KeyspaceIdBatchQuery{
+		Session:       proto.ProtoToSession(request.Session),
+		Queries:       proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+		AsTransaction: request.AsTransaction,
+	}
+	reply := new(proto.QueryResultList)
+	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, query, reply)
+	response = &pb.ExecuteBatchKeyspaceIdsResponse{
+		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
+	}
+	if executeErr == nil {
+		response.Results = tproto.QueryResultListToProto3(reply.List)
+		response.Session = proto.SessionToProto(reply.Session)
+		return response, nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		return response, nil
+	}
+	return nil, executeErr
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	return nil
+
+	query := &proto.Query{
+		Sql:           string(request.Query.Sql),
+		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+	}
+	return vtg.server.StreamExecute(stream.Context(), query, func(value *proto.QueryResult) error {
+		return stream.Send(&pb.StreamExecuteResponse{
+			Result: mproto.QueryResultToProto3(value.Result),
+		})
+	})
 }
 
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, stream pbs.Vitess_StreamExecuteShardsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil
+
+	query := &proto.QueryShard{
+		Sql:           string(request.Query.Sql),
+		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		Keyspace:      request.Keyspace,
+		Shards:        request.Shards,
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+	}
+	return vtg.server.StreamExecuteShard(stream.Context(), query, func(value *proto.QueryResult) error {
+		return stream.Send(&pb.StreamExecuteShardsResponse{
+			Result: mproto.QueryResultToProto3(value.Result),
+		})
+	})
 }
 
 // StreamExecuteKeyRanges is the RPC version of
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequest, stream pbs.Vitess_StreamExecuteKeyRangesServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil
+
+	query := &proto.KeyRangeQuery{
+		Sql:           string(request.Query.Sql),
+		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		Keyspace:      request.Keyspace,
+		KeyRanges:     key.ProtoToKeyRanges(request.KeyRanges),
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+	}
+	return vtg.server.StreamExecuteKeyRanges(stream.Context(), query, func(value *proto.QueryResult) error {
+		return stream.Send(&pb.StreamExecuteKeyRangesResponse{
+			Result: mproto.QueryResultToProto3(value.Result),
+		})
+	})
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIdsRequest, stream pbs.Vitess_StreamExecuteKeyspaceIdsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil
+
+	query := &proto.KeyspaceIdQuery{
+		Sql:           string(request.Query.Sql),
+		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		Keyspace:      request.Keyspace,
+		KeyspaceIds:   key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		TabletType:    topo.ProtoToTabletType(request.TabletType),
+	}
+	return vtg.server.StreamExecuteKeyspaceIds(stream.Context(), query, func(value *proto.QueryResult) error {
+		return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
+			Result: mproto.QueryResultToProto3(value.Result),
+		})
+	})
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -216,7 +297,7 @@ func (vtg *VTGate) Begin(ctx context.Context, request *pb.BeginRequest) (respons
 	outSession := new(proto.Session)
 	beginErr := vtg.server.Begin(ctx, outSession)
 	response = &pb.BeginResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(beginErr),
+		Error: vtgate.VtGateErrorToVtRPCError(beginErr, ""),
 	}
 	if beginErr == nil {
 		response.Session = proto.SessionToProto(outSession)
@@ -233,7 +314,7 @@ func (vtg *VTGate) Commit(ctx context.Context, request *pb.CommitRequest) (respo
 	defer vtg.server.HandlePanic(&err)
 	commitErr := vtg.server.Commit(ctx, proto.ProtoToSession(request.Session))
 	response = &pb.CommitResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(commitErr),
+		Error: vtgate.VtGateErrorToVtRPCError(commitErr, ""),
 	}
 	if commitErr == nil {
 		return response, nil
@@ -249,7 +330,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *pb.RollbackRequest) (r
 	defer vtg.server.HandlePanic(&err)
 	rollbackErr := vtg.server.Rollback(ctx, proto.ProtoToSession(request.Session))
 	response = &pb.RollbackResponse{
-		Error: vtgate.VtGateErrorToVtRPCError(rollbackErr),
+		Error: vtgate.VtGateErrorToVtRPCError(rollbackErr, ""),
 	}
 	if rollbackErr == nil {
 		return response, nil
@@ -262,9 +343,22 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *pb.RollbackRequest) (r
 
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (response *pb.SplitQueryResponse, err error) {
+
 	defer vtg.server.HandlePanic(&err)
-	// FIXME
-	return nil, nil
+	query := &proto.SplitQueryRequest{
+		Keyspace: request.Keyspace,
+		Query: tproto.BoundQuery{
+			Sql:           string(request.Query.Sql),
+			BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		},
+		SplitColumn: request.SplitColumn,
+		SplitCount:  int(request.SplitCount),
+	}
+	reply := new(proto.SplitQueryResult)
+	if err := vtg.server.SplitQuery(ctx, query, reply); err != nil {
+		return nil, err
+	}
+	return proto.SplitQueryPartsToProto(reply.Splits), nil
 }
 
 func init() {

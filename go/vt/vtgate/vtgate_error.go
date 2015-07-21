@@ -80,12 +80,18 @@ func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 }
 
 // VtGateErrorToVtRPCError converts a vtgate error into a vtrpc error.
-func VtGateErrorToVtRPCError(err error) *vtrpc.RPCError {
-	if err == nil {
+func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
+	if err == nil && errString == "" {
 		return nil
+	}
+	message := ""
+	if err != nil {
+		message = err.Error()
+	} else {
+		message = errString
 	}
 	return &vtrpc.RPCError{
 		Code:    vtrpc.ErrorCode_UnknownVtgateError,
-		Message: err.Error(),
+		Message: message,
 	}
 }

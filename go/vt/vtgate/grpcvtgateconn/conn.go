@@ -60,8 +60,8 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
@@ -83,8 +83,8 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
@@ -106,8 +106,8 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
@@ -129,8 +129,8 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
@@ -153,8 +153,8 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
@@ -165,8 +165,8 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.B
 		s = session.(*pb.Session)
 	}
 	request := &pb.ExecuteBatchShardsRequest{
-		Session: s,
-		// FIXME(alainjobart) queries []proto.BoundShardQuery
+		Session:       s,
+		Queries:       proto.BoundShardQueriesToProto(queries),
 		TabletType:    topo.TabletTypeToProto(tabletType),
 		AsTransaction: asTransaction,
 	}
@@ -174,8 +174,8 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.B
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResults(response.Results), response.Session, nil
 }
@@ -186,8 +186,8 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 		s = session.(*pb.Session)
 	}
 	request := &pb.ExecuteBatchKeyspaceIdsRequest{
-		Session: s,
-		// FIXME(alainjobart) queries []proto.BoundKeyspaceIdQuery
+		Session:       s,
+		Queries:       proto.BoundKeyspaceIdQueriesToProto(queries),
 		TabletType:    topo.TabletTypeToProto(tabletType),
 		AsTransaction: asTransaction,
 	}
@@ -195,8 +195,8 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	if err != nil {
 		return nil, session, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, response.Session, err
+	if response.Error != nil {
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
 	return mproto.Proto3ToQueryResults(response.Results), response.Session, nil
 }
@@ -349,8 +349,8 @@ func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := vterrors.FromVtRPCError(response.Error); err != nil {
-		return nil, err
+	if response.Error != nil {
+		return nil, vterrors.FromVtRPCError(response.Error)
 	}
 	return response.Session, nil
 }
@@ -363,7 +363,10 @@ func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
 	if err != nil {
 		return err
 	}
-	return vterrors.FromVtRPCError(response.Error)
+	if response.Error != nil {
+		return vterrors.FromVtRPCError(response.Error)
+	}
+	return nil
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
@@ -374,7 +377,10 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	if err != nil {
 		return err
 	}
-	return vterrors.FromVtRPCError(response.Error)
+	if response.Error != nil {
+		return vterrors.FromVtRPCError(response.Error)
+	}
+	return nil
 }
 
 func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {
