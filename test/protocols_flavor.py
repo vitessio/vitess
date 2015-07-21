@@ -38,8 +38,8 @@ class ProtocolsFlavor(object):
     vttablet."""
     raise NotImplementedError('Not implemented in the base class')
 
-  def vtgate_protocol_flags(self):
-    """Returns the flags to use for specifying the vtgate protocol."""
+  def vtgate_protocol(self):
+    """Returns the protocol to use to talk to vtgate."""
     raise NotImplementedError('Not implemented in the base class')
 
   def rpc_timeout_message(self):
