@@ -295,7 +295,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		batchQuery.AsTransaction,
 		batchQuery.Session,
 		func() (*scatterBatchRequest, error) {
-			return boundShardQueriesToScatterBatchRequest(batchQuery.Queries)
+			return boundShardQueriesToScatterBatchRequest(batchQuery.Queries), nil
 		})
 	if err == nil {
 		reply.List = qrs.List

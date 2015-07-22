@@ -8,7 +8,6 @@ package vtgate
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -228,8 +227,14 @@ func (res *Resolver) ExecuteEntityIds(
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
-	// TODO(sougou): implement (also revisit mapKeyspaceIdsToShards.
-	return nil, errors.New("unimplemented")
+	buildBatchRequest := func() (*scatterBatchRequest, error) {
+		shardQueries, err := boundKeyspaceIdQueriesToBoundShardQueries(ctx, res.scatterConn.toposerv, res.scatterConn.cell, query.TabletType, query.Queries)
+		if err != nil {
+			return nil, err
+		}
+		return boundShardQueriesToScatterBatchRequest(shardQueries), nil
+	}
+	return res.ExecuteBatch(ctx, query.TabletType, query.AsTransaction, query.Session, buildBatchRequest)
 }
 
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
@@ -256,6 +261,8 @@ func (res *Resolver) ExecuteBatch(
 		if asTransaction {
 			return qrs, err
 		}
+		// If lower level retries failed, check if there was a resharding event
+		// and retry again if needed.
 		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
 			newBatchRequest, buildErr := buildBatchRequest()
 			if buildErr != nil {
@@ -266,7 +273,9 @@ func (res *Resolver) ExecuteBatch(
 				return qrs, err
 			}
 			batchRequest = newBatchRequest
+			continue
 		}
+		return qrs, err
 	}
 }
 

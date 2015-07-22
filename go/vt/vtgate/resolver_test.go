@@ -98,8 +98,6 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 }
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
-	//TODO(sougou): Fix test
-	t.Skip()
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*mproto.QueryResult, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
@@ -117,7 +115,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 				KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
 			}},
 			TabletType:    topo.TYPE_MASTER,
-			AsTransaction: true,
+			AsTransaction: false,
 		}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(), query)
