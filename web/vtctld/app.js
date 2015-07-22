@@ -254,7 +254,6 @@ app.controller('TopoCtrl', function($scope, $routeParams, topodata) {
   var path = $routeParams.path;
 
   $scope.path = path;
-  $scope.node = topodata.get({path: path});
 
   var crumbs = [];
   if (path) {
@@ -265,6 +264,11 @@ app.controller('TopoCtrl', function($scope, $routeParams, topodata) {
     }
   }
   $scope.breadcrumbs = crumbs;
+
+  $scope.refreshData = function() {
+    $scope.node = topodata.get({path: path});
+  };
+  $scope.refreshData();
 });
 
 app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
