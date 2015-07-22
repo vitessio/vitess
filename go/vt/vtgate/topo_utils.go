@@ -159,7 +159,7 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery
 		Requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		for _, shard := range boundQuery.Shards {
+		for shard := range unique(boundQuery.Shards) {
 			key := boundQuery.Keyspace + ":" + shard
 			request := requests.Requests[key]
 			if request == nil {

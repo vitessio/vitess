@@ -170,6 +170,32 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				},
 			},
 		},
+		{
+			boundQueries: []proto.BoundShardQuery{
+				{
+					Sql:           "q1",
+					BindVariables: map[string]interface{}{"q1var": 1},
+					Keyspace:      "ks1",
+					Shards:        []string{"0", "0"},
+				},
+			},
+			requests: &scatterBatchRequest{
+				Length: 1,
+				Requests: map[string]*shardBatchRequest{
+					"ks1:0": &shardBatchRequest{
+						Queries: []tproto.BoundQuery{
+							{
+								Sql:           "q1",
+								BindVariables: map[string]interface{}{"q1var": 1},
+							},
+						},
+						Keyspace:      "ks1",
+						Shard:         "0",
+						ResultIndexes: []int{0},
+					},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
