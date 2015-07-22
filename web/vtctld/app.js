@@ -17,7 +17,8 @@ app.constant('routes', [
     urlPattern: '/keyspaces/',
     templateUrl: 'keyspaces.html',
     controller: 'KeyspacesCtrl',
-    showInNav: true
+    showInNav: true,
+    icon: 'dashboard'
   },
   {
     name: 'shard',
@@ -34,7 +35,8 @@ app.constant('routes', [
     urlPattern: '/schema/',
     templateUrl: 'schema.html',
     controller: 'SchemaCtrl',
-    showInNav: true
+    showInNav: true,
+    icon: 'storage'
   },
   {
     name: 'topo',
@@ -43,7 +45,8 @@ app.constant('routes', [
     urlPattern: '/topo/:path*?',
     templateUrl: 'topo.html',
     controller: 'TopoCtrl',
-    showInNav: true
+    showInNav: true,
+    icon: 'folder'
   },
 ]);
 
@@ -247,8 +250,21 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout,
 app.controller('SchemaCtrl', function() {
 });
 
-app.controller('TopoCtrl', function($scope, $routeParams) {
-  $scope.path = $routeParams.path;
+app.controller('TopoCtrl', function($scope, $routeParams, topodata) {
+  var path = $routeParams.path;
+
+  $scope.path = path;
+  $scope.node = topodata.get({path: path});
+
+  var crumbs = [];
+  if (path) {
+    var elems = path.split('/');
+    while (elems.length > 0) {
+      var elemPath = elems.join('/');
+      crumbs.unshift({name: elems.pop(), path: elemPath});
+    }
+  }
+  $scope.breadcrumbs = crumbs;
 });
 
 app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
@@ -354,4 +370,8 @@ app.factory('tabletinfo', function($resource) {
 
 app.factory('endpoints', function($resource) {
   return $resource('/api/endpoints/:cell/:keyspace/:shard/:tabletType');
+});
+
+app.factory('topodata', function($resource) {
+  return $resource('/api/topodata/:path');
 });

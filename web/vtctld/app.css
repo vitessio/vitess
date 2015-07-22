@@ -61,3 +61,18 @@ md-toolbar h1 {
 .card-table-row {
   padding: 8px 0px 8px 0px;
 }
+
+.breadcrumb {
+  color: #E8EAF6;
+  background-color: #3F51B5;
+  padding: 0px 12px 0px 12px;
+}
+
+.breadcrumb md-icon {
+  color: #E8EAF6;
+}
+
+.breadcrumb-divider {
+  font-size: 1.5em;
+  font-weight: 900;
+}
