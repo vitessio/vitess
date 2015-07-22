@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
@@ -554,16 +555,22 @@ func InCellList(cell string, cells []string) bool {
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the
 // tablet aliases in the given shard.
+//
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
+//
+// The tablet aliases are sorted by cell, then by UID.
 func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]TabletAlias, error) {
 	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
 // FindAllTabletAliasesInShardByCell uses the replication graph to find all the
 // tablet aliases in the given shard.
+//
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
+//
+// The tablet aliases are sorted by cell, then by UID.
 func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]TabletAlias, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.FindAllTabletAliasesInShardbyCell")
@@ -621,6 +628,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	for a := range resultAsMap {
 		result = append(result, a)
 	}
+	sort.Sort(TabletAliasList(result))
 	return result, err
 }
 
