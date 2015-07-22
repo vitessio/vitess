@@ -288,7 +288,6 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		return errTooManyInFlight
 	}
 
-	// TODO(sougou): implement functionality
 	qrs, err := vtg.resolver.ExecuteBatch(
 		ctx,
 		batchQuery.TabletType,

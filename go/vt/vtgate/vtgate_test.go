@@ -356,8 +356,6 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 }
 
 func TestVTGateExecuteBatchShard(t *testing.T) {
-	// TODO(sougou): Fix test.
-	t.Skip()
 	s := createSandbox("TestVTGateExecuteBatchShard")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
@@ -398,8 +396,6 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 }
 
 func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
-	//TODO(sougou): Fix test
-	t.Skip()
 	s := createSandbox("TestVTGateExecuteBatchKeyspaceIds")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
