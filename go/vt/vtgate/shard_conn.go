@@ -222,10 +222,6 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, endPoint, isTimeout, err = sdc.getConn(ctx)
 		if err != nil {
-			// CAUTION: if we decide to retry on timeout, remember to only
-			// retry read queries. We now allow DMLs in autocommit mode,
-			// and we also allow AsTransaction flag in ExecuteBatch. In those
-			// cases, we should not retry on timeout.
 			if isTimeout || i == sdc.retryCount {
 				break
 			}
