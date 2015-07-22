@@ -125,7 +125,6 @@ func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[st
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
 func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
-	// FIXME(sougou): don't retry if asTransaction is true.
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
 		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
@@ -223,6 +222,10 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, endPoint, isTimeout, err = sdc.getConn(ctx)
 		if err != nil {
+			// CAUTION: if we decide to retry on timeout, remember to only
+			// retry read queries. We now allow DMLs in autocommit mode,
+			// and we also allow AsTransaction flag in ExecuteBatch. In those
+			// cases, we should not retry on timeout.
 			if isTimeout || i == sdc.retryCount {
 				break
 			}

@@ -327,11 +327,12 @@ type sandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount     sync2.AtomicInt64
-	BeginCount    sync2.AtomicInt64
-	CommitCount   sync2.AtomicInt64
-	RollbackCount sync2.AtomicInt64
-	CloseCount    sync2.AtomicInt64
+	ExecCount          sync2.AtomicInt64
+	BeginCount         sync2.AtomicInt64
+	CommitCount        sync2.AtomicInt64
+	RollbackCount      sync2.AtomicInt64
+	CloseCount         sync2.AtomicInt64
+	AsTransactionCount sync2.AtomicInt64
 
 	// Queries stores the requests received.
 	Queries []tproto.BoundQuery
@@ -405,6 +406,9 @@ func (sbc *sandboxConn) Execute2(ctx context.Context, query string, bindVars map
 
 func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
+	if asTransaction {
+		sbc.AsTransactionCount.Add(1)
+	}
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
