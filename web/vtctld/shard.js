@@ -1,4 +1,4 @@
-app.controller('ShardCtrl', function($scope, $routeParams, $timeout,
+app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
                  shards, tablets, tabletinfo, actions) {
   var keyspace = $routeParams.keyspace;
   var shard = $routeParams.shard;
@@ -127,6 +127,7 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout,
   $scope.refreshData();
 
   function periodicRefresh() {
+    if ($route.current.name != 'shard') return;
     refreshStreamHealth();
     $timeout(periodicRefresh, 3000);
   }
