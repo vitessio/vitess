@@ -36,7 +36,7 @@ type poolConn interface {
 }
 
 // Execute performs a non-streaming query execution.
-func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
+func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 	qre.logStats.OriginalSql = qre.query
 	qre.logStats.BindVariables = qre.bindVars
 	qre.logStats.TransactionID = qre.transactionID
@@ -55,7 +55,9 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		qre.qe.queryServiceStats.ResultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
-	qre.checkPermissions()
+	if err := qre.checkPermissions(); err != nil {
+		return nil, err
+	}
 
 	if qre.plan.PlanId == planbuilder.PLAN_DDL {
 		return qre.execDDL()
@@ -73,79 +75,89 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult) {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_DML:
 			if qre.qe.strictMode.Get() != 0 {
-				panic(NewTabletError(ErrFail, "DML too complex"))
+				return nil, NewTabletError(ErrFail, "DML too complex")
 			}
-			reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PLAN_INSERT_PK:
-			reply = qre.execInsertPK(conn)
+			reply, err = qre.execInsertPK(conn)
 		case planbuilder.PLAN_INSERT_SUBQUERY:
-			reply = qre.execInsertSubquery(conn)
+			reply, err = qre.execInsertSubquery(conn)
 		case planbuilder.PLAN_DML_PK:
-			reply = qre.execDMLPK(conn, invalidator)
+			reply, err = qre.execDMLPK(conn, invalidator)
 		case planbuilder.PLAN_DML_SUBQUERY:
-			reply = qre.execDMLSubquery(conn, invalidator)
+			reply, err = qre.execDMLSubquery(conn, invalidator)
 		case planbuilder.PLAN_OTHER:
-			reply = qre.execSQL(conn, qre.query, true)
+			reply, err = qre.execSQL(conn, qre.query, true)
 		default: // select or set in a transaction, just count as select
-			reply = qre.execDirect(conn)
+			reply, err = qre.execDirect(conn)
 		}
 	} else {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_SELECT:
 			if qre.plan.Reason == planbuilder.REASON_LOCK {
-				panic(NewTabletError(ErrFail, "Disallowed outside transaction"))
+				return nil, NewTabletError(ErrFail, "Disallowed outside transaction")
 			}
-			reply = qre.execSelect()
+			reply, err = qre.execSelect()
 		case planbuilder.PLAN_PK_IN:
-			reply = qre.execPKIN()
+			reply, err = qre.execPKIN()
 		case planbuilder.PLAN_SELECT_SUBQUERY:
-			reply = qre.execSubquery()
+			reply, err = qre.execSubquery()
 		case planbuilder.PLAN_SET:
-			reply = qre.execSet()
+			reply, err = qre.execSet()
 		case planbuilder.PLAN_OTHER:
-			conn := qre.getConn(qre.qe.connPool)
+			conn, err := qre.getConn(qre.qe.connPool)
+			if err != nil {
+				return nil, err
+			}
 			defer conn.Recycle()
-			reply = qre.execSQL(conn, qre.query, true)
+			reply, err = qre.execSQL(conn, qre.query, true)
 		default:
 			if !qre.qe.enableAutoCommit {
-				panic(NewTabletError(ErrFatal, "unsupported query: %s", qre.query))
+				return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
 			}
-			reply = qre.execDmlAutoCommit()
+			reply, err = qre.execDmlAutoCommit()
 		}
 	}
-	return reply
+	return reply, err
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) {
+func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) error {
 	qre.logStats.OriginalSql = qre.query
 	qre.logStats.PlanType = qre.plan.PlanId.String()
 	defer qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), time.Now())
 
-	qre.checkPermissions()
+	if err := qre.checkPermissions(); err != nil {
+		return err
+	}
 
-	conn := qre.getConn(qre.qe.streamConnPool)
+	conn, err := qre.getConn(qre.qe.streamConnPool)
+	if err != nil {
+		return err
+	}
 	defer conn.Recycle()
 
 	qd := NewQueryDetail(qre.logStats.ctx, conn)
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
-	qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, sendReply)
+	return qre.fullStreamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, sendReply)
 }
 
-func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult) {
+func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err error) {
 	transactionID := qre.qe.txPool.Begin(qre.ctx)
 	qre.logStats.AddRewrittenSql("begin", time.Now())
 	defer func() {
-		err := recover()
-		if err == nil {
-			qre.qe.Commit(qre.ctx, qre.logStats, transactionID)
-			qre.logStats.AddRewrittenSql("commit", time.Now())
-		} else {
+		// TxPool.Get may panic
+		if panicErr := recover(); panicErr != nil {
+			err = fmt.Errorf("DML autocommit got panic: %v", panicErr)
+		}
+		if err != nil {
 			qre.qe.txPool.Rollback(qre.ctx, transactionID)
 			qre.logStats.AddRewrittenSql("rollback", time.Now())
-			panic(err)
+		} else {
+			qre.qe.Commit(qre.ctx, qre.logStats, transactionID)
+			qre.logStats.AddRewrittenSql("commit", time.Now())
 		}
 	}()
 	conn := qre.qe.txPool.Get(transactionID)
@@ -157,27 +169,27 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult) {
 	switch qre.plan.PlanId {
 	case planbuilder.PLAN_PASS_DML:
 		if qre.qe.strictMode.Get() != 0 {
-			panic(NewTabletError(ErrFail, "DML too complex"))
+			return nil, NewTabletError(ErrFail, "DML too complex")
 		}
-		reply = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+		reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 	case planbuilder.PLAN_INSERT_PK:
-		reply = qre.execInsertPK(conn)
+		reply, err = qre.execInsertPK(conn)
 	case planbuilder.PLAN_INSERT_SUBQUERY:
-		reply = qre.execInsertSubquery(conn)
+		reply, err = qre.execInsertSubquery(conn)
 	case planbuilder.PLAN_DML_PK:
-		reply = qre.execDMLPK(conn, invalidator)
+		reply, err = qre.execDMLPK(conn, invalidator)
 	case planbuilder.PLAN_DML_SUBQUERY:
-		reply = qre.execDMLSubquery(conn, invalidator)
+		reply, err = qre.execDMLSubquery(conn, invalidator)
 	default:
-		panic(NewTabletError(ErrFatal, "unsupported query: %s", qre.query))
+		return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
 	}
-	return reply
+	return reply, nil
 }
 
-func (qre *QueryExecutor) checkPermissions() {
+func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if we have a background context.
 	if qre.ctx == context.Background() {
-		return
+		return nil
 	}
 
 	// Blacklist
@@ -191,9 +203,9 @@ func (qre *QueryExecutor) checkPermissions() {
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QR_FAIL:
-		panic(NewTabletError(ErrFail, "Query disallowed due to rule: %s", desc))
+		return NewTabletError(ErrFail, "Query disallowed due to rule: %s", desc)
 	case QR_FAIL_RETRY:
-		panic(NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc))
+		return NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc)
 	}
 
 	// Perform table ACL check if it is enabled
@@ -201,16 +213,17 @@ func (qre *QueryExecutor) checkPermissions() {
 		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
 		// Raise error if in strictTableAcl mode, else just log an error
 		if qre.qe.strictTableAcl {
-			panic(NewTabletError(ErrFail, "%s", errStr))
+			return NewTabletError(ErrFail, "%s", errStr)
 		}
 		qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 	}
+	return nil
 }
 
-func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
+func (qre *QueryExecutor) execDDL() (*mproto.QueryResult, error) {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(ErrFail, "DDL is not understood"))
+		return nil, NewTabletError(ErrFail, "DDL is not understood")
 	}
 
 	txid := qre.qe.txPool.Begin(qre.ctx)
@@ -219,8 +232,10 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 	// Stolen from Execute
 	conn := qre.qe.txPool.Get(txid)
 	defer conn.Recycle()
-	result := qre.execSQL(conn, qre.query, false)
-
+	result, err := qre.execSQL(conn, qre.query, false)
+	if err != nil {
+		return nil, err
+	}
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
@@ -228,31 +243,37 @@ func (qre *QueryExecutor) execDDL() *mproto.QueryResult {
 	if ddlPlan.NewName != "" {
 		qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName)
 	}
-	return result
+	return result, nil
 }
 
-func (qre *QueryExecutor) execPKIN() (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execPKIN() (*mproto.QueryResult, error) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return qre.fetchMulti(pkRows, getLimit(qre.plan.Limit, qre.bindVars))
+	limit, err := getLimit(qre.plan.Limit, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return qre.fetchMulti(pkRows, limit)
 }
 
-func (qre *QueryExecutor) execSubquery() (result *mproto.QueryResult) {
-	innerResult := qre.qFetch(qre.logStats, qre.plan.Subquery, qre.bindVars)
+func (qre *QueryExecutor) execSubquery() (*mproto.QueryResult, error) {
+	innerResult, err := qre.qFetch(qre.logStats, qre.plan.Subquery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
 	return qre.fetchMulti(innerResult.Rows, -1)
 }
 
-func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (*mproto.QueryResult, error) {
 	if qre.plan.Fields == nil {
-		panic("unexpected")
+		return nil, NewTabletError(ErrFatal, "query plan.Fields is empty")
 	}
-	result = &mproto.QueryResult{Fields: qre.plan.Fields}
+	result := &mproto.QueryResult{Fields: qre.plan.Fields}
 	if len(pkRows) == 0 || limit == 0 {
-		return
+		return result, nil
 	}
-
 	tableInfo := qre.plan.TableInfo
 	keys := make([]string, len(pkRows))
 	for i, pk := range pkRows {
@@ -266,7 +287,10 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 		rcresult := rcresults[keys[i]]
 		if rcresult.Row != nil {
 			if qre.mustVerify() {
-				qre.spotCheck(rcresult, pk)
+				err := qre.spotCheck(rcresult, pk)
+				if err != nil {
+					return nil, err
+				}
 			}
 			rows = append(rows, applyFilter(qre.plan.ColumnNumbers, rcresult.Row))
 			hits++
@@ -281,7 +305,10 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 				Rows:    missingRows,
 			},
 		}
-		resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
+		resultFromdb, err := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
+		if err != nil {
+			return nil, err
+		}
 		misses = int64(len(resultFromdb.Rows))
 		absent = int64(len(pkRows)) - hits - misses
 		for _, row := range resultFromdb.Rows {
@@ -307,14 +334,14 @@ func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (re
 		result.Rows = result.Rows[:limit]
 		result.RowsAffected = uint64(limit)
 	}
-	return result
+	return result, nil
 }
 
 func (qre *QueryExecutor) mustVerify() bool {
 	return (Rand() % spotCheckMultiplier) < qre.qe.spotCheckFreq.Get()
 }
 
-func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
+func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) error {
 	qre.qe.queryServiceStats.SpotCheckCount.Add(1)
 	bv := map[string]interface{}{
 		"#pk": sqlparser.TupleEqualityList{
@@ -322,7 +349,10 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 			Rows:    [][]sqltypes.Value{pk},
 		},
 	}
-	resultFromdb := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
+	resultFromdb, err := qre.qFetch(qre.logStats, qre.plan.OuterQuery, bv)
+	if err != nil {
+		return err
+	}
 	var dbrow []sqltypes.Value
 	if len(resultFromdb.Rows) != 0 {
 		dbrow = resultFromdb.Rows[0]
@@ -330,6 +360,7 @@ func (qre *QueryExecutor) spotCheck(rcresult RCResult, pk []sqltypes.Value) {
 	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
 		qre.qe.Launch(func() { qre.recheckLater(rcresult, dbrow, pk) })
 	}
+	return nil
 }
 
 func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
@@ -347,45 +378,56 @@ func (qre *QueryExecutor) recheckLater(rcresult RCResult, dbrow []sqltypes.Value
 }
 
 // execDirect always sends the query to mysql
-func (qre *QueryExecutor) execDirect(conn poolConn) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDirect(conn poolConn) (*mproto.QueryResult, error) {
 	if qre.plan.Fields != nil {
-		result = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+		result, err := qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
+		if err != nil {
+			return nil, err
+		}
 		result.Fields = qre.plan.Fields
-		return
+		return result, err
 	}
-	result = qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
-	return
+	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
-func (qre *QueryExecutor) execSelect() (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execSelect() (*mproto.QueryResult, error) {
 	if qre.plan.Fields != nil {
-		result = qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
+		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
 		result.Fields = qre.plan.Fields
-		return
+		return result, nil
 	}
-	conn := qre.getConn(qre.qe.connPool)
+	conn, err := qre.getConn(qre.qe.connPool)
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Recycle()
 	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
 
-func (qre *QueryExecutor) execInsertPK(conn poolConn) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPK(conn poolConn) (*mproto.QueryResult, error) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (result *mproto.QueryResult) {
-	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
+func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (*mproto.QueryResult, error) {
+	innerResult, err := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
-		return &mproto.QueryResult{RowsAffected: 0}
+		return &mproto.QueryResult{RowsAffected: 0}, nil
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		panic(NewTabletError(ErrFail, "Subquery length does not match column list"))
+		return nil, NewTabletError(ErrFail, "Subquery length does not match column list")
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -393,46 +435,48 @@ func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (result *mproto.Quer
 	}
 	// Validating first row is sufficient
 	if err := validateRow(qre.plan.TableInfo, qre.plan.TableInfo.PKColumns, pkRows[0]); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	qre.bindVars["#values"] = innerRows
 	return qre.execInsertPKRows(conn, pkRows)
 }
 
-func (qre *QueryExecutor) execInsertPKRows(conn poolConn, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execInsertPKRows(conn poolConn, pkRows [][]sqltypes.Value) (*mproto.QueryResult, error) {
 	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	result = qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
-	return result
+	return qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
 }
 
-func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return qre.execDMLPKRows(conn, pkRows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLSubquery(conn poolConn, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	innerResult := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
+func (qre *QueryExecutor) execDMLSubquery(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
+	innerResult, err := qre.directFetch(conn, qre.plan.Subquery, qre.bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
 	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
 	if len(pkRows) == 0 {
-		return &mproto.QueryResult{RowsAffected: 0}
+		return &mproto.QueryResult{RowsAffected: 0}, nil
 	}
 	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	result = &mproto.QueryResult{}
+	result := &mproto.QueryResult{}
 	maxRows := int(qre.qe.maxDMLRows.Get())
 	for i := 0; i < len(pkRows); i += maxRows {
 		end := i + maxRows
@@ -449,93 +493,157 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value
 			Columns: qre.plan.TableInfo.Indexes[0].Columns,
 			Rows:    pkRows,
 		}
-		r := qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+		r, err := qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+		if err != nil {
+			return nil, err
+		}
 		// DMLs should only return RowsAffected.
 		result.RowsAffected += r.RowsAffected
 	}
 	if invalidator == nil {
-		return result
+		return result, nil
 	}
 	for _, pk := range pkRows {
 		key := buildKey(pk)
 		invalidator.Delete(key)
 	}
-	return result
+	return result, nil
 }
 
-func (qre *QueryExecutor) execSet() (result *mproto.QueryResult) {
+func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 	switch qre.plan.SetKey {
 	case "vt_pool_size":
-		qre.qe.connPool.SetCapacity(int(getInt64(qre.plan.SetValue)))
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_pool_size = %v, want to int64", err)
+		}
+		qre.qe.connPool.SetCapacity(int(val))
 	case "vt_stream_pool_size":
-		qre.qe.streamConnPool.SetCapacity(int(getInt64(qre.plan.SetValue)))
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_stream_pool_size = %v, want int64", err)
+		}
+		qre.qe.streamConnPool.SetCapacity(int(val))
 	case "vt_transaction_cap":
-		qre.qe.txPool.pool.SetCapacity(int(getInt64(qre.plan.SetValue)))
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_transaction_cap = %v, want int64", err)
+		}
+		qre.qe.txPool.pool.SetCapacity(int(val))
 	case "vt_transaction_timeout":
-		qre.qe.txPool.SetTimeout(getDuration(qre.plan.SetValue))
+		val, err := parseDuration(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_transaction_timeout = %v, want int64 or float64", err)
+		}
+		qre.qe.txPool.SetTimeout(val)
 	case "vt_schema_reload_time":
-		qre.qe.schemaInfo.SetReloadTime(getDuration(qre.plan.SetValue))
+		val, err := parseDuration(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_schema_reload_time = %v, want int64 or float64", err)
+		}
+		qre.qe.schemaInfo.SetReloadTime(val)
 	case "vt_query_cache_size":
-		qre.qe.schemaInfo.SetQueryCacheSize(int(getInt64(qre.plan.SetValue)))
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_query_cache_size = %v, want int64", err)
+		}
+		qre.qe.schemaInfo.SetQueryCacheSize(int(val))
 	case "vt_max_result_size":
-		val := getInt64(qre.plan.SetValue)
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_max_result_size = %v, want int64", err)
+		}
 		if val < 1 {
-			panic(NewTabletError(ErrFail, "vt_max_result_size out of range %v", val))
+			return nil, NewTabletError(ErrFail, "vt_max_result_size out of range %v", val)
 		}
 		qre.qe.maxResultSize.Set(val)
 	case "vt_max_dml_rows":
-		val := getInt64(qre.plan.SetValue)
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_max_dml_rows = %v, want to int64", err)
+		}
 		if val < 1 {
-			panic(NewTabletError(ErrFail, "vt_max_dml_rows out of range %v", val))
+			return nil, NewTabletError(ErrFail, "vt_max_dml_rows out of range %v", val)
 		}
 		qre.qe.maxDMLRows.Set(val)
 	case "vt_stream_buffer_size":
-		val := getInt64(qre.plan.SetValue)
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_stream_buffer_size = %v, want int64", err)
+		}
+
 		if val < 1024 {
-			panic(NewTabletError(ErrFail, "vt_stream_buffer_size out of range %v", val))
+			return nil, NewTabletError(ErrFail, "vt_stream_buffer_size out of range %v", val)
 		}
 		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
-		qre.qe.queryTimeout.Set(getDuration(qre.plan.SetValue))
+		val, err := parseDuration(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_query_timeout = %v, want int64 or float64", err)
+		}
+		qre.qe.queryTimeout.Set(val)
 	case "vt_idle_timeout":
-		t := getDuration(qre.plan.SetValue)
-		qre.qe.connPool.SetIdleTimeout(t)
-		qre.qe.streamConnPool.SetIdleTimeout(t)
-		qre.qe.txPool.pool.SetIdleTimeout(t)
+		val, err := parseDuration(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_idle_timeout = %v, want int64 or float64", err)
+		}
+		qre.qe.connPool.SetIdleTimeout(val)
+		qre.qe.streamConnPool.SetIdleTimeout(val)
+		qre.qe.txPool.pool.SetIdleTimeout(val)
 	case "vt_spot_check_ratio":
-		qre.qe.spotCheckFreq.Set(int64(getFloat64(qre.plan.SetValue) * spotCheckMultiplier))
+		val, err := parseFloat64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_spot_check_ratio = %v, want float64", err)
+		}
+		qre.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
 	case "vt_strict_mode":
-		qre.qe.strictMode.Set(getInt64(qre.plan.SetValue))
+		val, err := parseInt64(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_strict_mode = %v, want to int64", err)
+		}
+		qre.qe.strictMode.Set(val)
 	case "vt_txpool_timeout":
-		t := getDuration(qre.plan.SetValue)
-		qre.qe.txPool.SetPoolTimeout(t)
+		val, err := parseDuration(qre.plan.SetValue)
+		if err != nil {
+			return nil, NewTabletError(ErrFail, "got set vt_txpool_timeout = %v, want int64 or float64", err)
+		}
+		qre.qe.txPool.SetPoolTimeout(val)
 	default:
-		conn := qre.getConn(qre.qe.connPool)
+		conn, err := qre.getConn(qre.qe.connPool)
+		if err != nil {
+			return nil, err
+		}
 		defer conn.Recycle()
 		return qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 	}
-	return &mproto.QueryResult{}
+	return &mproto.QueryResult{}, nil
 }
 
-func getInt64(v interface{}) int64 {
+func parseInt64(v interface{}) (int64, error) {
 	if ival, ok := v.(int64); ok {
-		return ival
+		return ival, nil
 	}
-	panic(NewTabletError(ErrFail, "expecting int"))
+	return -1, NewTabletError(ErrFail, "got %v, want int64", v)
 }
 
-func getFloat64(v interface{}) float64 {
+func parseFloat64(v interface{}) (float64, error) {
 	if ival, ok := v.(int64); ok {
-		return float64(ival)
+		return float64(ival), nil
 	}
 	if fval, ok := v.(float64); ok {
-		return fval
+		return fval, nil
 	}
-	panic(NewTabletError(ErrFail, "expecting number"))
+	return -1, NewTabletError(ErrFail, "got %v, want int64 or float64", v)
 }
 
-func getDuration(v interface{}) time.Duration {
-	return time.Duration(getFloat64(v) * 1e9)
+func parseDuration(v interface{}) (time.Duration, error) {
+	val, err := parseFloat64(v)
+	if err != nil {
+		return 0, err
+	}
+	// time.Duration is an int64, have to multiple by 1e9 because
+	// val might be in range (0, 1)
+	return time.Duration(val * 1e9), nil
 }
 
 func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
@@ -553,21 +661,24 @@ func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
 	return true
 }
 
-func (qre *QueryExecutor) getConn(pool *ConnPool) *DBConn {
+func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	start := time.Now()
 	conn, err := pool.Get(qre.ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Now().Sub(start)
-		return conn
+		return conn, nil
 	case ErrConnPoolClosed:
-		panic(err)
+		return nil, err
 	}
-	panic(NewTabletErrorSql(ErrFatal, err))
+	return nil, NewTabletErrorSql(ErrFatal, err)
 }
 
-func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (result *mproto.QueryResult) {
-	sql := qre.generateFinalSql(parsedQuery, bindVars, nil)
+func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
 	q, ok := qre.qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()
@@ -578,7 +689,7 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 			q.Err = NewTabletErrorSql(ErrFatal, err)
 		} else {
 			defer conn.Recycle()
-			q.Result, q.Err = qre.execSQLNoPanic(conn, sql, false)
+			q.Result, q.Err = qre.execSQL(conn, sql, false)
 		}
 	} else {
 		logStats.QuerySources |= QuerySourceConsolidator
@@ -587,59 +698,61 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 		qre.qe.queryServiceStats.WaitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
-		panic(q.Err)
+		return nil, q.Err
 	}
-	return q.Result.(*mproto.QueryResult)
+	return q.Result.(*mproto.QueryResult), nil
 }
 
-func (qre *QueryExecutor) directFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
+func (qre *QueryExecutor) directFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (*mproto.QueryResult, error) {
+	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
+	if err != nil {
+		return nil, err
+	}
 	return qre.execSQL(conn, sql, false)
 }
 
 // fullFetch also fetches field info
-func (qre *QueryExecutor) fullFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
-	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
+func (qre *QueryExecutor) fullFetch(conn poolConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (*mproto.QueryResult, error) {
+	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
+	if err != nil {
+		return nil, err
+	}
 	return qre.execSQL(conn, sql, true)
 }
 
-func (qre *QueryExecutor) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
-	sql := qre.generateFinalSql(parsedQuery, bindVars, buildStreamComment)
-	qre.execStreamSQL(conn, sql, callback)
+func (qre *QueryExecutor) fullStreamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, callback func(*mproto.QueryResult) error) error {
+	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
+	if err != nil {
+		return err
+	}
+	return qre.execStreamSQL(conn, sql, callback)
 }
 
-func (qre *QueryExecutor) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) string {
+func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (string, error) {
 	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		panic(NewTabletError(ErrFail, "%s", err))
+		return "", NewTabletError(ErrFail, "%s", err)
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
 	}
 	// undo hack done by stripTrailing
 	sql = restoreTrailing(sql, bindVars)
-	return hack.String(sql)
+	return hack.String(sql), nil
 }
 
-func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := qre.execSQLNoPanic(conn, sql, wantfields)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-func (qre *QueryExecutor) execSQLNoPanic(conn poolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
+func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	defer qre.logStats.AddRewrittenSql(sql, time.Now())
 	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) {
+func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) error {
 	start := time.Now()
 	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()))
 	qre.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
-		panic(NewTabletErrorSql(ErrFail, err))
+		return NewTabletErrorSql(ErrFail, err)
 	}
+	return nil
 }

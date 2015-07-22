@@ -40,12 +40,13 @@ func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[s
 
 func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
 	length = -1
-	setLength := func(list []sqltypes.Value) {
+	setLengthFunc := func(list []sqltypes.Value) error {
 		if length == -1 {
 			length = len(list)
 		} else if len(list) != length {
-			panic(NewTabletError(ErrFail, "mismatched lengths for values %v", pkValues))
+			return NewTabletError(ErrFail, "mismatched lengths for values %v", pkValues)
 		}
+		return nil
 	}
 	resolved = make([]interface{}, len(pkValues))
 	for i, val := range pkValues {
@@ -61,7 +62,9 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 				if err != nil {
 					return nil, 0, err
 				}
-				setLength(list)
+				if err := setLengthFunc(list); err != nil {
+					return nil, 0, err
+				}
 				resolved[i] = list
 			}
 		case []interface{}:
@@ -72,7 +75,9 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 					return nil, 0, err
 				}
 			}
-			setLength(list)
+			if err := setLengthFunc(list); err != nil {
+				return nil, 0, err
+			}
 			resolved[i] = list
 		default:
 			resolved[i], err = resolveValue(tableInfo.GetPKColumn(i), val, nil)
@@ -144,7 +149,7 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	case sqltypes.Value:
 		result = v
 	default:
-		panic(NewTabletError(ErrFail, "incompatible value type %v", v))
+		return result, NewTabletError(ErrFail, "incompatible value type %v", v)
 	}
 
 	if err = validateValue(col, result); err != nil {
@@ -185,12 +190,12 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 
 // getLimit resolves the rowcount or offset of the limit clause value.
 // It returns -1 if it's not set.
-func getLimit(limit interface{}, bv map[string]interface{}) int64 {
+func getLimit(limit interface{}, bv map[string]interface{}) (int64, error) {
 	switch lim := limit.(type) {
 	case string:
 		lookup, ok := bv[lim[1:]]
 		if !ok {
-			panic(NewTabletError(ErrFail, "missing bind var %s", lim))
+			return -1, NewTabletError(ErrFail, "missing bind var %s", lim)
 		}
 		var newlim int64
 		switch l := lookup.(type) {
@@ -201,16 +206,16 @@ func getLimit(limit interface{}, bv map[string]interface{}) int64 {
 		case int:
 			newlim = int64(l)
 		default:
-			panic(NewTabletError(ErrFail, "want number type for %s, got %T", lim, lookup))
+			return -1, NewTabletError(ErrFail, "want number type for %s, got %T", lim, lookup)
 		}
 		if newlim < 0 {
-			panic(NewTabletError(ErrFail, "negative limit %d", newlim))
+			return -1, NewTabletError(ErrFail, "negative limit %d", newlim)
 		}
-		return newlim
+		return newlim, nil
 	case int64:
-		return lim
+		return lim, nil
 	default:
-		return -1
+		return -1, nil
 	}
 }
 

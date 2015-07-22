@@ -348,33 +348,37 @@ func (sq *SqlQuery) Rollback(ctx context.Context, session *proto.Session) (err e
 // the supplied error return value.
 func (sq *SqlQuery) handleExecError(query *proto.Query, err *error, logStats *SQLQueryStats) {
 	if x := recover(); x != nil {
-		terr, ok := x.(*TabletError)
-		if !ok {
-			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
-			*err = NewTabletError(ErrFail, "%v: uncaught panic for %v", x, query)
-			sq.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-			return
-		}
-		if sq.config.TerseErrors && terr.SqlError != 0 {
-			*err = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
-		} else {
-			*err = terr
-		}
-		terr.RecordStats(sq.qe.queryServiceStats)
-		// suppress these errors in logs
-		if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
-			return
-		}
-		if terr.ErrorType == ErrFatal {
-			log.Errorf("%v: %v", terr, query)
-		} else {
-			log.Warningf("%v: %v", terr, query)
-		}
+		*err = sq.handleExecErrorNoPanic(query, x, logStats)
 	}
 	if logStats != nil {
 		logStats.Error = *err
 		logStats.Send()
 	}
+}
+
+func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *SQLQueryStats) error {
+	terr, ok := err.(*TabletError)
+	if !ok {
+		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
+		sq.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
+		return NewTabletError(ErrFail, "%v: uncaught panic for %v", err, query)
+	}
+	var myError error
+	if sq.config.TerseErrors && terr.SqlError != 0 {
+		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+	} else {
+		myError = terr
+	}
+	terr.RecordStats(sq.qe.queryServiceStats)
+	// suppress these errors in logs
+	if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
+		return myError
+	}
+	if terr.ErrorType == ErrFatal {
+		log.Errorf("%v: %v", terr, query)
+	}
+	log.Warningf("%v: %v", terr, query)
+	return myError
 }
 
 // Execute executes the query and returns the result as response.
@@ -405,7 +409,11 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 		logStats:      logStats,
 		qe:            sq.qe,
 	}
-	*reply = *qre.Execute()
+	result, err := qre.Execute()
+	if err != nil {
+		return sq.handleExecErrorNoPanic(query, err, logStats)
+	}
+	*reply = *result
 	return nil
 }
 
@@ -439,7 +447,10 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendR
 		logStats:      logStats,
 		qe:            sq.qe,
 	}
-	qre.Stream(sendReply)
+	err = qre.Stream(sendReply)
+	if err != nil {
+		return sq.handleExecErrorNoPanic(query, err, logStats)
+	}
 	return nil
 }
 
@@ -528,13 +539,19 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		logStats: logStats,
 		qe:       sq.qe,
 	}
-	conn := qre.getConn(sq.qe.connPool)
+	conn, err := qre.getConn(sq.qe.connPool)
+	if err != nil {
+		return err
+	}
 	defer conn.Recycle()
 	// TODO: For fetching MinMax, include where clauses on the
 	// primary key, if any, in the original query which might give a narrower
 	// range of split column to work with.
-	minMaxSql := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.splitColumn, splitter.splitColumn, splitter.tableName)
-	splitColumnMinMax := qre.execSQL(conn, minMaxSql, true)
+	minMaxSQL := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.splitColumn, splitter.splitColumn, splitter.tableName)
+	splitColumnMinMax, err := qre.execSQL(conn, minMaxSQL, true)
+	if err != nil {
+		return err
+	}
 	reply.Queries, err = splitter.split(splitColumnMinMax)
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
