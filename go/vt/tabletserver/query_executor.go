@@ -623,7 +623,7 @@ func (qre *QueryExecutor) generateFinalSql(parsedQuery *sqlparser.ParsedQuery, b
 }
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) *mproto.QueryResult {
-	result, err := qre.execSQLNoPanic(conn, sql, true)
+	result, err := qre.execSQLNoPanic(conn, sql, wantfields)
 	if err != nil {
 		panic(err)
 	}
