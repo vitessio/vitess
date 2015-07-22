@@ -1,7 +1,7 @@
 kind: Pod
 apiVersion: v1
 metadata:
-  name: vttablet-{{uid}}
+  name: vttablet-{{cell}}-{{uid}}
   labels:
     name: vttablet
     keyspace: "{{keyspace}}"
