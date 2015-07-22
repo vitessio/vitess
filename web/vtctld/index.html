@@ -19,39 +19,39 @@
 <body ng-app="vtctld" layout="row" ng-controller="AppCtrl as app">
 
 <md-sidenav class="site-sidenav md-sidenav-left md-whiteframe-z2"
-						md-component-id="left"
-						md-is-locked-open="$mdMedia('gt-md')">
+            md-component-id="left"
+            md-is-locked-open="$mdMedia('gt-md')">
 
-	<md-toolbar class="md-whiteframe-z1">
-		<h1>Vitess</h1>
-	</md-toolbar>
+  <md-toolbar class="md-whiteframe-z1">
+    <h1>Vitess</h1>
+  </md-toolbar>
 
-	<md-list>
-		<md-list-item ng-repeat="route in routes | filter:{showInNav:true}">
-			<md-button ng-class="{ 'selected': navIsSelected(route) }" ng-href="#{{route.urlBase}}">
+  <md-list>
+    <md-list-item ng-repeat="route in routes | filter:{showInNav:true}">
+      <md-button ng-class="{ 'selected': navIsSelected(route) }" ng-href="#{{route.urlBase}}">
         <md-icon md-font-set="material-icons" ng-bind="route.icon"></md-icon>
-				{{route.title}}
-			</md-button>
-		</md-list-item>
-	</md-list>
+        {{route.title}}
+      </md-button>
+    </md-list-item>
+  </md-list>
 
 </md-sidenav>
 
 <div flex layout="column" tabIndex="-1" role="main" class="md-whiteframe-z2">
 
-	<md-toolbar layout="row" class="md-whiteframe-z1" layout-align="space-between center">
-		<md-button class="md-icon-button" hide-gt-md ng-click="toggleNav()" aria-label="Toggle Nav Bar">
-			<md-icon md-font-set="material-icons">menu</md-icon>
-		</md-button>
+  <md-toolbar layout="row" class="md-whiteframe-z1" layout-align="space-between center">
+    <md-button class="md-icon-button" hide-gt-md ng-click="toggleNav()" aria-label="Toggle Nav Bar">
+      <md-icon md-font-set="material-icons">menu</md-icon>
+    </md-button>
 
-		<h1 ng-bind="navTitle()"></h1>
+    <h1 ng-bind="navTitle()"></h1>
 
-		<md-button class="md-icon-button" ng-click="refreshRoute()" aria-label="Refresh">
-			<md-icon md-font-set="material-icons">refresh</md-icon>
-		</md-button>
-	</md-toolbar>
+    <md-button class="md-icon-button" ng-click="refreshRoute()" aria-label="Refresh">
+      <md-icon md-font-set="material-icons">refresh</md-icon>
+    </md-button>
+  </md-toolbar>
 
-	<div flex layout="column" id="content" ng-view></div>
+  <div flex layout="column" id="content" ng-view></div>
 
 </div>
 
