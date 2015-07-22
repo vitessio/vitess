@@ -1,15 +1,14 @@
-package com.youtube.vitess.vtgate;
+package com.youtube.vitess.vtgate.rpcclient.gorpc;
 
 import com.google.common.primitives.UnsignedLong;
-
 import com.youtube.vitess.vtgate.Exceptions.InvalidFieldException;
-import com.youtube.vitess.vtgate.Field.FieldType;
 import com.youtube.vitess.vtgate.Field.Flag;
+import com.youtube.vitess.vtgate.QueryResult;
+import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
-import com.youtube.vitess.vtgate.rpcclient.gorpc.Bsonify;
-
+import com.youtube.vitess.vtgate.FieldType;
 import org.bson.BSONObject;
 import org.bson.BasicBSONObject;
 import org.bson.types.BasicBSONList;

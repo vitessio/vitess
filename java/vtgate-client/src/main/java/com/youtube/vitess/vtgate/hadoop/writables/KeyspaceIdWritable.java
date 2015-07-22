@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import com.youtube.vitess.vtgate.KeyspaceId;
-import com.youtube.vitess.vtgate.utils.GsonAdapters;
+import com.youtube.vitess.vtgate.hadoop.utils.GsonAdapters;
 
 import org.apache.hadoop.io.WritableComparable;
 

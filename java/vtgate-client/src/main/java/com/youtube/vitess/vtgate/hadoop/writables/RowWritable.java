@@ -6,7 +6,7 @@ import com.google.gson.GsonBuilder;
 
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
-import com.youtube.vitess.vtgate.utils.GsonAdapters;
+import com.youtube.vitess.vtgate.hadoop.utils.GsonAdapters;
 
 import org.apache.commons.net.util.Base64;
 import org.apache.hadoop.io.Writable;
