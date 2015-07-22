@@ -29,8 +29,7 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 	testUtils := &testUtils{}
 	query := "alter table test_table add zipcode int"
 	expected := &mproto.QueryResult{
-		Fields: getTestTableFields(),
-		Rows:   [][]sqltypes.Value{},
+		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, expected)
 	qre, sqlQuery := newTestQueryExecutor(
@@ -45,8 +44,7 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	testUtils := &testUtils{}
 	query := "update test_table set pk = foo()"
 	expected := &mproto.QueryResult{
-		Fields: []mproto.Field{},
-		Rows:   [][]sqltypes.Value{},
+		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, expected)
 	// non strict mode
@@ -76,8 +74,7 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	testUtils := &testUtils{}
 	query := "update test_table set pk = foo()"
 	expected := &mproto.QueryResult{
-		Fields: []mproto.Field{},
-		Rows:   [][]sqltypes.Value{},
+		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, expected)
 	// non strict mode
@@ -104,8 +101,7 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
 	want := &mproto.QueryResult{
-		Fields: make([]mproto.Field, 0),
-		Rows:   make([][]sqltypes.Value, 0),
+		Rows: make([][]sqltypes.Value, 0),
 	}
 	sql := "insert into test_table values(1)"
 	qre, sqlQuery := newTestQueryExecutor(
@@ -123,18 +119,13 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	testUtils := &testUtils{}
-	fields := []mproto.Field{
-		mproto.Field{Name: "pk", Type: mproto.VT_LONG},
-	}
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
 	expected := &mproto.QueryResult{
-		Fields: fields,
-		Rows:   [][]sqltypes.Value{},
+		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, expected)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &mproto.QueryResult{
-		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
@@ -143,9 +134,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 
 	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
 
-	db.AddQuery(insertQuery, &mproto.QueryResult{
-		Fields: fields,
-	})
+	db.AddQuery(insertQuery, &mproto.QueryResult{})
 
 	qre, sqlQuery := newTestQueryExecutor(
 		query, context.Background(), enableRowCache|enableStrict)
@@ -157,18 +146,13 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	testUtils := &testUtils{}
-	fields := []mproto.Field{
-		mproto.Field{Name: "pk", Type: mproto.VT_LONG},
-	}
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
 	expected := &mproto.QueryResult{
-		Fields: fields,
-		Rows:   [][]sqltypes.Value{},
+		Rows: [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, expected)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &mproto.QueryResult{
-		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeNumeric([]byte("2"))},
@@ -177,9 +161,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 
 	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
 
-	db.AddQuery(insertQuery, &mproto.QueryResult{
-		Fields: fields,
-	})
+	db.AddQuery(insertQuery, &mproto.QueryResult{})
 
 	qre, sqlQuery := newTestQueryExecutor(
 		query, context.Background(), enableRowCache|enableTx|enableStrict)
@@ -427,8 +409,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	// unrecognized set field will be delegated to MySQL and both Fields and Rows should be
 	// empty arrays in this case.
 	want := &mproto.QueryResult{
-		Fields: make([]mproto.Field, 0),
-		Rows:   make([][]sqltypes.Value, 0),
+		Rows: make([][]sqltypes.Value, 0),
 	}
 	got := qre.Execute()
 	if !reflect.DeepEqual(got, want) {
