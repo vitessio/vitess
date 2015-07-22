@@ -9,7 +9,8 @@
 <meta name="description" content="">
 <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
 
-<link rel='stylesheet' href='http://fonts.googleapis.com/css?family=Roboto:400,500,700,400italic'>
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Roboto:400,500,700,400italic">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/0.10.0/angular-material.min.css">
 <link rel="stylesheet" href="./app.css"/>
 
@@ -27,7 +28,7 @@
 
 	<md-list>
 		<md-list-item ng-repeat="route in routes | filter:{showInNav:true}">
-			<md-button ng-class="{ 'selected': navIsSelected(route) }" ng-click="navigate(route.urlBase)">
+			<md-button ng-class="{ 'selected': navIsSelected(route) }" ng-href="#{{route.urlBase}}">
 				{{route.title}}
 			</md-button>
 		</md-list-item>
@@ -39,13 +40,13 @@
 
 	<md-toolbar layout="row" class="md-whiteframe-z1">
 		<md-button hide-gt-md ng-click="toggleNav()" aria-label="Toggle Nav Bar">
-			<md-icon md-svg-icon="menu"></md-icon>
+			<md-icon md-font-set="material-icons">menu</md-icon>
 		</md-button>
 
 		<h1 ng-bind="navTitle()"></h1>
 
 		<md-button ng-click="refreshRoute()" aria-label="Refresh">
-			<md-icon md-svg-icon="refresh"></md-icon>
+			<md-icon md-font-set="material-icons">refresh</md-icon>
 		</md-button>
 	</md-toolbar>
 

@@ -47,14 +47,8 @@ app.constant('routes', [
   },
 ]);
 
-app.config(function($mdThemingProvider, $mdIconProvider, $routeProvider,
+app.config(function($mdThemingProvider, $routeProvider,
              $resourceProvider, routes) {
-  $mdIconProvider
-    .icon("menu", "img/menu.svg", 24)
-    .icon("close", "img/close.svg", 24)
-    .icon("refresh", "img/refresh.svg", 24)
-    .icon("more_vert", "img/more_vert.svg", 24);
-
   $mdThemingProvider.theme('default')
     .primaryPalette('indigo')
     .accentPalette('red');
