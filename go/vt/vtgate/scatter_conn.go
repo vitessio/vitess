@@ -239,48 +239,92 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	return qr, nil
 }
 
+// scatterBatchRequest needs to be built to perform a scatter batch query.
+// A VTGate batch request will get translated into a differnt set of batches
+// for each keyspace:shard, and those results will map to different positions in the
+// results list. The lenght specifies the total length of the final results
+// list. In each request variable, the resultIndexes specifies the position
+// for each result from the shard.
+type scatterBatchRequest struct {
+	Length   int
+	Requests map[string]*shardBatchRequest
+}
+
+type shardBatchRequest struct {
+	Queries         []tproto.BoundQuery
+	Keyspace, Shard string
+	ResultIndexes   []int
+}
+
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
 func (stc *ScatterConn) ExecuteBatch(
 	ctx context.Context,
-	queries []tproto.BoundQuery,
-	keyspace string,
-	shards []string,
+	batchRequest *scatterBatchRequest,
 	tabletType topo.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-) (qrs *tproto.QueryResultList, err error) {
-	results, allErrors := stc.multiGo(
-		ctx,
-		"ExecuteBatch",
-		keyspace,
-		shards,
-		tabletType,
-		session,
-		notInTransaction,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqrs, err := sdc.ExecuteBatch(ctx, queries, false, transactionId)
-			if err != nil {
-				return err
-			}
-			sResults <- innerqrs
-			return nil
-		})
+	asTransaction bool,
+	session *SafeSession) (qrs *tproto.QueryResultList, err error) {
+	allErrors := new(concurrency.AllErrorRecorder)
 
 	qrs = &tproto.QueryResultList{}
-	qrs.List = make([]mproto.QueryResult, len(queries))
-	for innerqr := range results {
-		innerqr := innerqr.(*tproto.QueryResultList)
-		for i := range qrs.List {
-			appendResult(&qrs.List[i], &innerqr.List[i])
-		}
+	qrs.List = make([]mproto.QueryResult, batchRequest.Length)
+	var resMutex sync.Mutex
+
+	var wg sync.WaitGroup
+	for _, req := range batchRequest.Requests {
+		wg.Add(1)
+		go func(req *shardBatchRequest) {
+			statsKey := []string{"ExecuteBatch", req.Keyspace, req.Shard, string(tabletType)}
+			defer wg.Done()
+			startTime := time.Now()
+			defer stc.timings.Record(statsKey, startTime)
+
+			sdc := stc.getConnection(ctx, req.Keyspace, req.Shard, tabletType)
+			transactionID, err := stc.updateSession(ctx, sdc, req.Keyspace, req.Shard, tabletType, session, false)
+			if err != nil {
+				allErrors.RecordError(err)
+				stc.tabletCallErrorCount.Add(statsKey, 1)
+				return
+			}
+
+			innerqrs, err := sdc.ExecuteBatch(ctx, req.Queries, asTransaction, transactionID)
+			if err != nil {
+				allErrors.RecordError(err)
+				// Don't increment the error counter for duplicate keys, as those errors
+				// are caused by client queries and are not VTGate's fault.
+				if !strings.Contains(err.Error(), errDupKey) {
+					stc.tabletCallErrorCount.Add(statsKey, 1)
+				}
+				return
+			}
+			// Encapsulate in a function for safe mutex operation.
+			func() {
+				resMutex.Lock()
+				defer resMutex.Unlock()
+				for i, result := range innerqrs.List {
+					appendResult(&qrs.List[req.ResultIndexes[i]], &result)
+				}
+			}()
+		}(req)
 	}
+	wg.Wait()
+	// If we want to rollback, we have to do it before closing results
+	// so that the session is updated to be not InTransaction.
 	if allErrors.HasErrors() {
+		if session.InTransaction() {
+			errstr := allErrors.Error().Error()
+			// We cannot recover from these errors
+			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
+				stc.Rollback(ctx, session)
+			}
+		}
 		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
 	return qrs, nil
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
+// The implementation of this function is similar to multiGo. A change there is likely
+// to require a change in this function also.
 func (stc *ScatterConn) StreamExecute(
 	ctx context.Context,
 	query string,
@@ -574,6 +618,8 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 // If there are any unrecoverable errors during a transaction, multiGo
 // rolls back the transaction for all shards.
 // The action function must match the shardActionFunc signature.
+// This function has similarities with StreamExecute. A change there will likely
+// require a change here also.
 func (stc *ScatterConn) multiGo(
 	ctx context.Context,
 	name string,

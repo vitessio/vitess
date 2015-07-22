@@ -446,7 +446,7 @@ func TestResolverInsertSqlClause(t *testing.T) {
 			"select a from table where id = 1 and " + clause + " for update"},
 	}
 	for _, test := range tests {
-		got := insertSqlClause(test[0], clause)
+		got := insertSQLClause(test[0], clause)
 		if got != test[1] {
 			t.Errorf("want '%v', got '%v'", test[1], got)
 		}

@@ -289,7 +289,14 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 	}
 
 	// TODO(sougou): implement functionality
-	qrs, err := &proto.QueryResultList{}, error(nil)
+	qrs, err := vtg.resolver.ExecuteBatch(
+		ctx,
+		batchQuery.TabletType,
+		batchQuery.AsTransaction,
+		batchQuery.Session,
+		func() (*scatterBatchRequest, error) {
+			return boundShardQueriesToScatterBatchRequest(batchQuery.Queries)
+		})
 	if err == nil {
 		reply.List = qrs.List
 		var rowCount int64

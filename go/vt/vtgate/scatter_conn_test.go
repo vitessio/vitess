@@ -12,7 +12,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -41,8 +40,17 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 func TestScatterConnExecuteBatch(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecuteBatch", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(context.Background(), queries, "TestScatterConnExecuteBatch", shards, "", nil, false)
+		queries := []proto.BoundShardQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestScatterConnExecuteBatch",
+			Shards:        shards,
+		}}
+		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+		if err != nil {
+			t.Error(err)
+		}
+		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, "", false, nil)
 		if err != nil {
 			return nil, err
 		}

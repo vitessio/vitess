@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -29,9 +30,9 @@ var (
 	closeBracket     = []byte(")")
 	kwAnd            = []byte(" and ")
 	kwWhere          = []byte(" where ")
-	insert_dml       = "insert"
-	update_dml       = "update"
-	delete_dml       = "delete"
+	insertDML        = "insert"
+	updateDML        = "update"
+	deleteDML        = "delete"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -235,51 +236,37 @@ func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.K
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatch(
 	ctx context.Context,
-	queries []tproto.BoundQuery,
-	keyspace string,
 	tabletType topo.TabletType,
+	asTransaction bool,
 	session *proto.Session,
-	mapToShards func(string) (string, []string, error),
-	notInTransaction bool,
+	buildBatchRequest func() (*scatterBatchRequest, error),
 ) (*tproto.QueryResultList, error) {
-	keyspace, shards, err := mapToShards(keyspace)
+	batchRequest, err := buildBatchRequest()
 	if err != nil {
 		return nil, err
 	}
 	for {
 		qrs, err := res.scatterConn.ExecuteBatch(
 			ctx,
-			queries,
-			keyspace,
-			shards,
+			batchRequest,
 			tabletType,
-			NewSafeSession(session),
-			notInTransaction)
+			asTransaction,
+			NewSafeSession(session))
+		// Don't retry transactional requests.
+		if asTransaction {
+			return qrs, err
+		}
 		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
-			resharding := false
-			newKeyspace, newShards, err := mapToShards(keyspace)
-			if err != nil {
-				return nil, err
+			newBatchRequest, buildErr := buildBatchRequest()
+			if buildErr != nil {
+				return nil, buildErr
 			}
-			// check keyspace change for vertical resharding
-			if newKeyspace != keyspace {
-				keyspace = newKeyspace
-				resharding = true
+			// Use reflect to see if the request has changed.
+			if reflect.DeepEqual(*batchRequest, *newBatchRequest) {
+				return qrs, err
 			}
-			// check shards change for horizontal resharding
-			if !StrsEquals(newShards, shards) {
-				shards = newShards
-				resharding = true
-			}
-			// retry if resharding happened
-			if resharding {
-				continue
-			}
+			batchRequest = newBatchRequest
 		}
-		if err != nil {
-			return nil, err
-		}
-		return qrs, err
 	}
 }
 
@@ -378,7 +365,7 @@ func StrsEquals(a, b []string) bool {
 	return true
 }
 
-func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
+func buildEntityIds(shardIDMap map[string][]interface{}, qSQL, entityColName string, qBindVars map[string]interface{}) ([]string, map[string]string, map[string]map[string]interface{}) {
 	shards := make([]string, len(shardIDMap))
 	shardsIdx := 0
 	sqls := make(map[string]string)
@@ -401,7 +388,7 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 			b.Write([]byte(bvName))
 		}
 		b.Write(closeBracket)
-		sqls[shard] = insertSqlClause(qSql, b.String())
+		sqls[shard] = insertSQLClause(qSQL, b.String())
 		bindVars[shard] = bindVar
 		shards[shardsIdx] = shard
 		shardsIdx++
@@ -409,10 +396,10 @@ func buildEntityIds(shardIDMap map[string][]interface{}, qSql, entityColName str
 	return shards, sqls, bindVars
 }
 
-func insertSqlClause(querySql, clause string) string {
+func insertSQLClause(querySQL, clause string) string {
 	// get first index of any additional clause: group by, order by, limit, for update, sql end if nothing
 	// insert clause into the index position
-	sql := strings.ToLower(querySql)
+	sql := strings.ToLower(querySQL)
 	idxExtra := len(sql)
 	if idxGroupBy := strings.Index(sql, " group by"); idxGroupBy > 0 && idxGroupBy < idxExtra {
 		idxExtra = idxGroupBy
@@ -427,7 +414,7 @@ func insertSqlClause(querySql, clause string) string {
 		idxExtra = idxForUpdate
 	}
 	var b bytes.Buffer
-	b.Write([]byte(querySql[:idxExtra]))
+	b.Write([]byte(querySQL[:idxExtra]))
 	if strings.Contains(sql, "where") {
 		b.Write(kwAnd)
 	} else {
@@ -435,18 +422,18 @@ func insertSqlClause(querySql, clause string) string {
 	}
 	b.Write([]byte(clause))
 	if idxExtra < len(sql) {
-		b.Write([]byte(querySql[idxExtra:]))
+		b.Write([]byte(querySQL[idxExtra:]))
 	}
 	return b.String()
 }
 
-func isDml(querySql string) bool {
+func isDml(querySQL string) bool {
 	var sqlKW string
-	if i := strings.Index(querySql, " "); i >= 0 {
-		sqlKW = querySql[:i]
+	if i := strings.Index(querySQL, " "); i >= 0 {
+		sqlKW = querySQL[:i]
 	}
 	sqlKW = strings.ToLower(sqlKW)
-	if sqlKW == insert_dml || sqlKW == update_dml || sqlKW == delete_dml {
+	if sqlKW == insertDML || sqlKW == updateDML || sqlKW == deleteDML {
 		return true
 	}
 	return false
