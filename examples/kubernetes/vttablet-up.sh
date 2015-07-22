@@ -23,10 +23,9 @@ if [ -n "$VTDATAROOT_VOLUME" ]; then
   vtdataroot_volume="hostDir: {path: ${VTDATAROOT_VOLUME}}"
 fi
 
-
 uid_base=$UID_BASE
 for shard in $(echo $SHARDS | tr "," " "); do
-  cell_index=100000000
+  cell_index=0
   for cell in `echo $CELLS | tr ',' ' '`; do
     echo "Creating $keyspace.shard-$shard pods in cell $CELL..."
     for uid_index in `seq 0 $(($TABLETS_PER_SHARD-1))`; do
