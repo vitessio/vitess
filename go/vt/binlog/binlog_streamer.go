@@ -163,7 +163,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 		trans := &proto.BinlogTransaction{
 			Statements: statements,
 			Timestamp:  int64(timestamp),
-			GTIDField:  myproto.GTIDField{Value: gtid},
+			Position:   myproto.EncodeGTID(gtid),
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {

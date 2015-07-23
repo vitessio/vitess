@@ -141,9 +141,14 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint topo.EndPoint, tables []s
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
+	gtid, err := myproto.DecodeGTID(tx.Position)
+	if err != nil {
+		return err
+	}
+
 	now := time.Now().Unix()
 
-	blp.blpPos.Position = myproto.AppendGTID(blp.blpPos.Position, tx.GTIDField.Value)
+	blp.blpPos.Position = myproto.AppendGTID(blp.blpPos.Position, gtid)
 	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, blp.blpPos.Position, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)

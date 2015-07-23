@@ -24,7 +24,7 @@ func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
 		PrimaryKeyValues: mproto.RowsToProto3(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
-		Position:         myproto.EncodeGTID(s.GTIDField.Value),
+		Position:         s.Position,
 	}
 	switch s.Category {
 	case "DML":
@@ -47,9 +47,7 @@ func ProtoToStreamEvent(s *pb.StreamEvent) *StreamEvent {
 		PrimaryKeyValues: mproto.Proto3ToRows(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
-		GTIDField: myproto.GTIDField{
-			Value: myproto.MustDecodeGTID(s.Position),
-		},
+		Position:         s.Position,
 	}
 	switch s.Category {
 	case pb.StreamEvent_SE_DML:
@@ -86,7 +84,7 @@ func ProtoToStatement(s *pb.BinlogTransaction_Statement) Statement {
 func BinlogTransactionToProto(bt *BinlogTransaction) *pb.BinlogTransaction {
 	result := &pb.BinlogTransaction{
 		Timestamp: bt.Timestamp,
-		Position:  myproto.EncodeGTID(bt.GTIDField.Value),
+		Position:  bt.Position,
 	}
 	if len(bt.Statements) > 0 {
 		result.Statements = make([]*pb.BinlogTransaction_Statement, len(bt.Statements))
@@ -102,9 +100,7 @@ func BinlogTransactionToProto(bt *BinlogTransaction) *pb.BinlogTransaction {
 func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
 	result := &BinlogTransaction{
 		Timestamp: bt.Timestamp,
-		GTIDField: myproto.GTIDField{
-			Value: myproto.MustDecodeGTID(bt.Position),
-		},
+		Position:  bt.Position,
 	}
 	if len(bt.Statements) > 0 {
 		result.Statements = make([]Statement, len(bt.Statements))

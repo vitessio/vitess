@@ -176,8 +176,11 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -220,8 +223,11 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -551,8 +557,11 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		proto.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
@@ -560,8 +569,11 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -603,14 +615,20 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 		proto.BinlogTransaction{
 			Statements: nil,
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -653,14 +671,20 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{},
 			Timestamp:  1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -705,8 +729,11 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -784,8 +811,11 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -829,8 +859,11 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			Timestamp: 1407805592,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0x0d}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 0x0d,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -905,8 +938,11 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 				proto.Statement{Category: proto.BL_DML, Charset: charset, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
 			},
 			Timestamp: 1409892744,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 10,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction
@@ -948,8 +984,11 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
 			},
 			Timestamp: 1409892744,
-			GTIDField: myproto.GTIDField{
-				Value: myproto.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}},
+			Position: myproto.EncodeGTID(myproto.MariadbGTID{
+				Domain:   0,
+				Server:   62344,
+				Sequence: 9,
+			}),
 		},
 	}
 	var got []proto.BinlogTransaction

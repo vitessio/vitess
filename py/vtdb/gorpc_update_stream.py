@@ -93,20 +93,13 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
             row = tuple(_make_row(pk_list, conversions))
             rows.append(row)
 
-        if 'MariaDB' in reply['GTIDField']:
-          position = 'MariaDB/' + reply['GTIDField']['MariaDB']
-        elif 'MySQL56' in reply['GTIDField']:
-          position = 'MySQL56/' + reply['GTIDField']['MySQL56']
-        else:
-          position = ''
-
         yield update_stream.StreamEvent(category=category,
                                         table_name=reply['TableName'],
                                         fields=fields,
                                         rows=rows,
                                         sql=reply['Sql'],
                                         timestamp=reply['Timestamp'],
-                                        position=position)
+                                        position=reply['Position'])
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:

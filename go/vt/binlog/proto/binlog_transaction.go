@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // Valid statement types in the binlogs.
@@ -38,7 +37,7 @@ var BL_CATEGORY_NAMES = map[int]string{
 type BinlogTransaction struct {
 	Statements []Statement
 	Timestamp  int64
-	GTIDField  myproto.GTIDField
+	Position   string
 }
 
 //go:generate bsongen -file $GOFILE -type BinlogTransaction -o binlog_transaction_bson.go

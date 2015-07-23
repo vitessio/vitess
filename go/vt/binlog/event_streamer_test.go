@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var dmlErrorCases = []string{
@@ -102,25 +101,25 @@ func TestDMLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("MariaDB", "0-41983-20")},
+		Position:  "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [{eid 8 0} {id 8 0} {name 15 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 <nil>}`
+				want := `&{DML vtocc_e [{eid 8 0} {id 8 0} {name 15 0}] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got \n%s, want \n%s", got, want)
 				}
 			case "ERR":
-				want := `&{ERR  [] [] query 1 <nil>}`
+				want := `&{ERR  [] [] query 1 }`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  1 0-41983-20}`
+				want := `&{POS  [] []  1 MariaDB/0-41983-20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
@@ -149,19 +148,19 @@ func TestDDLEvent(t *testing.T) {
 			},
 		},
 		Timestamp: 1,
-		GTIDField: myproto.GTIDField{Value: myproto.MustParseGTID("MariaDB", "0-41983-20")},
+		Position:  "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DDL":
-				want := `&{DDL  [] [] DDL 1 <nil>}`
+				want := `&{DDL  [] [] DDL 1 }`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)
 				}
 			case "POS":
-				want := `&{POS  [] []  1 0-41983-20}`
+				want := `&{POS  [] []  1 MariaDB/0-41983-20}`
 				got := fmt.Sprintf("%v", event)
 				if got != want {
 					t.Errorf("got %s, want %s", got, want)

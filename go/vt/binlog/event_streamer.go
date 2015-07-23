@@ -101,7 +101,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 	}
 	posEvent := &proto.StreamEvent{
 		Category:  "POS",
-		GTIDField: trans.GTIDField,
+		Position:  trans.Position,
 		Timestamp: trans.Timestamp,
 	}
 	if err = evs.sendEvent(posEvent); err != nil {

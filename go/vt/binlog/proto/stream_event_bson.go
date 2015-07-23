@@ -51,7 +51,7 @@ func (streamEvent *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter, key strin
 	}
 	bson.EncodeString(buf, "Sql", streamEvent.Sql)
 	bson.EncodeInt64(buf, "Timestamp", streamEvent.Timestamp)
-	streamEvent.GTIDField.MarshalBson(buf, "GTIDField")
+	bson.EncodeString(buf, "Position", streamEvent.Position)
 
 	lenWriter.Close()
 }
@@ -121,8 +121,8 @@ func (streamEvent *StreamEvent) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 			streamEvent.Sql = bson.DecodeString(buf, kind)
 		case "Timestamp":
 			streamEvent.Timestamp = bson.DecodeInt64(buf, kind)
-		case "GTIDField":
-			streamEvent.GTIDField.UnmarshalBson(buf, kind)
+		case "Position":
+			streamEvent.Position = bson.DecodeString(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

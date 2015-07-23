@@ -11,7 +11,6 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectStreamEvent struct {
@@ -21,7 +20,7 @@ type reflectStreamEvent struct {
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
-	GTIDField        myproto.GTIDField
+	Position         string
 }
 
 type extraStreamEvent struct {
@@ -32,7 +31,7 @@ type extraStreamEvent struct {
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
-	GTIDField        myproto.GTIDField
+	Position         string
 }
 
 func TestStreamEvent(t *testing.T) {

@@ -156,7 +156,11 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	case "ERR":
 		rci.handleUnrecognizedEvent(event.Sql)
 	case "POS":
-		rci.AppendGTID(event.GTIDField.Value)
+		gtid, err := myproto.DecodeGTID(event.Position)
+		if err != nil {
+			return err
+		}
+		rci.AppendGTID(gtid)
 	default:
 		log.Errorf("unknown event: %#v", event)
 		rci.qe.queryServiceStats.InternalErrors.Add("Invalidation", 1)

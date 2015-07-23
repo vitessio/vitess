@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -61,13 +60,7 @@ var testStreamEvent = &proto.StreamEvent{
 	},
 	Sql:       "test sql",
 	Timestamp: 372,
-	GTIDField: myproto.GTIDField{
-		Value: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   4567,
-			Sequence: 6789,
-		},
-	},
+	Position:  "StreamEvent returned position",
 }
 
 // ServeUpdateStream is part of the the UpdateStream interface
@@ -146,13 +139,7 @@ var testBinlogTransaction = &proto.BinlogTransaction{
 		},
 	},
 	Timestamp: 78,
-	GTIDField: myproto.GTIDField{
-		Value: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   345,
-			Sequence: 789,
-		},
-	},
+	Position:  "BinlogTransaction returned position",
 }
 
 // StreamKeyRange is part of the the UpdateStream interface

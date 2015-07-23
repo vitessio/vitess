@@ -7,7 +7,6 @@ package proto
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // StreamEvent represents one event for the update stream.
@@ -27,7 +26,7 @@ type StreamEvent struct {
 	Timestamp int64
 
 	// POS
-	GTIDField myproto.GTIDField
+	Position string
 }
 
 //go:generate bsongen -file $GOFILE -type StreamEvent -o stream_event_bson.go
