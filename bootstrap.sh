@@ -102,29 +102,11 @@ go get -u github.com/tools/godep
 go get -u google.golang.org/grpc
 go get -u -a github.com/golang/protobuf/protoc-gen-go
 
-# goversion_min returns true if major.minor go version is at least some value.
-function goversion_min() {
-  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
-  gotmajor=${BASH_REMATCH[1]}
-  gotminor=${BASH_REMATCH[2]}
-  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
-  wantmajor=${BASH_REMATCH[1]}
-  wantminor=${BASH_REMATCH[2]}
-  [ "$gotmajor" -lt "$wantmajor" ] && return 1
-  [ "$gotmajor" -gt "$wantmajor" ] && return 0
-  [ "$gotminor" -lt "$wantminor" ] && return 1
-  return 0
-}
-
 # Packages for uploading code coverage to coveralls.io.
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access. However, this tool
 # is optional, so we should hide any errors to avoid confusion.
-if goversion_min 1.4; then
-  go get -u golang.org/x/tools/cmd/cover &> /dev/null
-else
-  go get -u code.google.com/p/go.tools/cmd/cover &> /dev/null
-fi
+go get -u golang.org/x/tools/cmd/cover &> /dev/null
 go get -u github.com/modocache/gover
 go get -u github.com/mattn/goveralls
 
