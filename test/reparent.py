@@ -109,10 +109,11 @@ class TestReparent(unittest.TestCase):
                      'Unexpected port: %u != %u from %s' % (port, expected_port,
                                                             str(ep)))
     host = ep['entries'][0]['host']
-    if not host.startswith(utils.hostname):
+    # Hostname was set explicitly to "localhost" with -tablet_hostname flag.
+    if not host.startswith('localhost'):
       self.fail(
           'Invalid hostname %s was expecting something starting with %s' %
-          (host, utils.hostname))
+          (host, 'localhost'))
 
   def test_master_to_spare_state_change_impossible(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -505,8 +506,9 @@ class TestReparent(unittest.TestCase):
     tablet_62044.mquery('', mysql_flavor().promote_slave_commands())
     new_pos = mysql_flavor().master_position(tablet_62044)
     logging.debug('New master position: %s', str(new_pos))
+    # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
     changeMasterCmds = mysql_flavor().change_master_commands(
-                            utils.hostname,
+                            "localhost",
                             tablet_62044.mysql_port,
                             new_pos)
 
