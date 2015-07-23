@@ -31,6 +31,8 @@ env:
     - MYSQL_FLAVOR=MariaDB
     - MYSQL_ROOT=$HOME/mysql
     - VT_MYSQL_ROOT=$MYSQL_ROOT/usr
+    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+    - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
   matrix:
     - MAKE_TARGET=java_vtgate_client_test
     - MAKE_TARGET=unit_test_goveralls
@@ -41,6 +43,8 @@ env:
     - MAKE_TARGET=unit_test
 before_install:
   - bash travis/download_mariadb.sh
+  # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+  - PATH=$PATH:$MYSQL_ROOT/usr/bin LDFLAGS="-L$MYSQL_ROOT/usr/lib" pip install --user mysql-python
 install:
   - bash -v bootstrap.sh
 script:
