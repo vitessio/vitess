@@ -105,9 +105,9 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		case planbuilder.PLAN_SET:
 			reply, err = qre.execSet()
 		case planbuilder.PLAN_OTHER:
-			conn, err := qre.getConn(qre.qe.connPool)
-			if err != nil {
-				return nil, err
+			conn, connErr := qre.getConn(qre.qe.connPool)
+			if connErr != nil {
+				return nil, connErr
 			}
 			defer conn.Recycle()
 			reply, err = qre.execSQL(conn, qre.query, true)
@@ -183,7 +183,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	default:
 		return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
 	}
-	return reply, nil
+	return reply, err
 }
 
 func (qre *QueryExecutor) checkPermissions() error {
@@ -385,7 +385,7 @@ func (qre *QueryExecutor) execDirect(conn poolConn) (*mproto.QueryResult, error)
 			return nil, err
 		}
 		result.Fields = qre.plan.Fields
-		return result, err
+		return result, nil
 	}
 	return qre.fullFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 }
