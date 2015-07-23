@@ -66,7 +66,9 @@ unit_test_goveralls:
 	# Travis doesn't set the token for forked pull requests, so skip
 	# upload if COVERALLS_TOKEN is unset.
 	if ! [ -z "$$COVERALLS_TOKEN" ]; then \
-		goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
+		# -shallow ensures that goveralls does not return with a failure \
+		# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
+		goveralls -shallow -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
 	fi
 
 ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
