@@ -141,9 +141,14 @@ func NewBinlogPlayerTables(dbClient VtClient, endPoint topo.EndPoint, tables []s
 //   transaction_timestamp alone (keeping the old value), and we don't
 //   change SecondsBehindMaster
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *proto.BinlogTransaction) error {
+	gtid, err := myproto.DecodeGTID(tx.TransactionID)
+	if err != nil {
+		return err
+	}
+
 	now := time.Now().Unix()
 
-	blp.blpPos.Position = myproto.AppendGTID(blp.blpPos.Position, tx.GTIDField.Value)
+	blp.blpPos.Position = myproto.AppendGTID(blp.blpPos.Position, gtid)
 	updateRecovery := UpdateBlpCheckpoint(blp.blpPos.Uid, blp.blpPos.Position, now, tx.Timestamp)
 
 	qr, err := blp.exec(updateRecovery)
@@ -312,20 +317,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	var responseChan chan *proto.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
-		req := &proto.TablesRequest{
-			Tables:   blp.tables,
-			Position: blp.blpPos.Position,
-			Charset:  &blp.defaultCharset,
-		}
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, req)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, &blp.defaultCharset)
 	} else {
-		req := &proto.KeyRangeRequest{
-			KeyspaceIdType: blp.keyspaceIdType,
-			KeyRange:       blp.keyRange,
-			Position:       blp.blpPos.Position,
-			Charset:        &blp.defaultCharset,
-		}
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, req)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.keyspaceIdType, blp.keyRange, &blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)

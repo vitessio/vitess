@@ -7,7 +7,6 @@ package binlogdata;
 
 import "query.proto";
 import "topodata.proto";
-import "replicationdata.proto";
 
 // Charset is the per-statement charset info from a QUERY_EVENT binlog entry.
 message Charset {
@@ -48,8 +47,8 @@ message BinlogTransaction {
   // the timestamp of the statements
   int64 timestamp = 2;
 
-  // the Global Transaction ID after the statements have been applied
-  string gtid = 3;
+  // the Transaction ID after this statement was applied
+  string transaction_id = 3;
 }
 
 // StreamEvent describes an update stream event inside the binlogs.
@@ -74,14 +73,14 @@ message StreamEvent {
   // timestamp is set for SE_DML, SE_DDL or SE_ERR
   int64 timestamp = 6;
 
-  // the Global Transaction ID after the statements have been applied
-  string gtid = 7;
+  // the Transaction ID after this statement was applied
+  string transaction_id = 7;
 }
 
 // StreamUpdateRequest is the payload to StreamUpdate
 message StreamUpdateRequest{
   // where to start
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 // StreamUpdateResponse is the response from StreamUpdate
@@ -92,7 +91,7 @@ message StreamUpdateResponse{
 // StreamKeyRangeRequest is the payload to StreamKeyRange
 message StreamKeyRangeRequest {
   // where to start
-  replicationdata.Position position = 1;
+  string position = 1;
 
   // type to get
   topodata.KeyspaceIdType keyspace_id_type = 2;
@@ -112,7 +111,7 @@ message StreamKeyRangeResponse{
 // StreamTablesRequest is the payload to StreamTables
 message StreamTablesRequest {
   // where to start
-  replicationdata.Position position = 1;
+  string position = 1;
 
   // what to get
   repeated string tables = 2;

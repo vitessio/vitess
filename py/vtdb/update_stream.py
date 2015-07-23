@@ -48,14 +48,14 @@ class StreamEvent(object):
   POS = 3
 
   def __init__(self, category, table_name, fields, rows, sql, timestamp,
-               position):
+               transaction_id):
     self.category = category
     self.table_name = table_name
     self.fields = fields
     self.rows = rows
     self.sql = sql
     self.timestamp = timestamp
-    self.position = position
+    self.transaction_id = transaction_id
 
 
 class UpdateStreamConnection(object):

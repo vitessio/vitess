@@ -10,20 +10,19 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type reflectBinlogTransaction struct {
-	Statements []reflectStatement
-	Timestamp  int64
-	GTIDField  myproto.GTIDField
+	Statements    []reflectStatement
+	Timestamp     int64
+	TransactionID string
 }
 
 type extraBinlogTransaction struct {
-	Extra      int
-	Statements []reflectStatement
-	Timestamp  int64
-	GTIDField  myproto.GTIDField
+	Extra         int
+	Statements    []reflectStatement
+	Timestamp     int64
+	TransactionID string
 }
 
 type reflectStatement struct {

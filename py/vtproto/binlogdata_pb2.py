@@ -15,16 +15,15 @@ _sym_db = _symbol_database.Default()
 
 import query_pb2 as query__pb2
 import topodata_pb2 as topodata__pb2
-import replicationdata_pb2 as replicationdata__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='binlogdata.proto',
   package='binlogdata',
   syntax='proto3',
-  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bquery.proto\x1a\x0etopodata.proto\x1a\x15replicationdata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xe9\x02\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x1a\xf5\x01\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x02 \x01(\x0c\"q\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\n\n\x06\x42L_DML\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\"\x91\x02\n\x0bStreamEvent\x12\x32\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32 .binlogdata.StreamEvent.Category\x12\x12\n\ntable_name\x18\x02 \x01(\t\x12(\n\x12primary_key_fields\x18\x03 \x03(\x0b\x32\x0c.query.Field\x12&\n\x12primary_key_values\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x0b\n\x03sql\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x0c\n\x04gtid\x18\x07 \x01(\t\":\n\x08\x43\x61tegory\x12\n\n\x06SE_ERR\x10\x00\x12\n\n\x06SE_DML\x10\x01\x12\n\n\x06SE_DDL\x10\x02\x12\n\n\x06SE_POS\x10\x03\"B\n\x13StreamUpdateRequest\x12+\n\x08position\x18\x01 \x01(\x0b\x32\x19.replicationdata.Position\"E\n\x14StreamUpdateResponse\x12-\n\x0cstream_event\x18\x01 \x01(\x0b\x32\x17.binlogdata.StreamEvent\"\xc5\x01\n\x15StreamKeyRangeRequest\x12+\n\x08position\x18\x01 \x01(\x0b\x32\x19.replicationdata.Position\x12\x32\n\x10keyspace_id_type\x18\x02 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12%\n\tkey_range\x18\x03 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x04 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"x\n\x13StreamTablesRequest\x12+\n\x08position\x18\x01 \x01(\x0b\x32\x19.replicationdata.Position\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransactionb\x06proto3')
+  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bquery.proto\x1a\x0etopodata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xf3\x02\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x16\n\x0etransaction_id\x18\x03 \x01(\t\x1a\xf5\x01\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x02 \x01(\x0c\"q\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\n\n\x06\x42L_DML\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\"\x9b\x02\n\x0bStreamEvent\x12\x32\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32 .binlogdata.StreamEvent.Category\x12\x12\n\ntable_name\x18\x02 \x01(\t\x12(\n\x12primary_key_fields\x18\x03 \x03(\x0b\x32\x0c.query.Field\x12&\n\x12primary_key_values\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x0b\n\x03sql\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\x03\x12\x16\n\x0etransaction_id\x18\x07 \x01(\t\":\n\x08\x43\x61tegory\x12\n\n\x06SE_ERR\x10\x00\x12\n\n\x06SE_DML\x10\x01\x12\n\n\x06SE_DDL\x10\x02\x12\n\n\x06SE_POS\x10\x03\"\'\n\x13StreamUpdateRequest\x12\x10\n\x08position\x18\x01 \x01(\t\"E\n\x14StreamUpdateResponse\x12-\n\x0cstream_event\x18\x01 \x01(\x0b\x32\x17.binlogdata.StreamEvent\"\xaa\x01\n\x15StreamKeyRangeRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x32\n\x10keyspace_id_type\x18\x02 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12%\n\tkey_range\x18\x03 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x04 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"]\n\x13StreamTablesRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransactionb\x06proto3')
   ,
-  dependencies=[query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,replicationdata__pb2.DESCRIPTOR,])
+  dependencies=[query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
@@ -66,8 +65,8 @@ _BINLOGTRANSACTION_STATEMENT_CATEGORY = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=390,
-  serialized_end=503,
+  serialized_start=377,
+  serialized_end=490,
 )
 _sym_db.RegisterEnumDescriptor(_BINLOGTRANSACTION_STATEMENT_CATEGORY)
 
@@ -96,8 +95,8 @@ _STREAMEVENT_CATEGORY = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=721,
-  serialized_end=779,
+  serialized_start=718,
+  serialized_end=776,
 )
 _sym_db.RegisterEnumDescriptor(_STREAMEVENT_CATEGORY)
 
@@ -142,8 +141,8 @@ _CHARSET = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=84,
-  serialized_end=139,
+  serialized_start=61,
+  serialized_end=116,
 )
 
 
@@ -188,8 +187,8 @@ _BINLOGTRANSACTION_STATEMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=258,
-  serialized_end=503,
+  serialized_start=245,
+  serialized_end=490,
 )
 
 _BINLOGTRANSACTION = _descriptor.Descriptor(
@@ -214,7 +213,7 @@ _BINLOGTRANSACTION = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='gtid', full_name='binlogdata.BinlogTransaction.gtid', index=2,
+      name='transaction_id', full_name='binlogdata.BinlogTransaction.transaction_id', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -232,8 +231,8 @@ _BINLOGTRANSACTION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=142,
-  serialized_end=503,
+  serialized_start=119,
+  serialized_end=490,
 )
 
 
@@ -287,7 +286,7 @@ _STREAMEVENT = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='gtid', full_name='binlogdata.StreamEvent.gtid', index=6,
+      name='transaction_id', full_name='binlogdata.StreamEvent.transaction_id', index=6,
       number=7, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -306,8 +305,8 @@ _STREAMEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=506,
-  serialized_end=779,
+  serialized_start=493,
+  serialized_end=776,
 )
 
 
@@ -320,8 +319,8 @@ _STREAMUPDATEREQUEST = _descriptor.Descriptor(
   fields=[
     _descriptor.FieldDescriptor(
       name='position', full_name='binlogdata.StreamUpdateRequest.position', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -337,8 +336,8 @@ _STREAMUPDATEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=781,
-  serialized_end=847,
+  serialized_start=778,
+  serialized_end=817,
 )
 
 
@@ -368,8 +367,8 @@ _STREAMUPDATERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=849,
-  serialized_end=918,
+  serialized_start=819,
+  serialized_end=888,
 )
 
 
@@ -382,8 +381,8 @@ _STREAMKEYRANGEREQUEST = _descriptor.Descriptor(
   fields=[
     _descriptor.FieldDescriptor(
       name='position', full_name='binlogdata.StreamKeyRangeRequest.position', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -420,8 +419,8 @@ _STREAMKEYRANGEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=921,
-  serialized_end=1118,
+  serialized_start=891,
+  serialized_end=1061,
 )
 
 
@@ -451,8 +450,8 @@ _STREAMKEYRANGERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1120,
-  serialized_end=1203,
+  serialized_start=1063,
+  serialized_end=1146,
 )
 
 
@@ -465,8 +464,8 @@ _STREAMTABLESREQUEST = _descriptor.Descriptor(
   fields=[
     _descriptor.FieldDescriptor(
       name='position', full_name='binlogdata.StreamTablesRequest.position', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -496,8 +495,8 @@ _STREAMTABLESREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1205,
-  serialized_end=1325,
+  serialized_start=1148,
+  serialized_end=1241,
 )
 
 
@@ -527,8 +526,8 @@ _STREAMTABLESRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1327,
-  serialized_end=1408,
+  serialized_start=1243,
+  serialized_end=1324,
 )
 
 _BINLOGTRANSACTION_STATEMENT.fields_by_name['category'].enum_type = _BINLOGTRANSACTION_STATEMENT_CATEGORY
@@ -540,14 +539,11 @@ _STREAMEVENT.fields_by_name['category'].enum_type = _STREAMEVENT_CATEGORY
 _STREAMEVENT.fields_by_name['primary_key_fields'].message_type = query__pb2._FIELD
 _STREAMEVENT.fields_by_name['primary_key_values'].message_type = query__pb2._ROW
 _STREAMEVENT_CATEGORY.containing_type = _STREAMEVENT
-_STREAMUPDATEREQUEST.fields_by_name['position'].message_type = replicationdata__pb2._POSITION
 _STREAMUPDATERESPONSE.fields_by_name['stream_event'].message_type = _STREAMEVENT
-_STREAMKEYRANGEREQUEST.fields_by_name['position'].message_type = replicationdata__pb2._POSITION
 _STREAMKEYRANGEREQUEST.fields_by_name['keyspace_id_type'].enum_type = topodata__pb2._KEYSPACEIDTYPE
 _STREAMKEYRANGEREQUEST.fields_by_name['key_range'].message_type = topodata__pb2._KEYRANGE
 _STREAMKEYRANGEREQUEST.fields_by_name['charset'].message_type = _CHARSET
 _STREAMKEYRANGERESPONSE.fields_by_name['binlog_transaction'].message_type = _BINLOGTRANSACTION
-_STREAMTABLESREQUEST.fields_by_name['position'].message_type = replicationdata__pb2._POSITION
 _STREAMTABLESREQUEST.fields_by_name['charset'].message_type = _CHARSET
 _STREAMTABLESRESPONSE.fields_by_name['binlog_transaction'].message_type = _BINLOGTRANSACTION
 DESCRIPTOR.message_types_by_name['Charset'] = _CHARSET

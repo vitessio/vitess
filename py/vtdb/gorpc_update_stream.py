@@ -98,7 +98,7 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
                                         rows=rows,
                                         sql=reply['Sql'],
                                         timestamp=reply['Timestamp'],
-                                        position=reply['GTIDField'])
+                                        transaction_id=reply['TransactionID'])
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:
