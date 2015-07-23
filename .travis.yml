@@ -55,5 +55,7 @@ install:
   - bash -v bootstrap.sh
 script:
   - source dev.env
+  # Log GOMAXPROCS (should be 2 as of 07/2015).
+  - go run travis/log_gomaxprocs.go
   - |
       travis_retry /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
