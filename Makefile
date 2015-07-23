@@ -20,6 +20,14 @@ LDFLAGS = "\
 	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(LC_ALL=C date)'\
 "
 
+# Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
+ifdef VT_MYSQL_ROOT
+# Clutter the env var only if it's a non-standard path.
+  ifneq ($(VT_MYSQL_ROOT),/usr)
+    CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
+  endif
+endif
+
 build:
 	godep go install -ldflags ${LDFLAGS} ./go/...
 
