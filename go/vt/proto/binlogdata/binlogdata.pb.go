@@ -112,7 +112,7 @@ type BinlogTransaction struct {
 	// the timestamp of the statements
 	Timestamp int64 `protobuf:"varint,2,opt,name=timestamp" json:"timestamp,omitempty"`
 	// the Global Transaction ID after the statements have been applied
-	Gtid string `protobuf:"bytes,3,opt,name=gtid" json:"gtid,omitempty"`
+	Position string `protobuf:"bytes,3,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *BinlogTransaction) Reset()         { *m = BinlogTransaction{} }
@@ -158,7 +158,7 @@ type StreamEvent struct {
 	// timestamp is set for SE_DML, SE_DDL or SE_ERR
 	Timestamp int64 `protobuf:"varint,6,opt,name=timestamp" json:"timestamp,omitempty"`
 	// the Global Transaction ID after the statements have been applied
-	Gtid string `protobuf:"bytes,7,opt,name=gtid" json:"gtid,omitempty"`
+	Position string `protobuf:"bytes,7,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *StreamEvent) Reset()         { *m = StreamEvent{} }

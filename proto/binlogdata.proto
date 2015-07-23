@@ -49,7 +49,7 @@ message BinlogTransaction {
   int64 timestamp = 2;
 
   // the Global Transaction ID after the statements have been applied
-  string gtid = 3;
+  string position = 3;
 }
 
 // StreamEvent describes an update stream event inside the binlogs.
@@ -75,7 +75,7 @@ message StreamEvent {
   int64 timestamp = 6;
 
   // the Global Transaction ID after the statements have been applied
-  string gtid = 7;
+  string position = 7;
 }
 
 // StreamUpdateRequest is the payload to StreamUpdate

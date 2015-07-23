@@ -92,7 +92,7 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
                                           rows=rows,
                                           sql=stream_event.sql,
                                           timestamp=stream_event.timestamp,
-                                          position=stream_event.gtid)
+                                          position=stream_event.position)
         except GeneratorExit:
           # if the loop is interrupted for any reason, we need to
           # cancel the iterator, so we close the RPC connection,
