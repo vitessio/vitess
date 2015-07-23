@@ -172,7 +172,7 @@ fi
 
 # install bson
 bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
-if [ -d $bson_dist ]; then
+if [ -f $bson_dist/lib/python2.7/site-packages/bson/__init__.py ]; then
   echo "skipping bson python build"
 else
   cd $VTTOP/third_party/py/bson-0.3.2 && \
@@ -185,6 +185,9 @@ mock_dist=$VTROOT/dist/py-mock-1.0.1
 if [ -f $mock_dist/.build_finished ]; then
   echo "skipping mock python build"
 else
+  # Cleanup any existing data
+  # (e.g. necessary for Travis CI caching which creates .build_finished as directory and prevents this script from creating it as file).
+  rm -rf $mock_dist
   # For some reason, it seems like setuptools won't create directories even with the --prefix argument
   mkdir -p $mock_dist/lib/python2.7/site-packages
   export PYTHONPATH=$(prepend_path $PYTHONPATH $mock_dist/lib/python2.7/site-packages)
@@ -199,7 +202,7 @@ fi
 
 # install cbson
 cbson_dist=$VTROOT/dist/py-cbson
-if [ -d $cbson_dist ]; then
+if [ -f $cbson_dist/lib/python2.7/site-packages/cbson.so ]; then
   echo "skipping cbson python build"
 else
   cd $VTTOP/py/cbson && \
