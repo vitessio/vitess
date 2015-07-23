@@ -1,4 +1,3 @@
-# TODO(mberlin): Remove all "free" and "ps" commands once https://github.com/travis-ci/travis-ci/issues/4013 is resolved.
 language: go
 go:
   - 1.4
@@ -14,37 +13,12 @@ env:
     - MAKE_TARGET=queryservice_test
     - MAKE_TARGET=unit_test
 before_install:
-  - |
-      free -m | grep "buffers/cache" | awk '{ if ($3 > 900) { print "\n\nCAUTION - CAUTION - CAUTION\n\nWE ARE FAILING THIS TEST EARLY BECAUSE MEMORY USAGE IS TOO HIGH ("$3" MB) AND THE TEST WOULD HAVE PROBABLY FLAKED.\n\nThis is a bug in the Travis VM infrastructure: https://github.com/travis-ci/travis-ci/issues/4013\nOnce this is fixed, we will remove this fail fast.\n\n"; exit 1; } else { print "\n\nINFO - LOOKS LIKE NO MEMORY IS LEAKING, TEST RESULTS WILL NOT BE FLAKY\n\n" } }'
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
   - bash -v travis/dependencies.sh
   - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
   - travis_retry sudo bash -v travis/install_grpc.sh
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
 install:
   - bash -v bootstrap.sh --skip_root_installs
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
 script:
   - source dev.env
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
   - |
       travis_retry /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
