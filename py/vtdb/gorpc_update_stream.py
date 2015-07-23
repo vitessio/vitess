@@ -60,8 +60,11 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
   def stream_update(self, position, timeout=3600.0):
     """Note this implementation doesn't honor the timeout."""
     try:
+      (flavor, gtid) = position.split("/")
       self.client.stream_call('UpdateStream.ServeUpdateStream',
-                              {"Position": position})
+                              {"Position": {
+                                  flavor: gtid,
+                              }})
       while True:
         response = self.client.stream_next()
         if response is None:
@@ -92,13 +95,20 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
             row = tuple(_make_row(pk_list, conversions))
             rows.append(row)
 
+        if 'MariaDB' in reply['GTIDField']:
+          position = 'MariaDB/' + reply['GTIDField']['MariaDB']
+        elif 'MySQL56' in reply['GTIDField']:
+          position = 'MySQL56/' + reply['GTIDField']['MySQL56']
+        else:
+          position = ''
+
         yield update_stream.StreamEvent(category=category,
                                         table_name=reply['TableName'],
                                         fields=fields,
                                         rows=rows,
                                         sql=reply['Sql'],
                                         timestamp=reply['Timestamp'],
-                                        position=reply['GTIDField'])
+                                        position=position)
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:

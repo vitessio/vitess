@@ -37,7 +37,7 @@ class MysqlFlavor(object):
     return "mysql-db-dir.tbz"
 
   def master_position(self, tablet):
-    """Returns the position from SHOW MASTER STATUS"""
+    """Returns the position from SHOW MASTER STATUS as a string"""
     raise NotImplementedError()
 
   def position_equal(self, a, b):
@@ -85,15 +85,15 @@ class MariaDB(MysqlFlavor):
     return "mysql-db-dir_10.0.13-MariaDB.tbz"
 
   def master_position(self, tablet):
-    return {
-        "MariaDB": tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
-    }
+    gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
+    return "MariaDB/" + gtid
 
   def position_equal(self, a, b):
-    return a["MariaDB"] == b["MariaDB"]
+    return a == b
 
   def position_at_least(self, a, b):
-    return int(a["MariaDB"].split("-")[2]) >= int(b["MariaDB"].split("-")[2])
+    # positions are MariaDB/A-B-C and we only compare C
+    return int(a.split("-")[2]) >= int(b.split("-")[2])
 
   def position_append(self, pos, gtid):
     if self.position_at_least(pos, gtid):
@@ -102,8 +102,9 @@ class MariaDB(MysqlFlavor):
       return gtid
 
   def change_master_commands(self, host, port, pos):
+    (_flavor, gtid) = pos.split("/")
     return [
-        "SET GLOBAL gtid_slave_pos = '%s'" % pos["MariaDB"],
+        "SET GLOBAL gtid_slave_pos = '%s'" % gtid,
         "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%u, "
         "MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos" %
         (host, port)]
@@ -116,40 +117,32 @@ class MySQL56(MysqlFlavor):
     return "mysql-db-dir_5.6.24.tbz"
 
   def master_position(self, tablet):
-    return {
-        "MySQL56": tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
-    }
+    gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
+    return "MySQL56/" + gtid
 
   def position_equal(self, a, b):
     return subprocess.check_output([
-        "mysqlctl", "position", "equal",
-        "MySQL56/" + a["MySQL56"],
-        "MySQL56/" + b["MySQL56"],
+        "mysqlctl", "position", "equal", a, b,
     ]).strip() == "true"
 
   def position_at_least(self, a, b):
     return subprocess.check_output([
-        "mysqlctl", "position", "at_least",
-        "MySQL56/" + a["MySQL56"],
-        "MySQL56/" + b["MySQL56"],
+        "mysqlctl", "position", "at_least", a, b,
     ]).strip() == "true"
 
   def position_append(self, pos, gtid):
-    return {
-        "MySQL56": subprocess.check_output([
-            "mysqlctl", "position", "append",
-            "MySQL56/" + pos["MySQL56"],
-            "MySQL56/" + gtid["MySQL56"],
+    return "MySQL56/" + subprocess.check_output([
+        "mysqlctl", "position", "append", pos, gtid,
         ]).strip()
-    }
 
   def extra_my_cnf(self):
     return environment.vttop + "/config/mycnf/master_mysql56.cnf"
 
   def change_master_commands(self, host, port, pos):
+    (_flavor, gtid) = pos.split("/")
     return [
         "RESET MASTER",
-        "SET GLOBAL gtid_purged = '%s'" % pos["MySQL56"],
+        "SET GLOBAL gtid_purged = '%s'" % gtid,
         "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%u, "
         "MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1" %
         (host, port)]

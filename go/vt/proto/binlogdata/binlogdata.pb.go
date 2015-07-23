@@ -24,7 +24,6 @@ package binlogdata
 import proto "github.com/golang/protobuf/proto"
 import query "github.com/youtube/vitess/go/vt/proto/query"
 import topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-import replicationdata "github.com/youtube/vitess/go/vt/proto/replicationdata"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -182,19 +181,12 @@ func (m *StreamEvent) GetPrimaryKeyValues() []*query.Row {
 // StreamUpdateRequest is the payload to StreamUpdate
 type StreamUpdateRequest struct {
 	// where to start
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *StreamUpdateRequest) Reset()         { *m = StreamUpdateRequest{} }
 func (m *StreamUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamUpdateRequest) ProtoMessage()    {}
-
-func (m *StreamUpdateRequest) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 // StreamUpdateResponse is the response from StreamUpdate
 type StreamUpdateResponse struct {
@@ -215,7 +207,7 @@ func (m *StreamUpdateResponse) GetStreamEvent() *StreamEvent {
 // StreamKeyRangeRequest is the payload to StreamKeyRange
 type StreamKeyRangeRequest struct {
 	// where to start
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 	// type to get
 	KeyspaceIdType topodata.KeyspaceIdType `protobuf:"varint,2,opt,name=keyspace_id_type,enum=topodata.KeyspaceIdType" json:"keyspace_id_type,omitempty"`
 	// what to get
@@ -227,13 +219,6 @@ type StreamKeyRangeRequest struct {
 func (m *StreamKeyRangeRequest) Reset()         { *m = StreamKeyRangeRequest{} }
 func (m *StreamKeyRangeRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamKeyRangeRequest) ProtoMessage()    {}
-
-func (m *StreamKeyRangeRequest) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 func (m *StreamKeyRangeRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
@@ -268,7 +253,7 @@ func (m *StreamKeyRangeResponse) GetBinlogTransaction() *BinlogTransaction {
 // StreamTablesRequest is the payload to StreamTables
 type StreamTablesRequest struct {
 	// where to start
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 	// what to get
 	Tables []string `protobuf:"bytes,2,rep,name=tables" json:"tables,omitempty"`
 	// default charset on the player side
@@ -278,13 +263,6 @@ type StreamTablesRequest struct {
 func (m *StreamTablesRequest) Reset()         { *m = StreamTablesRequest{} }
 func (m *StreamTablesRequest) String() string { return proto.CompactTextString(m) }
 func (*StreamTablesRequest) ProtoMessage()    {}
-
-func (m *StreamTablesRequest) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 func (m *StreamTablesRequest) GetCharset() *Charset {
 	if m != nil {

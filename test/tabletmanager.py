@@ -548,7 +548,7 @@ class TestTabletManager(unittest.TestCase):
     self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "rdonly")
     self.check_healthz(tablet_62044, True)
     tablet_62044.wait_for_vttablet_state('SERVING')
-    
+
     # kill the tablets
     tablet.kill_tablets([tablet_62344, tablet_62044])
 

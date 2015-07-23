@@ -31,8 +31,12 @@ func New(updateStream proto.UpdateStream) *UpdateStream {
 // StreamUpdate is part of the pbs.UpdateStreamServer interface
 func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs.UpdateStream_StreamUpdateServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
+	pos, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
 	return server.updateStream.ServeUpdateStream(&proto.UpdateStreamRequest{
-		Position: myproto.ProtoToReplicationPosition(req.Position),
+		Position: pos,
 	}, func(reply *proto.StreamEvent) error {
 		return stream.Send(&pb.StreamUpdateResponse{
 			StreamEvent: proto.StreamEventToProto(reply),
@@ -43,8 +47,12 @@ func (server *UpdateStream) StreamUpdate(req *pb.StreamUpdateRequest, stream pbs
 // StreamKeyRange is part of the pbs.UpdateStreamServer interface
 func (server *UpdateStream) StreamKeyRange(req *pb.StreamKeyRangeRequest, stream pbs.UpdateStream_StreamKeyRangeServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
+	pos, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
 	return server.updateStream.StreamKeyRange(&proto.KeyRangeRequest{
-		Position:       myproto.ProtoToReplicationPosition(req.Position),
+		Position:       pos,
 		KeyspaceIdType: key.ProtoToKeyspaceIdType(req.KeyspaceIdType),
 		KeyRange:       key.ProtoToKeyRange(req.KeyRange),
 		Charset:        mproto.ProtoToCharset(req.Charset),
@@ -58,8 +66,12 @@ func (server *UpdateStream) StreamKeyRange(req *pb.StreamKeyRangeRequest, stream
 // StreamTables is part of the pbs.UpdateStreamServer interface
 func (server *UpdateStream) StreamTables(req *pb.StreamTablesRequest, stream pbs.UpdateStream_StreamTablesServer) (err error) {
 	defer server.updateStream.HandlePanic(&err)
+	pos, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
 	return server.updateStream.StreamTables(&proto.TablesRequest{
-		Position: myproto.ProtoToReplicationPosition(req.Position),
+		Position: pos,
 		Tables:   req.Tables,
 		Charset:  mproto.ProtoToCharset(req.Charset),
 	}, func(reply *proto.BinlogTransaction) error {

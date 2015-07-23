@@ -53,21 +53,7 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
     return self.stub == None
 
   def stream_update(self, position, timeout=3600.0):
-    # FIXME(alainjobart) the parameter we pass for position should be
-    # the string encoded one, we shouldn't need the structures.
-    if 'MariaDB' in position:
-      parts = position['MariaDB'].split("-")
-      domain = long(parts[0])
-      server = long(parts[1])
-      sequence = long(parts[2])
-      p3_position = replicationdata_pb2.Position(
-          mariadb_gtid=replicationdata_pb2.MariadbGtid(domain=domain,
-                                                       server=server,
-                                                       sequence=sequence))
-    else:
-      raise NotImplemented("Only MariaDB encoding is supported here for now")
-
-    req = binlogdata_pb2.StreamUpdateRequest(position=p3_position)
+    req = binlogdata_pb2.StreamUpdateRequest(position=position)
 
     with self.stub as stub:
       it = stub.StreamUpdate(req, timeout)
