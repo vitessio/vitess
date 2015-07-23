@@ -213,7 +213,7 @@ class TabletConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
-  def _execute_batch(self, sql_list, bind_variables_list, as_transaction=False):
+  def _execute_batch(self, sql_list, bind_variables_list, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}

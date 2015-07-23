@@ -362,8 +362,6 @@ class TestVTGateFunctions(unittest.TestCase):
                  traceback.print_exc()))
 
   def test_batch_read(self):
-    # TODO(sougou): fix this.
-    return
     try:
       vtgate_conn = get_connection()
       count = 10
@@ -405,8 +403,6 @@ class TestVTGateFunctions(unittest.TestCase):
                                                    traceback.print_exc()))
 
   def test_batch_write(self):
-    # TODO(sougou): fix this.
-    return
     try:
       vtgate_conn = get_connection()
       count = 10
@@ -425,11 +421,10 @@ class TestVTGateFunctions(unittest.TestCase):
         keyspace_id = kid_list[x%len(kid_list)]
         query_list.append("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)")
         bind_vars_list.append({'eid': x, 'id': x, 'keyspace_id': keyspace_id})
-      vtgate_conn.begin()
       vtgate_conn._execute_batch(
           query_list, bind_vars_list,
-          KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(kid) for kid in kid_list])
-      vtgate_conn.commit()
+          KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(kid) for kid in kid_list],
+          as_transaction=True)
       results, rowcount, _, _ = vtgate_conn._execute(
           "select * from vt_insert_test", {},
           KEYSPACE_NAME, 'master',

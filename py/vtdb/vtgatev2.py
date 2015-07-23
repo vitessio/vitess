@@ -278,13 +278,15 @@ class VTGateConnection(object):
 
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids, not_in_transaction=False):
+  def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
       query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
+      query['Keyspace'] = keyspace
+      query['KeyspaceIds'] = keyspace_ids
       query_list.append(query)
 
     rowsets = []
@@ -292,10 +294,8 @@ class VTGateConnection(object):
     try:
       req = {
           'Queries': query_list,
-          'Keyspace': keyspace,
           'TabletType': tablet_type,
-          'KeyspaceIds': keyspace_ids,
-          'NotInTransaction': not_in_transaction,
+          'AsTransaction': as_transaction,
       }
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)

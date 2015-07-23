@@ -195,7 +195,7 @@ def db_class_method(*pargs, **kwargs):
   return classmethod(db_wrapper(*pargs, **kwargs))
 
 
-def execute_batch_read(cursor, query_list, bind_vars_list):
+def execute_batch_read(cursor, query_list, bind_vars_list, as_transaction=False):
   """Method for executing select queries in batch.
 
   Args:
@@ -218,7 +218,7 @@ def execute_batch_read(cursor, query_list, bind_vars_list):
       raise dbexceptions.ProgrammingError("Dml %s for read batch cursor." % q)
     batch_cursor.execute(q, bv)
 
-  batch_cursor.flush()
+  batch_cursor.flush(as_transaction)
   rowsets = batch_cursor.rowsets
   result = []
   # rowset is of the type [(results, rowcount, lastrowid, fields),..]
@@ -232,7 +232,7 @@ def execute_batch_read(cursor, query_list, bind_vars_list):
   return result
 
 
-def execute_batch_write(cursor, query_list, bind_vars_list):
+def execute_batch_write(cursor, query_list, bind_vars_list, as_transaction=False):
   """Method for executing dml queries in batch.
 
   Args:
@@ -259,7 +259,7 @@ def execute_batch_write(cursor, query_list, bind_vars_list):
       raise dbexceptions.ProgrammingError("query %s is not a dml" % q)
     batch_cursor.execute(q, bv)
 
-  batch_cursor.flush()
+  batch_cursor.flush(as_transaction)
 
   rowsets = batch_cursor.rowsets
   result = []

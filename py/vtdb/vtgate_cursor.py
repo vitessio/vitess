@@ -212,13 +212,13 @@ class BatchVTGateCursor(VTGateCursor):
     self.query_list.append(sql)
     self.bind_vars_list.append(bind_variables)
 
-  def flush(self):
+  def flush(self, as_transaction=False):
     self.rowsets = self._conn._execute_batch(self.query_list,
                                               self.bind_vars_list,
                                               self.keyspace,
                                               self.tablet_type,
                                               self.keyspace_ids,
-                                              not_in_transaction=(not self.is_writable()))
+                                              as_transaction)
     self.query_list = []
     self.bind_vars_list = []
 

@@ -259,7 +259,7 @@ class TestTabletFunctions(unittest.TestCase):
                               {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       master_conn.commit()
       rowsets = master_conn._execute_batch(["select * from vt_insert_test",
-                                            "select * from vt_a"], [{}, {}])
+                                            "select * from vt_a"], [{}, {}], False)
       self.assertEqual(rowsets[0][1], count)
       self.assertEqual(rowsets[1][1], count)
     except Exception, e:
@@ -285,9 +285,7 @@ class TestTabletFunctions(unittest.TestCase):
         keyspace_id = kid_list[count%len(kid_list)]
         query_list.append("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)")
         bind_vars_list.append({'eid': x, 'id': x, 'keyspace_id': keyspace_id})
-      master_conn.begin()
-      master_conn._execute_batch(query_list, bind_vars_list)
-      master_conn.commit()
+      master_conn._execute_batch(query_list, bind_vars_list, True)
       results, rowcount, _, _ = master_conn._execute("select * from vt_insert_test", {})
       self.assertEqual(rowcount, count)
       results, rowcount, _, _ = master_conn._execute("select * from vt_a", {})

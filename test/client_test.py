@@ -566,8 +566,6 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(max_id, expected, "wrong max value fetched; expected %d got %d" % (expected, max_id))
 
   def test_batch_read(self):
-    # TODO(sougou): fix
-    return
     # 1. Create select queries using DB classes.
     query_list = []
     bv_list = []
@@ -594,8 +592,6 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(res_user_ids, user_id_list)
 
   def test_batch_write(self):
-    # TODO(sougou): fix
-    return
     # 1. Create DMLs using DB Classes.
     query_list = []
     bv_list = []
@@ -635,7 +631,7 @@ class TestRangeSharded(unittest.TestCase):
       cursor = context.get_cursor(entity_id_map=entity_id_map)(db_class_sharded.VtUser)
       # 3. Execute the writable batch query.
       results = db_object.execute_batch_write(
-          cursor, query_list, bv_list)
+          cursor, query_list, bv_list, False)
 
       # 4. Verify results
       self.assertEqual(len(results), len(query_list))
