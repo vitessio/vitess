@@ -278,9 +278,9 @@ class VTGateConnection(object):
 
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids, as_transaction):
+  def _execute_batch(self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list, tablet_type, as_transaction):
     query_list = []
-    for sql, bind_vars in zip(sql_list, bind_variables_list):
+    for sql, bind_vars, keyspace, keyspace_ids in zip(sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
       sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
       query = {}
       query['Sql'] = sql
