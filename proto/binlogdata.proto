@@ -47,8 +47,8 @@ message BinlogTransaction {
   // the timestamp of the statements
   int64 timestamp = 2;
 
-  // the Global Transaction ID after the statements have been applied
-  string position = 3;
+  // the Transaction ID after this statement was applied
+  string transaction_id = 3;
 }
 
 // StreamEvent describes an update stream event inside the binlogs.
@@ -73,8 +73,8 @@ message StreamEvent {
   // timestamp is set for SE_DML, SE_DDL or SE_ERR
   int64 timestamp = 6;
 
-  // the Global Transaction ID after the statements have been applied
-  string position = 7;
+  // the Transaction ID after this statement was applied
+  string transaction_id = 7;
 }
 
 // StreamUpdateRequest is the payload to StreamUpdate

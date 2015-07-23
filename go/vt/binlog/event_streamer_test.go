@@ -100,8 +100,8 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("query"),
 			},
 		},
-		Timestamp: 1,
-		Position:  "MariaDB/0-41983-20",
+		Timestamp:     1,
+		TransactionID: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
@@ -147,8 +147,8 @@ func TestDDLEvent(t *testing.T) {
 				Sql:      []byte("DDL"),
 			},
 		},
-		Timestamp: 1,
-		Position:  "MariaDB/0-41983-20",
+		Timestamp:     1,
+		TransactionID: "MariaDB/0-41983-20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {

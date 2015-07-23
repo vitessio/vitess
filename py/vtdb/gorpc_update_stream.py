@@ -61,8 +61,7 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
     """Note this implementation doesn't honor the timeout."""
     try:
       self.client.stream_call('UpdateStream.ServeUpdateStream',
-                              {"Position": position,
-                              })
+                              {"Position": position})
       while True:
         response = self.client.stream_next()
         if response is None:
@@ -99,7 +98,7 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
                                         rows=rows,
                                         sql=reply['Sql'],
                                         timestamp=reply['Timestamp'],
-                                        position=reply['Position'])
+                                        transaction_id=reply['TransactionID'])
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:

@@ -29,7 +29,7 @@ func (binlogTransaction *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWrite
 		lenWriter.Close()
 	}
 	bson.EncodeInt64(buf, "Timestamp", binlogTransaction.Timestamp)
-	bson.EncodeString(buf, "Position", binlogTransaction.Position)
+	bson.EncodeString(buf, "TransactionID", binlogTransaction.TransactionID)
 
 	lenWriter.Close()
 }
@@ -65,8 +65,8 @@ func (binlogTransaction *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer, kin
 			}
 		case "Timestamp":
 			binlogTransaction.Timestamp = bson.DecodeInt64(buf, kind)
-		case "Position":
-			binlogTransaction.Position = bson.DecodeString(buf, kind)
+		case "TransactionID":
+			binlogTransaction.TransactionID = bson.DecodeString(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

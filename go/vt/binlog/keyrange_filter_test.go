@@ -31,7 +31,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
 			},
 		},
-		Position: "MariaDB/0-41983-1",
+		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -39,7 +39,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> position: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -56,7 +56,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			},
 		},
-		Position: "MariaDB/0-41983-1",
+		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -64,7 +64,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "MariaDB/0-41983-1" `
+	want := `transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -81,7 +81,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		Position: "MariaDB/0-41983-1",
+		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -89,7 +89,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "MariaDB/0-41983-1" `
+	want := `transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -112,7 +112,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
 			},
 		},
-		Position: "MariaDB/0-41983-1",
+		TransactionID: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
@@ -120,7 +120,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "MariaDB/0-41983-1" `
+	want := `transaction_id: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -131,6 +131,6 @@ func bltToString(tx *proto.BinlogTransaction) string {
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
 	}
-	result += fmt.Sprintf("position: \"%v\" ", tx.Position)
+	result += fmt.Sprintf("transaction_id: \"%v\" ", tx.TransactionID)
 	return result
 }

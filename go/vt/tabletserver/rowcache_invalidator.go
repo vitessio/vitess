@@ -156,7 +156,7 @@ func (rci *RowcacheInvalidator) processEvent(event *blproto.StreamEvent) error {
 	case "ERR":
 		rci.handleUnrecognizedEvent(event.Sql)
 	case "POS":
-		gtid, err := myproto.DecodeGTID(event.Position)
+		gtid, err := myproto.DecodeGTID(event.TransactionID)
 		if err != nil {
 			return err
 		}

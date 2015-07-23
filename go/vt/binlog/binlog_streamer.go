@@ -161,9 +161,9 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
 		trans := &proto.BinlogTransaction{
-			Statements: statements,
-			Timestamp:  int64(timestamp),
-			Position:   myproto.EncodeGTID(gtid),
+			Statements:    statements,
+			Timestamp:     int64(timestamp),
+			TransactionID: myproto.EncodeGTID(gtid),
 		}
 		if err = bls.sendTransaction(trans); err != nil {
 			if err == io.EOF {

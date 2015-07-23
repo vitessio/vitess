@@ -20,7 +20,7 @@ type reflectStreamEvent struct {
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
-	Position         string
+	TransactionID    string
 }
 
 type extraStreamEvent struct {
@@ -31,7 +31,7 @@ type extraStreamEvent struct {
 	PrimaryKeyValues [][]sqltypes.Value
 	Sql              string
 	Timestamp        int64
-	Position         string
+	TransactionID    string
 }
 
 func TestStreamEvent(t *testing.T) {

@@ -35,9 +35,9 @@ var BL_CATEGORY_NAMES = map[int]string{
 // the binlog. Timestamp is set if the first statement was
 // something like 'SET TIMESTAMP=...'
 type BinlogTransaction struct {
-	Statements []Statement
-	Timestamp  int64
-	Position   string
+	Statements    []Statement
+	Timestamp     int64
+	TransactionID string
 }
 
 //go:generate bsongen -file $GOFILE -type BinlogTransaction -o binlog_transaction_bson.go

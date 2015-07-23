@@ -13,16 +13,16 @@ import (
 )
 
 type reflectBinlogTransaction struct {
-	Statements []reflectStatement
-	Timestamp  int64
-	Position   string
+	Statements    []reflectStatement
+	Timestamp     int64
+	TransactionID string
 }
 
 type extraBinlogTransaction struct {
-	Extra      int
-	Statements []reflectStatement
-	Timestamp  int64
-	Position   string
+	Extra         int
+	Statements    []reflectStatement
+	Timestamp     int64
+	TransactionID string
 }
 
 type reflectStatement struct {

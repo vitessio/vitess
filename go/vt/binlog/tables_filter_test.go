@@ -36,7 +36,7 @@ func TestTablesFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "" `
+	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> transaction_id: "" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -60,7 +60,7 @@ func TestTablesFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "" `
+	want := `transaction_id: "" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -84,7 +84,7 @@ func TestTablesFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "" `
+	want := `transaction_id: "" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -111,7 +111,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: "" `
+	want := `transaction_id: "" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

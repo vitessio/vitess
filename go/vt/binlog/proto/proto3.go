@@ -24,7 +24,7 @@ func StreamEventToProto(s *StreamEvent) *pb.StreamEvent {
 		PrimaryKeyValues: mproto.RowsToProto3(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
-		Position:         s.Position,
+		TransactionId:    s.TransactionID,
 	}
 	switch s.Category {
 	case "DML":
@@ -47,7 +47,7 @@ func ProtoToStreamEvent(s *pb.StreamEvent) *StreamEvent {
 		PrimaryKeyValues: mproto.Proto3ToRows(s.PrimaryKeyValues),
 		Sql:              s.Sql,
 		Timestamp:        s.Timestamp,
-		Position:         s.Position,
+		TransactionID:    s.TransactionId,
 	}
 	switch s.Category {
 	case pb.StreamEvent_SE_DML:
@@ -83,8 +83,8 @@ func ProtoToStatement(s *pb.BinlogTransaction_Statement) Statement {
 // BinlogTransactionToProto converts a BinlogTransaction to a proto3
 func BinlogTransactionToProto(bt *BinlogTransaction) *pb.BinlogTransaction {
 	result := &pb.BinlogTransaction{
-		Timestamp: bt.Timestamp,
-		Position:  bt.Position,
+		Timestamp:     bt.Timestamp,
+		TransactionId: bt.TransactionID,
 	}
 	if len(bt.Statements) > 0 {
 		result.Statements = make([]*pb.BinlogTransaction_Statement, len(bt.Statements))
@@ -99,8 +99,8 @@ func BinlogTransactionToProto(bt *BinlogTransaction) *pb.BinlogTransaction {
 // ProtoToBinlogTransaction converts a proto to a BinlogTransaction
 func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
 	result := &BinlogTransaction{
-		Timestamp: bt.Timestamp,
-		Position:  bt.Position,
+		Timestamp:     bt.Timestamp,
+		TransactionID: bt.TransactionId,
 	}
 	if len(bt.Statements) > 0 {
 		result.Statements = make([]Statement, len(bt.Statements))

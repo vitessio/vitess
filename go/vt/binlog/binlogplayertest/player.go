@@ -58,9 +58,9 @@ var testStreamEvent = &proto.StreamEvent{
 			sqltypes.MakeString([]byte("123")),
 		},
 	},
-	Sql:       "test sql",
-	Timestamp: 372,
-	Position:  "StreamEvent returned position",
+	Sql:           "test sql",
+	Timestamp:     372,
+	TransactionID: "StreamEvent returned transaction id",
 }
 
 // ServeUpdateStream is part of the the UpdateStream interface
@@ -138,8 +138,8 @@ var testBinlogTransaction = &proto.BinlogTransaction{
 			Sql: []byte("my statement"),
 		},
 	},
-	Timestamp: 78,
-	Position:  "BinlogTransaction returned position",
+	Timestamp:     78,
+	TransactionID: "BinlogTransaction returned transaction id",
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
