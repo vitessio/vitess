@@ -20,6 +20,12 @@ LDFLAGS = "\
 	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(LC_ALL=C date)'\
 "
 
+# Set a custom value for -p, the number of packages to be built/tested in parallel.
+# This is currently only used by our Travis CI test configuration.
+# (Also keep in mind that this value is independent of GOMAXPROCS.)
+ifdef VT_GO_PARALLEL
+VT_GO_PARALLEL := "-p" $(VT_GO_PARALLEL)
+endif
 # Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
 ifdef VT_MYSQL_ROOT
 # Clutter the env var only if it's a non-standard path.
@@ -29,7 +35,7 @@ ifdef VT_MYSQL_ROOT
 endif
 
 build:
-	godep go install -ldflags ${LDFLAGS} ./go/...
+	godep go install $(VT_GO_PARALLEL) -ldflags ${LDFLAGS} ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
@@ -41,21 +47,21 @@ clean:
 	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
 
 unit_test:
-	godep go test ./go/...
+	godep go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover:
-	godep go test -cover ./go/... | misc/parse_cover.py
+	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
-	godep go test -race ./go/...
+	godep go test $(VT_GO_PARALLEL) -race ./go/...
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
-	go list -f '{{if len .TestGoFiles}}godep go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
 	# Travis doesn't set the token for forked pull requests, so skip
 	# upload if COVERALLS_TOKEN is unset.

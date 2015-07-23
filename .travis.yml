@@ -36,6 +36,9 @@ env:
     - MAKEFLAGS=-j4
     # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
     - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
+    # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
+    # As of 07/2015 this value works best in a Travis CI container.
+    - VT_GO_PARALLEL=4
   matrix:
     - MAKE_TARGET=java_vtgate_client_test
     - MAKE_TARGET=unit_test_goveralls
