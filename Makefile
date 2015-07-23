@@ -55,15 +55,13 @@ unit_test_goveralls:
 		goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
 	fi
 
+ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
+queryservice_test_files = \
+	"queryservice_test.py $(ENABLE_MEMCACHED) -e vtocc" \
+	"queryservice_test.py $(ENABLE_MEMCACHED) -e vttablet"
+
 queryservice_test:
-	echo $$(date): Running test/queryservice_test.py...
-	if [ -e "/usr/bin/memcached" ]; then \
-		time test/queryservice_test.py -m -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -m -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	else \
-		time test/queryservice_test.py -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	fi
+	$(call run_integration_tests, $(queryservice_test_files))
 
 # These tests should be run by users to check that Vitess works in their environment.
 site_integration_test_files = \
