@@ -4,17 +4,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"reflect"
 	"strings"
 
+	"github.com/youtube/vitess/go/vt/schemamanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 
 // This file implements a REST-style API for the vtctld web interface.
 
-const apiPrefix = "/api/"
+const (
+	apiPrefix = "/api/"
+
+	jsonContentType = "application/json; charset=utf-8"
+)
 
 func handleCollection(collection string, getFunc func(*http.Request) (interface{}, error)) {
 	http.HandleFunc(apiPrefix+collection+"/", func(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +38,7 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 
 		// JSON marshals a nil slice as "null", but we prefer "[]".
 		if val := reflect.ValueOf(obj); val.Kind() == reflect.Slice && val.IsNil() {
+			w.Header().Set("Content-Type", jsonContentType)
 			w.Write([]byte("[]"))
 			return
 		}
@@ -41,6 +49,7 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 			httpErrorf(w, r, "json error: %v", err)
 			return
 		}
+		w.Header().Set("Content-Type", jsonContentType)
 		w.Write(data)
 	})
 }
@@ -58,6 +67,14 @@ func getItemPath(url string) string {
 		return ""
 	}
 	return parts[1]
+}
+
+func unmarshalRequest(r *http.Request, v interface{}) error {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, v)
 }
 
 func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
@@ -205,5 +222,21 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 		// Get the endpoints object for a specific type.
 		ep, _, err := ts.GetEndPoints(ctx, parts[0], parts[1], parts[2], topo.TabletType(parts[3]))
 		return ep, err
+	})
+
+	// Schema Change
+	http.HandleFunc(apiPrefix+"schema/apply", func(w http.ResponseWriter, r *http.Request) {
+		req := struct{ Keyspace, SQL string }{}
+		if err := unmarshalRequest(r, &req); err != nil {
+			httpErrorf(w, r, "can't unmarshal request: %v", err)
+			return
+		}
+
+		executor := schemamanager.NewTabletExecutor(
+			tmclient.NewTabletManagerClient(),
+			ts)
+
+		schemamanager.Run(ctx,
+			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
 	})
 }

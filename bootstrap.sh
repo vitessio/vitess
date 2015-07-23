@@ -215,3 +215,4 @@ ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 
 echo
 echo "bootstrap finished - run 'source dev.env' in your shell before building."
+
