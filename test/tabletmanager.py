@@ -561,8 +561,9 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
     pos = mysql_flavor().master_position(tablet_62344)
+    # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
     changeMasterCmds = mysql_flavor().change_master_commands(
-                            utils.hostname,
+                            "localhost",
                             tablet_62344.mysql_port,
                             pos)
     tablet_62044.mquery('', ['RESET MASTER', 'RESET SLAVE'] +

@@ -447,6 +447,8 @@ class Tablet(object):
     The process is also saved in self.proc, so it's easy to kill as well.
     """
     args = []
+    # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
+    args.extend(['-tablet_hostname', 'localhost'])
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server().flags())
     args.extend(['-binlog_player_protocol',

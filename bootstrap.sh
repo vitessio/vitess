@@ -93,40 +93,25 @@ fi
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
-go get -u github.com/golang/protobuf/proto
-go get -u golang.org/x/net/context
-go get -u golang.org/x/tools/cmd/goimports
-go get -u github.com/golang/glog
-go get -u github.com/golang/lint/golint
-go get -u github.com/tools/godep
-go get -u google.golang.org/grpc
-go get -u -a github.com/golang/protobuf/protoc-gen-go
+# Download third-party Go libraries.
+# (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
+repos="github.com/golang/glog \
+       github.com/golang/lint/golint \
+       github.com/golang/protobuf/proto \
+       github.com/golang/protobuf/protoc-gen-go \
+       github.com/tools/godep \
+       golang.org/x/net/context \
+       golang.org/x/tools/cmd/goimports \
+       google.golang.org/grpc \
+"
 
-# goversion_min returns true if major.minor go version is at least some value.
-function goversion_min() {
-  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
-  gotmajor=${BASH_REMATCH[1]}
-  gotminor=${BASH_REMATCH[2]}
-  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
-  wantmajor=${BASH_REMATCH[1]}
-  wantminor=${BASH_REMATCH[2]}
-  [ "$gotmajor" -lt "$wantmajor" ] && return 1
-  [ "$gotmajor" -gt "$wantmajor" ] && return 0
-  [ "$gotminor" -lt "$wantminor" ] && return 1
-  return 0
-}
-
-# Packages for uploading code coverage to coveralls.io.
+# Packages for uploading code coverage to coveralls.io (used by Travis CI).
+repos+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
-# if Go is installed somewhere that requires root access. However, this tool
-# is optional, so we should hide any errors to avoid confusion.
-if goversion_min 1.4; then
-  go get -u golang.org/x/tools/cmd/cover &> /dev/null
-else
-  go get -u code.google.com/p/go.tools/cmd/cover &> /dev/null
-fi
-go get -u github.com/modocache/gover
-go get -u github.com/mattn/goveralls
+# if Go is installed somewhere that requires root access.
+repos+=" golang.org/x/tools/cmd/cover"
+
+go get -u $repos
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
@@ -187,7 +172,7 @@ fi
 
 # install bson
 bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
-if [ -d $bson_dist ]; then
+if [ -f $bson_dist/lib/python2.7/site-packages/bson/__init__.py ]; then
   echo "skipping bson python build"
 else
   cd $VTTOP/third_party/py/bson-0.3.2 && \
@@ -200,6 +185,9 @@ mock_dist=$VTROOT/dist/py-mock-1.0.1
 if [ -f $mock_dist/.build_finished ]; then
   echo "skipping mock python build"
 else
+  # Cleanup any existing data
+  # (e.g. necessary for Travis CI caching which creates .build_finished as directory and prevents this script from creating it as file).
+  rm -rf $mock_dist
   # For some reason, it seems like setuptools won't create directories even with the --prefix argument
   mkdir -p $mock_dist/lib/python2.7/site-packages
   export PYTHONPATH=$(prepend_path $PYTHONPATH $mock_dist/lib/python2.7/site-packages)
@@ -214,7 +202,7 @@ fi
 
 # install cbson
 cbson_dist=$VTROOT/dist/py-cbson
-if [ -d $cbson_dist ]; then
+if [ -f $cbson_dist/lib/python2.7/site-packages/cbson.so ]; then
   echo "skipping cbson python build"
 else
   cd $VTTOP/py/cbson && \

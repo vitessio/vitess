@@ -20,8 +20,22 @@ LDFLAGS = "\
 	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(LC_ALL=C date)'\
 "
 
+# Set a custom value for -p, the number of packages to be built/tested in parallel.
+# This is currently only used by our Travis CI test configuration.
+# (Also keep in mind that this value is independent of GOMAXPROCS.)
+ifdef VT_GO_PARALLEL
+VT_GO_PARALLEL := "-p" $(VT_GO_PARALLEL)
+endif
+# Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
+ifdef VT_MYSQL_ROOT
+# Clutter the env var only if it's a non-standard path.
+  ifneq ($(VT_MYSQL_ROOT),/usr)
+    CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
+  endif
+endif
+
 build:
-	godep go install -ldflags ${LDFLAGS} ./go/...
+	godep go install $(VT_GO_PARALLEL) -ldflags ${LDFLAGS} ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
@@ -33,21 +47,21 @@ clean:
 	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
 
 unit_test:
-	godep go test ./go/...
+	godep go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:
 #   go test -coverprofile=coverage.out && go tool cover -html=coverage.out
 unit_test_cover:
-	godep go test -cover ./go/... | misc/parse_cover.py
+	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
-	godep go test -race ./go/...
+	godep go test $(VT_GO_PARALLEL) -race ./go/...
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
-	go list -f '{{if len .TestGoFiles}}godep go test -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
 	# Travis doesn't set the token for forked pull requests, so skip
 	# upload if COVERALLS_TOKEN is unset.
@@ -55,15 +69,13 @@ unit_test_goveralls:
 		goveralls -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
 	fi
 
+ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
+queryservice_test_files = \
+	"queryservice_test.py $(ENABLE_MEMCACHED) -e vtocc" \
+	"queryservice_test.py $(ENABLE_MEMCACHED) -e vttablet"
+
 queryservice_test:
-	echo $$(date): Running test/queryservice_test.py...
-	if [ -e "/usr/bin/memcached" ]; then \
-		time test/queryservice_test.py -m -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -m -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	else \
-		time test/queryservice_test.py -e vtocc $$VT_TEST_FLAGS || exit 1 ; \
-		time test/queryservice_test.py -e vttablet $$VT_TEST_FLAGS || exit 1 ; \
-	fi
+	$(call run_integration_tests, $(queryservice_test_files))
 
 # These tests should be run by users to check that Vitess works in their environment.
 site_integration_test_files = \
@@ -95,7 +107,10 @@ small_integration_test_files = \
 	binlog.py \
 	backup.py \
 	update_stream.py \
-	custom_sharding.py
+	custom_sharding.py \
+	initial_sharding_bytes.py \
+	initial_sharding.py \
+	zkocc_test.py
 
 medium_integration_test_files = \
 	tabletmanager.py \
@@ -107,18 +122,15 @@ medium_integration_test_files = \
 	automation_horizontal_resharding.py
 
 large_integration_test_files = \
-	vtgatev2_test.py \
-	zkocc_test.py
+	vtgatev2_test.py
 
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
 ci_skip_integration_test_files = \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
 	resharding_bytes.py \
 	resharding.py
 
-# Run the following tests after making worker changes
+# Run the following tests after making worker changes.
 worker_integration_test_files = \
 	binlog.py \
 	resharding.py \

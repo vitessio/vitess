@@ -1,50 +1,110 @@
-# TODO(mberlin): Remove all "free" and "ps" commands once https://github.com/travis-ci/travis-ci/issues/4013 is resolved.
+# Use container-based infrastructure (see: http://docs.travis-ci.com/user/workers/container-based-infrastructure/).
+sudo: false
 language: go
 go:
   - 1.4
+addons:
+  apt:
+    packages:
+    # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
+    - automake
+    - libtool
+    - memcached
+    - python-dev
+    - python-mysqldb
+    - python-pip
+    - python-virtualenv
+    - libssl-dev
+    - g++
+    - git
+    - pkg-config
+    # installs libaio1 which is required by MariaDB 10.0 server package
+    - libaio-dev
+    # required by travis script below to measure CPU and memory usage
+    - time
+    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+    - python-dev
+    # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
+    - rsyslog
+# Cache directories of dependencies which are built by bootstrap.sh
+cache:
+  directories:
+  # Cache downloaded and extracted MariaDB 10.0 packages.
+  - $MYSQL_ROOT
+  # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
+  - $HOME/gopath/dist/grpc/.build_finished
+  - $HOME/gopath/dist/grpc/grpc/python2.7_virtual_environment
+  - $HOME/gopath/dist/grpc/lib/python2.7/site-packages
+  - $HOME/gopath/dist/protobuf/.build_finished
+  - $HOME/gopath/dist/protobuf/lib
+  - $HOME/gopath/dist/py-cbson/lib/python2.7/site-packages
+  - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
+  - $HOME/gopath/dist/py-mock-1.0.1/lib/python2.7/site-packages
+  - $HOME/gopath/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages
+  - $HOME/gopath/dist/vt-zookeeper-3.3.5/.build_finished
+  - $HOME/gopath/dist/vt-zookeeper-3.3.5/include
+  - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
+  # Maven repository for Java dependencies.
+  - $HOME/.m2
+  # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+  - $HOME/.local/lib/python2.7/site-packages
+before_cache:
+  # Travis CI caching doesn't work with this symlink. Just delete it.
+  - rm $HOME/gopath/bin/zksrv.sh
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
+    - MYSQL_ROOT=$HOME/mysql
+    - VT_MYSQL_ROOT=$MYSQL_ROOT/usr
+    # Enable parallel compilation e.g. for gRPC.
+    # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
+    - MAKEFLAGS=-j4
+    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+    - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
+    # Uncomment the next line to debug Python integration tests.
+    # NOTE: When -k is enabled, subsequent tests will fail because the test directory is not empty.
+    #       I.e. modify the Makefile to make sure that the test to be debugged is run first.
+    #- VT_TEST_FLAGS="-v -k"
+    # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
+    # As of 07/2015 this value works best in a Travis CI container.
+    - VT_GO_PARALLEL=4
   matrix:
-    - MAKE_TARGET=java_vtgate_client_test
-    - MAKE_TARGET=unit_test_goveralls
-    - MAKE_TARGET=small_integration_test
-    - MAKE_TARGET=medium_integration_test
-    - MAKE_TARGET=large_integration_test
-    - MAKE_TARGET=queryservice_test
-    - MAKE_TARGET=unit_test
+    # NOTE: Travis CI schedules up to 5 tests simultaneously.
+    #       All our tests should be spread out as evenly as possible across these 5 slots.
+    #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
+    # NOTE: Use "" if you specify a space separated list of multiple targets.
+   - MAKE_TARGET="unit_test build java_vtgate_client_test queryservice_test"
+   - MAKE_TARGET="unit_test_race unit_test_goveralls"
+   # Run large tests first because they take longer than medium. This way, it evens out better when tests get queued.
+   - MAKE_TARGET="build large_integration_test ci_skip_integration_test"
+   - MAKE_TARGET="build small_integration_test"
+   - MAKE_TARGET="build medium_integration_test"
 before_install:
-  - |
-      free -m | grep "buffers/cache" | awk '{ if ($3 > 900) { print "\n\nCAUTION - CAUTION - CAUTION\n\nWE ARE FAILING THIS TEST EARLY BECAUSE MEMORY USAGE IS TOO HIGH ("$3" MB) AND THE TEST WOULD HAVE PROBABLY FLAKED.\n\nThis is a bug in the Travis VM infrastructure: https://github.com/travis-ci/travis-ci/issues/4013\nOnce this is fixed, we will remove this fail fast.\n\n"; exit 1; } else { print "\n\nINFO - LOOKS LIKE NO MEMORY IS LEAKING, TEST RESULTS WILL NOT BE FLAKY\n\n" } }'
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-  - bash -v travis/dependencies.sh
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
-  - travis_retry sudo bash -v travis/install_grpc.sh
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
+  - bash travis/download_mariadb.sh
+  # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+  - PATH=$PATH:$MYSQL_ROOT/usr/bin LDFLAGS="-L$MYSQL_ROOT/usr/lib" pip install --user mysql-python
 install:
-  - bash -v bootstrap.sh --skip_root_installs
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
+  - bash -v bootstrap.sh
 script:
   - source dev.env
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
+  # Log GOMAXPROCS (should be 2 as of 07/2015).
+  - go run travis/log_gomaxprocs.go
+  # TODO(mberlin): Readd travis_retry when done testing.
   - |
-      travis_retry /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
-  - free -m
-  - ps -A -o pid,rss,vsz,cmd --sort -rss
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $2 } END { print sum / 1024.0, "MB used" }'
-  - ps -A -o pid,rss,vsz,cmd --sort -rss | awk '{ sum += $3 } END { print sum / 1024.0, "MB virtual memory used" }'
+      return_value=1
+      for target in $MAKE_TARGET; do
+        echo "Running: make $target"
+        /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
+        return_value=$?
+        if [ $return_value -ne 0 ]; then
+          echo "ERROR: make $target failed with code: $return_value. Please fix the problem and re-trigger the test."
+          break
+        fi
+      done
+      [ $return_value -eq 0 ] || false
+after_failure:
+  # In case of errors, output log files to make it easier to debug the error.
+  # List all available files.
+  - ls -alR $HOME/gopath/vtdataroot
+  # Output *.log* and *.stderr files. (Uncomment VT_TEST_FLAGS above or tests will delete their logs.)
+  - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat

@@ -88,6 +88,9 @@ class TestEnv(object):
       raise
 
   def shutdown(self):
+    # Explicitly kill vtgate first because StreamingServerShutdownIT.java expects an EOF from the vtgate client
+    # and not an error that vttablet killed the query (which is seen when vtgate is killed last).
+    utils.vtgate.kill()
     tablet.kill_tablets(self.tablets)
     teardown_procs = [t.teardown_mysql() for t in self.tablets]
     utils.wait_procs(teardown_procs, raise_on_error=False)
