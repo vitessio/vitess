@@ -51,6 +51,9 @@ cache:
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
+  # Delete this file because it keeps changing (having the latest timestamp of an update)
+  # and triggers a lengthy update of the cache (~19 seconds).
+  - rm $HOME/.m2/repository/com/youtube/vitess/gorpc-client/0.0.1-SNAPSHOT/resolver-status.properties
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
