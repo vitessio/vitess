@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -48,7 +47,7 @@ func (client *client) Close() {
 func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateStreamRequest) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.StreamEvent, 10)
 	query := &pb.StreamUpdateRequest{
-		Position: myproto.EncodeReplicationPosition(req.Position),
+		Position: req.Position,
 	}
 
 	stream, err := client.c.StreamUpdate(ctx, query)
@@ -77,7 +76,7 @@ func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateSt
 func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
-		Position:       myproto.EncodeReplicationPosition(req.Position),
+		Position:       req.Position,
 		KeyspaceIdType: key.KeyspaceIdTypeToProto(req.KeyspaceIdType),
 		KeyRange:       key.KeyRangeToProto(req.KeyRange),
 		Charset:        mproto.CharsetToProto(req.Charset),
@@ -109,7 +108,7 @@ func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeReq
 func (client *client) StreamTables(ctx context.Context, req *proto.TablesRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamTablesRequest{
-		Position: myproto.EncodeReplicationPosition(req.Position),
+		Position: req.Position,
 		Tables:   req.Tables,
 		Charset:  mproto.CharsetToProto(req.Charset),
 	}

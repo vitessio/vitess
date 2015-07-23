@@ -60,11 +60,9 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
   def stream_update(self, position, timeout=3600.0):
     """Note this implementation doesn't honor the timeout."""
     try:
-      (flavor, gtid) = position.split("/")
       self.client.stream_call('UpdateStream.ServeUpdateStream',
-                              {"Position": {
-                                  flavor: gtid,
-                              }})
+                              {"Position": position,
+                              })
       while True:
         response = self.client.stream_next()
         if response is None:

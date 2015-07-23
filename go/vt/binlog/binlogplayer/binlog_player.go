@@ -314,7 +314,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
 			Tables:   blp.tables,
-			Position: blp.blpPos.Position,
+			Position: myproto.EncodeReplicationPosition(blp.blpPos.Position),
 			Charset:  &blp.defaultCharset,
 		}
 		responseChan, errFunc, err = blplClient.StreamTables(ctx, req)
@@ -322,7 +322,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 		req := &proto.KeyRangeRequest{
 			KeyspaceIdType: blp.keyspaceIdType,
 			KeyRange:       blp.keyRange,
-			Position:       blp.blpPos.Position,
+			Position:       myproto.EncodeReplicationPosition(blp.blpPos.Position),
 			Charset:        &blp.defaultCharset,
 		}
 		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, req)

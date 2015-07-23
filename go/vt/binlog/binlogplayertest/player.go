@@ -41,13 +41,7 @@ func NewFakeBinlogStreamer(t *testing.T) *FakeBinlogStreamer {
 //
 
 var testUpdateStreamRequest = &proto.UpdateStreamRequest{
-	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   4567,
-			Sequence: 6789,
-		},
-	},
+	Position: "UpdateStream starting position",
 }
 
 var testStreamEvent = &proto.StreamEvent{
@@ -126,13 +120,7 @@ func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
 //
 
 var testKeyRangeRequest = &proto.KeyRangeRequest{
-	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   3456,
-			Sequence: 7890,
-		},
-	},
+	Position:       "KeyRange starting position",
 	KeyspaceIdType: key.KIT_UINT64,
 	KeyRange: key.KeyRange{
 		Start: key.Uint64Key(0x7000000000000000).KeyspaceId(),
@@ -217,14 +205,8 @@ func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
 //
 
 var testTablesRequest = &proto.TablesRequest{
-	Position: myproto.ReplicationPosition{
-		GTIDSet: myproto.MariadbGTID{
-			Domain:   1,
-			Server:   345,
-			Sequence: 789,
-		},
-	},
-	Tables: []string{"table1", "table2"},
+	Position: "Tables starting position",
+	Tables:   []string{"table1", "table2"},
 	Charset: &mproto.Charset{
 		Client: 12,
 		Conn:   13,

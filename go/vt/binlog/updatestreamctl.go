@@ -191,6 +191,11 @@ func (updateStream *UpdateStream) isEnabled() bool {
 
 // ServeUpdateStream is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) (err error) {
+	position, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
+
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -203,9 +208,9 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 	streamCount.Add("Updates", 1)
 	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
+	log.Infof("ServeUpdateStream starting @ %#v", position)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, req.Position, func(reply *proto.StreamEvent) error {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, position, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -223,6 +228,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 // StreamKeyRange is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+	position, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
+
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -235,7 +245,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
+	log.Infof("ServeUpdateStream starting @ %#v", position)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
@@ -243,7 +253,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, req.Position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -254,6 +264,11 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 
 // StreamTables is part of the proto.UpdateStream interface
 func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+	position, err := myproto.DecodeReplicationPosition(req.Position)
+	if err != nil {
+		return err
+	}
+
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
@@ -266,7 +281,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", req.Position)
+	log.Infof("ServeUpdateStream starting @ %#v", position)
 
 	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
@@ -274,7 +289,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, req.Position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, position, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
