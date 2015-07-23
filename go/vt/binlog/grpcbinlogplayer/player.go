@@ -44,10 +44,10 @@ func (client *client) Close() {
 	client.cc.Close()
 }
 
-func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateStreamRequest) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
+func (client *client) ServeUpdateStream(ctx context.Context, position string) (chan *proto.StreamEvent, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.StreamEvent, 10)
 	query := &pb.StreamUpdateRequest{
-		Position: req.Position,
+		Position: position,
 	}
 
 	stream, err := client.c.StreamUpdate(ctx, query)
@@ -73,13 +73,13 @@ func (client *client) ServeUpdateStream(ctx context.Context, req *proto.UpdateSt
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
-		Position:       req.Position,
-		KeyspaceIdType: key.KeyspaceIdTypeToProto(req.KeyspaceIdType),
-		KeyRange:       key.KeyRangeToProto(req.KeyRange),
-		Charset:        mproto.CharsetToProto(req.Charset),
+		Position:       position,
+		KeyspaceIdType: key.KeyspaceIdTypeToProto(keyspaceIdType),
+		KeyRange:       key.KeyRangeToProto(keyRange),
+		Charset:        mproto.CharsetToProto(charset),
 	}
 
 	stream, err := client.c.StreamKeyRange(ctx, query)
@@ -105,12 +105,12 @@ func (client *client) StreamKeyRange(ctx context.Context, req *proto.KeyRangeReq
 	}, nil
 }
 
-func (client *client) StreamTables(ctx context.Context, req *proto.TablesRequest) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (client *client) StreamTables(ctx context.Context, position string, tables []string, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamTablesRequest{
-		Position: req.Position,
-		Tables:   req.Tables,
-		Charset:  mproto.CharsetToProto(req.Charset),
+		Position: position,
+		Tables:   tables,
+		Charset:  mproto.CharsetToProto(charset),
 	}
 
 	stream, err := client.c.StreamTables(ctx, query)

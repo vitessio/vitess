@@ -18,7 +18,7 @@ type UpdateStream struct {
 // ServeUpdateStream is part of the gorpc UpdateStream service
 func (server *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.ServeUpdateStream(req, func(reply *proto.StreamEvent) error {
+	return server.updateStream.ServeUpdateStream(req.Position, func(reply *proto.StreamEvent) error {
 		return sendReply(reply)
 	})
 }
@@ -26,7 +26,7 @@ func (server *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, se
 // StreamKeyRange is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req, func(reply *proto.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *proto.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }
@@ -34,7 +34,7 @@ func (server *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply
 // StreamTables is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamTables(req, func(reply *proto.BinlogTransaction) error {
+	return server.updateStream.StreamTables(req.Position, req.Tables, req.Charset, func(reply *proto.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }

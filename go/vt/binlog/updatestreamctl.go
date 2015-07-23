@@ -9,10 +9,12 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -133,8 +135,8 @@ func DisableUpdateStreamService() {
 }
 
 // ServeUpdateStream sill serve one UpdateStream
-func ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) error {
-	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
+func ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) error {
+	return UpdateStreamRpcService.ServeUpdateStream(position, sendReply)
 }
 
 // IsUpdateStreamEnabled returns true if the RPC service is enabled
@@ -190,8 +192,8 @@ func (updateStream *UpdateStream) isEnabled() bool {
 }
 
 // ServeUpdateStream is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) (err error) {
-	position, err := myproto.DecodeReplicationPosition(req.Position)
+func (updateStream *UpdateStream) ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) (err error) {
+	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -208,9 +210,9 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 	streamCount.Add("Updates", 1)
 	defer streamCount.Add("Updates", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", position)
+	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, position, func(reply *proto.StreamEvent) error {
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mysqld, pos, func(reply *proto.StreamEvent) error {
 		if reply.Category == "ERR" {
 			updateStreamErrors.Add("UpdateStream", 1)
 		} else {
@@ -227,8 +229,8 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 }
 
 // StreamKeyRange is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
-	position, err := myproto.DecodeReplicationPosition(req.Position)
+func (updateStream *UpdateStream) StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -245,15 +247,15 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", position)
+	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyRangeFilterFunc(req.KeyspaceIdType, req.KeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(keyspaceIdType, keyRange, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)
@@ -263,8 +265,8 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 }
 
 // StreamTables is part of the proto.UpdateStream interface
-func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
-	position, err := myproto.DecodeReplicationPosition(req.Position)
+func (updateStream *UpdateStream) StreamTables(position string, tables []string, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
+	pos, err := myproto.DecodeReplicationPosition(position)
 	if err != nil {
 		return err
 	}
@@ -281,15 +283,15 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Infof("ServeUpdateStream starting @ %#v", position)
+	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: BinlogStreamer->TablesFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(tables, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
-	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, req.Charset, position, f)
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, f)
 
 	svm := &sync2.ServiceManager{}
 	svm.Go(bls.Stream)

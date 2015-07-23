@@ -21,6 +21,21 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// keyRangeRequest is used to make a request for StreamKeyRange.
+type keyRangeRequest struct {
+	Position       string
+	KeyspaceIdType key.KeyspaceIdType
+	KeyRange       key.KeyRange
+	Charset        *mproto.Charset
+}
+
+// tablesRequest is used to make a request for StreamTables.
+type tablesRequest struct {
+	Position string
+	Tables   []string
+	Charset  *mproto.Charset
+}
+
 // FakeBinlogStreamer is our implementation of UpdateStream
 type FakeBinlogStreamer struct {
 	t      *testing.T
@@ -39,9 +54,7 @@ func NewFakeBinlogStreamer(t *testing.T) *FakeBinlogStreamer {
 // ServeUpdateStream tests
 //
 
-var testUpdateStreamRequest = &proto.UpdateStreamRequest{
-	Position: "UpdateStream starting position",
-}
+var testUpdateStreamRequest = "UpdateStream starting position"
 
 var testStreamEvent = &proto.StreamEvent{
 	Category:  "DML",
@@ -64,9 +77,12 @@ var testStreamEvent = &proto.StreamEvent{
 }
 
 // ServeUpdateStream is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) error {
+func (fake *FakeBinlogStreamer) ServeUpdateStream(position string, sendReply func(reply *proto.StreamEvent) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if position != testUpdateStreamRequest {
+		fake.t.Errorf("wrong ServeUpdateStream parameter, got %v want %v", position, testUpdateStreamRequest)
 	}
 	sendReply(testStreamEvent)
 	return nil
@@ -112,7 +128,7 @@ func testServeUpdateStreamPanics(t *testing.T, bpc binlogplayer.Client) {
 // StreamKeyRange tests
 //
 
-var testKeyRangeRequest = &proto.KeyRangeRequest{
+var testKeyRangeRequest = &keyRangeRequest{
 	Position:       "KeyRange starting position",
 	KeyspaceIdType: key.KIT_UINT64,
 	KeyRange: key.KeyRange{
@@ -143,9 +159,18 @@ var testBinlogTransaction = &proto.BinlogTransaction{
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
+	}
+	req := &keyRangeRequest{
+		Position:       position,
+		KeyspaceIdType: keyspaceIdType,
+		KeyRange:       keyRange,
+		Charset:        charset,
+	}
+	if !reflect.DeepEqual(req, testKeyRangeRequest) {
+		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
 	}
 	sendReply(testBinlogTransaction)
 	return nil
@@ -153,7 +178,7 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(req *proto.KeyRangeRequest, sendR
 
 func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest)
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyspaceIdType, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -174,7 +199,7 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 
 func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest)
+	c, errFunc, err := bpc.StreamKeyRange(ctx, testKeyRangeRequest.Position, testKeyRangeRequest.KeyspaceIdType, testKeyRangeRequest.KeyRange, testKeyRangeRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -191,7 +216,7 @@ func testStreamKeyRangePanics(t *testing.T, bpc binlogplayer.Client) {
 // StreamTables test
 //
 
-var testTablesRequest = &proto.TablesRequest{
+var testTablesRequest = &tablesRequest{
 	Position: "Tables starting position",
 	Tables:   []string{"table1", "table2"},
 	Charset: &mproto.Charset{
@@ -202,9 +227,17 @@ var testTablesRequest = &proto.TablesRequest{
 }
 
 // StreamTables is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamTables(position string, tables []string, charset *mproto.Charset, sendReply func(reply *proto.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
+	}
+	req := &tablesRequest{
+		Position: position,
+		Tables:   tables,
+		Charset:  charset,
+	}
+	if !reflect.DeepEqual(req, testTablesRequest) {
+		fake.t.Errorf("wrong StreamTables parameter, got %+v want %+v", req, testTablesRequest)
 	}
 	sendReply(testBinlogTransaction)
 	return nil
@@ -212,7 +245,7 @@ func (fake *FakeBinlogStreamer) StreamTables(req *proto.TablesRequest, sendReply
 
 func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest)
+	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}
@@ -233,7 +266,7 @@ func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 
 func testStreamTablesPanics(t *testing.T, bpc binlogplayer.Client) {
 	ctx := context.Background()
-	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest)
+	c, errFunc, err := bpc.StreamTables(ctx, testTablesRequest.Position, testTablesRequest.Tables, testTablesRequest.Charset)
 	if err != nil {
 		t.Fatalf("got error: %v", err)
 	}

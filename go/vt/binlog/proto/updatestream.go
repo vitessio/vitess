@@ -9,37 +9,17 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 )
 
-// UpdateStreamRequest is used to make a request for ServeUpdateStream.
-type UpdateStreamRequest struct {
-	Position string
-}
-
-// KeyRangeRequest is used to make a request for StreamKeyRange.
-type KeyRangeRequest struct {
-	Position       string
-	KeyspaceIdType key.KeyspaceIdType
-	KeyRange       key.KeyRange
-	Charset        *mproto.Charset
-}
-
-// TablesRequest is used to make a request for StreamTables.
-type TablesRequest struct {
-	Position string
-	Tables   []string
-	Charset  *mproto.Charset
-}
-
 // UpdateStream is the interface for the server
 type UpdateStream interface {
 	// ServeUpdateStream serves the query and streams the result
 	// for the full update stream
-	ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply *StreamEvent) error) error
+	ServeUpdateStream(position string, sendReply func(reply *StreamEvent) error) error
 
 	// StreamKeyRange streams events related to a KeyRange only
-	StreamKeyRange(req *KeyRangeRequest, sendReply func(reply *BinlogTransaction) error) error
+	StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset, sendReply func(reply *BinlogTransaction) error) error
 
 	// StreamTables streams events related to a set of Tables only
-	StreamTables(req *TablesRequest, sendReply func(reply *BinlogTransaction) error) error
+	StreamTables(position string, tables []string, charset *mproto.Charset, sendReply func(reply *BinlogTransaction) error) error
 
 	// HandlePanic should be called in a defer,
 	// first thing in the RPC implementation.

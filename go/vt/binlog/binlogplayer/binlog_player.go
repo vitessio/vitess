@@ -317,20 +317,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	var responseChan chan *proto.BinlogTransaction
 	var errFunc ErrFunc
 	if len(blp.tables) > 0 {
-		req := &proto.TablesRequest{
-			Tables:   blp.tables,
-			Position: myproto.EncodeReplicationPosition(blp.blpPos.Position),
-			Charset:  &blp.defaultCharset,
-		}
-		responseChan, errFunc, err = blplClient.StreamTables(ctx, req)
+		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, &blp.defaultCharset)
 	} else {
-		req := &proto.KeyRangeRequest{
-			KeyspaceIdType: blp.keyspaceIdType,
-			KeyRange:       blp.keyRange,
-			Position:       myproto.EncodeReplicationPosition(blp.blpPos.Position),
-			Charset:        &blp.defaultCharset,
-		}
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, req)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.keyspaceIdType, blp.keyRange, &blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)
