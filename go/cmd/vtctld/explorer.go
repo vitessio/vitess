@@ -71,6 +71,12 @@ func HandleExplorer(name, url, templateName string, exp Explorer) {
 		panic(fmt.Sprintf("Only one Explorer can be registered in vtctld. Trying to register %q, but %q was already registered.", name, explorerName))
 	}
 
+	// Topo explorer API for client-side vtctld app.
+	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
+		return exp.HandlePath(actionRepo, path.Clean(url+getItemPath(r.URL.Path)), r), nil
+	})
+
+	// Old server-side explorer.
 	explorer = exp
 	explorerName = name
 	indexContent.ToplevelLinks[name+" Explorer"] = url
