@@ -1,6 +1,31 @@
+# Use container-based infrastructure (see: http://docs.travis-ci.com/user/workers/container-based-infrastructure/).
+sudo: false
 language: go
 go:
   - 1.4
+addons:
+  apt:
+    packages:
+    # NOTE: When you add a dependency, don't forget to add comment why it's necessary.
+    - automake
+    - libtool
+    - memcached
+    - python-dev
+    - python-mysqldb
+    - python-pip
+    - python-virtualenv
+    - libssl-dev
+    - g++
+    - git
+    - pkg-config
+    # installs libaio1 which is required by MariaDB 10.0 server package
+    - libaio-dev
+    # required by travis script below to measure CPU and memory usage
+    - time
+    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
+    - python-dev
+    # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
+    - rsyslog
 env:
   global:
     - MYSQL_FLAVOR=MariaDB
@@ -14,10 +39,8 @@ env:
     - MAKE_TARGET=unit_test
 before_install:
   - bash -v travis/dependencies.sh
-  - free -m
-  - travis_retry sudo bash -v travis/install_grpc.sh
 install:
-  - bash -v bootstrap.sh --skip_root_installs
+  - bash -v bootstrap.sh
 script:
   - source dev.env
   - |
