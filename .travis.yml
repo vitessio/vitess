@@ -31,6 +31,9 @@ env:
     - MYSQL_FLAVOR=MariaDB
     - MYSQL_ROOT=$HOME/mysql
     - VT_MYSQL_ROOT=$MYSQL_ROOT/usr
+    # Enable parallel compilation e.g. for gRPC.
+    # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
+    - MAKEFLAGS=-j4
     # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
     - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
   matrix:
