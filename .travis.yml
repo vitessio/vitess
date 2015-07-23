@@ -36,6 +36,10 @@ env:
     - MAKEFLAGS=-j4
     # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
     - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
+    # Uncomment the next line to debug Python integration tests.
+    # NOTE: When -k is enabled, subsequent tests will fail because the test directory is not empty.
+    #       I.e. modify the Makefile to make sure that the test to be debugged is run first.
+    #- VT_TEST_FLAGS="-v -k"
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
@@ -59,3 +63,10 @@ script:
   - go run travis/log_gomaxprocs.go
   - |
       travis_retry /usr/bin/time -f "CPU: %P Memory: %M kB" make build $MAKE_TARGET
+after_failure:
+  # In case of errors, output log files to make it easier to debug the error.
+  # List all available files.
+  - ls -alR $HOME/gopath/vtdataroot
+  # Output *.log* and *.stderr files. (Uncomment VT_TEST_FLAGS above or tests will delete their logs.)
+  - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat
+      
