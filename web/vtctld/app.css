@@ -76,3 +76,7 @@ md-toolbar h1 {
   font-size: 1.5em;
   font-weight: 900;
 }
+
+textarea.code {
+  font-family: monospace;
+}

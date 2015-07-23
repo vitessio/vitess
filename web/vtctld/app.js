@@ -68,7 +68,10 @@ app.controller('AppCtrl', function($scope, $mdSidenav, $route, $location,
   $scope.routes = routes;
 
   $scope.refreshRoute = function() {
-    $route.current.locals.$scope.refreshData();
+    if ($route.current && $route.current.locals.$scope.refreshData)
+      $route.current.locals.$scope.refreshData();
+    else
+      $route.reload();
   };
 
   $scope.toggleNav = function() { $mdSidenav('left').toggle(); }
@@ -84,7 +87,4 @@ app.controller('AppCtrl', function($scope, $mdSidenav, $route, $location,
   $scope.navigate = function(path) {
     $location.path(path);
   };
-});
-
-app.controller('SchemaCtrl', function() {
 });

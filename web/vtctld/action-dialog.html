@@ -19,8 +19,9 @@
 </div>
 
 <md-content ng-if="result.$resolved" class="md-padding">
-<h2 ng-bind="result.Error === undefined || result.Error ? 'Action Failed' : 'Action Succeeded'"></h2>
-<p ng-bind="result.Output"></p>
+<h2 ng-if="result.Error">Action Failed</h2>
+<h2 ng-if="!result.Error && !result.Output">Action Succeeded</h2>
+<pre ng-bind="result.Output"></pre>
 </md-content>
 
 </md-dialog-content>

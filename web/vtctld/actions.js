@@ -51,7 +51,7 @@ app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
         keyspace: keyspace,
         shard: shard,
         action: action.name
-        }, ''); 
+        }, '');
       showResult(ev, action, result);
     });
   };
@@ -63,6 +63,12 @@ app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
         action: action.name
         }, '');
       showResult(ev, action, result);
+    });
+  };
+
+  svc.applyFunc = function(ev, action, func) {
+    confirm(ev, action, function() {
+      showResult(ev, action, func());
     });
   };
 
