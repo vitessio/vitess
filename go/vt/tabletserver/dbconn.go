@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -67,7 +68,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return nil, NewTabletErrorSql(ErrFatal, err)
 		}
 	}
-	panic("unreachable")
+	return nil, NewTabletErrorSql(ErrFatal, errors.New("dbconn.Exec: unreachable code"))
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {

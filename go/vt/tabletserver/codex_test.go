@@ -229,10 +229,8 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
-	func() {
-		defer testUtils.checkTabletErrorWithRecover(t, ErrFail, "mismatched lengths")
-		_, _, err = resolvePKValues(&tableInfo, pkValues, bindVariables)
-	}()
+	_, _, err = resolvePKValues(&tableInfo, pkValues, bindVariables)
+	testUtils.checkTabletError(t, err, ErrFail, "mismatched lengths")
 }
 
 func TestCodexResolveListArg(t *testing.T) {
@@ -322,11 +320,8 @@ func TestCodexResolveValueWithIncompatibleValueType(t *testing.T) {
 		[]string{"pk1", "pk2", "col1"},
 		[]string{"int", "varbinary(128)", "int"},
 		[]string{"pk1", "pk2"})
-
-	func() {
-		defer testUtils.checkTabletErrorWithRecover(t, ErrFail, "incompatible value type ")
-		resolveValue(tableInfo.GetPKColumn(0), 0, nil)
-	}()
+	_, err := resolveValue(tableInfo.GetPKColumn(0), 0, nil)
+	testUtils.checkTabletError(t, err, ErrFail, "incompatible value type ")
 }
 
 func TestCodexValidateRow(t *testing.T) {
@@ -352,46 +347,52 @@ func TestCodexGetLimit(t *testing.T) {
 		"uint":     uint(1),
 	}
 	testUtils := newTestUtils()
-	// to handle panics
-	func() {
-		defer testUtils.checkTabletErrorWithRecover(t, ErrFail, "missing bind var")
-		getLimit(":unknown", bv)
-	}()
-	if result := getLimit(int64(1), bv); result != 1 {
+	_, err := getLimit(":unknown", bv)
+	if err == nil {
+		t.Fatal("got nil, want error: missing bind var")
+	}
+	testUtils.checkTabletError(t, err, ErrFail, "missing bind var")
+	result, err := getLimit(int64(1), bv)
+	if err != nil {
+		t.Fatalf("getLimit(1, bv) = %v, want nil", err)
+	}
+	if result != 1 {
 		t.Fatalf("got %d, want 1", result)
 	}
-	if result := getLimit(nil, bv); result != -1 {
+	result, err = getLimit(nil, bv)
+	if err != nil {
+		t.Fatalf("getLimit(nil, bv) = %v, want nil", err)
+	}
+	if result != -1 {
 		t.Fatalf("got %d, want -1", result)
 	}
-	func() {
-		defer func() {
-			x := recover().(error).Error()
-			want := "error: negative limit -1"
-			if x != want {
-				t.Fatalf("got %s, want %s", x, want)
-			}
-		}()
-		getLimit(":negative", bv)
-	}()
-	if result := getLimit(":int64", bv); result != 1 {
+
+	result, err = getLimit(":negative", bv)
+	if err == nil {
+		t.Fatalf("getLimit(':negative', bv) should return an error")
+	}
+	want := "error: negative limit -1"
+	if err.Error() != want {
+		t.Fatalf("got %s, want %s", err.Error(), want)
+	}
+	if result, _ := getLimit(":int64", bv); result != 1 {
 		t.Fatalf("got %d, want 1", result)
 	}
-	if result := getLimit(":int32", bv); result != 1 {
+	if result, _ := getLimit(":int32", bv); result != 1 {
 		t.Fatalf("got %d, want 1", result)
 	}
-	if result := getLimit(":int", bv); result != 1 {
+	if result, _ := getLimit(":int", bv); result != 1 {
 		t.Fatalf("got %d, want 1", result)
 	}
-	func() {
-		defer func() {
-			x := recover().(error).Error()
-			want := "error: want number type for :uint, got uint"
-			if x != want {
-				t.Fatalf("got %s, want %s", x, want)
-			}
-		}()
-		getLimit(":uint", bv)
-	}()
+
+	_, err = getLimit(":uint", bv)
+	if err == nil {
+		t.Fatalf("getLimit(':uint', bv) should return an error")
+	}
+	want = "error: want number type for :uint, got uint"
+	if err.Error() != want {
+		t.Fatalf("got %s, want %s", err.Error(), want)
+	}
 }
 
 func TestCodexBuildKey(t *testing.T) {
