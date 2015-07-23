@@ -69,14 +69,16 @@ env:
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
   matrix:
+    # NOTE: Travis CI schedules up to 5 tests simultaneously.
+    #       All our tests should be spread out as evenly as possible across these 5 slots.
+    #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
-    - MAKE_TARGET=java_vtgate_client_test
-    - MAKE_TARGET=unit_test_goveralls
-    - MAKE_TARGET=small_integration_test
-    - MAKE_TARGET=medium_integration_test
-    - MAKE_TARGET=large_integration_test
-    - MAKE_TARGET=queryservice_test
-    - MAKE_TARGET=unit_test
+   - MAKE_TARGET="unit_test build java_vtgate_client_test queryservice_test"
+   - MAKE_TARGET="unit_test_race unit_test_goveralls"
+   # Run large tests first because they take longer than medium. This way, it evens out better when tests get queued.
+   - MAKE_TARGET="build large_integration_test ci_skip_integration_test"
+   - MAKE_TARGET="build small_integration_test"
+   - MAKE_TARGET="build medium_integration_test"
 before_install:
   - bash travis/download_mariadb.sh
   # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
@@ -106,4 +108,3 @@ after_failure:
   - ls -alR $HOME/gopath/vtdataroot
   # Output *.log* and *.stderr files. (Uncomment VT_TEST_FLAGS above or tests will delete their logs.)
   - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat
-      

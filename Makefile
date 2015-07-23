@@ -107,7 +107,10 @@ small_integration_test_files = \
 	binlog.py \
 	backup.py \
 	update_stream.py \
-	custom_sharding.py
+	custom_sharding.py \
+	initial_sharding_bytes.py \
+	initial_sharding.py \
+	zkocc_test.py
 
 medium_integration_test_files = \
 	tabletmanager.py \
@@ -119,18 +122,15 @@ medium_integration_test_files = \
 	automation_horizontal_resharding.py
 
 large_integration_test_files = \
-	vtgatev2_test.py \
-	zkocc_test.py
+	vtgatev2_test.py
 
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
 ci_skip_integration_test_files = \
-	initial_sharding_bytes.py \
-	initial_sharding.py \
 	resharding_bytes.py \
 	resharding.py
 
-# Run the following tests after making worker changes
+# Run the following tests after making worker changes.
 worker_integration_test_files = \
 	binlog.py \
 	resharding.py \
