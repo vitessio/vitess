@@ -1,4 +1,4 @@
-package com.youtube.vitess.vtgate.utils;
+package com.youtube.vitess.vtgate.hadoop.utils;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.gson.JsonDeserializationContext;

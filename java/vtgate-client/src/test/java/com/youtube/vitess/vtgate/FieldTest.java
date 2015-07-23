@@ -2,10 +2,7 @@ package com.youtube.vitess.vtgate;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
-
-import com.youtube.vitess.vtgate.Field.FieldType;
 import com.youtube.vitess.vtgate.Field.Flag;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;

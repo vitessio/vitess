@@ -12,7 +12,7 @@ import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
-import com.youtube.vitess.vtgate.utils.GsonAdapters;
+import com.youtube.vitess.vtgate.hadoop.utils.GsonAdapters;
 
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;

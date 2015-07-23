@@ -1,8 +1,6 @@
 package com.youtube.vitess.vtgate;
 
-import com.youtube.vitess.vtgate.Field.FieldType;
 import com.youtube.vitess.vtgate.Field.Flag;
-
 import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.Test;
