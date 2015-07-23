@@ -94,7 +94,11 @@ script:
       return_value=1
       for target in $MAKE_TARGET; do
         echo "Running: make $target"
-        /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
+        if [[ $target != unit_test* ]]; then
+          # Retry integration tests up to three times, but not unit tests.
+          TRAVIS_RETRY_CMD="travis_retry"
+        fi
+        $TRAVIS_RETRY_CMD /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
         return_value=$?
         if [ $return_value -ne 0 ]; then
           echo "ERROR: make $target failed with code: $return_value. Please fix the problem and re-trigger the test."
