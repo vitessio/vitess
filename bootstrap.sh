@@ -93,22 +93,25 @@ fi
 ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
 go install launchpad.net/gozk/zookeeper
 
-go get -u github.com/golang/protobuf/proto
-go get -u golang.org/x/net/context
-go get -u golang.org/x/tools/cmd/goimports
-go get -u github.com/golang/glog
-go get -u github.com/golang/lint/golint
-go get -u github.com/tools/godep
-go get -u google.golang.org/grpc
-go get -u -a github.com/golang/protobuf/protoc-gen-go
+# Download third-party Go libraries.
+# (We use one go get command (and therefore one variable) for all repositories because this saves us several seconds of execution time.)
+repos="github.com/golang/glog \
+       github.com/golang/lint/golint \
+       github.com/golang/protobuf/proto \
+       github.com/golang/protobuf/protoc-gen-go \
+       github.com/tools/godep \
+       golang.org/x/net/context \
+       golang.org/x/tools/cmd/goimports \
+       google.golang.org/grpc \
+"
 
-# Packages for uploading code coverage to coveralls.io.
+# Packages for uploading code coverage to coveralls.io (used by Travis CI).
+repos+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
-# if Go is installed somewhere that requires root access. However, this tool
-# is optional, so we should hide any errors to avoid confusion.
-go get -u golang.org/x/tools/cmd/cover &> /dev/null
-go get -u github.com/modocache/gover
-go get -u github.com/mattn/goveralls
+# if Go is installed somewhere that requires root access.
+repos+=" golang.org/x/tools/cmd/cover"
+
+go get -u $repos
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
