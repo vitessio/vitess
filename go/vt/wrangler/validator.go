@@ -6,7 +6,7 @@ package wrangler
 
 import (
 	"fmt"
-	"strings"
+	"net"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -166,7 +166,9 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 func normalizeIP(ip string) string {
 	// Normalize loopback to avoid spurious validation errors.
-	if strings.HasPrefix(ip, "127.") {
+	if parsedIP := net.ParseIP(ip); parsedIP != nil && parsedIP.IsLoopback() {
+		// Note that this also maps IPv6 localhost to IPv4 localhost
+		// as GetSlaves() will return only IPv4 addresses.
 		return "127.0.0.1"
 	}
 	return ip
