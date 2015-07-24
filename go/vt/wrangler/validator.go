@@ -5,11 +5,11 @@
 package wrangler
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -33,8 +33,8 @@ func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error
 
 	var finalErr error
 	for err := range results {
-		finalErr = fmt.Errorf("some validation errors - see log")
-		log.Errorf("%v", err)
+		finalErr = errors.New("some validation errors - see log")
+		wr.Logger().Errorf("%v", err)
 	}
 	return finalErr
 }
