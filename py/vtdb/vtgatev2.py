@@ -320,8 +320,8 @@ class VTGateConnection(object):
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables_list)
-      raise convert_exception(e, str(self), sql_list, keyspace_ids,
-                              keyspace=keyspace, tablet_type=tablet_type)
+      raise convert_exception(e, str(self), sql_list, keyspace_ids_list,
+                              keyspace='', tablet_type=tablet_type)
     except:
       logging.exception('gorpc low-level error')
       raise
