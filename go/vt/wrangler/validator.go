@@ -5,11 +5,11 @@
 package wrangler
 
 import (
+	"errors"
 	"fmt"
-	"strings"
+	"net"
 	"sync"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
@@ -33,8 +33,8 @@ func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error
 
 	var finalErr error
 	for err := range results {
-		finalErr = fmt.Errorf("some validation errors - see log")
-		log.Errorf("%v", err)
+		finalErr = errors.New("some validation errors - see log")
+		wr.Logger().Errorf("%v", err)
 	}
 	return finalErr
 }
@@ -166,7 +166,9 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 func normalizeIP(ip string) string {
 	// Normalize loopback to avoid spurious validation errors.
-	if strings.HasPrefix(ip, "127.") {
+	if parsedIP := net.ParseIP(ip); parsedIP != nil && parsedIP.IsLoopback() {
+		// Note that this also maps IPv6 localhost to IPv4 localhost
+		// as GetSlaves() will return only IPv4 addresses.
 		return "127.0.0.1"
 	}
 	return ip
@@ -210,7 +212,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		}
 
 		if !slaveIPMap[normalizeIP(tablet.IPAddr)] {
-			results <- fmt.Errorf("slave %v not replicating: %v %q", tablet.Alias, tablet.IPAddr, slaveList)
+			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", tablet.Alias, tablet.IPAddr, slaveList)
 		}
 	}
 }
@@ -222,7 +224,7 @@ func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[topo.TabletAl
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo); err != nil {
-				results <- fmt.Errorf("Ping(%v) failed: %v %v", tabletAlias, err, tabletInfo.Hostname)
+				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
 	}

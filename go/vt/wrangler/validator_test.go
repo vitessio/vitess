@@ -13,6 +13,10 @@ func TestNormalizeIP(t *testing.T) {
 		"1.2.3.4":   "1.2.3.4",
 		"127.0.0.1": "127.0.0.1",
 		"127.0.1.1": "127.0.0.1",
+		// IPv6 must be mapped to IPv4.
+		"::1": "127.0.0.1",
+		// An unparseable IP should be returned as is.
+		"127.": "127.",
 	}
 	for input, want := range table {
 		if got := normalizeIP(input); got != want {
