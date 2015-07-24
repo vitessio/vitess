@@ -508,9 +508,9 @@ class TestReparent(unittest.TestCase):
     logging.debug('New master position: %s', str(new_pos))
     # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
     changeMasterCmds = mysql_flavor().change_master_commands(
-                            "localhost",
-                            tablet_62044.mysql_port,
-                            new_pos)
+        'localhost',
+        tablet_62044.mysql_port,
+        new_pos)
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
