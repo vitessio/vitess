@@ -453,7 +453,6 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
     """Shuts down MySQL on the destination masters (in addition to the base setup)"""
     logging.debug("Starting base setup for MysqlDownDuringWorkerCopy")
     super(TestMysqlDownDuringWorkerCopy, self).setUp()
-    self.copy_schema_to_destination_shards()
 
     logging.debug("Starting MysqlDownDuringWorkerCopy-specific setup")
     utils.wait_procs([shard_0_master.shutdown_mysql(),
