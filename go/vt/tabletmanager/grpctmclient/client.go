@@ -350,7 +350,11 @@ func (client *Client) MasterPosition(ctx context.Context, tablet *topo.TabletInf
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 // StopSlave is part of the tmclient.TabletManagerClient interface
@@ -372,13 +376,17 @@ func (client *Client) StopSlaveMinimum(ctx context.Context, tablet *topo.TabletI
 	}
 	defer cc.Close()
 	response, err := c.StopSlaveMinimum(ctx, &pb.StopSlaveMinimumRequest{
-		Position:    myproto.ReplicationPositionToProto(minPos),
+		Position:    myproto.EncodeReplicationPosition(minPos),
 		WaitTimeout: int64(waitTime),
 	})
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 // StartSlave is part of the tmclient.TabletManagerClient interface
@@ -472,7 +480,11 @@ func (client *Client) RunBlpUntil(ctx context.Context, tablet *topo.TabletInfo, 
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), nil
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 //
@@ -501,7 +513,11 @@ func (client *Client) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
@@ -515,7 +531,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.
 		TimeCreatedNs:       timeCreatedNS,
 		ActionName:          actionName,
 		MasterAlias:         topo.TabletAliasToProto(masterAlias),
-		ReplicationPosition: myproto.ReplicationPositionToProto(pos),
+		ReplicationPosition: myproto.EncodeReplicationPosition(pos),
 	})
 	return err
 }
@@ -529,7 +545,7 @@ func (client *Client) InitSlave(ctx context.Context, tablet *topo.TabletInfo, pa
 	defer cc.Close()
 	_, err = c.InitSlave(ctx, &pb.InitSlaveRequest{
 		Parent:              topo.TabletAliasToProto(parent),
-		ReplicationPosition: myproto.ReplicationPositionToProto(replicationPosition),
+		ReplicationPosition: myproto.EncodeReplicationPosition(replicationPosition),
 		TimeCreatedNs:       timeCreatedNS,
 	})
 	return err
@@ -546,7 +562,11 @@ func (client *Client) DemoteMaster(ctx context.Context, tablet *topo.TabletInfo)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 // PromoteSlaveWhenCaughtUp is part of the tmclient.TabletManagerClient interface
@@ -557,12 +577,16 @@ func (client *Client) PromoteSlaveWhenCaughtUp(ctx context.Context, tablet *topo
 	}
 	defer cc.Close()
 	response, err := c.PromoteSlaveWhenCaughtUp(ctx, &pb.PromoteSlaveWhenCaughtUpRequest{
-		Position: myproto.ReplicationPositionToProto(pos),
+		Position: myproto.EncodeReplicationPosition(pos),
 	})
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 // SlaveWasPromoted is part of the tmclient.TabletManagerClient interface
@@ -629,7 +653,11 @@ func (client *Client) PromoteSlave(ctx context.Context, tablet *topo.TabletInfo)
 	if err != nil {
 		return myproto.ReplicationPosition{}, err
 	}
-	return myproto.ProtoToReplicationPosition(response.Position), err
+	position, err := myproto.DecodeReplicationPosition(response.Position)
+	if err != nil {
+		return myproto.ReplicationPosition{}, err
+	}
+	return position, err
 }
 
 //

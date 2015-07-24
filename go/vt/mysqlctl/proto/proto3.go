@@ -11,85 +11,11 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// ReplicationPositionToProto translates a ReplicationPosition to
-// proto, or panics
-func ReplicationPositionToProto(rp ReplicationPosition) *pb.Position {
-	switch gtid := rp.GTIDSet.(type) {
-	case MariadbGTID:
-		return &pb.Position{
-			MariadbGtid: &pb.MariadbGtid{
-				Domain:   gtid.Domain,
-				Server:   gtid.Server,
-				Sequence: gtid.Sequence,
-			},
-		}
-	case Mysql56GTIDSet:
-		result := &pb.Position{
-			MysqlGtidSet: &pb.MysqlGtidSet{},
-		}
-		for k, v := range gtid {
-			s := &pb.MysqlGtidSet_MysqlUuidSet{
-				Interval: make([]*pb.MysqlGtidSet_MysqlInterval, len(v)),
-			}
-			s.Uuid = make([]byte, len(k))
-			for i, b := range k {
-				s.Uuid[i] = b
-			}
-			for i, in := range v {
-				s.Interval[i] = &pb.MysqlGtidSet_MysqlInterval{
-					First: uint64(in.start),
-					Last:  uint64(in.end),
-				}
-			}
-			result.MysqlGtidSet.UuidSet = append(result.MysqlGtidSet.UuidSet, s)
-		}
-		return result
-	default:
-		panic(fmt.Errorf("can't convert ReplicationPosition to proto: %#v", rp))
-	}
-}
-
-// ProtoToReplicationPosition translates a proto ReplicationPosition, or panics
-func ProtoToReplicationPosition(rp *pb.Position) ReplicationPosition {
-	if rp.MariadbGtid != nil {
-		return ReplicationPosition{
-			GTIDSet: MariadbGTID{
-				Domain:   rp.MariadbGtid.Domain,
-				Server:   rp.MariadbGtid.Server,
-				Sequence: rp.MariadbGtid.Sequence,
-			},
-		}
-	}
-	if rp.MysqlGtidSet != nil {
-		m := Mysql56GTIDSet(make(map[SID][]interval))
-		for _, s := range rp.MysqlGtidSet.UuidSet {
-			if len(s.Uuid) != 16 {
-				panic(fmt.Errorf("invalid MysqlGtidSet Uuid length: %v", len(s.Uuid)))
-			}
-			var sid SID
-			for i, b := range s.Uuid {
-				sid[i] = b
-			}
-			ins := make([]interval, len(s.Interval))
-			for i, in := range s.Interval {
-				ins[i].start = int64(in.First)
-				ins[i].end = int64(in.Last)
-			}
-			m[sid] = ins
-		}
-		return ReplicationPosition{
-			GTIDSet: m,
-		}
-	}
-
-	panic(fmt.Errorf("can't convert ReplicationPosition from proto: %#v", rp))
-}
-
 // ReplicationStatusToProto translates a ReplicationStatus to
 // proto, or panics
 func ReplicationStatusToProto(r ReplicationStatus) *pb.Status {
 	return &pb.Status{
-		Position:            ReplicationPositionToProto(r.Position),
+		Position:            EncodeReplicationPosition(r.Position),
 		SlaveIoRunning:      r.SlaveIORunning,
 		SlaveSqlRunning:     r.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(r.SecondsBehindMaster),
@@ -101,8 +27,12 @@ func ReplicationStatusToProto(r ReplicationStatus) *pb.Status {
 
 // ProtoToReplicationStatus translates a proto ReplicationStatus, or panics
 func ProtoToReplicationStatus(r *pb.Status) ReplicationStatus {
+	pos, err := DecodeReplicationPosition(r.Position)
+	if err != nil {
+		panic(fmt.Errorf("cannot decode Position: %v", err))
+	}
 	return ReplicationStatus{
-		Position:            ProtoToReplicationPosition(r.Position),
+		Position:            pos,
 		SlaveIORunning:      r.SlaveIoRunning,
 		SlaveSQLRunning:     r.SlaveSqlRunning,
 		SecondsBehindMaster: uint(r.SecondsBehindMaster),

@@ -5,6 +5,8 @@
 package proto
 
 import (
+	"fmt"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 
@@ -115,15 +117,19 @@ func ProtoToBinlogTransaction(bt *pb.BinlogTransaction) *BinlogTransaction {
 func BlpPositionToProto(b *BlpPosition) *pbt.BlpPosition {
 	return &pbt.BlpPosition{
 		Uid:      b.Uid,
-		Position: myproto.ReplicationPositionToProto(b.Position),
+		Position: myproto.EncodeReplicationPosition(b.Position),
 	}
 }
 
 // ProtoToBlpPosition converts a proto to a BlpPosition
 func ProtoToBlpPosition(b *pbt.BlpPosition) *BlpPosition {
+	pos, err := myproto.DecodeReplicationPosition(b.Position)
+	if err != nil {
+		panic(fmt.Errorf("cannot decode position: %v", err))
+	}
 	return &BlpPosition{
 		Uid:      b.Uid,
-		Position: myproto.ProtoToReplicationPosition(b.Position),
+		Position: pos,
 	}
 }
 

@@ -232,7 +232,7 @@ func (s *server) MasterPosition(ctx context.Context, request *pb.MasterPositionR
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionMasterPosition, request, response, func() error {
 		position, err := s.agent.MasterPosition(ctx)
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
@@ -250,9 +250,13 @@ func (s *server) StopSlaveMinimum(ctx context.Context, request *pb.StopSlaveMini
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.StopSlaveMinimumResponse{}
 	return response, s.agent.RPCWrapLock(ctx, actionnode.TabletActionStopSlaveMinimum, request, response, true, func() error {
-		position, err := s.agent.StopSlaveMinimum(ctx, myproto.ProtoToReplicationPosition(request.Position), time.Duration(request.WaitTimeout))
+		position, err := myproto.DecodeReplicationPosition(request.Position)
+		if err != nil {
+			return err
+		}
+		position, err = s.agent.StopSlaveMinimum(ctx, position, time.Duration(request.WaitTimeout))
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
@@ -324,7 +328,7 @@ func (s *server) RunBlpUntil(ctx context.Context, request *pb.RunBlpUntilRequest
 	return response, s.agent.RPCWrapLock(ctx, actionnode.TabletActionRunBLPUntil, request, response, true, func() error {
 		position, err := s.agent.RunBlpUntil(ctx, blproto.ProtoToBlpPositionList(request.BlpPositions), time.Duration(request.WaitTimeout))
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(*position)
+			response.Position = myproto.EncodeReplicationPosition(*position)
 		}
 		return err
 	})
@@ -348,7 +352,7 @@ func (s *server) InitMaster(ctx context.Context, request *pb.InitMasterRequest) 
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionInitMaster, request, response, true, func() error {
 		position, err := s.agent.InitMaster(ctx)
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
@@ -358,7 +362,11 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *pb.Popula
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.PopulateReparentJournalResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionPopulateReparentJournal, request, response, func() error {
-		return s.agent.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, topo.ProtoToTabletAlias(request.MasterAlias), myproto.ProtoToReplicationPosition(request.ReplicationPosition))
+		position, err := myproto.DecodeReplicationPosition(request.ReplicationPosition)
+		if err != nil {
+			return err
+		}
+		return s.agent.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, topo.ProtoToTabletAlias(request.MasterAlias), position)
 	})
 }
 
@@ -366,7 +374,11 @@ func (s *server) InitSlave(ctx context.Context, request *pb.InitSlaveRequest) (*
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.InitSlaveResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionInitSlave, request, response, true, func() error {
-		return s.agent.InitSlave(ctx, topo.ProtoToTabletAlias(request.Parent), myproto.ProtoToReplicationPosition(request.ReplicationPosition), request.TimeCreatedNs)
+		position, err := myproto.DecodeReplicationPosition(request.ReplicationPosition)
+		if err != nil {
+			return err
+		}
+		return s.agent.InitSlave(ctx, topo.ProtoToTabletAlias(request.Parent), position, request.TimeCreatedNs)
 	})
 }
 
@@ -376,7 +388,7 @@ func (s *server) DemoteMaster(ctx context.Context, request *pb.DemoteMasterReque
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionDemoteMaster, request, response, true, func() error {
 		position, err := s.agent.DemoteMaster(ctx)
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
@@ -386,9 +398,13 @@ func (s *server) PromoteSlaveWhenCaughtUp(ctx context.Context, request *pb.Promo
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.PromoteSlaveWhenCaughtUpResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlaveWhenCaughtUp, request, response, true, func() error {
-		position, err := s.agent.PromoteSlaveWhenCaughtUp(ctx, myproto.ProtoToReplicationPosition(request.Position))
+		position, err := myproto.DecodeReplicationPosition(request.Position)
+		if err != nil {
+			return err
+		}
+		position, err = s.agent.PromoteSlaveWhenCaughtUp(ctx, position)
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
@@ -438,7 +454,7 @@ func (s *server) PromoteSlave(ctx context.Context, request *pb.PromoteSlaveReque
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionPromoteSlave, request, response, true, func() error {
 		position, err := s.agent.PromoteSlave(ctx)
 		if err == nil {
-			response.Position = myproto.ReplicationPositionToProto(position)
+			response.Position = myproto.EncodeReplicationPosition(position)
 		}
 		return err
 	})
