@@ -48,7 +48,9 @@ func init() {
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency (in [0, 1]), if rowcache is enabled, this value determines how often a row retrieved from the rowcache is spot-checked against MySQL.")
 	flag.BoolVar(&qsConfig.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
+	// tableacl related configurations.
 	flag.BoolVar(&qsConfig.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
+	flag.StringVar(&qsConfig.TableAclExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableAclExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.BoolVar(&qsConfig.EnablePublishStats, "queryserver-config-enable-publish-stats", DefaultQsConfig.EnablePublishStats, "set this flag to true makes queryservice publish monitoring stats")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file, vttablet launches a memcached if rowcache is enabled. This config specifies the location of the memcache binary.")
@@ -123,6 +125,7 @@ type Config struct {
 	StatsPrefix        string
 	DebugURLPrefix     string
 	PoolNamePrefix     string
+	TableAclExemptACL  string
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -156,6 +159,7 @@ var DefaultQsConfig = Config{
 	StatsPrefix:        "",
 	DebugURLPrefix:     "/debug",
 	PoolNamePrefix:     "",
+	TableAclExemptACL:  "",
 }
 
 var qsConfig Config

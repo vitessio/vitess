@@ -64,6 +64,7 @@ type QueryEngine struct {
 	streamBufferSize sync2.AtomicInt64
 	strictTableAcl   bool
 	enableAutoCommit bool
+	exemptACL        string
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -165,6 +166,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		qe.strictMode.Set(1)
 	}
 	qe.strictTableAcl = config.StrictTableAcl
+	qe.exemptACL = config.TableAclExemptACL
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.maxDMLRows = sync2.AtomicInt64(config.MaxDMLRows)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)

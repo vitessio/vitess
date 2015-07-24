@@ -207,7 +207,10 @@ func (qre *QueryExecutor) checkPermissions() error {
 	case QR_FAIL_RETRY:
 		return NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc)
 	}
-
+	// a superuser that exempts from table ACL checking
+	if qre.qe.exemptACL == username {
+		return nil
+	}
 	// Perform table ACL check if it is enabled
 	if qre.plan.Authorized != nil && !qre.plan.Authorized.IsMember(username) {
 		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
