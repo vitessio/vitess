@@ -31,7 +31,6 @@ func TestInitTablet(t *testing.T) {
 
 	// start with idle, and a tablet record that doesn't exist
 	port := 1234
-	securePort := 2345
 	gRPCPort := 3456
 	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	agent := &ActionAgent{
@@ -49,7 +48,7 @@ func TestInitTablet(t *testing.T) {
 	}
 	*initTabletType = "idle"
 	*tabletHostname = "localhost"
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("NewTestActionAgent(idle) failed: %v", err)
 	}
 	ti, err := ts.GetTablet(ctx, tabletAlias)
@@ -65,17 +64,13 @@ func TestInitTablet(t *testing.T) {
 	if ti.Portmap["vt"] != port {
 		t.Errorf("wrong port for tablet: %v", ti.Portmap["vt"])
 	}
-	if ti.Portmap["vts"] != securePort {
-		t.Errorf("wrong secure port for tablet: %v", ti.Portmap["vts"])
-	}
 	if ti.Portmap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.Portmap["grpc"])
 	}
 
 	// try again now that the node exists
 	port = 3456
-	securePort = 4567
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("NewTestActionAgent(idle again) failed: %v", err)
 	}
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -84,9 +79,6 @@ func TestInitTablet(t *testing.T) {
 	}
 	if ti.Portmap["vt"] != port {
 		t.Errorf("wrong port for tablet: %v", ti.Portmap["vt"])
-	}
-	if ti.Portmap["vts"] != securePort {
-		t.Errorf("wrong secure port for tablet: %v", ti.Portmap["vts"])
 	}
 	if ti.Portmap["grpc"] != gRPCPort {
 		t.Errorf("wrong gRPC port for tablet: %v", ti.Portmap["grpc"])
@@ -97,7 +89,7 @@ func TestInitTablet(t *testing.T) {
 	*initTabletType = "replica"
 	*initKeyspace = "test_keyspace"
 	*initShard = "-80"
-	if err := agent.InitTablet(port, securePort, gRPCPort); err == nil || !strings.Contains(err.Error(), "InitTablet failed because existing tablet keyspace and shard / differ from the provided ones test_keyspace/-80") {
+	if err := agent.InitTablet(port, gRPCPort); err == nil || !strings.Contains(err.Error(), "InitTablet failed because existing tablet keyspace and shard / differ from the provided ones test_keyspace/-80") {
 		t.Fatalf("InitTablet(type over idle) didn't fail correctly: %v", err)
 	}
 
@@ -108,7 +100,7 @@ func TestInitTablet(t *testing.T) {
 		Uid:  2,
 	}
 	agent.TabletAlias = tabletAlias
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type) failed: %v", err)
 	}
 	si, err := ts.GetShard(ctx, "test_keyspace", "-80")
@@ -129,7 +121,7 @@ func TestInitTablet(t *testing.T) {
 	// try to init again, this time with health check on
 	*initTabletType = ""
 	*targetTabletType = "replica"
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -149,7 +141,7 @@ func TestInitTablet(t *testing.T) {
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
 	ti, err = ts.GetTablet(ctx, tabletAlias)
@@ -166,7 +158,7 @@ func TestInitTablet(t *testing.T) {
 	*targetTabletType = ""
 	*initDbNameOverride = "DBNAME"
 	initTags.Set("aaa:bbb")
-	if err := agent.InitTablet(port, securePort, gRPCPort); err != nil {
+	if err := agent.InitTablet(port, gRPCPort); err != nil {
 		t.Fatalf("InitTablet(type, healthcheck) failed: %v", err)
 	}
 	ti, err = ts.GetTablet(ctx, tabletAlias)

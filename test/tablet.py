@@ -355,7 +355,7 @@ class Tablet(object):
 
   def _start_prog(self, binary, port=None, auth=False, memcache=False,
                   wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
-                  schema_override=None, cert=None, key=None, ca_cert=None,
+                  schema_override=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
                   extra_args=None, extra_env=None):
@@ -391,13 +391,6 @@ class Tablet(object):
       args.extend(['-table-acl-config', table_acl_config])
       args.extend(['-queryserver-config-strict-table-acl'])
 
-    if cert:
-      self.secure_port = environment.reserve_ports(1)
-      args.extend(['-secure-port', '%s' % self.secure_port,
-                   '-cert', cert,
-                   '-key', key])
-      if ca_cert:
-        args.extend(['-ca_cert', ca_cert])
     if protocols_flavor().service_map():
       args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if self.grpc_enabled():
@@ -434,7 +427,7 @@ class Tablet(object):
 
   def start_vttablet(self, port=None, auth=False, memcache=False,
                      wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
-                     schema_override=None, cert=None, key=None, ca_cert=None,
+                     schema_override=None,
                      repl_extra_flags={}, table_acl_config=None,
                      lameduck_period=None, security_policy=None,
                      target_tablet_type=None, full_mycnf_args=False,
@@ -525,7 +518,6 @@ class Tablet(object):
                             filecustomrules=filecustomrules,
                             zkcustomrules=zkcustomrules,
                             schema_override=schema_override,
-                            cert=cert, key=key, ca_cert=ca_cert,
                             repl_extra_flags=repl_extra_flags,
                             table_acl_config=table_acl_config,
                             lameduck_period=lameduck_period, extra_args=args,
@@ -533,7 +525,7 @@ class Tablet(object):
 
   def start_vtocc(self, port=None, auth=False, memcache=False,
                   wait_for_state='SERVING', filecustomrules=None,
-                  schema_override=None, cert=None, key=None, ca_cert=None,
+                  schema_override=None,
                   repl_extra_flags={}, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
                   keyspace=None, shard=False,
@@ -559,7 +551,6 @@ class Tablet(object):
                             memcache=memcache, wait_for_state=wait_for_state,
                             filecustomrules=filecustomrules,
                             schema_override=schema_override,
-                            cert=cert, key=key, ca_cert=ca_cert,
                             repl_extra_flags=repl_extra_flags,
                             table_acl_config=table_acl_config,
                             lameduck_period=lameduck_period, extra_args=args,

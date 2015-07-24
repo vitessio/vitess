@@ -28,9 +28,6 @@ func Register(name string, rcvr interface{}) {
 	} else {
 		log.Infof("Not registering %v for SASL bsonrpc over vt port, enable it with bsonrpc-auth-vt-%v service_map parameter", name, name)
 	}
-
-	// register the other guys
-	secureRegister(name, rcvr)
 }
 
 // ServeRPC will deal with bson rpc serving

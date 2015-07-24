@@ -33,7 +33,6 @@ var topoReader *TopoReader
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.RegisterDefaultSecureFlags()
 	servenv.InitServiceMapForBsonRpcService("toporeader")
 	servenv.InitServiceMapForBsonRpcService("vtgateservice")
 }

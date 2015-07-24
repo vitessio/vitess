@@ -414,17 +414,13 @@ class VtGate(object):
   """VtGate object represents a vtgate process.
   """
 
-  def __init__(self, port=None, cert=None, key=None):
+  def __init__(self, port=None):
     """Creates the Vtgate instance and reserve the ports if necessary.
     """
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
     self.secure_port = None
-    if cert:
-      self.secure_port = environment.reserve_ports(1)
-      self.cert = cert
-      self.key = key
     self.proc = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
@@ -460,11 +456,6 @@ class VtGate(object):
       args.extend(['-auth-credentials',
                    os.path.join(environment.vttop, 'test', 'test_data',
                                 'authcredentials_test.json')])
-    if self.secure_port:
-      args.extend(['-secure-port', '%s' % self.secure_port,
-                   '-cert', self.cert,
-                   '-key', self.key])
-
     if extra_args:
       args.extend(extra_args)
 
