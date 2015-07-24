@@ -6,11 +6,6 @@ import warnings
 warnings.simplefilter('ignore')
 
 import logging
-import os
-import shutil
-import signal
-from subprocess import PIPE
-import time
 import unittest
 
 import environment
