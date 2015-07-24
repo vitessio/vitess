@@ -34,7 +34,7 @@ for shard in `seq 1 $num_shards`; do
       fi
 
       echo "Deleting pod for tablet $alias..."
-      $KUBECTL delete pod vttablet-$cell-$uid
+      $KUBECTL delete pod vttablet-$uid
     done
     let cell_index=cell_index+100000000
   done
