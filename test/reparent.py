@@ -6,11 +6,6 @@ import warnings
 warnings.simplefilter('ignore')
 
 import logging
-import os
-import shutil
-import signal
-from subprocess import PIPE
-import time
 import unittest
 
 import environment
@@ -175,10 +170,10 @@ class TestReparent(unittest.TestCase):
 
     # Perform a planned reparent operation, will try to contact
     # the current master and fail somewhat quickly
-    stdout, stderr = utils.run_vtctl(['-wait-time', '5s',
-                                      'PlannedReparentShard', 'test_keyspace/0',
-                                      tablet_62044.tablet_alias],
-                                     expect_fail=True)
+    _, stderr = utils.run_vtctl(['-wait-time', '5s',
+                                 'PlannedReparentShard', 'test_keyspace/0',
+                                 tablet_62044.tablet_alias],
+                                expect_fail=True)
     logging.debug('Failed PlannedReparentShard output:\n' + stderr)
     if 'DemoteMaster failed' not in stderr:
       self.fail(
@@ -186,9 +181,9 @@ class TestReparent(unittest.TestCase):
           stderr)
 
     # Should fail to connect and fail
-    stdout, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
-                                      tablet_62344.tablet_alias],
-                                     expect_fail=True)
+    _, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
+                                 tablet_62344.tablet_alias],
+                                expect_fail=True)
     logging.debug('Failed ScrapTablet output:\n' + stderr)
     if 'connection refused' not in stderr and protocols_flavor().rpc_timeout_message() not in stderr:
       self.fail("didn't find the right error strings in failed ScrapTablet: " +
@@ -508,9 +503,9 @@ class TestReparent(unittest.TestCase):
     logging.debug('New master position: %s', str(new_pos))
     # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
     changeMasterCmds = mysql_flavor().change_master_commands(
-                            "localhost",
-                            tablet_62044.mysql_port,
-                            new_pos)
+        'localhost',
+        tablet_62044.mysql_port,
+        new_pos)
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', ['RESET MASTER', 'RESET SLAVE'] +
@@ -611,10 +606,10 @@ class TestReparent(unittest.TestCase):
     utils.wait_procs([tablet_41983.shutdown_mysql()])
 
     # Perform a graceful reparent operation. It will fail as one tablet is down.
-    stdout, stderr = utils.run_vtctl(['PlannedReparentShard',
-                                      'test_keyspace/' + shard_id,
-                                      tablet_62044.tablet_alias],
-                                      expect_fail=True)
+    _, stderr = utils.run_vtctl(['PlannedReparentShard',
+                                 'test_keyspace/' + shard_id,
+                                 tablet_62044.tablet_alias],
+                                expect_fail=True)
     if 'TabletManager.SetMaster on test_nj-0000041983 error' not in stderr:
       self.fail(
           "didn't find the right error strings in failed PlannedReparentShard: " +
