@@ -212,7 +212,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		}
 
 		if !slaveIPMap[normalizeIP(tablet.IPAddr)] {
-			results <- fmt.Errorf("slave %v not replicating: %v %q", tablet.Alias, tablet.IPAddr, slaveList)
+			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", tablet.Alias, tablet.IPAddr, slaveList)
 		}
 	}
 }
@@ -224,7 +224,7 @@ func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[topo.TabletAl
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo); err != nil {
-				results <- fmt.Errorf("Ping(%v) failed: %v %v", tabletAlias, err, tabletInfo.Hostname)
+				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
 	}
