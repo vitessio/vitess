@@ -101,6 +101,7 @@ medium_integration_test_files = \
 	tabletmanager.py \
 	reparent.py \
 	vtdb_test.py \
+	client_test.py \
 	vtgate_utils_test.py \
 	rowcache_invalidator.py \
 	worker.py \
