@@ -241,20 +241,13 @@ func (m *Permissions) GetHostPermissions() []*HostPermission {
 
 // BlpPosition is a replication position for a given binlog player
 type BlpPosition struct {
-	Uid      uint32                    `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
-	Position *replicationdata.Position `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
+	Uid      uint32 `protobuf:"varint,1,opt,name=uid" json:"uid,omitempty"`
+	Position string `protobuf:"bytes,2,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *BlpPosition) Reset()         { *m = BlpPosition{} }
 func (m *BlpPosition) String() string { return proto.CompactTextString(m) }
 func (*BlpPosition) ProtoMessage()    {}
-
-func (m *BlpPosition) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type PingRequest struct {
 	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
@@ -625,19 +618,12 @@ func (m *MasterPositionRequest) String() string { return proto.CompactTextString
 func (*MasterPositionRequest) ProtoMessage()    {}
 
 type MasterPositionResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{} }
 func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
 func (*MasterPositionResponse) ProtoMessage()    {}
-
-func (m *MasterPositionResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type StopSlaveRequest struct {
 }
@@ -654,35 +640,21 @@ func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) 
 func (*StopSlaveResponse) ProtoMessage()    {}
 
 type StopSlaveMinimumRequest struct {
-	Position    *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
-	WaitTimeout int64                     `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
+	Position    string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	WaitTimeout int64  `protobuf:"varint,2,opt,name=wait_timeout" json:"wait_timeout,omitempty"`
 }
 
 func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
 func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumRequest) ProtoMessage()    {}
 
-func (m *StopSlaveMinimumRequest) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
-
 type StopSlaveMinimumResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
 func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumResponse) ProtoMessage()    {}
-
-func (m *StopSlaveMinimumResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type StartSlaveRequest struct {
 }
@@ -821,19 +793,12 @@ func (m *RunBlpUntilRequest) GetBlpPositions() []*BlpPosition {
 }
 
 type RunBlpUntilResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *RunBlpUntilResponse) Reset()         { *m = RunBlpUntilResponse{} }
 func (m *RunBlpUntilResponse) String() string { return proto.CompactTextString(m) }
 func (*RunBlpUntilResponse) ProtoMessage()    {}
-
-func (m *RunBlpUntilResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type ResetReplicationRequest struct {
 }
@@ -857,25 +822,18 @@ func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) 
 func (*InitMasterRequest) ProtoMessage()    {}
 
 type InitMasterResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
 func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*InitMasterResponse) ProtoMessage()    {}
 
-func (m *InitMasterResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
-
 type PopulateReparentJournalRequest struct {
-	TimeCreatedNs       int64                     `protobuf:"varint,1,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
-	ActionName          string                    `protobuf:"bytes,2,opt,name=action_name" json:"action_name,omitempty"`
-	MasterAlias         *topodata.TabletAlias     `protobuf:"bytes,3,opt,name=master_alias" json:"master_alias,omitempty"`
-	ReplicationPosition *replicationdata.Position `protobuf:"bytes,4,opt,name=replication_position" json:"replication_position,omitempty"`
+	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	ActionName          string                `protobuf:"bytes,2,opt,name=action_name" json:"action_name,omitempty"`
+	MasterAlias         *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias" json:"master_alias,omitempty"`
+	ReplicationPosition string                `protobuf:"bytes,4,opt,name=replication_position" json:"replication_position,omitempty"`
 }
 
 func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparentJournalRequest{} }
@@ -889,13 +847,6 @@ func (m *PopulateReparentJournalRequest) GetMasterAlias() *topodata.TabletAlias 
 	return nil
 }
 
-func (m *PopulateReparentJournalRequest) GetReplicationPosition() *replicationdata.Position {
-	if m != nil {
-		return m.ReplicationPosition
-	}
-	return nil
-}
-
 type PopulateReparentJournalResponse struct {
 }
 
@@ -904,9 +855,9 @@ func (m *PopulateReparentJournalResponse) String() string { return proto.Compact
 func (*PopulateReparentJournalResponse) ProtoMessage()    {}
 
 type InitSlaveRequest struct {
-	Parent              *topodata.TabletAlias     `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
-	ReplicationPosition *replicationdata.Position `protobuf:"bytes,2,opt,name=replication_position" json:"replication_position,omitempty"`
-	TimeCreatedNs       int64                     `protobuf:"varint,3,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
+	Parent              *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
+	ReplicationPosition string                `protobuf:"bytes,2,opt,name=replication_position" json:"replication_position,omitempty"`
+	TimeCreatedNs       int64                 `protobuf:"varint,3,opt,name=time_created_ns" json:"time_created_ns,omitempty"`
 }
 
 func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
@@ -916,13 +867,6 @@ func (*InitSlaveRequest) ProtoMessage()    {}
 func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
 	if m != nil {
 		return m.Parent
-	}
-	return nil
-}
-
-func (m *InitSlaveRequest) GetReplicationPosition() *replicationdata.Position {
-	if m != nil {
-		return m.ReplicationPosition
 	}
 	return nil
 }
@@ -942,49 +886,28 @@ func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m
 func (*DemoteMasterRequest) ProtoMessage()    {}
 
 type DemoteMasterResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
 func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
 func (*DemoteMasterResponse) ProtoMessage()    {}
 
-func (m *DemoteMasterResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
-
 type PromoteSlaveWhenCaughtUpRequest struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhenCaughtUpRequest{} }
 func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
 
-func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
-
 type PromoteSlaveWhenCaughtUpResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWhenCaughtUpResponse{} }
 func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
-
-func (m *PromoteSlaveWhenCaughtUpResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type SlaveWasPromotedRequest struct {
 }
@@ -1077,19 +1000,12 @@ func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m
 func (*PromoteSlaveRequest) ProtoMessage()    {}
 
 type PromoteSlaveResponse struct {
-	Position *replicationdata.Position `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
+	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
 
 func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
 func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
 func (*PromoteSlaveResponse) ProtoMessage()    {}
-
-func (m *PromoteSlaveResponse) GetPosition() *replicationdata.Position {
-	if m != nil {
-		return m.Position
-	}
-	return nil
-}
 
 type BackupRequest struct {
 	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`

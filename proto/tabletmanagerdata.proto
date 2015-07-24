@@ -81,7 +81,7 @@ message Permissions {
 // BlpPosition is a replication position for a given binlog player
 message BlpPosition {
   uint32 uid = 1;
-  replicationdata.Position position = 2;
+  string position = 2;
 }
 
 //
@@ -233,7 +233,7 @@ message MasterPositionRequest {
 }
 
 message MasterPositionResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message StopSlaveRequest {
@@ -243,12 +243,12 @@ message StopSlaveResponse {
 }
 
 message StopSlaveMinimumRequest {
-  replicationdata.Position position = 1;
+  string position = 1;
   int64 wait_timeout = 2;
 }
 
 message StopSlaveMinimumResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message StartSlaveRequest {
@@ -307,7 +307,7 @@ message RunBlpUntilRequest {
 }
 
 message RunBlpUntilResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message ResetReplicationRequest {
@@ -320,14 +320,14 @@ message InitMasterRequest {
 }
 
 message InitMasterResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message PopulateReparentJournalRequest {
   int64 time_created_ns = 1;
   string action_name = 2;
   topodata.TabletAlias master_alias = 3;
-  replicationdata.Position replication_position = 4;
+  string replication_position = 4;
 }
 
 message PopulateReparentJournalResponse {
@@ -335,7 +335,7 @@ message PopulateReparentJournalResponse {
 
 message InitSlaveRequest {
   topodata.TabletAlias parent = 1;
-  replicationdata.Position replication_position = 2;
+  string replication_position = 2;
   int64 time_created_ns = 3;
 }
 
@@ -346,15 +346,15 @@ message DemoteMasterRequest {
 }
 
 message DemoteMasterResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message PromoteSlaveWhenCaughtUpRequest {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message PromoteSlaveWhenCaughtUpResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 message SlaveWasPromotedRequest {
@@ -391,7 +391,7 @@ message PromoteSlaveRequest {
 }
 
 message PromoteSlaveResponse {
-  replicationdata.Position position = 1;
+  string position = 1;
 }
 
 // Backup / Restore related messages
