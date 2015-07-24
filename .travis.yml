@@ -22,8 +22,6 @@ addons:
     - libaio-dev
     # required by travis script below to measure CPU and memory usage
     - time
-    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
-    - python-dev
     # Optional dependency. Without a running syslog daemon, Vitess will keep complaining that it could not log events and spam the logs.
     - rsyslog
 # Cache directories of dependencies which are built by bootstrap.sh
@@ -46,8 +44,6 @@ cache:
   - $HOME/gopath/dist/vt-zookeeper-3.3.5/lib
   # Maven repository for Java dependencies.
   - $HOME/.m2
-  # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
-  - $HOME/.local/lib/python2.7/site-packages
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
@@ -59,8 +55,6 @@ env:
     # Enable parallel compilation e.g. for gRPC.
     # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
     - MAKEFLAGS=-j4
-    # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
-    - PYTHONPATH=$HOME/.local/lib/python2.7/site-packages
     # Uncomment the next line to debug Python integration tests.
     # NOTE: When -k is enabled, subsequent tests will fail because the test directory is not empty.
     #       I.e. modify the Makefile to make sure that the test to be debugged is run first.
@@ -81,8 +75,6 @@ env:
    - MAKE_TARGET="build medium_integration_test"
 before_install:
   - bash travis/download_mariadb.sh
-  # TODO(mberlin): Remove this when python-mysql is installable via the "apt" addon above.
-  - PATH=$PATH:$MYSQL_ROOT/usr/bin LDFLAGS="-L$MYSQL_ROOT/usr/lib" pip install --user mysql-python
 install:
   - bash -v bootstrap.sh
 script:
