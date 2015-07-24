@@ -158,7 +158,7 @@ class VtOCCConnection(object):
     return result
 
   @reconnect
-  def _execute_batch(self, sql_list, bind_variables_list):
+  def _execute_batch(self, sql_list, bind_variables_list, as_transaction):
     sane_sql_list = []
     sane_bind_vars_list = []
     for sql, bind_variables in zip(sql_list, bind_variables_list):
@@ -167,7 +167,7 @@ class VtOCCConnection(object):
       sane_bind_vars_list.append(sane_bind_vars)
 
     try:
-      result = self.conn._execute_batch(sane_sql_list, sane_bind_vars_list)
+      result = self.conn._execute_batch(sane_sql_list, sane_bind_vars_list, as_transaction)
     except dbexceptions.IntegrityError as e:
       vtdb_logger.get_logger().integrity_error(e)
       raise

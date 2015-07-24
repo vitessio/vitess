@@ -153,13 +153,13 @@ func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace 
 	return keyspace, nil, fmt.Errorf("keyrange %v does not exactly match shards", kr)
 }
 
-func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery) (*scatterBatchRequest, error) {
+func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery) *scatterBatchRequest {
 	requests := &scatterBatchRequest{
 		Length:   len(boundQueries),
 		Requests: make(map[string]*shardBatchRequest),
 	}
 	for i, boundQuery := range boundQueries {
-		for _, shard := range boundQuery.Shards {
+		for shard := range unique(boundQuery.Shards) {
 			key := boundQuery.Keyspace + ":" + shard
 			request := requests.Requests[key]
 			if request == nil {
@@ -176,5 +176,22 @@ func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery
 			request.ResultIndexes = append(request.ResultIndexes, i)
 		}
 	}
-	return requests, nil
+	return requests
+}
+
+func boundKeyspaceIdQueriesToBoundShardQueries(ctx context.Context, topoServ SrvTopoServer, cell string, tabletType topo.TabletType, idQueries []proto.BoundKeyspaceIdQuery) ([]proto.BoundShardQuery, error) {
+	shardQueries := make([]proto.BoundShardQuery, len(idQueries))
+	for i, idQuery := range idQueries {
+		keyspace, shards, err := mapKeyspaceIdsToShards(ctx, topoServ, cell, idQuery.Keyspace, tabletType, idQuery.KeyspaceIds)
+		if err != nil {
+			return nil, err
+		}
+		shardQueries[i] = proto.BoundShardQuery{
+			Sql:           idQuery.Sql,
+			BindVariables: idQuery.BindVariables,
+			Keyspace:      keyspace,
+			Shards:        shards,
+		}
+	}
+	return shardQueries, nil
 }

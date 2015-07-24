@@ -32,10 +32,7 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 			Keyspace:      KsTestUnshardedServedFrom,
 			Shards:        shards,
 		}}
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
-		if err != nil {
-			t.Error(err)
-		}
+		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
 		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topo.TYPE_RDONLY, false, nil)
 		if err != nil {
 			return nil, err

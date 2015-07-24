@@ -213,7 +213,7 @@ class TabletConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
-  def _execute_batch(self, sql_list, bind_variables_list):
+  def _execute_batch(self, sql_list, bind_variables_list, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -226,6 +226,7 @@ class TabletConnection(object):
     try:
       req = self._make_req()
       req['Queries'] = query_list
+      req['AsTransaction'] = as_transaction
       response = self.rpc_call_and_extract_error('SqlQuery.ExecuteBatch', req)
       for reply in response.reply['List']:
         fields = []

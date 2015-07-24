@@ -7,6 +7,7 @@ package vtgate
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -170,17 +171,101 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 				},
 			},
 		},
+		{
+			boundQueries: []proto.BoundShardQuery{
+				{
+					Sql:           "q1",
+					BindVariables: map[string]interface{}{"q1var": 1},
+					Keyspace:      "ks1",
+					Shards:        []string{"0", "0"},
+				},
+			},
+			requests: &scatterBatchRequest{
+				Length: 1,
+				Requests: map[string]*shardBatchRequest{
+					"ks1:0": &shardBatchRequest{
+						Queries: []tproto.BoundQuery{
+							{
+								Sql:           "q1",
+								BindVariables: map[string]interface{}{"q1var": 1},
+							},
+						},
+						Keyspace:      "ks1",
+						Shard:         "0",
+						ResultIndexes: []int{0},
+					},
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
-		if err != nil {
-			t.Error(err)
-		}
+		scatterRequest := boundShardQueriesToScatterBatchRequest(testCase.boundQueries)
 		if !reflect.DeepEqual(testCase.requests, scatterRequest) {
 			got, _ := json.Marshal(scatterRequest)
 			want, _ := json.Marshal(testCase.requests)
 			t.Errorf("Bound Query: %#v\nResponse:   %s\nExepecting: %s", testCase.boundQueries, got, want)
+		}
+	}
+}
+
+func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
+	ts := new(sandboxTopo)
+	kid10, err := key.HexKeyspaceId("10").Unhex()
+	if err != nil {
+		t.Error(err)
+	}
+	kid25, err := key.HexKeyspaceId("25").Unhex()
+	if err != nil {
+		t.Error(err)
+	}
+	var testCases = []struct {
+		idQueries    []proto.BoundKeyspaceIdQuery
+		shardQueries []proto.BoundShardQuery
+	}{
+		{
+			idQueries: []proto.BoundKeyspaceIdQuery{
+				{
+					Sql:           "q1",
+					BindVariables: map[string]interface{}{"q1var": 1},
+					Keyspace:      KsTestSharded,
+					KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
+				}, {
+					Sql:           "q2",
+					BindVariables: map[string]interface{}{"q2var": 2},
+					Keyspace:      KsTestSharded,
+					KeyspaceIds:   []key.KeyspaceId{kid25, kid25},
+				},
+			},
+			shardQueries: []proto.BoundShardQuery{
+				{
+					Sql:           "q1",
+					BindVariables: map[string]interface{}{"q1var": 1},
+					Keyspace:      KsTestSharded,
+					Shards:        []string{"-20", "20-40"},
+				}, {
+					Sql:           "q2",
+					BindVariables: map[string]interface{}{"q2var": 2},
+					Keyspace:      KsTestSharded,
+					Shards:        []string{"20-40"},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		shardQueries, err := boundKeyspaceIdQueriesToBoundShardQueries(context.Background(), ts, "", topo.TYPE_MASTER, testCase.idQueries)
+		if err != nil {
+			t.Error(err)
+		}
+		// Sort shards, because they're random otherwise.
+		for _, shardQuery := range shardQueries {
+			sort.Strings(shardQuery.Shards)
+		}
+		if !reflect.DeepEqual(testCase.shardQueries, shardQueries) {
+			got, _ := json.Marshal(shardQueries)
+			want, _ := json.Marshal(testCase.shardQueries)
+			t.Errorf("idQueries: %#v\nResponse:   %s\nExepecting: %s", testCase.idQueries, got, want)
 		}
 	}
 }

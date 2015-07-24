@@ -362,8 +362,6 @@ class TestVTGateFunctions(unittest.TestCase):
                  traceback.print_exc()))
 
   def test_batch_read(self):
-    # TODO(sougou): fix this.
-    return
     try:
       vtgate_conn = get_connection()
       count = 10
@@ -392,11 +390,9 @@ class TestVTGateFunctions(unittest.TestCase):
             {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
         cursor.commit()
       kid_list = [pack_kid(kid) for kid in kid_list]
-      cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
-                                  keyspace_ids=kid_list,
-                                  cursorclass=vtgate_cursor.BatchVTGateCursor)
-      cursor.execute("select * from vt_insert_test", {})
-      cursor.execute("select * from vt_a", {})
+      cursor = vtgate_conn.cursor('master', cursorclass=vtgate_cursor.BatchVTGateCursor)
+      cursor.execute("select * from vt_insert_test", {}, KEYSPACE_NAME, kid_list)
+      cursor.execute("select * from vt_a", {}, KEYSPACE_NAME, kid_list)
       cursor.flush()
       self.assertEqual(cursor.rowsets[0][1], count)
       self.assertEqual(cursor.rowsets[1][1], count)
@@ -405,31 +401,25 @@ class TestVTGateFunctions(unittest.TestCase):
                                                    traceback.print_exc()))
 
   def test_batch_write(self):
-    # TODO(sougou): fix this.
-    return
     try:
       vtgate_conn = get_connection()
-      count = 10
-      query_list = []
-      bind_vars_list = []
-      query_list.append("delete from vt_insert_test")
-      bind_vars_list.append({})
+      cursor = vtgate_conn.cursor('master', cursorclass=vtgate_cursor.BatchVTGateCursor)
       kid_list = shard_kid_map[shard_names[self.shard_index]]
+      all_ids = [pack_kid(kid) for kid in kid_list]
+      count = 10
+      cursor.execute("delete from vt_insert_test", None, KEYSPACE_NAME, all_ids)
       for x in xrange(count):
         keyspace_id = kid_list[x%len(kid_list)]
-        query_list.append("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)")
-        bind_vars_list.append({'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
-      query_list.append("delete from vt_a")
-      bind_vars_list.append({})
+        cursor.execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
+                       {'msg': 'test %s' % x, 'keyspace_id': keyspace_id},
+                       KEYSPACE_NAME, [pack_kid(keyspace_id)])
+      cursor.execute("delete from vt_a", None, KEYSPACE_NAME, all_ids)
       for x in xrange(count):
         keyspace_id = kid_list[x%len(kid_list)]
-        query_list.append("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)")
-        bind_vars_list.append({'eid': x, 'id': x, 'keyspace_id': keyspace_id})
-      vtgate_conn.begin()
-      vtgate_conn._execute_batch(
-          query_list, bind_vars_list,
-          KEYSPACE_NAME, 'master', keyspace_ids=[pack_kid(kid) for kid in kid_list])
-      vtgate_conn.commit()
+        cursor.execute("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)",
+                       {'eid': x, 'id': x, 'keyspace_id': keyspace_id},
+                       KEYSPACE_NAME, [pack_kid(keyspace_id)])
+      cursor.flush(True)
       results, rowcount, _, _ = vtgate_conn._execute(
           "select * from vt_insert_test", {},
           KEYSPACE_NAME, 'master',

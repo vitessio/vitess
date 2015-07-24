@@ -199,28 +199,32 @@ class BatchVTGateCursor(VTGateCursor):
   This only supports keyspace_ids right now since that is what
   the underlying vtgate server supports.
   """
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None,
-               writable=False):
+  def __init__(self, connection, tablet_type, writable=False):
     # rowset is [(results, rowcount, lastrowid, fields),]
     self.rowsets = None
     self.query_list = []
     self.bind_vars_list = []
-    VTGateCursor.__init__(self, connection, keyspace, tablet_type,
-                          keyspace_ids=keyspace_ids, writable=writable)
+    self.keyspace_list = []
+    self.keyspace_ids_list = []
+    VTGateCursor.__init__(self, connection, "", tablet_type, writable=writable)
 
-  def execute(self, sql, bind_variables=None):
+  def execute(self, sql, bind_variables, keyspace, keyspace_ids):
     self.query_list.append(sql)
     self.bind_vars_list.append(bind_variables)
+    self.keyspace_list.append(keyspace)
+    self.keyspace_ids_list.append(keyspace_ids)
 
-  def flush(self):
+  def flush(self, as_transaction=False):
     self.rowsets = self._conn._execute_batch(self.query_list,
                                               self.bind_vars_list,
-                                              self.keyspace,
+                                              self.keyspace_list,
+                                              self.keyspace_ids_list,
                                               self.tablet_type,
-                                              self.keyspace_ids,
-                                              not_in_transaction=(not self.is_writable()))
+                                              as_transaction)
     self.query_list = []
     self.bind_vars_list = []
+    self.keyspace_list = []
+    self.keyspace_ids_list = []
 
 
 class StreamVTGateCursor(VTGateCursor):

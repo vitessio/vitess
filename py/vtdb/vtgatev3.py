@@ -197,7 +197,7 @@ class VTGateConnection(object):
     return results, rowcount, lastrowid, fields
 
 
-  def _execute_batch(self, sql_list, bind_variables_list, tablet_type, not_in_transaction=False):
+  def _execute_batch(self, sql_list, bind_variables_list, tablet_type, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -211,7 +211,7 @@ class VTGateConnection(object):
       req = {
           'Queries': query_list,
           'TabletType': tablet_type,
-          'NotInTransaction': not_in_transaction,
+          'AsTransaction': as_transaction,
       }
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatch', req)

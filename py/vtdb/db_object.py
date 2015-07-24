@@ -138,9 +138,8 @@ def create_batch_cursor_from_cursor(original_cursor, writable=False):
     raise dbexceptions.ProgrammingError(
         "Original cursor should be of VTGateCursor type.")
   batch_cursor = vtgate_cursor.BatchVTGateCursor(
-      original_cursor._conn, original_cursor.keyspace,
+      original_cursor._conn,
       original_cursor.tablet_type,
-      keyspace_ids=original_cursor.keyspace_ids,
       writable=writable)
   return batch_cursor
 
@@ -193,80 +192,6 @@ def write_db_class_method(*pargs, **kwargs):
 def db_class_method(*pargs, **kwargs):
   """This function calls db_wrapper to create the appropriate cursor."""
   return classmethod(db_wrapper(*pargs, **kwargs))
-
-
-def execute_batch_read(cursor, query_list, bind_vars_list):
-  """Method for executing select queries in batch.
-
-  Args:
-    cursor: original cursor - that is converted to read-only BatchVTGateCursor.
-    query_list: query_list.
-    bind_vars_list: bind variables list.
-
-  Returns:
-    Result of the form [[q1row1, q1row2,...], [q2row1, ...],..]
-
-  Raises:
-   dbexceptions.ProgrammingError when dmls are issued to read batch cursor.
-  """
-  if not isinstance(cursor, vtgate_cursor.VTGateCursor):
-    raise dbexceptions.ProgrammingError(
-        "cursor is not of the type VTGateCursor.")
-  batch_cursor = create_batch_cursor_from_cursor(cursor)
-  for q, bv in zip(query_list, bind_vars_list):
-    if is_dml(q):
-      raise dbexceptions.ProgrammingError("Dml %s for read batch cursor." % q)
-    batch_cursor.execute(q, bv)
-
-  batch_cursor.flush()
-  rowsets = batch_cursor.rowsets
-  result = []
-  # rowset is of the type [(results, rowcount, lastrowid, fields),..]
-  for rowset in rowsets:
-    rowset_results = rowset[0]
-    fields = [f[0] for f in rowset[3]]
-    rows = []
-    for row in rowset_results:
-      rows.append(sql_builder.DBRow(fields, row))
-    result.append(rows)
-  return result
-
-
-def execute_batch_write(cursor, query_list, bind_vars_list):
-  """Method for executing dml queries in batch.
-
-  Args:
-    cursor: original cursor - that is converted to read-only BatchVTGateCursor.
-    query_list: query_list.
-    bind_vars_list: bind variables list.
-
-  Returns:
-    Result of the form [{'rowcount':rowcount, 'lastrowid':lastrowid}, ...]
-    since for dmls those two values are valuable.
-
-  Raises:
-    dbexceptions.ProgrammingError when non-dmls are issued to writable batch cursor.
-  """
-  if not isinstance(cursor, vtgate_cursor.VTGateCursor):
-    raise dbexceptions.ProgrammingError(
-        "cursor is not of the type VTGateCursor.")
-  batch_cursor = create_batch_cursor_from_cursor(cursor, writable=True)
-  if batch_cursor.is_writable() and len(batch_cursor.keyspace_ids) != 1:
-    raise dbexceptions.ProgrammingError(
-        "writable batch execute can also execute on one keyspace_id.")
-  for q, bv in zip(query_list, bind_vars_list):
-    if not is_dml(q):
-      raise dbexceptions.ProgrammingError("query %s is not a dml" % q)
-    batch_cursor.execute(q, bv)
-
-  batch_cursor.flush()
-
-  rowsets = batch_cursor.rowsets
-  result = []
-  # rowset is of the type [(results, rowcount, lastrowid, fields),..]
-  for rowset in rowsets:
-    result.append({'rowcount':rowset[1], 'lastrowid':rowset[2]})
-  return result
 
 
 class InvalidUtf8DbWrite(dbexceptions.Error):

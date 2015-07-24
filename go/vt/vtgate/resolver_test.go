@@ -98,8 +98,6 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 }
 
 func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
-	//TODO(sougou): Fix test
-	t.Skip()
 	testResolverGeneric(t, "TestResolverExecuteBatchKeyspaceIds", func() (*mproto.QueryResult, error) {
 		kid10, err := key.HexKeyspaceId("10").Unhex()
 		if err != nil {
@@ -117,7 +115,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 				KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
 			}},
 			TabletType:    topo.TYPE_MASTER,
-			AsTransaction: true,
+			AsTransaction: false,
 		}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(), query)
@@ -511,6 +509,51 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	_, err = res.ExecuteKeyspaceIds(context.Background(), query)
 	if err == nil {
 		t.Errorf("want %v, got nil", errStr)
+	}
+}
+
+func TestResolverExecBatchAsTransaction(t *testing.T) {
+	s := createSandbox(KsTestUnshardedServedFrom)
+	sbc := &sandboxConn{mustFailRetry: 20}
+	s.MapTestConn("0", sbc)
+
+	res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 2, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+
+	callcount := 0
+	buildBatchRequest := func() (*scatterBatchRequest, error) {
+		callcount++
+		queries := []proto.BoundShardQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      KsTestUnshardedServedFrom,
+			Shards:        []string{"0"},
+		}}
+		return boundShardQueriesToScatterBatchRequest(queries), nil
+	}
+
+	_, err := res.ExecuteBatch(context.Background(), topo.TYPE_MASTER, false, nil, buildBatchRequest)
+	if err == nil {
+		t.Errorf("want got, got none")
+	}
+	// Ensure scatter tried a re-resolve
+	if callcount != 2 {
+		t.Errorf("want 2, got %v", callcount)
+	}
+	if sbc.AsTransactionCount != 0 {
+		t.Errorf("want 0, got %v", sbc.AsTransactionCount)
+	}
+
+	callcount = 0
+	_, err = res.ExecuteBatch(context.Background(), topo.TYPE_MASTER, true, nil, buildBatchRequest)
+	if err == nil {
+		t.Errorf("want got, got none")
+	}
+	// Ensure scatter did not re-resolve
+	if callcount != 1 {
+		t.Errorf("want 1, got %v", callcount)
+	}
+	if sbc.AsTransactionCount != 1 {
+		t.Errorf("want 1, got %v", sbc.AsTransactionCount)
 	}
 }
 

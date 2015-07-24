@@ -413,8 +413,33 @@ class TestNocache(framework.TestCase):
   def test_batch(self):
     queries = ["select * from vtocc_a where id = :a", "select * from vtocc_b where id = :b"]
     bvars = [{"a":2}, {"b":2}]
-    results = self.env.conn._execute_batch(queries, bvars)
+    results = self.env.conn._execute_batch(queries, bvars, False)
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
+
+    # Not in transaction, as_transaction false
+    queries = [
+        "insert into vtocc_test (intval, floatval, charval, binval) values(4, null, null, null)",
+        "select * from vtocc_test where intval = 4",
+        "delete from vtocc_test where intval = 4",
+        ]
+    results = self.env.conn._execute_batch(queries, [{}, {}, {}], False)
+    self.assertEqual(results[1][0], [(4L, None, None, None)])
+
+    # In transaction, as_transaction false
+    self.env.conn.begin()
+    results = self.env.conn._execute_batch(queries, [{}, {}, {}], False)
+    self.assertEqual(results[1][0], [(4L, None, None, None)])
+    self.env.conn.commit()
+
+    # In transaction, as_transaction true
+    self.env.conn.begin()
+    with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*cannot start a new transaction.*'):
+      self.env.conn._execute_batch(queries, [{}, {}, {}], True)
+    self.env.conn.rollback()
+
+    # Not in transaction, as_transaction true
+    results = self.env.conn._execute_batch(queries, [{}, {}, {}], True)
+    self.assertEqual(results[1][0], [(4L, None, None, None)])
 
   def test_bind_in_select(self):
     bv = {'bv': 1}

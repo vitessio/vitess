@@ -46,10 +46,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 			Keyspace:      "TestScatterConnExecuteBatch",
 			Shards:        shards,
 		}}
-		scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
-		if err != nil {
-			t.Error(err)
-		}
+		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
 		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, "", false, nil)
 		if err != nil {
 			return nil, err

@@ -115,9 +115,10 @@ class BatchCursor(BaseCursor):
     self.query_list.append(sql)
     self.bind_vars_list.append(bind_variables)
 
-  def flush(self):
+  def flush(self, as_transaction=False):
     self.rowsets = self.connection._execute_batch(self.query_list,
-                                                  self.bind_vars_list)
+                                                  self.bind_vars_list,
+                                                  as_transaction)
     self.query_list = []
     self.bind_vars_list = []
 
