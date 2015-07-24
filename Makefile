@@ -56,7 +56,10 @@ unit_test_cover:
 	godep go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
 unit_test_race:
-	godep go test $(VT_GO_PARALLEL) -race ./go/...
+# There seems to be a bug which prevents go test -race from exiting with a non-zero code when a race is found.
+# The fix for the bug seems to be: https://go-review.googlesource.com/#/c/4371/
+# To work-around current (as of 7/2015) bugged go binaries, we enable "halt_on_error" which exits with a non-zero code on the first error.
+	GORACE=halt_on_error=1 godep go test $(VT_GO_PARALLEL) -race ./go/...
 
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
