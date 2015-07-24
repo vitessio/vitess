@@ -3,9 +3,10 @@
 GKE_CLUSTER_NAME=${GKE_CLUSTER_NAME:-'example'}
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-3}
+CELLS=${CELLS:-'test'}
 
 ./vtgate-down.sh
-SHARDS=$SHARDS TABLETS_PER_SHARD=$TABLETS_PER_SHARD ./vttablet-down.sh
+SHARDS=$SHARDS CELLS=$CELLS TABLETS_PER_SHARD=$TABLETS_PER_SHARD ./vttablet-down.sh
 ./vtctld-down.sh
 ./etcd-down.sh
 

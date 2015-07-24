@@ -15,7 +15,10 @@ source $script_root/env.sh
 
 replicas=${ETCD_REPLICAS:-3}
 
-for cell in 'global' 'test'; do
+CELLS=${CELLS:-'test'}
+cells=`echo $CELLS | tr ',' ' '`
+
+for cell in 'global' $cells; do
   # Generate a discovery token.
   echo "Generating discovery token for $cell cell..."
   discovery=$(curl -sL https://discovery.etcd.io/new?size=$replicas)

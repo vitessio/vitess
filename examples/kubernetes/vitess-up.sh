@@ -23,6 +23,10 @@ VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-benchmarking-template.yaml'
 VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-benchmarking-template.yaml'}
 VTGATE_COUNT=${VTGATE_COUNT:-0}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
+CELLS=${CELLS:-'test'}
+
+cells=`echo $CELLS | tr ',' ' '`
+num_cells=`echo $cells | wc -w`
 
 # Get region from zone (everything to last dash)
 gke_region=`echo $GKE_ZONE | sed "s/-[^-]*$//"`
@@ -81,7 +85,7 @@ fi
 export KUBECTL='kubectl'
 go get github.com/youtube/vitess/go/cmd/vtctlclient
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
-total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD))
+total_tablet_count=$(($num_shards*$TABLETS_PER_SHARD*$num_cells))
 vtgate_count=$VTGATE_COUNT
 if [ $vtgate_count -eq 0 ]; then
   vtgate_count=$(($total_tablet_count/4>3?$total_tablet_count/4:3))
@@ -94,14 +98,17 @@ echo "*  Shards: $SHARDS"
 echo "*  Tablets per shard: $TABLETS_PER_SHARD"
 echo "*  Rdonly per shard: $RDONLY_COUNT"
 echo "*  VTGate count: $vtgate_count"
+echo "*  Cells: $cells"
 echo "****************************"
 
-echo 'Running etcd-up.sh' && ./etcd-up.sh
+echo 'Running etcd-up.sh' && CELLS=$CELLS ./etcd-up.sh
 wait_for_running_tasks etcd-global 3
-wait_for_running_tasks etcd-test 3
+for cell in $cells; do
+  wait_for_running_tasks etcd-$cell 3
+done
 
 echo 'Running vtctld-up.sh' && ./vtctld-up.sh
-echo 'Running vttablet-up.sh' && ./vttablet-up.sh
+echo 'Running vttablet-up.sh' && CELLS=$CELLS ./vttablet-up.sh
 echo 'Running vtgate-up.sh' && ./vtgate-up.sh
 
 wait_for_running_tasks vtctld 1
@@ -118,7 +125,10 @@ kvtctl="$GOPATH/bin/vtctlclient -server $vtctl_server"
 echo Waiting for tablets to be visible in the topology
 counter=0
 while [ $counter -lt $MAX_VTTABLET_TOPO_WAIT_RETRIES ]; do
-  num_tablets=`$kvtctl ListAllTablets test | wc -l`
+  num_tablets=0
+  for cell in $cells; do
+    num_tablets=$(($num_tablets+`$kvtctl ListAllTablets $cell | wc -l`))
+  done
   echo -en "\r$num_tablets out of $total_tablet_count in topology..."
   if [ $num_tablets -eq $total_tablet_count ]
   then
@@ -141,7 +151,7 @@ if [ $split_shard_count -eq 1 ]; then
   split_shard_count=0
 fi
 
-echo -n Setting Keyspace Sharding Info... 
+echo -n Setting Keyspace Sharding Info...
 $kvtctl SetKeyspaceShardingInfo -force -split_shard_count $split_shard_count test_keyspace keyspace_id uint64
 echo Done
 echo -n Rebuilding Keyspace Graph...
@@ -150,7 +160,7 @@ echo Done
 echo -n Reparenting...
 shard_num=1
 for shard in $(echo $SHARDS | tr "," " "); do
-  $kvtctl InitShardMaster -force test_keyspace/$shard test-0000000${shard_num}00
+  $kvtctl InitShardMaster -force test_keyspace/$shard `echo $cells | awk '{print $1}'`-0100000${shard_num}00
   let shard_num=shard_num+1
 done
 echo Done
