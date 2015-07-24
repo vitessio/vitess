@@ -89,7 +89,7 @@ script:
   - source dev.env
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  - go test -v -race racy_test.go
+  - GORACE=halt_on_error=1 go test -v -race racy_test.go
   ## TODO(mberlin): Readd travis_retry when done testing.
   #- |
       #return_value=1
