@@ -81,16 +81,11 @@ script:
   - source dev.env
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  # TODO(mberlin): Readd travis_retry when done testing.
   - |
       return_value=1
       for target in $MAKE_TARGET; do
         echo "Running: make $target"
-        if [[ $target != unit_test* ]]; then
-          # Retry integration tests up to three times, but not unit tests.
-          TRAVIS_RETRY_CMD="travis_retry"
-        fi
-        $TRAVIS_RETRY_CMD /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
+        travis_retry /usr/bin/time -f "elapsed: %E CPU: %P Memory: %M kB" make $target
         return_value=$?
         if [ $return_value -ne 0 ]; then
           echo "ERROR: make $target failed with code: $return_value. Please fix the problem and re-trigger the test."
