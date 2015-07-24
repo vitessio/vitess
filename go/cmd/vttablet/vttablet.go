@@ -40,7 +40,6 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.RegisterDefaultSecureFlags()
 	servenv.InitServiceMapForBsonRpcService("tabletmanager")
 	servenv.InitServiceMapForBsonRpcService("queryservice")
 	servenv.InitServiceMapForBsonRpcService("updatestream")
@@ -106,7 +105,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = *servenv.GRPCPort
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, *servenv.SecurePort, gRPCPort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, gRPCPort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)
