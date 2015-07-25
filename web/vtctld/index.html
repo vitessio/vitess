@@ -47,6 +47,7 @@
     <h1 ng-bind="navTitle()"></h1>
 
     <md-button class="md-icon-button" ng-click="refreshRoute()" aria-label="Refresh">
+      <md-tooltip>Refresh</md-tooltip>
       <md-icon md-font-set="material-icons">refresh</md-icon>
     </md-button>
   </md-toolbar>
@@ -60,6 +61,7 @@
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.2/angular-animate.min.js"></script>
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.2/angular-aria.min.js"></script>
 <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.2/angular-resource.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.2/angular-messages.min.js"></script>
 <script src="https://ajax.googleapis.com/ajax/libs/angular_material/0.10.0/angular-material.min.js"></script>
 
 <script src="./config.js"></script>
@@ -70,6 +72,7 @@
 <script src="./topo.js"></script>
 <script src="./actions.js"></script>
 <script src="./schema.js"></script>
+<script src="./vschema/vschema.js"></script>
 
 </body>
 </html>

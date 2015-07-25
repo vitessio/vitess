@@ -4,13 +4,15 @@
   <md-tab label="Apply Schema">
   <md-content class="md-padding">
 
+  <form ng-submit="submitSchema($event)">
+
   <md-autocomplete md-floating-label="Keyspace" md-min-length="0"
       md-selected-item="schemaChange.Keyspace"
       md-selected-item-change=""
       md-search-text="keyspaceSelector.searchText"
       md-search-text-change=""
       md-items="item in keyspaceSelector.items()"
-      md-item-text="item">
+      md-item-text="item" md-autofocus="false">
     <md-item-template>
       <span md-highlight-text="keyspaceSelector.searchText">{{item}}</span>
     </md-item-template>
@@ -22,7 +24,10 @@
     <textarea ng-model="schemaChange.SQL" class="code"></textarea>
   </md-input-container>
 
-  <md-button class="md-primary" ng-click="submitSchema($event)">Submit</md-button>
+  <md-button type="submit" class="md-primary md-raised" style="margin-left:0"
+    ng-disabled="!schemaChange.Keyspace || !schemaChange.SQL">Submit</md-button>
+
+  </form>
 
   </md-content>
   </md-tab>

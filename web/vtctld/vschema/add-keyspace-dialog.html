@@ -1,0 +1,35 @@
+<md-dialog aria-label="Add Keyspace">
+
+<md-toolbar>
+  <div class="md-toolbar-tools">
+  <h2>Add Keyspace</h2>
+  <span flex></span>
+  <md-button class="md-icon-button" ng-click="hide()">
+    <md-icon md-font-set="material-icons">close</md-icon>
+  </md-button>
+  </div>
+</md-toolbar>
+
+<md-dialog-content layout="column">
+
+  <md-autocomplete md-floating-label="Keyspace" md-min-length="0"
+      md-selected-item=""
+      md-selected-item-change=""
+      md-search-text="keyspace"
+      md-search-text-change=""
+      md-items="item in keyspaceSelector(keyspace)"
+      md-item-text="item" md-autofocus="false">
+    <md-item-template>
+      <span md-highlight-text="keyspace">{{item}}</span>
+    </md-item-template>
+    <md-not-found>No keyspaces found matching "{{keyspace}}".</md-not-found>
+  </md-autocomplete>
+
+</md-dialog-content>
+
+<div class="md-actions" layout="row" layout-align="end center">
+  <md-button ng-click="hide()">Cancel</md-button>
+  <md-button ng-click="addKeyspace(keyspace); hide()" class="md-primary">Add</md-button>
+</div>
+
+</md-dialog>
