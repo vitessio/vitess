@@ -58,6 +58,30 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
   };
   $scope.refreshData();
 
+  $scope.submitVSchema = function(ev) {
+    var action = {
+      title: 'Save VSchema',
+      confirm: 'This will update the stored VSchema in topology.'
+    };
+    actions.applyFunc(ev, action, function() {
+      var result = {$resolved: false};
+
+      $scope.vschema.$save(
+        function() {
+          result.$resolved = true;
+          result.Output = 'VSchema Saved';
+          result.Error = false;
+        },
+        function(httpErr) {
+          result.$resolved = true;
+          result.Output = httpErr;
+          result.Error = true;
+        });
+
+      return result;
+    });
+  };
+
   $scope.hasKeys = function(obj) {
     if (obj) {
       for (var key in obj)
