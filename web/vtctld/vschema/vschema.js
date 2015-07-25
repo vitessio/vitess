@@ -74,7 +74,7 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
         },
         function(httpErr) {
           result.$resolved = true;
-          result.Output = httpErr;
+          result.Output = httpErr.data;
           result.Error = true;
         });
 
@@ -164,7 +164,7 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
       if (!keyspace.Classes)
         keyspace.Classes = {};
       if (!keyspace.Classes[classname])
-        keyspace.Classes[classname] = {};
+        keyspace.Classes[classname] = {ColVindexes: []};
     }
   };
 
