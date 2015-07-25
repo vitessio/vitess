@@ -2,13 +2,12 @@
 # coding: utf-8
 
 import itertools
-import logging
-import time
 import unittest
 
-import utils
-
 from vtdb import sql_builder
+from vtdb import vtrouting
+
+import utils
 
 
 class TestBuildValuesClause(unittest.TestCase):
@@ -25,7 +24,7 @@ class TestBuildValuesClause(unittest.TestCase):
     self.assertEqual(column_names, ['col_a'])
 
   def test_with_time_created_and_time_updated(self):
-
+    """Check time_created and time_updated are added as needed."""
     bind_vars = dict(time_created=1, col_b=2)
     sql, column_names = sql_builder.build_values_clause(
         columns=['time_created', 'col_b'], bind_vars=bind_vars)
@@ -45,6 +44,18 @@ class TestBuildValuesClause(unittest.TestCase):
     self.assertEqual(column_names, ['time_created', 'time_updated'])
     self.assertIn('time_created', bind_vars)
     self.assertIn('time_updated', bind_vars)
+
+  def test_with_insert_expr(self):
+    timestamp = sql_builder.RawSQLInsertExpr(
+        'FROM_UNIXTIME(%(col_b_1)s)', col_b_1=1234567890)
+    bind_vars = dict(col_a=1, col_b=timestamp)
+    sql, column_names = sql_builder.build_values_clause(
+        columns=['col_a', 'col_b'], bind_vars=bind_vars)
+    self.assertEqual(sql, '%(col_a)s, %(col_b)s')
+    self.assertEqual(column_names, ['col_a', 'col_b'])
+    self.assertEqual(sorted(bind_vars), ['col_a', 'col_b', 'col_b_1'])
+    self.assertEqual(bind_vars['col_a'], 1)
+    self.assertEqual(bind_vars['col_b_1'], 1234567890)
 
 
 class TestBuildIn(unittest.TestCase):
@@ -95,10 +106,11 @@ class TestBuildLimitClause(unittest.TestCase):
 
 class TestBuildOrderClause(unittest.TestCase):
 
+  def test_empty(self):
+    self.assertEqual(sql_builder.build_order_clause(None), '')
+
   def test_with_one_col(self):
-    self.assertEqual(
-        sql_builder.build_order_clause('col'),
-        'ORDER BY col')
+    self.assertEqual(sql_builder.build_order_clause('col'), 'ORDER BY col')
 
   def test_with_two_cols(self):
     self.assertEqual(
@@ -132,6 +144,12 @@ class TestBuildWhereClause(unittest.TestCase):
         bind_vars,
         dict(col_a_1=1, col_b_2=2, col_b_3=3, col_c_4=4, col_c_5=5))
 
+  def test_empty_iterable(self):
+    sql, bind_vars = sql_builder.build_where_clause(
+        column_value_pairs=[('col_a', [])])
+    self.assertEqual(sql, '1 = 0')
+    self.assertEqual(bind_vars, dict(col_a=[]))
+
   def test_two_expr_columns(self):
     col_a = sql_builder.GreaterThanValue(1)
     col_b = sql_builder.LessThanValue(2)
@@ -156,11 +174,16 @@ class TestColstr(unittest.TestCase):
         'COUNT(1), MIN(col_a)')
 
   def test_order_by_cols(self):
-    """Wasteful duplication of columns."""
+    """This currently prepends the ORDER BY columns."""
     self.assertEqual(
         sql_builder.colstr(
             select_columns=['col_a', 'col_b', 'col_c'],
-            order_by_cols=['col_b', 'col_c']),
+            order_by=['col_b', 'col_c']),
+        'col_b, col_c, col_a, col_b, col_c')
+    self.assertEqual(
+        sql_builder.colstr(
+            select_columns=['col_a', 'col_b', 'col_c'],
+            order_by=['col_b ASC', ('col_c', 'ASC')]),
         'col_b, col_c, col_a, col_b, col_c')
 
   def test_bind(self):
@@ -215,6 +238,34 @@ class TestDeleteByColumnsQuery(unittest.TestCase):
         dict(col_a_1=1, col_b_2=2, limit_row_count=5))
 
 
+class TestFlags(unittest.TestCase):
+  """Test sql_builder.Flag class."""
+
+  def test_overlap(self):
+    self.assertRaises(
+        ValueError, sql_builder.Flag, flags_present=0x3, flags_absent=0x5)
+
+  def test_repr(self):
+    self.assertEqual(
+        repr(sql_builder.Flag(flags_present=0x1, flags_absent=0x2)),
+        'Flag(flags_present=0x1, flags_absent=0x2)')
+
+  def test_or(self):
+    flags = sql_builder.Flag(flags_present=0x3, flags_absent=0x30)
+    flags |= sql_builder.Flag(flags_present=0x5, flags_absent=0x50)
+    self.assertEqual(flags.mask, 0x77)
+    self.assertEqual(flags.value, 0x7)
+
+  def test_eq(self):
+    flags1 = sql_builder.Flag(flags_present=0x3, flags_absent=0x30)
+    self.assertEqual(
+        flags1, sql_builder.Flag(flags_present=0x3, flags_absent=0x30))
+    self.assertNotEqual(
+        flags1, sql_builder.Flag(flags_present=0x30, flags_absent=0x3))
+    self.assertNotEqual(flags1, 'abcde')
+    self.assertNotEqual('abcde', flags1)
+
+
 class TestInsertQuery(unittest.TestCase):
   """Test sql_builder.insert_query."""
 
@@ -235,9 +286,7 @@ class TestSelectByColumnsQuery(unittest.TestCase):
         select_column_list=['col_a', sql_builder.Min('col_b')],
         table_name='my_table',
         column_value_pairs=[('col_a', [1, 2, 3])],
-        order_by='col_b ASC',
-        group_by='col_a',
-        limit=10)
+        order_by='col_b ASC', group_by='col_a', limit=10)
     self.assertEqual(
         sql,
         'SELECT col_a, MIN(col_b) FROM my_table '
@@ -247,6 +296,53 @@ class TestSelectByColumnsQuery(unittest.TestCase):
     self.assertEqual(
         bind_vars,
         dict(col_a_1=1, col_a_2=2, col_a_3=3, limit_row_count=10))
+
+  def test_vt_routing(self):
+    key_range = '80-C0'
+    routing_sql, routing_bind_vars = (
+        vtrouting._create_where_clause_for_keyrange(key_range))
+    vt_routing_info = vtrouting.VTRoutingInfo(
+        key_range, routing_sql, routing_bind_vars)
+    sql, bind_vars = sql_builder.select_by_columns_query(
+        select_column_list=['col_a', sql_builder.Min('col_b')],
+        table_name='my_table',
+        column_value_pairs=[('col_a', [1, 2, 3])],
+        vt_routing_info=vt_routing_info)
+    self.assertEqual(
+        sql,
+        'SELECT col_a, MIN(col_b) FROM my_table '
+        'WHERE col_a IN (%(col_a_1)s, %(col_a_2)s, %(col_a_3)s) '
+        'AND keyspace_id >= %(keyspace_id0)s '
+        'AND keyspace_id < %(keyspace_id1)s')
+    self.assertEqual(
+        bind_vars,
+        dict(col_a_1=1, col_a_2=2, col_a_3=3,
+             keyspace_id0=(0x80 << 56), keyspace_id1=(0xC0 << 56)))
+
+  def test_for_update_and_client_aggregate(self):
+    sql, bind_vars = sql_builder.select_by_columns_query(
+        select_column_list=['col_a', sql_builder.Min('col_b')],
+        table_name='my_table',
+        column_value_pairs=[('col_a', [1, 2, 3])],
+        order_by='col_b ASC', group_by='col_a', limit=10,
+        for_update=True, client_aggregate=True)
+    self.assertEqual(
+        sql,
+        'SELECT col_b, col_a, MIN(col_b) FROM my_table '
+        'WHERE col_a IN (%(col_a_1)s, %(col_a_2)s, %(col_a_3)s) '
+        'GROUP BY col_a '
+        'ORDER BY col_b ASC LIMIT %(limit_row_count)s FOR UPDATE')
+    self.assertEqual(
+        bind_vars,
+        dict(col_a_1=1, col_a_2=2, col_a_3=3, limit_row_count=10))
+
+  def test_no_where_clause(self):
+    sql, bind_vars = sql_builder.select_by_columns_query(
+        select_column_list=['col_a', sql_builder.Min('col_b')],
+        table_name='my_table', group_by='col_a')
+    self.assertEqual(
+        sql, 'SELECT col_a, MIN(col_b) FROM my_table GROUP BY col_a')
+    self.assertEqual(bind_vars, {})
 
 
 class TestSelectClause(unittest.TestCase):
@@ -270,21 +366,35 @@ class TestSmallMethods(unittest.TestCase):
   """Test some very simple sql_builder methods."""
 
   def test_build_aggregate_query(self):
-    query = sql_builder.build_aggregate_query(
-        table_name='my_table', id_column_name='row_id', sort_func='min')
+    sql, bind_vars = sql_builder.build_aggregate_query(
+        table_name='my_table', id_column_name='row_id', is_asc=False)
     self.assertEqual(
-        query, 'SELECT row_id FROM my_table ORDER BY row_id LIMIT 1')
-    query = sql_builder.build_aggregate_query(
-        table_name='my_table', id_column_name='row_id', sort_func='max')
+        sql,
+        'SELECT row_id FROM my_table ORDER BY row_id DESC '
+        'LIMIT %(limit_row_count)s')
+    self.assertEqual(bind_vars, dict(limit_row_count=1))
+    sql, bind_vars = sql_builder.build_aggregate_query(
+        table_name='my_table', id_column_name='row_id', is_asc=True)
     self.assertEqual(
-        query, 'SELECT row_id FROM my_table ORDER BY row_id DESC LIMIT 1')
+        sql,
+        'SELECT row_id FROM my_table ORDER BY row_id '
+        'LIMIT %(limit_row_count)s')
+    self.assertEqual(bind_vars, dict(limit_row_count=1))
 
   def test_build_count_query(self):
     query, bind_vars = sql_builder.build_count_query(
         table_name='my_table', column_value_pairs=[('col_a', 2)])
     self.assertEqual(
-        query, 'SELECT count(1) FROM my_table WHERE col_a = %(col_a_1)s')
+        query, 'SELECT COUNT(1) FROM my_table WHERE col_a = %(col_a_1)s')
     self.assertEqual(bind_vars, dict(col_a_1=2))
+
+  def test_build_group_clause(self):
+    self.assertEqual(sql_builder.build_group_clause(None), '')
+    self.assertEqual(
+        sql_builder.build_group_clause(['col_a']), 'GROUP BY col_a')
+    self.assertEqual(
+        sql_builder.build_group_clause(['col_a', 'col_b']),
+        'GROUP BY col_a, col_b')
 
   def test_choose_bind_name(self):
     counter = itertools.count(3)
@@ -301,13 +411,45 @@ class TestSmallMethods(unittest.TestCase):
         sql_builder.make_bind_list('col_a', [2, 4], itertools.count(3)),
         [('col_a_3', 2), ('col_a_4', 4)])
 
+  def test_make_flag(self):
+    flag = sql_builder.make_flag(flag_mask=0x3, value=True)
+    self.assertEqual(flag.mask, 0x3)
+    self.assertEqual(flag.value, 0x3)
+    flag = sql_builder.make_flag(flag_mask=0x3, value=False)
+    self.assertEqual(flag.mask, 0x3)
+    self.assertEqual(flag.value, 0x0)
+
+  def test_update_bind_vars(self):
+    bind_vars = dict(col_a_1=2)
+    sql_builder.update_bind_vars(bind_vars, dict(col_b_2=4))
+    self.assertEqual(bind_vars, dict(col_a_1=2, col_b_2=4))
+    self.assertRaises(
+        ValueError, sql_builder.update_bind_vars, bind_vars, dict(col_b_2=4))
+
 
 class TestSqlSelectExprs(unittest.TestCase):
-  """Test classes derived from sql_builder.BaseSQLUpdateExpr."""
+  """Test classes derived from sql_builder.BaseSQLSelectExpr."""
+
+  def test_base_sql_select_expr(self):
+    expr = sql_builder.BaseSQLSelectExpr()
+    self.assertRaises(NotImplementedError, expr.select_sql, alias=None)
+
+  def test_raw_sql_select_expr(self):
+    self.assertRaises(ValueError, sql_builder.RawSQLSelectExpr)
+
+    expr = sql_builder.RawSQLSelectExpr('UNIX_TIMESTAMP()')
+    self.assertEqual(expr.select_sql(alias=None), 'UNIX_TIMESTAMP()')
 
   def test_count(self):
     self.assertEqual(sql_builder.Count().select_sql(alias=None), 'COUNT(1)')
     self.assertEqual(sql_builder.Count().select_sql(alias='mt'), 'COUNT(1)')
+
+  def test_sql_aggregate(self):
+    self.assertRaises(ValueError, sql_builder.SQLAggregate, 'col_a')
+
+    expr = sql_builder.SQLAggregate('col_a', function_name='LENGTH')
+    self.assertEqual(expr.select_sql(alias=None), 'LENGTH(col_a)')
+    self.assertEqual(expr.select_sql(alias='mt'), 'LENGTH(mt.col_a)')
 
   def test_max(self):
     self.assertEqual(
@@ -328,8 +470,45 @@ class TestSqlSelectExprs(unittest.TestCase):
         sql_builder.Sum('col_a').select_sql(alias='mt'), 'SUM(mt.col_a)')
 
 
+class TestSQLInsertExprs(unittest.TestCase):
+  """Test classes derived from sql_builder.BaseSQLInsertExpr."""
+
+  def test_base_sql_insert_expr(self):
+    expr = sql_builder.BaseSQLInsertExpr()
+    self.assertRaises(NotImplementedError, expr.build_insert_sql)
+
+  def test_raw_sql_insert_expr(self):
+    expr = sql_builder.RawSQLInsertExpr('UNIX_TIMESTAMP()')
+    sql, bind_vars = expr.build_insert_sql()
+    self.assertEqual(sql, 'UNIX_TIMESTAMP()')
+    self.assertEqual(bind_vars, {})
+
+    sql, bind_vars = expr.build_update_sql('col_a')
+    self.assertEqual(sql, 'col_a = UNIX_TIMESTAMP()')
+    self.assertEqual(bind_vars, {})
+
+    self.assertRaises(ValueError, sql_builder.RawSQLInsertExpr)
+
+
 class TestSqlUpdateExprs(unittest.TestCase):
-  """Test classes derived from sql_builder.BaseSQLSelectExpr."""
+  """Test classes derived from sql_builder.BaseSQLUpdateExpr."""
+
+  def test_base_sql_update_expr(self):
+    expr = sql_builder.BaseSQLUpdateExpr()
+    self.assertRaises(NotImplementedError, expr.build_update_sql, 'col_a')
+
+  def test_raw_sql_update_expr(self):
+    expr = sql_builder.RawSQLUpdateExpr('UNIX_TIMESTAMP()')
+    sql, bind_vars = expr.build_update_sql('col_a')
+    self.assertEqual(sql, 'col_a = UNIX_TIMESTAMP()')
+    self.assertEqual(bind_vars, {})
+
+    expr = sql_builder.RawSQLUpdateExpr('POW(2, %(col_a_1)s', col_a_1=8)
+    sql, bind_vars = expr.build_update_sql('col_a')
+    self.assertEqual(sql, 'col_a = POW(2, %(col_a_1)s')
+    self.assertEqual(bind_vars, dict(col_a_1=8))
+
+    self.assertRaises(ValueError, sql_builder.RawSQLUpdateExpr)
 
   def test_mysql_function(self):
     unix_function = sql_builder.MySQLFunction('unix_timestamp()')
@@ -357,6 +536,118 @@ class TestSqlUpdateExprs(unittest.TestCase):
         'flags = (flags | %(update_flags_add)s) & ~%(update_flags_remove)s')
     self.assertEqual(
         bind_vars, dict(update_flags_add=0x1, update_flags_remove=0x2))
+
+
+class TestSqlWhereExprs(unittest.TestCase):
+  """Test classes derived from sql_builder.BaseSQLWhereExpr."""
+
+  def _check_build_where_sql(self, expr, expected_sql, expected_bind_vars):
+    sql, bind_vars = expr.build_where_sql('col_a', itertools.count(3))
+    self.assertEqual(sql, expected_sql)
+    self.assertEqual(bind_vars, expected_bind_vars)
+
+  def test_base_sql_where_expr(self):
+    expr = sql_builder.BaseSQLWhereExpr()
+    self.assertRaises(
+        NotImplementedError, expr.select_where_sql,
+        'col_a', itertools.count(3))
+
+  def test_null_safe_not_value(self):
+    self._check_build_where_sql(
+        sql_builder.NullSafeNotValue(5),
+        'NOT col_a <=> %(col_a_3)s', dict(col_a_3=5))
+
+  def test_not_value(self):
+    self._check_build_where_sql(
+        sql_builder.NotValue(5), 'col_a != %(col_a_3)s', dict(col_a_3=5))
+    self._check_build_where_sql(
+        sql_builder.NotValue(None), 'col_a IS NOT NULL', {})
+
+  def test_in_values(self):
+    self._check_build_where_sql(
+        sql_builder.InValues(2, 3, 5),
+        'col_a IN (%(col_a_3)s, %(col_a_4)s, %(col_a_5)s)',
+        dict(col_a_3=2, col_a_4=3, col_a_5=5))
+
+  def test_not_in_values(self):
+    self._check_build_where_sql(
+        sql_builder.NotInValues(2, 3, 5),
+        'col_a NOT IN (%(col_a_3)s, %(col_a_4)s, %(col_a_5)s)',
+        dict(col_a_3=2, col_a_4=3, col_a_5=5))
+
+  def test_in_values_or_null(self):
+    self._check_build_where_sql(
+        sql_builder.InValuesOrNull(2, 3, 5),
+        '(col_a IN (%(col_a_3)s, %(col_a_4)s, %(col_a_5)s) OR col_a IS NULL)',
+        dict(col_a_3=2, col_a_4=3, col_a_5=5))
+
+  def test_between_values(self):
+    self._check_build_where_sql(
+        sql_builder.BetweenValues(11, 20),
+        'col_a BETWEEN %(col_a_3)s AND %(col_a_4)s',
+        dict(col_a_3=11, col_a_4=20))
+
+  def test_or_values(self):
+    self.assertRaises(ValueError, sql_builder.OrValues, 7)
+    self._check_build_where_sql(
+        sql_builder.OrValues(sql_builder.BetweenValues(11, 20), 30),
+        '((col_a BETWEEN %(col_a_3)s AND %(col_a_4)s) OR '
+        '(col_a = %(col_a_5)s))',
+        dict(col_a_3=11, col_a_4=20, col_a_5=30))
+
+  def test_like_value(self):
+    self._check_build_where_sql(
+        sql_builder.LikeValue('FOO%'),
+        'col_a LIKE %(col_a_3)s', dict(col_a_3='FOO%'))
+
+  def test_greater_than_value(self):
+    self._check_build_where_sql(
+        sql_builder.GreaterThanValue(5),
+        'col_a > %(col_a_3)s', dict(col_a_3=5))
+
+  def test_greater_than_or_equal_to_value(self):
+    self._check_build_where_sql(
+        sql_builder.GreaterThanOrEqualToValue(5),
+        'col_a >= %(col_a_3)s', dict(col_a_3=5))
+
+  def test_less_than_value(self):
+    self._check_build_where_sql(
+        sql_builder.LessThanValue(5),
+        'col_a < %(col_a_3)s', dict(col_a_3=5))
+
+  def test_less_than_or_equal_to_value(self):
+    self._check_build_where_sql(
+        sql_builder.LessThanOrEqualToValue(5),
+        'col_a <= %(col_a_3)s', dict(col_a_3=5))
+
+  def test_modulo_equals(self):
+    self._check_build_where_sql(
+        sql_builder.ModuloEquals(modulus=5, value=3),
+        '(col_a %% %(modulus_3)s) = %(col_a_4)s',
+        dict(modulus_3=5, col_a_4=3))
+
+  def test_expression(self):
+    self._check_build_where_sql(
+        sql_builder.Expression('col_b', '<'), 'col_a < col_b', {})
+
+  def test_is_null_or_empty_string(self):
+    self._check_build_where_sql(
+        sql_builder.IsNullOrEmptyString(),
+        '(col_a IS NULL OR col_a = \'\')', {})
+
+  def test_is_null_value(self):
+    self._check_build_where_sql(
+        sql_builder.IsNullValue(), 'col_a IS NULL', {})
+
+  def test_is_not_null_value(self):
+    self._check_build_where_sql(
+        sql_builder.IsNotNullValue(), 'col_a IS NOT NULL', {})
+
+  def test_flag(self):
+    self._check_build_where_sql(
+        sql_builder.Flag(flags_present=0x1, flags_absent=0x2),
+        'col_a & %(col_a_mask_3)s = %(col_a_value_4)s',
+        dict(col_a_mask_3=3, col_a_value_4=1))
 
 
 class TestUpdateColumnsQuery(unittest.TestCase):
