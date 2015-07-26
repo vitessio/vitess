@@ -29,11 +29,12 @@ import (
 )
 
 var (
-	tabletPath     = flag.String("tablet-path", "", "tablet alias")
-	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
-	overridesFile  = flag.String("schema-override", "", "schema overrides file")
-	tableAclConfig = flag.String("table-acl-config", "", "path to table access checker config file")
-	lockTimeout    = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
+	enableRowcache        = flag.Bool("enable-rowcache", false, "enable rowcacche")
+	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
+	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
+	tabletPath            = flag.String("tablet-path", "", "tablet alias")
+	overridesFile         = flag.String("schema-override", "", "schema overrides file")
+	lockTimeout           = flag.Duration("lock_timeout", actionnode.DefaultLockTimeout, "lock time for wrangler/topo operations")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -87,6 +88,9 @@ func main() {
 	if *tableAclConfig != "" {
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 		tableacl.Init(*tableAclConfig)
+	} else if *enforceTableACLConfig {
+		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
+		exit.Return(1)
 	}
 
 	// creates and registers the query service
