@@ -426,7 +426,7 @@ def build_aggregate_query(table_name, id_column_name, is_asc=False):
   """Return query, bind_vars for a table-wide min or max query."""
   query, bind_vars = select_by_columns_query(
       select_column_list=[id_column_name], table_name=table_name,
-      order_by=(id_column_name if is_asc else '%s DESC' % id_column_name),
+      order_by=[(id_column_name, 'ASC' if is_asc else 'DESC')],
       limit=1)
   return query, bind_vars
 

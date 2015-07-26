@@ -472,6 +472,6 @@ class DBObjectBase(object):
 
     query = sql_builder.build_aggregate_query(class_.table_name,
                                               class_.id_column_name,
-                                              sort_func='max')
+                                              is_asc=True)
     cursor.execute(query, EmptyBindVariables)
     return cursor.fetch_aggregate_function(max)

@@ -377,7 +377,7 @@ class TestSmallMethods(unittest.TestCase):
         table_name='my_table', id_column_name='row_id', is_asc=True)
     self.assertEqual(
         sql,
-        'SELECT row_id FROM my_table ORDER BY row_id '
+        'SELECT row_id FROM my_table ORDER BY row_id ASC '
         'LIMIT %(limit_row_count)s')
     self.assertEqual(bind_vars, dict(limit_row_count=1))
 
