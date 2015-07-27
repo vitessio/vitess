@@ -7,6 +7,7 @@ import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
 
+import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.RecordReader;
@@ -17,7 +18,7 @@ import java.io.IOException;
 public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> {
   private VitessInputSplit split;
   private VtGate vtgate;
-  private VitessConf vtConf;
+  private VitessConf conf;
   private RowWritable rowWritable;
   private long rowsProcessed = 0;
   private Cursor cursor;
@@ -29,10 +30,11 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
   public void initialize(InputSplit split, TaskAttemptContext context) throws IOException,
       InterruptedException {
     this.split = (VitessInputSplit) split;
-    vtConf = new VitessConf(context.getConfiguration());
+    conf = new VitessConf(context.getConfiguration());
     try {
-      vtgate = VtGate.connect(vtConf.getHosts(), vtConf.getTimeoutMs());
-    } catch (ConnectionException e) {
+      Class<? extends RpcClientFactory> rpcFactoryClass = (Class<? extends RpcClientFactory>)Class.forName(conf.getRpcFactoryClass());
+      vtgate = VtGate.connect(conf.getHosts(), conf.getTimeoutMs(), rpcFactoryClass.newInstance());
+    } catch (ConnectionException|ClassNotFoundException|InstantiationException|IllegalAccessException e) {
       throw new RuntimeException(e);
     }
   }

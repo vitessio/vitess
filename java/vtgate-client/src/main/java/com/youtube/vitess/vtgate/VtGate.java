@@ -10,7 +10,6 @@ import com.youtube.vitess.vtgate.rpcclient.RpcClient;
 import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -18,7 +17,7 @@ import java.util.Random;
 /**
  * A single threaded VtGate client
  *
- * Usage:
+ * <p>Usage:
  *
  * <pre>
  *VtGate vtGate = VtGate.connect(addresses);
@@ -50,10 +49,10 @@ public class VtGate {
    * @param timeoutMs connection timeout in milliseconds, 0 for no timeout
    * @throws ConnectionException
    */
-  public static VtGate connect(String addresses, int timeoutMs) throws ConnectionException {
+  public static VtGate connect(String addresses, int timeoutMs, RpcClientFactory rpcFactory) throws ConnectionException {
     List<String> addressList = Arrays.asList(addresses.split(","));
     int index = new Random().nextInt(addressList.size());
-    RpcClient client = RpcClientFactory.get(addressList.get(index), timeoutMs);
+    RpcClient client = rpcFactory.create(addressList.get(index), timeoutMs);
     return new VtGate(client);
   }
 

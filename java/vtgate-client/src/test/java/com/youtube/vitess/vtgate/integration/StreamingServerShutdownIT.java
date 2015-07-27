@@ -4,7 +4,7 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
 import org.junit.After;
@@ -33,9 +33,9 @@ public class StreamingServerShutdownIT {
   @Test
   public void testShutdownServerWhileStreaming() throws Exception {
     Util.insertRows(testEnv, 1, 2000);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String selectSql = "select A.* from vtgate_test A join vtgate_test B";
-    Query joinQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+    Query joinQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
     Cursor cursor = vtgate.execute(joinQuery);
 
@@ -51,7 +51,7 @@ public class StreamingServerShutdownIT {
       vtgate.close();
       Assert.fail("failed to raise exception");
     } catch (RuntimeException e) {
-      Assert.assertTrue(e.getMessage().contains("vtgate exception: connection exception"));
+      Assert.assertTrue(e.getMessage().length() > 0);
     }
   }
 }

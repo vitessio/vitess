@@ -2,10 +2,8 @@ package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
-
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
-import com.youtube.vitess.vtgate.Exceptions.DatabaseException;
 import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
@@ -15,9 +13,8 @@ import com.youtube.vitess.vtgate.Row.Cell;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
-
 import org.apache.commons.codec.binary.Hex;
 import org.joda.time.DateTime;
 import org.junit.AfterClass;
@@ -28,12 +25,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -64,11 +60,11 @@ public class VtGateIT {
    */
   @Test
   public void testExecuteKeyspaceIds() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
 
     // Ensure empty table
     String selectSql = "select * from vtgate_test";
-    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master").setKeyspaceIds(
+    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").setKeyspaceIds(
         testEnv.getAllKeyspaceIds()).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(CursorImpl.class, cursor.getClass());
@@ -80,7 +76,7 @@ public class VtGateIT {
     // Insert 10 rows
     Util.insertRows(testEnv, 1000, 10);
 
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(10, cursor.getRowsAffected());
     Assert.assertEquals(0, cursor.getLastRowId());
@@ -89,7 +85,7 @@ public class VtGateIT {
     // Fetch all rows from the first shard
     KeyspaceId firstKid = testEnv.getAllKeyspaceIds().get(0);
     Query query =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyspaceId(firstKid).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyspaceId(firstKid).build();
     cursor = vtgate.execute(query);
 
     // Check field types and values
@@ -118,15 +114,15 @@ public class VtGateIT {
    */
   @Test
   public void testQueryRouting() throws Exception {
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, 10);
     }
 
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String allRowsSql = "select * from vtgate_test";
 
-    for (String shardName : testEnv.shardKidMap.keySet()) {
-      Query shardRows = new QueryBuilder(allRowsSql, testEnv.keyspace, "master").setKeyspaceIds(
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
+      Query shardRows = new QueryBuilder(allRowsSql, testEnv.getKeyspace(), "master").setKeyspaceIds(
           testEnv.getKeyspaceIds(shardName)).build();
       Cursor cursor = vtgate.execute(shardRows);
       Assert.assertEquals(10, cursor.getRowsAffected());
@@ -138,8 +134,8 @@ public class VtGateIT {
   public void testDateFieldTypes() throws Exception {
     DateTime dt = DateTime.now().minusDays(2).withMillisOfSecond(0);
     Util.insertRows(testEnv, 10, 1, dt);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    Query allRowsQuery = new QueryBuilder("select * from vtgate_test", testEnv.keyspace, "master")
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
+    Query allRowsQuery = new QueryBuilder("select * from vtgate_test", testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
     Row row = vtgate.execute(allRowsQuery).next();
     Assert.assertTrue(dt.equals(row.getDateTime("timestamp_col")));
@@ -159,10 +155,10 @@ public class VtGateIT {
   public void testAllKeyRange() throws Exception {
     // Insert 10 rows across the shards
     Util.insertRows(testEnv, 1000, 10);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
     Query allRowsQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     // Verify all rows returned
     Assert.assertEquals(10, cursor.getRowsAffected());
@@ -176,33 +172,33 @@ public class VtGateIT {
   public void testKeyRangeReads() throws Exception {
     int rowsPerShard = 10;
     // insert rows in each shard using ExecuteKeyspaceIds
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
     }
 
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
 
     // Check ALL KeyRange query returns rows from both shards
     Query allRangeQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(allRangeQuery);
     Assert.assertEquals(rowsPerShard * 2, cursor.getRowsAffected());
 
     // Check KeyRange query limited to a single shard returns 10 rows each
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       List<KeyspaceId> shardKids = testEnv.getKeyspaceIds(shardName);
       KeyspaceId minKid = Collections.min(shardKids);
       KeyspaceId maxKid = Collections.max(shardKids);
       KeyRange shardKeyRange = new KeyRange(minKid, maxKid);
-      Query shardRangeQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(
+      Query shardRangeQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(
           shardKeyRange).build();
       cursor = vtgate.execute(shardRangeQuery);
       Assert.assertEquals(rowsPerShard, cursor.getRowsAffected());
     }
 
     // Now make a cross-shard KeyRange and check all rows are returned
-    Iterator<String> shardNameIter = testEnv.shardKidMap.keySet().iterator();
+    Iterator<String> shardNameIter = testEnv.getShardKidMap().keySet().iterator();
     KeyspaceId kidShard1 = testEnv.getKeyspaceIds(shardNameIter.next()).get(2);
     KeyspaceId kidShard2 = testEnv.getKeyspaceIds(shardNameIter.next()).get(2);
     KeyRange crossShardKeyrange;
@@ -211,7 +207,7 @@ public class VtGateIT {
     } else {
       crossShardKeyrange = new KeyRange(kidShard2, kidShard1);
     }
-    Query shardRangeQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(
+    Query shardRangeQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(
         crossShardKeyrange).build();
     cursor = vtgate.execute(shardRangeQuery);
     Assert.assertEquals(rowsPerShard * 2, cursor.getRowsAffected());
@@ -224,20 +220,20 @@ public class VtGateIT {
   @Test
   public void testKeyRangeWrites() throws Exception {
     Random random = new Random();
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     String sql = "insert into vtgate_test " + "(id, name, keyspace_id, age) "
         + "values (:id, :name, :keyspace_id, :age)";
     int count = 20;
     // Insert 20 rows per shard
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
       KeyspaceId minKid = Collections.min(kids);
       KeyspaceId maxKid = Collections.max(kids);
       KeyRange kr = new KeyRange(minKid, maxKid);
       for (int i = 0; i < count; i++) {
         KeyspaceId kid = kids.get(i % kids.size());
-        Query query = new QueryBuilder(sql, testEnv.keyspace, "master")
+        Query query = new QueryBuilder(sql, testEnv.getKeyspace(), "master")
             .addBindVar(
                 BindVariable.forULong("id", UnsignedLong.valueOf("" + Math.abs(random.nextInt()))))
             .addBindVar(BindVariable.forString("name", ("name_" + i)))
@@ -252,16 +248,16 @@ public class VtGateIT {
     vtgate.close();
 
     // Check 40 rows exist in total
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
-    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master").setKeyspaceIds(
+    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").setKeyspaceIds(
         testEnv.getAllKeyspaceIds()).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(count * 2, cursor.getRowsAffected());
 
     // Check 20 rows exist per shard
-    for (String shardName : testEnv.shardKidMap.keySet()) {
-      Query shardRows = new QueryBuilder(selectSql, testEnv.keyspace, "master").setKeyspaceIds(
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
+      Query shardRows = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").setKeyspaceIds(
           testEnv.getKeyspaceIds(shardName)).build();
       cursor = vtgate.execute(shardRows);
       Assert.assertEquals(count, cursor.getRowsAffected());
@@ -274,11 +270,11 @@ public class VtGateIT {
   @Test
   public void testSplitQuery() throws Exception {
     // Insert 20 rows per shard
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, 20);
     }
     Util.waitForTablet("rdonly", 40, 3, testEnv);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     Map<Query, Long> queries =
         vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", 1, "");
     vtgate.close();
@@ -298,7 +294,7 @@ public class VtGateIT {
     }
 
     // Verify the keyrange queries in splits cover the entire keyspace
-    Assert.assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap.keySet()));
+    Assert.assertTrue(shardsInSplits.containsAll(testEnv.getShardKidMap().keySet()));
   }
 
   @Test
@@ -313,7 +309,7 @@ public class VtGateIT {
             "select id, keyspace_id from vtgate_test where id >= 19",
             "select id, keyspace_id from vtgate_test where id >= 19");
     Util.waitForTablet("rdonly", rowCount, 3, testEnv);
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     int splitCount = 6;
     Map<Query, Long> queries =
         vtgate.splitQuery("test_keyspace", "select id,keyspace_id from vtgate_test", splitCount, "");
@@ -336,13 +332,13 @@ public class VtGateIT {
     }
 
     // Verify the keyrange queries in splits cover the entire keyspace
-    Assert.assertTrue(shardsInSplits.containsAll(testEnv.shardKidMap.keySet()));
+    Assert.assertTrue(shardsInSplits.containsAll(testEnv.getShardKidMap().keySet()));
     Assert.assertTrue(expectedSqls.size() == 0);
   }
 
   @Test
   public void testSplitQueryInvalidTable() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     try {
       vtgate.splitQuery("test_keyspace", "select id from invalid_table", 1, "");
       Assert.fail("failed to raise connection exception");
@@ -364,7 +360,7 @@ public class VtGateIT {
         Lists.newArrayList("9767889778372766922", "9742070682920810358", "10296850775085416642"));
     shardKidMap.put("-80",
         Lists.newArrayList("527875958493693904", "626750931627689502", "345387386794260318"));
-    TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
+    TestEnv env = Util.getTestEnv(shardKidMap, "test_keyspace");
     env.addTablet("rdonly", 1);
     return env;
   }

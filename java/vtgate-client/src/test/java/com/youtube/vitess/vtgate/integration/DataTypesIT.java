@@ -10,7 +10,7 @@ import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
 import org.joda.time.DateTime;
@@ -48,14 +48,14 @@ public class DataTypesIT {
   public void testInts() throws Exception {
     String createTable =
         "create table vtocc_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, year year, primary key(tiny)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
 
     String insertSql =
         "insert into vtocc_ints values(:tiny, :tinyu, :small, :smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)";
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forInt("tiny", -128))
         .addBindVar(BindVariable.forInt("tinyu", 255))
         .addBindVar(BindVariable.forInt("small", -32768))
@@ -75,7 +75,7 @@ public class DataTypesIT {
 
     String selectSql = "select * from vtocc_ints where tiny = -128";
     Query selectQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(selectQuery);
     Assert.assertEquals(1, cursor.getRowsAffected());
     Row row = cursor.next();
@@ -97,13 +97,13 @@ public class DataTypesIT {
   public void testFracts() throws Exception {
     String createTable =
         "create table vtocc_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
 
     String insertSql = "insert into vtocc_fracts values(:id, :deci, :num, :f, :d)";
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forInt("id", 1))
         .addBindVar(BindVariable.forDouble("deci", 1.99))
         .addBindVar(BindVariable.forDouble("num", 2.99))
@@ -117,7 +117,7 @@ public class DataTypesIT {
 
     String selectSql = "select * from vtocc_fracts where id = 1";
     Query selectQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(selectQuery);
     Assert.assertEquals(1, cursor.getRowsAffected());
     Row row = cursor.next();
@@ -133,14 +133,14 @@ public class DataTypesIT {
   public void testStrings() throws Exception {
     String createTable =
         "create table vtocc_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
 
     String insertSql =
         "insert into vtocc_strings values(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)";
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forBytes("vb", "a".getBytes()))
         .addBindVar(BindVariable.forBytes("c", "b".getBytes()))
         .addBindVar(BindVariable.forBytes("vc", "c".getBytes()))
@@ -159,7 +159,7 @@ public class DataTypesIT {
 
     String selectSql = "select * from vtocc_strings where vb = 'a'";
     Query selectQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(selectQuery);
     Assert.assertEquals(1, cursor.getRowsAffected());
     Row row = cursor.next();
@@ -182,13 +182,13 @@ public class DataTypesIT {
   public void testMisc() throws Exception {
     String createTable =
         "create table vtocc_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id)) comment 'vtocc_nocache'\n" + "";
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     vtgate.begin();
     vtgate.execute(getQuery(createTable));
     vtgate.commit();
 
     String insertSql = "insert into vtocc_misc values(:id, :b, :d, :dt, :t)";
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forInt("id", 1))
         .addBindVar(BindVariable.forBytes("b", ByteBuffer.allocate(1).put((byte) 1).array()))
         .addBindVar(BindVariable.forDate("d", DateTime.parse("2012-01-01")))
@@ -203,7 +203,7 @@ public class DataTypesIT {
 
     String selectSql = "select * from vtocc_misc where id = 1";
     Query selectQuery =
-        new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+        new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
     Cursor cursor = vtgate.execute(selectQuery);
     Assert.assertEquals(1, cursor.getRowsAffected());
     Row row = cursor.next();
@@ -218,7 +218,7 @@ public class DataTypesIT {
   }
 
   private Query getQuery(String sql) {
-    return new QueryBuilder(sql, testEnv.keyspace, "master").addKeyRange(KeyRange.ALL).build();
+    return new QueryBuilder(sql, testEnv.getKeyspace(), "master").addKeyRange(KeyRange.ALL).build();
   }
 
   /**
@@ -227,7 +227,7 @@ public class DataTypesIT {
   static TestEnv getTestEnv() {
     Map<String, List<String>> shardKidMap = new HashMap<>();
     shardKidMap.put("-", Lists.newArrayList("527875958493693904"));
-    TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
+    TestEnv env = Util.getTestEnv(shardKidMap, "test_keyspace");
     env.addTablet("replica", 1);
     return env;
   }

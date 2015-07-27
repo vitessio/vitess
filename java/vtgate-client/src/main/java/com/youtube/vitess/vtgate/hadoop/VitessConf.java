@@ -1,5 +1,6 @@
 package com.youtube.vitess.vtgate.hadoop;
 
+import com.youtube.vitess.vtgate.rpcclient.RpcClientFactory;
 import org.apache.hadoop.conf.Configuration;
 
 /**
@@ -12,6 +13,7 @@ public class VitessConf {
   public static final String INPUT_QUERY = "vitess.vtgate.hadoop.input_query";
   public static final String SPLITS = "vitess.vtgate.hadoop.splits";
   public static final String SPLIT_COLUMN = "vitess.vtgate.hadoop.splitcolumn";
+  public static final String RPC_FACTORY_CLASS = "vtgate.rpcclient.factory";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;
@@ -66,5 +68,11 @@ public class VitessConf {
 
   public void setSplitColumn(String splitColumn) {
     conf.set(SPLIT_COLUMN, splitColumn);
+  }
+
+  public String getRpcFactoryClass() { return conf.get(RPC_FACTORY_CLASS); }
+
+  public void setRpcFactoryClass(Class<? extends RpcClientFactory> clz) {
+    conf.set(RPC_FACTORY_CLASS, clz.getName());
   }
 }

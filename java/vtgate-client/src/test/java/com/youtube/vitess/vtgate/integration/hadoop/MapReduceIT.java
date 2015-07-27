@@ -10,7 +10,7 @@ import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.hadoop.VitessInputFormat;
 import com.youtube.vitess.vtgate.hadoop.writables.KeyspaceIdWritable;
 import com.youtube.vitess.vtgate.hadoop.writables.RowWritable;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 import com.youtube.vitess.vtgate.hadoop.utils.GsonAdapters;
 
@@ -66,7 +66,7 @@ public class MapReduceIT extends HadoopTestCase {
   public void testDumpTableToHDFS() throws Exception {
     // Insert 20 rows per shard
     int rowsPerShard = 20;
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
     }
     Util.waitForTablet("rdonly", 40, 3, testEnv);
@@ -77,10 +77,11 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
     VitessInputFormat.setInput(job,
-        "localhost:" + testEnv.port,
-        testEnv.keyspace,
+        "localhost:" + testEnv.getPort(),
+        testEnv.getKeyspace(),
         "select keyspace_id, name from vtgate_test",
-        4);
+        4,
+        testEnv.getRpcClientFactory().getClass());
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(RowWritable.class);
     job.setOutputFormatClass(TextOutputFormat.class);
@@ -144,7 +145,7 @@ public class MapReduceIT extends HadoopTestCase {
    */
   public void testReducerAggregateRows() throws Exception {
     int rowsPerShard = 20;
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowsPerShard);
     }
     Util.waitForTablet("rdonly", 40, 3, testEnv);
@@ -155,10 +156,11 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
     VitessInputFormat.setInput(job,
-        "localhost:" + testEnv.port,
-        testEnv.keyspace,
+        "localhost:" + testEnv.getPort(),
+        testEnv.getKeyspace(),
         "select keyspace_id, name from vtgate_test",
-        1);
+        1,
+        testEnv.getRpcClientFactory().getClass());
 
     job.setMapOutputKeyClass(KeyspaceIdWritable.class);
     job.setMapOutputValueClass(RowWritable.class);
@@ -226,7 +228,7 @@ public class MapReduceIT extends HadoopTestCase {
         Lists.newArrayList("527875958493693904", "626750931627689502", "345387386794260318"));
     shardKidMap.put("80-",
         Lists.newArrayList("9767889778372766922", "9742070682920810358", "10296850775085416642"));
-    TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
+    TestEnv env = Util.getTestEnv(shardKidMap, "test_keyspace");
     env.addTablet("rdonly", 1);
     return env;
   }

@@ -1,5 +1,6 @@
 package com.youtube.vitess.vtgate.integration;
 
+import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 
 import com.youtube.vitess.vtgate.BindVariable;
@@ -8,10 +9,10 @@ import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.Row;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.StreamCursor;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
 import org.junit.AfterClass;
@@ -51,9 +52,9 @@ public class StreamingVtGateIT {
 
   @Test
   public void testStreamCursorType() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String selectSql = "select * from vtgate_test";
-    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+    Query allRowsQuery = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
     Cursor cursor = vtgate.execute(allRowsQuery);
     Assert.assertEquals(StreamCursor.class, cursor.getClass());
@@ -66,20 +67,16 @@ public class StreamingVtGateIT {
   @Test
   public void testStreamExecuteKeyspaceIds() throws Exception {
     int rowCount = 10;
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-      Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+      Query query = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master")
           .setKeyspaceIds(testEnv.getKeyspaceIds(shardName)).setStreaming(true).build();
       Cursor cursor = vtgate.execute(query);
-      int count = 0;
-      while (cursor.hasNext()) {
-        cursor.next();
-        count++;
-      }
+      int count = Iterables.size(cursor);
       Assert.assertEquals((int) Math.pow(rowCount, 3), count);
     }
     vtgate.close();
@@ -90,16 +87,16 @@ public class StreamingVtGateIT {
    */
   @Test
   public void testStreamExecuteKeyRanges() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     int rowCount = 10;
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       List<KeyspaceId> kids = testEnv.getKeyspaceIds(shardName);
       KeyRange kr = new KeyRange(Collections.min(kids), Collections.max(kids));
       String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-      Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master").addKeyRange(kr)
+      Query query = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(kr)
           .setStreaming(true).build();
       Cursor cursor = vtgate.execute(query);
       int count = 0;
@@ -118,13 +115,13 @@ public class StreamingVtGateIT {
   @Test
   public void testScatterStreamingQuery() throws Exception {
     int rowCount = 10;
-    for (String shardName : testEnv.shardKidMap.keySet()) {
+    for (String shardName : testEnv.getShardKidMap().keySet()) {
       Util.insertRowsInShard(testEnv, shardName, rowCount);
     }
     String selectSql = "select A.* from vtgate_test A join vtgate_test B join vtgate_test C";
-    Query query = new QueryBuilder(selectSql, testEnv.keyspace, "master")
+    Query query = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     Cursor cursor = vtgate.execute(query);
     int count = 0;
     for (Row row : cursor) {
@@ -137,13 +134,13 @@ public class StreamingVtGateIT {
   @Test
   @Ignore("currently failing as vtgate doesn't set the error")
   public void testStreamingWrites() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
 
     vtgate.begin();
     String insertSql = "insert into vtgate_test " + "(id, name, age, percent, keyspace_id) "
         + "values (:id, :name, :age, :percent, :keyspace_id)";
     KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
-    Query query = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query query = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("" + 1)))
         .addBindVar(BindVariable.forString("name", ("name_" + 1)))
         .addBindVar(BindVariable.forULong("keyspace_id", (UnsignedLong) kid.getId()))

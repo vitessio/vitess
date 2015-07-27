@@ -12,7 +12,7 @@ import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.VtGate;
-import com.youtube.vitess.vtgate.integration.util.TestEnv;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
 
 import org.junit.AfterClass;
@@ -52,10 +52,10 @@ public class FailuresIT {
 
   @Test
   public void testIntegrityException() throws Exception {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     String insertSql = "insert into vtgate_test(id, keyspace_id) values (:id, :keyspace_id)";
     KeyspaceId kid = testEnv.getAllKeyspaceIds().get(0);
-    Query insertQuery = new QueryBuilder(insertSql, testEnv.keyspace, "master")
+    Query insertQuery = new QueryBuilder(insertSql, testEnv.getKeyspace(), "master")
         .addBindVar(BindVariable.forULong("id", UnsignedLong.valueOf("1")))
         .addBindVar(BindVariable.forULong("keyspace_id", ((UnsignedLong) kid.getId())))
         .addKeyspaceId(kid).build();
@@ -75,9 +75,9 @@ public class FailuresIT {
 
   @Test
   public void testTimeout() throws ConnectionException, DatabaseException {
-    VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 200);
+    VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 200, testEnv.getRpcClientFactory());
     // Check timeout error raised for slow query
-    Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual", testEnv.keyspace, "master")
+    Query sleepQuery = new QueryBuilder("select sleep(0.5) from dual", testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
     try {
       vtgate.execute(sleepQuery);
@@ -85,9 +85,9 @@ public class FailuresIT {
     } catch (ConnectionException e) {
     }
     vtgate.close();
-    vtgate = VtGate.connect("localhost:" + testEnv.port, 2000);
+    vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 2000, testEnv.getRpcClientFactory());
     // Check no timeout error for fast query
-    sleepQuery = new QueryBuilder("select sleep(0.01) from dual", testEnv.keyspace, "master")
+    sleepQuery = new QueryBuilder("select sleep(0.01) from dual", testEnv.getKeyspace(), "master")
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).build();
     vtgate.execute(sleepQuery);
     vtgate.close();
@@ -100,11 +100,11 @@ public class FailuresIT {
     try {
       // Transaction cap is 20
       for (int i = 0; i < 25; i++) {
-        VtGate vtgate = VtGate.connect("localhost:" + testEnv.port, 0);
+        VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
         vtgates.add(vtgate);
         vtgate.begin();
         // Run a query to actually begin a transaction with the tablets
-        Query query = new QueryBuilder("delete from vtgate_test", testEnv.keyspace, "master")
+        Query query = new QueryBuilder("delete from vtgate_test", testEnv.getKeyspace(), "master")
             .addKeyRange(KeyRange.ALL).build();
         vtgate.execute(query);
       }
@@ -128,7 +128,7 @@ public class FailuresIT {
   static TestEnv getTestEnv() {
     Map<String, List<String>> shardKidMap = new HashMap<>();
     shardKidMap.put("-", Lists.newArrayList("527875958493693904"));
-    TestEnv env = new TestEnv(shardKidMap, "test_keyspace");
+    TestEnv env = Util.getTestEnv(shardKidMap, "test_keyspace");
     env.addTablet("replica", 1);
     return env;
   }

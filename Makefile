@@ -183,10 +183,6 @@ integration_test: small_integration_test medium_integration_test large_integrati
 site_integration_test:
 	$(call run_integration_tests, $(site_integration_test_files))
 
-# this rule only works if bootstrap.sh was successfully ran in ./java
-java_test:
-	cd java && mvn verify
-
 java_vtgate_client_test:
 	mvn -f java/vtgate-client/pom.xml clean verify
 

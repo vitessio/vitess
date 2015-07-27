@@ -69,6 +69,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.3</version>
         <configuration>
           <source>1.7</source>
           <target>1.7</target>
@@ -88,6 +89,10 @@
         <version>2.13</version>
         <configuration>
           <argLine>${failsafeArgLine}</argLine>
+          <systemPropertyVariables>
+            <vtgate.test.env>com.youtube.vitess.vtgate.TestEnv</vtgate.test.env>
+            <vtgate.rpcclient.factory>com.youtube.vitess.vtgate.rpcclient.gorpc.BsonRpcClientFactory</vtgate.rpcclient.factory>
+          </systemPropertyVariables>
         </configuration>
         <executions>
           <execution>
@@ -101,6 +106,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
+        <version>2.4</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
         </configuration>
