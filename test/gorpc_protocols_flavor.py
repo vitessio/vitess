@@ -31,12 +31,17 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_protocol(self):
     return 'gorpc'
 
+  def vtgate_python_protocol(self):
+    return 'gorpc'
+
   def rpc_timeout_message(self):
     return 'timeout waiting for'
 
   def service_map(self):
     return [
         'grpc-vtworker',
+        # enabled for vtgate_python_protocol
+        'bsonrpc-vt-vtgateservice',
         ]
 
 protocols_flavor.__knows_protocols_flavor_map['gorpc'] = GoRpcProtocolsFlavor

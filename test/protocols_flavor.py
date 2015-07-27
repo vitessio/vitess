@@ -39,7 +39,11 @@ class ProtocolsFlavor(object):
     raise NotImplementedError('Not implemented in the base class')
 
   def vtgate_protocol(self):
-    """Returns the protocol to use to talk to vtgate."""
+    """Returns the protocol to use to talk to vtgate, in go."""
+    raise NotImplementedError('Not implemented in the base class')
+
+  def vtgate_python_protocol(self):
+    """Returns the protocol to use to talk to vtgate with python clients."""
     raise NotImplementedError('Not implemented in the base class')
 
   def rpc_timeout_message(self):
