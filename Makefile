@@ -98,6 +98,7 @@ site_integration_test_files = \
 # - large: over 1 min
 small_integration_test_files = \
 	tablet_test.py \
+	sql_builder_test.py \
 	vertical_split.py \
 	vertical_split_vtgate.py \
 	schema.py \
