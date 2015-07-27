@@ -384,10 +384,9 @@ class DBObjectBase(object):
     if class_.id_column_name is None:
       raise dbexceptions.ProgrammingError("id_column_name not set.")
 
-    query = sql_builder.build_aggregate_query(class_.table_name,
-                                              class_.id_column_name)
-
-    cursor.execute(query, EmptyBindVariables)
+    query, bind_vars = sql_builder.build_aggregate_query(
+        class_.table_name, class_.id_column_name, is_asc=True)
+    cursor.execute(query, bind_vars)
     return cursor.fetch_aggregate_function(min)
 
   @db_class_method
@@ -395,8 +394,7 @@ class DBObjectBase(object):
     if class_.id_column_name is None:
       raise dbexceptions.ProgrammingError("id_column_name not set.")
 
-    query = sql_builder.build_aggregate_query(class_.table_name,
-                                              class_.id_column_name,
-                                              sort_func='max')
-    cursor.execute(query, EmptyBindVariables)
+    query, bind_vars = sql_builder.build_aggregate_query(
+        class_.table_name, class_.id_column_name, is_asc=False)
+    cursor.execute(query, bind_vars)
     return cursor.fetch_aggregate_function(max)

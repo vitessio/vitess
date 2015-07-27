@@ -62,6 +62,10 @@ func TestInitFromProto(t *testing.T) {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
 
+	if !reflect.DeepEqual(GetCurrentConfig(), config) {
+		t.Fatalf("GetCurrentConfig() = %v, want: %v", GetCurrentConfig(), config)
+	}
+
 	readerACL = Authorized("unknown_table", READER)
 	if !reflect.DeepEqual(acl.AcceptAllACL{}, readerACL) {
 		t.Fatalf("there is no config for unknown_table, should grand all permissions")
@@ -70,6 +74,80 @@ func TestInitFromProto(t *testing.T) {
 	readerACL = Authorized("test_table", READER)
 	if !readerACL.IsMember("vt") {
 		t.Fatalf("user: vt should have reader permission to table: test_table")
+	}
+}
+
+func TestTableACLValidateConfig(t *testing.T) {
+	if err := validate(nil); err != nil {
+		t.Fatalf("validate(<entries>) = %v, want: nil", err)
+	}
+	if err := validate([]aclEntry{}); err != nil {
+		t.Fatalf("validate(<entries>) = %v, want: nil", err)
+	}
+	if err := validate([]aclEntry{{tableNameOrPrefix: "b"}}); err != nil {
+		t.Fatalf("validate(<entries>) = %v, want: nil", err)
+	}
+	if err := validate([]aclEntry{{tableNameOrPrefix: "b%c"}}); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+
+	entries := []aclEntry{
+		{tableNameOrPrefix: "b"},
+		{tableNameOrPrefix: "a"},
+	}
+	// error because entries are not sorted by tableNameOrPrefix
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+
+	entries = []aclEntry{
+		{tableNameOrPrefix: "aaa"},
+		{tableNameOrPrefix: "aaab"},
+		{tableNameOrPrefix: "aaab%"},
+		{tableNameOrPrefix: "aaabb"},
+	}
+	// error because two entries overlaps
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+	entries = []aclEntry{
+		{tableNameOrPrefix: "a"},
+		{tableNameOrPrefix: "aa%"},
+		{tableNameOrPrefix: "aaab%"},
+	}
+	// error because two entries overlaps
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+	entries = []aclEntry{
+		{tableNameOrPrefix: "a"},
+		{tableNameOrPrefix: "aa%"},
+		{tableNameOrPrefix: "aaab"},
+		{tableNameOrPrefix: "aaabb"},
+	}
+	// error because two entries overlaps
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+	entries = []aclEntry{
+		{tableNameOrPrefix: "a"},
+		{tableNameOrPrefix: "aa"},
+		{tableNameOrPrefix: "aaa%%"},
+		{tableNameOrPrefix: "aaaaa"},
+	}
+	// error because there is an invalid entry.
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
+	}
+	entries = []aclEntry{
+		{tableNameOrPrefix: "a"},
+		{tableNameOrPrefix: "aa"},
+		{tableNameOrPrefix: "aa"},
+		{tableNameOrPrefix: "aaaaa"},
+	}
+	// error because there are duplicate entries.
+	if err := validate(entries); err == nil {
+		t.Fatal("validate(<entries>) = nil, want: error")
 	}
 }
 
@@ -86,7 +164,7 @@ func TestTableACLAuthorize(t *testing.T) {
 			},
 			{
 				Name:                 "group02",
-				TableNamesOrPrefixes: []string{"test_music", "test_video"},
+				TableNamesOrPrefixes: []string{"test_music_02", "test_video"},
 				Readers:              []string{"u1", "u2"},
 				Writers:              []string{"u3"},
 				Admins:               []string{"u4"},

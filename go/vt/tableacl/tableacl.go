@@ -6,6 +6,7 @@ package tableacl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"sort"
@@ -13,9 +14,10 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	proto "github.com/golang/protobuf/proto"
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
+
+	pb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
 type aclEntry struct {
@@ -48,7 +50,7 @@ var defaultACL string
 type tableACL struct {
 	sync.RWMutex
 	entries aclEntries
-	config  tableaclpb.Config
+	config  pb.Config
 }
 
 // currentACL stores current effective ACL information.
@@ -61,7 +63,7 @@ func Init(configFile string) {
 		log.Errorf("unable to read tableACL config file: %v", err)
 		panic(fmt.Errorf("unable to read tableACL config file: %v", err))
 	}
-	config := &tableaclpb.Config{}
+	config := &pb.Config{}
 	if err := proto.Unmarshal(data, config); err != nil {
 		log.Errorf("unable to parse tableACL config file as a protobuf file: %v", err)
 		// try to parse tableacl as json file
@@ -77,7 +79,7 @@ func Init(configFile string) {
 }
 
 // InitFromProto inits table ACLs from a proto.
-func InitFromProto(config *tableaclpb.Config) (err error) {
+func InitFromProto(config *pb.Config) (err error) {
 	return load(config)
 }
 
@@ -88,7 +90,7 @@ func InitFromProto(config *tableaclpb.Config) (err error) {
 //	<table name or table name prefix>: {"READER": "*", "WRITER": "<u2>,<u4>...","ADMIN": "<u5>"},
 //	<table name or table name prefix>: {"ADMIN": "<u5>"}
 //}`)
-func load(config *tableaclpb.Config) error {
+func load(config *pb.Config) error {
 	var entries aclEntries
 	for _, group := range config.TableGroups {
 		readers, err := newACL(group.Readers)
@@ -126,7 +128,51 @@ func load(config *tableaclpb.Config) error {
 }
 
 func validate(entries aclEntries) error {
-	// TODO: shengzhe add acl entries validation logic
+	if len(entries) == 0 {
+		return nil
+	}
+	if !sort.IsSorted(entries) {
+		return errors.New("acl entries are not sorted by table name or prefix")
+	}
+	if err := validateNameOrPrefix(entries[0].tableNameOrPrefix); err != nil {
+		return err
+	}
+	for i := 1; i < len(entries); i++ {
+		prev := entries[i-1].tableNameOrPrefix
+		cur := entries[i].tableNameOrPrefix
+		if err := validateNameOrPrefix(cur); err != nil {
+			return err
+		}
+		if prev == cur {
+			return fmt.Errorf("conflict entries, name: %s overlaps with name: %s", cur, prev)
+		} else if isPrefix(prev) && isPrefix(cur) {
+			if strings.HasPrefix(cur[:len(cur)-1], prev[:len(prev)-1]) {
+				return fmt.Errorf("conflict entries, prefix: %s overlaps with prefix: %s", cur, prev)
+			}
+		} else if isPrefix(prev) {
+			if strings.HasPrefix(cur, prev[:len(prev)-1]) {
+				return fmt.Errorf("conflict entries, name: %s overlaps with prefix: %s", cur, prev)
+			}
+		} else if isPrefix(cur) {
+			if strings.HasPrefix(prev, cur[:len(cur)-1]) {
+				return fmt.Errorf("conflict entries, prefix: %s overlaps with name: %s", cur, prev)
+			}
+		}
+	}
+	return nil
+}
+
+func isPrefix(nameOrPrefix string) bool {
+	length := len(nameOrPrefix)
+	return length > 0 && nameOrPrefix[length-1] == '%'
+}
+
+func validateNameOrPrefix(nameOrPrefix string) error {
+	for i := 0; i < len(nameOrPrefix)-1; i++ {
+		if nameOrPrefix[i] == '%' {
+			return fmt.Errorf("got: %s, '%%' means this entry is a prefix and should not appear in the middle of name or prefix", nameOrPrefix)
+		}
+	}
 	return nil
 }
 
@@ -155,8 +201,8 @@ func Authorized(table string, role Role) acl.ACL {
 }
 
 // GetCurrentConfig returns a copy of current tableacl configuration.
-func GetCurrentConfig() *tableaclpb.Config {
-	config := &tableaclpb.Config{}
+func GetCurrentConfig() *pb.Config {
+	config := &pb.Config{}
 	currentACL.RLock()
 	defer currentACL.RUnlock()
 	*config = currentACL.config
