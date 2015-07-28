@@ -19,16 +19,16 @@ import (
 type ZknsAddr struct {
 	// These fields came from a Python app originally that used a different
 	// naming convention.
-	Host         string         `json:"host"`
-	Port         int            `json:"port,omitempty"` // DEPRECATED
-	NamedPortMap map[string]int `json:"named_port_map"`
-	IPv4         string         `json:"ipv4"`
-	version      int            // zk version to allow non-stomping writes
+	Host         string           `json:"host"`
+	Port         int32            `json:"port,omitempty"` // DEPRECATED
+	NamedPortMap map[string]int32 `json:"named_port_map"`
+	IPv4         string           `json:"ipv4"`
+	version      int              // zk version to allow non-stomping writes
 }
 
 // NewAddr returns a new ZknsAddr.
 func NewAddr(host string) *ZknsAddr {
-	return &ZknsAddr{Host: host, NamedPortMap: make(map[string]int)}
+	return &ZknsAddr{Host: host, NamedPortMap: make(map[string]int32)}
 }
 
 // ZknsAddrs represents a list of individual entries. SRV records can

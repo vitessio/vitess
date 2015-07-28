@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -96,7 +98,7 @@ func getEndPoints(ctx context.Context, rpcClient *rpcplus.Client, cell, keyspace
 		Shard:      shard,
 		TabletType: topo.TabletType(tabletType),
 	}
-	reply := &topo.EndPoints{}
+	reply := &pb.EndPoints{}
 	if err := rpcClient.Call(ctx, "TopoReader.GetEndPoints", req, reply); err != nil {
 		log.Fatalf("TopoReader.GetEndPoints error: %v", err)
 	}

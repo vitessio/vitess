@@ -14,13 +14,13 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -31,16 +31,16 @@ func init() {
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
 	mu        sync.RWMutex
-	endPoint  topo.EndPoint
+	endPoint  *pbt.EndPoint
 	cc        *grpc.ClientConn
 	c         pbs.QueryClient
 	sessionID int64
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
-	addr := netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["grpc"])
+	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["grpc"]))
 	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
@@ -330,7 +330,7 @@ func (conn *gRPCQueryClient) Close() {
 }
 
 // EndPoint returns the rpc end point.
-func (conn *gRPCQueryClient) EndPoint() topo.EndPoint {
+func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
 }
 

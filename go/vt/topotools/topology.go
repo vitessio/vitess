@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletNode is the representation of a tablet in the db topology.
@@ -21,21 +23,21 @@ import (
 type TabletNode struct {
 	Host  string
 	Alias topo.TabletAlias
-	Port  int
+	Port  int32
 }
 
 // ShortName returns a displayable representation of the host name.
 // If the host is an IP address instead of a name, it is not shortened.
 func (tn *TabletNode) ShortName() string {
 	if net.ParseIP(tn.Host) != nil {
-		return netutil.JoinHostPort(tn.Host, tn.Port)
+		return netutil.JoinHostPort(tn.Host, int(tn.Port))
 	}
 
 	hostPart := strings.SplitN(tn.Host, ".", 2)[0]
 	if tn.Port == 0 {
 		return hostPart
 	}
-	return netutil.JoinHostPort(hostPart, tn.Port)
+	return netutil.JoinHostPort(hostPart, int(tn.Port))
 }
 
 func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
@@ -44,18 +46,18 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 	}
 	return &TabletNode{
 		Host:  ti.Hostname,
-		Port:  ti.Portmap["vt"],
+		Port:  int32(ti.Portmap["vt"]),
 		Alias: ti.Alias,
 	}
 }
 
-func newTabletNodeFromEndPoint(ep topo.EndPoint, cell string) *TabletNode {
+func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
 	return &TabletNode{
 		Host: ep.Host,
 		Alias: topo.TabletAlias{
 			Uid:  ep.Uid,
 			Cell: cell},
-		Port: ep.NamedPortMap[topo.DefaultPortName],
+		Port: ep.Portmap[topo.DefaultPortName],
 	}
 }
 

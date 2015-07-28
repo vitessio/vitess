@@ -12,166 +12,168 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestFilterUnhealthy(t *testing.T) {
 	cases := []struct {
-		source *topo.EndPoints
-		want   *topo.EndPoints
+		source *pb.EndPoints
+		want   *pb.EndPoints
 	}{
 		{
 			source: nil,
 			want:   nil,
 		},
 		{
-			source: &topo.EndPoints{},
-			want:   &topo.EndPoints{Entries: nil},
+			source: &pb.EndPoints{},
+			want:   &pb.EndPoints{Entries: nil},
 		},
 		{
-			source: &topo.EndPoints{Entries: []topo.EndPoint{}},
-			want:   &topo.EndPoints{Entries: []topo.EndPoint{}},
+			source: &pb.EndPoints{Entries: []*pb.EndPoint{}},
+			want:   &pb.EndPoints{Entries: []*pb.EndPoint{}},
 		},
 		{
 			// All are healthy and all should be returned.
-			source: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
-						Uid:    1,
-						Health: nil,
+			source: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
+						Uid:       1,
+						HealthMap: nil,
 					},
-					topo.EndPoint{
-						Uid:    2,
-						Health: map[string]string{},
+					&pb.EndPoint{
+						Uid:       2,
+						HealthMap: map[string]string{},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							"Random": "Value1",
 						},
 					},
-					topo.EndPoint{
-						Uid:    4,
-						Health: nil,
+					&pb.EndPoint{
+						Uid:       4,
+						HealthMap: nil,
 					},
 				},
 			},
-			want: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
-						Uid:    1,
-						Health: nil,
+			want: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
+						Uid:       1,
+						HealthMap: nil,
 					},
-					topo.EndPoint{
-						Uid:    2,
-						Health: map[string]string{},
+					&pb.EndPoint{
+						Uid:       2,
+						HealthMap: map[string]string{},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							"Random": "Value1",
 						},
 					},
-					topo.EndPoint{
-						Uid:    4,
-						Health: nil,
+					&pb.EndPoint{
+						Uid:       4,
+						HealthMap: nil,
 					},
 				},
 			},
 		},
 		{
 			// 4 is unhealthy, it should be filtered out.
-			source: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
-						Uid:    1,
-						Health: nil,
+			source: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
+						Uid:       1,
+						HealthMap: nil,
 					},
-					topo.EndPoint{
-						Uid:    2,
-						Health: map[string]string{},
+					&pb.EndPoint{
+						Uid:       2,
+						HealthMap: map[string]string{},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							"Random": "Value2",
 						},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 4,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					topo.EndPoint{
-						Uid:    5,
-						Health: nil,
+					&pb.EndPoint{
+						Uid:       5,
+						HealthMap: nil,
 					},
 				},
 			},
-			want: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
-						Uid:    1,
-						Health: nil,
+			want: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
+						Uid:       1,
+						HealthMap: nil,
 					},
-					topo.EndPoint{
-						Uid:    2,
-						Health: map[string]string{},
+					&pb.EndPoint{
+						Uid:       2,
+						HealthMap: map[string]string{},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							"Random": "Value2",
 						},
 					},
-					topo.EndPoint{
-						Uid:    5,
-						Health: nil,
+					&pb.EndPoint{
+						Uid:       5,
+						HealthMap: nil,
 					},
 				},
 			},
 		},
 		{
 			// Only unhealthy servers, return all of them.
-			source: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
+			source: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
 						Uid: 1,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 2,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
 				},
 			},
-			want: &topo.EndPoints{
-				Entries: []topo.EndPoint{
-					topo.EndPoint{
+			want: &pb.EndPoints{
+				Entries: []*pb.EndPoint{
+					&pb.EndPoint{
 						Uid: 1,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 2,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
-					topo.EndPoint{
+					&pb.EndPoint{
 						Uid: 3,
-						Health: map[string]string{
+						HealthMap: map[string]string{
 							topo.ReplicationLag: topo.ReplicationLagHigh,
 						},
 					},
@@ -207,7 +209,7 @@ func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 	return nil, fmt.Errorf("Unknown keyspace")
 }
 
-func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (ft *fakeTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
 	return nil, -1, fmt.Errorf("No endpoints")
 }
 
@@ -224,25 +226,25 @@ func (ft *fakeTopoRemoteMaster) GetSrvShard(ctx context.Context, cell, keyspace,
 	}, nil
 }
 
-func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
 	if cell != ft.cell && cell != ft.remoteCell {
 		return nil, -1, fmt.Errorf("GetEndPoints: invalid cell: %v", cell)
 	}
 	if cell == ft.cell || tabletType != topo.TYPE_MASTER {
-		return &topo.EndPoints{
-			Entries: []topo.EndPoint{
-				topo.EndPoint{
-					Uid:    0,
-					Health: nil,
+		return &pb.EndPoints{
+			Entries: []*pb.EndPoint{
+				&pb.EndPoint{
+					Uid:       0,
+					HealthMap: nil,
 				},
 			},
 		}, -1, nil
 	}
-	return &topo.EndPoints{
-		Entries: []topo.EndPoint{
-			topo.EndPoint{
-				Uid:    1,
-				Health: nil,
+	return &pb.EndPoints{
+		Entries: []*pb.EndPoint{
+			&pb.EndPoint{
+				Uid:       1,
+				HealthMap: nil,
 			},
 		},
 	}, -1, nil

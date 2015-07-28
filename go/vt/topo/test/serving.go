@@ -11,6 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CheckServingGraph makes sure the serving graph functions work properly.
@@ -25,21 +27,25 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetEndPoints(invalid): %v", err)
 	}
 
-	endPoints := topo.EndPoints{
-		Entries: []topo.EndPoint{
-			topo.EndPoint{
-				Uid:          1,
-				Host:         "host1",
-				NamedPortMap: map[string]int{"vt": 1234, "mysql": 1235, "vts": 1236},
+	endPoints := &pb.EndPoints{
+		Entries: []*pb.EndPoint{
+			&pb.EndPoint{
+				Uid:  1,
+				Host: "host1",
+				Portmap: map[string]int32{
+					"vt":    1234,
+					"mysql": 1235,
+					"vts":   1236,
+				},
 			},
 		},
 	}
 
-	if err := ts.CreateEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
+	if err := ts.CreateEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints); err != nil {
 		t.Fatalf("CreateEndPoints(master): %v", err)
 	}
 	// Try to create again.
-	if err := ts.CreateEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != topo.ErrNodeExists {
+	if err := ts.CreateEndPoints(ctx, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints); err != topo.ErrNodeExists {
 		t.Fatalf("CreateEndPoints(master): err = %v, want topo.ErrNodeExists", err)
 	}
 
@@ -51,7 +57,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	// Make a change.
 	tmp := endPoints.Entries[0].Uid
 	endPoints.Entries[0].Uid = tmp + 1
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	endPoints.Entries[0].Uid = tmp
@@ -68,7 +74,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("DeleteEndPoints: %v", err)
 	}
 	// Recreate it with an unconditional update.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -90,7 +96,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	// Re-add endpoints.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -101,20 +107,20 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	if len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
 		t.Errorf("GetEndPoints(1): %v", addrs)
 	}
-	if pm := addrs.Entries[0].NamedPortMap; pm["vt"] != 1234 || pm["mysql"] != 1235 || pm["vts"] != 1236 {
-		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", endPoints.Entries[0].NamedPortMap, pm)
+	if pm := addrs.Entries[0].Portmap; pm["vt"] != 1234 || pm["mysql"] != 1235 || pm["vts"] != 1236 {
+		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", endPoints.Entries[0].Portmap, pm)
 	}
 
 	// Update with the wrong version.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, version+1); err != topo.ErrBadVersion {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, version+1); err != topo.ErrBadVersion {
 		t.Fatalf("UpdateEndPoints(master): err = %v, want topo.ErrBadVersion", err)
 	}
 	// Update with the right version.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, version); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, version); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	// Update existing EndPoints unconditionally.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", topo.TYPE_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -224,16 +230,20 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	// update the endpoints, should get a notification
-	endPoints := topo.EndPoints{
-		Entries: []topo.EndPoint{
-			topo.EndPoint{
-				Uid:          1,
-				Host:         "host1",
-				NamedPortMap: map[string]int{"vt": 1234, "mysql": 1235, "vts": 1236},
+	endPoints := &pb.EndPoints{
+		Entries: []*pb.EndPoint{
+			&pb.EndPoint{
+				Uid:  1,
+				Host: "host1",
+				Portmap: map[string]int32{
+					"vt":    1234,
+					"mysql": 1235,
+					"vts":   1236,
+				},
 			},
 		},
 	}
-	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints failed: %v", err)
 	}
 	for {
@@ -246,7 +256,7 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 			continue
 		}
 		// non-empty value, that one should be ours
-		if !reflect.DeepEqual(&endPoints, ep) {
+		if !reflect.DeepEqual(endPoints, ep) {
 			t.Fatalf("first value is wrong: %v %v", ep, ok)
 		}
 		break
@@ -267,14 +277,14 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 
 		// duplicate notification of the first value, that's OK,
 		// but value better be good.
-		if !reflect.DeepEqual(&endPoints, ep) {
+		if !reflect.DeepEqual(endPoints, ep) {
 			t.Fatalf("duplicate notification value is bad: %v", ep)
 		}
 	}
 
 	// re-create the value, a bit different, should get a notification
 	endPoints.Entries[0].Uid = 2
-	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, &endPoints, -1); err != nil {
+	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints failed: %v", err)
 	}
 	for {
@@ -287,7 +297,7 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 			continue
 		}
 		// non-empty value, that one should be ours
-		if !reflect.DeepEqual(&endPoints, ep) {
+		if !reflect.DeepEqual(endPoints, ep) {
 			t.Fatalf("value after delete / re-create is wrong: %v %v", ep, ok)
 		}
 		break
@@ -301,7 +311,7 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 		if !ok {
 			break
 		}
-		if !reflect.DeepEqual(&endPoints, ep) {
+		if !reflect.DeepEqual(endPoints, ep) {
 			t.Fatalf("duplicate notification value is bad: %v", ep)
 		}
 	}

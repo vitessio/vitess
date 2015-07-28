@@ -5,11 +5,12 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -86,7 +87,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	}
 
 	// pass in empty keyspace and shard to not ask for sessionId
-	conn, err := tabletconn.GetDialer()(ctx, *ep, "", "", 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", 30*time.Second)
 	if err != nil {
 		return err
 	}

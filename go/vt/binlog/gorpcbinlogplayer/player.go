@@ -16,7 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // client implements a Client over go rpc
@@ -24,8 +25,8 @@ type client struct {
 	*rpcplus.Client
 }
 
-func (client *client) Dial(endPoint topo.EndPoint, connTimeout time.Duration) error {
-	addr := netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vt"])
+func (client *client) Dial(endPoint *pb.EndPoint, connTimeout time.Duration) error {
+	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["vt"]))
 	var err error
 	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout, nil)
 	return err

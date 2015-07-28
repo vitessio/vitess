@@ -19,6 +19,8 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/key"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -350,21 +352,20 @@ func (tablet *Tablet) ValidatePortmap() error {
 }
 
 // EndPoint returns an EndPoint associated with the tablet record
-func (tablet *Tablet) EndPoint() (*EndPoint, error) {
-	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
+func (tablet *Tablet) EndPoint() (*pb.EndPoint, error) {
 	if err := tablet.ValidatePortmap(); err != nil {
 		return nil, err
 	}
 
-	entry.NamedPortMap = map[string]int{}
+	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
 	for name, port := range tablet.Portmap {
-		entry.NamedPortMap[name] = port
+		entry.Portmap[name] = int32(port)
 	}
 
 	if len(tablet.Health) > 0 {
-		entry.Health = make(map[string]string, len(tablet.Health))
+		entry.HealthMap = make(map[string]string, len(tablet.Health))
 		for k, v := range tablet.Health {
-			entry.Health[k] = v
+			entry.HealthMap[k] = v
 		}
 	}
 	return entry, nil

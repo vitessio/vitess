@@ -19,11 +19,11 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -39,21 +39,21 @@ func init() {
 // TabletBson implements a bson rpcplus implementation for TabletConn
 type TabletBson struct {
 	mu        sync.RWMutex
-	endPoint  topo.EndPoint
+	endPoint  *pbt.EndPoint
 	rpcClient *rpcplus.Client
 	sessionID int64
 }
 
 // DialTablet creates and initializes TabletBson.
-func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
-		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vts"])
+		addr = netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["vts"]))
 		config = &tls.Config{}
 		config.InsecureSkipVerify = true
 	} else {
-		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vt"])
+		addr = netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["vt"]))
 	}
 
 	conn := &TabletBson{endPoint: endPoint}
@@ -536,7 +536,7 @@ func (conn *TabletBson) Close() {
 }
 
 // EndPoint returns the rpc end point.
-func (conn *TabletBson) EndPoint() topo.EndPoint {
+func (conn *TabletBson) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
 }
 

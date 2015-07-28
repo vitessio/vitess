@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -43,7 +45,7 @@ type SrvTopoServer interface {
 
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error)
 
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error)
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
@@ -155,29 +157,31 @@ type endPointsEntry struct {
 	insertionTime time.Time
 
 	// value is the end points that were returned to the client.
-	value *topo.EndPoints
+	value *pb.EndPoints
+
 	// originalValue is the end points that were returned from
 	// the topology server.
-	originalValue *topo.EndPoints
-	lastError     error
-	lastErrorCtx  context.Context
+	originalValue *pb.EndPoints
+
+	lastError    error
+	lastErrorCtx context.Context
 }
 
-func endPointIsHealthy(ep topo.EndPoint) bool {
+func endPointIsHealthy(ep *pb.EndPoint) bool {
 	// if we are behind on replication, we're not 100% healthy
-	return ep.Health == nil || ep.Health[topo.ReplicationLag] != topo.ReplicationLagHigh
+	return ep.HealthMap == nil || ep.HealthMap[topo.ReplicationLag] != topo.ReplicationLagHigh
 }
 
 // filterUnhealthyServers removes the unhealthy servers from the list,
 // unless all servers are unhealthy, then it keeps them all.
-func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
+func filterUnhealthyServers(endPoints *pb.EndPoints) *pb.EndPoints {
 
 	// no endpoints, return right away
 	if endPoints == nil || len(endPoints.Entries) == 0 {
 		return endPoints
 	}
 
-	healthyEndPoints := make([]topo.EndPoint, 0, len(endPoints.Entries))
+	healthyEndPoints := make([]*pb.EndPoint, 0, len(endPoints.Entries))
 	for _, ep := range endPoints.Entries {
 		// if we are behind on replication, we're not 100% healthy
 		if !endPointIsHealthy(ep) {
@@ -189,7 +193,7 @@ func filterUnhealthyServers(endPoints *topo.EndPoints) *topo.EndPoints {
 
 	// we have healthy guys, we return them
 	if len(healthyEndPoints) > 0 {
-		return &topo.EndPoints{Entries: healthyEndPoints}
+		return &pb.EndPoints{Entries: healthyEndPoints}
 	}
 
 	// we only have unhealthy guys, return them
@@ -371,7 +375,7 @@ func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, key
 }
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
-func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *topo.EndPoints, version int64, err error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *pb.EndPoints, version int64, err error) {
 	shard = strings.ToLower(shard)
 	key := []string{cell, keyspace, shard, string(tabletType)}
 
@@ -613,8 +617,8 @@ type EndPointsCacheStatus struct {
 	Keyspace      string
 	Shard         string
 	TabletType    topo.TabletType
-	Value         *topo.EndPoints
-	OriginalValue *topo.EndPoints
+	Value         *pb.EndPoints
+	OriginalValue *pb.EndPoints
 	LastError     error
 	LastErrorCtx  context.Context
 }
@@ -635,15 +639,15 @@ func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 	if ovl > 0 {
 		for _, ove := range st.OriginalValue.Entries {
 			healthColor := "red"
-			vtPort := 0
+			var vtPort int32
 			if vl > 0 {
 				for _, ve := range st.Value.Entries {
 					if ove.Uid == ve.Uid {
-						if _, ok := ve.NamedPortMap["vt"]; ok {
-							vtPort = ve.NamedPortMap["vt"]
+						if _, ok := ve.Portmap["vt"]; ok {
+							vtPort = ve.Portmap["vt"]
 							// EndPoint is healthy
 							healthColor = "green"
-							if len(ve.Health) > 0 {
+							if len(ve.HealthMap) > 0 {
 								// EndPoint is half healthy
 								healthColor = "orange"
 							}
@@ -661,7 +665,7 @@ func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 		if vl == 0 {
 			return template.HTML(fmt.Sprintf("<b>No healthy endpoints</b>, %v", epLinks))
 		}
-		if len(st.OriginalValue.Entries[0].Health) > 0 {
+		if len(st.OriginalValue.Entries[0].HealthMap) > 0 {
 			return template.HTML(fmt.Sprintf("<b>Serving from %v degraded endpoints</b>, %v", vl, epLinks))
 		}
 		return template.HTML(fmt.Sprintf("All %v endpoints are healthy, %v", vl, epLinks))

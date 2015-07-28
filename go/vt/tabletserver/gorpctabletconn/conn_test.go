@@ -15,8 +15,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/gorpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This test makes sure the go rpc service works
@@ -48,10 +49,10 @@ func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
 
 	// Create a Go RPC client connecting to the server
 	ctx := context.Background()
-	client, err := DialTablet(ctx, topo.EndPoint{
+	client, err := DialTablet(ctx, &pb.EndPoint{
 		Host: "localhost",
-		NamedPortMap: map[string]int{
-			"vt": port,
+		Portmap: map[string]int32{
+			"vt": int32(port),
 		},
 	}, tabletconntest.TestKeyspace, tabletconntest.TestShard, 30*time.Second)
 	if err != nil {

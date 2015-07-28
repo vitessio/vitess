@@ -14,7 +14,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -30,7 +31,7 @@ type ErrFunc func() error
 // Client is the interface all clients must satisfy
 type Client interface {
 	// Dial a server
-	Dial(endPoint topo.EndPoint, connTimeout time.Duration) error
+	Dial(endPoint *pb.EndPoint, connTimeout time.Duration) error
 
 	// Close the connection
 	Close()

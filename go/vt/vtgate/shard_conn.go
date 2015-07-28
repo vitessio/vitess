@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var danglingTabletConn = stats.NewInt("DanglingTabletConn")
@@ -50,7 +52,7 @@ type ShardConn struct {
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
 func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
-	getAddresses := func() (*topo.EndPoints, error) {
+	getAddresses := func() (*pb.EndPoints, error) {
 		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, fmt.Errorf("endpoints fetch error: %v", err)
@@ -214,7 +216,7 @@ func (sdc *ShardConn) closeCurrent() {
 // re-resolve and retry.
 func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn.TabletConn) error, transactionID int64, isStreaming bool) error {
 	var conn tabletconn.TabletConn
-	var endPoint topo.EndPoint
+	var endPoint *pb.EndPoint
 	var err error
 	var isTimeout bool
 	inTransaction := (transactionID != 0)
@@ -239,7 +241,7 @@ func (sdc *ShardConn) withRetry(ctx context.Context, action func(conn tabletconn
 
 type connectResult struct {
 	Conn      tabletconn.TabletConn
-	EndPoint  topo.EndPoint
+	EndPoint  *pb.EndPoint
 	IsTimeout bool
 }
 
@@ -247,7 +249,7 @@ type connectResult struct {
 // If no connection is available,
 // it creates a new connection if no connection is being created.
 // Otherwise it waits for the connection to be created.
-func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, isTimeout bool, err error) {
+func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint *pb.EndPoint, isTimeout bool, err error) {
 	sdc.mu.Lock()
 	if sdc.conn != nil {
 		conn = sdc.conn
@@ -274,20 +276,20 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 
 // getNewConn creates a new tablet connection with a separate per conn timeout.
 // It limits the overall timeout to connTimeoutTotal by checking elapsed time after each blocking call.
-func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint topo.EndPoint, isTimeout bool, err error) {
+func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletConn, endPoint *pb.EndPoint, isTimeout bool, err error) {
 	startTime := time.Now()
 
 	endPoints, err := sdc.balancer.Get()
 	if err != nil {
 		// Error when getting endpoint
-		return nil, topo.EndPoint{}, false, err
+		return nil, nil, false, err
 	}
 	if len(endPoints) == 0 {
 		// No valid endpoint
-		return nil, topo.EndPoint{}, false, fmt.Errorf("no valid endpoint")
+		return nil, nil, false, fmt.Errorf("no valid endpoint")
 	}
 	if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
-		return nil, topo.EndPoint{}, true, fmt.Errorf("timeout when getting endpoints")
+		return nil, nil, true, fmt.Errorf("timeout when getting endpoints")
 	}
 
 	// Iterate through all endpoints to create a connection
@@ -309,10 +311,10 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
 			err = fmt.Errorf("timeout when connecting to %+v", endPoint)
 			allErrors.RecordError(err)
-			return nil, topo.EndPoint{}, true, allErrors.Error()
+			return nil, nil, true, allErrors.Error()
 		}
 	}
-	return nil, topo.EndPoint{}, false, allErrors.Error()
+	return nil, nil, false, allErrors.Error()
 }
 
 // getConnTimeoutPerConn determines the appropriate timeout per connection.
@@ -391,7 +393,7 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn, reason string) {
 // adds the connection context
 // and adds a bit to determine whether the keyspace/shard needs to be
 // re-resolved for a potential sharding event.
-func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction bool) (wrapped error) {
+func (sdc *ShardConn) WrapError(in error, endPoint *pb.EndPoint, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}

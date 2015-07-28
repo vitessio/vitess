@@ -23,7 +23,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -82,7 +83,7 @@ func NewBinlogPlayerStats() *BinlogPlayerStats {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	endPoint topo.EndPoint
+	endPoint *pb.EndPoint
 	dbClient VtClient
 
 	// for key range base requests
@@ -104,7 +105,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint topo.EndPoint, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
@@ -120,7 +121,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint topo.EndPoint, keyspace
 // replicating the provided tables, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient VtClient, endPoint topo.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, endPoint *pb.EndPoint, tables []string, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:     endPoint,
 		dbClient:     dbClient,

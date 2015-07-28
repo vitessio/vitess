@@ -215,7 +215,7 @@ type Server interface {
 	// CreateEndPoints creates and sets the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// It returns ErrNodeExists if the record already exists.
-	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints) error
+	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *pb.EndPoints) error
 
 	// UpdateEndPoints updates the serving records for a cell,
 	// keyspace, shard, tabletType.
@@ -224,12 +224,12 @@ type Server interface {
 	// Otherwise, it will Compare-And-Set only if the version matches.
 	// Can return ErrBadVersion.
 	// Can return ErrNoNode only if existingVersion is not -1.
-	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints, existingVersion int64) error
+	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *pb.EndPoints, existingVersion int64) error
 
 	// GetEndPoints returns the EndPoints list of serving addresses
 	// for a TabletType inside a shard, as well as the node version.
 	// Can return ErrNoNode.
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (ep *EndPoints, version int64, err error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (ep *pb.EndPoints, version int64, err error)
 
 	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
@@ -251,7 +251,7 @@ type Server interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (notifications <-chan *EndPoints, stopWatching chan<- struct{}, err error)
+	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (notifications <-chan *pb.EndPoints, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.

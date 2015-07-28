@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // WatchSleepDuration is how many seconds interval to poll for in case
@@ -45,7 +47,7 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 }
 
 // CreateEndPoints implements topo.Server.
-func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -56,7 +58,7 @@ func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -73,7 +75,7 @@ func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // updateEndPoints updates the EndPoints file only if the version matches.
-func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, version int64) error {
+func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, version int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -87,7 +89,7 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType to
 }
 
 // GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, -1, err
@@ -101,7 +103,7 @@ func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard str
 		return nil, -1, ErrBadResponse
 	}
 
-	value := &topo.EndPoints{}
+	value := &pb.EndPoints{}
 	if resp.Node.Value != "" {
 		if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 			return nil, -1, fmt.Errorf("bad end points data (%v): %q", err, resp.Node.Value)
@@ -248,14 +250,14 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("WatchEndPoints cannot get cell: %v", err)
 	}
 	filePath := endPointsFilePath(keyspace, shard, string(tabletType))
 
-	notifications := make(chan *topo.EndPoints, 10)
+	notifications := make(chan *pb.EndPoints, 10)
 	stopWatching := make(chan struct{})
 
 	// The watch go routine will stop if the 'stop' channel is closed.
@@ -301,9 +303,9 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 		for {
 			select {
 			case resp := <-watch:
-				var ep *topo.EndPoints
+				var ep *pb.EndPoints
 				if resp.Node != nil && resp.Node.Value != "" {
-					ep = &topo.EndPoints{}
+					ep = &pb.EndPoints{}
 					if err := json.Unmarshal([]byte(resp.Node.Value), ep); err != nil {
 						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
 						continue
