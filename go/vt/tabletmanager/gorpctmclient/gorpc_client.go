@@ -46,7 +46,7 @@ func (client *GoRPCTabletManagerClient) rpcCallTablet(ctx context.Context, table
 			return timeoutError{fmt.Errorf("timeout connecting to TabletManager.%v on %v", name, tablet.Alias)}
 		}
 	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout)
 	if err != nil {
 		return fmt.Errorf("RPC error for %v: %v", tablet.Alias, err.Error())
 	}
@@ -420,7 +420,7 @@ func (client *GoRPCTabletManagerClient) Backup(ctx context.Context, tablet *topo
 			return nil, nil, timeoutError{fmt.Errorf("timeout connecting to TabletManager.Backup on %v", tablet.Alias)}
 		}
 	}
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr(), connectTimeout)
 	if err != nil {
 		return nil, nil, err
 	}

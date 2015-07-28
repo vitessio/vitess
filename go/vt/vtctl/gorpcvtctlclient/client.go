@@ -23,7 +23,7 @@ type goRPCVtctlClient struct {
 
 func goRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
 	// create the RPC client
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, dialTimeout, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, dialTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("RPC error for %v: %v", addr, err)
 	}

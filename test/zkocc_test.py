@@ -70,7 +70,7 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl('CreateKeyspace test_keyspace')
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
-    utils.run_vtctl('UpdateTabletAddrs -hostname localhost -ip-addr 127.0.0.1 -mysql-port %s -vts-port %s %s' % (t.mysql_port, t.port + 500, t.tablet_alias))
+    utils.run_vtctl('UpdateTabletAddrs -hostname localhost -ip-addr 127.0.0.1 -mysql-port %s %s' % (t.mysql_port, t.tablet_alias))
     self.rebuild()
 
     # vtgate zk API test

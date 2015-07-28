@@ -43,7 +43,7 @@ func init() {
 }
 
 func connect() *rpcplus.Client {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, *timeout, nil)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, *timeout)
 	if err != nil {
 		log.Fatalf("Can't connect to topo server: %v", err)
 	}
