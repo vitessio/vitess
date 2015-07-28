@@ -8,7 +8,6 @@ import com.youtube.vitess.vtgate.KeyRange;
 import com.youtube.vitess.vtgate.KeyspaceId;
 import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
-import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
@@ -99,11 +98,7 @@ public class StreamingVtGateIT {
       Query query = new QueryBuilder(selectSql, testEnv.getKeyspace(), "master").addKeyRange(kr)
           .setStreaming(true).build();
       Cursor cursor = vtgate.execute(query);
-      int count = 0;
-      while (cursor.hasNext()) {
-        cursor.next();
-        count++;
-      }
+      int count = Iterables.size(cursor);
       Assert.assertEquals((int) Math.pow(rowCount, 3), count);
     }
     vtgate.close();
@@ -123,10 +118,7 @@ public class StreamingVtGateIT {
         .setKeyspaceIds(testEnv.getAllKeyspaceIds()).setStreaming(true).build();
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     Cursor cursor = vtgate.execute(query);
-    int count = 0;
-    for (Row row : cursor) {
-      count++;
-    }
+    int count = Iterables.size(cursor);
     Assert.assertEquals(2 * (int) Math.pow(rowCount, 3), count);
     vtgate.close();
   }
