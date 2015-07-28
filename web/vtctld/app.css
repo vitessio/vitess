@@ -80,3 +80,12 @@ md-toolbar h1 {
 textarea.code {
   font-family: monospace;
 }
+
+.notice {
+  background-color: #FFC107;
+}
+
+.input-header {
+  color: black !important;
+  font-weight: bold;
+}

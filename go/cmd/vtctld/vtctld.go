@@ -294,7 +294,7 @@ func main() {
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		templateLoader.ServeTemplate("index.html", indexContent, w, r)
+		http.Redirect(w, r, "/app/", http.StatusFound)
 	})
 
 	http.HandleFunc("/content/", func(w http.ResponseWriter, r *http.Request) {

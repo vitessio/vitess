@@ -1,11 +1,21 @@
 app.controller('SchemaCtrl', function($scope, $http, $mdDialog,
                actions, keyspaces) {
-  $scope.schemaChange = {Keyspace: '', SQL: ''};
-
   $scope.refreshData = function() {
     $scope.keyspaces = keyspaces.query();
   };
   $scope.refreshData();
+
+  $scope.schemaChange = {Keyspace: '', SQL: ''};
+  $scope.keyspaceSelector = {
+    searchText: '',
+    items: function() {
+      var searchText = this.searchText;
+      if (!searchText) return $scope.keyspaces;
+      return $scope.keyspaces.filter(function(item) {
+        return item.indexOf(searchText) != -1;
+      });
+    }
+  };
 
   $scope.submitSchema = function(ev) {
     var action = {
