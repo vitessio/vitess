@@ -57,7 +57,7 @@ func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
 		Alias: topo.TabletAlias{
 			Uid:  ep.Uid,
 			Cell: cell},
-		Port: ep.Portmap[topo.DefaultPortName],
+		Port: ep.PortMap[topo.DefaultPortName],
 	}
 }
 

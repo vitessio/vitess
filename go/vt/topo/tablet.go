@@ -359,7 +359,7 @@ func (tablet *Tablet) EndPoint() (*pb.EndPoint, error) {
 
 	entry := NewEndPoint(tablet.Alias.Uid, tablet.Hostname)
 	for name, port := range tablet.Portmap {
-		entry.Portmap[name] = int32(port)
+		entry.PortMap[name] = int32(port)
 	}
 
 	if len(tablet.Health) > 0 {

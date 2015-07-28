@@ -157,7 +157,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "endpoints/cell1/ks1/-80/replica", `{
 				"entries": [{
 						"uid": 100,
-						"portmap": {"vt": 100}
+						"port_map": {"vt": 100}
 					}]
 			}`},
 	}

@@ -50,7 +50,7 @@ func TabletToProto(t *Tablet) *pb.Tablet {
 		Alias:          TabletAliasToProto(t.Alias),
 		Hostname:       t.Hostname,
 		Ip:             t.IPAddr,
-		Portmap:        make(map[string]int32),
+		PortMap:        make(map[string]int32),
 		Keyspace:       t.Keyspace,
 		Shard:          t.Shard,
 		KeyRange:       key.KeyRangeToProto(t.KeyRange),
@@ -60,7 +60,7 @@ func TabletToProto(t *Tablet) *pb.Tablet {
 		HealthMap:      t.Health,
 	}
 	for k, v := range t.Portmap {
-		result.Portmap[k] = int32(v)
+		result.PortMap[k] = int32(v)
 	}
 	return result
 }
@@ -80,7 +80,7 @@ func ProtoToTablet(t *pb.Tablet) *Tablet {
 		Tags:           t.Tags,
 		Health:         t.HealthMap,
 	}
-	for k, v := range t.Portmap {
+	for k, v := range t.PortMap {
 		result.Portmap[k] = int(v)
 	}
 	return result

@@ -176,7 +176,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	sbc = &sandboxConn{mustFailServer: 1}
 	s.MapTestConn("0", sbc)
 	err = f()
-	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" portmap:<key:\"vt\" value:1 > , error: err", name)
+	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -195,7 +195,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	sbc = &sandboxConn{mustFailConn: 1}
 	s.MapTestConn("0", sbc)
 	err = f()
-	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" portmap:<key:\"vt\" value:1 > , error: conn", name)
+	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" port_map:<key:\"vt\" value:1 > , error: conn", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}
@@ -230,7 +230,7 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 	err := f()
-	want := fmt.Sprintf("shard, host: %v.0., host:\"0\" portmap:<key:\"vt\" value:1 > , retry: err", name)
+	want := fmt.Sprintf("shard, host: %v.0., host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -244,7 +244,7 @@ func testShardConnTransact(t *testing.T, name string, f func() error) {
 	sbc = &sandboxConn{mustFailConn: 3}
 	s.MapTestConn("0", sbc)
 	err = f()
-	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" portmap:<key:\"vt\" value:1 > , error: conn", name)
+	want = fmt.Sprintf("shard, host: %v.0., host:\"0\" port_map:<key:\"vt\" value:1 > , error: conn", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -259,7 +259,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	s := createSandbox("TestShardConnBeginOther")
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	s.MapTestConn("0", sbc)
-	want := fmt.Sprintf("shard, host: TestShardConnBeginOther.0., host:\"0\" portmap:<key:\"vt\" value:1 > , tx_pool_full: err")
+	want := fmt.Sprintf("shard, host: TestShardConnBeginOther.0., host:\"0\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err")
 	sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBeginOther", "0", "", 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, 24*time.Hour, connectTimings)
 	_, err := sdc.Begin(context.Background())
 	if err == nil || err.Error() != want {
@@ -300,7 +300,7 @@ func TestShardConnStreamingRetry(t *testing.T) {
 	sdc = NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnStreamingRetry", "0", "", 10*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, 24*time.Hour, connectTimings)
 	_, errfunc = sdc.StreamExecute(context.Background(), "query", nil, 0)
 	err = errfunc()
-	want := "shard, host: TestShardConnStreamingRetry.0., host:\"0\" portmap:<key:\"vt\" value:1 > , fatal: err"
+	want := "shard, host: TestShardConnStreamingRetry.0., host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}

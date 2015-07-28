@@ -40,7 +40,7 @@ func NewEndPoint(uid uint32, host string) *pb.EndPoint {
 	return &pb.EndPoint{
 		Uid:     uid,
 		Host:    host,
-		Portmap: make(map[string]int32),
+		PortMap: make(map[string]int32),
 	}
 }
 
@@ -52,11 +52,11 @@ func EndPointEquality(left, right *pb.EndPoint) bool {
 	if left.Host != right.Host {
 		return false
 	}
-	if len(left.Portmap) != len(right.Portmap) {
+	if len(left.PortMap) != len(right.PortMap) {
 		return false
 	}
-	for key, lvalue := range left.Portmap {
-		rvalue, ok := right.Portmap[key]
+	for key, lvalue := range left.PortMap {
+		rvalue, ok := right.PortMap[key]
 		if !ok {
 			return false
 		}
@@ -109,7 +109,7 @@ func SrvEntries(addrs *pb.EndPoints, namedPort string) (srvs []*net.SRV, err err
 		if namedPort == "" {
 			namedPort = DefaultPortName
 		}
-		port = int(entry.Portmap[namedPort])
+		port = int(entry.PortMap[namedPort])
 		if port == 0 {
 			log.Warningf("vtns: bad port %v %v", namedPort, entry)
 			continue

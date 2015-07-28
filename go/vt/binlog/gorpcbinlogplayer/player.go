@@ -26,7 +26,7 @@ type client struct {
 }
 
 func (client *client) Dial(endPoint *pb.EndPoint, connTimeout time.Duration) error {
-	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["vt"]))
+	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.PortMap["vt"]))
 	var err error
 	client.Client, err = bsonrpc.DialHTTP("tcp", addr, connTimeout)
 	return err

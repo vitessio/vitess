@@ -30,7 +30,7 @@ type client struct {
 }
 
 func (client *client) Dial(endPoint *pbt.EndPoint, connTimeout time.Duration) error {
-	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.Portmap["grpc"]))
+	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.PortMap["grpc"]))
 	var err error
 	client.cc, err = grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(connTimeout))
 	if err != nil {

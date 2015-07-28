@@ -167,8 +167,8 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 		zknsPaths = append(zknsPaths, zknsAddrPath)
 		zknsAddr := zkns.ZknsAddr{
 			Host:         entry.Host,
-			Port:         entry.Portmap["mysql"],
-			NamedPortMap: entry.Portmap,
+			Port:         entry.PortMap["mysql"],
+			NamedPortMap: entry.PortMap,
 		}
 		err := writeAddr(zconn, zknsAddrPath, &zknsAddr)
 		if err != nil {

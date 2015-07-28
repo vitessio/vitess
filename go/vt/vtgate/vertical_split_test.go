@@ -69,7 +69,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 		}},
 	})
 	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, topo.TYPE_MASTER, session, false)
-	want := "shard, host: TestUnshardedServedFrom.0.master, host:\"0\" portmap:<key:\"vt\" value:1 > , retry: err"
+	want := "shard, host: TestUnshardedServedFrom.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)
 	}
@@ -100,7 +100,7 @@ func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []st
 	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
 	if isStreaming {
-		want := "shard, host: TestUnshardedServedFrom.0.rdonly, host:\"0\" portmap:<key:\"vt\" value:1 > , fatal: err"
+		want := "shard, host: TestUnshardedServedFrom.0.rdonly, host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err"
 		if err == nil || err.Error() != want {
 			t.Errorf("want '%v', got '%v'", want, err)
 		}
@@ -123,7 +123,7 @@ func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []st
 	sbc = &sandboxConn{mustFailServer: 3}
 	s.MapTestConn("0", sbc)
 	_, err = f([]string{"0"})
-	want := "shard, host: TestUnshardedServedFrom.0.rdonly, host:\"0\" portmap:<key:\"vt\" value:1 > , error: err"
+	want := "shard, host: TestUnshardedServedFrom.0.rdonly, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)
 	}

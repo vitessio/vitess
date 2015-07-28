@@ -25,21 +25,21 @@ func endPoints3() (*pb.EndPoints, error) {
 			&pb.EndPoint{
 				Uid:  0,
 				Host: "0",
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
 			&pb.EndPoint{
 				Uid:  1,
 				Host: "1",
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": 2,
 				},
 			},
 			&pb.EndPoint{
 				Uid:  2,
 				Host: "2",
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": 3,
 				},
 			},
@@ -189,21 +189,21 @@ func endPointsMorph() (*pb.EndPoints, error) {
 			&pb.EndPoint{
 				Uid:  addrNum,
 				Host: fmt.Sprintf("%d", addrNum),
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
 			&pb.EndPoint{
 				Uid:  1,
 				Host: "1",
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": int32(addrNum),
 				},
 			},
 			&pb.EndPoint{
 				Uid:  2,
 				Host: "2",
-				Portmap: map[string]int32{
+				PortMap: map[string]int32{
 					"vt": 3,
 				},
 			},
@@ -220,7 +220,7 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want other than -1: %v", index)
 	}
 	// "1" should be in the list with port 11
-	portStart := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.Portmap["vt"]
+	portStart := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.PortMap["vt"]
 	if portStart != 11 {
 		t.Errorf("want 11, got %v", portStart)
 	}
@@ -241,7 +241,7 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want non-zero, got 0")
 	}
 	// "1" should have the updated port 12
-	portNew := b.addressNodes[index].endPoint.Portmap["vt"]
+	portNew := b.addressNodes[index].endPoint.PortMap["vt"]
 	if portNew != 12 {
 		t.Errorf("want 12, got %v", portNew)
 	}

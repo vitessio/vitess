@@ -40,7 +40,7 @@ func TestGRPCBinlogStreamer(t *testing.T) {
 	// and send it to the test suite
 	binlogplayertest.Run(t, c, &pbt.EndPoint{
 		Host: host,
-		Portmap: map[string]int32{
+		PortMap: map[string]int32{
 			"grpc": int32(port),
 		},
 	}, fakeUpdateStream)

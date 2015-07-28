@@ -235,8 +235,8 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailRetry: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want1 := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" portmap:<key:\"vt\" value:1 > , error: err", name)
-	want2 := fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" portmap:<key:\"vt\" value:1 > , retry: err", name)
+	want1 := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , error: err", name)
+	want2 := fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -267,8 +267,8 @@ func testResolverGeneric(t *testing.T, name string, action func() (*mproto.Query
 	sbc1 = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want1 = fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" portmap:<key:\"vt\" value:1 > , retry: err", name)
-	want2 = fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" portmap:<key:\"vt\" value:1 > , fatal: err", name)
+	want1 = fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
+	want2 = fmt.Sprintf("shard, host: %s.20-40.master, host:\"20-40\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -410,7 +410,7 @@ func testResolverStreamGeneric(t *testing.T, name string, action func() (*mproto
 	sbc1 = &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
 	_, err = action()
-	want := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" portmap:<key:\"vt\" value:1 > , retry: err", name)
+	want := fmt.Sprintf("shard, host: %s.-20.master, host:\"-20\" port_map:<key:\"vt\" value:1 > , retry: err", name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}

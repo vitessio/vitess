@@ -137,7 +137,7 @@ func (s *sandbox) MapTestConn(shard string, conn sandboxableConn) {
 	conn.setEndPoint(&pbt.EndPoint{
 		Uid:     uid,
 		Host:    shard,
-		Portmap: map[string]int32{"vt": 1},
+		PortMap: map[string]int32{"vt": 1},
 	})
 	conns[uid] = conn
 	s.TestConns[shard] = conns

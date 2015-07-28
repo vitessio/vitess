@@ -47,7 +47,7 @@ func TestGoRPCBinlogStreamer(t *testing.T) {
 	// and send it to the test suite
 	binlogplayertest.Run(t, c, &pb.EndPoint{
 		Host: host,
-		Portmap: map[string]int32{
+		PortMap: map[string]int32{
 			"vt": int32(port),
 		},
 	}, fakeUpdateStream)

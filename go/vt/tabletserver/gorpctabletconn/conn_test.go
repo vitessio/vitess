@@ -51,7 +51,7 @@ func testGoRPCTabletConn(t *testing.T, rpcOnlyInReply bool) {
 	ctx := context.Background()
 	client, err := DialTablet(ctx, &pb.EndPoint{
 		Host: "localhost",
-		Portmap: map[string]int32{
+		PortMap: map[string]int32{
 			"vt": int32(port),
 		},
 	}, tabletconntest.TestKeyspace, tabletconntest.TestShard, 30*time.Second)

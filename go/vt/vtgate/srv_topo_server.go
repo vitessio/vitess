@@ -643,8 +643,8 @@ func (st *EndPointsCacheStatus) StatusAsHTML() template.HTML {
 			if vl > 0 {
 				for _, ve := range st.Value.Entries {
 					if ove.Uid == ve.Uid {
-						if _, ok := ve.Portmap["vt"]; ok {
-							vtPort = ve.Portmap["vt"]
+						ok := false
+						if vtPort, ok = ve.PortMap["vt"]; ok {
 							// EndPoint is healthy
 							healthColor = "green"
 							if len(ve.HealthMap) > 0 {
