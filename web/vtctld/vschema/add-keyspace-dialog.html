@@ -10,9 +10,12 @@
   </div>
 </md-toolbar>
 
+<form name="addKeyspaceForm" ng-submit="addKeyspace(keyspace); hide()">
+
 <md-dialog-content layout="column">
 
   <md-autocomplete md-floating-label="Keyspace" md-min-length="0"
+      md-input-name="keyspace" required
       md-selected-item=""
       md-selected-item-change=""
       md-search-text="keyspace"
@@ -23,13 +26,19 @@
       <span md-highlight-text="keyspace">{{item}}</span>
     </md-item-template>
     <md-not-found>No keyspaces found matching "{{keyspace}}".</md-not-found>
+    <div ng-messages="addKeyspaceForm.keyspace.$error">
+      <div ng-message="required">Required</div>
+    </div>
   </md-autocomplete>
 
 </md-dialog-content>
 
 <div class="md-actions" layout="row" layout-align="end center">
   <md-button ng-click="hide()">Cancel</md-button>
-  <md-button ng-click="addKeyspace(keyspace); hide()" class="md-primary">Add</md-button>
+  <md-button type="submit" class="md-primary"
+      ng-disabled="addKeyspaceForm.$invalid">Add</md-button>
 </div>
+
+</form>
 
 </md-dialog>

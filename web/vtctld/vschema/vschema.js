@@ -155,7 +155,7 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
       if (!keyspace.Tables)
         keyspace.Tables = {};
       if (!keyspace.Tables[table])
-        keyspace.Tables[table] = classname;
+        keyspace.Tables[table] = keyspace.Sharded ? classname : '';
     }
   };
 
@@ -216,6 +216,8 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
     } else {
       delete keyspace.Classes;
       delete keyspace.Vindexes;
+      for (var table in keyspace.Tables)
+        keyspace.Tables[table] = '';
     }
   };
 
@@ -235,6 +237,55 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
         if (!vindex.Params[param])
           vindex.Params[param] = '';
       });
+    }
+  };
+});
+
+app.directive('vclass', function() {
+  return {
+    require: 'ngModel',
+    link: function(scope, elem, attrs, ctrl) {
+      ctrl.$validators.vempty = function(modelValue, viewValue) {
+        if (!scope.keyspace.Sharded)
+          return viewValue == '';
+        return true;
+      };
+      ctrl.$validators.vrequired = function(modelValue, viewValue) {
+        if (scope.keyspace.Sharded)
+          return !!viewValue;
+        return true;
+      };
+      ctrl.$validators.vdefined = function(modelValue, viewValue) {
+        if (viewValue && scope.keyspace.Sharded)
+          return viewValue in scope.keyspace.Classes;
+        return true;
+      };
+    }
+  };
+});
+
+app.directive('vindex', function() {
+  return {
+    require: 'ngModel',
+    link: function(scope, elem, attrs, ctrl) {
+      ctrl.$validators.vdefined = function(modelValue, viewValue) {
+        if (viewValue)
+          return viewValue in scope.keyspace.Vindexes;
+        return true;
+      };
+    }
+  };
+});
+
+app.directive('vindexType', function() {
+  return {
+    require: 'ngModel',
+    link: function(scope, elem, attrs, ctrl) {
+      ctrl.$validators.vdefined = function(modelValue, viewValue) {
+        if (viewValue)
+          return viewValue in vindexInfo.types;
+        return true;
+      };
     }
   };
 });

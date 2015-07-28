@@ -6,8 +6,6 @@ They are only used with the
 
 <md-content class="md-padding">
 
-<md-form name="keyspacesForm">
-
 <md-card>
 <md-toolbar>
 <div class="md-toolbar-tools">
@@ -74,7 +72,8 @@ They are only used with the
 
     <md-card-content layout="column">
 
-    <div layout="row" ng-repeat="(table, class) in keyspace.Tables">
+    <div ng-repeat="(table, class) in keyspace.Tables">
+      <form name="tableForm" layout="row">
       <md-button class="md-icon-button md-raised" aria-label="Remove Table" ng-click="removeTable(keyspace, table)">
         <md-tooltip>Remove Table</md-tooltip>
         <md-icon md-font-set="material-icons">remove</md-icon>
@@ -85,7 +84,8 @@ They are only used with the
         <input type="text" ng-model="table" disabled class="input-header">
       </md-input-container>
 
-      <md-autocomplete flex md-floating-label="Class" md-min-length="0"
+      <md-autocomplete flex md-floating-label="Class"
+          md-min-length="keyspace.Sharded ? 0 : 1000"
           md-selected-item=""
           md-selected-item-change=""
           md-search-text="keyspace.Tables[table]"
@@ -96,21 +96,31 @@ They are only used with the
           <span md-highlight-text="keyspace.Tables[table]">{{item}}</span>
         </md-item-template>
         <md-not-found>No classes found matching "{{keyspace.Tables[table]}}".</md-not-found>
+        <div ng-messages="tableForm.classname.$error">
+          <div ng-message="vempty">Class should be empty for non-sharded keyspace.</div>
+          <div ng-message="vrequired">Required</div>
+          <div ng-message="vdefined">Undefined Class</div>
+        </div>
       </md-autocomplete>
+      <input ng-hide="true" name="classname" ng-model="keyspace.Tables[table]" vclass>
+      </form>
     </div>
 
-    <div layout="row">
-      <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Table" ng-click="addTable(keyspace, newTable, newTableClass); newTable=''; newTableClass=''">
+    <form name="addTableForm" layout="row"
+          ng-submit="addTable(keyspace, newTable, newTableClass); newTable=''; newTableClass=''; addTableForm.$setUntouched()">
+      <md-button class="md-icon-button md-raised md-primary md-hue-3"
+          type="submit" aria-label="Add Table" ng-disabled="addTableForm.$invalid">
         <md-tooltip>Add Table</md-tooltip>
         <md-icon md-font-set="material-icons">add</md-icon>
       </md-button>
 
       <md-input-container flex>
         <label>Table</label>
-        <input type="text" ng-model="newTable" class="input-header">
+        <input type="text" ng-model="newTable" name="table" class="input-header" required>
       </md-input-container>
 
-      <md-autocomplete flex md-floating-label="Class" md-min-length="0"
+      <md-autocomplete flex md-floating-label="Class"
+          md-min-length="keyspace.Sharded ? 0 : 1000"
           md-selected-item=""
           md-selected-item-change=""
           md-search-text="newTableClass"
@@ -121,8 +131,13 @@ They are only used with the
           <span md-highlight-text="keyspace.Tables[table]">{{item}}</span>
         </md-item-template>
         <md-not-found>No classes found matching "{{keyspace.Tables[table]}}".</md-not-found>
+        <div ng-messages="addTableForm.classname.$error">
+          <div ng-message="vempty">Class should be empty for non-sharded keyspace.</div>
+          <div ng-message="vdefined">Undefined Class</div>
+        </div>
       </md-autocomplete>
-    </div>
+      <input ng-hide="true" name="classname" ng-model="newTableClass" vclass>
+    </form>
 
     </md-card-content>
   </md-card>
@@ -150,7 +165,8 @@ They are only used with the
 
       <div layout="column" flex>
 
-      <div layout="row" ng-repeat="col in classval.ColVindexes">
+      <div ng-repeat="col in classval.ColVindexes">
+        <form name="classForm" layout="row">
         <md-input-container flex>
           <label>Column</label>
           <input type="text" ng-model="col.Col">
@@ -167,18 +183,25 @@ They are only used with the
             <span md-highlight-text="col.Name">{{item}}</span>
           </md-item-template>
           <md-not-found>No vindexes found matching "{{col.Name}}".</md-not-found>
+          <div ng-messages="classForm.vindex.$error">
+            <div ng-message="required">Required</div>
+            <div ng-message="vdefined">Undefined Vindex</div>
+          </div>
         </md-autocomplete>
+        <input ng-hide="true" name="vindex" ng-model="col.Name" vindex required>
 
         <md-button class="md-icon-button md-raised" aria-label="Remove Column" ng-click="removeColumn(keyspace, classname, $index)">
           <md-tooltip>Remove Column</md-tooltip>
           <md-icon md-font-set="material-icons">remove</md-icon>
         </md-button>
+        </form>
       </div>
 
-      <div layout="row">
+      <form name="addColumnForm" layout="row"
+          ng-submit="addColumn(keyspace, classname, newCol, newColVindex); newCol=''; newColVindex=''; addColumnForm.$setUntouched()">
         <md-input-container flex>
           <label>Column</label>
-          <input type="text" ng-model="newCol">
+          <input type="text" ng-model="newCol" name="column" required>
         </md-input-container>
 
         <md-autocomplete flex md-floating-label="Vindex" md-min-length="0"
@@ -192,28 +215,35 @@ They are only used with the
             <span md-highlight-text="newColVindex">{{item}}</span>
           </md-item-template>
           <md-not-found>No vindexes found matching "{{newColVindex}}".</md-not-found>
+          <div ng-messages="addColumnForm.vindex.$error">
+            <div ng-message="vdefined">Undefined Vindex</div>
+          </div>
         </md-autocomplete>
+        <input ng-hide="true" name="vindex" ng-model="newColVindex" vindex required>
 
-        <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Column" ng-click="addColumn(keyspace, classname, newCol, newColVindex); newCol=''; newColVindex=''">
+        <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Column"
+            type="submit" ng-disabled="addColumnForm.$invalid">
           <md-tooltip>Add Column</md-tooltip>
           <md-icon md-font-set="material-icons">add</md-icon>
         </md-button>
-      </div>
+      </form>
 
       </div>
     </div>
 
-    <div layout="row">
-      <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Class" ng-click="addClass(keyspace, newClass); newClass=''">
+    <form name="addClassForm" layout="row"
+        ng-submit="addClass(keyspace, newClass); newClass=''; addClassForm.$setUntouched()">
+      <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Class"
+          ng-disabled="addClassForm.$invalid">
         <md-tooltip>Add Class</md-tooltip>
         <md-icon md-font-set="material-icons">add</md-icon>
       </md-button>
 
       <md-input-container flex="30">
         <label>Class</label>
-        <input type="text" ng-model="newClass" class="input-header">
+        <input type="text" ng-model="newClass" class="input-header" name="class" required>
       </md-input-container>
-    </div>
+    </form>
 
     </md-card-content>
   </md-card>
@@ -227,8 +257,8 @@ They are only used with the
 
     <md-card-content layout="column">
 
-    <div layout="row" layout-align="start start"
-        ng-repeat="(vindexname, vindex) in keyspace.Vindexes">
+    <div ng-repeat="(vindexname, vindex) in keyspace.Vindexes">
+      <form name="vindexForm" layout="row" layout-align="start start">
       <md-button class="md-icon-button md-raised" aria-label="Remove Vindex" ng-click="removeVindex(keyspace, vindexname)">
         <md-tooltip>Remove Vindex</md-tooltip>
         <md-icon md-font-set="material-icons">remove</md-icon>
@@ -252,7 +282,12 @@ They are only used with the
               <span md-highlight-text="vindex.Type">{{item}}</span>
             </md-item-template>
             <md-not-found>No vindex types found matching "{{vindex.Type}}".</md-not-found>
+            <div ng-messages="vindexForm.vindexType.$error">
+              <div ng-message="required">Required</div>
+              <div ng-message="vdefined">Undefined Vindex Type</div>
+            </div>
           </md-autocomplete>
+          <input ng-hide="true" name="vindexType" ng-model="vindex.Type" vindex-type required>
 
           <md-input-container flex>
             <label>Owner</label>
@@ -267,17 +302,20 @@ They are only used with the
           </md-input-container>
         </div>
       </div>
+      </form>
     </div>
 
-    <div layout="row">
-      <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Vindex" ng-click="addVindex(keyspace, newVindex, newVindexType, newVindexOwner); newVindex=''; newVindexType=''; newVindexOwner=''">
+    <form name="addVindexForm" layout="row"
+        ng-submit="addVindex(keyspace, newVindex, newVindexType, newVindexOwner); newVindex=''; newVindexType=''; newVindexOwner=''; addVindexForm.$setUntouched()">
+      <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Vindex"
+          type="submit" ng-disabled="addVindexForm.$invalid">
         <md-tooltip>Add Vindex</md-tooltip>
         <md-icon md-font-set="material-icons">add</md-icon>
       </md-button>
 
       <md-input-container flex="30">
         <label>Vindex</label>
-        <input type="text" ng-model="newVindex" class="input-header">
+        <input type="text" ng-model="newVindex" class="input-header" name="vindex" required>
       </md-input-container>
 
       <md-autocomplete flex md-floating-label="Type" md-min-length="0"
@@ -291,7 +329,11 @@ They are only used with the
           <span md-highlight-text="newVindexType">{{item}}</span>
         </md-item-template>
         <md-not-found>No vindex types found matching "{{newVindexType}}".</md-not-found>
+        <div ng-messages="addVindexForm.vindexType.$error">
+          <div ng-message="vdefined">Undefined Vindex Type</div>
+        </div>
       </md-autocomplete>
+      <input ng-hide="true" name="vindexType" ng-model="newVindexType" vindex-type required>
 
       <md-input-container flex>
         <label>Owner</label>
@@ -305,7 +347,5 @@ They are only used with the
 </md-card-content>
 
 </md-card>
-
-</md-form>
 
 </md-content>
