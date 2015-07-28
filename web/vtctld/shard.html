@@ -7,6 +7,7 @@
   <span flex></span>
     <md-menu>
     <md-button class="md-icon-button" aria-label="Shard actions" ng-click="$mdOpenMenu()" md-menu-origin>
+      <md-tooltip>Shard Actions</md-tooltip>
       <md-icon md-font-set="material-icons">more_vert</md-icon>
     </md-button>
     <md-menu-content>
@@ -31,9 +32,8 @@
     <h3 flex="50">Master Tablet</h3>
     <div flex>
       <span ng-if="!shard.MasterAlias.Uid">None</span>
-      <a ng-if="shard.MasterAlias.Uid"
-        ng-href="#/tablets/{{shard.MasterAlias.Cell}}-{{shard.MasterAlias.Uid}}"
-        ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></a>
+      <span ng-if="shard.MasterAlias.Uid"
+        ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></span>
     </div>
   </div>
 </div>
@@ -60,6 +60,7 @@
     <span flex></span>
     <md-menu>
     <md-button class="md-icon-button" aria-label="Tablet actions" ng-click="$mdOpenMenu()" md-menu-origin>
+      <md-tooltip>Tablet Actions</md-tooltip>
       <md-icon md-font-set="material-icons">more_vert</md-icon>
     </md-button>
     <md-menu-content>
