@@ -9,6 +9,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func testVersionedObjectCache(t *testing.T, voc *VersionedObjectCache, vo VersionedObject, expectedVO VersionedObject) {
@@ -295,16 +297,16 @@ func TestShardCache(t *testing.T) {
 func TestCellShardTabletsCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *topo.ShardReplication) error {
-		sr.ReplicationLinks = []topo.ReplicationLink{
-			topo.ReplicationLink{
-				TabletAlias: topo.TabletAlias{
+	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *pb.ShardReplication) error {
+		sr.ReplicationLinks = []*pb.ShardReplication_ReplicationLink{
+			&pb.ShardReplication_ReplicationLink{
+				TabletAlias: &pb.TabletAlias{
 					Cell: "cell1",
 					Uid:  12,
 				},
 			},
-			topo.ReplicationLink{
-				TabletAlias: topo.TabletAlias{
+			&pb.ShardReplication_ReplicationLink{
+				TabletAlias: &pb.TabletAlias{
 					Cell: "cell1",
 					Uid:  13,
 				},

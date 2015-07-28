@@ -362,7 +362,7 @@ class TestTabletManager(unittest.TestCase):
     # make sure the replica is in the replication graph
     before_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                          'test_keyspace/0'])
-    self.assertEqual(2, len(before_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(before_scrap))
+    self.assertEqual(2, len(before_scrap['replication_links']), 'wrong replication links before: %s' % str(before_scrap))
 
     # scrap and re-init
     utils.run_vtctl(['ScrapTablet', '-force', tablet_62044.tablet_alias])
@@ -370,7 +370,7 @@ class TestTabletManager(unittest.TestCase):
 
     after_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['ReplicationLinks']), 'wrong replication links after: %s' % str(after_scrap))
+    self.assertEqual(2, len(after_scrap['replication_links']), 'wrong replication links after: %s' % str(after_scrap))
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
@@ -378,13 +378,13 @@ class TestTabletManager(unittest.TestCase):
                      'test_nj-0000066666'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
-    self.assertEqual(3, len(with_bogus['ReplicationLinks']),
+    self.assertEqual(3, len(with_bogus['replication_links']),
                      'wrong replication links with bogus: %s' % str(with_bogus))
     utils.run_vtctl(['ShardReplicationFix', 'test_nj', 'test_keyspace/0'],
                     auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                         'test_keyspace/0'])
-    self.assertEqual(2, len(after_scrap['ReplicationLinks']),
+    self.assertEqual(2, len(after_scrap['replication_links']),
                      'wrong replication links after fix: %s' % str(after_fix))
 
   def check_healthz(self, tablet, expected):

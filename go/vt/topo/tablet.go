@@ -538,7 +538,7 @@ func Validate(ctx context.Context, ts Server, tabletAlias TabletAlias) error {
 			return err
 		}
 
-		_, err = si.GetReplicationLink(tabletAlias)
+		_, err = si.GetReplicationLink(TabletAliasToProto(tabletAlias))
 		if err != nil {
 			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
 		}
@@ -553,7 +553,7 @@ func Validate(ctx context.Context, ts Server, tabletAlias TabletAlias) error {
 			return err
 		}
 
-		rl, err := si.GetReplicationLink(tabletAlias)
+		rl, err := si.GetReplicationLink(TabletAliasToProto(tabletAlias))
 		if err != ErrNoNode {
 			return fmt.Errorf("unexpected replication data found(possible pending action?): %v (%v)", rl, tablet.Type)
 		}

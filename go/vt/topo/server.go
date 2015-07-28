@@ -11,6 +11,8 @@ import (
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -176,7 +178,7 @@ type Server interface {
 	// ShardReplication object does not exist, an empty one will
 	// be passed to the update function. All necessary directories
 	// need to be created by this method, if applicable.
-	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*ShardReplication) error) error
+	UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error
 
 	// GetShardReplication returns the replication data.
 	// Can return ErrNoNode if the object doesn't exist.

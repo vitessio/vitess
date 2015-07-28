@@ -252,7 +252,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
 				wr.Logger().Infof("Deleting tablet %v", rl.TabletAlias)
-				if err := wr.TopoServer().DeleteTablet(ctx, rl.TabletAlias); err != nil && err != topo.ErrNoNode {
+				if err := wr.TopoServer().DeleteTablet(ctx, topo.ProtoToTabletAlias(rl.TabletAlias)); err != nil && err != topo.ErrNoNode {
 					return fmt.Errorf("can't delete tablet %v: %v", rl.TabletAlias, err)
 				}
 			}

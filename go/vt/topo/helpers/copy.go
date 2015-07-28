@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo
@@ -208,7 +210,7 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Server) {
 							continue
 						}
 
-						if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topo.ShardReplication) error {
+						if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *pb.ShardReplication) error {
 							*oldSR = *sri.ShardReplication
 							return nil
 						}); err != nil {

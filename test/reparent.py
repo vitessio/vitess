@@ -546,8 +546,8 @@ class TestReparent(unittest.TestCase):
     shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                               'test_keyspace/0'])
     hashed_links = {}
-    for rl in shard_replication['ReplicationLinks']:
-      key = rl['TabletAlias']['Cell'] + '-' + str(rl['TabletAlias']['Uid'])
+    for rl in shard_replication['replication_links']:
+      key = rl['tablet_alias']['cell'] + '-' + str(rl['tablet_alias']['uid'])
       hashed_links[key] = True
     logging.debug('Got replication links: %s', str(hashed_links))
     expected_links = {

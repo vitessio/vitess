@@ -366,7 +366,7 @@ func newCellShardTabletsCache(ts topo.Server) *VersionedObjectCacheMap {
 				TabletAliases: make([]topo.TabletAlias, len(sr.ReplicationLinks)),
 			}
 			for i, rl := range sr.ReplicationLinks {
-				result.TabletAliases[i] = rl.TabletAlias
+				result.TabletAliases[i] = topo.ProtoToTabletAlias(rl.TabletAlias)
 			}
 			return result, nil
 		})

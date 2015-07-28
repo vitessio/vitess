@@ -7,6 +7,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var errNotImplemented = errors.New("Not implemented")
@@ -128,7 +130,7 @@ func (ft FakeTopo) GetTabletsByCell(ctx context.Context, cell string) ([]topo.Ta
 }
 
 // UpdateShardReplicationFields implements topo.Server.
-func (ft FakeTopo) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+func (ft FakeTopo) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error {
 	return errNotImplemented
 }
 
