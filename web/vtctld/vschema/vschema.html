@@ -266,7 +266,7 @@ They are only used with the
 
       <md-input-container flex="30">
         <label>Vindex</label>
-        <input type="text" ng-model="vindexname" disabled class="input-header">
+        <input type="text" ng-model="vindexname" name="vindex" disabled class="input-header">
       </md-input-container>
 
       <div layout="column" flex>
@@ -285,14 +285,28 @@ They are only used with the
             <div ng-messages="vindexForm.vindexType.$error">
               <div ng-message="required">Required</div>
               <div ng-message="vdefined">Undefined Vindex Type</div>
+              <div ng-message="vownedPrimaryFunctional">Owned primary vindex must have a functional type.</div>
+              <div ng-message="vownedNonPrimaryLookup">Owned non-primary vindex must have a lookup type.</div>
             </div>
           </md-autocomplete>
           <input ng-hide="true" name="vindexType" ng-model="vindex.Type" vindex-type required>
 
-          <md-input-container flex>
-            <label>Owner</label>
-            <input type="text" ng-model="vindex.Owner">
-          </md-input-container>
+          <md-autocomplete flex md-floating-label="Owner" md-min-length="0"
+              md-selected-item=""
+              md-selected-item-change=""
+              md-search-text="vindex.Owner"
+              md-search-text-change=""
+              md-items="item in tableSelector(keyspace, vindex.Owner)"
+              md-item-text="item" md-autofocus="false">
+            <md-item-template>
+              <span md-highlight-text="vindex.Owner">{{item}}</span>
+            </md-item-template>
+            <md-not-found>No tables found matching "{{vindex.Owner}}".</md-not-found>
+            <div ng-messages="vindexForm.vindexOwner.$error">
+              <div ng-message="vdefined">Undefined Table</div>
+            </div>
+          </md-autocomplete>
+          <input ng-hide="true" name="vindexOwner" ng-model="vindex.Owner" vindex-owner>
         </div>
 
         <div layout="row" layout-wrap>
@@ -305,10 +319,10 @@ They are only used with the
       </form>
     </div>
 
-    <form name="addVindexForm" layout="row"
-        ng-submit="addVindex(keyspace, newVindex, newVindexType, newVindexOwner); newVindex=''; newVindexType=''; newVindexOwner=''; addVindexForm.$setUntouched()">
+    <form name="vindexForm" layout="row"
+        ng-submit="addVindex(keyspace, newVindex, newVindexType, newVindexOwner); newVindex=''; newVindexType=''; newVindexOwner=''; vindexForm.$setUntouched()">
       <md-button class="md-icon-button md-raised md-primary md-hue-3" aria-label="Add Vindex"
-          type="submit" ng-disabled="addVindexForm.$invalid">
+          type="submit" ng-disabled="vindexForm.$invalid">
         <md-tooltip>Add Vindex</md-tooltip>
         <md-icon md-font-set="material-icons">add</md-icon>
       </md-button>
@@ -329,16 +343,30 @@ They are only used with the
           <span md-highlight-text="newVindexType">{{item}}</span>
         </md-item-template>
         <md-not-found>No vindex types found matching "{{newVindexType}}".</md-not-found>
-        <div ng-messages="addVindexForm.vindexType.$error">
+        <div ng-messages="vindexForm.vindexType.$error">
           <div ng-message="vdefined">Undefined Vindex Type</div>
+          <div ng-message="vownedPrimaryFunctional">Owned primary vindex must have a functional type.</div>
+          <div ng-message="vownedNonPrimaryLookup">Owned non-primary vindex must have a lookup type.</div>
         </div>
       </md-autocomplete>
       <input ng-hide="true" name="vindexType" ng-model="newVindexType" vindex-type required>
 
-      <md-input-container flex>
-        <label>Owner</label>
-        <input type="text" ng-model="newVindexOwner">
-      </md-input-container>
+      <md-autocomplete flex md-floating-label="Owner" md-min-length="0"
+          md-selected-item=""
+          md-selected-item-change=""
+          md-search-text="newVindexOwner"
+          md-search-text-change=""
+          md-items="item in tableSelector(keyspace, newVindexOwner)"
+          md-item-text="item" md-autofocus="false">
+        <md-item-template>
+          <span md-highlight-text="newVindexOwner">{{item}}</span>
+        </md-item-template>
+        <md-not-found>No tables found matching "{{newVindexOwner}}".</md-not-found>
+        <div ng-messages="vindexForm.vindexOwner.$error">
+          <div ng-message="vdefined">Undefined Table</div>
+        </div>
+      </md-autocomplete>
+      <input ng-hide="true" name="vindexOwner" ng-model="newVindexOwner" vindex-owner>
     </div>
 
     </md-card-content>

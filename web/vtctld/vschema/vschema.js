@@ -1,50 +1,50 @@
 vindexInfo = {};
 vindexInfo.types = {
-  "numeric": {
-      "Type": "functional",
-      "Unique": true,
-      "Params": []
+  'numeric': {
+      type: 'functional',
+      unique: true,
+      params: []
   },
-  "hash": {
-      "Type": "functional",
-      "Unique": true,
-      "Params": [
-          "Table", "Column"
+  'hash': {
+      type: 'functional',
+      unique: true,
+      params: [
+          'Table', 'Column'
       ]
   },
-  "hash_autoinc": {
-      "Type": "functional",
-      "Unique": true,
-      "Params": [
-          "Table", "Column"
+  'hash_autoinc': {
+      type: 'functional',
+      unique: true,
+      params: [
+          'Table', 'Column'
       ]
   },
-  "lookup_hash": {
-      "Type": "lookup",
-      "Unique": false,
-      "Params": [
-          "Table", "From", "To"
+  'lookup_hash': {
+      type: 'lookup',
+      unique: false,
+      params: [
+          'Table', 'From', 'To'
       ]
   },
-  "lookup_hash_unique": {
-      "Type": "lookup",
-      "Unique": true,
-      "Params": [
-          "Table", "From", "To"
+  'lookup_hash_unique': {
+      type: 'lookup',
+      unique: true,
+      params: [
+          'Table', 'From', 'To'
       ]
   },
-  "lookup_hash_autoinc": {
-      "Type": "lookup",
-      "Unique": false,
-      "Params": [
-          "Table", "From", "To"
+  'lookup_hash_autoinc': {
+      type: 'lookup',
+      unique: false,
+      params: [
+          'Table', 'From', 'To'
       ]
   },
-  "lookup_hash_unique_autoinc": {
-      "Type": "lookup",
-      "Unique": true,
-      "Params": [
-          "Table", "From", "To"
+  'lookup_hash_unique_autoinc': {
+      type: 'lookup',
+      unique: true,
+      params: [
+          'Table', 'From', 'To'
       ]
   }
 };
@@ -93,6 +93,15 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
   keyspaceSelector = function(searchText) {
     if (!searchText) return $scope.keyspaces;
     return $scope.keyspaces.filter(function(item) {
+      return item.indexOf(searchText) != -1;
+    });
+  };
+
+  $scope.tableSelector = function(keyspace, searchText) {
+    if (!keyspace.Tables) return [];
+    var items = Object.keys(keyspace.Tables).sort();
+    if (!searchText) return items;
+    return items.filter(function(item) {
       return item.indexOf(searchText) != -1;
     });
   };
@@ -223,7 +232,7 @@ app.controller('VSchemaCtrl', function($scope, $mdDialog,
 
   $scope.onVindexTypeChange = function(vindex, type) {
     if (type in vindexInfo.types) {
-      params = vindexInfo.types[type].Params;
+      params = vindexInfo.types[type].params;
       if (!vindex.Params)
         vindex.Params = {};
 
@@ -284,6 +293,57 @@ app.directive('vindexType', function() {
       ctrl.$validators.vdefined = function(modelValue, viewValue) {
         if (viewValue)
           return viewValue in vindexInfo.types;
+        return true;
+      };
+      ctrl.$validators.vownedPrimaryFunctional = function(modelValue, viewValue) {
+        var form = scope.vindexForm;
+        var type = viewValue;
+        var owner = form.vindexOwner.$modelValue;
+        var vindex = form.vindex.$modelValue;
+        if (owner && scope.keyspace.Tables[owner]
+              && type && vindexInfo.types[type]
+              && vindexInfo.types[type].type != 'functional') {
+          // It's owned and non-functional. Make sure it isn't a primary.
+          var classname = scope.keyspace.Tables[owner];
+          if (classname && scope.keyspace.Classes[classname]) {
+            var cls = scope.keyspace.Classes[classname];
+            if (cls.ColVindexes && cls.ColVindexes[0]
+                  && cls.ColVindexes[0].Name == vindex)
+              return false;
+          }
+        }
+        return true;
+      };
+      ctrl.$validators.vownedNonPrimaryLookup = function(modelValue, viewValue) {
+        var form = scope.vindexForm;
+        var type = viewValue;
+        var owner = form.vindexOwner.$modelValue;
+        var vindex = form.vindex.$modelValue;
+        if (owner && scope.keyspace.Tables[owner]
+              && type && vindexInfo.types[type]
+              && vindexInfo.types[type].type != 'lookup') {
+          // It's owned and non-lookup. Make sure it is a primary.
+          var classname = scope.keyspace.Tables[owner];
+          if (classname && scope.keyspace.Classes[classname]) {
+            var cls = scope.keyspace.Classes[classname];
+            if (cls.ColVindexes && cls.ColVindexes[0]
+                  && cls.ColVindexes[0].Name != vindex)
+              return false;
+          }
+        }
+        return true;
+      };
+    }
+  };
+});
+
+app.directive('vindexOwner', function() {
+  return {
+    require: 'ngModel',
+    link: function(scope, elem, attrs, ctrl) {
+      ctrl.$validators.vdefined = function(modelValue, viewValue) {
+        if (viewValue)
+          return viewValue in scope.keyspace.Tables;
         return true;
       };
     }
