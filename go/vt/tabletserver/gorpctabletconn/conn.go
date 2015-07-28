@@ -44,7 +44,7 @@ type TabletBson struct {
 
 // DialTablet creates and initializes TabletBson.
 func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
-	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.PortMap["vt"]))
+	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["vt"])
 	conn := &TabletBson{endPoint: endPoint}
 	var err error
 	if *tabletBsonUsername != "" {

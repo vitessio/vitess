@@ -30,14 +30,14 @@ type TabletNode struct {
 // If the host is an IP address instead of a name, it is not shortened.
 func (tn *TabletNode) ShortName() string {
 	if net.ParseIP(tn.Host) != nil {
-		return netutil.JoinHostPort(tn.Host, int(tn.Port))
+		return netutil.JoinHostPort(tn.Host, tn.Port)
 	}
 
 	hostPart := strings.SplitN(tn.Host, ".", 2)[0]
 	if tn.Port == 0 {
 		return hostPart
 	}
-	return netutil.JoinHostPort(hostPart, int(tn.Port))
+	return netutil.JoinHostPort(hostPart, tn.Port)
 }
 
 func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {

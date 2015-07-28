@@ -53,7 +53,7 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 
 	var cc *grpc.ClientConn
 	var err error
-	addr := netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["grpc"])
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["grpc"]))
 	if connectTimeout == 0 {
 		cc, err = grpc.Dial(addr, grpc.WithBlock())
 	} else {

@@ -373,17 +373,17 @@ func (tablet *Tablet) EndPoint() (*pb.EndPoint, error) {
 
 // Addr returns hostname:vt port.
 func (tablet *Tablet) Addr() string {
-	return netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["vt"])
+	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["vt"]))
 }
 
 // MysqlAddr returns hostname:mysql port.
 func (tablet *Tablet) MysqlAddr() string {
-	return netutil.JoinHostPort(tablet.Hostname, tablet.Portmap["mysql"])
+	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["mysql"]))
 }
 
 // MysqlIPAddr returns ip:mysql port.
 func (tablet *Tablet) MysqlIPAddr() string {
-	return netutil.JoinHostPort(tablet.IPAddr, tablet.Portmap["mysql"])
+	return netutil.JoinHostPort(tablet.IPAddr, int32(tablet.Portmap["mysql"]))
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the

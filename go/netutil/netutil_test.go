@@ -104,7 +104,7 @@ func TestSplitHostPortFail(t *testing.T) {
 func TestJoinHostPort(t *testing.T) {
 	type addr struct {
 		host string
-		port int
+		port int32
 	}
 	table := map[string]addr{
 		"host-name:132": addr{host: "host-name", port: 132},

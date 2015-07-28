@@ -547,7 +547,7 @@ func deleteTopDir(dir string) (removalErr error) {
 // Addr returns the fully qualified host name + port for this instance.
 func (mysqld *Mysqld) Addr() string {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
-	return netutil.JoinHostPort(hostname, mysqld.config.MysqlPort)
+	return netutil.JoinHostPort(hostname, int32(mysqld.config.MysqlPort))
 }
 
 // IPAddr returns the IP address for this instance

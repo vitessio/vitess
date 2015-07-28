@@ -166,7 +166,7 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	tabletAddr = netutil.JoinHostPort("localhost", *port)
+	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
 
 	if *mysqlSocket != "" {

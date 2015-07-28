@@ -201,6 +201,6 @@ func addTabletLinks(result *explorerResult, data string) {
 	}
 
 	if port, ok := t.Portmap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, int32(port))))
 	}
 }
