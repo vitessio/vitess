@@ -362,6 +362,25 @@ app.directive('vindexOwner', function() {
           return viewValue in scope.keyspace.Tables;
         return true;
       };
+      ctrl.$validators.vcontained = function(modelValue, viewValue) {
+        var form = scope.vindexForm;
+        var vindex = form.vindex.$modelValue;
+
+        if (viewValue && scope.keyspace.Tables[viewValue]) {
+          var classname = scope.keyspace.Tables[viewValue];
+          if (classname && scope.keyspace.Classes[classname]) {
+            var cls = scope.keyspace.Classes[classname];
+            if (cls.ColVindexes) {
+              for (var i = 0; i < cls.ColVindexes.length; i++) {
+                if (cls.ColVindexes[i].Name == vindex)
+                  return true;
+              }
+            }
+            return false;
+          }
+        }
+        return true;
+      };
     }
   };
 });

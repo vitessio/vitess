@@ -305,6 +305,7 @@ They are only used with the
             <md-not-found>No tables found matching "{{vindex.Owner}}".</md-not-found>
             <div ng-messages="vindexForm.vindexOwner.$error">
               <div ng-message="vdefined">Undefined Table</div>
+              <div ng-message="vcontained">Table's class doesn't contain this vindex.</div>
             </div>
           </md-autocomplete>
           <input ng-hide="true" name="vindexOwner" ng-model="vindex.Owner" vindex-owner>
@@ -366,6 +367,7 @@ They are only used with the
         <md-not-found>No tables found matching "{{newVindexOwner}}".</md-not-found>
         <div ng-messages="vindexForm.vindexOwner.$error">
           <div ng-message="vdefined">Undefined Table</div>
+          <div ng-message="vcontained">Table's class doesn't contain this vindex.</div>
         </div>
       </md-autocomplete>
       <input ng-hide="true" name="vindexOwner" ng-model="newVindexOwner" vindex-owner>
