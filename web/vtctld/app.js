@@ -1,4 +1,4 @@
-app = angular.module('vtctld', ['ngMaterial', 'ngRoute', 'ngResource']);
+app = angular.module('vtctld', ['ngMaterial', 'ngRoute', 'ngResource', 'ngMessages']);
 
 vtTabletTypes = [
   'unknown', 'idle', 'master', 'replica', 'rdonly', 'spare', 'experimental',
@@ -12,7 +12,7 @@ app.constant('routes', [
   },
   {
     name: 'keyspaces',
-    title: 'Keyspaces',
+    title: 'Dashboard',
     urlBase: '/keyspaces/',
     urlPattern: '/keyspaces/',
     templateUrl: 'keyspaces.html',
@@ -29,6 +29,16 @@ app.constant('routes', [
     controller: 'ShardCtrl'
   },
   {
+    name: 'topo',
+    title: 'Topology Browser',
+    urlBase: '/topo/',
+    urlPattern: '/topo/:path*?',
+    templateUrl: 'topo.html',
+    controller: 'TopoCtrl',
+    showInNav: true,
+    icon: 'folder'
+  },
+  {
     name: 'schema',
     title: 'Schema Manager',
     urlBase: '/schema/',
@@ -39,15 +49,15 @@ app.constant('routes', [
     icon: 'storage'
   },
   {
-    name: 'topo',
-    title: 'Topology Browser',
-    urlBase: '/topo/',
-    urlPattern: '/topo/:path*?',
-    templateUrl: 'topo.html',
-    controller: 'TopoCtrl',
+    name: 'vschema',
+    title: 'Routing Indexes',
+    urlBase: '/vschema/',
+    urlPattern: '/vschema/',
+    templateUrl: 'vschema/vschema.html',
+    controller: 'VSchemaCtrl',
     showInNav: true,
-    icon: 'folder'
-  },
+    icon: 'directions'
+  }
 ]);
 
 app.config(function($mdThemingProvider, $routeProvider,
