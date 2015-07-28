@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -215,20 +216,27 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc)
 	}
 
+	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+	if callerID == nil {
+		if qre.qe.strictTableAcl {
+			return NewTabletError(ErrFail, "missing caller id")
+		}
+		return nil
+	}
+
 	// a superuser that exempts from table ACL checking.
-	if qre.qe.exemptACL == username {
+	if qre.qe.exemptACL == callerID.Username {
 		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
-	tableACLStatsKey := []string{
-		qre.plan.TableName,
-		// TODO(shengzhe): use table group instead of username.
-		username,
-		qre.plan.PlanId.String(),
-		username,
-	}
 	if qre.plan.Authorized == nil {
 		return NewTabletError(ErrFail, "table acl error: nil acl")
+	}
+	tableACLStatsKey := []string{
+		qre.plan.TableName,
+		qre.plan.Authorized.GroupName,
+		qre.plan.PlanId.String(),
+		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(username) {
