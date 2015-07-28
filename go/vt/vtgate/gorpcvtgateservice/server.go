@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -228,6 +229,19 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 		return nil
 	}
 	return vtgErr
+}
+
+// GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace *string, reply *topo.SrvKeyspace) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
+	defer cancel()
+	ks, err := vtg.server.GetSrvKeyspace(ctx, *keyspace)
+	if err != nil {
+		return err
+	}
+	*reply = *ks
+	return nil
 }
 
 // New returns a new VTGate service

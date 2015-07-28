@@ -361,6 +361,18 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest
 	return proto.SplitQueryPartsToProto(reply.Splits), nil
 }
 
+// GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *pb.GetSrvKeyspaceRequest) (response *pb.GetSrvKeyspaceResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	sk, err := vtg.server.GetSrvKeyspace(ctx, request.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetSrvKeyspaceResponse{
+		SrvKeyspace: topo.SrvKeyspaceToProto(sk),
+	}, nil
+}
+
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate vtgateservice.VTGateService) {
 		if servenv.GRPCCheckServiceMap("vtgateservice") {

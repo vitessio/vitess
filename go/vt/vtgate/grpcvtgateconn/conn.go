@@ -409,6 +409,17 @@ func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query t
 	return proto.ProtoToSplitQueryParts(response), nil
 }
 
+func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	request := &pb.GetSrvKeyspaceRequest{
+		Keyspace: keyspace,
+	}
+	response, err := conn.c.GetSrvKeyspace(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return topo.ProtoToSrvKeyspace(response.SrvKeyspace), nil
+}
+
 func (conn *vtgateConn) Close() {
 	conn.cc.Close()
 }

@@ -375,6 +375,20 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQuer
 	return nil
 }
 
+// GetSrvKeyspace is part of the VTGateService interface
+func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	if f.hasError {
+		return nil, testVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	if keyspace != getSrvKeyspaceKeyspace {
+		f.t.Errorf("GetSrvKeyspace has wrong input: got %v wanted %v", keyspace, getSrvKeyspaceKeyspace)
+	}
+	return getSrvKeyspaceResult, nil
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	return &fakeVTGateService{
@@ -418,6 +432,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testTx2PassNotInTransaction(t, conn)
 	testTx2Fail(t, conn)
 	testSplitQuery(t, conn)
+	testGetSrvKeyspace(t, conn)
 
 	// return an error for every call, make sure they're handled properly
 	fakeServer.(*fakeVTGateService).hasError = true
@@ -445,6 +460,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testCommit2Error(t, conn)
 	testRollback2Error(t, conn)
 	testSplitQueryError(t, conn)
+	testGetSrvKeyspaceError(t, conn)
 	fakeServer.(*fakeVTGateService).hasError = false
 
 	// force a panic at every call, then test that works
@@ -473,6 +489,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testCommit2Panic(t, conn)
 	testRollback2Panic(t, conn)
 	testSplitQueryPanic(t, conn)
+	testGetSrvKeyspacePanic(t, conn)
 	fakeServer.(*fakeVTGateService).panics = false
 }
 
@@ -1590,8 +1607,8 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
 	if !reflect.DeepEqual(qsl, splitQueryResult.Splits) {
-		t.Errorf("SplitQuery returned worng result: got %+v wanted %+v", qsl, splitQueryResult.Splits)
-		t.Errorf("SplitQuery returned worng result: got %+v wanted %+v", qsl[0].Query, splitQueryResult.Splits[0].Query)
+		t.Errorf("SplitQuery returned wrong result: got %+v wanted %+v", qsl, splitQueryResult.Splits)
+		t.Errorf("SplitQuery returned wrong result: got %+v wanted %+v", qsl[0].Query, splitQueryResult.Splits[0].Query)
 	}
 }
 
@@ -1604,6 +1621,29 @@ func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	expectPanic(t, err)
+}
+
+func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	sk, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
+	if err != nil {
+		t.Fatalf("GetSrvKeyspace failed: %v", err)
+	}
+	if !reflect.DeepEqual(sk, getSrvKeyspaceResult) {
+		t.Errorf("GetSrvKeyspace returned wrong result: got %+v wanted %+v", sk, getSrvKeyspaceResult)
+	}
+}
+
+func testGetSrvKeyspaceError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
+	verifyError(t, err, "GetSrvKeyspace")
+}
+
+func testGetSrvKeyspacePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := context.Background()
+	_, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
 	expectPanic(t, err)
 }
 
@@ -2098,4 +2138,28 @@ var splitQueryResult = &proto.SplitQueryResult{
 			Size: 12344,
 		},
 	},
+}
+
+var getSrvKeyspaceKeyspace = "test_keyspace"
+
+var getSrvKeyspaceResult = &topo.SrvKeyspace{
+	Partitions: map[topo.TabletType]*topo.KeyspacePartition{
+		topo.TYPE_REPLICA: &topo.KeyspacePartition{
+			ShardReferences: []topo.ShardReference{
+				topo.ShardReference{
+					Name: "shard0",
+					KeyRange: key.KeyRange{
+						Start: key.KeyspaceId("s"),
+						End:   key.KeyspaceId("e"),
+					},
+				},
+			},
+		},
+	},
+	ShardingColumnName: "sharding_column_name",
+	ShardingColumnType: key.KIT_UINT64,
+	ServedFrom: map[topo.TabletType]string{
+		topo.TYPE_MASTER: "other_keyspace",
+	},
+	SplitShardCount: 128,
 }
