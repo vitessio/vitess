@@ -177,8 +177,8 @@ class TestSharded(unittest.TestCase):
 
     shard_0_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.-80.master:vt")
     if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:vt", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
-    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:vt", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
 
     # connect to shard -80
     conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],

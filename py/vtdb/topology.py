@@ -148,8 +148,8 @@ def get_host_port_by_name(topo_client, db_key):
 
   host_port_list = []
   for entry in data['Entries']:
-    if service in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap'][service])
+    if service in entry['PortMap']:
+      host_port = (entry['Host'], entry['PortMap'][service])
       host_port_list.append(host_port)
   random.shuffle(host_port_list)
   return host_port_list
