@@ -105,6 +105,7 @@ small_integration_test_files = \
 	keyspace_test.py \
 	keyrange_test.py \
 	mysqlctl.py \
+	python_client_test.py \
 	sharded.py \
 	secure.py \
 	binlog.py \

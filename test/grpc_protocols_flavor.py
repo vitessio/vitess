@@ -30,6 +30,9 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def vtgate_protocol(self):
     return 'grpc'
 
+  def vtgate_python_protocol(self):
+    return 'gorpc'
+
   def rpc_timeout_message(self):
     return 'context deadline exceeded'
 
@@ -41,6 +44,8 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'grpc-vtworker',
         'grpc-tabletmanager',
         'grpc-vtgateservice',
+        # enabled for vtgate_python_protocol
+        'bsonrpc-vt-vtgateservice',
         ]
 
 protocols_flavor.__knows_protocols_flavor_map['grpc'] = GRpcProtocolsFlavor
