@@ -113,10 +113,11 @@ class VTGateConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, timeout, user=None, password=None,
+               keyfile=None, certfile=None):
     self.addr = addr
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, keyfile=keyfile, certfile=certfile)
     self.logger_object = vtdb_logger.get_logger()
 
   def __str__(self):
@@ -413,16 +414,13 @@ def _make_row(row, conversions):
   return converted_row
 
 
-def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
+def get_params_for_vtgate_conn(vtgate_addrs, timeout, user=None, password=None):
   db_params_list = []
   addrs = []
   if isinstance(vtgate_addrs, dict):
-    service = 'vt'
-    if encrypted:
-      service = 'vts'
-    if service not in vtgate_addrs:
-      raise Exception("required vtgate service addrs %s not exist" % service)
-    addrs = vtgate_addrs[service]
+    if 'vt' not in vtgate_addrs:
+      raise Exception("required vtgate service addrs 'vt' does not exist")
+    addrs = vtgate_addrs['vt']
     random.shuffle(addrs)
   elif isinstance(vtgate_addrs, list):
     random.shuffle(vtgate_addrs)
@@ -434,17 +432,15 @@ def get_params_for_vtgate_conn(vtgate_addrs, timeout, encrypted=False, user=None
     vt_params = dict()
     vt_params['addr'] = addr
     vt_params['timeout'] = timeout
-    vt_params['encrypted'] = encrypted
     vt_params['user'] = user
     vt_params['password'] = password
     db_params_list.append(vt_params)
   return db_params_list
 
 
-def connect(vtgate_addrs, timeout, encrypted=False, user=None, password=None):
+def connect(vtgate_addrs, timeout, user=None, password=None):
   db_params_list = get_params_for_vtgate_conn(vtgate_addrs, timeout,
-                                              encrypted=encrypted, user=user,
-                                              password=password)
+                                              user=user, password=password)
 
   if not db_params_list:
    raise dbexceptions.OperationalError("empty db params list - no db instance available for vtgate_addrs %s" % vtgate_addrs)

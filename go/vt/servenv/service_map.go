@@ -40,8 +40,6 @@ func InitServiceMap(protocol, name string) {
 func InitServiceMapForBsonRpcService(name string) {
 	serviceMap["bsonrpc-vt-"+name] = true
 	serviceMap["bsonrpc-auth-vt-"+name] = true
-	serviceMap["bsonrpc-vts-"+name] = true
-	serviceMap["bsonrpc-auth-vts-"+name] = true
 	serviceMap["bsonrpc-unix-"+name] = true
 	serviceMap["bsonrpc-auth-unix-"+name] = true
 }

@@ -7,7 +7,6 @@ package rpcwrap
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -61,17 +60,15 @@ func (bc *BufferedConnection) Close() error {
 
 // DialHTTP connects to a go HTTP RPC server using the specified codec.
 // use 0 as connectTimeout for no timeout
-// use nil as config to not use TLS
-func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
-	return dialHTTP(network, address, codecName, cFactory, false, connectTimeout, config)
+func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (*rpc.Client, error) {
+	return dialHTTP(network, address, codecName, cFactory, false, connectTimeout)
 }
 
 // DialAuthHTTP connects to an authenticated go HTTP RPC server using
 // the specified codec and credentials.
 // use 0 as connectTimeout for no timeout
-// use nil as config to not use TLS
-func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration, config *tls.Config) (conn *rpc.Client, err error) {
-	if conn, err = dialHTTP(network, address, codecName, cFactory, true, connectTimeout, config); err != nil {
+func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (conn *rpc.Client, err error) {
+	if conn, err = dialHTTP(network, address, codecName, cFactory, true, connectTimeout); err != nil {
 		return
 	}
 	reply := new(auth.GetNewChallengeReply)
@@ -89,7 +86,7 @@ func DialAuthHTTP(network, address, user, password, codecName string, cFactory C
 	return
 }
 
-func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
+func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool, connectTimeout time.Duration) (*rpc.Client, error) {
 	var err error
 	var conn net.Conn
 	if connectTimeout != 0 {
@@ -99,10 +96,6 @@ func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, a
 	}
 	if err != nil {
 		return nil, err
-	}
-
-	if config != nil {
-		conn = tls.Client(conn, config)
 	}
 
 	_, err = io.WriteString(conn, "CONNECT "+GetRpcPath(codecName, auth)+" HTTP/1.0\n\n")

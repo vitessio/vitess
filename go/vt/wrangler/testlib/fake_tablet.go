@@ -107,7 +107,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		Portmap: map[string]int{
 			"vt":    8100 + int(uid),
 			"mysql": 3300 + int(uid),
-			"vts":   8200 + int(uid),
+			"grpc":  8200 + int(uid),
 		},
 		IPAddr:   fmt.Sprintf("%v.0.0.1", 100+uid),
 		Keyspace: "test_keyspace",

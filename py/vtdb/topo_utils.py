@@ -15,29 +15,23 @@ class VTConnParams(object):
   db_type = None
   addr = None
   timeout = 0
-  encrypted = False
   user = None
   password = None
 
-  def __init__(self, keyspace_name, shard, db_type, addr, timeout, encrypted, user, password):
+  def __init__(self, keyspace_name, shard, db_type, addr, timeout,
+               user, password):
     self.keyspace = keyspace_name
     self.shard = shard
     self.tablet_type = db_type
     self.addr = addr
     self.timeout = timeout
-    self.encrypted = encrypted
     self.user = user
     self.password = password
 
 
-def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, timeout, encrypted, user, password):
+def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, timeout, user, password):
   db_params_list = []
-  encrypted_service = 'vts'
-  if encrypted:
-    service = encrypted_service
-  else:
-    service = 'vt'
-  db_key = "%s.%s.%s:%s" % (keyspace_name, shard, db_type, service)
+  db_key = "%s.%s.%s:vt" % (keyspace_name, shard, db_type)
   # This will read the cached keyspace.
   keyspace_object = topology.get_keyspace(keyspace_name)
 
@@ -58,30 +52,17 @@ def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, ti
     vtdb_logger.get_logger().topo_exception('failed to get or parse topo data', db_key, e)
     return []
 
-  end_points_list = []
   host_port_list = []
-  encrypted_host_port_list = []
   if 'Entries' not in end_points_data:
     vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(end_points_data), db_key, e)
     raise Exception('zkocc returned: %s' % str(end_points_data))
   for entry in end_points_data['Entries']:
-    if service in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap'][service],
-                   service == 'vts')
+    if 'vt' in entry['NamedPortMap']:
+      host_port = (entry['Host'], entry['NamedPortMap']['vt'])
       host_port_list.append(host_port)
-    if encrypted and encrypted_service in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap'][encrypted_service],
-                   True)
-      encrypted_host_port_list.append(host_port)
-  if encrypted and len(encrypted_host_port_list) > 0:
-    random.shuffle(encrypted_host_port_list)
-    end_points_list = encrypted_host_port_list
-  else:
-    random.shuffle(host_port_list)
-    end_points_list = host_port_list
+  random.shuffle(host_port_list)
 
-
-  for host, port, encrypted in end_points_list:
-    vt_params = VTConnParams(keyspace_name, shard, db_type, "%s:%s" % (host, port), timeout, encrypted, user, password).__dict__
+  for host, port in host_port_list:
+    vt_params = VTConnParams(keyspace_name, shard, db_type, "%s:%s" % (host, port), timeout, user, password).__dict__
     db_params_list.append(vt_params)
   return db_params_list

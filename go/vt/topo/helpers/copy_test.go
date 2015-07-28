@@ -48,7 +48,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 		IPAddr:   "1.2.3.4",
 		Portmap: map[string]int{
 			"vt":    8101,
-			"vts":   8102,
+			"gprc":  8102,
 			"mysql": 3306,
 		},
 		Keyspace:       "test_keyspace",
@@ -67,7 +67,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 		IPAddr: "2.3.4.5",
 		Portmap: map[string]int{
 			"vt":    8101,
-			"vts":   8102,
+			"grpc":  8102,
 			"mysql": 3306,
 		},
 		Hostname: "slavehost",

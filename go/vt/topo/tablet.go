@@ -316,7 +316,7 @@ type Tablet struct {
 	Hostname string
 	IPAddr   string
 
-	// Named port names. Currently supported ports: vt, vts,
+	// Named port names. Currently supported ports: vt, grpc,
 	// mysql.
 	Portmap map[string]int
 
