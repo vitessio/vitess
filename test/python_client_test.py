@@ -16,7 +16,7 @@ import utils
 from vtdb import dbexceptions
 from vtdb import keyrange
 from vtdb import keyrange_constants
-from vtdb import vtgatev2
+from vtdb import vtgate_client
 
 
 vtgateclienttest_process = None
@@ -54,9 +54,9 @@ class TestPythonClient(unittest.TestCase):
   CONNECT_TIMEOUT = 10.0
 
   def setUp(self):
-    # FIXME(alainjobart, dumbunny): use the factory
-    addrs = {'vt': ['localhost:%u' % vtgateclienttest_port,]}
-    self.conn = vtgatev2.connect(addrs, self.CONNECT_TIMEOUT)
+    addr = 'localhost:%u' % vtgateclienttest_port
+    protocol = protocols_flavor().vtgate_python_protocol()
+    self.conn = vtgate_client.connect(protocol, addr, 30.0)
 
   def tearDown(self):
     self.conn.close()
