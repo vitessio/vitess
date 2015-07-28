@@ -285,6 +285,7 @@ They are only used with the
             <div ng-messages="vindexForm.vindexType.$error">
               <div ng-message="required">Required</div>
               <div ng-message="vdefined">Undefined Vindex Type</div>
+              <div ng-message="vprimaryUnique">Primary vindex must be unique.</div>
               <div ng-message="vownedPrimaryFunctional">Owned primary vindex must have a functional type.</div>
               <div ng-message="vownedNonPrimaryLookup">Owned non-primary vindex must have a lookup type.</div>
             </div>
@@ -345,6 +346,7 @@ They are only used with the
         <md-not-found>No vindex types found matching "{{newVindexType}}".</md-not-found>
         <div ng-messages="vindexForm.vindexType.$error">
           <div ng-message="vdefined">Undefined Vindex Type</div>
+          <div ng-message="vprimaryUnique">Primary vindex must be unique.</div>
           <div ng-message="vownedPrimaryFunctional">Owned primary vindex must have a functional type.</div>
           <div ng-message="vownedNonPrimaryLookup">Owned non-primary vindex must have a lookup type.</div>
         </div>

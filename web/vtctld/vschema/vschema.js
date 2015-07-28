@@ -295,6 +295,22 @@ app.directive('vindexType', function() {
           return viewValue in vindexInfo.types;
         return true;
       };
+      ctrl.$validators.vprimaryUnique = function(modelValue, viewValue) {
+        var form = scope.vindexForm;
+        var type = viewValue;
+        var vindex = form.vindex.$modelValue;
+        if (vindexInfo.types[type] && !vindexInfo.types[type].unique) {
+          // It's not unique. Make sure it isn't primary.
+          for (var classname in scope.keyspace.Classes) {
+            var cls = scope.keyspace.Classes[classname];
+            if (cls.ColVindexes && cls.ColVindexes[0]
+                  && cls.ColVindexes[0].Name == vindex) {
+              return false;
+            }
+          }
+        }
+        return true;
+      };
       ctrl.$validators.vownedPrimaryFunctional = function(modelValue, viewValue) {
         var form = scope.vindexForm;
         var type = viewValue;
