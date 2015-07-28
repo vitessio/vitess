@@ -44,7 +44,7 @@ site_test: unit_test site_integration_test
 
 clean:
 	go clean -i ./go/...
-	rm -rf java/vtocc-client/target java/vtocc-jdbc-driver/target third_party/acolyte
+	rm -rf third_party/acolyte
 
 unit_test:
 	godep go test $(VT_GO_PARALLEL) ./go/...
@@ -194,7 +194,7 @@ site_integration_test:
 	$(call run_integration_tests, $(site_integration_test_files))
 
 java_vtgate_client_test:
-	mvn -f java/vtgate-client/pom.xml clean verify
+	mvn -f java/pom.xml clean verify
 
 v3_test:
 	cd test && ./vtgatev3_test.py
