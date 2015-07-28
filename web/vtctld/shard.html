@@ -32,9 +32,8 @@
     <h3 flex="50">Master Tablet</h3>
     <div flex>
       <span ng-if="!shard.MasterAlias.Uid">None</span>
-      <a ng-if="shard.MasterAlias.Uid"
-        ng-href="#/tablets/{{shard.MasterAlias.Cell}}-{{shard.MasterAlias.Uid}}"
-        ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></a>
+      <span ng-if="shard.MasterAlias.Uid"
+        ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></span>
     </div>
   </div>
 </div>
