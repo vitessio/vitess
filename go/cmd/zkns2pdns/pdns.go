@@ -130,7 +130,7 @@ func (rz *zknsResolver) getSRV(qname string) ([]*pdnsReply, error) {
 
 	replies := make([]*pdnsReply, 0, 16)
 	for _, addr := range addrs.Entries {
-		content := fmt.Sprintf("%v\t%v %v %v", defaultPriority, defaultWeight, addr.NamedPortMap[portName], addr.Host)
+		content := fmt.Sprintf("%v\t%v %v %v", defaultPriority, defaultWeight, addr.PortMap[portName], addr.Host)
 		replies = append(replies, &pdnsReply{qname, "IN", "SRV", defaultTTL, defaultId, content})
 	}
 	return replies, nil
