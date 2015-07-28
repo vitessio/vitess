@@ -2,6 +2,7 @@ package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
+
 import com.youtube.vitess.vtgate.BindVariable;
 import com.youtube.vitess.vtgate.Exceptions.ConnectionException;
 import com.youtube.vitess.vtgate.KeyRange;
@@ -10,11 +11,12 @@ import com.youtube.vitess.vtgate.Query;
 import com.youtube.vitess.vtgate.Query.QueryBuilder;
 import com.youtube.vitess.vtgate.Row;
 import com.youtube.vitess.vtgate.Row.Cell;
+import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.VtGate;
 import com.youtube.vitess.vtgate.cursor.Cursor;
 import com.youtube.vitess.vtgate.cursor.CursorImpl;
-import com.youtube.vitess.vtgate.TestEnv;
 import com.youtube.vitess.vtgate.integration.util.Util;
+
 import org.apache.commons.codec.binary.Hex;
 import org.joda.time.DateTime;
 import org.junit.AfterClass;
