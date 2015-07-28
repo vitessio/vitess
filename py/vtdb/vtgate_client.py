@@ -334,3 +334,17 @@ class VTGateClient(object):
       dbexceptions.FatalError: this query should not be retried.
     """
     pass
+
+  def get_srv_keyspace(self, keyspace):
+    """Returns a SrvKeyspace object.
+
+    Args:
+      keyspace: name of the keyspace to retrieve.
+
+    Returns:
+      srv_keyspace: a keyspace.Keyspace object.
+
+    Raises:
+      TBD
+    """
+    pass

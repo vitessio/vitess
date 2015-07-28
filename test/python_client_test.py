@@ -61,6 +61,41 @@ class TestPythonClient(unittest.TestCase):
   def tearDown(self):
     self.conn.close()
 
+  def test_success_get_srv_keyspace(self):
+    """Test we get the right results from get_srv_keyspace.
+
+    We only test the successful cases.
+    """
+
+    # big has one big shard
+    big = self.conn.get_srv_keyspace('big')
+    self.assertEquals(big.name, 'big')
+    self.assertEquals(big.sharding_col_name, 'sharding_column_name')
+    self.assertEquals(big.sharding_col_type, keyrange_constants.KIT_UINT64)
+    self.assertEquals(big.served_from, {'master':'other_keyspace'})
+    self.assertEquals(big.get_shards('replica'), [{'Name':'shard0',
+                                                   'KeyRange':{
+                                                       'Start': '\x40\x00\x00\x00\x00\x00\x00\x00',
+                                                       'End': '\x80\x00\x00\x00\x00\x00\x00\x00',
+                                                       }}])
+    self.assertEquals(big.get_shard_count('replica'), 1)
+    self.assertEquals(big.get_shard_count('rdonly'), 0)
+    self.assertEquals(big.get_shard_names('replica'), ['shard0'])
+    self.assertEquals(big.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica'), 'shard0')
+    with self.assertRaises(ValueError):
+      big.keyspace_id_to_shard_name_for_db_type(0x2000000000000000, 'replica')
+
+    # small has no shards
+    small = self.conn.get_srv_keyspace('small')
+    self.assertEquals(small.name, 'small')
+    self.assertEquals(small.sharding_col_name, '')
+    self.assertEquals(small.sharding_col_type, keyrange_constants.KIT_UNSET)
+    self.assertEquals(small.served_from, {})
+    self.assertEquals(small.get_shards('replica'), [])
+    self.assertEquals(small.get_shard_count('replica'), 0)
+    with self.assertRaises(ValueError):
+      small.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica')
+
   def test_integrity_error(self):
     """Test we correctly raise dbexceptions.IntegrityError.
     """
@@ -90,6 +125,13 @@ class TestPythonClient(unittest.TestCase):
 
     # FIXME(alainjobart) add test for ExecuteBatchKeyspaceIds
 
+  def test_error(self):
+    """Test a regular server error raises the right exception.
+    """
+
+    # GetSrvKeyspace test
+    with self.assertRaises(dbexceptions.DatabaseError):
+      self.conn.get_srv_keyspace("error")
 
 if __name__ == '__main__':
   utils.main()

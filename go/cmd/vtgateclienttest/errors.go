@@ -16,12 +16,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-// errorClient implements vtgateservice.VTGateService.
+// errorClient implements vtgateservice.VTGateService
 // and returns specific errors. It is meant to test all possible error cases,
 // and make sure all clients handle the errors correctly.
 //
 // So far, we understand:
 // - "return integrity error": Execute* will return an integrity error.
+// - "error": GetSrvKeyspace will return an error.
 //
 // TODO(alainjobart) Add throttling error.
 // TODO(alainjobart) Add all errors the client may care about.

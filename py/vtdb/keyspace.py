@@ -48,6 +48,10 @@ class Keyspace(object):
     return [shard['Name'] for shard in shards]
 
   def keyspace_id_to_shard_name_for_db_type(self, keyspace_id, db_type):
+    """Finds the shard for a keyspace_id.
+
+    WARNING: this only works for KIT_UINT64 keyspace ids.
+    """
     if not keyspace_id:
       raise ValueError('keyspace_id is not set')
     if not db_type:

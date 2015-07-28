@@ -232,11 +232,11 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 }
 
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace *string, reply *topo.SrvKeyspace) (err error) {
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *proto.GetSrvKeyspaceRequest, reply *topo.SrvKeyspace) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(*rpcTimeout))
 	defer cancel()
-	ks, err := vtg.server.GetSrvKeyspace(ctx, *keyspace)
+	ks, err := vtg.server.GetSrvKeyspace(ctx, request.Keyspace)
 	if err != nil {
 		return err
 	}

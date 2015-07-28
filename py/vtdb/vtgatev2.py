@@ -13,6 +13,7 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyrange
+from vtdb import keyspace
 from vtdb import vtdb_logger
 from vtdb import vtgate_cursor
 from vtdb import vtgate_utils
@@ -398,6 +399,18 @@ class VTGateConnection(object):
       self._stream_result_index = 0
 
     return row
+
+  def get_srv_keyspace(self, name):
+    try:
+      response = self.client.call('VTGate.GetSrvKeyspace', {
+          'Keyspace': name,
+          })
+      return keyspace.Keyspace(name, response.reply)
+    except gorpc.GoRpcError as e:
+      raise convert_exception(e, str(self), keyspace=name)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
 
 
 def _make_row(row, conversions):
