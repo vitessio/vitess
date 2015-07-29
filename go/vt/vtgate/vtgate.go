@@ -563,6 +563,11 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	return nil
 }
 
+// GetSrvKeyspace is part of the vtgate service API.
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	return vtg.resolver.scatterConn.toposerv.GetSrvKeyspace(ctx, vtg.resolver.scatterConn.cell, keyspace)
+}
+
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
 // as errors in those components, but logged to Info in VTGate itself.
 func logError(err error, query interface{}, logger *logutil.ThrottledLogger) {

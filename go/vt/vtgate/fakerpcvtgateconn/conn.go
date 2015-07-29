@@ -278,6 +278,11 @@ func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, que
 	return reply, nil
 }
 
+// GetSrvKeyspace please see vtgateconn.Impl.SplitQuery
+func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	return nil, fmt.Errorf("NYI")
+}
+
 // Close please see vtgateconn.Impl.Close
 func (conn *FakeVTGateConn) Close() {
 }

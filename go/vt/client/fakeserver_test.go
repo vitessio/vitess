@@ -131,6 +131,11 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQuer
 	return nil
 }
 
+// GetSrvKeyspace is part of the VTGateService interface
+func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	return &topo.SrvKeyspace{}, nil
+}
+
 // HandlePanic is part of the VTGateService interface
 func (f *fakeVTGateService) HandlePanic(err *error) {
 	if x := recover(); x != nil {

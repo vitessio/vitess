@@ -13,10 +13,11 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import keyrange
+from vtdb import keyspace
 from vtdb import vtdb_logger
+from vtdb import vtgate_client
 from vtdb import vtgate_cursor
 from vtdb import vtgate_utils
-
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
 
@@ -106,7 +107,7 @@ def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges,
 # A simple, direct connection to the vttablet query server.
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
-class VTGateConnection(object):
+class VTGateConnection(vtgate_client.VTGateClient):
   session = None
   _stream_fields = None
   _stream_conversions = None
@@ -400,6 +401,18 @@ class VTGateConnection(object):
 
     return row
 
+  def get_srv_keyspace(self, name):
+    try:
+      response = self.client.call('VTGate.GetSrvKeyspace', {
+          'Keyspace': name,
+          })
+      return keyspace.Keyspace(name, response.reply)
+    except gorpc.GoRpcError as e:
+      raise convert_exception(e, str(self), keyspace=name)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
+
 
 def _make_row(row, conversions):
   converted_row = []
@@ -460,3 +473,5 @@ def connect(vtgate_addrs, timeout, user=None, password=None):
 
   raise dbexceptions.OperationalError(
     'unable to create vt connection', host_addr, db_exception)
+
+vtgate_client.register_conn_class('gorpc', VTGateConnection)

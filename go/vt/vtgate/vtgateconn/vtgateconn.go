@@ -166,6 +166,11 @@ func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query t
 	return conn.impl.SplitQuery(ctx, keyspace, query, splitColumn, splitCount)
 }
 
+// GetSrvKeyspace returns a topo.SrvKeyspace object.
+func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	return conn.impl.GetSrvKeyspace(ctx, keyspace)
+}
+
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
@@ -347,6 +352,9 @@ type Impl interface {
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query.
 	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
+
+	// GetSrvKeyspace returns a topo.SrvKeyspace.
+	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)
 
 	// Close must be called for releasing resources.
 	Close()

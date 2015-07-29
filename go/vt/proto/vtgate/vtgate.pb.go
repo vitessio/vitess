@@ -42,6 +42,8 @@ It has these top-level messages:
 	RollbackResponse
 	SplitQueryRequest
 	SplitQueryResponse
+	GetSrvKeyspaceRequest
+	GetSrvKeyspaceResponse
 */
 package vtgate
 
@@ -1080,6 +1082,31 @@ func (m *SplitQueryResponse_Part) GetKeyRangePart() *SplitQueryResponse_KeyRange
 func (m *SplitQueryResponse_Part) GetShardPart() *SplitQueryResponse_ShardPart {
 	if m != nil {
 		return m.ShardPart
+	}
+	return nil
+}
+
+// GetSrvKeyspaceRequest is the payload to GetSrvKeyspace
+type GetSrvKeyspaceRequest struct {
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace" json:"keyspace,omitempty"`
+}
+
+func (m *GetSrvKeyspaceRequest) Reset()         { *m = GetSrvKeyspaceRequest{} }
+func (m *GetSrvKeyspaceRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSrvKeyspaceRequest) ProtoMessage()    {}
+
+// GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace
+type GetSrvKeyspaceResponse struct {
+	SrvKeyspace *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace" json:"srv_keyspace,omitempty"`
+}
+
+func (m *GetSrvKeyspaceResponse) Reset()         { *m = GetSrvKeyspaceResponse{} }
+func (m *GetSrvKeyspaceResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSrvKeyspaceResponse) ProtoMessage()    {}
+
+func (m *GetSrvKeyspaceResponse) GetSrvKeyspace() *topodata.SrvKeyspace {
+	if m != nil {
+		return m.SrvKeyspace
 	}
 	return nil
 }

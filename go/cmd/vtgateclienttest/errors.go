@@ -10,17 +10,19 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 )
 
-// errorClient implements vtgateservice.VTGateService.
+// errorClient implements vtgateservice.VTGateService
 // and returns specific errors. It is meant to test all possible error cases,
 // and make sure all clients handle the errors correctly.
 //
 // So far, we understand:
 // - "return integrity error": Execute* will return an integrity error.
+// - "error": GetSrvKeyspace will return an error.
 //
 // TODO(alainjobart) Add throttling error.
 // TODO(alainjobart) Add all errors the client may care about.
@@ -113,6 +115,13 @@ func (c *errorClient) Rollback(ctx context.Context, inSession *proto.Session) er
 
 func (c *errorClient) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return c.fallback.SplitQuery(ctx, req, reply)
+}
+
+func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+	if keyspace == "error" {
+		return nil, fmt.Errorf("vtgate test client, errorClient.GetSrvKeyspace returning error")
+	}
+	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 
 func (c *errorClient) HandlePanic(err *error) {

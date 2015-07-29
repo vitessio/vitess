@@ -57,4 +57,13 @@ service Vitess {
 
   // Split a query into non-overlapping sub queries
   rpc SplitQuery(vtgate.SplitQueryRequest) returns (vtgate.SplitQueryResponse) {};
+
+  // GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
+  // This method is provided as a convenient way for clients to take a
+  // look at the sharding configuration for a Keyspace. Looking at the
+  // sharding information should not be used for routing queries (as the
+  // information may change, use the Execute calls for that).
+  // It is convenient for monitoring applications for instance, or if
+  // using custom sharding.
+  rpc GetSrvKeyspace(vtgate.GetSrvKeyspaceRequest) returns (vtgate.GetSrvKeyspaceResponse) {};
 }
