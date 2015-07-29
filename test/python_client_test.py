@@ -72,16 +72,18 @@ class TestPythonClient(unittest.TestCase):
     self.assertEquals(big.name, 'big')
     self.assertEquals(big.sharding_col_name, 'sharding_column_name')
     self.assertEquals(big.sharding_col_type, keyrange_constants.KIT_UINT64)
-    self.assertEquals(big.served_from, {'master':'other_keyspace'})
-    self.assertEquals(big.get_shards('replica'), [{'Name':'shard0',
-                                                   'KeyRange':{
-                                                       'Start': '\x40\x00\x00\x00\x00\x00\x00\x00',
-                                                       'End': '\x80\x00\x00\x00\x00\x00\x00\x00',
-                                                       }}])
+    self.assertEquals(big.served_from, {'master': 'other_keyspace'})
+    self.assertEquals(big.get_shards('replica'),
+                      [{'Name': 'shard0',
+                        'KeyRange': {
+                            'Start': '\x40\x00\x00\x00\x00\x00\x00\x00',
+                            'End': '\x80\x00\x00\x00\x00\x00\x00\x00',
+                            }}])
     self.assertEquals(big.get_shard_count('replica'), 1)
     self.assertEquals(big.get_shard_count('rdonly'), 0)
     self.assertEquals(big.get_shard_names('replica'), ['shard0'])
-    self.assertEquals(big.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica'), 'shard0')
+    self.assertEquals(big.keyspace_id_to_shard_name_for_db_type(
+        0x6000000000000000, 'replica'), 'shard0')
     with self.assertRaises(ValueError):
       big.keyspace_id_to_shard_name_for_db_type(0x2000000000000000, 'replica')
 
@@ -131,7 +133,7 @@ class TestPythonClient(unittest.TestCase):
 
     # GetSrvKeyspace test
     with self.assertRaises(dbexceptions.DatabaseError):
-      self.conn.get_srv_keyspace("error")
+      self.conn.get_srv_keyspace('error')
 
 if __name__ == '__main__':
   utils.main()
