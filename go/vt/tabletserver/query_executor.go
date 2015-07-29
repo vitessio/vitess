@@ -230,13 +230,13 @@ func (qre *QueryExecutor) checkPermissions() error {
 			qre.qe.tableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
-		errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
+			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 			return NewTabletError(ErrFail, "%s", errStr)
 		}
-		qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 		return nil
 	}
 	qre.qe.tableaclAllowed.Add(tableACLStatsKey, 1)

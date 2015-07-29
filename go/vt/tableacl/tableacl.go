@@ -197,7 +197,7 @@ func Authorized(table string, role Role) acl.ACL {
 			start = mid + 1
 		}
 	}
-	return acl.AcceptAllACL{}
+	return acl.DenyAllACL{}
 }
 
 // GetCurrentConfig returns a copy of current tableacl configuration.
