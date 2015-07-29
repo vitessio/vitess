@@ -15,6 +15,8 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -29,7 +31,6 @@ import (
 	// import vindexes implementations
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
-	"golang.org/x/net/context"
 )
 
 const errDupKey = "errno 1062"

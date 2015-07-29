@@ -53,7 +53,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	return nil, executeErr
 }
 
-// ExecuteShard is the RPC version of vtgateservice.VTGateService method
+// ExecuteShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsRequest) (response *pb.ExecuteShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	query := &proto.QueryShard{
@@ -166,7 +166,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	return nil, executeErr
 }
 
-// ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method
+// ExecuteBatchShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBatchShardsRequest) (response *pb.ExecuteBatchShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 
@@ -235,7 +235,7 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 	})
 }
 
-// StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
+// StreamExecuteShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, stream pbs.Vitess_StreamExecuteShardsServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 
@@ -381,6 +381,9 @@ func init() {
 	})
 }
 
+// RegisterForTest registers the gRPC implementation on the gRPC
+// server.  Useful for unit tests only, for real use, the init()
+// function does the registration.
 func RegisterForTest(s *grpc.Server, service vtgateservice.VTGateService) {
 	pbs.RegisterVitessServer(s, &VTGate{service})
 }
