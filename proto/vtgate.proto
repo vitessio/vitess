@@ -293,3 +293,13 @@ message SplitQueryResponse {
   }
   repeated Part splits = 1;
 }
+
+// GetSrvKeyspaceRequest is the payload to GetSrvKeyspace
+message GetSrvKeyspaceRequest {
+  string keyspace = 1;
+}
+
+// GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace
+message GetSrvKeyspaceResponse {
+  topodata.SrvKeyspace srv_keyspace = 1;
+}

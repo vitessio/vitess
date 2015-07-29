@@ -65,6 +65,14 @@ type VitessClient interface {
 	Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
 	SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error)
+	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
+	// This method is provided as a convenient way for clients to take a
+	// look at the sharding configuration for a Keyspace. Looking at the
+	// sharding information should not be used for routing queries (as the
+	// information may change, use the Execute calls for that).
+	// It is convenient for monitoring applications for instance, or if
+	// using custom sharding.
+	GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 
 type vitessClient struct {
@@ -302,6 +310,15 @@ func (c *vitessClient) SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequ
 	return out, nil
 }
 
+func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error) {
+	out := new(vtgate.GetSrvKeyspaceResponse)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/GetSrvKeyspace", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for Vitess service
 
 type VitessServer interface {
@@ -340,6 +357,14 @@ type VitessServer interface {
 	Rollback(context.Context, *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
 	SplitQuery(context.Context, *vtgate.SplitQueryRequest) (*vtgate.SplitQueryResponse, error)
+	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
+	// This method is provided as a convenient way for clients to take a
+	// look at the sharding configuration for a Keyspace. Looking at the
+	// sharding information should not be used for routing queries (as the
+	// information may change, use the Execute calls for that).
+	// It is convenient for monitoring applications for instance, or if
+	// using custom sharding.
+	GetSrvKeyspace(context.Context, *vtgate.GetSrvKeyspaceRequest) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 
 func RegisterVitessServer(s *grpc.Server, srv VitessServer) {
@@ -562,6 +587,18 @@ func _Vitess_SplitQuery_Handler(srv interface{}, ctx context.Context, codec grpc
 	return out, nil
 }
 
+func _Vitess_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, codec grpc.Codec, buf []byte) (interface{}, error) {
+	in := new(vtgate.GetSrvKeyspaceRequest)
+	if err := codec.Unmarshal(buf, in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(VitessServer).GetSrvKeyspace(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 var _Vitess_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "vtgateservice.Vitess",
 	HandlerType: (*VitessServer)(nil),
@@ -609,6 +646,10 @@ var _Vitess_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SplitQuery",
 			Handler:    _Vitess_SplitQuery_Handler,
+		},
+		{
+			MethodName: "GetSrvKeyspace",
+			Handler:    _Vitess_GetSrvKeyspace_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

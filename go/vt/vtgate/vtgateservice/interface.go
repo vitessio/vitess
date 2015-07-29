@@ -7,6 +7,7 @@
 package vtgateservice
 
 import (
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 )
@@ -36,6 +37,9 @@ type VTGateService interface {
 
 	// Map Reduce support
 	SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+
+	// Topology support
+	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)
 
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods

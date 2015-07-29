@@ -14,3 +14,4 @@ from vtdb.field_types import Binary
 from vtdb.field_types import STRING, BINARY, NUMBER, DATETIME, ROWID
 from vtdb.vtgatev3 import *
 from vtdb.cursorv3 import *
+from vtdb.vtgatev2 import *
