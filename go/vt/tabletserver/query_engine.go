@@ -62,9 +62,16 @@ type QueryEngine struct {
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
-	strictTableAcl   bool
-	enableAutoCommit bool
-	exemptACL        string
+	// tableaclExemptCount count the number of accesses allowed
+	// based on membership in the superuser ACL
+	tableaclExemptCount  sync2.AtomicInt64
+	tableaclAllowed      *stats.MultiCounters
+	tableaclDenied       *stats.MultiCounters
+	tableaclPseudoDenied *stats.MultiCounters
+	strictTableAcl       bool
+	enableAutoCommit     bool
+	enableTableAclDryRun bool
+	exemptACL            string
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -166,6 +173,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		qe.strictMode.Set(1)
 	}
 	qe.strictTableAcl = config.StrictTableAcl
+	qe.enableTableAclDryRun = config.EnableTableAclDryRun
 	qe.exemptACL = config.TableAclExemptACL
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.maxDMLRows = sync2.AtomicInt64(config.MaxDMLRows)
@@ -174,6 +182,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 	// Loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
+	var tableACLAllowedName string
+	var tableACLDeniedName string
+	var tableACLPseudoDeniedName string
 	// Stats
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -183,7 +194,16 @@ func NewQueryEngine(config Config) *QueryEngine {
 		stats.Publish(config.StatsPrefix+"RowcacheSpotCheckRatio", stats.FloatFunc(func() float64 {
 			return float64(qe.spotCheckFreq.Get()) / spotCheckMultiplier
 		}))
+		stats.Publish(config.StatsPrefix+"TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
+		tableACLAllowedName = "TableACLAllowed"
+		tableACLDeniedName = "TableACLDenied"
+		tableACLPseudoDeniedName = "TableACLPseudoDenied"
 	}
+
+	qe.tableaclAllowed = stats.NewMultiCounters(tableACLAllowedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
+	qe.tableaclDenied = stats.NewMultiCounters(tableACLDeniedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
+	qe.tableaclPseudoDenied = stats.NewMultiCounters(tableACLPseudoDeniedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
+
 	return qe
 }
 
