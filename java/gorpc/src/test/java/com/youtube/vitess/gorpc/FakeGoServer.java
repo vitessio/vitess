@@ -37,8 +37,9 @@ public class FakeGoServer extends Thread {
         new ArithThread(clientSocket).start();
       }
     } catch (SocketException e) {
+      throw new RuntimeException(e);
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new RuntimeException(e);
     }
   }
 

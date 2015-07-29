@@ -99,7 +99,7 @@ public class Client {
     if (isStreaming) {
       throw new GoRpcException("request not allowed as client is in the middle of streaming");
     }
-    seq = seq.add(UnsignedLong.ONE);
+    seq = seq.plus(UnsignedLong.ONE);
     Request request = new Request(serviceMethod, seq);
     try {
       codec.WriteRequest(request, args);
