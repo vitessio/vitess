@@ -83,14 +83,16 @@ select /* select as a value expression */ 1 from t where a = (select a from t)
 select /* parenthesised value */ 1 from t where a = (b)
 select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))
 select /* dot-parenthesize */ (a.b) from t where (b.c) = 2
-select /* & */ 1 from t where a = b&c
-select /* | */ 1 from t where a = b|c
-select /* ^ */ 1 from t where a = b^c
-select /* + */ 1 from t where a = b+c
-select /* - */ 1 from t where a = b-c
-select /* * */ 1 from t where a = b*c
-select /* / */ 1 from t where a = b/c
-select /* % */ 1 from t where a = b%c
+select /* & */ 1 from t where a = b & c
+select /* & */ 1 from t where a = b & c
+select /* | */ 1 from t where a = b | c
+select /* ^ */ 1 from t where a = b ^ c
+select /* + */ 1 from t where a = b + c
+select /* - */ 1 from t where a = b - c
+select /* * */ 1 from t where a = b * c
+select /* / */ 1 from t where a = b / c
+select /* % */ 1 from t where a = b % c
+select /* % no space */ 1 from t where a = b%c#select /* % no space */ 1 from t where a = b % c
 select /* u+ */ 1 from t where a = +b
 select /* u- */ 1 from t where a = -b
 select /* u~ */ 1 from t where a = ~b
@@ -130,12 +132,14 @@ select /* order by asc */ 1 from t order by a asc
 select /* order by desc */ 1 from t order by a desc
 select /* limit a */ 1 from t limit a
 select /* limit a,b */ 1 from t limit a, b
+select /* binary unary */ a- -b from t#select /* binary unary */ a - -b from t
+select /* - - */ - -b from t
 insert /* simple */ into a values (1)
 insert /* a.b */ into a.b values (1)
 insert /* multi-value */ into a values (1, 2)
 insert /* multi-value list */ into a values (1, 2), (3, 4)
 insert /* set */ into a set a = 1, a.b = 2#insert /* set */ into a(a, a.b) values (1, 2)
-insert /* value expression list */ into a values (a+1, 2*3)
+insert /* value expression list */ into a values (a + 1, 2 * 3)
 insert /* column list */ into a(a, b) values (1, 2)
 insert /* qualified column list */ into a(a, a.b) values (1, 2)
 insert /* select */ into a select b, c from d
@@ -144,7 +148,7 @@ update /* simple */ a set b = 3
 update /* a.b */ a.b set b = 3
 update /* b.c */ a set b.c = 3
 update /* list */ a set b = 3, c = 4
-update /* expression */ a set b = 3+4
+update /* expression */ a set b = 3 + 4
 update /* where */ a set b = 3 where a = b
 update /* order */ a set b = 3 order by c desc
 update /* limit */ a set b = 3 limit c

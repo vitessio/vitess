@@ -112,8 +112,8 @@ cases = [
          result=[(2L, 1L), (2L, 2L)],
          rowcount=2,
          rewritten=[
-           'select eid+1, id from vtocc_a where 1 != 1',
-           'select /* complex select list */ eid+1, id from vtocc_a limit 10001']),
+           'select eid + 1, id from vtocc_a where 1 != 1',
+           'select /* complex select list */ eid + 1, id from vtocc_a limit 10001']),
     Case(doc="*",
          sql='select /* * */ * from vtocc_a',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
@@ -164,7 +164,7 @@ cases = [
          rowcount=1,
          rewritten=[
            'select id from vtocc_a where 1 != 1',
-           'select /* complex where */ id from vtocc_a where id+1 = 2 limit 10001']),
+           'select /* complex where */ id from vtocc_a where id + 1 = 2 limit 10001']),
 
     Case(doc='complex where (non-value operand)',
          sql='select /* complex where (non-value operand) */ eid, id from vtocc_a where eid = id',
@@ -680,7 +680,7 @@ cases = [
        "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
        Case(sql="delete from vtocc_a where eid = 1+1 and id = 1",
             rewritten=[
-                'select eid, id from vtocc_a where eid = 1+1 and id = 1 limit 10001 for update',
+                'select eid, id from vtocc_a where eid = 1 + 1 and id = 1 limit 10001 for update',
                 "delete from vtocc_a where (eid = 2 and id = 1) /* _stream vtocc_a (eid id ) (2 1 )"],
             rowcount=1),
        'commit',
