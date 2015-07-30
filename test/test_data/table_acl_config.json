@@ -1,6 +1,55 @@
 {
   "table_groups": [
     {
+      "name": "mysql",
+      "table_names_or_prefixes": [""],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_cached",
+      "table_names_or_prefixes": ["vtocc_nocache", "vtocc_cached%"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_renamed",
+      "table_names_or_prefixes": ["vtocc_renamed%"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_part",
+      "table_names_or_prefixes": ["vtocc_part%"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc",
+      "table_names_or_prefixes": ["vtocc_a", "vtocc_b", "vtocc_c", "dual", "vtocc_d", "vtocc_temp", "vtocc_e", "vtocc_f", "vtocc_strings", "vtocc_fracts", "vtocc_ints", "vtocc_misc", "vtocc_big", "vtocc_view"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_test",
+      "table_names_or_prefixes": ["vtocc_test"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
+      "name": "vtocc_acl_unmatched",
+      "table_names_or_prefixes": ["vtocc_acl_unmatched"],
+      "readers": ["youtube-dev-dedicated"],
+      "writers": ["youtube-dev-dedicated"],
+      "admins": ["youtube-dev-dedicated"]
+    },
+    {
       "name": "vtocc_acl_no_access",
       "table_names_or_prefixes": ["vtocc_acl_no_access"]
     },
