@@ -118,7 +118,7 @@ public class ClientIT extends ClientTest {
     BSONObject mArgs = new BasicBSONObject();
     mArgs.put("Num", a);
     Response response = client.call("Arith.Increment", mArgs);
-    Assert.assertEquals(a.add(UnsignedLong.ONE), (UnsignedLong) response.getReply());
+    Assert.assertEquals(a.plus(UnsignedLong.ONE), (UnsignedLong) response.getReply());
     client.close();
   }
 }
