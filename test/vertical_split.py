@@ -219,7 +219,7 @@ index by_msg (msg)
       else:
         # table is not blacklisted, should just work
         qr = tablet.execute('select count(1) from %s' % t)
-        logging.debug('Got %d rows from table %s on tablet %s',
+        logging.debug('Got %s rows from table %s on tablet %s',
                       qr['Rows'][0][0], t, tablet.tablet_alias)
 
   def _populate_topo_cache(self):
