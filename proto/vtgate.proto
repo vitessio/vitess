@@ -4,6 +4,8 @@ syntax = "proto3";
 
 package vtgate;
 
+option java_package="com.youtube.vitess.proto";
+
 import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";

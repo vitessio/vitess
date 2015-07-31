@@ -3,6 +3,8 @@
 
 syntax = "proto3";
 
+option java_package="com.youtube.vitess.proto.grpc";
+
 package vtgateservice;
 
 import "vtgate.proto";
