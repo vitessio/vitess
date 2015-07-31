@@ -15,7 +15,8 @@ import (
 type SplitDiffTask struct {
 }
 
-func (t *SplitDiffTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+// Run is part of the Task interface.
+func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
 	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"],
 		[]string{"SplitDiff", keyspaceAndDestShard})
@@ -28,6 +29,7 @@ func (t *SplitDiffTask) run(parameters map[string]string) ([]*pb.TaskContainer, 
 	return nil, output, err
 }
 
-func (t *SplitDiffTask) requiredParameters() []string {
+// RequiredParameters is part of the Task interface.
+func (t *SplitDiffTask) RequiredParameters() []string {
 	return []string{"keyspace", "dest_shard", "vtworker_endpoint"}
 }

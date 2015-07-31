@@ -26,7 +26,7 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}
 
-	newTaskContainers, _, _ := reshardingTask.run(parameters)
+	newTaskContainers, _, _ := reshardingTask.Run(parameters)
 
 	// TODO(mberlin): Check emitted tasks against expected output.
 	for _, tc := range newTaskContainers {

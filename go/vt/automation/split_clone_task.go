@@ -15,7 +15,8 @@ import (
 type SplitCloneTask struct {
 }
 
-func (t *SplitCloneTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+// Run is part of the Task interface.
+func (t *SplitCloneTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',
@@ -33,6 +34,7 @@ func (t *SplitCloneTask) run(parameters map[string]string) ([]*pb.TaskContainer,
 	return nil, output, err
 }
 
-func (t *SplitCloneTask) requiredParameters() []string {
+// RequiredParameters is part of the Task interface.
+func (t *SplitCloneTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard", "vtworker_endpoint"}
 }
