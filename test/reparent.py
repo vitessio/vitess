@@ -99,7 +99,7 @@ class TestReparent(unittest.TestCase):
                                db_type])
     self.assertEqual(
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
-    port = ep['entries'][0]['named_port_map']['vt']
+    port = ep['entries'][0]['port_map']['vt']
     self.assertEqual(port, expected_port,
                      'Unexpected port: %u != %u from %s' % (port, expected_port,
                                                             str(ep)))
@@ -541,20 +541,20 @@ class TestReparent(unittest.TestCase):
     # make sure the shard replication graph is fine
     shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
                                               'test_keyspace/0'])
-    hashed_links = {}
-    for rl in shard_replication['ReplicationLinks']:
-      key = rl['TabletAlias']['Cell'] + '-' + str(rl['TabletAlias']['Uid'])
-      hashed_links[key] = True
-    logging.debug('Got replication links: %s', str(hashed_links))
-    expected_links = {
+    hashed_nodes = {}
+    for node in shard_replication['nodes']:
+      key = node['tablet_alias']['cell']+'-'+str(node['tablet_alias']['uid'])
+      hashed_nodes[key] = True
+    logging.debug('Got shard replication nodes: %s', str(hashed_nodes))
+    expected_nodes = {
         'test_nj-41983': True,
         'test_nj-62044': True,
         }
     if not brutal:
-      expected_links['test_nj-62344'] = True
-    self.assertEqual(expected_links, hashed_links,
-                     'Got unexpected links: %s != %s' % (str(expected_links),
-                                                         str(hashed_links)))
+      expected_nodes['test_nj-62344'] = True
+    self.assertEqual(expected_nodes, hashed_nodes,
+                     'Got unexpected nodes: %s != %s' % (str(expected_nodes),
+                                                         str(hashed_nodes)))
 
     tablet_62044_master_status = tablet_62044.get_status()
     self.assertIn('Serving graph: test_keyspace 0 master', tablet_62044_master_status)

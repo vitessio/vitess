@@ -69,7 +69,7 @@ message Tablet {
   string ip = 3;
 
   // Map of named ports. Normally this should include vt, grpc, and mysql.
-  map<string, int32> portmap = 4;
+  map<string, int32> port_map = 4;
 
   // Keyspace name.
   string keyspace = 5;
@@ -194,14 +194,14 @@ message Keyspace {
 // whithin a cell.
 message ShardReplication {
 
-  // ReplicationLink describes a tablet instance within the cell
-  message ReplicationLink {
+  // Node describes a tablet instance within the cell
+  message Node {
     TabletAlias tablet_alias = 1;
   }
 
-  // Note there can be only one ReplicationLink in this array
-  // for a given Slave.
-  repeated ReplicationLink replication_links = 1;
+  // Note there can be only one Node in this array
+  // for a given tablet.
+  repeated Node nodes = 1;
 }
 
 // Serving graph information
@@ -215,7 +215,7 @@ message EndPoint {
   string host = 2;
 
   // The ports opened for service.
-  map<string, int32> portmap = 3;
+  map<string, int32> port_map = 3;
 
   // The health entries.
   map<string, string> health_map = 4;

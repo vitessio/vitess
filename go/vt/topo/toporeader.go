@@ -2,6 +2,8 @@ package topo
 
 import (
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TopoReader returns read only information about the topology.
@@ -20,7 +22,7 @@ type TopoReader interface {
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).
-	GetEndPoints(context.Context, *GetEndPointsArgs, *EndPoints) error
+	GetEndPoints(context.Context, *GetEndPointsArgs, *pb.EndPoints) error
 }
 
 // GetSrvKeyspaceNamesArgs is the parameters for TopoReader.GetSrvKeyspaceNames

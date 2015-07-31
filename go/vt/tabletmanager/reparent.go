@@ -20,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -106,7 +108,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	}
 	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
 		si.Keyspace(), si.ShardName(), topo.TYPE_MASTER,
-		&topo.EndPoints{Entries: []topo.EndPoint{*ep}}, -1)
+		&pb.EndPoints{Entries: []*pb.EndPoint{ep}}, -1)
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
 	}

@@ -19,16 +19,18 @@ import (
 type ZknsAddr struct {
 	// These fields came from a Python app originally that used a different
 	// naming convention.
-	Host         string         `json:"host"`
-	Port         int            `json:"port,omitempty"` // DEPRECATED
-	NamedPortMap map[string]int `json:"named_port_map"`
-	IPv4         string         `json:"ipv4"`
-	version      int            // zk version to allow non-stomping writes
+	Host    string           `json:"host"`
+	PortMap map[string]int32 `json:"named_port_map"`
+	IPv4    string           `json:"ipv4"`
+	version int              // zk version to allow non-stomping writes
 }
 
 // NewAddr returns a new ZknsAddr.
 func NewAddr(host string) *ZknsAddr {
-	return &ZknsAddr{Host: host, NamedPortMap: make(map[string]int)}
+	return &ZknsAddr{
+		Host:    host,
+		PortMap: make(map[string]int32),
+	}
 }
 
 // ZknsAddrs represents a list of individual entries. SRV records can
@@ -53,7 +55,7 @@ func (zaddrs *ZknsAddrs) IsValidA() bool {
 		return false
 	}
 	for _, entry := range zaddrs.Entries {
-		if entry.IPv4 == "" || entry.Host != "" || len(entry.NamedPortMap) > 0 {
+		if entry.IPv4 == "" || entry.Host != "" || len(entry.PortMap) > 0 {
 			return false
 		}
 	}
@@ -76,7 +78,7 @@ func (zaddrs *ZknsAddrs) IsValidSRV() bool {
 		return false
 	}
 	for _, zaddr := range zaddrs.Entries {
-		if zaddr.Host == "" || zaddr.IPv4 != "" || len(zaddr.NamedPortMap) == 0 {
+		if zaddr.Host == "" || zaddr.IPv4 != "" || len(zaddr.PortMap) == 0 {
 			return false
 		}
 	}
@@ -156,7 +158,7 @@ func LookupName(zconn zk.Conn, addrPath string) ([]*net.SRV, error) {
 		// Set the weight to non-zero, otherwise the sort method is deactivated.
 		srv := &net.SRV{Target: addr.Host, Weight: 1}
 		if namedPort != "" {
-			srv.Port = uint16(addr.NamedPortMap[namedPort])
+			srv.Port = uint16(addr.PortMap[namedPort])
 			if srv.Port == 0 {
 				// If the port was requested and not defined it's probably
 				// a bug, so fail hard.

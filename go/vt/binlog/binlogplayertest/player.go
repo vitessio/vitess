@@ -18,7 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // keyRangeRequest is used to make a request for StreamKeyRange.
@@ -287,7 +288,7 @@ func (fake *FakeBinlogStreamer) HandlePanic(err *error) {
 }
 
 // Run runs the test suite
-func Run(t *testing.T, bpc binlogplayer.Client, endPoint topo.EndPoint, fake *FakeBinlogStreamer) {
+func Run(t *testing.T, bpc binlogplayer.Client, endPoint *pb.EndPoint, fake *FakeBinlogStreamer) {
 	if err := bpc.Dial(endPoint, 30*time.Second); err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}

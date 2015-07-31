@@ -99,7 +99,7 @@ func SplitHostPort(addr string) (string, int, error) {
 
 // JoinHostPort is an extension to net.JoinHostPort that also formats the
 // integer port.
-func JoinHostPort(host string, port int) string {
+func JoinHostPort(host string, port int32) string {
 	return net.JoinHostPort(host, strconv.FormatInt(int64(port), 10))
 }
 

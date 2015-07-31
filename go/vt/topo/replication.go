@@ -10,35 +10,13 @@ import (
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/logutil"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-// ReplicationLink describes a tablet that is linked in a shard.
-// We will add a record for all tablets in a shard.
-type ReplicationLink struct {
-	TabletAlias TabletAlias
-}
-
-// ShardReplication describes all the tablets for a shard
-// whithin a cell.
-type ShardReplication struct {
-	// Note there can be only one ReplicationLink in this array
-	// for a given Tablet
-	ReplicationLinks []ReplicationLink
-}
-
-// GetReplicationLink find a link for a given tablet.
-func (sr *ShardReplication) GetReplicationLink(tabletAlias TabletAlias) (ReplicationLink, error) {
-	for _, rl := range sr.ReplicationLinks {
-		if rl.TabletAlias == tabletAlias {
-			return rl, nil
-		}
-	}
-	return ReplicationLink{}, ErrNoNode
-}
 
 // ShardReplicationInfo is the companion structure for ShardReplication.
 type ShardReplicationInfo struct {
-	*ShardReplication
+	*pb.ShardReplication
 	cell     string
 	keyspace string
 	shard    string
@@ -46,7 +24,7 @@ type ShardReplicationInfo struct {
 
 // NewShardReplicationInfo is for topo.Server implementations to
 // create the structure
-func NewShardReplicationInfo(sr *ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
+func NewShardReplicationInfo(sr *pb.ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
 	return &ShardReplicationInfo{
 		ShardReplication: sr,
 		cell:             cell,
@@ -70,6 +48,16 @@ func (sri *ShardReplicationInfo) Shard() string {
 	return sri.shard
 }
 
+// GetShardReplicationNode finds a node for a given tablet.
+func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *pb.TabletAlias) (*pb.ShardReplication_Node, error) {
+	for _, rl := range sri.Nodes {
+		if *rl.TabletAlias == *tabletAlias {
+			return rl, nil
+		}
+	}
+	return nil, ErrNoNode
+}
+
 // UpdateShardReplicationRecord is a low level function to add / update an
 // entry to the ShardReplication object.
 func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shard string, tabletAlias TabletAlias) error {
@@ -80,24 +68,24 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	span.Annotate("tablet", tabletAlias.String())
 	defer span.Finish()
 
-	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
+	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *pb.ShardReplication) error {
 		// not very efficient, but easy to read
-		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
+		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes)+1)
 		found := false
-		for _, link := range sr.ReplicationLinks {
-			if link.TabletAlias == tabletAlias {
+		for _, node := range sr.Nodes {
+			if ProtoToTabletAlias(node.TabletAlias) == tabletAlias {
 				if found {
-					log.Warningf("Found a second ReplicationLink for tablet %v, deleting it", tabletAlias)
+					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
 					continue
 				}
 				found = true
 			}
-			links = append(links, link)
+			nodes = append(nodes, node)
 		}
 		if !found {
-			links = append(links, ReplicationLink{TabletAlias: tabletAlias})
+			nodes = append(nodes, &pb.ShardReplication_Node{TabletAlias: TabletAliasToProto(tabletAlias)})
 		}
-		sr.ReplicationLinks = links
+		sr.Nodes = nodes
 		return nil
 	})
 }
@@ -105,14 +93,14 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 // RemoveShardReplicationRecord is a low level function to remove an
 // entry from the ShardReplication object.
 func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias TabletAlias) error {
-	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *ShardReplication) error {
-		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
-		for _, link := range sr.ReplicationLinks {
-			if link.TabletAlias != tabletAlias {
-				links = append(links, link)
+	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *pb.ShardReplication) error {
+		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes))
+		for _, node := range sr.Nodes {
+			if ProtoToTabletAlias(node.TabletAlias) != tabletAlias {
+				nodes = append(nodes, node)
 			}
 		}
-		sr.ReplicationLinks = links
+		sr.Nodes = nodes
 		return nil
 	})
 	return err
@@ -126,11 +114,11 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 		return err
 	}
 
-	for _, rl := range sri.ReplicationLinks {
-		ti, err := ts.GetTablet(ctx, rl.TabletAlias)
+	for _, node := range sri.Nodes {
+		ti, err := ts.GetTablet(ctx, ProtoToTabletAlias(node.TabletAlias))
 		if err == ErrNoNode {
-			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, rl.TabletAlias)
+			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", node.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(node.TabletAlias))
 		}
 		if err != nil {
 			// unknown error, we probably don't want to continue
@@ -138,11 +126,11 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 		}
 
 		if ti.Type == TYPE_SCRAP {
-			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, rl.TabletAlias)
+			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", node.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(node.TabletAlias))
 		}
 
-		logger.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)
+		logger.Infof("Keeping tablet %v in the replication graph", node.TabletAlias)
 	}
 
 	logger.Infof("All entries in replication graph are valid")

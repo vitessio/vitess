@@ -11,6 +11,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Tee is an implementation of topo.Server that uses a primary
@@ -474,7 +476,7 @@ func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]topo.Table
 //
 
 // UpdateShardReplicationFields is part of the topo.Server interface
-func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+func (tee *Tee) UpdateShardReplicationFields(ctx context.Context, cell, keyspace, shard string, update func(*pb.ShardReplication) error) error {
 	if err := tee.primary.UpdateShardReplicationFields(ctx, cell, keyspace, shard, update); err != nil {
 		// failed on primary, not updating secondary
 		return err
@@ -577,7 +579,7 @@ func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, s
 }
 
 // CreateEndPoints is part of the topo.Server interface
-func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints) error {
 	if err := tee.primary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
@@ -590,7 +592,7 @@ func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // UpdateEndPoints is part of the topo.Server interface
-func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion); err != nil {
 		return err
 	}
@@ -603,7 +605,7 @@ func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
 	return tee.readFrom.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 
@@ -692,7 +694,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchEndPoints is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
 	return tee.primary.WatchEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 

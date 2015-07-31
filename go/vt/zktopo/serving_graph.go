@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // WatchSleepDuration is how many seconds interval to poll for in case
@@ -66,7 +68,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 }
 
 // CreateEndPoints is part of the topo.Server interface
-func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJSON(addrs)
 
@@ -79,7 +81,7 @@ func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard s
 }
 
 // UpdateEndPoints is part of the topo.Server interface
-func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints, existingVersion int64) error {
+func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJSON(addrs)
 
@@ -112,7 +114,7 @@ func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard s
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, int64, error) {
+func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -121,7 +123,7 @@ func (zkts *Server) GetEndPoints(ctx context.Context, cell, keyspace, shard stri
 		}
 		return nil, 0, err
 	}
-	result := &topo.EndPoints{}
+	result := &pb.EndPoints{}
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), result); err != nil {
 			return nil, 0, fmt.Errorf("EndPoints unmarshal failed: %v %v", data, err)
@@ -256,7 +258,7 @@ func (zkts *Server) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]str
 
 var errSkipUpdate = fmt.Errorf("skip update")
 
-func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *topo.EndPoint) (newValue string, err error) {
+func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *pb.EndPoint) (newValue string, err error) {
 	if oldStat == nil {
 		// The incoming object doesn't exist - we haven't been placed in the serving
 		// graph yet, so don't update. Assume the next process that rebuilds the graph
@@ -264,9 +266,9 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		return "", errSkipUpdate
 	}
 
-	var addrs *topo.EndPoints
+	var addrs *pb.EndPoints
 	if oldValue != "" {
-		addrs = &topo.EndPoints{}
+		addrs = &pb.EndPoints{}
 		if len(oldValue) > 0 {
 			if err := json.Unmarshal([]byte(oldValue), addrs); err != nil {
 				return "", fmt.Errorf("EndPoints unmarshal failed: %v %v", oldValue, err)
@@ -277,28 +279,28 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		for i, entry := range addrs.Entries {
 			if entry.Uid == addr.Uid {
 				foundTablet = true
-				if !topo.EndPointEquality(&entry, addr) {
-					addrs.Entries[i] = *addr
+				if !topo.EndPointEquality(entry, addr) {
+					addrs.Entries[i] = addr
 				}
 				break
 			}
 		}
 
 		if !foundTablet {
-			addrs.Entries = append(addrs.Entries, *addr)
+			addrs.Entries = append(addrs.Entries, addr)
 		}
 	} else {
 		addrs = topo.NewEndPoints()
-		addrs.Entries = append(addrs.Entries, *addr)
+		addrs.Entries = append(addrs.Entries, addr)
 	}
 	return jscfg.ToJSON(addrs), nil
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *topo.EndPoints, chan<- struct{}, error) {
+func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
 	filePath := zkPathForVtName(cell, keyspace, shard, tabletType)
 
-	notifications := make(chan *topo.EndPoints, 10)
+	notifications := make(chan *pb.EndPoints, 10)
 	stopWatching := make(chan struct{})
 
 	// waitOrInterrupted will return true if stopWatching is triggered
@@ -332,10 +334,10 @@ func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard st
 
 			// get the initial value, send it, or send nil if no
 			// data
-			var ep *topo.EndPoints
+			var ep *pb.EndPoints
 			sendIt := true
 			if len(data) > 0 {
-				ep = &topo.EndPoints{}
+				ep = &pb.EndPoints{}
 				if err := json.Unmarshal([]byte(data), ep); err != nil {
 					log.Errorf("EndPoints unmarshal failed: %v %v", data, err)
 					sendIt = false

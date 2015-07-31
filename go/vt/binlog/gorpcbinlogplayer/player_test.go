@@ -13,7 +13,8 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
 	"github.com/youtube/vitess/go/vt/binlog/gorpcbinlogstreamer"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -44,10 +45,10 @@ func TestGoRPCBinlogStreamer(t *testing.T) {
 	c := &client{}
 
 	// and send it to the test suite
-	binlogplayertest.Run(t, c, topo.EndPoint{
+	binlogplayertest.Run(t, c, &pb.EndPoint{
 		Host: host,
-		NamedPortMap: map[string]int{
-			"vt": port,
+		PortMap: map[string]int32{
+			"vt": int32(port),
 		},
 	}, fakeUpdateStream)
 }

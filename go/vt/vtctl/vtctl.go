@@ -1618,7 +1618,7 @@ func commandResolve(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 		return err
 	}
 	for _, addr := range addrs {
-		wr.Logger().Printf("%v\n", netutil.JoinHostPort(addr.Target, int(addr.Port)))
+		wr.Logger().Printf("%v\n", netutil.JoinHostPort(addr.Target, int32(addr.Port)))
 	}
 	return nil
 }

@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var _ = flag.Bool("lock_srvshard", false, "Unused")
@@ -86,7 +88,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		}
 
 		// Build up the serving graph from scratch.
-		serving := make(map[topo.TabletType]*topo.EndPoints)
+		serving := make(map[topo.TabletType]*pb.EndPoints)
 		for _, tablet := range tablets {
 			if !tablet.IsInReplicationGraph() {
 				// only valid case is a scrapped master in the
@@ -116,7 +118,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 				log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
 				continue
 			}
-			endpoints.Entries = append(endpoints.Entries, *entry)
+			endpoints.Entries = append(endpoints.Entries, entry)
 		}
 
 		wg := sync.WaitGroup{}
@@ -126,7 +128,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		// Write nodes that should exist.
 		for tabletType, endpoints := range serving {
 			wg.Add(1)
-			go func(tabletType topo.TabletType, endpoints *topo.EndPoints) {
+			go func(tabletType topo.TabletType, endpoints *pb.EndPoints) {
 				defer wg.Done()
 
 				log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, si.Keyspace(), si.ShardName(), tabletType)
@@ -246,32 +248,32 @@ func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, s
 	return versions, errs.Error()
 }
 
-func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, endpoint *topo.EndPoint) error {
+func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, endpoint *pb.EndPoint) error {
 	return retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, true, /* create */
-		func(endpoints *topo.EndPoints) bool {
+		func(endpoints *pb.EndPoints) bool {
 			// Look for an existing entry to update.
 			for i := range endpoints.Entries {
 				if endpoints.Entries[i].Uid == endpoint.Uid {
-					if topo.EndPointEquality(&endpoints.Entries[i], endpoint) {
+					if topo.EndPointEquality(endpoints.Entries[i], endpoint) {
 						// The entry already exists and is the same.
 						return false
 					}
 					// Update an existing entry.
-					endpoints.Entries[i] = *endpoint
+					endpoints.Entries[i] = endpoint
 					return true
 				}
 			}
 			// The entry doesn't exist, so add it.
-			endpoints.Entries = append(endpoints.Entries, *endpoint)
+			endpoints.Entries = append(endpoints.Entries, endpoint)
 			return true
 		})
 }
 
 func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, tabletUID uint32) error {
 	err := retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, false, /* create */
-		func(endpoints *topo.EndPoints) bool {
+		func(endpoints *pb.EndPoints) bool {
 			// Make a new list, excluding the given UID.
-			entries := make([]topo.EndPoint, 0, len(endpoints.Entries))
+			entries := make([]*pb.EndPoint, 0, len(endpoints.Entries))
 			for _, ep := range endpoints.Entries {
 				if ep.Uid != tabletUID {
 					entries = append(entries, ep)
@@ -293,7 +295,7 @@ func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard s
 	return err
 }
 
-func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, create bool, updateFunc func(*topo.EndPoints) bool) error {
+func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, create bool, updateFunc func(*pb.EndPoints) bool) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -305,7 +307,7 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 		endpoints, version, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err == topo.ErrNoNode && create {
 			// Create instead of updating.
-			endpoints = &topo.EndPoints{}
+			endpoints = &pb.EndPoints{}
 			if !updateFunc(endpoints) {
 				// Nothing changed.
 				return nil

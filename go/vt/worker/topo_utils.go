@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -36,7 +38,7 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 	newCtx, cancel := context.WithTimeout(ctx, *WaitForHealthyEndPointsTimeout)
 	defer cancel()
 
-	var healthyEndpoints []topo.EndPoint
+	var healthyEndpoints []*pb.EndPoint
 	for {
 		select {
 		case <-newCtx.Done():
@@ -48,14 +50,14 @@ func FindHealthyRdonlyEndPoint(ctx context.Context, wr *wrangler.Wrangler, cell,
 		if err != nil {
 			if err == topo.ErrNoNode {
 				// If the node doesn't exist, count that as 0 available rdonly instances.
-				endPoints = &topo.EndPoints{}
+				endPoints = &pb.EndPoints{}
 			} else {
 				return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", cell, keyspace, shard, err)
 			}
 		}
-		healthyEndpoints = make([]topo.EndPoint, 0, len(endPoints.Entries))
+		healthyEndpoints = make([]*pb.EndPoint, 0, len(endPoints.Entries))
 		for _, entry := range endPoints.Entries {
-			if len(entry.Health) == 0 {
+			if len(entry.HealthMap) == 0 {
 				healthyEndpoints = append(healthyEndpoints, entry)
 			}
 		}

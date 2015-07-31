@@ -102,7 +102,7 @@ func populateListeningURL() {
 	}
 	ListeningURL = url.URL{
 		Scheme: "http",
-		Host:   netutil.JoinHostPort(host, *Port),
+		Host:   netutil.JoinHostPort(host, int32(*Port)),
 		Path:   "/",
 	}
 }

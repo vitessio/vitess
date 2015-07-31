@@ -57,8 +57,8 @@ def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, ti
     vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(end_points_data), db_key, e)
     raise Exception('zkocc returned: %s' % str(end_points_data))
   for entry in end_points_data['Entries']:
-    if 'vt' in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap']['vt'])
+    if 'vt' in entry['PortMap']:
+      host_port = (entry['Host'], entry['PortMap']['vt'])
       host_port_list.append(host_port)
   random.shuffle(host_port_list)
 

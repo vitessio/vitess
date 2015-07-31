@@ -11,10 +11,10 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -60,7 +60,7 @@ func (e OperationalError) Error() string { return string(e) }
 // object that can communicate with a tablet.
 // If both keyspace and shard are empty, we will not ask for a sessionId
 // (and assume we're using the target field for the queries).
-type TabletDialer func(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
+type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
@@ -95,7 +95,7 @@ type TabletConn interface {
 	Close()
 
 	// GetEndPoint returns the end point info.
-	EndPoint() topo.EndPoint
+	EndPoint() *pbt.EndPoint
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query

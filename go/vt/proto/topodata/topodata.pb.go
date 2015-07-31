@@ -144,8 +144,8 @@ type Tablet struct {
 	Hostname string `protobuf:"bytes,2,opt,name=hostname" json:"hostname,omitempty"`
 	// IP address, stored as a string.
 	Ip string `protobuf:"bytes,3,opt,name=ip" json:"ip,omitempty"`
-	// Map of named ports. Normally this should include vt, vts, and mysql.
-	Portmap map[string]int32 `protobuf:"bytes,4,rep,name=portmap" json:"portmap,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	// Map of named ports. Normally this should include vt, grpc, and mysql.
+	PortMap map[string]int32 `protobuf:"bytes,4,rep,name=port_map" json:"port_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// Keyspace name.
 	Keyspace string `protobuf:"bytes,5,opt,name=keyspace" json:"keyspace,omitempty"`
 	// Shard name. If range based sharding is used, it should match
@@ -175,9 +175,9 @@ func (m *Tablet) GetAlias() *TabletAlias {
 	return nil
 }
 
-func (m *Tablet) GetPortmap() map[string]int32 {
+func (m *Tablet) GetPortMap() map[string]int32 {
 	if m != nil {
-		return m.Portmap
+		return m.PortMap
 	}
 	return nil
 }
@@ -357,32 +357,32 @@ func (*Keyspace_KeyspaceServedFrom) ProtoMessage()    {}
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.
 type ShardReplication struct {
-	// Note there can be only one ReplicationLink in this array
-	// for a given Slave.
-	ReplicationLinks []*ShardReplication_ReplicationLink `protobuf:"bytes,1,rep,name=replication_links" json:"replication_links,omitempty"`
+	// Note there can be only one Node in this array
+	// for a given tablet.
+	Nodes []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
 }
 
 func (m *ShardReplication) Reset()         { *m = ShardReplication{} }
 func (m *ShardReplication) String() string { return proto.CompactTextString(m) }
 func (*ShardReplication) ProtoMessage()    {}
 
-func (m *ShardReplication) GetReplicationLinks() []*ShardReplication_ReplicationLink {
+func (m *ShardReplication) GetNodes() []*ShardReplication_Node {
 	if m != nil {
-		return m.ReplicationLinks
+		return m.Nodes
 	}
 	return nil
 }
 
-// ReplicationLink describes a tablet instance within the cell
-type ShardReplication_ReplicationLink struct {
+// Node describes a tablet instance within the cell
+type ShardReplication_Node struct {
 	TabletAlias *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias" json:"tablet_alias,omitempty"`
 }
 
-func (m *ShardReplication_ReplicationLink) Reset()         { *m = ShardReplication_ReplicationLink{} }
-func (m *ShardReplication_ReplicationLink) String() string { return proto.CompactTextString(m) }
-func (*ShardReplication_ReplicationLink) ProtoMessage()    {}
+func (m *ShardReplication_Node) Reset()         { *m = ShardReplication_Node{} }
+func (m *ShardReplication_Node) String() string { return proto.CompactTextString(m) }
+func (*ShardReplication_Node) ProtoMessage()    {}
 
-func (m *ShardReplication_ReplicationLink) GetTabletAlias() *TabletAlias {
+func (m *ShardReplication_Node) GetTabletAlias() *TabletAlias {
 	if m != nil {
 		return m.TabletAlias
 	}
@@ -396,7 +396,7 @@ type EndPoint struct {
 	// The host the tablet is running on (FQDN).
 	Host string `protobuf:"bytes,2,opt,name=host" json:"host,omitempty"`
 	// The ports opened for service.
-	Portmap map[string]int32 `protobuf:"bytes,3,rep,name=portmap" json:"portmap,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	PortMap map[string]int32 `protobuf:"bytes,3,rep,name=port_map" json:"port_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// The health entries.
 	HealthMap map[string]string `protobuf:"bytes,4,rep,name=health_map" json:"health_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
@@ -405,9 +405,9 @@ func (m *EndPoint) Reset()         { *m = EndPoint{} }
 func (m *EndPoint) String() string { return proto.CompactTextString(m) }
 func (*EndPoint) ProtoMessage()    {}
 
-func (m *EndPoint) GetPortmap() map[string]int32 {
+func (m *EndPoint) GetPortMap() map[string]int32 {
 	if m != nil {
-		return m.Portmap
+		return m.PortMap
 	}
 	return nil
 }

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -18,28 +18,28 @@ var (
 
 var counter = 0
 
-func endPoints3() (*topo.EndPoints, error) {
+func endPoints3() (*pb.EndPoints, error) {
 	counter++
-	return &topo.EndPoints{
-		Entries: []topo.EndPoint{
-			topo.EndPoint{
+	return &pb.EndPoints{
+		Entries: []*pb.EndPoint{
+			&pb.EndPoint{
 				Uid:  0,
 				Host: "0",
-				NamedPortMap: map[string]int{
+				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			topo.EndPoint{
+			&pb.EndPoint{
 				Uid:  1,
 				Host: "1",
-				NamedPortMap: map[string]int{
+				PortMap: map[string]int32{
 					"vt": 2,
 				},
 			},
-			topo.EndPoint{
+			&pb.EndPoint{
 				Uid:  2,
 				Host: "2",
-				NamedPortMap: map[string]int{
+				PortMap: map[string]int32{
 					"vt": 3,
 				},
 			},
@@ -71,9 +71,9 @@ func TestFindAddress(t *testing.T) {
 
 func TestFindDeleteAddrNode(t *testing.T) {
 	addrNodes := []*addressStatus{
-		{endPoint: topo.EndPoint{Uid: 0}},
-		{endPoint: topo.EndPoint{Uid: 1}},
-		{endPoint: topo.EndPoint{Uid: 2}},
+		{endPoint: &pb.EndPoint{Uid: 0}},
+		{endPoint: &pb.EndPoint{Uid: 1}},
+		{endPoint: &pb.EndPoint{Uid: 2}},
 	}
 	goti := findAddrNode(addrNodes, 1)
 	if goti != 1 {
@@ -89,11 +89,11 @@ func TestFindDeleteAddrNode(t *testing.T) {
 	}
 }
 
-func endPointsError() (*topo.EndPoints, error) {
+func endPointsError() (*pb.EndPoints, error) {
 	return nil, fmt.Errorf("expected error")
 }
 
-func endPointsNone() (*topo.EndPoints, error) {
+func endPointsNone() (*pb.EndPoints, error) {
 	return nil, nil
 }
 
@@ -182,28 +182,28 @@ func TestMarkDown(t *testing.T) {
 
 var addrNum uint32 = 10
 
-func endPointsMorph() (*topo.EndPoints, error) {
+func endPointsMorph() (*pb.EndPoints, error) {
 	addrNum++
-	return &topo.EndPoints{
-		Entries: []topo.EndPoint{
-			topo.EndPoint{
+	return &pb.EndPoints{
+		Entries: []*pb.EndPoint{
+			&pb.EndPoint{
 				Uid:  addrNum,
 				Host: fmt.Sprintf("%d", addrNum),
-				NamedPortMap: map[string]int{
+				PortMap: map[string]int32{
 					"vt": 1,
 				},
 			},
-			topo.EndPoint{
+			&pb.EndPoint{
 				Uid:  1,
 				Host: "1",
-				NamedPortMap: map[string]int{
-					"vt": int(addrNum),
+				PortMap: map[string]int32{
+					"vt": int32(addrNum),
 				},
 			},
-			topo.EndPoint{
+			&pb.EndPoint{
 				Uid:  2,
 				Host: "2",
-				NamedPortMap: map[string]int{
+				PortMap: map[string]int32{
 					"vt": 3,
 				},
 			},
@@ -220,7 +220,7 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want other than -1: %v", index)
 	}
 	// "1" should be in the list with port 11
-	portStart := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.NamedPortMap["vt"]
+	portStart := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.PortMap["vt"]
 	if portStart != 11 {
 		t.Errorf("want 11, got %v", portStart)
 	}
@@ -241,7 +241,7 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("want non-zero, got 0")
 	}
 	// "1" should have the updated port 12
-	portNew := b.addressNodes[index].endPoint.NamedPortMap["vt"]
+	portNew := b.addressNodes[index].endPoint.PortMap["vt"]
 	if portNew != 12 {
 		t.Errorf("want 12, got %v", portNew)
 	}
