@@ -21,7 +21,10 @@ def get_all_files(directory, filenames):
 
 def write_header(doc, commands):
   doc.write('This reference guide explains the commands that the ' +
-            '<b>vtctl</b> tool supports. Commands are listed in the ' +
+            '<b>vtctl</b> tool supports. **vtctl** is a command-line tool ' +
+            'used to administer a Vitess cluster, and it allows a human ' +
+            'or application to easily interact with a Vitess ' +
+            'implementation.\n\nCommands are listed in the ' +
             'following groups:\n\n')
   for group in sorted(commands):
     group_link = group.lower().replace(' ', '-')
