@@ -31,6 +31,9 @@ func NewStringArena(size int) *StringArena {
 // NewString copies a byte slice into the arena and returns it as a string.
 // If the arena is full, it returns a traditional go string.
 func (sa *StringArena) NewString(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
 	if len(sa.buf)+len(b) > cap(sa.buf) {
 		return string(b)
 	}
@@ -47,6 +50,9 @@ func (sa *StringArena) SpaceLeft() int {
 // String force casts a []byte to a string.
 // USE AT YOUR OWN RISK
 func String(b []byte) (s string) {
+	if len(b) == 0 {
+		return ""
+	}
 	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	pstring.Data = pbytes.Data

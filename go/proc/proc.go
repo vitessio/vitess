@@ -29,7 +29,9 @@ const pidURL = "/debug/pid"
 // signal requesting the server to shutdown, and then attempts to
 // to create the listener.
 func Listen(port string) (l net.Listener, err error) {
-	killPredecessor(port)
+	if port != "" {
+		killPredecessor(port)
+	}
 	return listen(port)
 }
 

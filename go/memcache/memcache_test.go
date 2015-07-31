@@ -265,9 +265,9 @@ func TestMemcache(t *testing.T) {
 	// timeout test
 	c.timeout = 1 * time.Nanosecond
 	results, err = c.Gets("key1", "key3", "key2")
-	want := "write unix /tmp/vt_memcache_test.sock: i/o timeout"
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
+	want := "i/o timeout"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("\"%v\" does not contain \"%s\"", err, want)
 	}
 
 	// test double close
