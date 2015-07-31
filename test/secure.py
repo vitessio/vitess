@@ -7,16 +7,7 @@
 import logging
 import os
 import subprocess
-import time
 import unittest
-
-from vtdb import dbexceptions
-from vtdb import keyrange
-from vtdb import keyrange_constants
-from vtdb import tablet as tablet3
-from vtdb import topology
-from vtdb import vtgatev2
-from zk import zkocc
 
 import environment
 import utils
