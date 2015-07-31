@@ -54,7 +54,7 @@ Lists specified tablets in an awk-friendly way.
 
 ### Resolve
 
-Reads a list of addresses that can answer this query. The port name can be mysql, vt, or vts. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd).
+Reads a list of addresses that can answer this query. The port name can be mysql, vt, or grpc. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd).
 
 #### Example
 
@@ -1331,7 +1331,7 @@ Initializes a tablet in the topology.
 
 #### Example
 
-<pre class="command-example">InitTablet [-force] [-parent] [-update] [-db-name-override=&lt;db name&gt;] [-hostname=&lt;hostname&gt;] [-mysql_port=&lt;port&gt;] [-port=&lt;port&gt;] [-vts_port=&lt;port&gt;] [-keyspace=&lt;keyspace&gt;] [-shard=&lt;shard&gt;] [-parent_alias=&lt;parent alias&gt;] &lt;tablet alias&gt; &lt;tablet type&gt;</pre>
+<pre class="command-example">InitTablet [-force] [-parent] [-update] [-db-name-override=&lt;db name&gt;] [-hostname=&lt;hostname&gt;] [-mysql_port=&lt;port&gt;] [-port=&lt;port&gt;] [-grpc_port=&lt;port&gt;] [-keyspace=&lt;keyspace&gt;] [-shard=&lt;shard&gt;] [-parent_alias=&lt;parent alias&gt;] &lt;tablet alias&gt; &lt;tablet type&gt;</pre>
 
 #### Flags
 
@@ -1347,7 +1347,7 @@ Initializes a tablet in the topology.
 | shard | string | The shard to which this tablet belongs |
 | tags | string | A comma-separated list of key:value pairs that are used to tag the tablet |
 | update | Boolean | Performs update if a tablet with the provided alias already exists |
-| vts_port | Int | The encrypted port for the vttablet process |
+| grpc_port | Int | The encrypted port for the vttablet process |
 
 
 #### Arguments
@@ -1571,7 +1571,7 @@ Updates the IP address and port numbers of a tablet.
 
 #### Example
 
-<pre class="command-example">UpdateTabletAddrs [-hostname &lt;hostname&gt;] [-ip-addr &lt;ip addr&gt;] [-mysql-port &lt;mysql port&gt;] [-vt-port &lt;vt port&gt;] [-vts-port &lt;vts port&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">UpdateTabletAddrs [-hostname &lt;hostname&gt;] [-ip-addr &lt;ip addr&gt;] [-mysql-port &lt;mysql port&gt;] [-vt-port &lt;vt port&gt;] [-grpc-port &lt;grpc port&gt;] &lt;tablet alias&gt;</pre>
 
 #### Flags
 
@@ -1581,7 +1581,7 @@ Updates the IP address and port numbers of a tablet.
 | ip-addr | string | IP address |
 | mysql-port | Int | The mysql port for the mysql daemon |
 | vt-port | Int | The main port for the vttablet process |
-| vts-port | Int | The encrypted port for the vttablet process |
+| grpc-port | Int | The encrypted port for the vttablet process |
 
 
 #### Arguments

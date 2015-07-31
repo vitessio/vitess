@@ -130,7 +130,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-vts_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>",
+				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type> values are:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
@@ -138,7 +138,7 @@ var commands = []commandGroup{
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
-				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-vts-port <vts port>] <tablet alias> ",
+				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-grpc-port <grpc port>] <tablet alias> ",
 				"Updates the IP address and port numbers of a tablet."},
 			command{"ScrapTablet", commandScrapTablet,
 				"[-force] [-skip-rebuild] <tablet alias>",
@@ -282,7 +282,7 @@ var commands = []commandGroup{
 		"Generic", []command{
 			command{"Resolve", commandResolve,
 				"<keyspace>.<shard>.<db type>:<port name>",
-				"Reads a list of addresses that can answer this query. The port name can be mysql, vt, or vts. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd)."},
+				"Reads a list of addresses that can answer this query. The port name can be mysql, vt, or grpc. Vitess uses this name to retrieve the actual port number from the topology server (ZooKeeper or etcd)."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"<cell1>,<cell2>... <keyspace1>,<keyspace2>,...",
 				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
@@ -572,7 +572,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		hostname       = subFlags.String("hostname", "", "The server on which the tablet is running")
 		mysqlPort      = subFlags.Int("mysql_port", 0, "The mysql port for the mysql daemon")
 		port           = subFlags.Int("port", 0, "The main port for the vttablet process")
-		vtsPort        = subFlags.Int("vts_port", 0, "The encrypted port for the vttablet process")
+		grpcPort       = subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
 		keyspace       = subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
 		shard          = subFlags.String("shard", "", "The shard to which this tablet belongs")
 		tags           flagutil.StringMapValue
@@ -611,8 +611,8 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if *mysqlPort != 0 {
 		tablet.Portmap["mysql"] = *mysqlPort
 	}
-	if *vtsPort != 0 {
-		tablet.Portmap["vts"] = *vtsPort
+	if *grpcPort != 0 {
+		tablet.Portmap["grpc"] = *grpcPort
 	}
 
 	return wr.InitTablet(ctx, tablet, *force, *parent, *update)
@@ -642,7 +642,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	ipAddr := subFlags.String("ip-addr", "", "IP address")
 	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
 	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
-	vtsPort := subFlags.Int("vts-port", 0, "The encrypted port for the vttablet process")
+	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -665,15 +665,15 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 		if *ipAddr != "" {
 			tablet.IPAddr = *ipAddr
 		}
-		if *vtPort != 0 || *vtsPort != 0 || *mysqlPort != 0 {
+		if *vtPort != 0 || *grpcPort != 0 || *mysqlPort != 0 {
 			if tablet.Portmap == nil {
 				tablet.Portmap = make(map[string]int)
 			}
 			if *vtPort != 0 {
 				tablet.Portmap["vt"] = *vtPort
 			}
-			if *vtsPort != 0 {
-				tablet.Portmap["vts"] = *vtsPort
+			if *grpcPort != 0 {
+				tablet.Portmap["grpc"] = *grpcPort
 			}
 			if *mysqlPort != 0 {
 				tablet.Portmap["mysql"] = *mysqlPort

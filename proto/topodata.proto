@@ -68,7 +68,7 @@ message Tablet {
   // IP address, stored as a string.
   string ip = 3;
 
-  // Map of named ports. Normally this should include vt, vts, and mysql.
+  // Map of named ports. Normally this should include vt, grpc, and mysql.
   map<string, int32> portmap = 4;
 
   // Keyspace name.

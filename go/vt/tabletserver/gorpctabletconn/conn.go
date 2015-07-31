@@ -5,7 +5,6 @@
 package gorpctabletconn
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"strings"
@@ -27,9 +26,8 @@ import (
 )
 
 var (
-	tabletBsonUsername  = flag.String("tablet-bson-username", "", "user to use for bson rpc connections")
-	tabletBsonPassword  = flag.String("tablet-bson-password", "", "password to use for bson rpc connections (ignored if username is empty)")
-	tabletBsonEncrypted = flag.Bool("tablet-bson-encrypted", false, "use encryption to talk to vttablet")
+	tabletBsonUsername = flag.String("tablet-bson-username", "", "user to use for bson rpc connections")
+	tabletBsonPassword = flag.String("tablet-bson-password", "", "password to use for bson rpc connections (ignored if username is empty)")
 )
 
 func init() {
@@ -46,22 +44,13 @@ type TabletBson struct {
 
 // DialTablet creates and initializes TabletBson.
 func DialTablet(ctx context.Context, endPoint topo.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
-	var addr string
-	var config *tls.Config
-	if *tabletBsonEncrypted {
-		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vts"])
-		config = &tls.Config{}
-		config.InsecureSkipVerify = true
-	} else {
-		addr = netutil.JoinHostPort(endPoint.Host, endPoint.NamedPortMap["vt"])
-	}
-
+	addr := netutil.JoinHostPort(endPoint.Host, int(endPoint.NamedPortMap["vt"]))
 	conn := &TabletBson{endPoint: endPoint}
 	var err error
 	if *tabletBsonUsername != "" {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, timeout, config)
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, timeout)
 	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, timeout, config)
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, timeout)
 	}
 	if err != nil {
 		return nil, tabletError(err)

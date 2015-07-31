@@ -124,19 +124,14 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
 
 # db_key is <keyspace>.<shard_name>.<db_type>[:<service>]
 # returns a list of entries to try, which is an array of tuples
-# (host, port, encrypted)
-def get_host_port_by_name(topo_client, db_key, encrypted=False):
+# (host, port)
+def get_host_port_by_name(topo_client, db_key):
   parts = db_key.split(':')
   if len(parts) == 2:
     service = parts[1]
   else:
     service = 'mysql'
 
-  host_port_list = []
-  encrypted_host_port_list = []
-
-  if service == 'vt' and encrypted:
-    encrypted_service = 'vts'
   db_key = parts[0]
   ks, shard, tablet_type = db_key.split('.')
   try:
@@ -150,18 +145,12 @@ def get_host_port_by_name(topo_client, db_key, encrypted=False):
   if 'Entries' not in data:
     vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(data), db_key, e)
     raise Exception('zkocc returned: %s' % str(data))
+
+  host_port_list = []
   for entry in data['Entries']:
     if service in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap'][service],
-                   service == 'vts')
+      host_port = (entry['Host'], entry['NamedPortMap'][service])
       host_port_list.append(host_port)
-    if encrypted and encrypted_service in entry['NamedPortMap']:
-      host_port = (entry['Host'], entry['NamedPortMap'][encrypted_service],
-                   True)
-      encrypted_host_port_list.append(host_port)
-  if encrypted and len(encrypted_host_port_list) > 0:
-    random.shuffle(encrypted_host_port_list)
-    return encrypted_host_port_list
   random.shuffle(host_port_list)
   return host_port_list
 

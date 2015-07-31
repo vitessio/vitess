@@ -36,7 +36,7 @@ func dial(ctx context.Context, address string, timeout time.Duration) (vtgatecon
 	if strings.Contains(address, "/") {
 		network = "unix"
 	}
-	rpcConn, err := bsonrpc.DialHTTP(network, address, timeout, nil)
+	rpcConn, err := bsonrpc.DialHTTP(network, address, timeout)
 	if err != nil {
 		return nil, err
 	}

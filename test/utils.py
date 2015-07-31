@@ -425,7 +425,7 @@ class VtGate(object):
     self.proc = None
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
-            topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s',
+            topo_impl=None, cache_ttl='1s',
             auth=False, timeout_total="4s", timeout_per_conn="2s",
             extra_args=None):
     """Starts the process for thie vtgate instance. If no other instance has
@@ -451,8 +451,6 @@ class VtGate(object):
       args.extend(['-topo_implementation', topo_impl])
     else:
       args.extend(environment.topo_server().flags())
-    if tablet_bson_encrypted:
-      args.append('-tablet-bson-encrypted')
     if auth:
       args.extend(['-auth-credentials',
                    os.path.join(environment.vttop, 'test', 'test_data',

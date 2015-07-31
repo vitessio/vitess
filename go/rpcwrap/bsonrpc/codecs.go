@@ -6,7 +6,6 @@
 package bsonrpc
 
 import (
-	"crypto/tls"
 	"io"
 	"net/http"
 	"time"
@@ -104,13 +103,13 @@ func (sc *ServerCodec) Close() error {
 }
 
 // DialHTTP dials a HTTP endpoint with bsonrpc codec
-func DialHTTP(network, address string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
-	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout, config)
+func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Client, error) {
+	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout)
 }
 
 // DialAuthHTTP dials a HTTP endpoint with bsonrpc codec as authentication enabled
-func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout, config)
+func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration) (*rpc.Client, error) {
+	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout)
 }
 
 // ServeRPC serves bsonrpc codec with the default rpc server

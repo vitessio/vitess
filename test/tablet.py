@@ -280,7 +280,6 @@ class Tablet(object):
         '-ip-addr', '127.0.0.1',
         '-mysql-port', '%u' % self.mysql_port,
         '-vt-port', '%u' % self.port,
-        '-vts-port', '%u' % (self.port + 500),
         self.tablet_alias
     ]
     return utils.run_vtctl(args)
