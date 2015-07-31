@@ -1,11 +1,9 @@
 #!/usr/bin/env python
+"""Tests a sharded setup works and routes queries correctly.
+"""
 
 import logging
 import unittest
-
-from vtdb import tablet as tablet3
-from vtdb import topology
-from zk import zkocc
 
 import environment
 import tablet
@@ -93,15 +91,15 @@ class TestSharded(unittest.TestCase):
     # apply the schema on the first shard through vtctl, so all tablets
     # are the same.
     shard_0_master.mquery('vt_test_keyspace',
-                          create_vt_select_test.replace("\n", ""), write=True)
+                          create_vt_select_test.replace('\n', ''), write=True)
     shard_0_replica.mquery('vt_test_keyspace',
-                           create_vt_select_test.replace("\n", ""), write=True)
+                           create_vt_select_test.replace('\n', ''), write=True)
 
     # apply the schema on the second shard.
     shard_1_master.mquery('vt_test_keyspace',
-                          create_vt_select_test_reverse.replace("\n", ""), write=True)
+                          create_vt_select_test_reverse.replace('\n', ''), write=True)
     shard_1_replica.mquery('vt_test_keyspace',
-                           create_vt_select_test_reverse.replace("\n", ""), write=True)
+                           create_vt_select_test_reverse.replace('\n', ''), write=True)
 
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
@@ -125,14 +123,14 @@ class TestSharded(unittest.TestCase):
 
     utils.validate_topology(ping_tablets=True)
 
-    utils.pause("Before the sql scatter query")
+    utils.pause('Before the sql scatter query')
 
     # make sure the '1' value was written on first shard
-    rows = shard_0_master.mquery('vt_test_keyspace', "select id, msg from vt_select_test order by id")
+    rows = shard_0_master.mquery('vt_test_keyspace', 'select id, msg from vt_select_test order by id')
     self.assertEqual(rows, ((1, 'test 1'), ),
                      'wrong mysql_query output: %s' % str(rows))
 
-    utils.pause("After db writes")
+    utils.pause('After db writes')
 
     # throw in some schema validation step
     # we created the schema differently, so it should show
@@ -168,47 +166,22 @@ class TestSharded(unittest.TestCase):
             if expected not in lines:
               self.fail('missing zkns part:\n%s\nin:%s' %(expected, out))
 
-    # now try to connect using the python client and shard-aware connection
-    # to both shards
-    # first get the topology and check it
-    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                          "test_nj", 30.0)
-    topology.read_keyspaces(vtgate_client)
+    # connect to the tablets directly, make sure they know / validate
+    # their own shard
+    sql = 'select id, msg from vt_select_test order by id'
 
-    shard_0_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.-80.master:vt")
-    if len(shard_0_master_addrs) != 1:
-      self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:vt", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
-    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+    qr = shard_0_master.execute(sql)
+    self.assertEqual(qr['Rows'], [['1', 'test 1'], ])
 
-    # connect to shard -80
-    conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],
-                                               shard_0_master_addrs[0][1]),
-                                    "", "test_keyspace", "-80", 10.0)
-    conn.dial()
-    (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
-    self.assertEqual(results, [(1, 'test 1'), ],
-                     'wrong conn._execute output: %s' % str(results))
+    qr = shard_1_master.execute(sql)
+    self.assertEqual(qr['Rows'], [['10', 'test 10'], ])
 
-    # connect to shard 80-
-    shard_1_master_addrs = topology.get_host_port_by_name(vtgate_client, "test_keyspace.80-.master:vt")
-    conn = tablet3.TabletConnection("%s:%u" % (shard_1_master_addrs[0][0],
-                                               shard_1_master_addrs[0][1]),
-                                    "", "test_keyspace", "80-", 10.0)
-    conn.dial()
-    (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
-    self.assertEqual(results, [(10, 'test 10'), ],
-                     'wrong conn._execute output: %s' % str(results))
-    vtgate_client.close()
-
-    # try to connect with bad shard
-    try:
-      conn = tablet3.TabletConnection("localhost:%u" % shard_0_master.port,
-                                      "", "test_keyspace", "-90", 10.0)
-      conn.dial()
-      self.fail('expected an exception')
-    except Exception as e:
-      if "fatal: Shard mismatch, expecting -80, received -90" not in str(e):
-        self.fail('unexpected exception: ' + str(e))
+    _, stderr = utils.run_vtctl(['VtTabletExecute',
+                                 '-keyspace', 'test_keyspace',
+                                 '-shard', '-90',
+                                 shard_0_master.tablet_alias, sql],
+                                expect_fail=True)
+    self.assertIn('fatal: Shard mismatch, expecting -80, received -90', stderr)
 
     utils.vtgate.kill()
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,

@@ -40,7 +40,7 @@ def setUpModule():
     utils.wait_procs(setup_procs)
 
     # Start up a master mysql and vttablet
-    logging.debug("Setting up tablets")
+    logging.debug('Setting up tablets')
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     master_tablet.init_tablet('master', 'test_keyspace', '0')
     replica_tablet.init_tablet('replica', 'test_keyspace', '0')
@@ -71,7 +71,7 @@ def setUpModule():
 def tearDownModule():
   if utils.options.skip_teardown:
     return
-  logging.debug("Tearing down the servers and setup")
+  logging.debug('Tearing down the servers and setup')
   tablet.kill_tablets([master_tablet, replica_tablet])
   teardown_procs = [master_tablet.teardown_mysql(),
                     replica_tablet.teardown_mysql()]
@@ -86,7 +86,7 @@ def tearDownModule():
 class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
     self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                               "test_nj", 30.0)
+                                               'test_nj', 30.0)
     topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
 
@@ -94,11 +94,11 @@ class RowCacheInvalidator(unittest.TestCase):
     self.perform_delete()
 
   def replica_stats(self):
-    url = "http://localhost:%u/debug/table_stats" % replica_tablet.port
+    url = 'http://localhost:%u/debug/table_stats' % replica_tablet.port
     return framework.MultiDict(json.load(urllib2.urlopen(url)))
 
   def replica_vars(self):
-    url = "http://localhost:%u/debug/vars" % replica_tablet.port
+    url = 'http://localhost:%u/debug/vars' % replica_tablet.port
     return framework.MultiDict(json.load(urllib2.urlopen(url)))
 
   def perform_insert(self, count):
@@ -120,31 +120,31 @@ class RowCacheInvalidator(unittest.TestCase):
     self._wait_for_replica()
     invalidations = self.replica_stats()['Totals']['Invalidations']
     invalidatorStats = self.replica_vars()
-    logging.debug("Invalidations %d InvalidatorStats %s" %
+    logging.debug('Invalidations %d InvalidatorStats %s' %
                   (invalidations,
                    invalidatorStats['RowcacheInvalidatorPosition']))
-    self.assertTrue(invalidations > 0, "Invalidations are not flowing through.")
+    self.assertTrue(invalidations > 0, 'Invalidations are not flowing through.')
 
     res = replica_tablet.mquery('vt_test_keyspace',
-                                "select min(id) from vt_insert_test")
+                                'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
-                        "Cannot proceed, no rows in vt_insert_test")
+                        'Cannot proceed, no rows in vt_insert_test')
     id = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
-    logging.debug("vt_insert_test stats %s" % stats_dict)
+    logging.debug('vt_insert_test stats %s' % stats_dict)
     misses = stats_dict['Misses']
-    hits = stats_dict["Hits"]
-    conn = replica_tablet.conn()
-    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
+    hits = stats_dict['Hits']
+    replica_tablet.execute('select * from vt_insert_test where id=:id',
+                           bindvars={'id': id})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
-    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
+    replica_tablet.execute('select * from vt_insert_test where id=:id',
+                           bindvars={'id': id})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1,
                      "This should have hit the cache")
-    conn.close()
 
   def test_outofband_statements(self):
     start = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
@@ -153,14 +153,14 @@ class RowCacheInvalidator(unittest.TestCase):
     time.sleep(1.0)
 
     # Test update statement
-    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
     self.assertEqual(result, [(1000000, 'start')])
     utils.mysql_write_query(master_tablet.tablet_uid,
                             'vt_test_keyspace',
                             "update vt_insert_test set msg = 'foo' where id = 1000000")
     self._wait_for_replica()
     time.sleep(1.0)
-    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
     self.assertEqual(result, [(1000000, 'foo')])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(start, end1)
@@ -168,10 +168,10 @@ class RowCacheInvalidator(unittest.TestCase):
     # Test delete statement
     utils.mysql_write_query(master_tablet.tablet_uid,
                             'vt_test_keyspace',
-                            "delete from vt_insert_test where id = 1000000")
+                            'delete from vt_insert_test where id = 1000000')
     self._wait_for_replica()
     time.sleep(1.0)
-    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
     self.assertEqual(result, [])
     end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end1, end2)
@@ -182,7 +182,7 @@ class RowCacheInvalidator(unittest.TestCase):
                             "insert into vt_insert_test (id, msg) values(1000000, 'bar')")
     self._wait_for_replica()
     time.sleep(1.0)
-    result = self._exec_replica_query("select * from vt_insert_test where id = 1000000")
+    result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
     self.assertEqual(result, [(1000000, 'bar')])
     end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end2, end3)
@@ -190,7 +190,7 @@ class RowCacheInvalidator(unittest.TestCase):
     # Test unrecognized statement
     utils.mysql_query(master_tablet.tablet_uid,
                       'vt_test_keyspace',
-                       "truncate table vt_insert_test")
+                       'truncate table vt_insert_test')
     self._wait_for_replica()
     time.sleep(1.0)
     end4 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
@@ -212,57 +212,57 @@ class RowCacheInvalidator(unittest.TestCase):
     for timeout in xrange(300):
       time.sleep(0.1)
       inv_count1 = self.replica_stats()['Totals']['Invalidations']
-      logging.debug("Got %u invalidations" % inv_count1)
+      logging.debug('Got %u invalidations' % inv_count1)
       if inv_count1 == 100:
         break
     inv_count1 = self.replica_stats()['Totals']['Invalidations']
     self.assertEqual(inv_count1, 100,
-                     "Unexpected number of invalidations: %u" % inv_count1)
+                     'Unexpected number of invalidations: %u' % inv_count1)
 
     # stop replication insert more data, restart replication
-    replica_tablet.mquery('vt_test_keyspace', "stop slave")
+    replica_tablet.mquery('vt_test_keyspace', 'stop slave')
     self.perform_insert(100)
     time.sleep(2)
-    replica_tablet.mquery('vt_test_keyspace', "start slave")
+    replica_tablet.mquery('vt_test_keyspace', 'start slave')
     self._wait_for_replica()
 
     # wait until the slave processed all data
     for timeout in xrange(300):
       time.sleep(0.1)
       inv_count2 = self.replica_stats()['Totals']['Invalidations']
-      logging.debug("Got %u invalidations" % inv_count2)
+      logging.debug('Got %u invalidations' % inv_count2)
       if inv_count2 == 200:
         break
     inv_count2 = self.replica_stats()['Totals']['Invalidations']
-    self.assertEqual(inv_count2, 200, "Unexpected number of invalidations: %u" %
+    self.assertEqual(inv_count2, 200, 'Unexpected number of invalidations: %u' %
                      inv_count2)
 
     # check and display some stats
     invalidatorStats = self.replica_vars()
-    logging.debug("invalidatorStats %s" %
+    logging.debug('invalidatorStats %s' %
                   invalidatorStats['RowcacheInvalidatorPosition'])
-    self.assertEqual(invalidatorStats["RowcacheInvalidatorState"], "Running",
-                     "Row-cache invalidator should be enabled")
+    self.assertEqual(invalidatorStats['RowcacheInvalidatorState'], 'Running',
+                     'Row-cache invalidator should be enabled')
 
   def test_cache_hit(self):
     res = replica_tablet.mquery('vt_test_keyspace',
-                                "select min(id) from vt_insert_test")
+                                'select min(id) from vt_insert_test')
     self.assertNotEqual(res[0][0], None,
-                        "Cannot proceed, no rows in vt_insert_test")
+                        'Cannot proceed, no rows in vt_insert_test')
     id = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
     misses = stats_dict['Misses']
-    hits = stats_dict["Hits"]
-    conn = replica_tablet.conn()
-    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
+    hits = stats_dict['Hits']
+    replica_tablet.execute('select * from vt_insert_test where id=:id',
+                           bindvars={'id': id})
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1,
                      "This shouldn't have hit the cache")
 
-    conn._execute("select * from vt_insert_test where id=%d" % (id), {})
+    replica_tablet.execute('select * from vt_insert_test where id=:id',
+                           bindvars={'id': id})
     hits2 = self.replica_stats()['vt_insert_test']['Hits']
-    self.assertEqual(hits2 - hits, 1, "This should have hit the cache")
-    conn.close()
+    self.assertEqual(hits2 - hits, 1, 'This should have hit the cache')
 
   def test_service_disabled(self):
     # perform some inserts, then change state to stop the invalidator
@@ -275,19 +275,19 @@ class RowCacheInvalidator(unittest.TestCase):
     for timeout in xrange(300):
       time.sleep(0.1)
       invStats_after = self.replica_vars()
-      logging.debug("Got state %s" %
-                    invStats_after["RowcacheInvalidatorState"])
-      if invStats_after["RowcacheInvalidatorState"] == "Stopped":
+      logging.debug('Got state %s' %
+                    invStats_after['RowcacheInvalidatorState'])
+      if invStats_after['RowcacheInvalidatorState'] == 'Stopped':
         break
 
     # check all data is right
     inv_after = self.replica_stats()['Totals']['Invalidations']
     invStats_after = self.replica_vars()
-    logging.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['RowcacheInvalidatorPosition'], inv_after, invStats_after['RowcacheInvalidatorPosition']))
+    logging.debug('Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s' % (inv_before, invStats_before['RowcacheInvalidatorPosition'], inv_after, invStats_after['RowcacheInvalidatorPosition']))
     self.assertEqual(inv_after, 0,
-                     "Row-cache invalid. should be disabled, no invalidations")
-    self.assertEqual(invStats_after["RowcacheInvalidatorState"], "Stopped",
-                     "Row-cache invalidator should be disabled")
+                     'Row-cache invalid. should be disabled, no invalidations')
+    self.assertEqual(invStats_after['RowcacheInvalidatorState'], 'Stopped',
+                     'Row-cache invalidator should be disabled')
 
     # and restore the type
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
