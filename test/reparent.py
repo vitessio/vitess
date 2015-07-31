@@ -174,11 +174,7 @@ class TestReparent(unittest.TestCase):
                                  'PlannedReparentShard', 'test_keyspace/0',
                                  tablet_62044.tablet_alias],
                                 expect_fail=True)
-    logging.debug('Failed PlannedReparentShard output:\n' + stderr)
-    if 'DemoteMaster failed' not in stderr:
-      self.fail(
-          "didn't find the right error strings in failed PlannedReparentShard: " +
-          stderr)
+    self.assertIn('DemoteMaster failed', stderr)
 
     # Should fail to connect and fail
     _, stderr = utils.run_vtctl(['-wait-time', '10s', 'ScrapTablet',
@@ -610,10 +606,7 @@ class TestReparent(unittest.TestCase):
                                  'test_keyspace/' + shard_id,
                                  tablet_62044.tablet_alias],
                                 expect_fail=True)
-    if 'TabletManager.SetMaster on test_nj-0000041983 error' not in stderr:
-      self.fail(
-          "didn't find the right error strings in failed PlannedReparentShard: " +
-          stderr)
+    self.assertIn('TabletManager.SetMaster on test_nj-0000041983 error', stderr)
 
     # insert data into the new master, check the connected slaves work
     self._populate_vt_insert_test(tablet_62044, 3)

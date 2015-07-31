@@ -673,6 +673,21 @@ class Tablet(object):
     if Tablet.tablets_running > 0:
       raise utils.TestError('This test is not killing all its vttablets')
 
+  def execute(self, sql, bindvars=None, transaction_id=None):
+    """execute uses 'vtctl VtTabletExecute' to execute a command.
+    """
+    args = [
+        'VtTabletExecute',
+        '-keyspace', self.keyspace,
+        '-shard', self.shard,
+        ]
+    if bindvars:
+      args.extend(['-bind_variables', json.dumps(bindvars)])
+    if transaction_id:
+      args.extend(['-transaction_id', str(transaction_id)])
+    args.extend([self.tablet_alias, sql])
+    return utils.run_vtctl_json(args)
+
 
 def kill_tablets(tablets):
   for t in tablets:
