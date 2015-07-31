@@ -194,14 +194,14 @@ message Keyspace {
 // whithin a cell.
 message ShardReplication {
 
-  // ReplicationLink describes a tablet instance within the cell
-  message ReplicationLink {
+  // Node describes a tablet instance within the cell
+  message Node {
     TabletAlias tablet_alias = 1;
   }
 
-  // Note there can be only one ReplicationLink in this array
-  // for a given Slave.
-  repeated ReplicationLink replication_links = 1;
+  // Note there can be only one Node in this array
+  // for a given tablet.
+  repeated Node nodes = 1;
 }
 
 // Serving graph information

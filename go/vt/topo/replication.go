@@ -48,9 +48,9 @@ func (sri *ShardReplicationInfo) Shard() string {
 	return sri.shard
 }
 
-// GetReplicationLink find a link for a given tablet.
-func (sri *ShardReplicationInfo) GetReplicationLink(tabletAlias *pb.TabletAlias) (*pb.ShardReplication_ReplicationLink, error) {
-	for _, rl := range sri.ReplicationLinks {
+// GetShardReplicationNode finds a node for a given tablet.
+func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *pb.TabletAlias) (*pb.ShardReplication_Node, error) {
+	for _, rl := range sri.Nodes {
 		if *rl.TabletAlias == *tabletAlias {
 			return rl, nil
 		}
@@ -70,22 +70,22 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 
 	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *pb.ShardReplication) error {
 		// not very efficient, but easy to read
-		links := make([]*pb.ShardReplication_ReplicationLink, 0, len(sr.ReplicationLinks)+1)
+		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes)+1)
 		found := false
-		for _, link := range sr.ReplicationLinks {
-			if ProtoToTabletAlias(link.TabletAlias) == tabletAlias {
+		for _, node := range sr.Nodes {
+			if ProtoToTabletAlias(node.TabletAlias) == tabletAlias {
 				if found {
-					log.Warningf("Found a second ReplicationLink for tablet %v, deleting it", tabletAlias)
+					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
 					continue
 				}
 				found = true
 			}
-			links = append(links, link)
+			nodes = append(nodes, node)
 		}
 		if !found {
-			links = append(links, &pb.ShardReplication_ReplicationLink{TabletAlias: TabletAliasToProto(tabletAlias)})
+			nodes = append(nodes, &pb.ShardReplication_Node{TabletAlias: TabletAliasToProto(tabletAlias)})
 		}
-		sr.ReplicationLinks = links
+		sr.Nodes = nodes
 		return nil
 	})
 }
@@ -94,13 +94,13 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 // entry from the ShardReplication object.
 func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace, shard string, tabletAlias TabletAlias) error {
 	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *pb.ShardReplication) error {
-		links := make([]*pb.ShardReplication_ReplicationLink, 0, len(sr.ReplicationLinks))
-		for _, link := range sr.ReplicationLinks {
-			if ProtoToTabletAlias(link.TabletAlias) != tabletAlias {
-				links = append(links, link)
+		nodes := make([]*pb.ShardReplication_Node, 0, len(sr.Nodes))
+		for _, node := range sr.Nodes {
+			if ProtoToTabletAlias(node.TabletAlias) != tabletAlias {
+				nodes = append(nodes, node)
 			}
 		}
-		sr.ReplicationLinks = links
+		sr.Nodes = nodes
 		return nil
 	})
 	return err
@@ -114,11 +114,11 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 		return err
 	}
 
-	for _, rl := range sri.ReplicationLinks {
-		ti, err := ts.GetTablet(ctx, ProtoToTabletAlias(rl.TabletAlias))
+	for _, node := range sri.Nodes {
+		ti, err := ts.GetTablet(ctx, ProtoToTabletAlias(node.TabletAlias))
 		if err == ErrNoNode {
-			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(rl.TabletAlias))
+			logger.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", node.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(node.TabletAlias))
 		}
 		if err != nil {
 			// unknown error, we probably don't want to continue
@@ -126,11 +126,11 @@ func FixShardReplication(ctx context.Context, ts Server, logger logutil.Logger, 
 		}
 
 		if ti.Type == TYPE_SCRAP {
-			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
-			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(rl.TabletAlias))
+			logger.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", node.TabletAlias)
+			return RemoveShardReplicationRecord(ctx, ts, cell, keyspace, shard, ProtoToTabletAlias(node.TabletAlias))
 		}
 
-		logger.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)
+		logger.Infof("Keeping tablet %v in the replication graph", node.TabletAlias)
 	}
 
 	logger.Infof("All entries in replication graph are valid")

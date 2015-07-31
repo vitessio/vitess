@@ -248,16 +248,16 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 	case nil:
 		if recursive {
 			wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
-			for _, rl := range sri.ReplicationLinks {
+			for _, node := range sri.Nodes {
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
-				wr.Logger().Infof("Deleting tablet %v", rl.TabletAlias)
-				if err := wr.TopoServer().DeleteTablet(ctx, topo.ProtoToTabletAlias(rl.TabletAlias)); err != nil && err != topo.ErrNoNode {
-					return fmt.Errorf("can't delete tablet %v: %v", rl.TabletAlias, err)
+				wr.Logger().Infof("Deleting tablet %v", node.TabletAlias)
+				if err := wr.TopoServer().DeleteTablet(ctx, topo.ProtoToTabletAlias(node.TabletAlias)); err != nil && err != topo.ErrNoNode {
+					return fmt.Errorf("can't delete tablet %v: %v", node.TabletAlias, err)
 				}
 			}
-		} else if len(sri.ReplicationLinks) > 0 {
-			return fmt.Errorf("cell %v has %v possible tablets in replication graph", cell, len(sri.ReplicationLinks))
+		} else if len(sri.Nodes) > 0 {
+			return fmt.Errorf("cell %v has %v possible tablets in replication graph", cell, len(sri.Nodes))
 		}
 
 		// ShardReplication object is now useless, remove it

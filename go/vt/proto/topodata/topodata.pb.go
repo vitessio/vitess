@@ -357,32 +357,32 @@ func (*Keyspace_KeyspaceServedFrom) ProtoMessage()    {}
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.
 type ShardReplication struct {
-	// Note there can be only one ReplicationLink in this array
-	// for a given Slave.
-	ReplicationLinks []*ShardReplication_ReplicationLink `protobuf:"bytes,1,rep,name=replication_links" json:"replication_links,omitempty"`
+	// Note there can be only one Node in this array
+	// for a given tablet.
+	Nodes []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
 }
 
 func (m *ShardReplication) Reset()         { *m = ShardReplication{} }
 func (m *ShardReplication) String() string { return proto.CompactTextString(m) }
 func (*ShardReplication) ProtoMessage()    {}
 
-func (m *ShardReplication) GetReplicationLinks() []*ShardReplication_ReplicationLink {
+func (m *ShardReplication) GetNodes() []*ShardReplication_Node {
 	if m != nil {
-		return m.ReplicationLinks
+		return m.Nodes
 	}
 	return nil
 }
 
-// ReplicationLink describes a tablet instance within the cell
-type ShardReplication_ReplicationLink struct {
+// Node describes a tablet instance within the cell
+type ShardReplication_Node struct {
 	TabletAlias *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias" json:"tablet_alias,omitempty"`
 }
 
-func (m *ShardReplication_ReplicationLink) Reset()         { *m = ShardReplication_ReplicationLink{} }
-func (m *ShardReplication_ReplicationLink) String() string { return proto.CompactTextString(m) }
-func (*ShardReplication_ReplicationLink) ProtoMessage()    {}
+func (m *ShardReplication_Node) Reset()         { *m = ShardReplication_Node{} }
+func (m *ShardReplication_Node) String() string { return proto.CompactTextString(m) }
+func (*ShardReplication_Node) ProtoMessage()    {}
 
-func (m *ShardReplication_ReplicationLink) GetTabletAlias() *TabletAlias {
+func (m *ShardReplication_Node) GetTabletAlias() *TabletAlias {
 	if m != nil {
 		return m.TabletAlias
 	}

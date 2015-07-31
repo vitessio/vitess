@@ -21,8 +21,8 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	sr := &pb.ShardReplication{
-		ReplicationLinks: []*pb.ShardReplication_ReplicationLink{
-			&pb.ShardReplication_ReplicationLink{
+		Nodes: []*pb.ShardReplication_Node{
+			&pb.ShardReplication_Node{
 				TabletAlias: &pb.TabletAlias{
 					Cell: "c1",
 					Uid:  1,
@@ -40,15 +40,15 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Server) {
 	if sri, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != nil {
 		t.Errorf("GetShardReplication(new guy) failed: %v", err)
 	} else {
-		if len(sri.ReplicationLinks) != 1 ||
-			sri.ReplicationLinks[0].TabletAlias.Cell != "c1" ||
-			sri.ReplicationLinks[0].TabletAlias.Uid != 1 {
+		if len(sri.Nodes) != 1 ||
+			sri.Nodes[0].TabletAlias.Cell != "c1" ||
+			sri.Nodes[0].TabletAlias.Uid != 1 {
 			t.Errorf("GetShardReplication(new guy) returned wrong value: %v", *sri)
 		}
 	}
 
 	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(sr *pb.ShardReplication) error {
-		sr.ReplicationLinks = append(sr.ReplicationLinks, &pb.ShardReplication_ReplicationLink{
+		sr.Nodes = append(sr.Nodes, &pb.ShardReplication_Node{
 			TabletAlias: &pb.TabletAlias{
 				Cell: "c3",
 				Uid:  3,
@@ -62,11 +62,11 @@ func CheckShardReplication(ctx context.Context, t *testing.T, ts topo.Server) {
 	if sri, err := ts.GetShardReplication(ctx, cell, "test_keyspace", "-10"); err != nil {
 		t.Errorf("GetShardReplication(after append) failed: %v", err)
 	} else {
-		if len(sri.ReplicationLinks) != 2 ||
-			sri.ReplicationLinks[0].TabletAlias.Cell != "c1" ||
-			sri.ReplicationLinks[0].TabletAlias.Uid != 1 ||
-			sri.ReplicationLinks[1].TabletAlias.Cell != "c3" ||
-			sri.ReplicationLinks[1].TabletAlias.Uid != 3 {
+		if len(sri.Nodes) != 2 ||
+			sri.Nodes[0].TabletAlias.Cell != "c1" ||
+			sri.Nodes[0].TabletAlias.Uid != 1 ||
+			sri.Nodes[1].TabletAlias.Cell != "c3" ||
+			sri.Nodes[1].TabletAlias.Uid != 3 {
 			t.Errorf("GetShardReplication(new guy) returned wrong value: %v", *sri)
 		}
 	}

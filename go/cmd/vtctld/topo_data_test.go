@@ -298,14 +298,14 @@ func TestCellShardTabletsCache(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	if err := ts.UpdateShardReplicationFields(ctx, "cell1", "ks1", "s1", func(sr *pb.ShardReplication) error {
-		sr.ReplicationLinks = []*pb.ShardReplication_ReplicationLink{
-			&pb.ShardReplication_ReplicationLink{
+		sr.Nodes = []*pb.ShardReplication_Node{
+			&pb.ShardReplication_Node{
 				TabletAlias: &pb.TabletAlias{
 					Cell: "cell1",
 					Uid:  12,
 				},
 			},
-			&pb.ShardReplication_ReplicationLink{
+			&pb.ShardReplication_Node{
 				TabletAlias: &pb.TabletAlias{
 					Cell: "cell1",
 					Uid:  13,
