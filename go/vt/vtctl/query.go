@@ -192,7 +192,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	transactionId := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
+	transactionID := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
 	bindVariables := newBindvars(subFlags)
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
@@ -217,13 +217,13 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 
 	// pass in empty keyspace and shard to not ask for sessionId
-	conn, err := tabletconn.GetDialer()(ctx, *ep, *keyspace, *shard, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 	defer conn.Close()
 
-	qr, err := conn.Execute(ctx, subFlags.Arg(1), *bindVariables, int64(*transactionId))
+	qr, err := conn.Execute(ctx, subFlags.Arg(1), *bindVariables, int64(*transactionID))
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
