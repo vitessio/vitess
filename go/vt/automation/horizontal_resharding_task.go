@@ -14,7 +14,8 @@ import (
 type HorizontalReshardingTask struct {
 }
 
-func (t *HorizontalReshardingTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+// Run is part of the Task interface.
+func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	// Example: test_keyspace
 	keyspace := parameters["keyspace"]
 	// Example: 10-20
@@ -75,7 +76,8 @@ func (t *HorizontalReshardingTask) run(parameters map[string]string) ([]*pb.Task
 	return newTasks, "", nil
 }
 
-func (t *HorizontalReshardingTask) requiredParameters() []string {
+// RequiredParameters is part of the Task interface.
+func (t *HorizontalReshardingTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard_list", "dest_shard_list",
 		"vtctld_endpoint", "vtworker_endpoint"}
 }

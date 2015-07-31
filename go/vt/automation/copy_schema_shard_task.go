@@ -15,7 +15,8 @@ import (
 type CopySchemaShardTask struct {
 }
 
-func (t *CopySchemaShardTask) run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
+// Run is part of the Task interface.
+func (t *CopySchemaShardTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndSourceShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
@@ -23,6 +24,7 @@ func (t *CopySchemaShardTask) run(parameters map[string]string) ([]*pb.TaskConta
 	return nil, output, err
 }
 
-func (t *CopySchemaShardTask) requiredParameters() []string {
+// RequiredParameters is part of the Task interface.
+func (t *CopySchemaShardTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard", "dest_shard", "vtctld_endpoint"}
 }

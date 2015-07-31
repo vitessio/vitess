@@ -28,14 +28,14 @@ func testingTaskCreator(taskName string) Task {
 type TestingEchoTask struct {
 }
 
-func (t *TestingEchoTask) run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
 	for _, v := range parameters {
 		output += v
 	}
 	return
 }
 
-func (t *TestingEchoTask) requiredParameters() []string {
+func (t *TestingEchoTask) RequiredParameters() []string {
 	return []string{"echo_text"}
 }
 
@@ -43,13 +43,13 @@ func (t *TestingEchoTask) requiredParameters() []string {
 type TestingEmitEchoTask struct {
 }
 
-func (t *TestingEmitEchoTask) run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
 	return []*pb.TaskContainer{
 		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
 	}, "emitted TestingEchoTask", nil
 }
 
-func (t *TestingEmitEchoTask) requiredParameters() []string {
+func (t *TestingEmitEchoTask) RequiredParameters() []string {
 	return []string{}
 }
 
@@ -57,10 +57,10 @@ func (t *TestingEmitEchoTask) requiredParameters() []string {
 type TestingFailTask struct {
 }
 
-func (t *TestingFailTask) run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
 	return nil, "something went wrong", errors.New("full error message")
 }
 
-func (t *TestingFailTask) requiredParameters() []string {
+func (t *TestingFailTask) RequiredParameters() []string {
 	return []string{}
 }

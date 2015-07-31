@@ -33,7 +33,7 @@ func TestCopySchemaShardTask(t *testing.T) {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}
 
-	newTasks, _ /* output */, err := task.run(parameters)
+	newTasks, _ /* output */, err := task.Run(parameters)
 	if newTasks != nil {
 		t.Errorf("Task should not emit new tasks: %v", newTasks)
 	}
