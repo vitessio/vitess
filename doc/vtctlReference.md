@@ -4,6 +4,7 @@ Commands are listed in the following groups:
 
 * [Generic](#generic)
 * [Keyspaces](#keyspaces)
+* [Queries](#queries)
 * [Replication Graph](#replication-graph)
 * [Schema, Version, Permissions](#schema,-version,-permissions)
 * [Serving Graph](#serving-graph)
@@ -13,10 +14,39 @@ Commands are listed in the following groups:
 
 ## Generic
 
+* [ExportZkns](#exportzkns)
+* [ExportZknsForKeyspace](#exportzknsforkeyspace)
 * [ListAllTablets](#listalltablets)
 * [ListTablets](#listtablets)
+* [PruneActionLogs](#pruneactionlogs)
 * [Resolve](#resolve)
 * [Validate](#validate)
+
+### ExportZkns
+
+(requires zktopo.Server)<br><br>Export the serving graph entries to the zkns format.
+
+#### Example
+
+<pre class="command-example">ExportZkns &lt;cell name|zk local vt path&gt;</pre>
+
+#### Errors
+
+* action <code>&lt;ExportZkns&gt;</code> requires <code>&lt;cell name|zk vt root path&gt;</code> This error occurs if the command is not called with exactly one argument.
+
+
+### ExportZknsForKeyspace
+
+(requires zktopo.Server)<br><br>Export the serving graph entries to the zkns format.
+
+#### Example
+
+<pre class="command-example">ExportZknsForKeyspace &lt;keyspace|zk global keyspace path&gt;</pre>
+
+#### Errors
+
+* action <code>&lt;ExportZknsForKeyspace&gt;</code> requires <code>&lt;keyspace|zk global keyspace path&gt;</code> This error occurs if the command is not called with exactly one argument.
+
 
 ### ListAllTablets
 
@@ -50,6 +80,32 @@ Lists specified tablets in an awk-friendly way.
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command. This error occurs if the command is not called with at least one argument.
+
+
+### PruneActionLogs
+
+(requires zktopo.Server)<br><br>e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog<br><br>Removes older actionlog entries until at most &lt;count to keep&gt; are left.
+
+#### Example
+
+<pre class="command-example">PruneActionLogs [-keep-count=&lt;count to keep&gt;] &lt;zk actionlog path&gt; ...</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| keep-count | Int | count to keep |
+
+
+#### Arguments
+
+* <code>&lt;zk actionlog path&gt;</code> &ndash; Required. To specify multiple values for this argument, separate individual values with a space.
+
+#### Errors
+
+* action <code>&lt;PruneActionLogs&gt;</code> requires <code>&lt;zk action log path&gt;</code> [...] This error occurs if the command is not called with at least one argument.
+* <code>&lt;PruneActionLogs&gt;</code> requires a zktopo.Server
+* some errors occurred, check the log
 
 
 ### Resolve
@@ -89,11 +145,13 @@ Validates that all nodes reachable from the global replication graph and that al
 ## Keyspaces
 
 * [CreateKeyspace](#createkeyspace)
+* [DeleteKeyspace](#deletekeyspace)
 * [FindAllShardsInKeyspace](#findallshardsinkeyspace)
 * [GetKeyspace](#getkeyspace)
 * [MigrateServedFrom](#migrateservedfrom)
 * [MigrateServedTypes](#migrateservedtypes)
 * [RebuildKeyspaceGraph](#rebuildkeyspacegraph)
+* [RemoveKeyspaceCell](#removekeyspacecell)
 * [SetKeyspaceServedFrom](#setkeyspaceservedfrom)
 * [SetKeyspaceShardingInfo](#setkeyspaceshardinginfo)
 * [ValidateKeyspace](#validatekeyspace)
@@ -126,6 +184,30 @@ Creates the specified keyspace.
 * The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 * The <code>&lt;sharding_column_type&gt;</code> flag specifies an invalid value.
 * The <code>&lt;served_from&gt;</code> flag specifies a database (tablet) type that is not in the serving graph. The invalid value is: %v
+
+
+### DeleteKeyspace
+
+Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace.
+
+#### Example
+
+<pre class="command-example">DeleteKeyspace [-recursive] &lt;keyspace&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| recursive | Boolean | Also recursively delete all shards in the keyspace. |
+
+
+#### Arguments
+
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+
+#### Errors
+
+* Must specify the <code>&lt;keyspace&gt;</code> argument for <code>&lt;DeleteKeyspace&gt;</code>. This error occurs if the command is not called with exactly one argument.
 
 
 ### FindAllShardsInKeyspace
@@ -186,7 +268,6 @@ Makes the &lt;destination keyspace/shard&gt; serve the given type. This command 
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -199,6 +280,7 @@ Makes the &lt;destination keyspace/shard&gt; serve the given type. This command 
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -233,7 +315,6 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -246,6 +327,7 @@ Migrates a serving type from the source shard to the shards that it replicates t
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -281,6 +363,32 @@ Rebuilds the serving data for the keyspace and, optionally, all shards in the sp
 * The <code>&lt;keyspace&gt;</code> argument must be used to specify at least one keyspace when calling the <code>&lt;RebuildKeyspaceGraph&gt;</code> command. This error occurs if the command is not called with at least one argument.
 
 
+### RemoveKeyspaceCell
+
+Removes the cell from the Cells list for all shards in the keyspace.
+
+#### Example
+
+<pre class="command-example">RemoveKeyspaceCell [-force] [-recursive] &lt;keyspace&gt; &lt;cell&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| force | Boolean | Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data. |
+| recursive | Boolean | Also delete all tablets in that cell belonging to the specified keyspace. |
+
+
+#### Arguments
+
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace. 
+
+#### Errors
+
+* The <code>&lt;keyspace&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveKeyspaceCell&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+
+
 ### SetKeyspaceServedFrom
 
 Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph.
@@ -305,7 +413,6 @@ Changes the ServedFromMap manually. This command is intended for emergency fixes
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -318,6 +425,7 @@ Changes the ServedFromMap manually. This command is intended for emergency fixes
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -377,6 +485,153 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 #### Errors
 
 * The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+## Queries
+
+* [](#)
+* [// VtTablet commands](#//-vttablet-commands)
+* [VtGateExecute](#vtgateexecute)
+* [VtGateExecuteShard](#vtgateexecuteshard)
+* [VtGateSplitQuery](#vtgatesplitquery)
+* [VtTabletStreamHealth](#vttabletstreamhealth)
+
+### 
+
+
+
+### // VtTablet commands
+
+[-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;,Executes the given query on the given tablet.
+
+#### Example
+
+<pre class="command-example">// VtTablet commands commandVtTabletExecute</pre>
+
+
+
+### VtGateExecute
+
+Executes the given SQL query with the provided bound variables against the vtgate server.
+
+#### Example
+
+<pre class="command-example">VtGateExecute -server &lt;vtgate&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vtgate client |
+| server | string | VtGate server to connect to |
+| tablet_type | string | tablet type to query |
+
+
+#### Arguments
+
+* <code>&lt;vtgate&gt;</code> &ndash; Required.
+* <code>&lt;sql&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecute&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* error connecting to vtgate '%v': %v
+* Execute failed: %v
+
+
+### VtGateExecuteShard
+
+Executes the given SQL query with the provided bound variables against the vtgate server.
+
+#### Example
+
+<pre class="command-example">VtGateExecuteShard -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; -shards &lt;shard0&gt;,&lt;shard1&gt;,... [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet type&gt;] &lt;sql&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vtgate client |
+| keyspace | string | keyspace to send query to |
+| server | string | VtGate server to connect to |
+| shards | string | comma-separated list of shards to send query to |
+| tablet_type | string | tablet type to query |
+
+
+#### Arguments
+
+* <code>&lt;vtgate&gt;</code> &ndash; Required.
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.  To specify multiple values for this argument, separate individual values with a comma.
+* <code>&lt;sql&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateExecuteShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* error connecting to vtgate '%v': %v
+* Execute failed: %v
+
+
+### VtGateSplitQuery
+
+Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes).
+
+#### Example
+
+<pre class="command-example">VtGateSplitQuery -server &lt;vtgate&gt; -keyspace &lt;keyspace&gt; [-split_column &lt;split_column&gt;] -split_count &lt;split_count&gt; [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;sql&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vtgate client |
+| keyspace | string | keyspace to send query to |
+| server | string | VtGate server to connect to |
+| split_column | string | force the use of this column to split the query |
+| split_count | Int | number of splits to generate |
+
+
+#### Arguments
+
+* <code>&lt;vtgate&gt;</code> &ndash; Required.
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;split_count&gt;</code> &ndash; Required.
+* <code>&lt;sql&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* error connecting to vtgate '%v': %v
+* SplitQuery failed: %v
+
+
+### VtTabletStreamHealth
+
+Executes the StreamHealth streaming query to a vttablet process. Will stop after getting &lt;count&gt; answers.
+
+#### Example
+
+<pre class="command-example">VtTabletStreamHealth [-count &lt;count, default 1&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vttablet client |
+| count | Int | number of responses to wait for |
+
+
+#### Arguments
+
+* <code>&lt;count default 1&gt;</code> &ndash; Required.
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+
+#### Errors
+
+* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* cannot get EndPoint from tablet record: %v
+* cannot connect to tablet %v: %v
+* stream ended early: %v
 
 
 ## Replication Graph
@@ -468,11 +723,11 @@ Applies the VTGate routing schema.
 
 ### CopySchemaShard
 
-Copies the schema from a source tablet to the specified shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs.
+Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs.
 
 #### Example
 
-<pre class="command-example">CopySchemaShard [-tables=&lt;table1&gt;,&lt;table2&gt;,...] [-exclude_tables=&lt;table1&gt;,&lt;table2&gt;,...] [-include-views] &lt;source tablet alias&gt; &lt;destination keyspace/shard&gt;</pre>
+<pre class="command-example">CopySchemaShard [-tables=&lt;table1&gt;,&lt;table2&gt;,...] [-exclude_tables=&lt;table1&gt;,&lt;table2&gt;,...] [-include-views] {&lt;source keyspace/shard&gt; || &lt;source tablet alias&gt;} &lt;destination keyspace/shard&gt;</pre>
 
 #### Flags
 
@@ -490,7 +745,7 @@ Copies the schema from a source tablet to the specified shard. The schema is app
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. The <code>&lt;tablet alias&gt;</code> argument identifies a source and the <code>&lt;keyspace/shard&gt;</code> argument identifies a destination. This error occurs if the command is not called with exactly 2 arguments.
+* The <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;destination keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. Instead of the <code>&lt;source keyspace/shard&gt;</code> argument, you can also specify <code>&lt;tablet alias&gt;</code> which refers to a specific tablet of the shard in the source keyspace. This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### GetPermissions
@@ -705,7 +960,6 @@ Outputs a JSON structure that contains information about the EndPoints.
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -718,6 +972,7 @@ Outputs a JSON structure that contains information about the EndPoints.
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -784,9 +1039,14 @@ Outputs a JSON structure that contains information about the SrvShard.
 
 * [CreateShard](#createshard)
 * [DeleteShard](#deleteshard)
+* [EmergencyReparentShard](#emergencyreparentshard)
 * [GetShard](#getshard)
+* [InitShardMaster](#initshardmaster)
+* [ListBackups](#listbackups)
 * [ListShardTablets](#listshardtablets)
+* [PlannedReparentShard](#plannedreparentshard)
 * [RebuildShardGraph](#rebuildshardgraph)
+* [RemoveBackup](#removebackup)
 * [RemoveShardCell](#removeshardcell)
 * [SetShardServedTypes](#setshardservedtypes)
 * [SetShardTabletControl](#setshardtabletcontrol)
@@ -824,11 +1084,18 @@ Creates the specified shard.
 
 ### DeleteShard
 
-Deletes the specified shard(s).
+Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard.
 
 #### Example
 
-<pre class="command-example">DeleteShard &lt;keyspace/shard&gt; ...</pre>
+<pre class="command-example">DeleteShard [-recursive] &lt;keyspace/shard&gt; ...</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| recursive | Boolean | Also delete all tablets belonging to the shard. |
+
 
 #### Arguments
 
@@ -837,6 +1104,31 @@ Deletes the specified shard(s).
 #### Errors
 
 * The <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;DeleteShard&gt;</code> command. This error occurs if the command is not called with at least one argument.
+
+
+### EmergencyReparentShard
+
+Reparents the shard to the new master. Assumes the old master is dead and not responsding.
+
+#### Example
+
+<pre class="command-example">EmergencyReparentShard &lt;keyspace/shard&gt; &lt;tablet alias&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| wait_slave_timeout | Duration | time to wait for slaves to catch up in reparenting |
+
+
+#### Arguments
+
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+
+#### Errors
+
+* action <code>&lt;EmergencyReparentShard&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
+* active reparent actions disable in this cluster
 
 
 ### GetShard
@@ -856,13 +1148,53 @@ Outputs a JSON structure that contains information about the Shard.
 * The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;GetShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
+### InitShardMaster
+
+Sets the initial master for a shard. Will make all other tablets in the shard slaves of the provided master. WARNING: this could cause data loss on an already replicating shard, then PlannedReparentShard or EmergencyReparentShard should be used instead.
+
+#### Example
+
+<pre class="command-example">InitShardMaster [-force] [-wait_slave_timeout=&lt;duration&gt;] &lt;keyspace/shard&gt; &lt;tablet alias&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| force | Boolean | will force the reparent even if the provided tablet is not a master or the shard master |
+| wait_slave_timeout | Duration | time to wait for slaves to catch up in reparenting |
+
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. 
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+
+#### Errors
+
+* action <code>&lt;InitShardMaster&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
+* active reparent actions disable in this cluster
+
+
+### ListBackups
+
+Lists all the backups for a shard.
+
+#### Example
+
+<pre class="command-example">ListBackups &lt;keyspace/shard&gt;</pre>
+
+#### Errors
+
+* action <code>&lt;ListBackups&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> This error occurs if the command is not called with exactly one argument.
+
+
 ### ListShardTablets
 
 Lists all tablets in the specified shard.
 
 #### Example
 
-<pre class="command-example">ListShardTablets &lt;keyspace/shard&gt;)</pre>
+<pre class="command-example">ListShardTablets &lt;keyspace/shard&gt;</pre>
 
 #### Arguments
 
@@ -871,6 +1203,31 @@ Lists all tablets in the specified shard.
 #### Errors
 
 * The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ListShardTablets&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### PlannedReparentShard
+
+Reparents the shard to the new master. Both old and new master need to be up and running.
+
+#### Example
+
+<pre class="command-example">PlannedReparentShard &lt;keyspace/shard&gt; &lt;tablet alias&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| wait_slave_timeout | Duration | time to wait for slaves to catch up in reparenting |
+
+
+#### Arguments
+
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+
+#### Errors
+
+* action <code>&lt;PlannedReparentShard&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
+* active reparent actions disable in this cluster
 
 
 ### RebuildShardGraph
@@ -897,19 +1254,37 @@ Rebuilds the replication graph and shard serving data in ZooKeeper or etcd. This
 * The <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;RebuildShardGraph&gt;</code> command. This error occurs if the command is not called with at least one argument.
 
 
+### RemoveBackup
+
+Removes a backup for the BackupStorage.
+
+#### Example
+
+<pre class="command-example">RemoveBackup &lt;keyspace/shard&gt; &lt;backup name&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;backup name&gt;</code> &ndash; Required.
+
+#### Errors
+
+* action <code>&lt;RemoveBackup&gt;</code> requires <code>&lt;keyspace/shard&gt;</code> <code>&lt;backup name&gt;</code> This error occurs if the command is not called with exactly 2 arguments.
+
+
 ### RemoveShardCell
 
 Removes the cell from the shard's Cells list.
 
 #### Example
 
-<pre class="command-example">RemoveShardCell [-force] &lt;keyspace/shard&gt; &lt;cell&gt;</pre>
+<pre class="command-example">RemoveShardCell [-force] [-recursive] &lt;keyspace/shard&gt; &lt;cell&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| force | Boolean | Proceeds even if the cell's topology server cannot be reached to check for tablets |
+| force | Boolean | Proceeds even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data. |
+| recursive | Boolean | Also delete all tablets in that cell belonging to the specified shard. |
 
 
 #### Arguments
@@ -945,7 +1320,6 @@ Sets a given shard's served tablet types. Does not rebuild any serving graph.
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -958,6 +1332,7 @@ Sets a given shard's served tablet types. Does not rebuild any serving graph.
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -992,7 +1367,6 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -1005,6 +1379,7 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -1096,7 +1471,7 @@ Deletes the SourceShard record with the provided index. This is meant as an emer
 
 ### TabletExternallyReparented
 
-Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the <a href=\"https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents\">Reparenting</a> guide for more information.
+Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents.
 
 #### Example
 
@@ -1140,13 +1515,14 @@ Validates that all nodes that are reachable from this shard are consistent.
 * [Backup](#backup)
 * [ChangeSlaveType](#changeslavetype)
 * [DeleteTablet](#deletetablet)
+* [DemoteMaster](#demotemaster)
 * [ExecuteFetchAsDba](#executefetchasdba)
 * [ExecuteHook](#executehook)
 * [GetTablet](#gettablet)
-* [HealthStream](#healthstream)
 * [InitTablet](#inittablet)
 * [Ping](#ping)
 * [RefreshState](#refreshstate)
+* [ReparentTablet](#reparenttablet)
 * [RunHealthCheck](#runhealthcheck)
 * [ScrapTablet](#scraptablet)
 * [SetReadOnly](#setreadonly)
@@ -1182,7 +1558,7 @@ Stops mysqld and uses the BackupStorage service to store a new backup. This func
 
 ### ChangeSlaveType
 
-Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>Valid &lt;tablet type&gt; values for this command are <code>backup</code>, <code>batch</code>, <code>experimental</code>, <code>rdonly</code>, <code>replica</code>, <code>restore</code>, <code>schema_apply</code>, <code>spare</code>, and <code>worker</code>.
+Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " ")},
 
 #### Example
 
@@ -1203,7 +1579,6 @@ Changes the db type for the specified tablet, if possible. This command is used 
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -1216,6 +1591,7 @@ Changes the db type for the specified tablet, if possible. This command is used 
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -1242,6 +1618,20 @@ Deletes scrapped tablet(s) from the topology.
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument must be used to specify at least one tablet when calling the <code>&lt;DeleteTablet&gt;</code> command. This error occurs if the command is not called with at least one argument.
+
+
+### DemoteMaster
+
+Demotes a master tablet.
+
+#### Example
+
+<pre class="command-example">DemoteMaster &lt;tablet alias&gt;</pre>
+
+#### Errors
+
+* action <code>&lt;DemoteMaster&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
+* active reparent actions disable in this cluster
 
 
 ### ExecuteFetchAsDba
@@ -1308,26 +1698,9 @@ Outputs a JSON structure that contains information about the Tablet.
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
-### HealthStream
-
-Streams the health status of a tablet.
-
-#### Example
-
-<pre class="command-example">HealthStream &lt;tablet alias&gt;</pre>
-
-#### Arguments
-
-* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
-
-#### Errors
-
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;HealthStream&gt;</code> command. This error occurs if the command is not called with exactly one argument.
-
-
 ### InitTablet
 
-Initializes a tablet in the topology.
+Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 
 #### Example
 
@@ -1339,6 +1712,7 @@ Initializes a tablet in the topology.
 | :-------- | :--------- | :--------- |
 | db-name-override | string | Overrides the name of the database that the vttablet uses |
 | force | Boolean | Overwrites the node if the node already exists |
+| grpc_port | Int | The gRPC port for the vttablet process |
 | hostname | string | The server on which the tablet is running |
 | keyspace | string | The keyspace to which this tablet belongs |
 | mysql_port | Int | The mysql port for the mysql daemon |
@@ -1347,7 +1721,6 @@ Initializes a tablet in the topology.
 | shard | string | The shard to which this tablet belongs |
 | tags | string | A comma-separated list of key:value pairs that are used to tag the tablet |
 | update | Boolean | Performs update if a tablet with the provided alias already exists |
-| grpc_port | Int | The encrypted port for the vttablet process |
 
 
 #### Arguments
@@ -1357,7 +1730,6 @@ Initializes a tablet in the topology.
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -1370,6 +1742,7 @@ Initializes a tablet in the topology.
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -1413,6 +1786,20 @@ Reloads the tablet record on the specified tablet.
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
+### ReparentTablet
+
+Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action.
+
+#### Example
+
+<pre class="command-example">ReparentTablet &lt;tablet alias&gt;</pre>
+
+#### Errors
+
+* action <code>&lt;ReparentTablet&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
+* active reparent actions disable in this cluster
+
+
 ### RunHealthCheck
 
 Runs a health check on a remote tablet with the specified target type.
@@ -1428,7 +1815,6 @@ Runs a health check on a remote tablet with the specified target type.
 
     * <code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes
     * <code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)
-    * <code>checker</code> &ndash; A tablet that is running a checker process. The tablet is likely lagging in replication.
     * <code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.
     * <code>idle</code> &ndash; An idle vttablet that does not have a keyspace, shard or type assigned
     * <code>lag</code> &ndash; A slaved copy of data intentionally lagged for pseudo-backup.
@@ -1441,6 +1827,7 @@ Runs a health check on a remote tablet with the specified target type.
     * <code>scrap</code> &ndash; A tablet that contains data that needs to be wiped.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
@@ -1463,7 +1850,7 @@ Scraps a tablet.
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | force | Boolean | Changes the tablet type to <code>scrap</code> in ZooKeeper or etcd if a tablet is offline |
-| skip-rebuild | Boolean | Skips rebuilding the shard and keyspace graph after scrapping the tablet |
+| skip-rebuild | Boolean | Skips rebuilding the shard graph after scrapping the tablet |
 
 
 #### Arguments
@@ -1577,11 +1964,11 @@ Updates the IP address and port numbers of a tablet.
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
+| grpc-port | Int | The gRPC port for the vttablet process |
 | hostname | string | The fully qualified host name of the server on which the tablet is running. |
 | ip-addr | string | IP address |
 | mysql-port | Int | The mysql port for the mysql daemon |
 | vt-port | Int | The main port for the vttablet process |
-| grpc-port | Int | The encrypted port for the vttablet process |
 
 
 #### Arguments
