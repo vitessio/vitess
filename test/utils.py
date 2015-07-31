@@ -210,9 +210,10 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   if proc.returncode:
     if raise_on_error:
       pause("cmd fail: %s, pausing..." % (args))
-      raise TestError('cmd fail:', args, stdout, stderr)
+      raise TestError('cmd fail:', args, proc.returncode, stdout, stderr)
     else:
-      logging.debug('cmd fail: %s %s %s', str(args), stdout, stderr)
+      logging.debug('cmd fail: %s %d %s %s',
+                    str(args), proc.returncode, stdout, stderr)
   return stdout, stderr
 
 # run sub-process, expects failure
