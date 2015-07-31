@@ -730,7 +730,7 @@ const (
 )
 
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v%c%v", node.Left, node.Operator, node.Right)
+	buf.Myprintf("%v %c %v", node.Left, node.Operator, node.Right)
 }
 
 // UnaryExpr represents a unary value expression.
@@ -747,6 +747,10 @@ const (
 )
 
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
+	if _, unary := node.Expr.(*UnaryExpr); unary {
+		buf.Myprintf("%c %v", node.Operator, node.Expr)
+		return
+	}
 	buf.Myprintf("%c%v", node.Operator, node.Expr)
 }
 

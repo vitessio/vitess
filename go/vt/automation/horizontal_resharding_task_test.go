@@ -14,11 +14,11 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 	reshardingTask := &HorizontalReshardingTask{}
 
 	parameters := map[string]string{
-		"keyspace":                 "test_keyspace",
-		"source_shard_list":        "10-20",
-		"dest_shard_list":          "10-18,18-20",
-		"vtctld_endpoint":          "localhost:15000",
-		"vtworker_endpoint":        "localhost:15001",
+		"keyspace":          "test_keyspace",
+		"source_shard_list": "10-20",
+		"dest_shard_list":   "10-18,18-20",
+		"vtctld_endpoint":   "localhost:15000",
+		"vtworker_endpoint": "localhost:15001",
 	}
 
 	err := checkRequiredParameters(reshardingTask, parameters)
@@ -26,7 +26,7 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}
 
-	newTaskContainers, _, _ := reshardingTask.run(parameters)
+	newTaskContainers, _, _ := reshardingTask.Run(parameters)
 
 	// TODO(mberlin): Check emitted tasks against expected output.
 	for _, tc := range newTaskContainers {

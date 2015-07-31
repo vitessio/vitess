@@ -456,7 +456,7 @@
   "Reason":"",
   "Table": "user",
   "Original":"select * from user where id in (1+1, 2)",
-  "Rewritten":"select * from user where id in (1+1, 2)",
+  "Rewritten":"select * from user where id in (1 + 1, 2)",
   "Subquery": "",
   "Vindex": "",
   "Col": "",

@@ -415,7 +415,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 			server.endPointCounters.errors.Add(key, 1)
 			return
 		}
-		if len(result.Entries) == 0 {
+		if result == nil || len(result.Entries) == 0 {
 			server.endPointCounters.emptyResults.Add(key, 1)
 			return
 		}

@@ -138,7 +138,7 @@ func (s *Scheduler) processClusterOperation(clusterOp *ClusterOperationInstance)
 
 			taskProto.State = pb.TaskState_RUNNING
 			log.Infof("Task: %v (%v/%v) running. Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, taskProto)
-			newTaskContainers, output, errRun := task.run(taskProto.Parameters)
+			newTaskContainers, output, errRun := task.Run(taskProto.Parameters)
 			log.Infof("Task: %v (%v/%v) finished. newTaskContainers: %v, output: %v, error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, newTaskContainers, output, errRun)
 
 			if errRun != nil {
@@ -235,7 +235,7 @@ func (s *Scheduler) createTaskInstance(taskName string) (Task, error) {
 
 // checkRequiredParameters returns an error if not all required parameters are provided in "parameters".
 func checkRequiredParameters(task Task, parameters map[string]string) error {
-	for _, requiredParameter := range task.requiredParameters() {
+	for _, requiredParameter := range task.RequiredParameters() {
 		if _, ok := parameters[requiredParameter]; !ok {
 			return fmt.Errorf("Parameter %v is required, but not provided", requiredParameter)
 		}
