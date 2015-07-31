@@ -12,14 +12,6 @@ MAKEFLAGS = -s
 
 all: build test
 
-# Values to be burned into the binary at build-time.
-LDFLAGS = "\
-	-X github.com/youtube/vitess/go/vt/servenv.buildHost   '$$(hostname)'\
-	-X github.com/youtube/vitess/go/vt/servenv.buildUser   '$$(whoami)'\
-	-X github.com/youtube/vitess/go/vt/servenv.buildGitRev '$$(git rev-parse HEAD)'\
-	-X github.com/youtube/vitess/go/vt/servenv.buildTime   '$$(LC_ALL=C date)'\
-"
-
 # Set a custom value for -p, the number of packages to be built/tested in parallel.
 # This is currently only used by our Travis CI test configuration.
 # (Also keep in mind that this value is independent of GOMAXPROCS.)
@@ -35,7 +27,7 @@ ifdef VT_MYSQL_ROOT
 endif
 
 build:
-	godep go install $(VT_GO_PARALLEL) -ldflags ${LDFLAGS} ./go/...
+	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
@@ -45,6 +37,12 @@ site_test: unit_test site_integration_test
 clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
+
+# This will remove object files for all Go projects in the same GOPATH.
+# This is necessary, for example, to make sure dependencies are rebuilt
+# when switching between different versions of Go.
+clean_pkg:
+	rm -rf ../../../../pkg Godeps/_workspace/pkg
 
 unit_test:
 	godep go test $(VT_GO_PARALLEL) ./go/...
