@@ -4,31 +4,9 @@
 
 package cgzip
 
-// See http://www.zlib.net/zlib_how.html for more information on this
-
-/*
-#cgo CFLAGS: -Werror=implicit
-#cgo pkg-config: zlib
-
-#include "zlib.h"
-
-// deflateInit2 is a macro, so using a wrapper function
-// using deflateInit2 instead of deflateInit to be able to specify gzip format
-int cgzipDeflateInit(z_stream *strm, int level) {
-    strm->zalloc = Z_NULL;
-    strm->zfree = Z_NULL;
-    strm->opaque = Z_NULL;
-    return deflateInit2(strm, level, Z_DEFLATED,
-                        16+15, // 16 makes it a gzip file, 15 is default
-                        8, Z_DEFAULT_STRATEGY); // default values
-}
-*/
-import "C"
-
 import (
 	"fmt"
 	"io"
-	"unsafe"
 )
 
 const (
@@ -71,7 +49,7 @@ const (
 type Writer struct {
 	w    io.Writer
 	out  []byte
-	strm C.z_stream
+	strm zstream
 	err  error
 }
 
@@ -86,9 +64,8 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 
 func NewWriterLevelBuffer(w io.Writer, level, bufferSize int) (*Writer, error) {
 	z := &Writer{w: w, out: make([]byte, bufferSize)}
-	result := C.cgzipDeflateInit(&z.strm, (C.int)(level))
-	if result != Z_OK {
-		return nil, fmt.Errorf("cgzip: failed to initialize (%v): %v", result, C.GoString(z.strm.msg))
+	if err := z.strm.deflateInit(level); err != nil {
+		return nil, err
 	}
 	return z, nil
 }
@@ -97,34 +74,26 @@ func NewWriterLevelBuffer(w io.Writer, level, bufferSize int) (*Writer, error) {
 // new data or something else to do, like a flush
 func (z *Writer) write(p []byte, flush int) int {
 	if len(p) == 0 {
-		z.strm.next_in = (*C.Bytef)(unsafe.Pointer(nil))
-		z.strm.avail_in = 0
+		z.strm.setInBuf(nil, 0)
 	} else {
-		z.strm.next_in = (*C.Bytef)(unsafe.Pointer(&p[0]))
-		z.strm.avail_in = (C.uInt)(len(p))
+		z.strm.setInBuf(p, len(p))
 	}
 	// we loop until we don't get a full output buffer
 	// each loop completely writes the output buffer to the underlying
 	// writer
 	for {
 		// deflate one buffer
-		z.strm.next_out = (*C.Bytef)(unsafe.Pointer(&z.out[0]))
-		z.strm.avail_out = (C.uInt)(len(z.out))
-		ret := C.deflate(&z.strm, (C.int)(flush))
-		if ret == Z_STREAM_ERROR {
-			// all the other error cases are normal,
-			// and this should never happen
-			panic(fmt.Errorf("cgzip: Unexpected error (1)"))
-		}
+		z.strm.setOutBuf(z.out, len(z.out))
+		z.strm.deflate(flush)
 
 		// write everything
 		from := 0
-		have := len(z.out) - int(z.strm.avail_out)
+		have := len(z.out) - int(z.strm.availOut())
 		for have > 0 {
 			var n int
 			n, z.err = z.w.Write(z.out[from:have])
 			if z.err != nil {
-				C.deflateEnd(&z.strm)
+				z.strm.deflateEnd()
 				return 0
 			}
 			from += n
@@ -132,12 +101,12 @@ func (z *Writer) write(p []byte, flush int) int {
 		}
 
 		// we stop trying if we get a partial response
-		if z.strm.avail_out != 0 {
+		if z.strm.availOut() != 0 {
 			break
 		}
 	}
 	// the library guarantees this
-	if z.strm.avail_in != 0 {
+	if z.strm.availIn() != 0 {
 		panic(fmt.Errorf("cgzip: Unexpected error (2)"))
 	}
 	return len(p)
@@ -169,7 +138,7 @@ func (z *Writer) Close() error {
 	if z.err != nil {
 		return z.err
 	}
-	C.deflateEnd(&z.strm)
+	z.strm.deflateEnd()
 	z.err = io.EOF
 	return nil
 }
