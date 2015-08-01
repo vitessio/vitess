@@ -29,20 +29,9 @@ func NewClusterOperationInstance(clusterOpID string, initialTask *pb.TaskContain
 	return c
 }
 
-// addMissingTaskID assigns a task id to each task in "tc".
-func (c *ClusterOperationInstance) addMissingTaskID(tc []*pb.TaskContainer) {
-	for _, taskContainer := range tc {
-		for _, task := range taskContainer.ParallelTasks {
-			if task.Id == "" {
-				task.Id = c.taskIDGenerator.GetNextID()
-			}
-		}
-	}
-}
-
 // InsertTaskContainers  inserts "newTaskContainers" at pos in the current list of task containers. Existing task containers will be moved after the new task containers.
 func (c *ClusterOperationInstance) InsertTaskContainers(newTaskContainers []*pb.TaskContainer, pos int) {
-	c.addMissingTaskID(newTaskContainers)
+	AddMissingTaskID(newTaskContainers, c.taskIDGenerator)
 
 	newSerialTasks := make([]*pb.TaskContainer, len(c.SerialTasks)+len(newTaskContainers))
 	copy(newSerialTasks, c.SerialTasks[:pos])
