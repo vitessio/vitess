@@ -5,6 +5,8 @@
 
 syntax = "proto3";
 
+option java_package="com.youtube.vitess.proto";
+
 package topodata;
 
 // KeyRange describes a range of sharding keys, when range-based
