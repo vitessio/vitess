@@ -1400,7 +1400,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			if !topo.IsInServingGraph(topo.ProtoToTabletType(tt)) {
 				return fmt.Errorf("The served_from flag specifies a database (tablet) type that is not in the serving graph. The invalid value is: %v", tt)
 			}
-			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_KeyspaceServedFrom{
+			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
 				TabletType: tt,
 				Keyspace:   value,
 			})

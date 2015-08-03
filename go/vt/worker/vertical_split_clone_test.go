@@ -240,16 +240,16 @@ func testVerticalSplitClone(t *testing.T, strategy string) {
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &pb.Keyspace{
-		ServedFroms: []*pb.Keyspace_KeyspaceServedFrom{
-			&pb.Keyspace_KeyspaceServedFrom{
+		ServedFroms: []*pb.Keyspace_ServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_MASTER,
 				Keyspace:   "source_ks",
 			},
-			&pb.Keyspace_KeyspaceServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_REPLICA,
 				Keyspace:   "source_ks",
 			},
-			&pb.Keyspace_KeyspaceServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_RDONLY,
 				Keyspace:   "source_ks",
 			},

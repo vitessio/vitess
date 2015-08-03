@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtrpc.proto',
   package='vtrpc',
   syntax='proto3',
-  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\";\n\x08RPCError\x12\x1e\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*n\n\tErrorCode\x12\x0b\n\x07NoError\x10\x00\x12\x10\n\x0bTabletError\x10\xe8\x07\x12\x17\n\x12UnknownTabletError\x10\xcf\x0f\x12\x10\n\x0bVtgateError\x10\xd0\x0f\x12\x17\n\x12UnknownVtgateError\x10\xb7\x17\x62\x06proto3')
+  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\";\n\x08RPCError\x12\x1e\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*n\n\tErrorCode\x12\x0b\n\x07NoError\x10\x00\x12\x10\n\x0bTabletError\x10\xe8\x07\x12\x17\n\x12UnknownTabletError\x10\xcf\x0f\x12\x10\n\x0bVtgateError\x10\xd0\x0f\x12\x17\n\x12UnknownVtgateError\x10\xb7\x17\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -169,6 +169,8 @@ RPCError = _reflection.GeneratedProtocolMessageType('RPCError', (_message.Messag
 _sym_db.RegisterMessage(RPCError)
 
 
+DESCRIPTOR.has_options = True
+DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\030com.youtube.vitess.proto'))
 import abc
 from grpc.early_adopter import implementations
 from grpc.framework.alpha import utilities

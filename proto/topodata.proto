@@ -172,9 +172,9 @@ message Keyspace {
   // always have at most one job per shard (used during resharding).
   int32 split_shard_count = 3;
 
-  // KeyspaceServedFrom indicates a relationship between a TabletType and the
+  // ServedFrom indicates a relationship between a TabletType and the
   // keyspace name that's serving it.
-  message KeyspaceServedFrom {
+  message ServedFrom {
     // the tablet type (key for the map)
     TabletType tablet_type = 1;
 
@@ -185,9 +185,9 @@ message Keyspace {
     string keyspace = 3;
   }
 
-  // KeyspaceServedFrom will redirect the appropriate traffic to
+  // ServedFrom will redirect the appropriate traffic to
   // another keyspace.
-  repeated KeyspaceServedFrom served_froms = 4;
+  repeated ServedFrom served_froms = 4;
 }
 
 // Replication graph information

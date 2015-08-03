@@ -51,13 +51,13 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
 	k := &pb.Keyspace{
 		ShardingColumnName: "user_id",
 		ShardingColumnType: pb.KeyspaceIdType_UINT64,
-		ServedFroms: []*pb.Keyspace_KeyspaceServedFrom{
-			&pb.Keyspace_KeyspaceServedFrom{
+		ServedFroms: []*pb.Keyspace_ServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_REPLICA,
 				Cells:      []string{"c1", "c2"},
 				Keyspace:   "test_keyspace3",
 			},
-			&pb.Keyspace_KeyspaceServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_MASTER,
 				Cells:      nil,
 				Keyspace:   "test_keyspace3",
@@ -92,7 +92,7 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
 
 	ki.ShardingColumnName = "other_id"
 	ki.ShardingColumnType = pb.KeyspaceIdType_BYTES
-	var newServedFroms []*pb.Keyspace_KeyspaceServedFrom
+	var newServedFroms []*pb.Keyspace_ServedFrom
 	for _, ksf := range ki.ServedFroms {
 		if ksf.TabletType == pb.TabletType_MASTER {
 			continue

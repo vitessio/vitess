@@ -15,13 +15,13 @@ import (
 
 func TestUpdateServedFromMap(t *testing.T) {
 	ki := NewKeyspaceInfo("ks", &pb.Keyspace{
-		ServedFroms: []*pb.Keyspace_KeyspaceServedFrom{
-			&pb.Keyspace_KeyspaceServedFrom{
+		ServedFroms: []*pb.Keyspace_ServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_RDONLY,
 				Cells:      nil,
 				Keyspace:   "source",
 			},
-			&pb.Keyspace_KeyspaceServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_MASTER,
 				Cells:      nil,
 				Keyspace:   "source",
@@ -31,13 +31,13 @@ func TestUpdateServedFromMap(t *testing.T) {
 	allCells := []string{"first", "second", "third"}
 
 	// migrate one cell
-	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_KeyspaceServedFrom{
-		&pb.Keyspace_KeyspaceServedFrom{
+	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_ServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_RDONLY,
 			Cells:      []string{"second", "third"},
 			Keyspace:   "source",
 		},
-		&pb.Keyspace_KeyspaceServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -47,13 +47,13 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// re-add that cell, going back
-	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", false, nil); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_KeyspaceServedFrom{
-		&pb.Keyspace_KeyspaceServedFrom{
+	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", false, nil); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_ServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_RDONLY,
 			Cells:      []string{"second", "third", "first"},
 			Keyspace:   "source",
 		},
-		&pb.Keyspace_KeyspaceServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -63,13 +63,13 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// now remove the cell again
-	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_KeyspaceServedFrom{
-		&pb.Keyspace_KeyspaceServedFrom{
+	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"first"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_ServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_RDONLY,
 			Cells:      []string{"second", "third"},
 			Keyspace:   "source",
 		},
-		&pb.Keyspace_KeyspaceServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -87,8 +87,8 @@ func TestUpdateServedFromMap(t *testing.T) {
 	}
 
 	// now remove all cells
-	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"second", "third"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_KeyspaceServedFrom{
-		&pb.Keyspace_KeyspaceServedFrom{
+	if err := ki.UpdateServedFromMap(pb.TabletType_RDONLY, []string{"second", "third"}, "source", true, allCells); err != nil || !reflect.DeepEqual(ki.ServedFroms, []*pb.Keyspace_ServedFrom{
+		&pb.Keyspace_ServedFrom{
 			TabletType: pb.TabletType_MASTER,
 			Cells:      nil,
 			Keyspace:   "source",
@@ -116,13 +116,13 @@ func TestUpdateServedFromMap(t *testing.T) {
 
 func TestComputeCellServedFrom(t *testing.T) {
 	ki := NewKeyspaceInfo("ks", &pb.Keyspace{
-		ServedFroms: []*pb.Keyspace_KeyspaceServedFrom{
-			&pb.Keyspace_KeyspaceServedFrom{
+		ServedFroms: []*pb.Keyspace_ServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_MASTER,
 				Cells:      nil,
 				Keyspace:   "source",
 			},
-			&pb.Keyspace_KeyspaceServedFrom{
+			&pb.Keyspace_ServedFrom{
 				TabletType: pb.TabletType_REPLICA,
 				Cells:      []string{"c1", "c2"},
 				Keyspace:   "source",

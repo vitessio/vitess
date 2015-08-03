@@ -323,25 +323,25 @@ type Keyspace struct {
 	// SplitShardCount stores the number of jobs to run to be sure to
 	// always have at most one job per shard (used during resharding).
 	SplitShardCount int32 `protobuf:"varint,3,opt,name=split_shard_count" json:"split_shard_count,omitempty"`
-	// KeyspaceServedFrom will redirect the appropriate traffic to
+	// ServedFrom will redirect the appropriate traffic to
 	// another keyspace.
-	ServedFroms []*Keyspace_KeyspaceServedFrom `protobuf:"bytes,4,rep,name=served_froms" json:"served_froms,omitempty"`
+	ServedFroms []*Keyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_froms" json:"served_froms,omitempty"`
 }
 
 func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 
-func (m *Keyspace) GetServedFroms() []*Keyspace_KeyspaceServedFrom {
+func (m *Keyspace) GetServedFroms() []*Keyspace_ServedFrom {
 	if m != nil {
 		return m.ServedFroms
 	}
 	return nil
 }
 
-// KeyspaceServedFrom indicates a relationship between a TabletType and the
+// ServedFrom indicates a relationship between a TabletType and the
 // keyspace name that's serving it.
-type Keyspace_KeyspaceServedFrom struct {
+type Keyspace_ServedFrom struct {
 	// the tablet type (key for the map)
 	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// the cells to limit this to
@@ -350,9 +350,9 @@ type Keyspace_KeyspaceServedFrom struct {
 	Keyspace string `protobuf:"bytes,3,opt,name=keyspace" json:"keyspace,omitempty"`
 }
 
-func (m *Keyspace_KeyspaceServedFrom) Reset()         { *m = Keyspace_KeyspaceServedFrom{} }
-func (m *Keyspace_KeyspaceServedFrom) String() string { return proto.CompactTextString(m) }
-func (*Keyspace_KeyspaceServedFrom) ProtoMessage()    {}
+func (m *Keyspace_ServedFrom) Reset()         { *m = Keyspace_ServedFrom{} }
+func (m *Keyspace_ServedFrom) String() string { return proto.CompactTextString(m) }
+func (*Keyspace_ServedFrom) ProtoMessage()    {}
 
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.

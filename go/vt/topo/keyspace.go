@@ -48,8 +48,8 @@ func NewKeyspaceInfo(keyspace string, value *pb.Keyspace, version int64) *Keyspa
 	}
 }
 
-// GetServedFrom returns a Keyspace_KeyspaceServedFrom record if it exists.
-func (ki *KeyspaceInfo) GetServedFrom(tabletType pb.TabletType) *pb.Keyspace_KeyspaceServedFrom {
+// GetServedFrom returns a Keyspace_ServedFrom record if it exists.
+func (ki *KeyspaceInfo) GetServedFrom(tabletType pb.TabletType) *pb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {
 		if ksf.TabletType == tabletType {
 			return ksf
@@ -105,7 +105,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 			}
 			log.Warningf("Trying to remove KeyspaceServedFrom for missing type %v in keyspace %v", tabletType, ki.keyspace)
 		} else {
-			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_KeyspaceServedFrom{
+			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
 				TabletType: tabletType,
 				Cells:      cells,
 				Keyspace:   keyspace,
@@ -118,7 +118,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType pb.TabletType, cells []st
 		result, emptyList := removeCells(ksf.Cells, cells, allCells)
 		if emptyList {
 			// we don't have any cell left, we need to clear this record
-			var newServedFroms []*pb.Keyspace_KeyspaceServedFrom
+			var newServedFroms []*pb.Keyspace_ServedFrom
 			for _, k := range ki.ServedFroms {
 				if k != ksf {
 					newServedFroms = append(newServedFroms, k)
