@@ -25,7 +25,7 @@ app.controller('SchemaCtrl', function($scope, $http, $mdDialog,
     actions.applyFunc(ev, action, function() {
       var result = {$resolved: false};
 
-      $http.post('/api/schema/apply', $scope.schemaChange)
+      $http.post('../api/schema/apply', $scope.schemaChange)
         .success(function(data) {
           result.$resolved = true;
           result.Output = data;

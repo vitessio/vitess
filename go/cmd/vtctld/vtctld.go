@@ -302,21 +302,19 @@ func main() {
 	})
 
 	// Serve the static files for the vtctld web app.
-	if *webDir != "" {
-		http.HandleFunc("/app/", func(w http.ResponseWriter, r *http.Request) {
-			// Strip the prefix.
-			parts := strings.SplitN(r.URL.Path, "/", 3)
-			if len(parts) != 3 {
-				http.NotFound(w, r)
-				return
-			}
-			rest := parts[2]
-			if rest == "" {
-				rest = "index.html"
-			}
-			http.ServeFile(w, r, path.Join(*webDir, rest))
-		})
-	}
+	http.HandleFunc("/app/", func(w http.ResponseWriter, r *http.Request) {
+		// Strip the prefix.
+		parts := strings.SplitN(r.URL.Path, "/", 3)
+		if len(parts) != 3 {
+			http.NotFound(w, r)
+			return
+		}
+		rest := parts[2]
+		if rest == "" {
+			rest = "index.html"
+		}
+		http.ServeFile(w, r, path.Join(*webDir, rest))
+	})
 
 	// Serve the REST API for the vtctld web app.
 	initAPI(context.Background(), ts, actionRepo)
