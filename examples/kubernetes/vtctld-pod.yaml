@@ -19,7 +19,15 @@ spec:
         - >-
           mkdir -p $VTDATAROOT/tmp &&
           chown -R vitess /vt &&
-          su -p -c "/vt/bin/vtctld -debug -templates $VTTOP/go/cmd/vtctld/templates -log_dir $VTDATAROOT/tmp -alsologtostderr -port 15000 -topo_implementation etcd -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
+          su -p -c "/vt/bin/vtctld
+          -debug
+          -templates $VTTOP/go/cmd/vtctld/templates
+          -web_dir $VTTOP/web/vtctld
+          -log_dir $VTDATAROOT/tmp
+          -alsologtostderr
+          -port 15000
+          -topo_implementation etcd
+          -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
   volumes:
     - name: syslog
       hostPath: {path: /dev/log}
