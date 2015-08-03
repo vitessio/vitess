@@ -19,33 +19,131 @@ import proto "github.com/golang/protobuf/proto"
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-// ErrorCode is the enum values for Errors
+// ErrorCodeDeprecated is the enum values for Errors. Internally, errors should
+// be created with one of these codes. These will then be translated over the wire
+// by various RPC frameworks.
 type ErrorCode int32
 
 const (
-	// NoError means there was no error, and the message should be ignored.
-	ErrorCode_NoError ErrorCode = 0
-	// TabletError is the base VtTablet error. All VtTablet errors
-	// should be 4 digits, starting with 1.
-	ErrorCode_TabletError ErrorCode = 1000
-	// UnknownTabletError is the code for an unknown error that came
-	// from VtTablet.
-	ErrorCode_UnknownTabletError ErrorCode = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors
-	// should be 4 digits, starting with 2.
-	ErrorCode_VtgateError ErrorCode = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	ErrorCode_UnknownVtgateError ErrorCode = 2999
+	ErrorCode_SUCCESS ErrorCode = 0
+	// Context was cancelled (and noticed in the app layer, as opposed to the RPC layer)
+	ErrorCode_CANCELLED ErrorCode = 1
+	// MySQL error code that we don't explicitly handle
+	ErrorCode_MYSQL_ERROR               ErrorCode = 2
+	ErrorCode_UNEXPECTED_MYSQL_RESPONSE ErrorCode = 3
+	ErrorCode_UNKNOWN_ERROR             ErrorCode = 4
+	// User sent SQL that couldn't be parsed correctly
+	ErrorCode_BAD_SQL ErrorCode = 5
+	// User tried a query that Vitess doesn't support.
+	ErrorCode_QUERY_NOT_SUPPORTED ErrorCode = 6
+	ErrorCode_DEADLINE_EXCEEDED   ErrorCode = 7
+	// Integrity error from MySQL, usually due to duplicate primary keys
+	ErrorCode_INTEGRITY_ERROR   ErrorCode = 8
+	ErrorCode_PERMISSION_DENIED ErrorCode = 9
+	ErrorCode_THROTTLED_ERROR   ErrorCode = 10
+	// Query could not be served right now. This could be due to various reasons:
+	// QueryService is not running, should not be running, wrong shard, wrong
+	// tablet type, etc. Clients that receive this error should usually re-resolve
+	// the topology, and then retry the query.
+	ErrorCode_QUERY_NOT_SERVED ErrorCode = 11
+	// We're not in a transaction, but we should be.
+	ErrorCode_NOT_IN_TX ErrorCode = 12
+	// Something is not configured correctly. Retrying the query will not help.
+	ErrorCode_INTERNAL_CONFIGURATION_ERROR ErrorCode = 13
+	// A necessary resource is not available, and we don't expect the problem to fix
+	// itself. Retrying the query will not help.
+	ErrorCode_INTERNAL_RESOURCE_UNAVAILABLE ErrorCode = 14
+	// Catch-all generic error for other internal errors.
+	ErrorCode_INTERNAL_ERROR ErrorCode = 15
+	// TransactionPool is full. Retrying this, with an exponential backoff, should work.
+	ErrorCode_TX_POOL_FULL ErrorCode = 16
+	// VtGate has a backlog of requests and can't service new ones. Retrying this,
+	// with an exponential backoff, should work.
+	ErrorCode_REQUEST_BACKLOG ErrorCode = 17
+	// MySQL deadlocked. Retrying this, with an exponential backoff, *may* work.
+	ErrorCode_MYSQL_DEADLOCK ErrorCode = 18
+	// Some other resource limit has temporarily been reached. Retrying this, with
+	// an exponential backoff, should work.
+	ErrorCode_RESOURCE_TEMPORARILY_UNAVAILABLE ErrorCode = 19
 )
 
 var ErrorCode_name = map[int32]string{
+	0:  "SUCCESS",
+	1:  "CANCELLED",
+	2:  "MYSQL_ERROR",
+	3:  "UNEXPECTED_MYSQL_RESPONSE",
+	4:  "UNKNOWN_ERROR",
+	5:  "BAD_SQL",
+	6:  "QUERY_NOT_SUPPORTED",
+	7:  "DEADLINE_EXCEEDED",
+	8:  "INTEGRITY_ERROR",
+	9:  "PERMISSION_DENIED",
+	10: "THROTTLED_ERROR",
+	11: "QUERY_NOT_SERVED",
+	12: "NOT_IN_TX",
+	13: "INTERNAL_CONFIGURATION_ERROR",
+	14: "INTERNAL_RESOURCE_UNAVAILABLE",
+	15: "INTERNAL_ERROR",
+	16: "TX_POOL_FULL",
+	17: "REQUEST_BACKLOG",
+	18: "MYSQL_DEADLOCK",
+	19: "RESOURCE_TEMPORARILY_UNAVAILABLE",
+}
+var ErrorCode_value = map[string]int32{
+	"SUCCESS":                          0,
+	"CANCELLED":                        1,
+	"MYSQL_ERROR":                      2,
+	"UNEXPECTED_MYSQL_RESPONSE":        3,
+	"UNKNOWN_ERROR":                    4,
+	"BAD_SQL":                          5,
+	"QUERY_NOT_SUPPORTED":              6,
+	"DEADLINE_EXCEEDED":                7,
+	"INTEGRITY_ERROR":                  8,
+	"PERMISSION_DENIED":                9,
+	"THROTTLED_ERROR":                  10,
+	"QUERY_NOT_SERVED":                 11,
+	"NOT_IN_TX":                        12,
+	"INTERNAL_CONFIGURATION_ERROR":     13,
+	"INTERNAL_RESOURCE_UNAVAILABLE":    14,
+	"INTERNAL_ERROR":                   15,
+	"TX_POOL_FULL":                     16,
+	"REQUEST_BACKLOG":                  17,
+	"MYSQL_DEADLOCK":                   18,
+	"RESOURCE_TEMPORARILY_UNAVAILABLE": 19,
+}
+
+func (x ErrorCode) String() string {
+	return proto.EnumName(ErrorCode_name, int32(x))
+}
+
+// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
+// should instead be using ErrorCode.
+type ErrorCodeDeprecated int32
+
+const (
+	// NoError means there was no error, and the message should be ignored.
+	ErrorCodeDeprecated_NoError ErrorCodeDeprecated = 0
+	// TabletError is the base VtTablet error. All VtTablet errors
+	// should be 4 digits, starting with 1.
+	ErrorCodeDeprecated_TabletError ErrorCodeDeprecated = 1000
+	// UnknownTabletError is the code for an unknown error that came
+	// from VtTablet.
+	ErrorCodeDeprecated_UnknownTabletError ErrorCodeDeprecated = 1999
+	// VtgateError is the base VTGate error code. All VTGate errors
+	// should be 4 digits, starting with 2.
+	ErrorCodeDeprecated_VtgateError ErrorCodeDeprecated = 2000
+	// UnknownVtgateError is the code for an unknown error that came from VTGate.
+	ErrorCodeDeprecated_UnknownVtgateError ErrorCodeDeprecated = 2999
+)
+
+var ErrorCodeDeprecated_name = map[int32]string{
 	0:    "NoError",
 	1000: "TabletError",
 	1999: "UnknownTabletError",
 	2000: "VtgateError",
 	2999: "UnknownVtgateError",
 }
-var ErrorCode_value = map[string]int32{
+var ErrorCodeDeprecated_value = map[string]int32{
 	"NoError":            0,
 	"TabletError":        1000,
 	"UnknownTabletError": 1999,
@@ -53,8 +151,8 @@ var ErrorCode_value = map[string]int32{
 	"UnknownVtgateError": 2999,
 }
 
-func (x ErrorCode) String() string {
-	return proto.EnumName(ErrorCode_name, int32(x))
+func (x ErrorCodeDeprecated) String() string {
+	return proto.EnumName(ErrorCodeDeprecated_name, int32(x))
 }
 
 // CallerID is passed along RPCs to identify the originating client
@@ -91,8 +189,8 @@ func (*CallerID) ProtoMessage()    {}
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	Code    ErrorCode `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCode" json:"code,omitempty"`
-	Message string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	Code    ErrorCodeDeprecated `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCodeDeprecated" json:"code,omitempty"`
+	Message string              `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
 }
 
 func (m *RPCError) Reset()         { *m = RPCError{} }
@@ -101,4 +199,5 @@ func (*RPCError) ProtoMessage()    {}
 
 func init() {
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
+	proto.RegisterEnum("vtrpc.ErrorCodeDeprecated", ErrorCodeDeprecated_name, ErrorCodeDeprecated_value)
 }

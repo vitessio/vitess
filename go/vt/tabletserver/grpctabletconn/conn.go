@@ -346,9 +346,9 @@ func tabletErrorFromRPCError(rpcErr *pbv.RPCError) error {
 	ve := vterrors.FromVtRPCError(rpcErr)
 
 	// see if the range is in the tablet error range
-	if ve.Code >= int64(pbv.ErrorCode_TabletError) && ve.Code <= int64(pbv.ErrorCode_UnknownTabletError) {
+	if ve.Code >= int64(pbv.ErrorCodeDeprecated_TabletError) && ve.Code <= int64(pbv.ErrorCodeDeprecated_UnknownTabletError) {
 		return &tabletconn.ServerError{
-			Code: int(ve.Code - int64(pbv.ErrorCode_TabletError)),
+			Code: int(ve.Code - int64(pbv.ErrorCodeDeprecated_TabletError)),
 			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
 		}
 	}

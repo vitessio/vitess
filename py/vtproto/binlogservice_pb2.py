@@ -19,7 +19,6 @@ import binlogdata_pb2 as binlogdata__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='binlogservice.proto',
   package='binlogservice',
-  syntax='proto3',
   serialized_pb=_b('\n\x13\x62inlogservice.proto\x12\rbinlogservice\x1a\x10\x62inlogdata.proto2\x99\x02\n\x0cUpdateStream\x12U\n\x0cStreamUpdate\x12\x1f.binlogdata.StreamUpdateRequest\x1a .binlogdata.StreamUpdateResponse\"\x00\x30\x01\x12[\n\x0eStreamKeyRange\x12!.binlogdata.StreamKeyRangeRequest\x1a\".binlogdata.StreamKeyRangeResponse\"\x00\x30\x01\x12U\n\x0cStreamTables\x12\x1f.binlogdata.StreamTablesRequest\x1a .binlogdata.StreamTablesResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[binlogdata__pb2.DESCRIPTOR,])
@@ -68,7 +67,7 @@ class EarlyAdopterUpdateStreamStub(object):
   def StreamTables(self, request):
     raise NotImplementedError()
   StreamTables.async = None
-def early_adopter_create_UpdateStream_server(servicer, port, private_key=None, certificate_chain=None):
+def early_adopter_create_UpdateStream_server(servicer, port, root_certificates, key_chain_pairs):
   import binlogdata_pb2
   import binlogdata_pb2
   import binlogdata_pb2
@@ -92,8 +91,8 @@ def early_adopter_create_UpdateStream_server(servicer, port, private_key=None, c
       binlogdata_pb2.StreamUpdateResponse.SerializeToString,
     ),
   }
-  return implementations.server("binlogservice.UpdateStream", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
-def early_adopter_create_UpdateStream_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
+  return implementations.secure_server("binlogservice.UpdateStream", method_service_descriptions, port, root_certificates, key_chain_pairs)
+def early_adopter_create_UpdateStream_stub(host, port):
   import binlogdata_pb2
   import binlogdata_pb2
   import binlogdata_pb2
@@ -114,5 +113,5 @@ def early_adopter_create_UpdateStream_stub(host, port, metadata_transformer=None
       binlogdata_pb2.StreamUpdateResponse.FromString,
     ),
   }
-  return implementations.stub("binlogservice.UpdateStream", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
+  return implementations.insecure_stub("binlogservice.UpdateStream", method_invocation_descriptions, host, port)
 # @@protoc_insertion_point(module_scope)

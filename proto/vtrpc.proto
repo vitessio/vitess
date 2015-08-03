@@ -33,8 +33,55 @@ message CallerID {
   string subcomponent = 3;
 }
 
-// ErrorCode is the enum values for Errors
+// ErrorCode is the enum values for Errors. Internally, errors should
+// be created with one of these codes. These will then be translated over the wire
+// by various RPC frameworks.
 enum ErrorCode {
+  SUCCESS = 0;
+  // Context was cancelled (and noticed in the app layer, as opposed to the RPC layer)
+  CANCELLED = 1;
+  // MySQL error code that we don't explicitly handle
+  MYSQL_ERROR = 2;
+  UNEXPECTED_MYSQL_RESPONSE = 3;
+  UNKNOWN_ERROR = 4;
+  // User sent SQL that couldn't be parsed correctly
+  BAD_SQL = 5;
+  // User tried a query that Vitess doesn't support.
+  QUERY_NOT_SUPPORTED = 6;
+  DEADLINE_EXCEEDED = 7;
+  // Integrity error from MySQL, usually due to duplicate primary keys
+  INTEGRITY_ERROR = 8;
+  PERMISSION_DENIED = 9;
+  THROTTLED_ERROR = 10;
+  // Query could not be served right now. This could be due to various reasons:
+  // QueryService is not running, should not be running, wrong shard, wrong
+  // tablet type, etc. Clients that receive this error should usually re-resolve
+  // the topology, and then retry the query.
+  QUERY_NOT_SERVED = 11;
+  // We're not in a transaction, but we should be.
+  NOT_IN_TX = 12;
+  // Something is not configured correctly. Retrying the query will not help.
+  INTERNAL_CONFIGURATION_ERROR = 13;
+  // A necessary resource is not available, and we don't expect the problem to fix
+  // itself. Retrying the query will not help.
+  INTERNAL_RESOURCE_UNAVAILABLE = 14;
+  // Catch-all generic error for other internal errors.
+  INTERNAL_ERROR = 15;
+  // TransactionPool is full. Retrying this, with an exponential backoff, should work.
+  TX_POOL_FULL = 16;
+  // VtGate has a backlog of requests and can't service new ones. Retrying this,
+  // with an exponential backoff, should work.
+  REQUEST_BACKLOG = 17;
+  // MySQL deadlocked. Retrying this, with an exponential backoff, *may* work.
+  MYSQL_DEADLOCK = 18;
+  // Some other resource limit has temporarily been reached. Retrying this, with
+  // an exponential backoff, should work.
+  RESOURCE_TEMPORARILY_UNAVAILABLE = 19;
+}
+
+// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
+// should instead be using ErrorCode.
+enum ErrorCodeDeprecated {
   // NoError means there was no error, and the message should be ignored.
   NoError = 0;
 
@@ -59,6 +106,6 @@ enum ErrorCode {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 message RPCError {
-  ErrorCode code = 1;
+  ErrorCodeDeprecated code = 1;
   string message = 2;
 }
