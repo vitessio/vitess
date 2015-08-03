@@ -7,7 +7,6 @@ package automation
 import (
 	"bytes"
 
-	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 )
@@ -18,9 +17,7 @@ func ExecuteVtworker(ctx context.Context, server string, args []string) (string,
 
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
-		func(e *logutil.LoggerEvent) {
-			e.ToBuffer(&output)
-		})
+		CreateLoggerEventToBufferFunction(&output))
 
 	return output.String(), err
 }

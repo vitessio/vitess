@@ -23,9 +23,24 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 		30*time.Second, // dialTimeout
 		time.Hour,      // actionTimeout
 		10*time.Second, // lockWaitTimeout
-		func(e *logutil.LoggerEvent) {
-			e.ToBuffer(&output)
-		})
+		CreateLoggerEventToBufferFunction(&output))
 
 	return output.String(), err
+}
+
+// CreateLoggerEventToBufferFunction returns a function to add LoggerEvent
+// structs to a given buffer, one line per event.
+// The buffer can be used to return a multi-line string with all events.
+func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutil.LoggerEvent) {
+	passedFirstLine := false
+
+	return func(e *logutil.LoggerEvent) {
+		if !passedFirstLine {
+			passedFirstLine = true
+		} else {
+			// After the first line, add a newline before each subsequent line.
+			output.WriteRune('\n')
+		}
+		e.ToBuffer(output)
+	}
 }
