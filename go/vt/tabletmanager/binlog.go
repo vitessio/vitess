@@ -26,6 +26,8 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -41,7 +43,7 @@ type BinlogPlayerController struct {
 
 	// Information about us (set at construction, immutable).
 	cell           string
-	keyspaceIDType key.KeyspaceIdType
+	keyspaceIDType pb.KeyspaceIdType
 	keyRange       key.KeyRange
 	dbName         string
 
@@ -73,7 +75,7 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		dbConfig:          dbConfig,
@@ -382,7 +384,7 @@ func (blm *BinlogPlayerMap) size() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType key.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
+func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)

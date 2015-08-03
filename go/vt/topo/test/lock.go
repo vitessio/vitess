@@ -10,6 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // timeUntilLockIsTaken is the time to wait until a lock is taken.
@@ -19,7 +21,7 @@ var timeUntilLockIsTaken = 10 * time.Millisecond
 
 // CheckKeyspaceLock checks we can take a keyspace lock as expected.
 func CheckKeyspaceLock(ctx context.Context, t *testing.T, ts topo.Server) {
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -113,7 +115,7 @@ func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server
 
 // CheckShardLock checks we can take a shard lock
 func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Server) {
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 	if err := topo.CreateShard(ctx, ts, "test_keyspace", "10-20"); err != nil {

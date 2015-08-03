@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func compactJSON(in []byte) string {
@@ -40,7 +42,7 @@ func TestAPI(t *testing.T) {
 	defer server.Close()
 
 	// Populate topo.
-	ts.CreateKeyspace(ctx, "ks1", &topo.Keyspace{ShardingColumnName: "shardcol"})
+	ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{ShardingColumnName: "shardcol"})
 	ts.CreateShard(ctx, "ks1", "-80", &topo.Shard{
 		Cells:    cells,
 		KeyRange: key.KeyRange{Start: "", End: "\x80"},
@@ -92,10 +94,7 @@ func TestAPI(t *testing.T) {
 		// Keyspaces
 		{"GET", "keyspaces", `["ks1"]`},
 		{"GET", "keyspaces/ks1", `{
-				"ShardingColumnName": "shardcol",
-				"ShardingColumnType": "",
-				"ServedFromMap": null,
-				"SplitShardCount": 0
+				"sharding_column_name": "shardcol"
 			}`},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", `{
 				"Name": "TestKeyspaceAction",

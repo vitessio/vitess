@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -28,7 +30,7 @@ const (
 )
 
 // CreateKeyspace is part of the topo.Server interface
-func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
+func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
@@ -111,7 +113,7 @@ func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.Key
 		return nil, err
 	}
 
-	k := &topo.Keyspace{}
+	k := &pb.Keyspace{}
 	if err = json.Unmarshal([]byte(data), k); err != nil {
 		return nil, fmt.Errorf("bad keyspace data %v", err)
 	}

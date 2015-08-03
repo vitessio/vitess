@@ -15,10 +15,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateKeyspace implements topo.Server.
-func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
+func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
 	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
@@ -74,7 +76,7 @@ func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.Keyspa
 		return nil, ErrBadResponse
 	}
 
-	value := &topo.Keyspace{}
+	value := &pb.Keyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad keyspace data (%v): %q", err, resp.Node.Value)
 	}

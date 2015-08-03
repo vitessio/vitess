@@ -7,10 +7,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyspace(t *testing.T) {
@@ -96,7 +97,7 @@ func TestPurgeActions(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
@@ -128,7 +129,7 @@ func TestPruneActionLogs(t *testing.T) {
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
 
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 

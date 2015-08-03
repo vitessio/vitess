@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestHealthRecordDeduplication(t *testing.T) {
@@ -114,7 +116,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 	ts := zktopo.NewTestServer(t, []string{cell})
 
-	if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 

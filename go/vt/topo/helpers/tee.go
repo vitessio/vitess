@@ -103,7 +103,7 @@ func (tee *Tee) GetKnownCells(ctx context.Context) ([]string, error) {
 //
 
 // CreateKeyspace is part of the topo.Server interface
-func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
+func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
 	if err := tee.primary.CreateKeyspace(ctx, keyspace, value); err != nil {
 		return err
 	}
