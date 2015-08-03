@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -474,7 +475,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 				continue
 			}
 
-			rowSplitter := NewRowSplitter(scw.destinationShards, scw.keyspaceInfo.ShardingColumnType, columnIndexes[tableIndex])
+			rowSplitter := NewRowSplitter(scw.destinationShards, key.ProtoToKeyspaceIdType(scw.keyspaceInfo.ShardingColumnType), columnIndexes[tableIndex])
 
 			chunks, err := FindChunks(ctx, scw.wr, scw.sourceTablets[shardIndex], td, scw.minTableSizeForSplit, scw.sourceReaderCount)
 			if err != nil {

@@ -10,6 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file includes the support for serving topo data to an ajax-based
@@ -222,7 +224,7 @@ type Keyspace struct {
 	KeyspaceName string
 
 	// Keyspace is the topo value of this keyspace
-	Keyspace *topo.Keyspace
+	Keyspace *pb.Keyspace
 }
 
 // Reset is part of the VersionedObject interface

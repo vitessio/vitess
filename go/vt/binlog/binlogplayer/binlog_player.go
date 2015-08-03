@@ -87,7 +87,7 @@ type BinlogPlayer struct {
 	dbClient VtClient
 
 	// for key range base requests
-	keyspaceIdType key.KeyspaceIdType
+	keyspaceIdType pb.KeyspaceIdType
 	keyRange       key.KeyRange
 
 	// for table base requests
@@ -105,7 +105,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType pb.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
@@ -320,7 +320,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	if len(blp.tables) > 0 {
 		responseChan, errFunc, err = blplClient.StreamTables(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.tables, &blp.defaultCharset)
 	} else {
-		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), blp.keyspaceIdType, blp.keyRange, &blp.defaultCharset)
+		responseChan, errFunc, err = blplClient.StreamKeyRange(ctx, myproto.EncodeReplicationPosition(blp.blpPos.Position), key.ProtoToKeyspaceIdType(blp.keyspaceIdType), blp.keyRange, &blp.defaultCharset)
 	}
 	if err != nil {
 		log.Errorf("Error sending streaming query to binlog server: %v", err)

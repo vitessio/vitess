@@ -11,6 +11,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func shardEqual(left, right *topo.Shard) (bool, error) {
@@ -27,7 +29,7 @@ func shardEqual(left, right *topo.Shard) (bool, error) {
 
 // CheckShard verifies the Shard operations work correctly
 func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
-	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 

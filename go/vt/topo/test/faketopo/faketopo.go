@@ -40,7 +40,7 @@ func (ft FakeTopo) GetKnownCells(ctx context.Context) ([]string, error) {
 }
 
 // CreateKeyspace implements topo.Server.
-func (ft FakeTopo) CreateKeyspace(ctx context.Context, keyspace string, value *topo.Keyspace) error {
+func (ft FakeTopo) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
 	return errNotImplemented
 }
 

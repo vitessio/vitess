@@ -179,8 +179,8 @@ class TestKeyspace(unittest.TestCase):
 
   def test_get_keyspace(self):
     ki = utils.run_vtctl_json(['GetKeyspace', UNSHARDED_KEYSPACE])
-    self.assertEqual('keyspace_id', ki['ShardingColumnName'])
-    self.assertEqual('uint64', ki['ShardingColumnType'])
+    self.assertEqual('keyspace_id', ki['sharding_column_name'])
+    self.assertEqual(1, ki['sharding_column_type'])
 
   def test_delete_keyspace(self):
     utils.run_vtctl(['CreateKeyspace', 'test_delete_keyspace'])

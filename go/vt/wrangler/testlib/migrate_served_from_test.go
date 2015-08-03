@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestMigrateServedFrom(t *testing.T) {
@@ -44,8 +46,8 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if len(ki.ServedFromMap) != 3 {
-		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	if len(ki.ServedFroms) != 3 {
+		t.Fatalf("bad initial dest ServedFroms: %+v", ki.ServedFroms)
 	}
 
 	// create the destination keyspace tablets
@@ -114,8 +116,8 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if _, ok := ki.ServedFromMap[topo.TYPE_RDONLY]; len(ki.ServedFromMap) != 2 || ok {
-		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	if len(ki.ServedFroms) != 2 || ki.GetServedFrom(pb.TabletType_RDONLY) != nil {
+		t.Fatalf("bad initial dest ServedFroms: %v", ki.ServedFroms)
 	}
 
 	// check the source shard has the right blacklisted tables
@@ -137,8 +139,8 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if _, ok := ki.ServedFromMap[topo.TYPE_REPLICA]; len(ki.ServedFromMap) != 1 || ok {
-		t.Fatalf("bad initial dest ServedFrom: %v", ki.ServedFromMap)
+	if len(ki.ServedFroms) != 1 || ki.GetServedFrom(pb.TabletType_REPLICA) != nil {
+		t.Fatalf("bad initial dest ServedFrom: %+v", ki.ServedFroms)
 	}
 
 	// check the source shard has the right blacklisted tables
@@ -160,8 +162,8 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeyspace failed: %v", err)
 	}
-	if len(ki.ServedFromMap) > 0 {
-		t.Fatalf("dest keyspace still is ServedFrom: %v", ki.ServedFromMap)
+	if len(ki.ServedFroms) > 0 {
+		t.Fatalf("dest keyspace still is ServedFrom: %+v", ki.ServedFroms)
 	}
 
 	// check the source shard has the right blacklisted tables
