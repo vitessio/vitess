@@ -210,15 +210,14 @@ type Shard struct {
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range" json:"key_range,omitempty"`
-	// served_type_map is a list here, but there is at most one entry
-	// per TabletType
-	ServedTypeMap []*Shard_ShardServedType `protobuf:"bytes,3,rep,name=served_type_map" json:"served_type_map,omitempty"`
+	// served_types has at most one entry per TabletType
+	ServedTypes []*Shard_ServedType `protobuf:"bytes,3,rep,name=served_types" json:"served_types,omitempty"`
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
 	SourceShards []*Shard_SourceShard `protobuf:"bytes,4,rep,name=source_shards" json:"source_shards,omitempty"`
 	// Cells is the list of cells that contain tablets for this shard.
 	Cells []string `protobuf:"bytes,5,rep,name=cells" json:"cells,omitempty"`
-	// tablet_control_maps is a map in go, but a list in proto.
+	// tablet_controls has at most one entry per TabletType
 	TabletControls []*Shard_TabletControl `protobuf:"bytes,6,rep,name=tablet_controls" json:"tablet_controls,omitempty"`
 }
 
@@ -240,9 +239,9 @@ func (m *Shard) GetKeyRange() *KeyRange {
 	return nil
 }
 
-func (m *Shard) GetServedTypeMap() []*Shard_ShardServedType {
+func (m *Shard) GetServedTypes() []*Shard_ServedType {
 	if m != nil {
-		return m.ServedTypeMap
+		return m.ServedTypes
 	}
 	return nil
 }
@@ -261,15 +260,15 @@ func (m *Shard) GetTabletControls() []*Shard_TabletControl {
 	return nil
 }
 
-// ShardServedType is an entry in the served_type_map
-type Shard_ShardServedType struct {
+// ShardServedType is an entry in the served_types
+type Shard_ServedType struct {
 	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	Cells      []string   `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`
 }
 
-func (m *Shard_ShardServedType) Reset()         { *m = Shard_ShardServedType{} }
-func (m *Shard_ShardServedType) String() string { return proto.CompactTextString(m) }
-func (*Shard_ShardServedType) ProtoMessage()    {}
+func (m *Shard_ServedType) Reset()         { *m = Shard_ServedType{} }
+func (m *Shard_ServedType) String() string { return proto.CompactTextString(m) }
+func (*Shard_ServedType) ProtoMessage()    {}
 
 // SourceShard represents a data source for filtered replication
 // accross shards. When this is used in a destination shard, the master
