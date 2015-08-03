@@ -32,15 +32,8 @@ func ExecuteVtctl(ctx context.Context, server string, args []string) (string, er
 // structs to a given buffer, one line per event.
 // The buffer can be used to return a multi-line string with all events.
 func CreateLoggerEventToBufferFunction(output *bytes.Buffer) func(*logutil.LoggerEvent) {
-	passedFirstLine := false
-
 	return func(e *logutil.LoggerEvent) {
-		if !passedFirstLine {
-			passedFirstLine = true
-		} else {
-			// After the first line, add a newline before each subsequent line.
-			output.WriteRune('\n')
-		}
 		e.ToBuffer(output)
+		output.WriteRune('\n')
 	}
 }
