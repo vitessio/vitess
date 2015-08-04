@@ -412,19 +412,31 @@ index by_msg (msg)
     # migrate test_nj only, using command line manual fix command,
     # and restore it back.
     keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
-    self.assertEqual(keyspace_json['ServedFromMap']['rdonly']['Cells'],
-                     ['test_nj'])
+    found = False
+    for ksf in keyspace_json['served_froms']:
+      if ksf['tablet_type'] == 4:
+        found = True
+        self.assertEqual(ksf['cells'], ['test_nj'])
+    self.assertTrue(found)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
                      '-remove', '-cells=test_nj', 'destination_keyspace',
                      'rdonly'], auto_log=True)
     keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
-    self.assertFalse('rdonly' in keyspace_json['ServedFromMap'])
+    found = False
+    for ksf in keyspace_json['served_froms']:
+      if ksf['tablet_type'] == 4:
+        found = True
+    self.assertFalse(found)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
                      'destination_keyspace', 'rdonly'],
                     auto_log=True)
     keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
-    self.assertEqual(keyspace_json['ServedFromMap']['rdonly']['Cells'],
-                     None)
+    found = False
+    for ksf in keyspace_json['served_froms']:
+      if ksf['tablet_type'] == 4:
+        found = True
+        self.assertNotIn('cells', ksf)
+    self.assertTrue(found)
 
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],

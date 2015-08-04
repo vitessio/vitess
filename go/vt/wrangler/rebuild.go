@@ -47,7 +47,7 @@ func (wr *Wrangler) findCellsForRebuild(ki *topo.KeyspaceInfo, shardMap map[stri
 			if _, ok := srvKeyspaceMap[cell]; !ok {
 				srvKeyspaceMap[cell] = &topo.SrvKeyspace{
 					ShardingColumnName: ki.ShardingColumnName,
-					ShardingColumnType: ki.ShardingColumnType,
+					ShardingColumnType: key.ProtoToKeyspaceIdType(ki.ShardingColumnType),
 					ServedFrom:         ki.ComputeCellServedFrom(cell),
 					SplitShardCount:    ki.SplitShardCount,
 				}
@@ -117,7 +117,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 	wr.findCellsForRebuild(ki, shardCache, cells, srvKeyspaceMap)
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
-	for _, ksf := range ki.ServedFromMap {
+	for _, ksf := range ki.ServedFroms {
 		servedFromShards, err := topo.FindAllShardsInKeyspace(ctx, wr.ts, ksf.Keyspace)
 		if err != nil {
 			return err

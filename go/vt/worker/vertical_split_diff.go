@@ -158,7 +158,7 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot read keyspace %v: %v", vsdw.keyspace, err)
 	}
-	if len(vsdw.keyspaceInfo.ServedFromMap) == 0 {
+	if len(vsdw.keyspaceInfo.ServedFroms) == 0 {
 		return fmt.Errorf("keyspace %v has no KeyspaceServedFrom", vsdw.keyspace)
 	}
 

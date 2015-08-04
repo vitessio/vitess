@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VerticalSplitCloneWorker will clone the data from a source keyspace/shard
@@ -209,16 +211,16 @@ func (vscw *VerticalSplitCloneWorker) init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot read destination keyspace %v: %v", vscw.destinationKeyspace, err)
 	}
-	if len(destinationKeyspaceInfo.ServedFromMap) == 0 {
+	if len(destinationKeyspaceInfo.ServedFroms) == 0 {
 		return fmt.Errorf("destination keyspace %v has no KeyspaceServedFrom", vscw.destinationKeyspace)
 	}
 
 	// validate all serving types, find sourceKeyspace
-	servingTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	servingTypes := []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY}
 	servedFrom := ""
 	for _, st := range servingTypes {
-		sf, ok := destinationKeyspaceInfo.ServedFromMap[st]
-		if !ok {
+		sf := destinationKeyspaceInfo.GetServedFrom(st)
+		if sf == nil {
 			return fmt.Errorf("destination keyspace %v is serving type %v", vscw.destinationKeyspace, st)
 		}
 		if servedFrom == "" {

@@ -107,6 +107,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -563,6 +565,27 @@ func parseTabletType(param string, types []topo.TabletType) (topo.TabletType, er
 	return tabletType, nil
 }
 
+// parseKeyspaceIdType parses the keyspace id type into the enum
+func parseKeyspaceIdType(param string) (pb.KeyspaceIdType, error) {
+	if param == "" {
+		return pb.KeyspaceIdType_UNSET, nil
+	}
+	value, ok := pb.KeyspaceIdType_value[strings.ToUpper(param)]
+	if !ok {
+		return pb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
+	}
+	return pb.KeyspaceIdType(value), nil
+}
+
+// parseTabletType3 parses the tablet type into the enum
+func parseTabletType3(param string) (pb.TabletType, error) {
+	value, ok := pb.TabletType_value[strings.ToUpper(param)]
+	if !ok {
+		return pb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
+	}
+	return pb.TabletType(value), nil
+}
+
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	var (
 		dbNameOverride = subFlags.String("db-name-override", "", "Overrides the name of the database that the vttablet uses")
@@ -998,7 +1021,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return err
 		}
 	}
@@ -1359,28 +1382,31 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	keyspace := subFlags.Arg(0)
-	kit := key.KeyspaceIdType(*shardingColumnType)
-	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-		return fmt.Errorf("The sharding_column_type flag specifies an invalid value.")
+	kit, err := parseKeyspaceIdType(*shardingColumnType)
+	if err != nil {
+		return err
 	}
-	ki := &topo.Keyspace{
+	ki := &pb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
 		SplitShardCount:    int32(*splitShardCount),
 	}
 	if len(servedFrom) > 0 {
-		ki.ServedFromMap = make(map[topo.TabletType]*topo.KeyspaceServedFrom, len(servedFrom))
 		for name, value := range servedFrom {
-			tt := topo.TabletType(name)
-			if !topo.IsInServingGraph(tt) {
+			tt, err := parseTabletType3(name)
+			if err != nil {
+				return err
+			}
+			if !topo.IsInServingGraph(topo.ProtoToTabletType(tt)) {
 				return fmt.Errorf("The served_from flag specifies a database (tablet) type that is not in the serving graph. The invalid value is: %v", tt)
 			}
-			ki.ServedFromMap[tt] = &topo.KeyspaceServedFrom{
-				Keyspace: value,
-			}
+			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
+				TabletType: tt,
+				Keyspace:   value,
+			})
 		}
 	}
-	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
+	err = wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
@@ -1444,11 +1470,12 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 	if subFlags.NArg() >= 2 {
 		columnName = subFlags.Arg(1)
 	}
-	kit := key.KIT_UNSET
+	kit := pb.KeyspaceIdType_UNSET
 	if subFlags.NArg() >= 3 {
-		kit = key.KeyspaceIdType(subFlags.Arg(2))
-		if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-			return fmt.Errorf("The <column type> argument specifies an invalid value for the sharding_column_type.")
+		var err error
+		kit, err = parseKeyspaceIdType(subFlags.Arg(2))
+		if err != nil {
+			return err
 		}
 	}
 
@@ -1475,7 +1502,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, cells, *source, *remove)
+	return wr.SetKeyspaceServedFrom(ctx, keyspace, topo.TabletTypeToProto(servedType), cells, *source, *remove)
 }
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1571,7 +1598,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+	return wr.MigrateServedFrom(ctx, keyspace, shard, topo.TabletTypeToProto(servedType), cells, *reverse, *filteredReplicationWaitTime)
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -72,7 +72,7 @@ type Server interface {
 
 	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
 	// yet. Can return ErrNodeExists if it already exists.
-	CreateKeyspace(ctx context.Context, keyspace string, value *Keyspace) error
+	CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error
 
 	// UpdateKeyspace updates the keyspace information
 	// pointed at by ki.keyspace to the *ki value.

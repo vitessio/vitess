@@ -397,7 +397,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				sdw.wr.Logger().Errorf(newErr.Error())
 				return
 			}
-			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAliases[0], tableDefinition, overlap, key.ProtoToKeyspaceIdType(sdw.keyspaceInfo.ShardingColumnType))
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(source) failed: %v", err)
 				rec.RecordError(newErr)
@@ -406,7 +406,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, key.ProtoToKeyspaceIdType(sdw.keyspaceInfo.ShardingColumnType))
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				rec.RecordError(newErr)

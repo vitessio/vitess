@@ -4,7 +4,10 @@
 
 package actionnode
 
-import "github.com/youtube/vitess/go/vt/topo"
+import (
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
+)
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -54,7 +57,7 @@ type ApplySchemaKeyspaceArgs struct {
 
 // MigrateServedFromArgs is the payload for MigrateServedFrom
 type MigrateServedFromArgs struct {
-	ServedType topo.TabletType
+	ServedType pb.TabletType
 }
 
 // methods to build the shard action nodes
@@ -173,7 +176,7 @@ func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
 }
 
 // MigrateServedFrom returns an ActionNode
-func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
+func MigrateServedFrom(servedType pb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: KeyspaceActionMigrateServedFrom,
 		Args: &MigrateServedFromArgs{

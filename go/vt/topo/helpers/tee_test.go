@@ -10,6 +10,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestTee(t *testing.T) {
@@ -26,7 +28,7 @@ func TestTee(t *testing.T) {
 	var _ topo.Server = tee
 
 	// create a keyspace, make sure it is on both sides
-	if err := tee.CreateKeyspace(ctx, "keyspace2", &topo.Keyspace{}); err != nil {
+	if err := tee.CreateKeyspace(ctx, "keyspace2", &pb.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
 	teeKeyspaces, err := tee.GetKeyspaces(ctx)

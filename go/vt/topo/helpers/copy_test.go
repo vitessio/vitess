@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/zk/fakezk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
@@ -33,7 +35,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	}
 
 	// create a keyspace and a couple tablets
-	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topo.Keyspace{}); err != nil {
+	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topo.Shard{Cells: []string{"test_cell"}}); err != nil {

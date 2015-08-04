@@ -10,6 +10,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateShard will create the shard, while holding the keyspace lock
@@ -34,7 +36,7 @@ func GetOrCreateShard(ctx context.Context, ts topo.Server, keyspace, shard strin
 	si, finalErr := ts.GetShard(ctx, keyspace, shard)
 	if finalErr == topo.ErrNoNode {
 		// create the keyspace, maybe it already exists
-		if err := ts.CreateKeyspace(ctx, keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
+		if err := ts.CreateKeyspace(ctx, keyspace, &pb.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return nil, fmt.Errorf("CreateKeyspace(%v) failed: %v", keyspace, err)
 		}
 
