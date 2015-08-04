@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -12,10 +13,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func hki(hexValue string) key.KeyspaceId {
-	k, err := key.HexKeyspaceId(hexValue).Unhex()
+func hki(hexValue string) []byte {
+	k, err := hex.DecodeString(hexValue)
 	if err != nil {
 		panic(err)
 	}
@@ -25,8 +28,8 @@ func hki(hexValue string) key.KeyspaceId {
 func si(start, end string) *topo.ShardInfo {
 	s := hki(start)
 	e := hki(end)
-	return topo.NewShardInfo("keyspace", s.String()+"-"+e.String(), &topo.Shard{
-		KeyRange: key.KeyRange{
+	return topo.NewShardInfo("keyspace", start+"-"+end, &pb.Shard{
+		KeyRange: &pb.KeyRange{
 			Start: s,
 			End:   e,
 		},
@@ -76,10 +79,12 @@ func TestRowSplitterUint64(t *testing.T) {
 }
 
 func siBytes(start, end string) *topo.ShardInfo {
-	return topo.NewShardInfo("keyspace", start+"-"+end, &topo.Shard{
-		KeyRange: key.KeyRange{
-			Start: key.KeyspaceId(start),
-			End:   key.KeyspaceId(end),
+	s := hex.EncodeToString([]byte(start))
+	e := hex.EncodeToString([]byte(end))
+	return topo.NewShardInfo("keyspace", s+"-"+e, &pb.Shard{
+		KeyRange: &pb.KeyRange{
+			Start: []byte(start),
+			End:   []byte(end),
 		},
 	}, 0)
 }

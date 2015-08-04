@@ -295,8 +295,9 @@ func TestTabletControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.TabletControlMap = map[topo.TabletType]*topo.TabletControl{
-		targetTabletType: &topo.TabletControl{
+	si.TabletControls = []*pb.Shard_TabletControl{
+		&pb.Shard_TabletControl{
+			TabletType:          topo.TabletTypeToProto(targetTabletType),
 			DisableQueryService: true,
 		},
 	}

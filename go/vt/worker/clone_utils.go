@@ -37,14 +37,14 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)
 	}
 
-	if si.MasterAlias.IsZero() {
+	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return ti, fmt.Errorf("no master in destination shard %v/%v", keyspace, shard)
 	}
 
 	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), si.MasterAlias)
+	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), topo.ProtoToTabletAlias(si.MasterAlias))
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",

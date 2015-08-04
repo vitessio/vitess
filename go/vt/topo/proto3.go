@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/key"
+
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -25,6 +26,9 @@ func TabletAliasToProto(t TabletAlias) *pb.TabletAlias {
 
 // ProtoToTabletAlias turns a proto to a TabletAlias
 func ProtoToTabletAlias(t *pb.TabletAlias) TabletAlias {
+	if t == nil {
+		return TabletAlias{}
+	}
 	return TabletAlias{
 		Cell: t.Cell,
 		Uid:  t.Uid,

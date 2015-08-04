@@ -140,7 +140,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	if masterAlias.Cell == "" {
 		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
-	} else if shardInfo.MasterAlias != masterAlias {
+	} else if !topo.TabletAliasEqual(shardInfo.MasterAlias, topo.TabletAliasToProto(masterAlias)) {
 		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, masterAlias, shardInfo.MasterAlias)
 	}
 
@@ -175,7 +175,7 @@ func normalizeIP(ip string) string {
 }
 
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- error) {
-	masterTablet, ok := tabletMap[shardInfo.MasterAlias]
+	masterTablet, ok := tabletMap[topo.ProtoToTabletAlias(shardInfo.MasterAlias)]
 	if !ok {
 		results <- fmt.Errorf("master %v not in tablet map", shardInfo.MasterAlias)
 		return

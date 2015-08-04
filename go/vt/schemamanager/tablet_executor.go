@@ -54,7 +54,7 @@ func (exec *TabletExecutor) Open(ctx context.Context, keyspace string) error {
 		if err != nil {
 			return fmt.Errorf("unable to get shard info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}
-		tabletInfo, err := exec.topoServer.GetTablet(ctx, shardInfo.MasterAlias)
+		tabletInfo, err := exec.topoServer.GetTablet(ctx, topo.ProtoToTabletAlias(shardInfo.MasterAlias))
 		if err != nil {
 			return fmt.Errorf("unable to get master tablet info, keyspace: %s, shard: %s, error: %v", keyspace, shardName, err)
 		}

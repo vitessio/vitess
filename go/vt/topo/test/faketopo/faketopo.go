@@ -70,7 +70,7 @@ func (ft FakeTopo) DeleteKeyspaceShards(ctx context.Context, keyspace string) er
 }
 
 // CreateShard implements topo.Server.
-func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
+func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
 	return errNotImplemented
 }
 

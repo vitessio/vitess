@@ -10,9 +10,19 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func newKeyRange(value string) key.KeyRange {
+	_, result, err := topo.ValidateShardName(value)
+	if err != nil {
+		panic(err)
+	}
+	return key.ProtoToKeyRange(result)
+}
+
+func newKeyRange3(value string) *pb.KeyRange {
 	_, result, err := topo.ValidateShardName(value)
 	if err != nil {
 		panic(err)

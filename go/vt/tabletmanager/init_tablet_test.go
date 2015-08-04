@@ -137,7 +137,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = tabletAlias
+	si.MasterAlias = topo.TabletAliasToProto(tabletAlias)
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}

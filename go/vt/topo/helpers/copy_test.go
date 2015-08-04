@@ -38,7 +38,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
-	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &topo.Shard{Cells: []string{"test_cell"}}); err != nil {
+	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
 	if err := topo.CreateTablet(ctx, fromTS, &topo.Tablet{

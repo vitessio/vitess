@@ -29,7 +29,7 @@ func NewRowSplitter(shardInfos []*topo.ShardInfo, typ key.KeyspaceIdType, valueI
 		KeyRanges:  make([]key.KeyRange, len(shardInfos)),
 	}
 	for i, si := range shardInfos {
-		result.KeyRanges[i] = si.KeyRange
+		result.KeyRanges[i] = key.ProtoToKeyRange(si.KeyRange)
 	}
 	return result
 }

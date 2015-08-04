@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -404,9 +405,11 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 // and writes it to the given cell.
 func UpdateSrvShard(ctx context.Context, ts topo.Server, cell string, si *topo.ShardInfo) error {
 	srvShard := &topo.SrvShard{
-		Name:       si.ShardName(),
-		KeyRange:   si.KeyRange,
-		MasterCell: si.MasterAlias.Cell,
+		Name:     si.ShardName(),
+		KeyRange: key.ProtoToKeyRange(si.KeyRange),
+	}
+	if si.MasterAlias != nil {
+		srvShard.MasterCell = si.MasterAlias.Cell
 	}
 	return ts.UpdateSrvShard(ctx, cell, si.Keyspace(), si.ShardName(), srvShard)
 }

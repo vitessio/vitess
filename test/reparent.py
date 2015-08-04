@@ -226,8 +226,8 @@ class TestReparent(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-    self.assertEqual(shard['Cells'], ['test_nj'],
-                     'wrong list of cell in Shard: %s' % str(shard['Cells']))
+    self.assertEqual(shard['cells'], ['test_nj'],
+                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
@@ -240,8 +240,8 @@ class TestReparent(unittest.TestCase):
       t.wait_for_vttablet_state('SERVING')
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
     self.assertEqual(
-        shard['Cells'], ['test_nj', 'test_ny'],
-        'wrong list of cell in Shard: %s' % str(shard['Cells']))
+        shard['cells'], ['test_nj', 'test_ny'],
+        'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.
@@ -305,8 +305,8 @@ class TestReparent(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
     if environment.topo_server().flavor() == 'zookeeper':
       shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-      self.assertEqual(shard['Cells'], ['test_nj'],
-                       'wrong list of cell in Shard: %s' % str(shard['Cells']))
+      self.assertEqual(shard['cells'], ['test_nj'],
+                       'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
@@ -319,8 +319,8 @@ class TestReparent(unittest.TestCase):
       t.wait_for_vttablet_state('SERVING')
     if environment.topo_server().flavor() == 'zookeeper':
       shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-      self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'],
-                       'wrong list of cell in Shard: %s' % str(shard['Cells']))
+      self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
+                       'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Recompute the shard layout node - until you do that, it might not be
     # valid.
@@ -556,8 +556,10 @@ class TestReparent(unittest.TestCase):
                      'Got unexpected nodes: %s != %s' % (str(expected_nodes),
                                                          str(hashed_nodes)))
 
+    utils.pause("AAAAAAAAAAAAAA")
     tablet_62044_master_status = tablet_62044.get_status()
-    self.assertIn('Serving graph: test_keyspace 0 master', tablet_62044_master_status)
+    self.assertIn('Serving graph: test_keyspace 0 master',
+                  tablet_62044_master_status)
 
   # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):

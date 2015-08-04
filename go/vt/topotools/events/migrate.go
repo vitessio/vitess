@@ -32,6 +32,6 @@ type MigrateServedTypes struct {
 	Keyspace          topo.KeyspaceInfo
 	SourceShards      []*topo.ShardInfo
 	DestinationShards []*topo.ShardInfo
-	ServedType        topo.TabletType
+	ServedType        pb.TabletType
 	Reverse           bool
 }

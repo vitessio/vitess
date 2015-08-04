@@ -13,10 +13,12 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // CreateShard implements topo.Server.
-func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
+func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
 	data := jscfg.ToJSON(value)
 	global := s.getGlobal()
 
@@ -78,7 +80,7 @@ func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo.Sh
 		return nil, ErrBadResponse
 	}
 
-	value := &topo.Shard{}
+	value := &pb.Shard{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad shard data (%v): %q", err, resp.Node.Value)
 	}

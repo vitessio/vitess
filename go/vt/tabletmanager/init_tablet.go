@@ -97,7 +97,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 		if err != nil {
 			return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 		}
-		if si.MasterAlias == agent.TabletAlias {
+		if si.MasterAlias != nil && *si.MasterAlias == *topo.TabletAliasToProto(agent.TabletAlias) {
 			// we are the current master for this shard (probably
 			// means the master tablet process was just restarted),
 			// so InitTablet as master.

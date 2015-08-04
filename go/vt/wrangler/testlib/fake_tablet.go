@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/grpctmserver"
@@ -69,11 +70,12 @@ type TabletOption func(tablet *topo.Tablet)
 func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	return func(tablet *topo.Tablet) {
 		tablet.Keyspace = keyspace
-		var err error
-		tablet.Shard, tablet.KeyRange, err = topo.ValidateShardName(shard)
+		shard, ks, err := topo.ValidateShardName(shard)
 		if err != nil {
 			t.Fatalf("cannot ValidateShardName value %v", shard)
 		}
+		tablet.Shard = shard
+		tablet.KeyRange = key.ProtoToKeyRange(ks)
 	}
 }
 

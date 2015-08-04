@@ -146,7 +146,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 				}
 				srvKeyspace.Partitions[tabletType].ShardReferences = append(srvKeyspace.Partitions[tabletType].ShardReferences, topo.ShardReference{
 					Name:     si.ShardName(),
-					KeyRange: si.KeyRange,
+					KeyRange: key.ProtoToKeyRange(si.KeyRange),
 				})
 			}
 		}

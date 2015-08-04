@@ -120,12 +120,12 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 			// we should not have holes on either side
 			hasHoles := false
 			for i := 0; i < len(left)-1; i++ {
-				if left[i].KeyRange.End != left[i+1].KeyRange.Start {
+				if string(left[i].KeyRange.End) != string(left[i+1].KeyRange.Start) {
 					hasHoles = true
 				}
 			}
 			for i := 0; i < len(right)-1; i++ {
-				if right[i].KeyRange.End != right[i+1].KeyRange.Start {
+				if string(right[i].KeyRange.End) != string(right[i+1].KeyRange.Start) {
 					hasHoles = true
 				}
 			}
@@ -134,10 +134,10 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 			}
 
 			// the two sides should match
-			if left[0].KeyRange.Start != right[0].KeyRange.Start {
+			if !key.KeyRangeStartEqual(left[0].KeyRange, right[0].KeyRange) {
 				continue
 			}
-			if left[len(left)-1].KeyRange.End != right[len(right)-1].KeyRange.End {
+			if !key.KeyRangeEndEqual(left[len(left)-1].KeyRange, right[len(right)-1].KeyRange) {
 				continue
 			}
 
@@ -157,7 +157,7 @@ func findOverlappingShards(shardMap map[string]*topo.ShardInfo) ([]*OverlappingS
 func findIntersectingShard(shardMap map[string]*topo.ShardInfo, sourceArray []*topo.ShardInfo) *topo.ShardInfo {
 	for name, si := range shardMap {
 		for _, sourceShardInfo := range sourceArray {
-			if key.KeyRangesIntersect(si.KeyRange, sourceShardInfo.KeyRange) {
+			if si.KeyRange == nil || sourceShardInfo.KeyRange == nil || key.KeyRangesIntersect3(si.KeyRange, sourceShardInfo.KeyRange) {
 				delete(shardMap, name)
 				return si
 			}
@@ -170,7 +170,7 @@ func findIntersectingShard(shardMap map[string]*topo.ShardInfo, sourceArray []*t
 // in the destination array
 func intersect(si *topo.ShardInfo, allShards []*topo.ShardInfo) bool {
 	for _, shard := range allShards {
-		if key.KeyRangesIntersect(si.KeyRange, shard.KeyRange) {
+		if key.KeyRangesIntersect3(si.KeyRange, shard.KeyRange) {
 			return true
 		}
 	}
@@ -187,7 +187,7 @@ func (sil shardInfoList) Len() int {
 
 // Less is part of sort.Interface
 func (sil shardInfoList) Less(i, j int) bool {
-	return sil[i].KeyRange.Start < sil[j].KeyRange.Start
+	return string(sil[i].KeyRange.Start) < string(sil[j].KeyRange.Start)
 }
 
 // Swap is part of sort.Interface

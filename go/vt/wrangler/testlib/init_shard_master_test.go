@@ -104,7 +104,7 @@ func TestInitMasterShard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if si.MasterAlias != master.Tablet.Alias {
+	if topo.ProtoToTabletAlias(si.MasterAlias) != master.Tablet.Alias {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 	if err := master.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
@@ -241,7 +241,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if si.MasterAlias != master.Tablet.Alias {
+	if topo.ProtoToTabletAlias(si.MasterAlias) != master.Tablet.Alias {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 }

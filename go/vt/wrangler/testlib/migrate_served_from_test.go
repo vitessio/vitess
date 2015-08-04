@@ -125,7 +125,12 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControlMap) != 1 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_RDONLY].BlacklistedTables, []string{"gone1", "gone2"}) {
+	if len(si.TabletControls) != 1 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_RDONLY,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+	}) {
 		t.Fatalf("rdonly type doesn't have right blacklisted tables")
 	}
 
@@ -148,7 +153,16 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControlMap) != 2 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_REPLICA].BlacklistedTables, []string{"gone1", "gone2"}) {
+	if len(si.TabletControls) != 2 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_RDONLY,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_REPLICA,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+	}) {
 		t.Fatalf("replica type doesn't have right blacklisted tables")
 	}
 
@@ -171,7 +185,20 @@ func TestMigrateServedFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.TabletControlMap) != 3 || !reflect.DeepEqual(si.TabletControlMap[topo.TYPE_MASTER].BlacklistedTables, []string{"gone1", "gone2"}) {
+	if len(si.TabletControls) != 3 || !reflect.DeepEqual(si.TabletControls, []*pb.Shard_TabletControl{
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_RDONLY,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_REPLICA,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+		&pb.Shard_TabletControl{
+			TabletType:        pb.TabletType_MASTER,
+			BlacklistedTables: []string{"gone1", "gone2"},
+		},
+	}) {
 		t.Fatalf("master type doesn't have right blacklisted tables")
 	}
 }

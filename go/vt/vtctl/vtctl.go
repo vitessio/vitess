@@ -99,7 +99,6 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -584,6 +583,19 @@ func parseTabletType3(param string) (pb.TabletType, error) {
 		return pb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
 	}
 	return pb.TabletType(value), nil
+}
+
+// parseServingTabletType3 parses the tablet type into the enum,
+// and makes sure the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH)
+func parseServingTabletType3(param string) (pb.TabletType, error) {
+	servedType, err := parseTabletType3(param)
+	if err != nil {
+		return pb.TabletType_UNKNOWN, err
+	}
+	if !topo.IsInServingGraph(topo.ProtoToTabletType(servedType)) {
+		return pb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
+	}
+	return servedType, nil
 }
 
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1173,7 +1185,8 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1200,7 +1213,7 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1260,7 +1273,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if *tablesStr != "" {
 		tables = strings.Split(*tablesStr, ",")
 	}
-	var kr key.KeyRange
+	var kr *pb.KeyRange
 	if *keyRange != "" {
 		if _, kr, err = topo.ValidateShardName(*keyRange); err != nil {
 			return err
@@ -1393,12 +1406,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {
-			tt, err := parseTabletType3(name)
+			tt, err := parseServingTabletType3(name)
 			if err != nil {
 				return err
-			}
-			if !topo.IsInServingGraph(topo.ProtoToTabletType(tt)) {
-				return fmt.Errorf("The served_from flag specifies a database (tablet) type that is not in the serving graph. The invalid value is: %v", tt)
 			}
 			ki.ServedFroms = append(ki.ServedFroms, &pb.Keyspace_ServedFrom{
 				TabletType: tt,
@@ -1561,11 +1571,11 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	servedType, err := parseServingTabletType3(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	if servedType == topo.TYPE_MASTER && *skipReFreshState {
+	if servedType == pb.TabletType_MASTER && *skipReFreshState {
 		return fmt.Errorf("The skip-refresh-state flag can only be specified for non-master migrations.")
 	}
 	var cells []string

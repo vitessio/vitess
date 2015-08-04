@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 )
@@ -282,8 +284,8 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 }
 
 func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, error) {
-	value := &topo.Shard{
-		MasterAlias: topo.TabletAlias{
+	value := &pb.Shard{
+		MasterAlias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
 		},

@@ -78,7 +78,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 	input := path.Join(explorerRoot, "global", keyspaceDirPath("test_keyspace"))
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &pb.Keyspace{}
-	shard := &topo.Shard{}
+	shard := &pb.Shard{}
 	want := jscfg.ToJSON(keyspace)
 
 	ctx := context.Background()
@@ -115,7 +115,7 @@ func TestHandlePathShard(t *testing.T) {
 	input := path.Join(explorerRoot, "global", shardDirPath("test_keyspace", "-80"))
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &pb.Keyspace{}
-	shard := &topo.Shard{}
+	shard := &pb.Shard{}
 	want := jscfg.ToJSON(shard)
 
 	ctx := context.Background()
