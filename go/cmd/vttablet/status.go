@@ -119,7 +119,7 @@ Binlog player state: {{.State}}</br>
   {{range .Controllers}}
     <tr>
       <td>{{.Index}}</td>
-      <td>{{.SourceShard.AsHTML}}</td>
+      <td>{{.SourceShardAsHTML}}</td>
       <td>{{.State}}
         {{if eq .State "Running"}}
           {{if .SourceTablet.IsZero}}

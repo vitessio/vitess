@@ -5,6 +5,7 @@
 package topo
 
 import (
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"reflect"
@@ -19,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Functions for dealing with shard representations in topology.
@@ -84,101 +87,24 @@ func ParseKeyspaceShardString(param string) (string, string, error) {
 	return keySpaceShard[0], keySpaceShard[1], nil
 }
 
-// SourceShard represents a data source for filtered replication
-// across shards. When this is used in a destination shard, the master
-// of that shard will run filtered replication.
-type SourceShard struct {
-	// Uid is the unique ID for this SourceShard object.
-	// It is for instance used as a unique index in blp_checkpoint
-	// when storing the position. It should be unique whithin a
-	// destination Shard, but not globally unique.
-	Uid uint32
-
-	// the source keyspace
-	Keyspace string
-
-	// the source shard
-	Shard string
-
-	// The source shard keyrange
-	// If partial, len(Tables) has to be zero
-	KeyRange key.KeyRange
-
-	// The source table list to replicate
-	// If non-empty, KeyRange must not be partial (must be KeyRange{})
-	Tables []string
-}
-
-// String returns a printable view of a SourceShard.
-func (source *SourceShard) String() string {
+// SourceShardString returns a printable view of a SourceShard.
+func SourceShardString(source *pb.Shard_SourceShard) string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
-// AsHTML returns a HTML version of the object.
-func (source *SourceShard) AsHTML() template.HTML {
+// SourceShardAsHTML returns a HTML version of the object.
+func SourceShardAsHTML(source *pb.Shard_SourceShard) template.HTML {
 	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
-	if source.KeyRange.IsPartial() {
+	if key.KeyRangeIsPartial(source.KeyRange) {
 		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
-			source.KeyRange.Start.Hex(), source.KeyRange.End.Hex())
+			hex.EncodeToString(source.KeyRange.Start),
+			hex.EncodeToString(source.KeyRange.End))
 	}
 	if len(source.Tables) > 0 {
 		result += fmt.Sprintf("<b>Tables</b>: %v</br>\n",
 			strings.Join(source.Tables, " "))
 	}
 	return template.HTML(result)
-}
-
-// TabletControl describes the parameters used by the vttablet processes
-// to know what specific configurations they should be using.
-type TabletControl struct {
-	// How to match the tablets
-	Cells []string // nil means all cells
-
-	// What specific action to take
-	DisableQueryService bool
-	BlacklistedTables   []string // only used if DisableQueryService==false
-}
-
-// ShardServedType describes the cells where the given shard is serving.
-type ShardServedType struct {
-	Cells []string // nil means all cells
-}
-
-// Shard is a pure data struct for information stored in topology server.  This
-// node is used to present a controlled view of the shard, unaware of
-// every management action. It also contains configuration data for a
-// shard.
-type Shard struct {
-	// There can be only at most one master, but there may be none. (0)
-	MasterAlias TabletAlias
-
-	// This must match the shard name based on our other conventions, but
-	// helpful to have it decomposed here.
-	KeyRange key.KeyRange
-
-	// ServedTypesMap is a map of all the tablet types this shard
-	// will serve, to the cells that serve this type. This is
-	// usually used with overlapping shards during data shuffles
-	// like shard splitting. Note the master record will always
-	// list all the cells.
-	ServedTypesMap map[TabletType]*ShardServedType
-
-	// SourceShards is the list of shards we're replicating from,
-	// using filtered replication.
-	SourceShards []SourceShard
-
-	// Cells is the list of cells that have tablets for this shard.
-	// It is populated at InitTablet time when a tablet is added
-	// in a cell that is not in the list yet.
-	Cells []string
-
-	// TabletControlMap is a map of TabletControl to apply specific
-	// configurations to tablets by type.
-	TabletControlMap map[TabletType]*TabletControl
-}
-
-func newShard() *Shard {
-	return &Shard{}
 }
 
 // IsShardUsingRangeBasedSharding returns true if the shard name
@@ -189,36 +115,26 @@ func IsShardUsingRangeBasedSharding(shard string) bool {
 
 // ValidateShardName takes a shard name and sanitizes it, and also returns
 // the KeyRange.
-func ValidateShardName(shard string) (string, key.KeyRange, error) {
+func ValidateShardName(shard string) (string, *pb.KeyRange, error) {
 	if !IsShardUsingRangeBasedSharding(shard) {
-		return shard, key.KeyRange{}, nil
+		return shard, nil, nil
 	}
 
 	parts := strings.Split(shard, "-")
 	if len(parts) != 2 {
-		return "", key.KeyRange{}, fmt.Errorf("invalid shardId, can only contain one '-': %v", shard)
+		return "", nil, fmt.Errorf("invalid shardId, can only contain one '-': %v", shard)
 	}
 
-	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
+	keyRange, err := key.ParseKeyRangeParts3(parts[0], parts[1])
 	if err != nil {
-		return "", key.KeyRange{}, err
+		return "", nil, err
 	}
 
-	if keyRange.End != key.MaxKey && keyRange.Start >= keyRange.End {
-		return "", key.KeyRange{}, fmt.Errorf("out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
+	if len(keyRange.End) > 0 && string(keyRange.Start) >= string(keyRange.End) {
+		return "", nil, fmt.Errorf("out of order keys: %v is not strictly smaller than %v", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
 	}
 
 	return strings.ToLower(shard), keyRange, nil
-}
-
-// HasCell returns true if the cell is listed in the Cells for the shard.
-func (shard *Shard) HasCell(cell string) bool {
-	for _, c := range shard.Cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
 }
 
 // ShardInfo is a meta struct that contains metadata to give the data
@@ -227,7 +143,7 @@ type ShardInfo struct {
 	keyspace  string
 	shardName string
 	version   int64
-	*Shard
+	*pb.Shard
 }
 
 // Keyspace returns the keyspace a shard belongs to
@@ -248,13 +164,23 @@ func (si *ShardInfo) Version() int64 {
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.
-func NewShardInfo(keyspace, shard string, value *Shard, version int64) *ShardInfo {
+func NewShardInfo(keyspace, shard string, value *pb.Shard, version int64) *ShardInfo {
 	return &ShardInfo{
 		keyspace:  keyspace,
 		shardName: shard,
 		version:   version,
 		Shard:     value,
 	}
+}
+
+// HasCell returns true if the cell is listed in the Cells for the shard.
+func (si *ShardInfo) HasCell(cell string) bool {
+	for _, c := range si.Cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
 }
 
 // GetShard is a high level function to read shard data.
@@ -293,7 +219,7 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 // update function on it, and then write it back. If the write fails due to
 // a version mismatch, it will re-read the record and retry the update.
 // If the update succeeds, it returns the updated ShardInfo.
-func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*Shard) error) (*ShardInfo, error) {
+func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
 	for {
 		si, err := GetShard(ctx, ts, keyspace, shard)
 		if err != nil {
@@ -320,13 +246,13 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 
 	// start the shard with all serving types. If it overlaps with
 	// other shards for some serving types, remove them.
-	s := &Shard{
+	servedTypes := map[pb.TabletType]bool{
+		pb.TabletType_MASTER:  true,
+		pb.TabletType_REPLICA: true,
+		pb.TabletType_RDONLY:  true,
+	}
+	s := &pb.Shard{
 		KeyRange: keyRange,
-		ServedTypesMap: map[TabletType]*ShardServedType{
-			TYPE_MASTER:  &ShardServedType{},
-			TYPE_REPLICA: &ShardServedType{},
-			TYPE_RDONLY:  &ShardServedType{},
-		},
 	}
 
 	if IsShardUsingRangeBasedSharding(name) {
@@ -337,18 +263,32 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 			return err
 		}
 		for _, si := range sis {
-			if key.KeyRangesIntersect(si.KeyRange, keyRange) {
-				for t := range si.ServedTypesMap {
-					delete(s.ServedTypesMap, t)
+			if si.KeyRange == nil || key.KeyRangesIntersect3(si.KeyRange, keyRange) {
+				for _, st := range si.ServedTypes {
+					delete(servedTypes, st.TabletType)
 				}
 			}
 		}
-		if len(s.ServedTypesMap) == 0 {
-			s.ServedTypesMap = nil
-		}
+	}
+
+	for st, _ := range servedTypes {
+		s.ServedTypes = append(s.ServedTypes, &pb.Shard_ServedType{
+			TabletType: st,
+		})
 	}
 
 	return ts.CreateShard(ctx, keyspace, name, s)
+}
+
+// GetTabletControl returns the Shard_TabletControl for the given tablet type,
+// or nil if it is not in the map.
+func (si *ShardInfo) GetTabletControl(tabletType pb.TabletType) *pb.Shard_TabletControl {
+	for _, tc := range si.TabletControls {
+		if tc.TabletType == tabletType {
+			return tc
+		}
+	}
+	return nil
 }
 
 // UpdateSourceBlacklistedTables will add or remove the listed tables
@@ -358,17 +298,11 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 //   table list that the provided one, we error out.
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells []string, remove bool, tables []string) error {
-	if si.TabletControlMap == nil {
-		si.TabletControlMap = make(map[TabletType]*TabletControl)
-	}
-	tc, ok := si.TabletControlMap[tabletType]
-	if !ok {
+func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType pb.TabletType, cells []string, remove bool, tables []string) error {
+	tc := si.GetTabletControl(tabletType)
+	if tc == nil {
 		// handle the case where the TabletControl object is new
 		if remove {
-			if len(si.TabletControlMap) == 0 {
-				si.TabletControlMap = nil
-			}
 			// we try to remove from something that doesn't exist,
 			// log, but we're done.
 			log.Warningf("Trying to remove TabletControl.BlacklistedTables for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
@@ -376,11 +310,12 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells 
 		}
 
 		// trying to add more constraints with no existing record
-		si.TabletControlMap[tabletType] = &TabletControl{
+		si.TabletControls = append(si.TabletControls, &pb.Shard_TabletControl{
+			TabletType:          tabletType,
 			Cells:               cells,
 			DisableQueryService: false,
 			BlacklistedTables:   tables,
-		}
+		})
 		return nil
 	}
 
@@ -407,23 +342,18 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(tabletType TabletType, cells 
 // of the corner cases:
 // - we don't support DisableQueryService at the same time as BlacklistedTables,
 //   because it's not used in the same context (vertical vs horizontal sharding)
-func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []string, disableQueryService bool) error {
-	if si.TabletControlMap == nil {
-		si.TabletControlMap = make(map[TabletType]*TabletControl)
-	}
-	tc, ok := si.TabletControlMap[tabletType]
-	if !ok {
+func (si *ShardInfo) UpdateDisableQueryService(tabletType pb.TabletType, cells []string, disableQueryService bool) error {
+	tc := si.GetTabletControl(tabletType)
+	if tc == nil {
 		// handle the case where the TabletControl object is new
 		if disableQueryService {
-			si.TabletControlMap[tabletType] = &TabletControl{
+			si.TabletControls = append(si.TabletControls, &pb.Shard_TabletControl{
+				TabletType:          tabletType,
 				Cells:               cells,
 				DisableQueryService: true,
 				BlacklistedTables:   nil,
-			}
+			})
 		} else {
-			if len(si.TabletControlMap) == 0 {
-				si.TabletControlMap = nil
-			}
 			log.Warningf("Trying to remove TabletControl.DisableQueryService for missing type: %v", tabletType)
 		}
 		return nil
@@ -446,45 +376,58 @@ func (si *ShardInfo) UpdateDisableQueryService(tabletType TabletType, cells []st
 	return nil
 }
 
-func (si *ShardInfo) removeCellsFromTabletControl(tc *TabletControl, tabletType TabletType, cells []string) {
+func (si *ShardInfo) removeCellsFromTabletControl(tc *pb.Shard_TabletControl, tabletType pb.TabletType, cells []string) {
 	result, emptyList := removeCells(tc.Cells, cells, si.Cells)
 	if emptyList {
 		// we don't have any cell left, we need to clear this record
-		delete(si.TabletControlMap, tabletType)
-		if len(si.TabletControlMap) == 0 {
-			si.TabletControlMap = nil
+		var tabletControls []*pb.Shard_TabletControl
+		for _, tc := range si.TabletControls {
+			if tc.TabletType != tabletType {
+				tabletControls = append(tabletControls, tc)
+			}
 		}
+		si.TabletControls = tabletControls
 	} else {
 		tc.Cells = result
 	}
 }
 
+// GetServedType returns the Shard_ServedType for a TabletType, or nil
+func (si *ShardInfo) GetServedType(tabletType pb.TabletType) *pb.Shard_ServedType {
+	for _, st := range si.ServedTypes {
+		if st.TabletType == tabletType {
+			return st
+		}
+	}
+	return nil
+}
+
 // GetServedTypesPerCell returns the list of types this shard is serving
 // in the provided cell.
 func (si *ShardInfo) GetServedTypesPerCell(cell string) []TabletType {
-	result := make([]TabletType, 0, len(si.ServedTypesMap))
-	for tt, sst := range si.ServedTypesMap {
-		if InCellList(cell, sst.Cells) {
-			result = append(result, tt)
+	result := make([]TabletType, 0, len(si.ServedTypes))
+	for _, st := range si.ServedTypes {
+		if InCellList(cell, st.Cells) {
+			result = append(result, ProtoToTabletType(st.TabletType))
 		}
 	}
 	return result
 }
 
 // CheckServedTypesMigration makes sure the provided migration is possible
-func (si *ShardInfo) CheckServedTypesMigration(tabletType TabletType, cells []string, remove bool) error {
+func (si *ShardInfo) CheckServedTypesMigration(tabletType pb.TabletType, cells []string, remove bool) error {
 	// master is a special case with a few extra checks
-	if tabletType == TYPE_MASTER {
+	if tabletType == pb.TabletType_MASTER {
 		if len(cells) > 0 {
 			return fmt.Errorf("cannot migrate only some cells for master in shard %v/%v", si.keyspace, si.shardName)
 		}
-		if remove && len(si.ServedTypesMap) > 1 {
+		if remove && len(si.ServedTypes) > 1 {
 			return fmt.Errorf("cannot migrate master away from %v/%v until everything else is migrated", si.keyspace, si.shardName)
 		}
 	}
 
 	// we can't remove a type we don't have
-	if _, ok := si.ServedTypesMap[tabletType]; !ok && remove {
+	if si.GetServedType(tabletType) == nil && remove {
 		return fmt.Errorf("supplied type %v cannot be migrated out of %#v", tabletType, si)
 	}
 
@@ -493,27 +436,22 @@ func (si *ShardInfo) CheckServedTypesMigration(tabletType TabletType, cells []st
 
 // UpdateServedTypesMap handles ServedTypesMap. It can add or remove
 // records, cells, ...
-func (si *ShardInfo) UpdateServedTypesMap(tabletType TabletType, cells []string, remove bool) error {
+func (si *ShardInfo) UpdateServedTypesMap(tabletType pb.TabletType, cells []string, remove bool) error {
 	// check parameters to be sure
 	if err := si.CheckServedTypesMigration(tabletType, cells, remove); err != nil {
 		return err
 	}
 
-	if si.ServedTypesMap == nil {
-		si.ServedTypesMap = make(map[TabletType]*ShardServedType)
-	}
-	sst, ok := si.ServedTypesMap[tabletType]
-	if !ok {
+	sst := si.GetServedType(tabletType)
+	if sst == nil {
 		// the record doesn't exist
 		if remove {
-			if len(si.ServedTypesMap) == 0 {
-				si.ServedTypesMap = nil
-			}
 			log.Warningf("Trying to remove ShardServedType for missing type %v in shard %v/%v", tabletType, si.keyspace, si.shardName)
 		} else {
-			si.ServedTypesMap[tabletType] = &ShardServedType{
-				Cells: cells,
-			}
+			si.ServedTypes = append(si.ServedTypes, &pb.Shard_ServedType{
+				TabletType: tabletType,
+				Cells:      cells,
+			})
 		}
 		return nil
 	}
@@ -522,10 +460,13 @@ func (si *ShardInfo) UpdateServedTypesMap(tabletType TabletType, cells []string,
 		result, emptyList := removeCells(sst.Cells, cells, si.Cells)
 		if emptyList {
 			// we don't have any cell left, we need to clear this record
-			delete(si.ServedTypesMap, tabletType)
-			if len(si.ServedTypesMap) == 0 {
-				si.ServedTypesMap = nil
+			var servedTypes []*pb.Shard_ServedType
+			for _, st := range si.ServedTypes {
+				if st.TabletType != tabletType {
+					servedTypes = append(servedTypes, st)
+				}
 			}
+			si.ServedTypes = servedTypes
 		} else {
 			sst.Cells = result
 		}
@@ -587,9 +528,9 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	}
 
 	resultAsMap := make(map[TabletAlias]bool)
-	if !si.MasterAlias.IsZero() {
+	if si.MasterAlias != nil && !TabletAliasIsZero(si.MasterAlias) {
 		if InCellList(si.MasterAlias.Cell, cells) {
-			resultAsMap[si.MasterAlias] = true
+			resultAsMap[ProtoToTabletAlias(si.MasterAlias)] = true
 		}
 	}
 

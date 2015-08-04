@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -24,7 +26,7 @@ This file contains the shard management code for zktopo.Server
 */
 
 // CreateShard is part of the topo.Server interface
-func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
+func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	pathList := []string{
 		shardPath,
@@ -103,7 +105,7 @@ func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo
 		return nil, err
 	}
 
-	s := &topo.Shard{}
+	s := &pb.Shard{}
 	if err = json.Unmarshal([]byte(data), s); err != nil {
 		return nil, fmt.Errorf("bad shard data %v", err)
 	}

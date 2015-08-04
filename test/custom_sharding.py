@@ -106,7 +106,7 @@ class TestCustomSharding(unittest.TestCase):
     self.assertEqual(len(ks['Partitions']['master']['ShardReferences']), 1)
     self.assertEqual(len(ks['Partitions']['rdonly']['ShardReferences']), 1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
-    self.assertEqual(len(s['ServedTypesMap']), 3)
+    self.assertEqual(len(s['served_types']), 3)
 
     # create a table on shard 0
     sql = '''create table data(
@@ -131,7 +131,7 @@ primary key (id)
     for t in [shard_1_master, shard_1_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/1'])
-    self.assertEqual(len(s['ServedTypesMap']), 3)
+    self.assertEqual(len(s['served_types']), 3)
 
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/1',
                      shard_1_master.tablet_alias], auto_log=True)

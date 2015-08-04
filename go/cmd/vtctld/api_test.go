@@ -43,13 +43,13 @@ func TestAPI(t *testing.T) {
 
 	// Populate topo.
 	ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{ShardingColumnName: "shardcol"})
-	ts.CreateShard(ctx, "ks1", "-80", &topo.Shard{
+	ts.CreateShard(ctx, "ks1", "-80", &pb.Shard{
 		Cells:    cells,
-		KeyRange: key.KeyRange{Start: "", End: "\x80"},
+		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
 	})
-	ts.CreateShard(ctx, "ks1", "80-", &topo.Shard{
+	ts.CreateShard(ctx, "ks1", "80-", &pb.Shard{
 		Cells:    cells,
-		KeyRange: key.KeyRange{Start: "\x80", End: ""},
+		KeyRange: &pb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
 	topo.CreateTablet(ctx, ts, &topo.Tablet{
@@ -106,12 +106,8 @@ func TestAPI(t *testing.T) {
 		// Shards
 		{"GET", "shards/ks1/", `["-80","80-"]`},
 		{"GET", "shards/ks1/-80", `{
-				"MasterAlias": {"Cell":"","Uid":0},
-				"KeyRange": {"Start":"","End":"80"},
-				"ServedTypesMap": null,
-				"SourceShards": null,
-				"Cells": ["cell1", "cell2"],
-				"TabletControlMap": null
+				"key_range": {"end":"gA=="},
+				"cells": ["cell1", "cell2"]
 			}`},
 		{"POST", "shards/ks1/-80?action=TestShardAction", `{
 				"Name": "TestShardAction",

@@ -7,8 +7,11 @@ package wrangler
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SetSourceShards is a utility function to override the SourceShards fields
@@ -35,14 +38,14 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	// Insert their KeyRange in the SourceShards array.
 	// We use a linear 0-based id, that matches what mysqlctld/split.go
 	// inserts into _vt.blp_checkpoint.
-	shardInfo.SourceShards = make([]topo.SourceShard, len(sourceTablets))
+	shardInfo.SourceShards = make([]*pb.Shard_SourceShard, len(sourceTablets))
 	i := 0
 	for _, ti := range sourceTablets {
-		shardInfo.SourceShards[i] = topo.SourceShard{
+		shardInfo.SourceShards[i] = &pb.Shard_SourceShard{
 			Uid:      uint32(i),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
-			KeyRange: ti.KeyRange,
+			KeyRange: key.KeyRangeToProto(ti.KeyRange),
 			Tables:   tables,
 		}
 		i++

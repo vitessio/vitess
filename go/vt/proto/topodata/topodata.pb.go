@@ -205,8 +205,12 @@ func (m *Tablet) GetHealthMap() map[string]string {
 
 // A Shard contains data about a subset of the data whithin a keyspace.
 type Shard struct {
-	// There can be only at most one master, but there may be none. (0)
+	// master_alias is the tablet alias of the master for the shard.
+	// If it is unset, then there is no master in this shard yet.
 	MasterAlias *TabletAlias `protobuf:"bytes,1,opt,name=master_alias" json:"master_alias,omitempty"`
+	// key_range is the KeyRange for this shard. It can be unset if:
+	// - we are not using range-based sharding in this shard.
+	// - the shard covers the entire keyrange.
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range" json:"key_range,omitempty"`
@@ -260,7 +264,7 @@ func (m *Shard) GetTabletControls() []*Shard_TabletControl {
 	return nil
 }
 
-// ShardServedType is an entry in the served_types
+// ServedType is an entry in the served_types
 type Shard_ServedType struct {
 	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	Cells      []string   `protobuf:"bytes,2,rep,name=cells" json:"cells,omitempty"`

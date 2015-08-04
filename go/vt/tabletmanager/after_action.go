@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -153,7 +154,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
-	var tabletControl *topo.TabletControl
+	var tabletControl *pbt.Shard_TabletControl
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
@@ -164,7 +165,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			if newTablet.Type == topo.TYPE_MASTER {
 				allowQuery = len(shardInfo.SourceShards) == 0
 			}
-			if tc, ok := shardInfo.TabletControlMap[newTablet.Type]; ok {
+			if tc := shardInfo.GetTabletControl(topo.TabletTypeToProto(newTablet.Type)); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false

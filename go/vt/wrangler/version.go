@@ -93,11 +93,11 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	}
 
 	// get version from the master, or error
-	if si.MasterAlias.IsZero() {
+	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering version for master %v", si.MasterAlias)
-	masterVersion, err := wr.GetVersion(ctx, si.MasterAlias)
+	masterVersion, err := wr.GetVersion(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
 	if err != nil {
 		return err
 	}
@@ -113,12 +113,12 @@ func (wr *Wrangler) ValidateVersionShard(ctx context.Context, keyspace, shard st
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
-		if alias == si.MasterAlias {
+		if alias == topo.ProtoToTabletAlias(si.MasterAlias) {
 			continue
 		}
 
 		wg.Add(1)
-		go wr.diffVersion(ctx, masterVersion, si.MasterAlias, alias, &wg, &er)
+		go wr.diffVersion(ctx, masterVersion, topo.ProtoToTabletAlias(si.MasterAlias), alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -150,10 +150,10 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.IsZero() {
+	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
-	referenceAlias := si.MasterAlias
+	referenceAlias := topo.ProtoToTabletAlias(si.MasterAlias)
 	log.Infof("Gathering version for reference master %v", referenceAlias)
 	referenceVersion, err := wr.GetVersion(ctx, referenceAlias)
 	if err != nil {
@@ -171,7 +171,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(ctx context.Context, keyspace string
 		}
 
 		for _, alias := range aliases {
-			if alias == si.MasterAlias {
+			if alias == topo.ProtoToTabletAlias(si.MasterAlias) {
 				continue
 			}
 

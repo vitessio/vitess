@@ -106,7 +106,7 @@ type Server interface {
 	// yet. The contents of the shard will be a new Shard{} object,
 	// with KeyRange populated by the result of ValidateShardName().
 	// Can return ErrNodeExists if it already exists.
-	CreateShard(ctx context.Context, keyspace, shard string, value *Shard) error
+	CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error
 
 	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.

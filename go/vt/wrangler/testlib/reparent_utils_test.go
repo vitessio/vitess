@@ -35,7 +35,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = master.Tablet.Alias
+	si.MasterAlias = topo.TabletAliasToProto(master.Tablet.Alias)
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestReparentTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = master.Tablet.Alias
+	si.MasterAlias = topo.TabletAliasToProto(master.Tablet.Alias)
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}

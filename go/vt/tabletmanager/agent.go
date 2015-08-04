@@ -45,6 +45,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -88,7 +90,7 @@ type ActionAgent struct {
 	// to update the fields, nothing else.
 	mutex            sync.Mutex
 	_tablet          *topo.TabletInfo
-	_tabletControl   *topo.TabletControl
+	_tabletControl   *pb.Shard_TabletControl
 	_waitingForMysql bool
 
 	// if the agent is healthy, this is nil. Otherwise it contains
@@ -317,7 +319,7 @@ func (agent *ActionAgent) DisableQueryService() bool {
 	return disable
 }
 
-func (agent *ActionAgent) setTabletControl(tc *topo.TabletControl) {
+func (agent *ActionAgent) setTabletControl(tc *pb.Shard_TabletControl) {
 	agent.mutex.Lock()
 	agent._tabletControl = tc
 	agent.mutex.Unlock()

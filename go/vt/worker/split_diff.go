@@ -164,7 +164,7 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 	if len(sdw.shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", sdw.keyspace, sdw.shard)
 	}
-	if sdw.shardInfo.MasterAlias.IsZero() {
+	if topo.TabletAliasIsZero(sdw.shardInfo.MasterAlias) {
 		return fmt.Errorf("shard %v/%v has no master", sdw.keyspace, sdw.shard)
 	}
 
@@ -218,7 +218,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.shardInfo.MasterAlias)
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, topo.ProtoToTabletAlias(sdw.shardInfo.MasterAlias))
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
@@ -390,7 +390,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				return
 			}
 
-			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
+			overlap, err := key.KeyRangesOverlap3(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
 			if err != nil {
 				newErr := fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
 				rec.RecordError(newErr)
@@ -406,7 +406,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, key.KeyRange{}, key.ProtoToKeyspaceIdType(sdw.keyspaceInfo.ShardingColumnType))
+			destinationQueryResultReader, err := TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, nil, key.ProtoToKeyspaceIdType(sdw.keyspaceInfo.ShardingColumnType))
 			if err != nil {
 				newErr := fmt.Errorf("TableScanByKeyRange(destination) failed: %v", err)
 				rec.RecordError(newErr)

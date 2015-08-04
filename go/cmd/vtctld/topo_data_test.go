@@ -226,13 +226,13 @@ func TestShardNamesCache(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s1", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s1", &pb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s2", &topo.Shard{
-		MasterAlias: topo.TabletAlias{
+	if err := ts.CreateShard(ctx, "ks1", "s2", &pb.Shard{
+		MasterAlias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
 		},
@@ -257,13 +257,13 @@ func TestShardCache(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s1", &topo.Shard{
+	if err := ts.CreateShard(ctx, "ks1", "s1", &pb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s2", &topo.Shard{
-		MasterAlias: topo.TabletAlias{
+	if err := ts.CreateShard(ctx, "ks1", "s2", &pb.Shard{
+		MasterAlias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
 		},
@@ -276,17 +276,18 @@ func TestShardCache(t *testing.T) {
 	expectedS := Shard{
 		KeyspaceName: "ks1",
 		ShardName:    "s1",
-		Shard: &topo.Shard{
+		Shard: &pb.Shard{
 			Cells: []string{"cell1", "cell2"},
 		},
 	}
 	testVersionedObjectCacheMap(t, sc, "ks1/s1", &s, &expectedS)
 
+	s = Shard{}
 	expectedS = Shard{
 		KeyspaceName: "ks1",
 		ShardName:    "s2",
-		Shard: &topo.Shard{
-			MasterAlias: topo.TabletAlias{
+		Shard: &pb.Shard{
+			MasterAlias: &pb.TabletAlias{
 				Cell: "cell1",
 				Uid:  12,
 			},

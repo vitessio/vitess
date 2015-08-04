@@ -799,12 +799,12 @@ def check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
   """Makes assertions about the state of DisableQueryService in the shard record's TabletControlMap."""
   # We assume that query service should be enabled unless DisableQueryService is explicitly True
   query_service_enabled = True
-  tablet_control_map = run_vtctl_json(['GetShard', shard_name]).get('TabletControlMap')
-  if tablet_control_map:
-    disable_query_service = tablet_control_map.get(tablet_type, {}).get('DisableQueryService')
-
-    if disable_query_service:
-      query_service_enabled = False
+  tablet_controls = run_vtctl_json(['GetShard', shard_name]).get('tablet_controls')
+  if tablet_controls:
+    for tc in tablet_controls:
+      if tc['tablet_type'] == tablet_type:
+        if tc.get('disable_query_service', False):
+          query_service_enabled = False
 
   testcase.assertEqual(
     query_service_enabled,
@@ -813,8 +813,8 @@ def check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
   )
 
 def check_shard_query_services(testcase, shard_names, tablet_type, expected_state):
-  for shard_names in shard_names:
-    check_shard_query_service(testcase, shard_names, tablet_type, expected_state)
+  for shard_name in shard_names:
+    check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
 
 def check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled):
   """check_tablet_query_service will check that the query service is enabled

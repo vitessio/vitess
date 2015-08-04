@@ -12,6 +12,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
@@ -21,7 +23,7 @@ var SPACE = []byte(" ")
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(sendTransaction))
-func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	isInteger := true
 	if kit == key.KIT_BYTES {
 		isInteger = false
@@ -59,7 +61,7 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange key.KeyRange, sendReply
 						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 						continue
 					}
-					if !keyrange.Contains(key.Uint64Key(id).KeyspaceId()) {
+					if !key.KeyRangeContains(keyrange, key.Uint64Key(id).Bytes()) {
 						continue
 					}
 				} else {
@@ -69,7 +71,7 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange key.KeyRange, sendReply
 						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 						continue
 					}
-					if !keyrange.Contains(key.KeyspaceId(data)) {
+					if !key.KeyRangeContains(keyrange, data) {
 						continue
 					}
 				}

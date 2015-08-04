@@ -8,6 +8,7 @@
 package binlogplayer
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"sync"
@@ -88,7 +89,7 @@ type BinlogPlayer struct {
 
 	// for key range base requests
 	keyspaceIdType pb.KeyspaceIdType
-	keyRange       key.KeyRange
+	keyRange       *pb.KeyRange
 
 	// for table base requests
 	tables []string
@@ -105,7 +106,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType pb.KeyspaceIdType, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, endPoint *pb.EndPoint, keyspaceIdType pb.KeyspaceIdType, keyRange *pb.KeyRange, startPosition *proto.BlpPosition, stopPosition myproto.ReplicationPosition, blplStats *BinlogPlayerStats) *BinlogPlayer {
 	return &BinlogPlayer{
 		endPoint:       endPoint,
 		dbClient:       dbClient,
@@ -265,8 +266,8 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	} else {
 		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
 			blp.blpPos.Uid,
-			blp.keyRange.Start.Hex(),
-			blp.keyRange.End.Hex(),
+			hex.EncodeToString(blp.keyRange.Start),
+			hex.EncodeToString(blp.keyRange.End),
 			blp.blpPos.Position,
 			blp.endPoint,
 		)

@@ -9,6 +9,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"html/template"
 	"math/rand" // not crypto-safe is OK here
 	"sort"
 	"strings"
@@ -44,11 +45,11 @@ type BinlogPlayerController struct {
 	// Information about us (set at construction, immutable).
 	cell           string
 	keyspaceIDType pb.KeyspaceIdType
-	keyRange       key.KeyRange
+	keyRange       *pb.KeyRange
 	dbName         string
 
 	// Information about the source (set at construction, immutable).
-	sourceShard topo.SourceShard
+	sourceShard *pb.Shard_SourceShard
 
 	// BinlogPlayerStats has the stats for the players we're going to use
 	// (pointer is set at construction, immutable, values are thread-safe).
@@ -75,7 +76,7 @@ type BinlogPlayerController struct {
 	lastError error
 }
 
-func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) *BinlogPlayerController {
+func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysqlctl.MysqlDaemon, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:                ts,
 		dbConfig:          dbConfig,
@@ -91,7 +92,7 @@ func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysql
 }
 
 func (bpc *BinlogPlayerController) String() string {
-	return "BinlogPlayerController(" + bpc.sourceShard.String() + ")"
+	return "BinlogPlayerController(" + topo.SourceShardString(bpc.sourceShard) + ")"
 }
 
 // Start will start the player in the background and run forever.
@@ -282,7 +283,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 	// the data we have to replicate is the intersection of the
 	// source keyrange and our keyrange
-	overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
+	overlap, err := key.KeyRangesOverlap3(bpc.sourceShard.KeyRange, bpc.keyRange)
 	if err != nil {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
@@ -384,7 +385,7 @@ func (blm *BinlogPlayerMap) size() int64 {
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
-func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange key.KeyRange, sourceShard topo.SourceShard, dbName string) {
+func (blm *BinlogPlayerMap) addPlayer(ctx context.Context, cell string, keyspaceIDType pb.KeyspaceIdType, keyRange *pb.KeyRange, sourceShard *pb.Shard_SourceShard, dbName string) {
 	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
@@ -446,7 +447,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet,
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, tablet.DbName())
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, key.KeyRangeToProto(tablet.KeyRange), sourceShard, tablet.DbName())
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
@@ -571,7 +572,7 @@ func (blm *BinlogPlayerMap) RunUntil(ctx context.Context, blpPositionList *blpro
 type BinlogPlayerControllerStatus struct {
 	// configuration values
 	Index        uint32
-	SourceShard  topo.SourceShard
+	SourceShard  *pb.Shard_SourceShard
 	StopPosition myproto.ReplicationPosition
 
 	// stats and current values
@@ -582,6 +583,11 @@ type BinlogPlayerControllerStatus struct {
 	State               string
 	SourceTablet        topo.TabletAlias
 	LastError           string
+}
+
+// SourceShardAsHTML returns the SourceShard as HTML
+func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
+	return topo.SourceShardAsHTML(bpcs.SourceShard)
 }
 
 // BinlogPlayerControllerStatusList is the list of statuses.

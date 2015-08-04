@@ -226,7 +226,7 @@ func (tee *Tee) DeleteKeyspaceShards(ctx context.Context, keyspace string) error
 //
 
 // CreateShard is part of the topo.Server interface
-func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
+func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
 	err := tee.primary.CreateShard(ctx, keyspace, shard, value)
 	if err != nil && err != topo.ErrNodeExists {
 		return err

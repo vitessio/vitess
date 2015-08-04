@@ -55,7 +55,10 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("Cannot read shard: %v", err)
 		}
-		ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
+		if si.MasterAlias == nil {
+			return fmt.Errorf("Shard %v/%v has no master", tablet.Keyspace, tablet.Shard)
+		}
+		ti, err := agent.TopoServer.GetTablet(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
 		if err != nil {
 			return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
 		}
