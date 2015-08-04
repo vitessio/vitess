@@ -77,7 +77,7 @@ func buildIndexPlan(ins *sqlparser.Insert, tablename string, colVindex *ColVinde
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: []byte(colVindex.Col)}})
+		ins.Columns = append(ins.Columns, &sqlparser.NonStarExpr{Expr: &sqlparser.ColName{Name: sqlparser.SQLName(colVindex.Col)}})
 		ins.Rows.(sqlparser.Values)[0] = append(ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple), &sqlparser.NullVal{})
 	}
 	row := ins.Rows.(sqlparser.Values)[0].(sqlparser.ValTuple)

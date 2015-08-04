@@ -468,7 +468,7 @@ func TestQueryExecutorPlanPKIn(t *testing.T) {
 func TestQueryExecutorPlanSelectSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table use index (INDEX) where name = 1 limit 1000"
+	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
 	want := &mproto.QueryResult{
 		Fields: getTestTableFields(),
 	}
@@ -1114,7 +1114,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table use index (INDEX) where name = 1 limit 1000"
+	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
 	expected := &mproto.QueryResult{
 		Fields: getTestTableFields(),
 	}
@@ -1173,7 +1173,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "select * from test_table where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table use index (INDEX) where name = 1 limit 1000"
+	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
 	expected := &mproto.QueryResult{
 		Fields: getTestTableFields(),
 	}
@@ -1436,7 +1436,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
+					sqltypes.MakeString([]byte("index")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte{}),

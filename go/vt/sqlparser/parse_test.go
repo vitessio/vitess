@@ -35,7 +35,7 @@ func TestParse(t *testing.T) {
 			out = String(tree)
 		}
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("File:%s Line:%v\n%q\n%q", tcase.file, tcase.lineno, tcase.output, out))
+			t.Errorf("File:%s Line:%v\n%q\n%q", tcase.file, tcase.lineno, tcase.output, out)
 		}
 	}
 }
@@ -43,20 +43,22 @@ func TestParse(t *testing.T) {
 func BenchmarkParse1(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
 	for i := 0; i < b.N; i++ {
-		_, err := Parse(sql)
+		ast, err := Parse(sql)
 		if err != nil {
 			b.Fatal(err)
 		}
+		_ = String(ast)
 	}
 }
 
 func BenchmarkParse2(b *testing.B) {
 	sql := "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
 	for i := 0; i < b.N; i++ {
-		_, err := Parse(sql)
+		ast, err := Parse(sql)
 		if err != nil {
 			b.Fatal(err)
 		}
+		_ = String(ast)
 	}
 }
 
