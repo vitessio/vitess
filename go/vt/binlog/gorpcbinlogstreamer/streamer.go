@@ -7,6 +7,7 @@ package gorpcbinlogstreamer
 import (
 	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -26,7 +27,7 @@ func (server *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, se
 // StreamKeyRange is part of the gorpc UpdateStream service
 func (server *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer server.updateStream.HandlePanic(&err)
-	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, req.KeyRange, req.Charset, func(reply *proto.BinlogTransaction) error {
+	return server.updateStream.StreamKeyRange(req.Position, req.KeyspaceIdType, key.KeyRangeToProto(req.KeyRange), req.Charset, func(reply *proto.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 }

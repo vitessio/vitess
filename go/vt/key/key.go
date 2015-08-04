@@ -68,6 +68,13 @@ func (i Uint64Key) KeyspaceId() KeyspaceId {
 	return KeyspaceId(i.String())
 }
 
+// Bytes returns the keyspace id (as bytes) associated with a Uint64Key.
+func (i Uint64Key) Bytes() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.BigEndian, uint64(i))
+	return buf.Bytes()
+}
+
 // HexKeyspaceId is the hex represention of a KeyspaceId.
 type HexKeyspaceId string
 
@@ -139,6 +146,15 @@ func (kr KeyRange) MapKey() string {
 
 func (kr KeyRange) Contains(i KeyspaceId) bool {
 	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
+}
+
+// KeyRangeContains returns true if the provided id is in the keyrange.
+func KeyRangeContains(kr *pb.KeyRange, id []byte) bool {
+	if kr == nil {
+		return true
+	}
+	return string(kr.Start) <= string(id) &&
+		(len(kr.End) == 0 || string(id) < string(kr.End))
 }
 
 func (kr KeyRange) String() string {

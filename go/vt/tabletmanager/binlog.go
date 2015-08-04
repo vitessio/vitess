@@ -288,7 +288,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, key.ProtoToKeyRange(overlap), startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
+	player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, endPoint, bpc.keyspaceIDType, overlap, startPosition, bpc.stopPosition, bpc.binlogPlayerStats)
 	return player.ApplyBinlogEvents(bpc.ctx)
 }
 
