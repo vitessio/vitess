@@ -708,7 +708,12 @@ value_expression:
 | '-'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
-      $$ = append(NumVal("-"), num...)
+      // Handle double negative
+      if num[0] == '-' {
+        $$ = num[1:]
+      } else {
+        $$ = append(NumVal("-"), num...)
+      }
     } else {
       $$ = &UnaryExpr{Operator: AST_MINUS, Expr: $2}
     }
