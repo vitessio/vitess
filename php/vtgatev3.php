@@ -64,9 +64,10 @@ class VTGateConnection {
 	public function execute($sql, $bind_vars, $tablet_type) {
 		$req = array(
 			'Sql' => $sql,
-			'BindVariables' => $bind_vars,
 			'TabletType' => $tablet_type,
 		);
+		if ($bind_vars)
+			$req['BindVariables'] = $bind_vars;
 		if ($this->session)
 			$req['Session'] = $this->session;
 

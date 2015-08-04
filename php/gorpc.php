@@ -28,13 +28,23 @@ class GoRpcRequest {
 	}
 }
 
+function unwrap_bin_data($value) {
+	if (is_object($value) && get_class($value) == 'MongoBinData')
+		return $value->bin;
+	if (is_array($value)) {
+		foreach ($value as $key => $child)
+			$value[$key] = unwrap_bin_data($child);
+	}
+	return $value;
+}
+
 class GoRpcResponse {
 	public $header;
 	public $reply;
 
 	public function __construct($header, $body) {
-		$this->header = $header;
-		$this->reply = $body;
+		$this->header = unwrap_bin_data($header);
+		$this->reply = unwrap_bin_data($body);
 	}
 
 	public function error() {
