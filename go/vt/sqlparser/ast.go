@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -196,8 +197,8 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // NewName is set for AST_ALTER, AST_CREATE, AST_RENAME.
 type DDL struct {
 	Action  string
-	Table   []byte
-	NewName []byte
+	Table   TableID
+	NewName TableID
 }
 
 const (
@@ -210,11 +211,11 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case AST_CREATE:
-		buf.Myprintf("%s table %s", node.Action, node.NewName)
+		buf.Myprintf("%s table %v", node.Action, node.NewName)
 	case AST_RENAME:
-		buf.Myprintf("%s table %s %s", node.Action, node.Table, node.NewName)
+		buf.Myprintf("%s table %v %v", node.Action, node.Table, node.NewName)
 	default:
-		buf.Myprintf("%s table %s", node.Action, node.Table)
+		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
 }
 
@@ -258,12 +259,12 @@ func (*NonStarExpr) ISelectExpr() {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName []byte
+	TableName TableID
 }
 
 func (node *StarExpr) Format(buf *TrackedBuffer) {
-	if node.TableName != nil {
-		buf.Myprintf("%s.", node.TableName)
+	if node.TableName != "" {
+		buf.Myprintf("%v.", node.TableName)
 	}
 	buf.Myprintf("*")
 }
@@ -271,13 +272,13 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 // NonStarExpr defines a non-'*' select expr.
 type NonStarExpr struct {
 	Expr Expr
-	As   []byte
+	As   SQLName
 }
 
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As != nil {
-		buf.Myprintf(" as %s", node.As)
+	if node.As != "" {
+		buf.Myprintf(" as %v", node.As)
 	}
 }
 
@@ -319,14 +320,14 @@ func (*JoinTableExpr) ITableExpr()    {}
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
 	Expr  SimpleTableExpr
-	As    []byte
+	As    TableID
 	Hints *IndexHints
 }
 
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As != nil {
-		buf.Myprintf(" as %s", node.As)
+	if node.As != "" {
+		buf.Myprintf(" as %v", node.As)
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
@@ -345,15 +346,14 @@ func (*Subquery) ISimpleTableExpr()  {}
 
 // TableName represents a table  name.
 type TableName struct {
-	Name, Qualifier []byte
+	Name, Qualifier TableID
 }
 
 func (node *TableName) Format(buf *TrackedBuffer) {
-	if node.Qualifier != nil {
-		escape(buf, node.Qualifier)
-		buf.Myprintf(".")
+	if node.Qualifier != "" {
+		buf.Myprintf("%v.", node.Qualifier)
 	}
-	escape(buf, node.Name)
+	buf.Myprintf("%v", node.Name)
 }
 
 // ParenTableExpr represents a parenthesized TableExpr.
@@ -393,7 +393,7 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 // IndexHints represents a list of index hints.
 type IndexHints struct {
 	Type    string
-	Indexes [][]byte
+	Indexes []SQLName
 }
 
 const (
@@ -406,7 +406,7 @@ func (node *IndexHints) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" %s index ", node.Type)
 	prefix := "("
 	for _, n := range node.Indexes {
-		buf.Myprintf("%s%s", prefix, n)
+		buf.Myprintf("%s%v", prefix, n)
 		prefix = ", "
 	}
 	buf.Myprintf(")")
@@ -646,23 +646,15 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 
 // ColName represents a column name.
 type ColName struct {
-	Name, Qualifier []byte
+	Name      SQLName
+	Qualifier TableID
 }
 
 func (node *ColName) Format(buf *TrackedBuffer) {
-	if node.Qualifier != nil {
-		escape(buf, node.Qualifier)
-		buf.Myprintf(".")
+	if node.Qualifier != "" {
+		buf.Myprintf("%v.", node.Qualifier)
 	}
-	escape(buf, node.Name)
-}
-
-func escape(buf *TrackedBuffer, name []byte) {
-	if _, ok := keywords[string(name)]; ok {
-		buf.Myprintf("`%s`", name)
-	} else {
-		buf.Myprintf("%s", name)
-	}
+	buf.Myprintf("%v", node.Name)
 }
 
 // ColTuple represents a list of column values.
@@ -756,7 +748,7 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     []byte
+	Name     string
 	Distinct bool
 	Exprs    SelectExprs
 }
@@ -970,4 +962,24 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 		return
 	}
 	buf.Myprintf(" on duplicate key update %v", UpdateExprs(node))
+}
+
+type TableID string
+
+func (node TableID) Format(buf *TrackedBuffer) {
+	if _, ok := keywords[strings.ToLower(string(node))]; ok {
+		buf.Myprintf("`%s`", string(node))
+		return
+	}
+	buf.Myprintf("%s", string(node))
+}
+
+type SQLName string
+
+func (node SQLName) Format(buf *TrackedBuffer) {
+	if _, ok := keywords[string(node)]; ok {
+		buf.Myprintf("`%s`", string(node))
+		return
+	}
+	buf.Myprintf("%s", string(node))
 }

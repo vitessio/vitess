@@ -15,7 +15,7 @@ import (
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) string {
-	if n, ok := node.(*TableName); ok && n.Qualifier == nil {
+	if n, ok := node.(*TableName); ok && n.Qualifier == "" {
 		return string(n.Name)
 	}
 	// sub-select or '.' expression
@@ -47,7 +47,7 @@ func IsValue(node ValExpr) bool {
 	return false
 }
 
-// HasINCaluse returns true if any of the conditions has an IN clause.
+// HasINClause returns true if any of the conditions has an IN clause.
 func HasINClause(conditions []BoolExpr) bool {
 	for _, node := range conditions {
 		if c, ok := node.(*ComparisonExpr); ok && c.Operator == AST_IN {
