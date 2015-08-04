@@ -145,7 +145,7 @@ func (qs *QuerySplitter) getWhereClause(start, end sqltypes.Value) *sqlparser.Wh
 		return qs.sel.Where
 	}
 	pk := &sqlparser.ColName{
-		Name: []byte(qs.splitColumn),
+		Name: sqlparser.SQLName(qs.splitColumn),
 	}
 	// splitColumn >= start
 	if !start.IsNull() {

@@ -228,7 +228,7 @@ func (rci *RowcacheInvalidator) handleUnrecognizedEvent(sql string) {
 	}
 
 	// Ignore cross-db statements.
-	if table.Qualifier != nil && string(table.Qualifier) != rci.qe.dbconfigs.App.DbName {
+	if table.Qualifier != "" && string(table.Qualifier) != rci.qe.dbconfigs.App.DbName {
 		return
 	}
 
