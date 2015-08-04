@@ -121,7 +121,7 @@ func DecodeUint32(buf *bytes.Buffer, kind byte) uint32 {
 	switch kind {
 	case Int:
 		return Pack.Uint32(Next(buf, 4))
-	case Ulong:
+	case Ulong, Long:
 		return uint32(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
@@ -173,7 +173,7 @@ func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 	}
 }
 
-// DecodeBinary decodes a time.Time from buf.
+// DecodeTime decodes a time.Time from buf.
 // Allowed types: Datetime, Null.
 func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
 	switch kind {
@@ -242,7 +242,7 @@ func DecodeMap(buf *bytes.Buffer, kind byte) map[string]interface{} {
 	return result
 }
 
-// DecodeMap decodes a []interface{} from buf.
+// DecodeArray decodes a []interface{} from buf.
 // Allowed types: Array, Null.
 func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
 	switch kind {
@@ -267,7 +267,7 @@ func DecodeArray(buf *bytes.Buffer, kind byte) []interface{} {
 	return result
 }
 
-// DecodeMap decodes a []string from buf.
+// DecodeStringArray decodes a []string from buf.
 // Allowed types: Array, Null.
 func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 	switch kind {
