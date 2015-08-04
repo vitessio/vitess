@@ -7,6 +7,8 @@ NOTE: This module requires bson_encode() and bson_decode(),
           $ sudo apt-get install php5-mongo
 */
 
+ini_set('mongo.native_long', 1);
+
 require_once('gorpc.php');
 
 class BsonRpcClient extends GoRpcClient {
