@@ -5,7 +5,6 @@
 package topotools
 
 import (
-	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -18,8 +17,6 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-var _ = flag.Bool("lock_srvshard", false, "Unused")
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
 //
