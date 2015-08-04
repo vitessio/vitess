@@ -197,8 +197,8 @@ func (node *Set) Format(buf *TrackedBuffer) {
 // NewName is set for AST_ALTER, AST_CREATE, AST_RENAME.
 type DDL struct {
 	Action  string
-	Table   TableID
-	NewName TableID
+	Table   SQLName
+	NewName SQLName
 }
 
 const (
@@ -259,7 +259,7 @@ func (*NonStarExpr) ISelectExpr() {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName TableID
+	TableName SQLName
 }
 
 func (node *StarExpr) Format(buf *TrackedBuffer) {
@@ -320,7 +320,7 @@ func (*JoinTableExpr) ITableExpr()    {}
 // coupled with an optional alias or index hint.
 type AliasedTableExpr struct {
 	Expr  SimpleTableExpr
-	As    TableID
+	As    SQLName
 	Hints *IndexHints
 }
 
@@ -346,7 +346,7 @@ func (*Subquery) ISimpleTableExpr()  {}
 
 // TableName represents a table  name.
 type TableName struct {
-	Name, Qualifier TableID
+	Name, Qualifier SQLName
 }
 
 func (node *TableName) Format(buf *TrackedBuffer) {
@@ -647,7 +647,7 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 // ColName represents a column name.
 type ColName struct {
 	Name      SQLName
-	Qualifier TableID
+	Qualifier SQLName
 }
 
 func (node *ColName) Format(buf *TrackedBuffer) {
@@ -964,20 +964,10 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" on duplicate key update %v", UpdateExprs(node))
 }
 
-type TableID string
-
-func (node TableID) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[strings.ToLower(string(node))]; ok {
-		buf.Myprintf("`%s`", string(node))
-		return
-	}
-	buf.Myprintf("%s", string(node))
-}
-
 type SQLName string
 
 func (node SQLName) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[string(node)]; ok {
+	if _, ok := keywords[strings.ToLower(string(node))]; ok {
 		buf.Myprintf("`%s`", string(node))
 		return
 	}

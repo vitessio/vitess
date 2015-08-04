@@ -69,7 +69,6 @@ func forceEOF(yylex interface{}) {
   updateExpr  *UpdateExpr
   sqlID       SQLName
   sqlIDs      []SQLName
-  tableID     TableID
 }
 
 %token LEX_ERROR
@@ -149,7 +148,7 @@ func forceEOF(yylex interface{}) {
 %type <updateExpr> update_expression
 %type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
 %type <sqlID> sql_id as_lower_opt
-%type <tableID> table_id as_opt
+%type <sqlID> table_id as_opt
 %type <empty> force_eof
 
 %%
@@ -232,7 +231,7 @@ create_statement:
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_CREATE, NewName: TableID($3)}
+    $$ = &DDL{Action: AST_CREATE, NewName: SQLName($3)}
   }
 
 alter_statement:
@@ -247,7 +246,7 @@ alter_statement:
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_ALTER, Table: TableID($3), NewName: TableID($3)}
+    $$ = &DDL{Action: AST_ALTER, Table: SQLName($3), NewName: SQLName($3)}
   }
 
 rename_statement:
@@ -268,7 +267,7 @@ drop_statement:
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDL{Action: AST_DROP, Table: TableID($4)}
+    $$ = &DDL{Action: AST_DROP, Table: SQLName($4)}
   }
 
 analyze_statement:
@@ -1040,7 +1039,7 @@ sql_id:
 table_id:
   ID
   {
-    $$ = TableID($1)
+    $$ = SQLName($1)
   }
 
 openb:
