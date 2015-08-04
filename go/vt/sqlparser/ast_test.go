@@ -94,3 +94,15 @@ func TestLimits(t *testing.T) {
 		t.Errorf("got %v, want %s", err, wantErr)
 	}
 }
+
+func TestIsAggregate(t *testing.T) {
+	f := FuncExpr{Name: "avg"}
+	if !f.IsAggregate() {
+		t.Error("IsAggregate: false, want true")
+	}
+
+	f = FuncExpr{Name: "foo"}
+	if f.IsAggregate() {
+		t.Error("IsAggregate: true, want false")
+	}
+}
