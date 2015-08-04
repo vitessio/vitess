@@ -89,6 +89,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> '&'
 %left <empty> '+' '-'
 %left <empty> '*' '/' '%'
+%left <empty> SHIFT_LEFT SHIFT_RIGHT
 %left <empty> '^'
 %right <empty> '~' UNARY
 %nonassoc <empty> '.'
@@ -697,12 +698,20 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: AST_MOD, Right: $3}
   }
+| value_expression SHIFT_LEFT value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: AST_SHIFT_LEFT, Right: $3}
+  }
+| value_expression SHIFT_RIGHT value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: AST_SHIFT_RIGHT, Right: $3}
+  }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
       $$ = num
     } else {
-      $$ = &UnaryExpr{Operator: AST_PLUS, Expr: $2}
+      $$ = &UnaryExpr{Operator: AST_UPLUS, Expr: $2}
     }
   }
 | '-'  value_expression %prec UNARY
@@ -715,7 +724,7 @@ value_expression:
         $$ = append(NumVal("-"), num...)
       }
     } else {
-      $$ = &UnaryExpr{Operator: AST_MINUS, Expr: $2}
+      $$ = &UnaryExpr{Operator: AST_UMINUS, Expr: $2}
     }
   }
 | '~'  value_expression

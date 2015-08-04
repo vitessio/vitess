@@ -101,6 +101,8 @@ select /* - */ 1 from t where a = b - c
 select /* * */ 1 from t where a = b * c
 select /* / */ 1 from t where a = b / c
 select /* % */ 1 from t where a = b % c
+select /* << */ 1 from t where a = b << c
+select /* >> */ 1 from t where a = b >> c
 select /* % no space */ 1 from t where a = b%c#select /* % no space */ 1 from t where a = b % c
 select /* u+ */ 1 from t where a = +b
 select /* u- */ 1 from t where a = -b

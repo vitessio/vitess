@@ -705,24 +705,26 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // BinaryExpr represents a binary value expression.
 type BinaryExpr struct {
-	Operator    byte
+	Operator    string
 	Left, Right Expr
 }
 
 // BinaryExpr.Operator
 const (
-	AST_BITAND = '&'
-	AST_BITOR  = '|'
-	AST_BITXOR = '^'
-	AST_PLUS   = '+'
-	AST_MINUS  = '-'
-	AST_MULT   = '*'
-	AST_DIV    = '/'
-	AST_MOD    = '%'
+	AST_BITAND      = "&"
+	AST_BITOR       = "|"
+	AST_BITXOR      = "^"
+	AST_PLUS        = "+"
+	AST_MINUS       = "-"
+	AST_MULT        = "*"
+	AST_DIV         = "/"
+	AST_MOD         = "%"
+	AST_SHIFT_LEFT  = "<<"
+	AST_SHIFT_RIGHT = ">>"
 )
 
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %c %v", node.Left, node.Operator, node.Right)
+	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
 }
 
 // UnaryExpr represents a unary value expression.

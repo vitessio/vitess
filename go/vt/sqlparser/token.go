@@ -194,6 +194,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			case '>':
 				tkn.next()
 				return NE, nil
+			case '<':
+				tkn.next()
+				return SHIFT_LEFT, nil
 			case '=':
 				tkn.next()
 				switch tkn.lastChar {
@@ -207,11 +210,16 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return int(ch), nil
 			}
 		case '>':
-			if tkn.lastChar == '=' {
+			switch tkn.lastChar {
+			case '=':
 				tkn.next()
 				return GE, nil
+			case '>':
+				tkn.next()
+				return SHIFT_RIGHT, nil
+			default:
+				return int(ch), nil
 			}
-			return int(ch), nil
 		case '!':
 			if tkn.lastChar == '=' {
 				tkn.next()
