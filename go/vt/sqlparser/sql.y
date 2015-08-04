@@ -76,7 +76,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
-%token <empty> '(' '=' '<' '>' '~'
+%token <empty> '(' '=' '<' '>'
 
 %left <empty> UNION MINUS EXCEPT INTERSECT
 %left <empty> ','
@@ -85,11 +85,13 @@ func forceEOF(yylex interface{}) {
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
-%left <empty> '&' '|' '^'
+%left <empty> '|'
+%left <empty> '&'
 %left <empty> '+' '-'
 %left <empty> '*' '/' '%'
+%left <empty> '^'
+%right <empty> '~' UNARY
 %nonassoc <empty> '.'
-%left <empty> UNARY
 %right <empty> CASE, WHEN, THEN, ELSE
 %left <empty> END
 
@@ -129,7 +131,6 @@ func forceEOF(yylex interface{}) {
 %type <rowTuple> row_tuple
 %type <str> keyword_as_func
 %type <subquery> subquery
-%type <byt> unary_operator
 %type <colName> column_name
 %type <caseExpr> case_expression
 %type <whens> when_expression_list
@@ -696,20 +697,25 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: AST_MOD, Right: $3}
   }
-| unary_operator value_expression %prec UNARY
+| '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
-      switch $1 {
-      case '-':
-        $$ = append(NumVal("-"), num...)
-      case '+':
-        $$ = num
-      default:
-        $$ = &UnaryExpr{Operator: $1, Expr: $2}
-      }
+      $$ = num
     } else {
-      $$ = &UnaryExpr{Operator: $1, Expr: $2}
+      $$ = &UnaryExpr{Operator: AST_PLUS, Expr: $2}
     }
+  }
+| '-'  value_expression %prec UNARY
+  {
+    if num, ok := $2.(NumVal); ok {
+      $$ = append(NumVal("-"), num...)
+    } else {
+      $$ = &UnaryExpr{Operator: AST_MINUS, Expr: $2}
+    }
+  }
+| '~'  value_expression
+  {
+    $$ = &UnaryExpr{Operator: AST_TILDA, Expr: $2}
   }
 | sql_id openb closeb
   {
@@ -740,20 +746,6 @@ keyword_as_func:
 | VALUES
   {
     $$ = "values"
-  }
-
-unary_operator:
-  '+'
-  {
-    $$ = AST_UPLUS
-  }
-| '-'
-  {
-    $$ = AST_UMINUS
-  }
-| '~'
-  {
-    $$ = AST_TILDA
   }
 
 case_expression:
