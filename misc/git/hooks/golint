@@ -35,11 +35,10 @@ done
 
 [ -z "$errors" ] && exit 0
 
-if [[ $- == *i* ]]; then
+# git doesn't give us access to user input, so let's steal it.
+exec < /dev/tty
+if [[ $? -eq 0 ]]; then
   # interactive shell. Prompt the user.
-  # git doesn't give us access to user input, so let's steal it.
-  exec < /dev/tty
-
   echo
   echo "Lint suggestions were found. They're not enforced, but we're pausing"
   echo "to let you know before they get clobbered in the scrollback buffer."
