@@ -75,8 +75,8 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	}
 	// Ensure that we tried once, no retry here
 	// since we are in a transaction.
-	if sbc.ExecCount != 1 {
-		t.Errorf("want 1, got %v", sbc.ExecCount)
+	if execCount := sbc.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v", execCount)
 	}
 }
 
@@ -90,8 +90,8 @@ func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []st
 		t.Errorf("want nil, got %v", err)
 	}
 	// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 2, got %v", sbc.ExecCount)
+	if execCount := sbc.ExecCount.Get(); execCount != 2 {
+		t.Errorf("want 2, got %v", execCount)
 	}
 
 	// Fatal Error, for keyspace that is redirected should succeed.
@@ -105,16 +105,16 @@ func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []st
 			t.Errorf("want '%v', got '%v'", want, err)
 		}
 		// Ensure that we tried only once.
-		if sbc.ExecCount != 1 {
-			t.Errorf("want 1, got %v", sbc.ExecCount)
+		if execCount := sbc.ExecCount.Get(); execCount != 1 {
+			t.Errorf("want 1, got %v", execCount)
 		}
 	} else {
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
 		}
 		// Ensure that we tried 2 times, 1 for retry and 1 for redirect.
-		if sbc.ExecCount != 2 {
-			t.Errorf("want 2, got %v", sbc.ExecCount)
+		if execCount := sbc.ExecCount.Get(); execCount != 2 {
+			t.Errorf("want 2, got %v", execCount)
 		}
 	}
 
@@ -128,7 +128,7 @@ func testVerticalSplitGeneric(t *testing.T, isStreaming bool, f func(shards []st
 		t.Errorf("want '%v', got '%v'", want, err)
 	}
 	// Ensure that we tried once, no retry here.
-	if sbc.ExecCount != 1 {
-		t.Errorf("want 1, got %v", sbc.ExecCount)
+	if execCount := sbc.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v", execCount)
 	}
 }

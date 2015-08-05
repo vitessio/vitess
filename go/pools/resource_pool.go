@@ -65,8 +65,8 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 	rp := &ResourcePool{
 		resources:   make(chan resourceWrapper, maxCap),
 		factory:     factory,
-		capacity:    sync2.AtomicInt64(capacity),
-		idleTimeout: sync2.AtomicDuration(idleTimeout),
+		capacity:    sync2.NewAtomicInt64(int64(capacity)),
+		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
