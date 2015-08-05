@@ -157,7 +157,7 @@ func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteR
 		callerid.GoRPCEffectiveCallerID(executeRequest.EffectiveCallerID),
 		callerid.GoRPCImmediateCallerID(executeRequest.ImmediateCallerID),
 	)
-	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), nil, &executeRequest.QueryRequest, reply)
+	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(executeRequest.Target), &executeRequest.QueryRequest, reply)
 	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
@@ -228,7 +228,7 @@ func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRe
 		callerid.GoRPCEffectiveCallerID(req.EffectiveCallerID),
 		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
 	)
-	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), nil, &req.QueryBatch, reply)
+	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), &req.QueryBatch, reply)
 	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
@@ -243,7 +243,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 		callerid.GoRPCEffectiveCallerID(req.EffectiveCallerID),
 		callerid.GoRPCImmediateCallerID(req.ImmediateCallerID),
 	)
-	tErr := sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), nil, req, reply)
+	tErr := sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), req, reply)
 	tabletserver.AddTabletErrorToSplitQueryResult(tErr, reply)
 	if *tabletserver.RPCErrorOnlyInReply {
 		return nil
