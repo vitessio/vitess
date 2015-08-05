@@ -35,7 +35,7 @@ done
 
 [ -z "$errors" ] && exit 0
 
-if [[ $- == *i* ]]; then
+if [[ /bin/true ]]; then
   # interactive shell. Prompt the user.
   # git doesn't give us access to user input, so let's steal it.
   exec < /dev/tty
