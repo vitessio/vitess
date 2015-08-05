@@ -29,6 +29,9 @@ type FakeQueryService struct {
 	panics                   bool
 	streamExecutePanicsEarly bool
 	panicWait                chan struct{}
+
+	// if set, we will also check Target, ImmediateCallerId and EffectiveCallerId
+	checkExtraFields bool
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
@@ -38,26 +41,30 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 	}
 }
 
-// TestKeyspace is the Keyspace we use for this test
-const TestKeyspace = "test_keyspace"
-
-// TestShard is the Shard we use for this test
-const TestShard = "test_shard"
-
-// TestTabletType is the TabletType we use for this test
-const TestTabletType = pbt.TabletType_UNKNOWN
+// testTarget is the target we use for this test
+var testTarget = &pb.Target{
+	Keyspace:   "test_keyspace",
+	Shard:      "test_shard",
+	TabletType: pbt.TabletType_REPLICA,
+}
 
 const testAsTransaction bool = true
 
 const testSessionID int64 = 5678
 
+func (f *FakeQueryService) checkTarget(name string, target *pb.Target) {
+	if !reflect.DeepEqual(target, testTarget) {
+		f.t.Errorf("invalid Target for %v: for %#v expected %#v", name, target, testTarget)
+	}
+}
+
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if sessionParams.Keyspace != TestKeyspace {
-		f.t.Errorf("invalid keyspace: got %v expected %v", sessionParams.Keyspace, TestKeyspace)
+	if sessionParams.Keyspace != testTarget.Keyspace {
+		f.t.Errorf("invalid keyspace: got %v expected %v", sessionParams.Keyspace, testTarget.Keyspace)
 	}
-	if sessionParams.Shard != TestShard {
-		f.t.Errorf("invalid shard: got %v expected %v", sessionParams.Shard, TestShard)
+	if sessionParams.Shard != testTarget.Shard {
+		f.t.Errorf("invalid shard: got %v expected %v", sessionParams.Shard, testTarget.Shard)
 	}
 	sessionInfo.SessionId = testSessionID
 	return nil
@@ -68,8 +75,12 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionID {
-		f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("Begin", target)
+	} else {
+		if session.SessionId != testSessionID {
+			f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		}
 	}
 	if session.TransactionId != 0 {
 		f.t.Errorf("Begin: invalid TransactionId: got %v expected 0", session.TransactionId)
@@ -125,8 +136,12 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, sessio
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionID {
-		f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("Commit", target)
+	} else {
+		if session.SessionId != testSessionID {
+			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		}
 	}
 	if session.TransactionId != commitTransactionID {
 		f.t.Errorf("Commit: invalid TransactionId: got %v expected %v", session.TransactionId, commitTransactionID)
@@ -175,8 +190,12 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, sess
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if session.SessionId != testSessionID {
-		f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("Rollback", target)
+	} else {
+		if session.SessionId != testSessionID {
+			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
+		}
 	}
 	if session.TransactionId != rollbackTransactionID {
 		f.t.Errorf("Rollback: invalid TransactionId: got %v expected %v", session.TransactionId, rollbackTransactionID)
@@ -231,8 +250,12 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *pb.Target, query
 	if !reflect.DeepEqual(query.BindVariables, executeBindVars) {
 		f.t.Errorf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
 	}
-	if query.SessionId != testSessionID {
-		f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("Execute", target)
+	} else {
+		if query.SessionId != testSessionID {
+			f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		}
 	}
 	if query.TransactionId != executeTransactionID {
 		f.t.Errorf("invalid Execute.Query.TransactionId: got %v expected %v", query.TransactionId, executeTransactionID)
@@ -325,8 +348,12 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target,
 	if !reflect.DeepEqual(query.BindVariables, streamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.Query.BindVariables: got %v expected %v", query.BindVariables, streamExecuteBindVars)
 	}
-	if query.SessionId != testSessionID {
-		f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("StreamExecute", target)
+	} else {
+		if query.SessionId != testSessionID {
+			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
+		}
 	}
 	if err := sendReply(&streamExecuteQueryResult1); err != nil {
 		f.t.Errorf("sendReply1 failed: %v", err)
@@ -553,8 +580,12 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, 
 	if !reflect.DeepEqual(queryList.Queries, executeBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
 	}
-	if queryList.SessionId != testSessionID {
-		f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
+	if f.checkExtraFields {
+		f.checkTarget("ExecuteBatch", target)
+	} else {
+		if queryList.SessionId != testSessionID {
+			f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
+		}
 	}
 	if queryList.AsTransaction != testAsTransaction {
 		f.t.Errorf("invalid ExecuteBatch.QueryList.AsTransaction: got %v expected %v", queryList.AsTransaction, testAsTransaction)
@@ -666,6 +697,9 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if f.checkExtraFields {
+		f.checkTarget("SplitQuery", target)
 	}
 	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
@@ -828,45 +862,64 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 	// make sure we use the right client
 	*tabletconn.TabletProtocol = protocol
 
-	// create a connection
+	// create a connection, using sessionId
 	ctx := context.Background()
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, TestKeyspace, TestShard, TestTabletType, 30*time.Second)
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	defer conn.Close()
 
 	// run the normal tests
 	testBegin(t, conn)
-	testBegin2(t, conn)
 	testCommit(t, conn)
-	testCommit2(t, conn)
 	testRollback(t, conn)
-	testRollback2(t, conn)
 	testExecute(t, conn)
-	testExecute2(t, conn)
 	testStreamExecute(t, conn)
-	testStreamExecute2(t, conn)
 	testExecuteBatch(t, conn)
-	testExecuteBatch2(t, conn)
 	testSplitQuery(t, conn)
 	testStreamHealth(t, conn)
 
-	// force panics, make sure they're caught
+	// create a new connection that expects the extra fields
+	conn.Close()
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_REPLICA, 30*time.Second)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+
+	// run the tests that expect extra fields
+	fake.checkExtraFields = true
+	testBegin2(t, conn)
+	testCommit2(t, conn)
+	testRollback2(t, conn)
+	testExecute2(t, conn)
+	testStreamExecute2(t, conn)
+	testExecuteBatch2(t, conn)
+	testSplitQuery(t, conn)
+
+	// force panics, make sure they're caught (with extra fields)
 	fake.panics = true
-	testBeginPanics(t, conn)
 	testBegin2Panics(t, conn)
-	testCommitPanics(t, conn)
 	testCommit2Panics(t, conn)
-	testRollbackPanics(t, conn)
 	testRollback2Panics(t, conn)
-	testExecutePanics(t, conn)
 	testExecute2Panics(t, conn)
-	testStreamExecutePanics(t, conn, fake)
 	testStreamExecute2Panics(t, conn, fake)
-	testExecuteBatchPanics(t, conn)
 	testExecuteBatch2Panics(t, conn)
 	testSplitQueryPanics(t, conn)
 	testStreamHealthPanics(t, conn)
+	conn.Close()
+
+	// force panic without extra fields
+	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	fake.checkExtraFields = false
+	testBeginPanics(t, conn)
+	testCommitPanics(t, conn)
+	testRollbackPanics(t, conn)
+	testExecutePanics(t, conn)
+	testExecuteBatchPanics(t, conn)
+	testStreamExecutePanics(t, conn, fake)
 	fake.panics = false
+	conn.Close()
 }

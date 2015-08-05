@@ -88,6 +88,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 
 	req := &pb.ExecuteRequest{
+		Target:        conn.target,
 		Query:         tproto.BoundQueryToProto3(query, bindVars),
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
@@ -113,6 +114,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	}
 
 	req := &pb.ExecuteBatchRequest{
+		Target:        conn.target,
 		Queries:       make([]*pb.BoundQuery, len(queries)),
 		AsTransaction: asTransaction,
 		TransactionId: transactionID,
@@ -142,6 +144,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 
 	req := &pb.StreamExecuteRequest{
+		Target:    conn.target,
 		Query:     tproto.BoundQueryToProto3(query, bindVars),
 		SessionId: conn.sessionID,
 	}
@@ -183,6 +186,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 
 	req := &pb.BeginRequest{
+		Target:    conn.target,
 		SessionId: conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, req)
@@ -206,6 +210,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 
 	req := &pb.CommitRequest{
+		Target:        conn.target,
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
 	}
@@ -230,6 +235,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 
 	req := &pb.RollbackRequest{
+		Target:        conn.target,
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
 	}
@@ -255,6 +261,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 
 	req := &pb.SplitQueryRequest{
+		Target:      conn.target,
 		Query:       tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
 		SplitColumn: splitColumn,
 		SplitCount:  int64(splitCount),

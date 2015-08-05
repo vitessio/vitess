@@ -143,6 +143,7 @@ func (conn *TabletBson) Execute2(ctx context.Context, query string, bindVars map
 	}
 
 	req := &tproto.ExecuteRequest{
+		Target: conn.target,
 		QueryRequest: tproto.Query{
 			Sql:           query,
 			BindVariables: bindVars,
@@ -206,6 +207,7 @@ func (conn *TabletBson) ExecuteBatch2(ctx context.Context, queries []tproto.Boun
 	}
 
 	req := tproto.ExecuteBatchRequest{
+		Target: conn.target,
 		QueryBatch: tproto.QueryList{
 			Queries:       queries,
 			AsTransaction: asTransaction,
@@ -290,13 +292,15 @@ func (conn *TabletBson) StreamExecute2(ctx context.Context, query string, bindVa
 		return nil, nil, tabletconn.ConnClosed
 	}
 
-	q := &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+	req := &tproto.StreamExecuteRequest{
+		Target: conn.target,
+		Query: &tproto.Query{
+			Sql:           query,
+			BindVariables: bindVars,
+			TransactionId: transactionID,
+			SessionId:     conn.sessionID,
+		},
 	}
-	req := &tproto.StreamExecuteRequest{Query: q}
 	// Use QueryResult instead of StreamExecuteResult for now, due to backwards compatability reasons.
 	// It'll be easuer to migrate all end-points to using StreamExecuteResult instead of
 	// maintaining a mixture of QueryResult and StreamExecuteResult channel returns.
@@ -373,6 +377,7 @@ func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err er
 	}
 
 	beginRequest := &tproto.BeginRequest{
+		Target:    conn.target,
 		SessionId: conn.sessionID,
 	}
 	beginResponse := new(tproto.BeginResponse)
@@ -418,6 +423,7 @@ func (conn *TabletBson) Commit2(ctx context.Context, transactionID int64) error 
 	}
 
 	commitRequest := &tproto.CommitRequest{
+		Target:        conn.target,
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
@@ -464,6 +470,7 @@ func (conn *TabletBson) Rollback2(ctx context.Context, transactionID int64) erro
 	}
 
 	rollbackRequest := &tproto.RollbackRequest{
+		Target:        conn.target,
 		SessionId:     conn.sessionID,
 		TransactionId: transactionID,
 	}
@@ -489,6 +496,7 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return
 	}
 	req := &tproto.SplitQueryRequest{
+		Target:      conn.target,
 		Query:       query,
 		SplitColumn: splitColumn,
 		SplitCount:  splitCount,
