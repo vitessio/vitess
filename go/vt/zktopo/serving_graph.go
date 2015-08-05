@@ -148,7 +148,7 @@ func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard s
 }
 
 // UpdateSrvShard is part of the topo.Server interface
-func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data := jscfg.ToJSON(srvShard)
 
@@ -168,16 +168,16 @@ func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard st
 }
 
 // GetSrvShard is part of the topo.Server interface
-func (zkts *Server) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (zkts *Server) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
 	path := zkPathForVtShard(cell, keyspace, shard)
-	data, stat, err := zkts.zconn.Get(path)
+	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	srvShard := topo.NewSrvShard(int64(stat.Version()))
+	srvShard := &pb.SrvShard{}
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvShard); err != nil {
 			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)

@@ -219,8 +219,8 @@ type fakeTopoRemoteMaster struct {
 	remoteCell string
 }
 
-func (ft *fakeTopoRemoteMaster) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
-	return &topo.SrvShard{
+func (ft *fakeTopoRemoteMaster) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
+	return &pb.SrvShard{
 		Name:       shard,
 		MasterCell: ft.remoteCell,
 	}, nil

@@ -255,11 +255,11 @@ type Server interface {
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
-	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *SrvShard) error
+	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error
 
 	// GetSrvShard reads a SrvShard record.
 	// Can return ErrNoNode.
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*SrvShard, error)
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
 
 	// DeleteSrvShard deletes a SrvShard record.
 	// Can return ErrNoNode.
