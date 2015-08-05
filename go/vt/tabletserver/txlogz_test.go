@@ -26,7 +26,7 @@ func testHandler(req *http.Request, t *testing.T) {
 		StartTime:     time.Now(),
 		Queries:       []string{"select * from test"},
 		Conclusion:    "unknown",
-		LogToFile:     sync2.AtomicInt32(0),
+		LogToFile:     sync2.AtomicInt32{},
 	}
 	txConn.EndTime = txConn.StartTime
 	response = httptest.NewRecorder()

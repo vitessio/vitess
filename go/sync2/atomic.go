@@ -10,22 +10,34 @@ import (
 	"time"
 )
 
-type AtomicInt32 int32
+// AtomicInt32 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int32 functions.
+type AtomicInt32 struct {
+	int32
+}
 
+// NewAtomicInt32 initializes a new AtomicInt32 with a given value.
+func NewAtomicInt32(n int32) AtomicInt32 {
+	return AtomicInt32{n}
+}
+
+// Add atomically adds n to the value.
 func (i *AtomicInt32) Add(n int32) int32 {
-	return atomic.AddInt32((*int32)(i), n)
+	return atomic.AddInt32(&i.int32, n)
 }
 
+// Set atomically sets n as new value.
 func (i *AtomicInt32) Set(n int32) {
-	atomic.StoreInt32((*int32)(i), n)
+	atomic.StoreInt32(&i.int32, n)
 }
 
+// Get atomically returns the current value.
 func (i *AtomicInt32) Get() int32 {
-	return atomic.LoadInt32((*int32)(i))
+	return atomic.LoadInt32(&i.int32)
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (i *AtomicInt32) CompareAndSwap(oldval, newval int32) (swapped bool) {
-	return atomic.CompareAndSwapInt32((*int32)(i), oldval, newval)
+	return atomic.CompareAndSwapInt32(&i.int32, oldval, newval)
 }
 
 type AtomicUint32 uint32
