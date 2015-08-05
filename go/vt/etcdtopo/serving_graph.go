@@ -144,7 +144,7 @@ func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // UpdateSrvShard implements topo.Server.
-func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard string, srvShard *pb.SrvShard) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
@@ -157,7 +157,7 @@ func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard s
 }
 
 // GetSrvShard implements topo.Server.
-func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*topo.SrvShard, error) {
+func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard string) (*pb.SrvShard, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -171,7 +171,7 @@ func (s *Server) GetSrvShard(ctx context.Context, cellName, keyspace, shard stri
 		return nil, ErrBadResponse
 	}
 
-	value := topo.NewSrvShard(int64(resp.Node.ModifiedIndex))
+	value := &pb.SrvShard{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving shard data (%v): %q", err, resp.Node.Value)
 	}

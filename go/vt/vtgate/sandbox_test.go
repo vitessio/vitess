@@ -268,7 +268,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
-func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pbt.SrvShard, error) {
 	return nil, fmt.Errorf("Unsupported")
 }
 
