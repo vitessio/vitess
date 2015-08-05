@@ -102,7 +102,7 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		maxInFlight: int64(maxInFlight),
-		inFlight:    0,
+		inFlight:    sync2.NewAtomicInt64(0),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),

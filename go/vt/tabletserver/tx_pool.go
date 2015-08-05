@@ -77,7 +77,7 @@ func NewTxPool(
 	axp := &TxPool{
 		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats),
 		activePool:        pools.NewNumbered(),
-		lastID:            sync2.AtomicInt64(time.Now().UnixNano()),
+		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:           sync2.AtomicDuration(timeout),
 		poolTimeout:       sync2.AtomicDuration(poolTimeout),
 		ticks:             timer.NewTimer(timeout / 10),

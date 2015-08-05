@@ -164,8 +164,8 @@ func TestSelectEqual(t *testing.T) {
 	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)

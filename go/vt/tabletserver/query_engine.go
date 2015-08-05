@@ -168,16 +168,16 @@ func NewQueryEngine(config Config) *QueryEngine {
 
 	// Vars
 	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
-	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * spotCheckMultiplier)
+	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
 	qe.strictTableAcl = config.StrictTableAcl
 	qe.enableTableAclDryRun = config.EnableTableAclDryRun
 	qe.exemptACL = config.TableAclExemptACL
-	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
-	qe.maxDMLRows = sync2.AtomicInt64(config.MaxDMLRows)
-	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
+	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
+	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
 	// Loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
