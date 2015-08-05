@@ -18,7 +18,7 @@ type TopoReader interface {
 
 	// GetSrvShard returns information about a shard in a
 	// particular cell and keyspace (as specified by the GetSrvShardArgs).
-	GetSrvShard(context.Context, *GetSrvShardArgs, *SrvShard) error
+	GetSrvShard(context.Context, *GetSrvShardArgs, *pb.SrvShard) error
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).

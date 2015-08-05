@@ -71,6 +71,11 @@ class TestTabletManager(unittest.TestCase):
       t.reset_replication()
       t.clean_dbs()
 
+  def _check_srv_shard(self):
+    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
+                                     'test_keyspace/0'])
+    self.assertEqual(srvShard['master_cell'], 'test_nj')
+
   # run twice to check behavior with existing znode data
   def test_sanity(self):
     self._test_sanity()
@@ -83,9 +88,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', '-rebuild_srv_shards', 'test_keyspace'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
 
     # if these statements don't run before the tablet it will wedge
     # waiting for the db to become accessible. this is more a bug than
@@ -125,9 +128,7 @@ class TestTabletManager(unittest.TestCase):
     # break because we only have a single master, no slaves
     utils.run_vtctl(['ValidateShard', '-ping-tablets=false',
                      'test_keyspace/0'])
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
 
     tablet_62344.kill_vttablet()
 
@@ -142,15 +143,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/*'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
 
     tablet_62044.scrap(force=True)
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
 
 
   _create_vt_select_test = '''create table vt_select_test (
@@ -171,9 +168,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
 
@@ -229,9 +224,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
-    srvShard = utils.run_vtctl_json(['GetSrvShard', 'test_nj',
-                                     'test_keyspace/0'])
-    self.assertEqual(srvShard['MasterCell'], 'test_nj')
+    self._check_srv_shard()
 
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
                           self._populate_vt_select_test)

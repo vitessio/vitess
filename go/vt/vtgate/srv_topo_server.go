@@ -43,7 +43,7 @@ type SrvTopoServer interface {
 
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error)
 
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error)
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
 
 	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error)
 }
@@ -138,7 +138,7 @@ type srvShardEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
-	value         *topo.SrvShard
+	value         *pb.SrvShard
 	lastError     error
 	lastErrorCtx  context.Context
 }
@@ -322,7 +322,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, 
 }
 
 // GetSrvShard returns SrvShard object for the given cell, keyspace, and shard.
-func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -444,7 +444,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 		remote = true
 		server.counts.Add(remoteQueryCategory, 1)
 		server.endPointCounters.remoteLookups.Add(key, 1)
-		var ss *topo.SrvShard
+		var ss *pb.SrvShard
 		ss, err = server.topoServer.GetSrvShard(newCtx, cell, keyspace, shard)
 		if err != nil {
 			server.counts.Add(remoteErrorCategory, 1)
@@ -573,7 +573,7 @@ type SrvShardCacheStatus struct {
 	Cell         string
 	Keyspace     string
 	Shard        string
-	Value        *topo.SrvShard
+	Value        *pb.SrvShard
 	LastError    error
 	LastErrorCtx context.Context
 }
