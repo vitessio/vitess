@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2012 The Go Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
@@ -9,10 +9,17 @@
 # it has execute permissions.
 #
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$')
 
 [ -z "$gofiles" ] && exit 0
-unformatted=$(goimports -l=true $gofiles 2>&1 | awk -F: '{print $1}')
+# goimports may fail. Recover its return value using PIPESTATUS[0].
+unformatted=$(goimports -l=true $gofiles 2>&1 | awk -F: '{print $1}'; exit ${PIPESTATUS[0]})
+if [ $? -ne 0 ]; then
+  echo >&2 "ERROR: Failed to run goimports."
+  echo >&2
+  goimports -l=true $gofiles 1>&2
+  exit 1
+fi
 [ -z "$unformatted" ] && exit 0
 
 # Some files are not goimports'd. Print message and fail.
