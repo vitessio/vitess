@@ -5,6 +5,7 @@ select 1.2e+1 from t
 select 1.2e-1 from t
 select 08.3 from t
 select -1 from t where b = -2
+select - -1 from t#select 1 from t
 select 1 from t // aa#select 1 from t
 select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
@@ -81,7 +82,9 @@ select /* is not null */ 1 from t where a is not null
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
-select /* <> */ 1 from t where a != b
+select /* > */ 1 from t where a > b
+select /* != */ 1 from t where a != b
+select /* <> */ 1 from t where a <> b#select /* <> */ 1 from t where a != b
 select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)
@@ -98,6 +101,8 @@ select /* - */ 1 from t where a = b - c
 select /* * */ 1 from t where a = b * c
 select /* / */ 1 from t where a = b / c
 select /* % */ 1 from t where a = b % c
+select /* << */ 1 from t where a = b << c
+select /* >> */ 1 from t where a = b >> c
 select /* % no space */ 1 from t where a = b%c#select /* % no space */ 1 from t where a = b % c
 select /* u+ */ 1 from t where a = +b
 select /* u- */ 1 from t where a = -b
