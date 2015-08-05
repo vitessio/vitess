@@ -15,7 +15,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -27,9 +26,9 @@ import (
 // FakeQueryService has the server side of this fake
 type FakeQueryService struct {
 	t                        *testing.T
-	hasError                 bool
 	panics                   bool
 	streamExecutePanicsEarly bool
+	panicWait                chan struct{}
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
@@ -52,28 +51,6 @@ const testAsTransaction bool = true
 
 const testSessionID int64 = 5678
 
-var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, "generic error")
-
-const expectedErrMatch string = "error: generic error"
-
-// Verifies the returned error has the properties that we expect.
-func verifyError(t *testing.T, err error, method string) {
-	if err == nil {
-		t.Errorf("%s was expecting an error, didn't get one", method)
-		return
-	}
-	if se, ok := err.(*tabletconn.ServerError); ok {
-		if se.Code != tabletconn.ERR_NORMAL {
-			t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, se.Code, tabletconn.ERR_NORMAL)
-		}
-	} else {
-		t.Errorf("Unexpected error type from %s: got %v, wanted tabletconn.ServerError", method, reflect.TypeOf(err))
-	}
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from %s: got %v, wanted err containing %v", method, err, expectedErrMatch)
-	}
-}
-
 // GetSessionId is part of the queryservice.QueryService interface
 func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if sessionParams.Keyspace != TestKeyspace {
@@ -88,9 +65,6 @@ func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 
 // Begin is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -118,13 +92,6 @@ func testBegin(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testBeginError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBeginError")
-	ctx := context.Background()
-	_, err := conn.Begin(ctx)
-	verifyError(t, err, "Begin")
-}
-
 func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBeginPanics")
 	ctx := context.Background()
@@ -145,13 +112,6 @@ func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testBegin2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBegin2Error")
-	ctx := context.Background()
-	_, err := conn.Begin2(ctx)
-	verifyError(t, err, "Begin2")
-}
-
 func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBegin2Panics")
 	ctx := context.Background()
@@ -162,9 +122,6 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 
 // Commit is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, session *proto.Session) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -188,13 +145,6 @@ func testCommit(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommitError")
-	ctx := context.Background()
-	err := conn.Commit(ctx, commitTransactionID)
-	verifyError(t, err, "Commit")
-}
-
 func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitPanics")
 	ctx := context.Background()
@@ -212,13 +162,6 @@ func testCommit2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testCommit2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testCommit2Error")
-	ctx := context.Background()
-	err := conn.Commit2(ctx, commitTransactionID)
-	verifyError(t, err, "Commit2")
-}
-
 func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommit2Panics")
 	ctx := context.Background()
@@ -229,9 +172,6 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 
 // Rollback is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -255,13 +195,6 @@ func testRollback(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollbackError")
-	ctx := context.Background()
-	err := conn.Rollback(ctx, commitTransactionID)
-	verifyError(t, err, "Rollback")
-}
-
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollbackPanics")
 	ctx := context.Background()
@@ -279,13 +212,6 @@ func testRollback2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testRollback2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testRollback2Error")
-	ctx := context.Background()
-	err := conn.Rollback2(ctx, commitTransactionID)
-	verifyError(t, err, "Rollback2")
-}
-
 func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollback2Panics")
 	ctx := context.Background()
@@ -296,9 +222,6 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 
 // Execute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -375,20 +298,6 @@ func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testExecuteError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecuteError")
-	ctx := context.Background()
-	_, err := conn.Execute(ctx, executeQuery, executeBindVars, executeTransactionID)
-	verifyError(t, err, "Execute")
-}
-
-func testExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testExecute2Error")
-	ctx := context.Background()
-	_, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
-	verifyError(t, err, "Execute")
-}
-
 func testExecutePanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecutePanics")
 	ctx := context.Background()
@@ -404,9 +313,6 @@ func testExecute2Panics(t *testing.T, conn tabletconn.TabletConn) {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
 }
-
-var panicWait chan struct{}
-var errorWait chan struct{}
 
 // StreamExecute is part of the queryservice.QueryService interface
 func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
@@ -427,14 +333,9 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target,
 	}
 	if f.panics && !f.streamExecutePanicsEarly {
 		// wait until the client gets the response, then panics
-		<-panicWait
+		<-f.panicWait
+		f.panicWait = make(chan struct{}) // for next test
 		panic(fmt.Errorf("test-triggered panic late"))
-	}
-	if f.hasError {
-		// wait until the client has the response, since all streaming implementation may not
-		// send previous messages if an error has been triggered.
-		<-errorWait
-		return testTabletError
 	}
 	if err := sendReply(&streamExecuteQueryResult2); err != nil {
 		f.t.Errorf("sendReply2 failed: %v", err)
@@ -512,36 +413,6 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamExecuteError")
-	ctx := context.Background()
-	stream, errFunc, err := conn.StreamExecute(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
-	if err != nil {
-		t.Fatalf("StreamExecute failed: %v", err)
-	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute failed: cannot read result1")
-	}
-	if len(qr.Rows) == 0 {
-		qr.Rows = nil
-	}
-	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
-		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
-	}
-	// signal to the server that the first result has been received
-	close(errorWait)
-	// After 1 result, we expect to get an error (no more results).
-	qr, ok = <-stream
-	if ok {
-		t.Fatalf("StreamExecute channel wasn't closed")
-	}
-	err = errFunc()
-	verifyError(t, err, "StreamExecute")
-	// reset state for the test
-	errorWait = make(chan struct{})
-}
-
 func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
 	t.Log("testStreamExecutePanics")
 	// early panic is before sending the Fields, that is returned
@@ -581,15 +452,13 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
-	close(panicWait)
+	close(fake.panicWait)
 	if _, ok := <-stream; ok {
 		t.Fatalf("StreamExecute returned more results")
 	}
 	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
-	// Make a new panicWait channel, to reset the state to the beginning of the test
-	panicWait = make(chan struct{})
 }
 
 func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
@@ -626,36 +495,6 @@ func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
 	if err := errFunc(); err != nil {
 		t.Fatalf("StreamExecute2 errFunc failed: %v", err)
 	}
-}
-
-func testStreamExecute2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testStreamExecute2Error")
-	ctx := context.Background()
-	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
-	if err != nil {
-		t.Fatalf("StreamExecute2 failed: %v", err)
-	}
-	qr, ok := <-stream
-	if !ok {
-		t.Fatalf("StreamExecute2 failed: cannot read result1")
-	}
-	if len(qr.Rows) == 0 {
-		qr.Rows = nil
-	}
-	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
-		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
-	}
-	// signal to the server that the first result has been received
-	close(errorWait)
-	// After 1 result, we expect to get an error (no more results).
-	qr, ok = <-stream
-	if ok {
-		t.Fatalf("StreamExecute2 channel wasn't closed")
-	}
-	err = errFunc()
-	verifyError(t, err, "StreamExecute2")
-	// reset state for the test
-	errorWait = make(chan struct{})
 }
 
 func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
@@ -697,22 +536,17 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 	if !reflect.DeepEqual(*qr, streamExecuteQueryResult1) {
 		t.Errorf("Unexpected result1 from StreamExecute2: got %v wanted %v", qr, streamExecuteQueryResult1)
 	}
-	close(panicWait)
+	close(fake.panicWait)
 	if _, ok := <-stream; ok {
 		t.Fatalf("StreamExecute2 returned more results")
 	}
 	if err := errFunc(); err == nil || !strings.Contains(err.Error(), "caught test panic") {
 		t.Fatalf("unexpected panic error: %v", err)
 	}
-	// Make a new panicWait channel, to reset the state to the beginning of the test
-	panicWait = make(chan struct{})
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
 func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -800,13 +634,6 @@ func testExecuteBatch(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testExecuteBatchError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBatchExecuteError")
-	ctx := context.Background()
-	_, err := conn.ExecuteBatch(ctx, executeBatchQueries, true, executeBatchTransactionID)
-	verifyError(t, err, "ExecuteBatch")
-}
-
 func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatchPanics")
 	ctx := context.Background()
@@ -827,13 +654,6 @@ func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	}
 }
 
-func testExecuteBatch2Error(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testBatchExecute2Error")
-	ctx := context.Background()
-	_, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
-	verifyError(t, err, "ExecuteBatch")
-}
-
 func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch2Panics")
 	ctx := context.Background()
@@ -844,9 +664,6 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	if f.hasError {
-		return testTabletError
-	}
 	if f.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -896,13 +713,6 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	if !reflect.DeepEqual(qsl, splitQueryQuerySplitList) {
 		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, splitQueryQuerySplitList)
 	}
-}
-
-func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn) {
-	t.Log("testSplitQueryError")
-	ctx := context.Background()
-	_, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
-	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -1005,14 +815,11 @@ func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn) {
 
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) *FakeQueryService {
-	// Make the synchronization channels on init, so there's no state shared between servers
-	panicWait = make(chan struct{})
-	errorWait = make(chan struct{})
-
 	return &FakeQueryService{
 		t:      t,
 		panics: false,
 		streamExecutePanicsEarly: false,
+		panicWait:                make(chan struct{}),
 	}
 }
 
@@ -1044,23 +851,6 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 	testExecuteBatch2(t, conn)
 	testSplitQuery(t, conn)
 	testStreamHealth(t, conn)
-
-	// fake should return an error, make sure errors are handled properly
-	fake.hasError = true
-	testBeginError(t, conn)
-	testBegin2Error(t, conn)
-	testCommitError(t, conn)
-	testCommit2Error(t, conn)
-	testRollbackError(t, conn)
-	testRollback2Error(t, conn)
-	testExecuteError(t, conn)
-	testExecute2Error(t, conn)
-	testStreamExecuteError(t, conn)
-	testStreamExecute2Error(t, conn)
-	testExecuteBatchError(t, conn)
-	testExecuteBatch2Error(t, conn)
-	testSplitQueryError(t, conn)
-	fake.hasError = false
 
 	// force panics, make sure they're caught
 	fake.panics = true

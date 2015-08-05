@@ -33,14 +33,15 @@ func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdReques
 	defer q.server.HandlePanic(&err)
 
 	sessionInfo := new(proto.SessionInfo)
-	gsiErr := q.server.GetSessionId(&proto.SessionParams{
+	if err := q.server.GetSessionId(&proto.SessionParams{
 		Keyspace: request.Keyspace,
 		Shard:    request.Shard,
-	}, sessionInfo)
+	}, sessionInfo); err != nil {
+		return nil, err
+	}
 
 	return &pb.GetSessionIdResponse{
 		SessionId: sessionInfo.SessionId,
-		Error:     tabletserver.TabletErrorToRPCError(gsiErr),
 	}, nil
 }
 
@@ -52,16 +53,13 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		request.GetImmediateCallerId(),
 	)
 	reply := new(mproto.QueryResult)
-	execErr := q.server.Execute(ctx, request.Target, &proto.Query{
+	if err := q.server.Execute(ctx, request.Target, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
-	}, reply)
-	if execErr != nil {
-		return &pb.ExecuteResponse{
-			Error: tabletserver.TabletErrorToRPCError(execErr),
-		}, nil
+	}, reply); err != nil {
+		return nil, err
 	}
 	return &pb.ExecuteResponse{
 		Result: mproto.QueryResultToProto3(reply),
@@ -76,16 +74,13 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 		request.GetImmediateCallerId(),
 	)
 	reply := new(proto.QueryResultList)
-	execErr := q.server.ExecuteBatch(ctx, request.Target, &proto.QueryList{
+	if err := q.server.ExecuteBatch(ctx, request.Target, &proto.QueryList{
 		Queries:       proto.Proto3ToBoundQueryList(request.Queries),
 		SessionId:     request.SessionId,
 		AsTransaction: request.AsTransaction,
 		TransactionId: request.TransactionId,
-	}, reply)
-	if execErr != nil {
-		return &pb.ExecuteBatchResponse{
-			Error: tabletserver.TabletErrorToRPCError(execErr),
-		}, nil
+	}, reply); err != nil {
+		return nil, err
 	}
 	return &pb.ExecuteBatchResponse{
 		Results: proto.QueryResultListToProto3(reply.List),
@@ -99,7 +94,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	seErr := q.server.StreamExecute(ctx, request.Target, &proto.Query{
+	return q.server.StreamExecute(ctx, request.Target, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
@@ -108,15 +103,6 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 			Result: mproto.QueryResultToProto3(reply),
 		})
 	})
-	if seErr != nil {
-		response := &pb.StreamExecuteResponse{
-			Error: tabletserver.TabletErrorToRPCError(seErr),
-		}
-		if err := stream.Send(response); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Begin is part of the queryservice.QueryServer interface
@@ -127,12 +113,10 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 		request.GetImmediateCallerId(),
 	)
 	txInfo := new(proto.TransactionInfo)
-	if beginErr := q.server.Begin(ctx, request.Target, &proto.Session{
+	if err := q.server.Begin(ctx, request.Target, &proto.Session{
 		SessionId: request.SessionId,
-	}, txInfo); beginErr != nil {
-		return &pb.BeginResponse{
-			Error: tabletserver.TabletErrorToRPCError(beginErr),
-		}, nil
+	}, txInfo); err != nil {
+		return nil, err
 	}
 
 	return &pb.BeginResponse{
@@ -147,13 +131,13 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	commitErr := q.server.Commit(ctx, request.Target, &proto.Session{
+	if err := q.server.Commit(ctx, request.Target, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
-	})
-	return &pb.CommitResponse{
-		Error: tabletserver.TabletErrorToRPCError(commitErr),
-	}, nil
+	}); err != nil {
+		return nil, err
+	}
+	return &pb.CommitResponse{}, nil
 }
 
 // Rollback is part of the queryservice.QueryServer interface
@@ -163,14 +147,14 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	rollbackErr := q.server.Rollback(ctx, request.Target, &proto.Session{
+	if err := q.server.Rollback(ctx, request.Target, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
-	})
+	}); err != nil {
+		return nil, err
+	}
 
-	return &pb.RollbackResponse{
-		Error: tabletserver.TabletErrorToRPCError(rollbackErr),
-	}, nil
+	return &pb.RollbackResponse{}, nil
 }
 
 // SplitQuery is part of the queryservice.QueryServer interface
@@ -181,15 +165,13 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 		request.GetImmediateCallerId(),
 	)
 	reply := &proto.SplitQueryResult{}
-	if sqErr := q.server.SplitQuery(ctx, request.Target, &proto.SplitQueryRequest{
+	if err := q.server.SplitQuery(ctx, request.Target, &proto.SplitQueryRequest{
 		Query:       *proto.Proto3ToBoundQuery(request.Query),
 		SplitColumn: request.SplitColumn,
 		SplitCount:  int(request.SplitCount),
 		SessionID:   request.SessionId,
-	}, reply); sqErr != nil {
-		return &pb.SplitQueryResponse{
-			Error: tabletserver.TabletErrorToRPCError(sqErr),
-		}, nil
+	}, reply); err != nil {
+		return nil, err
 	}
 	return &pb.SplitQueryResponse{
 		Queries: proto.QuerySplitsToProto3(reply.Queries),

@@ -14,14 +14,12 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const protocolName = "grpc"
@@ -68,10 +66,6 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 			cc.Close()
 			return nil, err
 		}
-		if gsir.Error != nil {
-			cc.Close()
-			return nil, tabletErrorFromRPCError(gsir.Error)
-		}
 		result.sessionID = gsir.SessionId
 	} else {
 		// we use target
@@ -102,9 +96,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
 	}
-	if er.Error != nil {
-		return nil, tabletErrorFromRPCError(er.Error)
-	}
 	return mproto.Proto3ToQueryResult(er.Result), nil
 }
 
@@ -133,9 +124,6 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	ebr, err := conn.c.ExecuteBatch(ctx, req)
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
-	}
-	if ebr.Error != nil {
-		return nil, tabletErrorFromRPCError(ebr.Error)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
 }
@@ -173,11 +161,6 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				close(sr)
 				return
 			}
-			if ser.Error != nil {
-				finalError = tabletErrorFromRPCError(ser.Error)
-				close(sr)
-				return
-			}
 			sr <- mproto.Proto3ToQueryResult(ser.Result)
 		}
 	}()
@@ -206,9 +189,6 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	if err != nil {
 		return 0, tabletErrorFromGRPC(err)
 	}
-	if br.Error != nil {
-		return 0, tabletErrorFromRPCError(br.Error)
-	}
 	return br.TransactionId, nil
 }
 
@@ -229,12 +209,9 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
 	}
-	cr, err := conn.c.Commit(ctx, req)
+	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
 		return tabletErrorFromGRPC(err)
-	}
-	if cr.Error != nil {
-		return tabletErrorFromRPCError(cr.Error)
 	}
 	return nil
 }
@@ -256,12 +233,9 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 		TransactionId: transactionID,
 		SessionId:     conn.sessionID,
 	}
-	rr, err := conn.c.Rollback(ctx, req)
+	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
 		return tabletErrorFromGRPC(err)
-	}
-	if rr.Error != nil {
-		return tabletErrorFromRPCError(rr.Error)
 	}
 	return nil
 }
@@ -289,9 +263,6 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
-	}
-	if sqr.Error != nil {
-		return nil, tabletErrorFromRPCError(sqr.Error)
 	}
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
@@ -370,20 +341,4 @@ func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 // gRPC error.
 func tabletErrorFromGRPC(err error) error {
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
-}
-
-// tabletErrorFromRPCError reconstructs a tablet error from the
-// RPCError, using the RPCError code.
-func tabletErrorFromRPCError(rpcErr *pbv.RPCError) error {
-	ve := vterrors.FromVtRPCError(rpcErr)
-
-	// see if the range is in the tablet error range
-	if ve.Code >= int64(pbv.ErrorCode_TabletError) && ve.Code <= int64(pbv.ErrorCode_UnknownTabletError) {
-		return &tabletconn.ServerError{
-			Code: int(ve.Code - int64(pbv.ErrorCode_TabletError)),
-			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
-		}
-	}
-
-	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }

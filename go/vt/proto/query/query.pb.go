@@ -398,20 +398,12 @@ func (m *GetSessionIdRequest) GetImmediateCallerId() *VTGateCallerID {
 
 // GetSessionIdResponse is the returned value from GetSessionId
 type GetSessionIdResponse struct {
-	Error     *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	SessionId int64           `protobuf:"varint,2,opt,name=session_id" json:"session_id,omitempty"`
+	SessionId int64 `protobuf:"varint,1,opt,name=session_id" json:"session_id,omitempty"`
 }
 
 func (m *GetSessionIdResponse) Reset()         { *m = GetSessionIdResponse{} }
 func (m *GetSessionIdResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSessionIdResponse) ProtoMessage()    {}
-
-func (m *GetSessionIdResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
@@ -457,20 +449,12 @@ func (m *ExecuteRequest) GetQuery() *BoundQuery {
 
 // ExecuteResponse is the returned value from Execute
 type ExecuteResponse struct {
-	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *QueryResult    `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
 func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteResponse) ProtoMessage()    {}
-
-func (m *ExecuteResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *ExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -524,20 +508,12 @@ func (m *ExecuteBatchRequest) GetQueries() []*BoundQuery {
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 type ExecuteBatchResponse struct {
-	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Results []*QueryResult  `protobuf:"bytes,2,rep,name=results" json:"results,omitempty"`
+	Results []*QueryResult `protobuf:"bytes,1,rep,name=results" json:"results,omitempty"`
 }
 
 func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
 func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
 func (*ExecuteBatchResponse) ProtoMessage()    {}
-
-func (m *ExecuteBatchResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 	if m != nil {
@@ -589,20 +565,12 @@ func (m *StreamExecuteRequest) GetQuery() *BoundQuery {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 type StreamExecuteResponse struct {
-	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Result *QueryResult    `protobuf:"bytes,2,opt,name=result" json:"result,omitempty"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
 
 func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
 func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
 func (*StreamExecuteResponse) ProtoMessage()    {}
-
-func (m *StreamExecuteResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *StreamExecuteResponse) GetResult() *QueryResult {
 	if m != nil {
@@ -646,20 +614,12 @@ func (m *BeginRequest) GetTarget() *Target {
 
 // BeginResponse is the returned value from Begin
 type BeginResponse struct {
-	Error         *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	TransactionId int64           `protobuf:"varint,2,opt,name=transaction_id" json:"transaction_id,omitempty"`
+	TransactionId int64 `protobuf:"varint,1,opt,name=transaction_id" json:"transaction_id,omitempty"`
 }
 
 func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
 func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
 func (*BeginResponse) ProtoMessage()    {}
-
-func (m *BeginResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
@@ -697,19 +657,11 @@ func (m *CommitRequest) GetTarget() *Target {
 
 // CommitResponse is the returned value from Commit
 type CommitResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
-
-func (m *CommitResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
@@ -747,19 +699,11 @@ func (m *RollbackRequest) GetTarget() *Target {
 
 // RollbackResponse is the returned value from Rollback
 type RollbackResponse struct {
-	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
 }
 
 func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
 func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
 func (*RollbackResponse) ProtoMessage()    {}
-
-func (m *RollbackResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 // SplitQueryRequest is the payload for SplitQuery
 type SplitQueryRequest struct {
@@ -826,20 +770,12 @@ func (m *QuerySplit) GetQuery() *BoundQuery {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 type SplitQueryResponse struct {
-	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
-	Queries []*QuerySplit   `protobuf:"bytes,2,rep,name=queries" json:"queries,omitempty"`
+	Queries []*QuerySplit `protobuf:"bytes,1,rep,name=queries" json:"queries,omitempty"`
 }
 
 func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
 func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
 func (*SplitQueryResponse) ProtoMessage()    {}
-
-func (m *SplitQueryResponse) GetError() *vtrpc.RPCError {
-	if m != nil {
-		return m.Error
-	}
-	return nil
-}
 
 func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 	if m != nil {
