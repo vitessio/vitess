@@ -58,7 +58,7 @@ func (tr *TopoReader) GetSrvKeyspace(ctx context.Context, req *topo.GetSrvKeyspa
 
 // GetSrvShard returns information about a shard for a keyspace
 // in a particular cell.
-func (tr *TopoReader) GetSrvShard(ctx context.Context, req *topo.GetSrvShardArgs, reply *topo.SrvShard) (err error) {
+func (tr *TopoReader) GetSrvShard(ctx context.Context, req *topo.GetSrvShardArgs, reply *pb.SrvShard) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
 	shard, err := tr.ts.GetSrvShard(ctx, req.Cell, req.Keyspace, req.Shard)
 	if err != nil {

@@ -624,7 +624,7 @@ func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // UpdateSrvShard is part of the topo.Server interface
-func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error {
 	if err := tee.primary.UpdateSrvShard(ctx, cell, keyspace, shard, srvShard); err != nil {
 		return err
 	}
@@ -637,7 +637,7 @@ func (tee *Tee) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string
 }
 
 // GetSrvShard is part of the topo.Server interface
-func (tee *Tee) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (tee *Tee) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
 	return tee.readFrom.GetSrvShard(ctx, cell, keyspace, shard)
 }
 
