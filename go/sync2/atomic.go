@@ -108,12 +108,14 @@ type AtomicString struct {
 	str string
 }
 
+// Set atomically sets str as new value.
 func (s *AtomicString) Set(str string) {
 	s.mu.Lock()
 	s.str = str
 	s.mu.Unlock()
 }
 
+// Get atomically returns the current value.
 func (s *AtomicString) Get() string {
 	s.mu.Lock()
 	str := s.str
@@ -121,6 +123,7 @@ func (s *AtomicString) Get() string {
 	return str
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (s *AtomicString) CompareAndSwap(oldval, newval string) (swqpped bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
