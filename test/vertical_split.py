@@ -500,7 +500,7 @@ index by_msg (msg)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
     self.assertEqual(len(shard_json['tablet_controls']), 2)
     for tc in shard_json['tablet_controls']:
-      self.assertTrue(tc['tablet_type'] == 2 or tc['tablet_type'] == 3)
+      self.assertIn(tc['tablet_type'], [2, 3]) # MASTER, REPLICA
     utils.run_vtctl(['SetShardTabletControl', '--tables=moving.*,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])

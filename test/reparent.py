@@ -556,7 +556,6 @@ class TestReparent(unittest.TestCase):
                      'Got unexpected nodes: %s != %s' % (str(expected_nodes),
                                                          str(hashed_nodes)))
 
-    utils.pause("AAAAAAAAAAAAAA")
     tablet_62044_master_status = tablet_62044.get_status()
     self.assertIn('Serving graph: test_keyspace 0 master',
                   tablet_62044_master_status)
