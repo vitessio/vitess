@@ -331,7 +331,7 @@ func TestScatterConnClose(t *testing.T) {
 	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil, false)
 	stc.Close()
 	time.Sleep(1)
-	if sbc.CloseCount != 1 {
+	if sbc.CloseCount.Get() != 1 {
 		t.Errorf("want 1, got %d", sbc.CloseCount)
 	}
 }
