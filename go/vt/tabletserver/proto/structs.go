@@ -50,6 +50,7 @@ type ExecuteRequest struct {
 	QueryRequest      Query
 	EffectiveCallerID *CallerID
 	ImmediateCallerID *VTGateCallerID
+	Target            *Target
 }
 
 //go:generate bsongen -file $GOFILE -type Query -o query_bson.go
@@ -103,6 +104,7 @@ type ExecuteBatchRequest struct {
 	QueryBatch        QueryList
 	EffectiveCallerID *CallerID
 	ImmediateCallerID *VTGateCallerID
+	Target            *Target
 }
 
 //go:generate bsongen -file $GOFILE -type QueryList -o query_list_bson.go
@@ -145,6 +147,7 @@ type SplitQueryRequest struct {
 	SessionID         int64
 	EffectiveCallerID *CallerID
 	ImmediateCallerID *VTGateCallerID
+	Target            *Target
 }
 
 // QuerySplit represents a split of SplitQueryRequest.Query. RowCount is only

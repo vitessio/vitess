@@ -1288,7 +1288,7 @@ func newTransaction(sqlQuery *SqlQuery) int64 {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	err := sqlQuery.Begin(context.Background(), &session, &txInfo)
+	err := sqlQuery.Begin(context.Background(), sqlQuery.target, &session, &txInfo)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}
@@ -1313,7 +1313,7 @@ func testCommitHelper(t *testing.T, sqlQuery *SqlQuery, queryExecutor *QueryExec
 		SessionId:     sqlQuery.sessionID,
 		TransactionId: queryExecutor.transactionID,
 	}
-	if err := sqlQuery.Commit(queryExecutor.ctx, &session); err != nil {
+	if err := sqlQuery.Commit(queryExecutor.ctx, sqlQuery.target, &session); err != nil {
 		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
 	}
 }

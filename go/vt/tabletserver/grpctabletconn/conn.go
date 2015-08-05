@@ -24,21 +24,27 @@ import (
 	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+const protocolName = "grpc"
+
 func init() {
-	tabletconn.RegisterDialer("grpc", DialTablet)
+	tabletconn.RegisterDialer(protocolName, DialTablet)
 }
 
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
+	// endPoint is set at construction time, and never changed
+	endPoint *pbt.EndPoint
+
+	// mu protects the next fields
 	mu        sync.RWMutex
-	endPoint  *pbt.EndPoint
 	cc        *grpc.ClientConn
 	c         pbs.QueryClient
 	sessionID int64
+	target    *pb.Target
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
 	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
@@ -52,7 +58,8 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 		cc:       cc,
 		c:        c,
 	}
-	if keyspace != "" || shard != "" {
+	if tabletType == pbt.TabletType_UNKNOWN {
+		// we use session
 		gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
 			Keyspace: keyspace,
 			Shard:    shard,
@@ -66,6 +73,13 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 			return nil, tabletErrorFromRPCError(gsir.Error)
 		}
 		result.sessionID = gsir.SessionId
+	} else {
+		// we use target
+		result.target = &pb.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: tabletType,
+		}
 	}
 
 	return result, nil
@@ -327,6 +341,24 @@ func (conn *gRPCQueryClient) Close() {
 	cc := conn.cc
 	conn.cc = nil
 	cc.Close()
+}
+
+// SetTarget can be called to change the target used for subsequent calls.
+func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.target == nil {
+		return fmt.Errorf("cannot set target on sessionId based conn")
+	}
+	if tabletType == pbt.TabletType_UNKNOWN {
+		return fmt.Errorf("cannot set tablet type to UNKNOWN")
+	}
+	conn.target = &pb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	return nil
 }
 
 // EndPoint returns the rpc end point.

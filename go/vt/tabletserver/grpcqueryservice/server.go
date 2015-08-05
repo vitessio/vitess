@@ -52,7 +52,7 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		request.GetImmediateCallerId(),
 	)
 	reply := new(mproto.QueryResult)
-	execErr := q.server.Execute(ctx, &proto.Query{
+	execErr := q.server.Execute(ctx, request.Target, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
@@ -76,7 +76,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 		request.GetImmediateCallerId(),
 	)
 	reply := new(proto.QueryResultList)
-	execErr := q.server.ExecuteBatch(ctx, &proto.QueryList{
+	execErr := q.server.ExecuteBatch(ctx, request.Target, &proto.QueryList{
 		Queries:       proto.Proto3ToBoundQueryList(request.Queries),
 		SessionId:     request.SessionId,
 		AsTransaction: request.AsTransaction,
@@ -99,7 +99,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	seErr := q.server.StreamExecute(ctx, &proto.Query{
+	seErr := q.server.StreamExecute(ctx, request.Target, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
@@ -127,7 +127,7 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 		request.GetImmediateCallerId(),
 	)
 	txInfo := new(proto.TransactionInfo)
-	if beginErr := q.server.Begin(ctx, &proto.Session{
+	if beginErr := q.server.Begin(ctx, request.Target, &proto.Session{
 		SessionId: request.SessionId,
 	}, txInfo); beginErr != nil {
 		return &pb.BeginResponse{
@@ -147,7 +147,7 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	commitErr := q.server.Commit(ctx, &proto.Session{
+	commitErr := q.server.Commit(ctx, request.Target, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	})
@@ -163,7 +163,7 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 		request.GetEffectiveCallerId(),
 		request.GetImmediateCallerId(),
 	)
-	rollbackErr := q.server.Rollback(ctx, &proto.Session{
+	rollbackErr := q.server.Rollback(ctx, request.Target, &proto.Session{
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	})
@@ -181,7 +181,7 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 		request.GetImmediateCallerId(),
 	)
 	reply := &proto.SplitQueryResult{}
-	if sqErr := q.server.SplitQuery(ctx, &proto.SplitQueryRequest{
+	if sqErr := q.server.SplitQuery(ctx, request.Target, &proto.SplitQueryRequest{
 		Query:       *proto.Proto3ToBoundQuery(request.Query),
 		SplitColumn: request.SplitColumn,
 		SplitCount:  int(request.SplitCount),

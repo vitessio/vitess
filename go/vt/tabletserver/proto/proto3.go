@@ -8,7 +8,20 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
+
+// TargetToProto3 transform the bson RPC target to proto3
+func TargetToProto3(target *Target) *pb.Target {
+	if target == nil {
+		return nil
+	}
+	return &pb.Target{
+		Keyspace:   target.Keyspace,
+		Shard:      target.Shard,
+		TabletType: pbt.TabletType(target.TabletType),
+	}
+}
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
 func BoundQueryToProto3(sql string, bindVars map[string]interface{}) *pb.BoundQuery {
