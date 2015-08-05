@@ -30,3 +30,14 @@ func NewTaskContainer() *pb.TaskContainer {
 func AddTask(t *pb.TaskContainer, taskName string, parameters map[string]string) {
 	t.ParallelTasks = append(t.ParallelTasks, NewTask(taskName, parameters))
 }
+
+// AddMissingTaskID assigns a task id to each task in "tc".
+func AddMissingTaskID(tc []*pb.TaskContainer, taskIDGenerator *IDGenerator) {
+	for _, taskContainer := range tc {
+		for _, task := range taskContainer.ParallelTasks {
+			if task.Id == "" {
+				task.Id = taskIDGenerator.GetNextID()
+			}
+		}
+	}
+}

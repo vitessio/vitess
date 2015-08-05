@@ -5,6 +5,7 @@
 package automation
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,30 @@ func newTestScheduler(t *testing.T) *Scheduler {
 	return scheduler
 }
 
+func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expectedOutput string, expectedError string) *pb.ClusterOperation {
+	scheduler := newTestScheduler(t)
+	defer scheduler.ShutdownAndWait()
+	scheduler.registerClusterOperation("TestingEchoTask")
+	scheduler.registerClusterOperation("TestingFailTask")
+	scheduler.registerClusterOperation("TestingEmitEchoTask")
+	scheduler.registerClusterOperation("TestingEmitEchoFailEchoTask")
+
+	scheduler.Run()
+
+	enqueueRequest := &pb.EnqueueClusterOperationRequest{
+		Name: taskName,
+		Parameters: map[string]string{
+			"echo_text": expectedOutput,
+		},
+	}
+	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
+	if err != nil {
+		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
+	}
+
+	return waitForClusterOperation(t, scheduler, enqueueResponse.Id, expectedOutput, expectedError)
+}
+
 // waitForClusterOperation is a helper function which blocks until the Cluster Operation has finished.
 func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expectedOutputLastTask string, expectedErrorLastTask string) *pb.ClusterOperation {
 	if expectedOutputLastTask == "" && expectedErrorLastTask == "" {
@@ -42,15 +67,22 @@ func waitForClusterOperation(t *testing.T, scheduler *Scheduler, id string, expe
 		}
 		if getDetailsResponse.ClusterOp.State == pb.ClusterOperationState_CLUSTER_OPERATION_DONE {
 			tc := getDetailsResponse.ClusterOp.SerialTasks
-			lastTc := tc[len(tc)-1]
+			// Check the last task which have finished. (It may not be the last one because tasks can fail.)
+			var lastTc *pb.TaskContainer
+			for i := len(tc) - 1; i >= 0; i-- {
+				if tc[i].ParallelTasks[len(tc[i].ParallelTasks)-1].State == pb.TaskState_DONE {
+					lastTc = tc[i]
+					break
+				}
+			}
 			if expectedOutputLastTask != "" {
 				if lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Output != expectedOutputLastTask {
 					t.Fatalf("ClusterOperation finished but did not return expected output. want: %v Full ClusterOperation details: %v", expectedOutputLastTask, proto.MarshalTextString(getDetailsResponse.ClusterOp))
 				}
 			}
 			if expectedErrorLastTask != "" {
-				if lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Error != expectedErrorLastTask {
-					t.Fatalf("ClusterOperation finished but did not return expected error. Full ClusterOperation details: %v", getDetailsResponse.ClusterOp)
+				if lastError := lastTc.ParallelTasks[len(lastTc.ParallelTasks)-1].Error; !strings.Contains(lastError, expectedErrorLastTask) {
+					t.Fatalf("ClusterOperation finished last error does not contain expected error. got: '%v' want: '%v' Full ClusterOperation details: %v", lastError, expectedErrorLastTask, getDetailsResponse.ClusterOp)
 				}
 			}
 			return getDetailsResponse.ClusterOp
@@ -70,34 +102,29 @@ func TestSchedulerImmediateShutdown(t *testing.T) {
 	scheduler.ShutdownAndWait()
 }
 
-func enqueueClusterOperationAndCheckOutput(t *testing.T, taskName string, expectedOutput string) {
-	scheduler := newTestScheduler(t)
-	defer scheduler.ShutdownAndWait()
-	scheduler.registerClusterOperation("TestingEchoTask")
-	scheduler.registerClusterOperation("TestingEmitEchoTask")
-
-	scheduler.Run()
-
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
-		Name: taskName,
-		Parameters: map[string]string{
-			"echo_text": expectedOutput,
-		},
-	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
-	if err != nil {
-		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
-	}
-
-	waitForClusterOperation(t, scheduler, enqueueResponse.Id, expectedOutput, "")
-}
-
 func TestEnqueueSingleTask(t *testing.T) {
-	enqueueClusterOperationAndCheckOutput(t, "TestingEchoTask", "echoed text")
+	enqueueClusterOperationAndCheckOutput(t, "TestingEchoTask", "echoed text", "")
 }
 
 func TestEnqueueEmittingTask(t *testing.T) {
-	enqueueClusterOperationAndCheckOutput(t, "TestingEmitEchoTask", "echoed text from emitted task")
+	enqueueClusterOperationAndCheckOutput(t, "TestingEmitEchoTask", "echoed text from emitted task", "")
+}
+
+func TestFailedTaskFailsClusterOperation(t *testing.T) {
+	enqueueClusterOperationAndCheckOutput(t, "TestingFailTask", "something went wrong", "full error message")
+}
+
+func TestFailedTaskFailsWholeClusterOperationEarly(t *testing.T) {
+	// If a task fails in the middle of a cluster operation, the remaining tasks must not be executed.
+	details := enqueueClusterOperationAndCheckOutput(t, "TestingEmitEchoFailEchoTask", "", "full error message")
+	got := details.SerialTasks[2].ParallelTasks[0].Error
+	want := "full error message"
+	if got != want {
+		t.Errorf("TestFailedTaskFailsWholeClusterOperationEarly: got error: '%v' want error: '%v'", got, want)
+	}
+	if details.SerialTasks[3].ParallelTasks[0].State != pb.TaskState_NOT_STARTED {
+		t.Errorf("TestFailedTaskFailsWholeClusterOperationEarly: Task after a failing task must not have been started.")
+	}
 }
 
 func TestEnqueueFailsDueToMissingParameter(t *testing.T) {
@@ -122,24 +149,6 @@ func TestEnqueueFailsDueToMissingParameter(t *testing.T) {
 	if err.Error() != want {
 		t.Fatalf("Wrong error message. got: '%v' want: '%v'", err, want)
 	}
-}
-
-func TestFailedTaskFailsClusterOperation(t *testing.T) {
-	scheduler := newTestScheduler(t)
-	defer scheduler.ShutdownAndWait()
-	scheduler.registerClusterOperation("TestingFailTask")
-
-	scheduler.Run()
-
-	enqueueRequest := &pb.EnqueueClusterOperationRequest{
-		Name: "TestingFailTask",
-	}
-	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
-	if err != nil {
-		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
-	}
-
-	waitForClusterOperation(t, scheduler, enqueueResponse.Id, "something went wrong", "full error message")
 }
 
 func TestEnqueueFailsDueToUnregisteredClusterOperation(t *testing.T) {
