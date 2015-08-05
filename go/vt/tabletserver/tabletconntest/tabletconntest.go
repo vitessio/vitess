@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -43,6 +44,9 @@ const TestKeyspace = "test_keyspace"
 
 // TestShard is the Shard we use for this test
 const TestShard = "test_shard"
+
+// TestTabletType is the TabletType we use for this test
+const TestTabletType = pbt.TabletType_UNKNOWN
 
 const testAsTransaction bool = true
 
@@ -83,7 +87,7 @@ func (f *FakeQueryService) GetSessionId(sessionParams *proto.SessionParams, sess
 }
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -157,7 +161,7 @@ func testBegin2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Commit is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Commit(ctx context.Context, session *proto.Session) error {
+func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -224,7 +228,7 @@ func testCommit2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Rollback is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Rollback(ctx context.Context, session *proto.Session) error {
+func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -291,7 +295,7 @@ func testRollback2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // Execute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
+func (f *FakeQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -405,7 +409,7 @@ var panicWait chan struct{}
 var errorWait chan struct{}
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
 	if f.panics && f.streamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -705,7 +709,7 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -839,7 +843,7 @@ func testExecuteBatch2Panics(t *testing.T, conn tabletconn.TabletConn) {
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	if f.hasError {
 		return testTabletError
 	}
@@ -1013,7 +1017,19 @@ func CreateFakeServer(t *testing.T) *FakeQueryService {
 }
 
 // TestSuite runs all the tests
-func TestSuite(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
+func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+	// make sure we use the right client
+	*tabletconn.TabletProtocol = protocol
+
+	// create a connection
+	ctx := context.Background()
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, TestKeyspace, TestShard, TestTabletType, 30*time.Second)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	// run the normal tests
 	testBegin(t, conn)
 	testBegin2(t, conn)
 	testCommit(t, conn)

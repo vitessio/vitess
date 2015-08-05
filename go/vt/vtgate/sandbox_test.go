@@ -290,7 +290,7 @@ func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard 
 	return ep, -1, nil
 }
 
-func sandboxDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	sand := getSandbox(keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
@@ -522,6 +522,10 @@ func (sbc *sandboxConn) StreamHealth(ctx context.Context) (<-chan *pb.StreamHeal
 // Close does not change ExecCount
 func (sbc *sandboxConn) Close() {
 	sbc.CloseCount.Add(1)
+}
+
+func (sbc *sandboxConn) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+	return fmt.Errorf("not implemented, vtgate doesn't use target yet")
 }
 
 func (sbc *sandboxConn) EndPoint() *pbt.EndPoint {

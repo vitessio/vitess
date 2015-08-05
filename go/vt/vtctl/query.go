@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the query command group for vtctl.
@@ -48,7 +50,7 @@ func init() {
 	addCommand(queriesGroupName, command{
 		"VtTabletExecute",
 		commandVtTabletExecute,
-		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
+		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
 		"Executes the given query on the given tablet."})
 	addCommand(queriesGroupName, command{
 		"VtTabletStreamHealth",
@@ -196,12 +198,17 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	bindVariables := newBindvars(subFlags)
 	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
 	shard := subFlags.String("shard", "", "shard the tablet belongs to")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("the <tablet_alis> and <sql> arguments are required for the VtTabletExecute command")
+	}
+	tt, err := parseTabletType3(*tabletType)
+	if err != nil {
+		return err
 	}
 	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
 	if err != nil {
@@ -216,8 +223,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
 
-	// pass in empty keyspace and shard to not ask for sessionId
-	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, *connectTimeout)
+	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -254,8 +260,8 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
 
-	// pass in empty keyspace and shard to not ask for sessionId
-	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", *connectTimeout)
+	// pass in a non-UNKNOWN tablet type to not use sessionId
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", pb.TabletType_MASTER, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

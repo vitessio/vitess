@@ -57,37 +57,37 @@ func (e *ErrorQueryService) GetSessionId(sessionParams *proto.SessionParams, ses
 }
 
 // Begin is part of QueryService interface
-func (e *ErrorQueryService) Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (e *ErrorQueryService) Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Commit is part of QueryService interface
-func (e *ErrorQueryService) Commit(ctx context.Context, session *proto.Session) error {
+func (e *ErrorQueryService) Commit(ctx context.Context, target *pb.Target, session *proto.Session) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Rollback is part of QueryService interface
-func (e *ErrorQueryService) Rollback(ctx context.Context, session *proto.Session) error {
+func (e *ErrorQueryService) Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // Execute is part of QueryService interface
-func (e *ErrorQueryService) Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error {
+func (e *ErrorQueryService) Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // ExecuteBatch is part of QueryService interface
-func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error {
+func (e *ErrorQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // SplitQuery is part of QueryService interface
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
@@ -104,3 +104,6 @@ func (e *ErrorQueryService) StreamHealthUnregister(int) error {
 // HandlePanic is part of QueryService interface
 func (e *ErrorQueryService) HandlePanic(*error) {
 }
+
+// make sure ErrorQueryService implements QueryService
+var _ QueryService = &ErrorQueryService{}

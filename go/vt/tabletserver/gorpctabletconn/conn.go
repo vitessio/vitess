@@ -25,25 +25,31 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+const protocolName = "gorpc"
+
 var (
 	tabletBsonUsername = flag.String("tablet-bson-username", "", "user to use for bson rpc connections")
 	tabletBsonPassword = flag.String("tablet-bson-password", "", "password to use for bson rpc connections (ignored if username is empty)")
 )
 
 func init() {
-	tabletconn.RegisterDialer("gorpc", DialTablet)
+	tabletconn.RegisterDialer(protocolName, DialTablet)
 }
 
 // TabletBson implements a bson rpcplus implementation for TabletConn
 type TabletBson struct {
+	// endPoint is set at construction time, and never changed
+	endPoint *pbt.EndPoint
+
+	// mu protects the next fields
 	mu        sync.RWMutex
-	endPoint  *pbt.EndPoint
 	rpcClient *rpcplus.Client
 	sessionID int64
+	target    *tproto.Target
 }
 
 // DialTablet creates and initializes TabletBson.
-func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["vt"])
 	conn := &TabletBson{endPoint: endPoint}
 	var err error
@@ -56,7 +62,8 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 		return nil, tabletError(err)
 	}
 
-	if keyspace != "" || shard != "" {
+	if tabletType == pbt.TabletType_UNKNOWN {
+		// we use session
 		var sessionInfo tproto.SessionInfo
 		if err = conn.rpcClient.Call(ctx, "SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
 			conn.rpcClient.Close()
@@ -68,6 +75,13 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 			return nil, tabletError(err)
 		}
 		conn.sessionID = sessionInfo.SessionId
+	} else {
+		// we use target
+		conn.target = &tproto.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: tproto.TabletType(tabletType),
+		}
 	}
 	return conn, nil
 }
@@ -522,6 +536,24 @@ func (conn *TabletBson) Close() {
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
 	rpcClient.Close()
+}
+
+// SetTarget can be called to change the target used for subsequent calls.
+func (conn *TabletBson) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.target == nil {
+		return fmt.Errorf("cannot set target on sessionId based conn")
+	}
+	if tabletType == pbt.TabletType_UNKNOWN {
+		return fmt.Errorf("cannot set tablet type to UNKNOWN")
+	}
+	conn.target = &tproto.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tproto.TabletType(tabletType),
+	}
+	return nil
 }
 
 // EndPoint returns the rpc end point.

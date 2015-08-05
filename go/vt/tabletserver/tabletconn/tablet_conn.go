@@ -58,9 +58,13 @@ func (e OperationalError) Error() string { return string(e) }
 
 // TabletDialer represents a function that will return a TabletConn
 // object that can communicate with a tablet.
-// If both keyspace and shard are empty, we will not ask for a sessionId
-// (and assume we're using the target field for the queries).
-type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (TabletConn, error)
+//
+// We support two modes of operation:
+// 1 - using GetSessionId (right after dialing) to get a sessionId.
+// 2 - using Target with each call (and never calling GetSessionId).
+// If tabletType is set to UNKNOWN, we'll use mode 1.
+// Mode 1 is being deprecated.
+type TabletDialer func(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
@@ -93,6 +97,11 @@ type TabletConn interface {
 
 	// Close must be called for releasing resources.
 	Close()
+
+	// SetTarget can be called to change the target used for
+	// subsequent calls. Can only be called if tabletType was not
+	// set to UNKNOWN in TabletDialer.
+	SetTarget(keyspace, shard string, tabletType pbt.TabletType) error
 
 	// GetEndPoint returns the end point info.
 	EndPoint() *pbt.EndPoint
