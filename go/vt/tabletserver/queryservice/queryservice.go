@@ -22,17 +22,17 @@ type QueryService interface {
 	GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error
 
 	// Transaction management
-	Begin(ctx context.Context, session *proto.Session, txInfo *proto.TransactionInfo) error
-	Commit(ctx context.Context, session *proto.Session) error
-	Rollback(ctx context.Context, session *proto.Session) error
+	Begin(ctx context.Context, target *pb.Target, session *proto.Session, txInfo *proto.TransactionInfo) error
+	Commit(ctx context.Context, target *pb.Target, session *proto.Session) error
+	Rollback(ctx context.Context, target *pb.Target, session *proto.Session) error
 
 	// Query execution
-	Execute(ctx context.Context, query *proto.Query, reply *mproto.QueryResult) error
-	StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) error
-	ExecuteBatch(ctx context.Context, queryList *proto.QueryList, reply *proto.QueryResultList) error
+	Execute(ctx context.Context, target *pb.Target, query *proto.Query, reply *mproto.QueryResult) error
+	StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) error
+	ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) error
 
 	// Map reduce helper
-	SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
+	SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error
 
 	// StreamHealthRegister registers a listener for StreamHealth
 	StreamHealthRegister(chan<- *pb.StreamHealthResponse) (int, error)
