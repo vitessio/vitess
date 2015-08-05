@@ -40,22 +40,34 @@ func (i *AtomicInt32) CompareAndSwap(oldval, newval int32) (swapped bool) {
 	return atomic.CompareAndSwapInt32(&i.int32, oldval, newval)
 }
 
-type AtomicUint32 uint32
+// AtomicUint32 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Uint32 functions.
+type AtomicUint32 struct {
+	uint32
+}
 
+// NewAtomicUint32 initializes a new AtomicUint32 with a given value.
+func NewAtomicUint32(n uint32) AtomicUint32 {
+	return AtomicUint32{n}
+}
+
+// Add atomically adds n to the value.
 func (i *AtomicUint32) Add(n uint32) uint32 {
-	return atomic.AddUint32((*uint32)(i), n)
+	return atomic.AddUint32(&i.uint32, n)
 }
 
+// Set atomically sets n as new value.
 func (i *AtomicUint32) Set(n uint32) {
-	atomic.StoreUint32((*uint32)(i), n)
+	atomic.StoreUint32(&i.uint32, n)
 }
 
+// Get atomically returns the current value.
 func (i *AtomicUint32) Get() uint32 {
-	return atomic.LoadUint32((*uint32)(i))
+	return atomic.LoadUint32(&i.uint32)
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (i *AtomicUint32) CompareAndSwap(oldval, newval uint32) (swapped bool) {
-	return atomic.CompareAndSwapUint32((*uint32)(i), oldval, newval)
+	return atomic.CompareAndSwapUint32(&i.uint32, oldval, newval)
 }
 
 // AtomicInt64 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int64 functions.
