@@ -19,7 +19,7 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtrpc.proto',
   package='vtrpc',
-  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\"E\n\x08RPCError\x12(\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x1a.vtrpc.ErrorCodeDeprecated\x12\x0f\n\x07message\x18\x02 \x01(\t*\xc7\x03\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\r\n\tCANCELLED\x10\x01\x12\x0f\n\x0bMYSQL_ERROR\x10\x02\x12\x1d\n\x19UNEXPECTED_MYSQL_RESPONSE\x10\x03\x12\x11\n\rUNKNOWN_ERROR\x10\x04\x12\x0b\n\x07\x42\x41\x44_SQL\x10\x05\x12\x17\n\x13QUERY_NOT_SUPPORTED\x10\x06\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x07\x12\x13\n\x0fINTEGRITY_ERROR\x10\x08\x12\x15\n\x11PERMISSION_DENIED\x10\t\x12\x13\n\x0fTHROTTLED_ERROR\x10\n\x12\x14\n\x10QUERY_NOT_SERVED\x10\x0b\x12\r\n\tNOT_IN_TX\x10\x0c\x12 \n\x1cINTERNAL_CONFIGURATION_ERROR\x10\r\x12!\n\x1dINTERNAL_RESOURCE_UNAVAILABLE\x10\x0e\x12\x12\n\x0eINTERNAL_ERROR\x10\x0f\x12\x10\n\x0cTX_POOL_FULL\x10\x10\x12\x13\n\x0fREQUEST_BACKLOG\x10\x11\x12\x12\n\x0eMYSQL_DEADLOCK\x10\x12\x12$\n RESOURCE_TEMPORARILY_UNAVAILABLE\x10\x13*x\n\x13\x45rrorCodeDeprecated\x12\x0b\n\x07NoError\x10\x00\x12\x10\n\x0bTabletError\x10\xe8\x07\x12\x17\n\x12UnknownTabletError\x10\xcf\x0f\x12\x10\n\x0bVtgateError\x10\xd0\x0f\x12\x17\n\x12UnknownVtgateError\x10\xb7\x17\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
+  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\"E\n\x08RPCError\x12(\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x1a.vtrpc.ErrorCodeDeprecated\x12\x0f\n\x07message\x18\x02 \x01(\t*\x80\x02\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\r\n\tCANCELLED\x10\x01\x12\x11\n\rUNKNOWN_ERROR\x10\x02\x12\r\n\tBAD_INPUT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\x13\n\x0fINTEGRITY_ERROR\x10\x05\x12\x15\n\x11PERMISSION_DENIED\x10\x06\x12\x13\n\x0fTHROTTLED_ERROR\x10\x07\x12\x14\n\x10QUERY_NOT_SERVED\x10\x08\x12\r\n\tNOT_IN_TX\x10\t\x12\x12\n\x0eINTERNAL_ERROR\x10\n\x12$\n RESOURCE_TEMPORARILY_UNAVAILABLE\x10\x0b*x\n\x13\x45rrorCodeDeprecated\x12\x0b\n\x07NoError\x10\x00\x12\x10\n\x0bTabletError\x10\xe8\x07\x12\x17\n\x12UnknownTabletError\x10\xcf\x0f\x12\x10\n\x0bVtgateError\x10\xd0\x0f\x12\x17\n\x12UnknownVtgateError\x10\xb7\x17\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -38,82 +38,50 @@ _ERRORCODE = _descriptor.EnumDescriptor(
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='MYSQL_ERROR', index=2, number=2,
+      name='UNKNOWN_ERROR', index=2, number=2,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='UNEXPECTED_MYSQL_RESPONSE', index=3, number=3,
+      name='BAD_INPUT', index=3, number=3,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='UNKNOWN_ERROR', index=4, number=4,
+      name='DEADLINE_EXCEEDED', index=4, number=4,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='BAD_SQL', index=5, number=5,
+      name='INTEGRITY_ERROR', index=5, number=5,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='QUERY_NOT_SUPPORTED', index=6, number=6,
+      name='PERMISSION_DENIED', index=6, number=6,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='DEADLINE_EXCEEDED', index=7, number=7,
+      name='THROTTLED_ERROR', index=7, number=7,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='INTEGRITY_ERROR', index=8, number=8,
+      name='QUERY_NOT_SERVED', index=8, number=8,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='PERMISSION_DENIED', index=9, number=9,
+      name='NOT_IN_TX', index=9, number=9,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='THROTTLED_ERROR', index=10, number=10,
+      name='INTERNAL_ERROR', index=10, number=10,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='QUERY_NOT_SERVED', index=11, number=11,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='NOT_IN_TX', index=12, number=12,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='INTERNAL_CONFIGURATION_ERROR', index=13, number=13,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='INTERNAL_RESOURCE_UNAVAILABLE', index=14, number=14,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='INTERNAL_ERROR', index=15, number=15,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='TX_POOL_FULL', index=16, number=16,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='REQUEST_BACKLOG', index=17, number=17,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='MYSQL_DEADLOCK', index=18, number=18,
-      options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='RESOURCE_TEMPORARILY_UNAVAILABLE', index=19, number=19,
+      name='RESOURCE_TEMPORARILY_UNAVAILABLE', index=11, number=11,
       options=None,
       type=None),
   ],
   containing_type=None,
   options=None,
   serialized_start=166,
-  serialized_end=621,
+  serialized_end=422,
 )
 _sym_db.RegisterEnumDescriptor(_ERRORCODE)
 
@@ -147,32 +115,24 @@ _ERRORCODEDEPRECATED = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=623,
-  serialized_end=743,
+  serialized_start=424,
+  serialized_end=544,
 )
 _sym_db.RegisterEnumDescriptor(_ERRORCODEDEPRECATED)
 
 ErrorCodeDeprecated = enum_type_wrapper.EnumTypeWrapper(_ERRORCODEDEPRECATED)
 SUCCESS = 0
 CANCELLED = 1
-MYSQL_ERROR = 2
-UNEXPECTED_MYSQL_RESPONSE = 3
-UNKNOWN_ERROR = 4
-BAD_SQL = 5
-QUERY_NOT_SUPPORTED = 6
-DEADLINE_EXCEEDED = 7
-INTEGRITY_ERROR = 8
-PERMISSION_DENIED = 9
-THROTTLED_ERROR = 10
-QUERY_NOT_SERVED = 11
-NOT_IN_TX = 12
-INTERNAL_CONFIGURATION_ERROR = 13
-INTERNAL_RESOURCE_UNAVAILABLE = 14
-INTERNAL_ERROR = 15
-TX_POOL_FULL = 16
-REQUEST_BACKLOG = 17
-MYSQL_DEADLOCK = 18
-RESOURCE_TEMPORARILY_UNAVAILABLE = 19
+UNKNOWN_ERROR = 2
+BAD_INPUT = 3
+DEADLINE_EXCEEDED = 4
+INTEGRITY_ERROR = 5
+PERMISSION_DENIED = 6
+THROTTLED_ERROR = 7
+QUERY_NOT_SERVED = 8
+NOT_IN_TX = 9
+INTERNAL_ERROR = 10
+RESOURCE_TEMPORARILY_UNAVAILABLE = 11
 NoError = 0
 TabletError = 1000
 UnknownTabletError = 1999

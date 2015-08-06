@@ -30,102 +30,76 @@ const (
 	// CANCELLED means that the context was cancelled (and noticed in the app layer,
 	// as opposed to the RPC layer)
 	ErrorCode_CANCELLED ErrorCode = 1
-	// MYSQL_ERROR means that there is a MySQL error code that we don't explicitly handle
-	ErrorCode_MYSQL_ERROR ErrorCode = 2
-	// UNEXPECTED_MYSQL_RESPONSE is returned when we were expecting a particular
-	// response from MySQL, and that wasn't returned. For example, we might expect a
-	// MySQL timestamp to be returned in a particular way, but it wasn't.
-	ErrorCode_UNEXPECTED_MYSQL_RESPONSE ErrorCode = 3
-	// UNKNOWN_ERROR is a generic catch-all error code for anything that doesn't fall into
-	// a different bucket.
-	ErrorCode_UNKNOWN_ERROR ErrorCode = 4
-	// BAD_SQL is returned when an end-user sent SQL that couldn't be parsed correctly.
-	ErrorCode_BAD_SQL ErrorCode = 5
-	// QUERY_NOT_SUPPORTED means that an end-user tried a query that Vitess doesn't support.
-	ErrorCode_QUERY_NOT_SUPPORTED ErrorCode = 6
+	// UNKNOWN_ERROR includes:
+	// 1. MySQL error codes that we don't explicitly handle
+	// 2.  MySQL response that wasn't as expected. For example, we might expect a MySQL
+	//  timestamp to be returned in a particular way, but it wasn't.
+	// 3. Anything else that doesn't fall into a different bucket.
+	ErrorCode_UNKNOWN_ERROR ErrorCode = 2
+	// BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly,
+	// or tries a query that isn't supported by Vitess.
+	ErrorCode_BAD_INPUT ErrorCode = 3
 	// DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.
-	ErrorCode_DEADLINE_EXCEEDED ErrorCode = 7
+	ErrorCode_DEADLINE_EXCEEDED ErrorCode = 4
 	// INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
 	// duplicate primary keys
-	ErrorCode_INTEGRITY_ERROR ErrorCode = 8
+	ErrorCode_INTEGRITY_ERROR ErrorCode = 5
 	// PERMISSION_DENIED errors are returned when a user requests access to something
 	// that they don't have permissions for.
-	ErrorCode_PERMISSION_DENIED ErrorCode = 9
+	ErrorCode_PERMISSION_DENIED ErrorCode = 6
 	// THROTTLED_ERROR is returned when a user exceeds their quota in some dimension and
 	// get throttled due to that.
-	ErrorCode_THROTTLED_ERROR ErrorCode = 10
+	ErrorCode_THROTTLED_ERROR ErrorCode = 7
 	// QUERY_NOT_SERVED means that a query could not be served right now.
 	// This could be due to various reasons: QueryService is not running,
 	// should not be running, wrong shard, wrong tablet type, etc. Clients that
 	// receive this error should usually re-resolve the topology, and then retry the query.
-	ErrorCode_QUERY_NOT_SERVED ErrorCode = 11
+	ErrorCode_QUERY_NOT_SERVED ErrorCode = 8
 	// NOT_IN_TX means that we're not currently in a transaction, but we should be.
-	ErrorCode_NOT_IN_TX ErrorCode = 12
-	// INTERNAL_CONFIGURATION_ERROR means that something is not configured correctly.
-	// Retrying the query will not help.
-	ErrorCode_INTERNAL_CONFIGURATION_ERROR ErrorCode = 13
-	// INTERNAL_RESOURCE_UNAVAILABLE is returned when a necessary resource is not
-	// available, and we don't expect the problem to fix itself. Retrying the query will not help.
-	ErrorCode_INTERNAL_RESOURCE_UNAVAILABLE ErrorCode = 14
-	// INTERNAL_ERROR is a generic catch-all error for all other internal errors.
-	ErrorCode_INTERNAL_ERROR ErrorCode = 15
-	// TX_POOL_FULL is returned when the TransactionPool is full. Retrying this,
-	// with an exponential backoff, should work.
-	ErrorCode_TX_POOL_FULL ErrorCode = 16
-	// REQUEST_BACKLOG means that VtGate has a backlog of requests and won't service new ones.
-	// Retrying the request, with an exponential backoff, should work.
-	ErrorCode_REQUEST_BACKLOG ErrorCode = 17
-	// MYSQL_DEADLOCK is returned when we get a deadlock error from MySQL. Retrying this,
-	// with an exponential backoff, *may* work.
-	ErrorCode_MYSQL_DEADLOCK ErrorCode = 18
-	// RESOURCE_TEMPORARILY_UNAVAILABLE is used for when some other resource limit
-	// has temporarily been reached. Retrying this, with an exponential backoff, should work.
-	ErrorCode_RESOURCE_TEMPORARILY_UNAVAILABLE ErrorCode = 19
+	ErrorCode_NOT_IN_TX ErrorCode = 9
+	// INTERNAL_ERROR is returned when:
+	//  1. Something is not configured correctly internally.
+	//  2. A necessary resource is not available
+	//  3. Some other internal error occures
+	// INTERNAL_ERRORs are not problems that are expected to fix themselves, and retrying
+	// the query will not help.
+	ErrorCode_INTERNAL_ERROR ErrorCode = 10
+	// RESOURCE_TEMPORARILY_UNAVAILABLE is used for when a resource limit has temporarily
+	// been reached. Trying this error, with an exponential backoff, should succeed.
+	// Various types of resources can be exhausted, including:
+	// 1. TxPool can be full
+	// 2. VtGate could have request backlog
+	// 3. MySQL could have a deadlock
+	ErrorCode_RESOURCE_TEMPORARILY_UNAVAILABLE ErrorCode = 11
 )
 
 var ErrorCode_name = map[int32]string{
 	0:  "SUCCESS",
 	1:  "CANCELLED",
-	2:  "MYSQL_ERROR",
-	3:  "UNEXPECTED_MYSQL_RESPONSE",
-	4:  "UNKNOWN_ERROR",
-	5:  "BAD_SQL",
-	6:  "QUERY_NOT_SUPPORTED",
-	7:  "DEADLINE_EXCEEDED",
-	8:  "INTEGRITY_ERROR",
-	9:  "PERMISSION_DENIED",
-	10: "THROTTLED_ERROR",
-	11: "QUERY_NOT_SERVED",
-	12: "NOT_IN_TX",
-	13: "INTERNAL_CONFIGURATION_ERROR",
-	14: "INTERNAL_RESOURCE_UNAVAILABLE",
-	15: "INTERNAL_ERROR",
-	16: "TX_POOL_FULL",
-	17: "REQUEST_BACKLOG",
-	18: "MYSQL_DEADLOCK",
-	19: "RESOURCE_TEMPORARILY_UNAVAILABLE",
+	2:  "UNKNOWN_ERROR",
+	3:  "BAD_INPUT",
+	4:  "DEADLINE_EXCEEDED",
+	5:  "INTEGRITY_ERROR",
+	6:  "PERMISSION_DENIED",
+	7:  "THROTTLED_ERROR",
+	8:  "QUERY_NOT_SERVED",
+	9:  "NOT_IN_TX",
+	10: "INTERNAL_ERROR",
+	11: "RESOURCE_TEMPORARILY_UNAVAILABLE",
 }
 var ErrorCode_value = map[string]int32{
 	"SUCCESS":                          0,
 	"CANCELLED":                        1,
-	"MYSQL_ERROR":                      2,
-	"UNEXPECTED_MYSQL_RESPONSE":        3,
-	"UNKNOWN_ERROR":                    4,
-	"BAD_SQL":                          5,
-	"QUERY_NOT_SUPPORTED":              6,
-	"DEADLINE_EXCEEDED":                7,
-	"INTEGRITY_ERROR":                  8,
-	"PERMISSION_DENIED":                9,
-	"THROTTLED_ERROR":                  10,
-	"QUERY_NOT_SERVED":                 11,
-	"NOT_IN_TX":                        12,
-	"INTERNAL_CONFIGURATION_ERROR":     13,
-	"INTERNAL_RESOURCE_UNAVAILABLE":    14,
-	"INTERNAL_ERROR":                   15,
-	"TX_POOL_FULL":                     16,
-	"REQUEST_BACKLOG":                  17,
-	"MYSQL_DEADLOCK":                   18,
-	"RESOURCE_TEMPORARILY_UNAVAILABLE": 19,
+	"UNKNOWN_ERROR":                    2,
+	"BAD_INPUT":                        3,
+	"DEADLINE_EXCEEDED":                4,
+	"INTEGRITY_ERROR":                  5,
+	"PERMISSION_DENIED":                6,
+	"THROTTLED_ERROR":                  7,
+	"QUERY_NOT_SERVED":                 8,
+	"NOT_IN_TX":                        9,
+	"INTERNAL_ERROR":                   10,
+	"RESOURCE_TEMPORARILY_UNAVAILABLE": 11,
 }
 
 func (x ErrorCode) String() string {
