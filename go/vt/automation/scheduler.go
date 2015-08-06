@@ -10,6 +10,7 @@ Package automation contains code to execute high-level cluster operations
 package automation
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -37,7 +38,7 @@ type Scheduler struct {
 	// Guarded by "mu".
 	registeredClusterOperations map[string]bool
 	// Guarded by "mu".
-	toBeScheduledClusterOperations chan *ClusterOperationInstance
+	toBeScheduledClusterOperations chan ClusterOperationInstance
 	// Guarded by "mu".
 	state schedulerState
 
@@ -49,9 +50,13 @@ type Scheduler struct {
 
 	muOpList sync.Mutex
 	// Guarded by "muOpList".
-	activeClusterOperations map[string]*ClusterOperationInstance
+	// The key of the map is ClusterOperationInstance.ID.
+	// This map contains a copy of the ClusterOperationInstance which is currently processed.
+	// The scheduler may update the copy with the latest status.
+	activeClusterOperations map[string]ClusterOperationInstance
 	// Guarded by "muOpList".
-	finishedClusterOperations map[string]*ClusterOperationInstance
+	// The key of the map is ClusterOperationInstance.ID.
+	finishedClusterOperations map[string]ClusterOperationInstance
 }
 
 // NewScheduler creates a new instance.
@@ -63,12 +68,12 @@ func NewScheduler() (*Scheduler, error) {
 	s := &Scheduler{
 		registeredClusterOperations:    defaultClusterOperations,
 		idGenerator:                    IDGenerator{},
-		toBeScheduledClusterOperations: make(chan *ClusterOperationInstance, 10),
+		toBeScheduledClusterOperations: make(chan ClusterOperationInstance, 10),
 		state:                     stateNotRunning,
 		taskCreator:               defaultTaskCreator,
 		pendingOpsWg:              &sync.WaitGroup{},
-		activeClusterOperations:   make(map[string]*ClusterOperationInstance),
-		finishedClusterOperations: make(map[string]*ClusterOperationInstance),
+		activeClusterOperations:   make(map[string]ClusterOperationInstance),
+		finishedClusterOperations: make(map[string]ClusterOperationInstance),
 	}
 
 	return s, nil
@@ -106,7 +111,7 @@ func (s *Scheduler) processRequestsLoop() {
 	log.Infof("Stopped processing loop for ClusterOperations.")
 }
 
-func (s *Scheduler) processClusterOperation(clusterOp *ClusterOperationInstance) {
+func (s *Scheduler) processClusterOperation(clusterOp ClusterOperationInstance) {
 	if clusterOp.State == pb.ClusterOperationState_CLUSTER_OPERATION_DONE {
 		log.Infof("ClusterOperation: %v skipping because it is already done. Details: %v", clusterOp.Id, clusterOp)
 		return
@@ -114,77 +119,86 @@ func (s *Scheduler) processClusterOperation(clusterOp *ClusterOperationInstance)
 
 	log.Infof("ClusterOperation: %v running. Details: %v", clusterOp.Id, clusterOp)
 
-	var lastTaskError string
+clusterOpLoop:
 	for i := 0; i < len(clusterOp.SerialTasks); i++ {
 		taskContainer := clusterOp.SerialTasks[i]
 		for _, taskProto := range taskContainer.ParallelTasks {
-			if taskProto.State == pb.TaskState_DONE {
-				if taskProto.Error != "" {
-					log.Errorf("Task: %v (%v/%v) failed before. Aborting the ClusterOperation. Error: %v Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, taskProto.Error, taskProto)
-					lastTaskError = taskProto.Error
-					break
-				} else {
-					log.Infof("Task: %v (%v/%v) skipped because it is already done. Full Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, taskProto)
-				}
-			}
-
-			task, err := s.createTaskInstance(taskProto.Name)
+			newTaskContainers, output, err := s.runTask(taskProto, clusterOp.Id)
 			if err != nil {
-				log.Errorf("Task: %v (%v/%v) could not be instantiated. Error: %v Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err, taskProto)
-				MarkTaskFailed(taskProto, "", err)
-				lastTaskError = err.Error()
-				break
+				MarkTaskFailed(taskProto, output, err)
+				clusterOp.Error = err.Error()
+				break clusterOpLoop
+			} else {
+				MarkTaskSucceeded(taskProto, output)
 			}
-
-			taskProto.State = pb.TaskState_RUNNING
-			log.Infof("Task: %v (%v/%v) running. Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, taskProto)
-			newTaskContainers, output, errRun := task.Run(taskProto.Parameters)
-			log.Infof("Task: %v (%v/%v) finished. newTaskContainers: %v, output: %v, error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, newTaskContainers, output, errRun)
-
-			if errRun != nil {
-				MarkTaskFailed(taskProto, output, errRun)
-				lastTaskError = errRun.Error()
-				break
-			}
-			MarkTaskSucceeded(taskProto, output)
 
 			if newTaskContainers != nil {
 				// Make sure all new tasks do not miss any required parameters.
-				for _, newTaskContainer := range newTaskContainers {
-					for _, newTaskProto := range newTaskContainer.ParallelTasks {
-						err := s.validateTaskSpecification(newTaskProto.Name, newTaskProto.Parameters)
-						if err != nil {
-							log.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v Details: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err, newTaskProto)
-							MarkTaskFailed(taskProto, output, err)
-							lastTaskError = err.Error()
-							break
-						}
-					}
+				err := s.validateTaskContainers(newTaskContainers)
+				if err != nil {
+					log.Errorf("Task: %v (%v/%v) emitted a new task which is not valid. Error: %v", taskProto.Name, clusterOp.Id, taskProto.Id, err)
+					MarkTaskFailed(taskProto, output, err)
+					clusterOp.Error = err.Error()
+					break clusterOpLoop
 				}
 
-				if lastTaskError == "" {
-					clusterOp.InsertTaskContainers(newTaskContainers, i+1)
-					log.Infof("ClusterOperation: %v %d new task containers added by %v (%v/%v). Updated ClusterOperation: %v",
-						clusterOp.Id, len(newTaskContainers), taskProto.Name, clusterOp.Id, taskProto.Id, clusterOp)
-				}
+				clusterOp.InsertTaskContainers(newTaskContainers, i+1)
+				log.Infof("ClusterOperation: %v %d new task containers added by %v (%v/%v). Updated ClusterOperation: %v",
+					clusterOp.Id, len(newTaskContainers), taskProto.Name, clusterOp.Id, taskProto.Id, clusterOp)
 			}
+			s.Checkpoint(clusterOp)
 		}
 	}
 
 	clusterOp.State = pb.ClusterOperationState_CLUSTER_OPERATION_DONE
-	if lastTaskError != "" {
-		clusterOp.Error = lastTaskError
-	}
 	log.Infof("ClusterOperation: %v finished. Details: %v", clusterOp.Id, clusterOp)
+	s.Checkpoint(clusterOp)
 
 	// Move operation from active to finished.
 	s.muOpList.Lock()
-	if s.activeClusterOperations[clusterOp.Id] != clusterOp {
+	defer s.muOpList.Unlock()
+	if _, ok := s.activeClusterOperations[clusterOp.Id]; !ok {
 		panic("Pending ClusterOperation was not recorded as active, but should have.")
 	}
 	delete(s.activeClusterOperations, clusterOp.Id)
 	s.finishedClusterOperations[clusterOp.Id] = clusterOp
-	s.muOpList.Unlock()
+}
+
+func (s *Scheduler) runTask(taskProto *pb.Task, clusterOpID string) ([]*pb.TaskContainer, string, error) {
+	if taskProto.State == pb.TaskState_DONE {
+		// Task is already done (e.g. because we resume from a checkpoint).
+		if taskProto.Error != "" {
+			log.Errorf("Task: %v (%v/%v) failed before. Aborting the ClusterOperation. Error: %v Details: %v", taskProto.Name, clusterOpID, taskProto.Id, taskProto.Error, taskProto)
+			return nil, "", errors.New(taskProto.Error)
+		}
+		log.Infof("Task: %v (%v/%v) skipped because it is already done. Full Details: %v", taskProto.Name, clusterOpID, taskProto.Id, taskProto)
+		return nil, taskProto.Output, nil
+	}
+
+	task, err := s.createTaskInstance(taskProto.Name)
+	if err != nil {
+		log.Errorf("Task: %v (%v/%v) could not be instantiated. Error: %v Details: %v", taskProto.Name, clusterOpID, taskProto.Id, err, taskProto)
+		return nil, "", err
+	}
+
+	taskProto.State = pb.TaskState_RUNNING
+	log.Infof("Task: %v (%v/%v) running. Details: %v", taskProto.Name, clusterOpID, taskProto.Id, taskProto)
+	newTaskContainers, output, err := task.Run(taskProto.Parameters)
+	log.Infof("Task: %v (%v/%v) finished. newTaskContainers: %v, output: %v, error: %v", taskProto.Name, clusterOpID, taskProto.Id, newTaskContainers, output, err)
+
+	return newTaskContainers, output, err
+}
+
+func (s *Scheduler) validateTaskContainers(newTaskContainers []*pb.TaskContainer) error {
+	for _, newTaskContainer := range newTaskContainers {
+		for _, newTaskProto := range newTaskContainer.ParallelTasks {
+			err := s.validateTaskSpecification(newTaskProto.Name, newTaskProto.Parameters)
+			if err != nil {
+				return fmt.Errorf("Error: %v Task: %v", err, newTaskProto)
+			}
+		}
+	}
+	return nil
 }
 
 func defaultTaskCreator(taskName string) Task {
@@ -267,9 +281,9 @@ func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.Enqueue
 	clusterOp := NewClusterOperationInstance(clusterOpID, initialTask, &taskIDGenerator)
 
 	s.muOpList.Lock()
-	s.toBeScheduledClusterOperations <- clusterOp
 	s.activeClusterOperations[clusterOpID] = clusterOp
 	s.muOpList.Unlock()
+	s.toBeScheduledClusterOperations <- clusterOp
 
 	return &pb.EnqueueClusterOperationResponse{
 		Id: clusterOp.Id,
@@ -277,9 +291,9 @@ func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.Enqueue
 }
 
 // findClusterOp checks for a given ClusterOperation ID if it's in the list of active or finished operations.
-func (s *Scheduler) findClusterOp(id string) (*ClusterOperationInstance, error) {
+func (s *Scheduler) findClusterOp(id string) (ClusterOperationInstance, error) {
 	var ok bool
-	var clusterOp *ClusterOperationInstance
+	var clusterOp ClusterOperationInstance
 
 	s.muOpList.Lock()
 	defer s.muOpList.Unlock()
@@ -288,9 +302,18 @@ func (s *Scheduler) findClusterOp(id string) (*ClusterOperationInstance, error) 
 		clusterOp, ok = s.finishedClusterOperations[id]
 	}
 	if !ok {
-		return nil, fmt.Errorf("ClusterOperation with id: %v not found", id)
+		return clusterOp, fmt.Errorf("ClusterOperation with id: %v not found", id)
 	}
-	return clusterOp, nil
+	return clusterOp.Clone(), nil
+}
+
+// Checkpoint should be called every time the state of the cluster op changes.
+// It is used to update the copy of the state in activeClusterOperations.
+func (s *Scheduler) Checkpoint(clusterOp ClusterOperationInstance) {
+	// TODO(mberlin): Add here support for persistent checkpoints.
+	s.muOpList.Lock()
+	defer s.muOpList.Unlock()
+	s.activeClusterOperations[clusterOp.Id] = clusterOp.Clone()
 }
 
 // GetClusterOperationDetails can be used to query the full details of active or finished operations.
