@@ -12,6 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -88,10 +89,12 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 
 	req := &pb.ExecuteRequest{
-		Target:        conn.target,
-		Query:         tproto.BoundQueryToProto3(query, bindVars),
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query, bindVars),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
@@ -114,11 +117,13 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	}
 
 	req := &pb.ExecuteBatchRequest{
-		Target:        conn.target,
-		Queries:       make([]*pb.BoundQuery, len(queries)),
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Queries:           make([]*pb.BoundQuery, len(queries)),
+		AsTransaction:     asTransaction,
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	for i, q := range queries {
 		req.Queries[i] = tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -144,9 +149,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 
 	req := &pb.StreamExecuteRequest{
-		Target:    conn.target,
-		Query:     tproto.BoundQueryToProto3(query, bindVars),
-		SessionId: conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query, bindVars),
+		SessionId:         conn.sessionID,
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
@@ -186,8 +193,10 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 
 	req := &pb.BeginRequest{
-		Target:    conn.target,
-		SessionId: conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		SessionId:         conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
@@ -210,9 +219,11 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 
 	req := &pb.CommitRequest{
-		Target:        conn.target,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
@@ -235,9 +246,11 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 
 	req := &pb.RollbackRequest{
-		Target:        conn.target,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
@@ -261,11 +274,13 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 
 	req := &pb.SplitQueryRequest{
-		Target:      conn.target,
-		Query:       tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
-		SplitColumn: splitColumn,
-		SplitCount:  int64(splitCount),
-		SessionId:   conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
+		SplitColumn:       splitColumn,
+		SplitCount:        int64(splitCount),
+		SessionId:         conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {

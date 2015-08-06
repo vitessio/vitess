@@ -15,12 +15,14 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // FakeQueryService has the server side of this fake
@@ -48,13 +50,39 @@ var testTarget = &pb.Target{
 	TabletType: pbt.TabletType_REPLICA,
 }
 
+var testCallerID = &pbv.CallerID{
+	Principal:    "test_principal",
+	Component:    "test_component",
+	Subcomponent: "test_subcomponent",
+}
+
+var testVTGateCallerID = &pb.VTGateCallerID{
+	Username: "test_username",
+}
+
 const testAsTransaction bool = true
 
 const testSessionID int64 = 5678
 
-func (f *FakeQueryService) checkTarget(name string, target *pb.Target) {
+func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *pb.Target) {
 	if !reflect.DeepEqual(target, testTarget) {
-		f.t.Errorf("invalid Target for %v: for %#v expected %#v", name, target, testTarget)
+		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, testTarget)
+	}
+	ef := callerid.EffectiveCallerIDFromContext(ctx)
+	if ef == nil {
+		f.t.Errorf("no effective caller id for %v", name)
+	} else {
+		if !reflect.DeepEqual(ef, testCallerID) {
+			f.t.Errorf("invalid effective caller id for %v: got %v expected %v", name, ef, testCallerID)
+		}
+	}
+	im := callerid.ImmediateCallerIDFromContext(ctx)
+	if im == nil {
+		f.t.Errorf("no immediate caller id for %v", name)
+	} else {
+		if !reflect.DeepEqual(im, testVTGateCallerID) {
+			f.t.Errorf("invalid immediate caller id for %v: got %v expected %v", name, im, testVTGateCallerID)
+		}
 	}
 }
 
@@ -76,7 +104,7 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *pb.Target, session
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	if f.checkExtraFields {
-		f.checkTarget("Begin", target)
+		f.checkTargetCallerID(ctx, "Begin", target)
 	} else {
 		if session.SessionId != testSessionID {
 			f.t.Errorf("Begin: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
@@ -114,6 +142,7 @@ func testBeginPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testBegin2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testBegin2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	transactionID, err := conn.Begin2(ctx)
 	if err != nil {
 		t.Fatalf("Begin2 failed: %v", err)
@@ -137,7 +166,7 @@ func (f *FakeQueryService) Commit(ctx context.Context, target *pb.Target, sessio
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	if f.checkExtraFields {
-		f.checkTarget("Commit", target)
+		f.checkTargetCallerID(ctx, "Commit", target)
 	} else {
 		if session.SessionId != testSessionID {
 			f.t.Errorf("Commit: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
@@ -171,6 +200,7 @@ func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testCommit2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommit2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Commit2(ctx, commitTransactionID)
 	if err != nil {
 		t.Fatalf("Commit2 failed: %v", err)
@@ -191,7 +221,7 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *pb.Target, sess
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	if f.checkExtraFields {
-		f.checkTarget("Rollback", target)
+		f.checkTargetCallerID(ctx, "Rollback", target)
 	} else {
 		if session.SessionId != testSessionID {
 			f.t.Errorf("Rollback: invalid SessionId: got %v expected %v", session.SessionId, testSessionID)
@@ -225,6 +255,7 @@ func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testRollback2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollback2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	err := conn.Rollback2(ctx, rollbackTransactionID)
 	if err != nil {
 		t.Fatalf("Rollback2 failed: %v", err)
@@ -251,7 +282,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *pb.Target, query
 		f.t.Errorf("invalid Execute.Query.BindVariables: got %v expected %v", query.BindVariables, executeBindVars)
 	}
 	if f.checkExtraFields {
-		f.checkTarget("Execute", target)
+		f.checkTargetCallerID(ctx, "Execute", target)
 	} else {
 		if query.SessionId != testSessionID {
 			f.t.Errorf("invalid Execute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
@@ -312,6 +343,7 @@ func testExecute(t *testing.T, conn tabletconn.TabletConn) {
 func testExecute2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecute2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qr, err := conn.Execute2(ctx, executeQuery, executeBindVars, executeTransactionID)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
@@ -349,7 +381,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *pb.Target,
 		f.t.Errorf("invalid StreamExecute.Query.BindVariables: got %v expected %v", query.BindVariables, streamExecuteBindVars)
 	}
 	if f.checkExtraFields {
-		f.checkTarget("StreamExecute", target)
+		f.checkTargetCallerID(ctx, "StreamExecute", target)
 	} else {
 		if query.SessionId != testSessionID {
 			f.t.Errorf("invalid StreamExecute.Query.SessionId: got %v expected %v", query.SessionId, testSessionID)
@@ -491,6 +523,7 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *Fak
 func testStreamExecute2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testStreamExecute2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
 		t.Fatalf("StreamExecute2 failed: %v", err)
@@ -530,6 +563,7 @@ func testStreamExecute2Panics(t *testing.T, conn tabletconn.TabletConn, fake *Fa
 	// by the StreamExecute2 call itself, or as the first error
 	// by ErrFunc
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	fake.streamExecutePanicsEarly = true
 	stream, errFunc, err := conn.StreamExecute2(ctx, streamExecuteQuery, streamExecuteBindVars, streamExecuteTransactionID)
 	if err != nil {
@@ -581,7 +615,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *pb.Target, 
 		f.t.Errorf("invalid ExecuteBatch.QueryList.Queries: got %v expected %v", queryList.Queries, executeBatchQueries)
 	}
 	if f.checkExtraFields {
-		f.checkTarget("ExecuteBatch", target)
+		f.checkTargetCallerID(ctx, "ExecuteBatch", target)
 	} else {
 		if queryList.SessionId != testSessionID {
 			f.t.Errorf("invalid ExecuteBatch.QueryList.SessionId: got %v expected %v", queryList.SessionId, testSessionID)
@@ -676,6 +710,7 @@ func testExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn) {
 func testExecuteBatch2(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testExecuteBatch2")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qrl, err := conn.ExecuteBatch2(ctx, executeBatchQueries, true, executeBatchTransactionID)
 	if err != nil {
 		t.Fatalf("ExecuteBatch failed: %v", err)
@@ -699,7 +734,7 @@ func (f *FakeQueryService) SplitQuery(ctx context.Context, target *pb.Target, re
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	if f.checkExtraFields {
-		f.checkTarget("SplitQuery", target)
+		f.checkTargetCallerID(ctx, "SplitQuery", target)
 	}
 	if !reflect.DeepEqual(req.Query, splitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", req.Query, splitQueryBoundQuery)
@@ -740,6 +775,7 @@ var splitQueryQuerySplitList = []proto.QuerySplit{
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testSplitQuery")
 	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, testCallerID, testVTGateCallerID)
 	qsl, err := conn.SplitQuery(ctx, splitQueryBoundQuery, splitQuerySplitColumn, splitQuerySplitCount)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
@@ -906,9 +942,9 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 	testExecuteBatch2Panics(t, conn)
 	testSplitQueryPanics(t, conn)
 	testStreamHealthPanics(t, conn)
-	conn.Close()
 
 	// force panic without extra fields
+	conn.Close()
 	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)

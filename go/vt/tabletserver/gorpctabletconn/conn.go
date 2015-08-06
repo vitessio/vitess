@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -132,6 +133,26 @@ func (conn *TabletBson) Execute(ctx context.Context, query string, bindVars map[
 	return qr, nil
 }
 
+func getEffectiveCallerID(ctx context.Context) *tproto.CallerID {
+	if ef := callerid.EffectiveCallerIDFromContext(ctx); ef != nil {
+		return &tproto.CallerID{
+			Principal:    ef.Principal,
+			Component:    ef.Component,
+			Subcomponent: ef.Subcomponent,
+		}
+	}
+	return nil
+}
+
+func getImmediateCallerID(ctx context.Context) *tproto.VTGateCallerID {
+	if im := callerid.ImmediateCallerIDFromContext(ctx); im != nil {
+		return &tproto.VTGateCallerID{
+			Username: im.Username,
+		}
+	}
+	return nil
+}
+
 // Execute2 should not be used now other than in tests.
 // It is the CallerID enabled version of Execute
 // Execute2 sends to query to VTTablet
@@ -143,7 +164,9 @@ func (conn *TabletBson) Execute2(ctx context.Context, query string, bindVars map
 	}
 
 	req := &tproto.ExecuteRequest{
-		Target: conn.target,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
 		QueryRequest: tproto.Query{
 			Sql:           query,
 			BindVariables: bindVars,
@@ -207,7 +230,9 @@ func (conn *TabletBson) ExecuteBatch2(ctx context.Context, queries []tproto.Boun
 	}
 
 	req := tproto.ExecuteBatchRequest{
-		Target: conn.target,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
 		QueryBatch: tproto.QueryList{
 			Queries:       queries,
 			AsTransaction: asTransaction,
@@ -293,7 +318,9 @@ func (conn *TabletBson) StreamExecute2(ctx context.Context, query string, bindVa
 	}
 
 	req := &tproto.StreamExecuteRequest{
-		Target: conn.target,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
 		Query: &tproto.Query{
 			Sql:           query,
 			BindVariables: bindVars,
@@ -377,8 +404,10 @@ func (conn *TabletBson) Begin2(ctx context.Context) (transactionID int64, err er
 	}
 
 	beginRequest := &tproto.BeginRequest{
-		Target:    conn.target,
-		SessionId: conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
+		SessionId:         conn.sessionID,
 	}
 	beginResponse := new(tproto.BeginResponse)
 	action := func() error {
@@ -423,9 +452,11 @@ func (conn *TabletBson) Commit2(ctx context.Context, transactionID int64) error 
 	}
 
 	commitRequest := &tproto.CommitRequest{
-		Target:        conn.target,
-		SessionId:     conn.sessionID,
-		TransactionId: transactionID,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
+		SessionId:         conn.sessionID,
+		TransactionId:     transactionID,
 	}
 	commitResponse := new(tproto.CommitResponse)
 	action := func() error {
@@ -470,9 +501,11 @@ func (conn *TabletBson) Rollback2(ctx context.Context, transactionID int64) erro
 	}
 
 	rollbackRequest := &tproto.RollbackRequest{
-		Target:        conn.target,
-		SessionId:     conn.sessionID,
-		TransactionId: transactionID,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
+		SessionId:         conn.sessionID,
+		TransactionId:     transactionID,
 	}
 	rollbackResponse := new(tproto.RollbackResponse)
 	action := func() error {
@@ -496,11 +529,13 @@ func (conn *TabletBson) SplitQuery(ctx context.Context, query tproto.BoundQuery,
 		return
 	}
 	req := &tproto.SplitQueryRequest{
-		Target:      conn.target,
-		Query:       query,
-		SplitColumn: splitColumn,
-		SplitCount:  splitCount,
-		SessionID:   conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerID: getEffectiveCallerID(ctx),
+		ImmediateCallerID: getImmediateCallerID(ctx),
+		Query:             query,
+		SplitColumn:       splitColumn,
+		SplitCount:        splitCount,
+		SessionID:         conn.sessionID,
 	}
 	reply := new(tproto.SplitQueryResult)
 	action := func() error {
