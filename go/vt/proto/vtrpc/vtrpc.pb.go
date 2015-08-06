@@ -19,33 +19,121 @@ import proto "github.com/golang/protobuf/proto"
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
-// ErrorCode is the enum values for Errors
+// ErrorCode is the enum values for Errors. Internally, errors should
+// be created with one of these codes. These will then be translated over the wire
+// by various RPC frameworks.
 type ErrorCode int32
 
 const (
-	// NoError means there was no error, and the message should be ignored.
-	ErrorCode_NoError ErrorCode = 0
-	// TabletError is the base VtTablet error. All VtTablet errors
-	// should be 4 digits, starting with 1.
-	ErrorCode_TabletError ErrorCode = 1000
-	// UnknownTabletError is the code for an unknown error that came
-	// from VtTablet.
-	ErrorCode_UnknownTabletError ErrorCode = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors
-	// should be 4 digits, starting with 2.
-	ErrorCode_VtgateError ErrorCode = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	ErrorCode_UnknownVtgateError ErrorCode = 2999
+	// SUCCESS is returned from a successful call
+	ErrorCode_SUCCESS ErrorCode = 0
+	// CANCELLED means that the context was cancelled (and noticed in the app layer,
+	// as opposed to the RPC layer)
+	ErrorCode_CANCELLED ErrorCode = 1
+	// UNKNOWN_ERROR includes:
+	// 1. MySQL error codes that we don't explicitly handle
+	// 2.  MySQL response that wasn't as expected. For example, we might expect a MySQL
+	//  timestamp to be returned in a particular way, but it wasn't.
+	// 3. Anything else that doesn't fall into a different bucket.
+	ErrorCode_UNKNOWN_ERROR ErrorCode = 2
+	// BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly,
+	// or tries a query that isn't supported by Vitess.
+	ErrorCode_BAD_INPUT ErrorCode = 3
+	// DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.
+	ErrorCode_DEADLINE_EXCEEDED ErrorCode = 4
+	// INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
+	// duplicate primary keys
+	ErrorCode_INTEGRITY_ERROR ErrorCode = 5
+	// PERMISSION_DENIED errors are returned when a user requests access to something
+	// that they don't have permissions for.
+	ErrorCode_PERMISSION_DENIED ErrorCode = 6
+	// THROTTLED_ERROR is returned when a user exceeds their quota in some dimension and
+	// get throttled due to that.
+	ErrorCode_THROTTLED_ERROR ErrorCode = 7
+	// QUERY_NOT_SERVED means that a query could not be served right now.
+	// This could be due to various reasons: QueryService is not running,
+	// should not be running, wrong shard, wrong tablet type, etc. Clients that
+	// receive this error should usually re-resolve the topology, and then retry the query.
+	ErrorCode_QUERY_NOT_SERVED ErrorCode = 8
+	// NOT_IN_TX means that we're not currently in a transaction, but we should be.
+	ErrorCode_NOT_IN_TX ErrorCode = 9
+	// INTERNAL_ERROR is returned when:
+	//  1. Something is not configured correctly internally.
+	//  2. A necessary resource is not available
+	//  3. Some other internal error occures
+	// INTERNAL_ERRORs are not problems that are expected to fix themselves, and retrying
+	// the query will not help.
+	ErrorCode_INTERNAL_ERROR ErrorCode = 10
+	// RESOURCE_TEMPORARILY_UNAVAILABLE is used for when a resource limit has temporarily
+	// been reached. Trying this error, with an exponential backoff, should succeed.
+	// Various types of resources can be exhausted, including:
+	// 1. TxPool can be full
+	// 2. VtGate could have request backlog
+	// 3. MySQL could have a deadlock
+	ErrorCode_RESOURCE_TEMPORARILY_UNAVAILABLE ErrorCode = 11
 )
 
 var ErrorCode_name = map[int32]string{
+	0:  "SUCCESS",
+	1:  "CANCELLED",
+	2:  "UNKNOWN_ERROR",
+	3:  "BAD_INPUT",
+	4:  "DEADLINE_EXCEEDED",
+	5:  "INTEGRITY_ERROR",
+	6:  "PERMISSION_DENIED",
+	7:  "THROTTLED_ERROR",
+	8:  "QUERY_NOT_SERVED",
+	9:  "NOT_IN_TX",
+	10: "INTERNAL_ERROR",
+	11: "RESOURCE_TEMPORARILY_UNAVAILABLE",
+}
+var ErrorCode_value = map[string]int32{
+	"SUCCESS":                          0,
+	"CANCELLED":                        1,
+	"UNKNOWN_ERROR":                    2,
+	"BAD_INPUT":                        3,
+	"DEADLINE_EXCEEDED":                4,
+	"INTEGRITY_ERROR":                  5,
+	"PERMISSION_DENIED":                6,
+	"THROTTLED_ERROR":                  7,
+	"QUERY_NOT_SERVED":                 8,
+	"NOT_IN_TX":                        9,
+	"INTERNAL_ERROR":                   10,
+	"RESOURCE_TEMPORARILY_UNAVAILABLE": 11,
+}
+
+func (x ErrorCode) String() string {
+	return proto.EnumName(ErrorCode_name, int32(x))
+}
+
+// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
+// should instead be using ErrorCode.
+type ErrorCodeDeprecated int32
+
+const (
+	// NoError means there was no error, and the message should be ignored.
+	ErrorCodeDeprecated_NoError ErrorCodeDeprecated = 0
+	// TabletError is the base VtTablet error. All VtTablet errors
+	// should be 4 digits, starting with 1.
+	ErrorCodeDeprecated_TabletError ErrorCodeDeprecated = 1000
+	// UnknownTabletError is the code for an unknown error that came
+	// from VtTablet.
+	ErrorCodeDeprecated_UnknownTabletError ErrorCodeDeprecated = 1999
+	// VtgateError is the base VTGate error code. All VTGate errors
+	// should be 4 digits, starting with 2.
+	ErrorCodeDeprecated_VtgateError ErrorCodeDeprecated = 2000
+	// UnknownVtgateError is the code for an unknown error that came from VTGate.
+	ErrorCodeDeprecated_UnknownVtgateError ErrorCodeDeprecated = 2999
+)
+
+var ErrorCodeDeprecated_name = map[int32]string{
 	0:    "NoError",
 	1000: "TabletError",
 	1999: "UnknownTabletError",
 	2000: "VtgateError",
 	2999: "UnknownVtgateError",
 }
-var ErrorCode_value = map[string]int32{
+var ErrorCodeDeprecated_value = map[string]int32{
 	"NoError":            0,
 	"TabletError":        1000,
 	"UnknownTabletError": 1999,
@@ -53,8 +141,8 @@ var ErrorCode_value = map[string]int32{
 	"UnknownVtgateError": 2999,
 }
 
-func (x ErrorCode) String() string {
-	return proto.EnumName(ErrorCode_name, int32(x))
+func (x ErrorCodeDeprecated) String() string {
+	return proto.EnumName(ErrorCodeDeprecated_name, int32(x))
 }
 
 // CallerID is passed along RPCs to identify the originating client
@@ -91,8 +179,8 @@ func (*CallerID) ProtoMessage()    {}
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	Code    ErrorCode `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCode" json:"code,omitempty"`
-	Message string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	Code    ErrorCodeDeprecated `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCodeDeprecated" json:"code,omitempty"`
+	Message string              `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
 }
 
 func (m *RPCError) Reset()         { *m = RPCError{} }
@@ -101,4 +189,5 @@ func (*RPCError) ProtoMessage()    {}
 
 func init() {
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
+	proto.RegisterEnum("vtrpc.ErrorCodeDeprecated", ErrorCodeDeprecated_name, ErrorCodeDeprecated_value)
 }

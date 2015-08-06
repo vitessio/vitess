@@ -329,7 +329,7 @@ func TabletErrorToRPCError(err error) *vtrpc.RPCError {
 	if terr, ok := err.(*TabletError); ok {
 		return &vtrpc.RPCError{
 			// Transform TabletError code to VitessError code
-			Code: vtrpc.ErrorCode(int64(terr.ErrorType) + vterrors.TabletError),
+			Code: vtrpc.ErrorCodeDeprecated(int64(terr.ErrorType) + vterrors.TabletError),
 			// Make sure the the VitessError message is identical to the TabletError
 			// err, so that downstream consumers will see identical messages no matter
 			// which endpoint they're using.
@@ -337,7 +337,7 @@ func TabletErrorToRPCError(err error) *vtrpc.RPCError {
 		}
 	}
 	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCode_UnknownTabletError,
+		Code:    vtrpc.ErrorCodeDeprecated_UnknownTabletError,
 		Message: err.Error(),
 	}
 }
