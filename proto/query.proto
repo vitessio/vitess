@@ -159,8 +159,7 @@ message GetSessionIdRequest {
 
 // GetSessionIdResponse is the returned value from GetSessionId
 message GetSessionIdResponse {
-  vtrpc.RPCError error = 1;
-  int64 session_id = 2;
+  int64 session_id = 1;
 }
 
 // ExecuteRequest is the payload to Execute
@@ -175,8 +174,7 @@ message ExecuteRequest {
 
 // ExecuteResponse is the returned value from Execute
 message ExecuteResponse {
-  vtrpc.RPCError error = 1;
-  QueryResult result = 2;
+  QueryResult result = 1;
 }
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
@@ -192,8 +190,7 @@ message ExecuteBatchRequest {
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 message ExecuteBatchResponse {
-  vtrpc.RPCError error = 1;
-  repeated QueryResult results = 2;
+  repeated QueryResult results = 1;
 }
 
 // StreamExecuteRequest is the payload to StreamExecute
@@ -207,8 +204,7 @@ message StreamExecuteRequest {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 message StreamExecuteResponse {
-  vtrpc.RPCError error = 1;
-  QueryResult result = 2;
+  QueryResult result = 1;
 }
 
 // BeginRequest is the payload to Begin
@@ -221,8 +217,7 @@ message BeginRequest {
 
 // BeginResponse is the returned value from Begin
 message BeginResponse {
-  vtrpc.RPCError error = 1;
-  int64 transaction_id = 2;
+  int64 transaction_id = 1;
 }
 
 // CommitRequest is the payload to Commit
@@ -235,9 +230,7 @@ message CommitRequest {
 }
 
 // CommitResponse is the returned value from Commit
-message CommitResponse {
-  vtrpc.RPCError error = 1;
-}
+message CommitResponse {}
 
 // RollbackRequest is the payload to Rollback
 message RollbackRequest {
@@ -249,9 +242,7 @@ message RollbackRequest {
 }
 
 // RollbackResponse is the returned value from Rollback
-message RollbackResponse {
-  vtrpc.RPCError error = 1;
-}
+message RollbackResponse {}
 
 // SplitQueryRequest is the payload for SplitQuery
 message SplitQueryRequest {
@@ -276,8 +267,7 @@ message QuerySplit {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 message SplitQueryResponse {
-  vtrpc.RPCError error = 1;
-  repeated QuerySplit queries = 2;
+  repeated QuerySplit queries = 1;
 }
 
 // StreamHealthRequest is the payload for StreamHealth
