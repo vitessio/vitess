@@ -170,6 +170,8 @@ type CallerID struct {
 	Subcomponent string
 }
 
+//go:generate bsongen -file $GOFILE -type CallerID -o callerid_bson.go
+
 // VTGateCallerID is the BSON implementation of the proto3 query.VTGateCallerID
 type VTGateCallerID struct {
 	Username string

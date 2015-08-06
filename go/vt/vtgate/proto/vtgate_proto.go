@@ -43,6 +43,7 @@ func (shardSession *ShardSession) String() string {
 
 // Query represents a keyspace agnostic query request.
 type Query struct {
+	CallerID         *tproto.CallerID // only used by BSON
 	Sql              string
 	BindVariables    map[string]interface{}
 	TabletType       topo.TabletType
@@ -55,6 +56,7 @@ type Query struct {
 // QueryShard represents a query request for the
 // specified list of shards.
 type QueryShard struct {
+	CallerID         *tproto.CallerID // only used by BSON
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -69,6 +71,7 @@ type QueryShard struct {
 // KeyspaceIdQuery represents a query request for the
 // specified list of keyspace IDs.
 type KeyspaceIdQuery struct {
+	CallerID         *tproto.CallerID // only used by BSON
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -83,6 +86,7 @@ type KeyspaceIdQuery struct {
 // KeyRangeQuery represents a query request for the
 // specified list of keyranges.
 type KeyRangeQuery struct {
+	CallerID         *tproto.CallerID // only used by BSON
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -104,6 +108,7 @@ type EntityId struct {
 
 // EntityIdsQuery represents a query request for the specified KeyspaceId map.
 type EntityIdsQuery struct {
+	CallerID          *tproto.CallerID // only used by BSON
 	Sql               string
 	BindVariables     map[string]interface{}
 	Keyspace          string
@@ -140,6 +145,7 @@ type BoundShardQuery struct {
 // BatchQueryShard represents a batch query request
 // for the specified shards.
 type BatchQueryShard struct {
+	CallerID      *tproto.CallerID // only used by BSON
 	Queries       []BoundShardQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
@@ -162,6 +168,7 @@ type BoundKeyspaceIdQuery struct {
 // KeyspaceIdBatchQuery represents a batch query request
 // for the specified keyspace IDs.
 type KeyspaceIdBatchQuery struct {
+	CallerID      *tproto.CallerID // only used by BSON
 	Queries       []BoundKeyspaceIdQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
@@ -180,6 +187,7 @@ type QueryResultList struct {
 
 // SplitQueryRequest is a request to split a query into multiple parts
 type SplitQueryRequest struct {
+	CallerID    *tproto.CallerID // only used by BSON
 	Keyspace    string
 	Query       tproto.BoundQuery
 	SplitColumn string
@@ -200,9 +208,9 @@ type SplitQueryResult struct {
 	Err    *mproto.RPCError
 }
 
-// BeginRequest is the BSON implementation of the proto3 query.BeginkRequest
+// BeginRequest is the BSON implementation of the proto3 query.BeginRequest
 type BeginRequest struct {
-	CallerID *tproto.CallerID
+	CallerID *tproto.CallerID // only used by BSON
 }
 
 // BeginResponse is the BSON implementation of the proto3 vtgate.BeginResponse
@@ -215,7 +223,7 @@ type BeginResponse struct {
 
 // CommitRequest is the BSON implementation of the proto3 vtgate.CommitRequest
 type CommitRequest struct {
-	CallerID *tproto.CallerID
+	CallerID *tproto.CallerID // only used by BSON
 	Session  *Session
 }
 
@@ -228,7 +236,7 @@ type CommitResponse struct {
 
 // RollbackRequest is the BSON implementation of the proto3 vtgate.RollbackRequest
 type RollbackRequest struct {
-	CallerID *tproto.CallerID
+	CallerID *tproto.CallerID // only used by BSON
 	Session  *Session
 }
 

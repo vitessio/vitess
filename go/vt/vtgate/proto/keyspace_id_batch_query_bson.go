@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes KeyspaceIdBatchQuery.
@@ -19,6 +20,12 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) MarshalBson(buf *bytes2.Chunke
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
+	// *tproto.CallerID
+	if keyspaceIdBatchQuery.CallerID == nil {
+		bson.EncodePrefix(buf, bson.Null, "CallerID")
+	} else {
+		(*keyspaceIdBatchQuery.CallerID).MarshalBson(buf, "CallerID")
+	}
 	// []BoundKeyspaceIdQuery
 	{
 		bson.EncodePrefix(buf, bson.Array, "Queries")
@@ -54,6 +61,12 @@ func (keyspaceIdBatchQuery *KeyspaceIdBatchQuery) UnmarshalBson(buf *bytes.Buffe
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
+		case "CallerID":
+			// *tproto.CallerID
+			if kind != bson.Null {
+				keyspaceIdBatchQuery.CallerID = new(tproto.CallerID)
+				(*keyspaceIdBatchQuery.CallerID).UnmarshalBson(buf, kind)
+			}
 		case "Queries":
 			// []BoundKeyspaceIdQuery
 			if kind != bson.Null {

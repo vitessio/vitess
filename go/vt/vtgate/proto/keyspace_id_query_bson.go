@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes KeyspaceIdQuery.
@@ -20,6 +21,12 @@ func (keyspaceIdQuery *KeyspaceIdQuery) MarshalBson(buf *bytes2.ChunkedWriter, k
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
+	// *tproto.CallerID
+	if keyspaceIdQuery.CallerID == nil {
+		bson.EncodePrefix(buf, bson.Null, "CallerID")
+	} else {
+		(*keyspaceIdQuery.CallerID).MarshalBson(buf, "CallerID")
+	}
 	bson.EncodeString(buf, "Sql", keyspaceIdQuery.Sql)
 	// map[string]interface{}
 	{
@@ -66,6 +73,12 @@ func (keyspaceIdQuery *KeyspaceIdQuery) UnmarshalBson(buf *bytes.Buffer, kind by
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
+		case "CallerID":
+			// *tproto.CallerID
+			if kind != bson.Null {
+				keyspaceIdQuery.CallerID = new(tproto.CallerID)
+				(*keyspaceIdQuery.CallerID).UnmarshalBson(buf, kind)
+			}
 		case "Sql":
 			keyspaceIdQuery.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
