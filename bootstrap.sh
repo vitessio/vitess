@@ -109,7 +109,12 @@ repos="github.com/golang/glog \
 repos+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
-repos+=" golang.org/x/tools/cmd/cover"
+source tools/shell_functions.inc
+if goversion_min 1.4; then
+  repos+=" golang.org/x/tools/cmd/cover"
+else
+  repos+=" code.google.com/p/go.tools/cmd/cover"
+fi
 
 go get -u $repos
 
