@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes KeyRangeQuery.
@@ -20,6 +21,12 @@ func (keyRangeQuery *KeyRangeQuery) MarshalBson(buf *bytes2.ChunkedWriter, key s
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
+	// *tproto.CallerID
+	if keyRangeQuery.CallerID == nil {
+		bson.EncodePrefix(buf, bson.Null, "CallerID")
+	} else {
+		(*keyRangeQuery.CallerID).MarshalBson(buf, "CallerID")
+	}
 	bson.EncodeString(buf, "Sql", keyRangeQuery.Sql)
 	// map[string]interface{}
 	{
@@ -66,6 +73,12 @@ func (keyRangeQuery *KeyRangeQuery) UnmarshalBson(buf *bytes.Buffer, kind byte) 
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
+		case "CallerID":
+			// *tproto.CallerID
+			if kind != bson.Null {
+				keyRangeQuery.CallerID = new(tproto.CallerID)
+				(*keyRangeQuery.CallerID).UnmarshalBson(buf, kind)
+			}
 		case "Sql":
 			keyRangeQuery.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":

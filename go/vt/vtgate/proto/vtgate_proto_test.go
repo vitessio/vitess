@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	kproto "github.com/youtube/vitess/go/vt/key"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -91,6 +92,7 @@ func TestSession(t *testing.T) {
 }
 
 type reflectQueryShard struct {
+	CallerID         *tproto.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -101,6 +103,7 @@ type reflectQueryShard struct {
 }
 
 type extraQueryShard struct {
+	CallerID         *tproto.CallerID
 	Extra            int
 	Sql              string
 	BindVariables    map[string]interface{}
@@ -209,6 +212,7 @@ type reflectBoundShardQuery struct {
 }
 
 type reflectBatchQueryShard struct {
+	CallerID      *tproto.CallerID
 	Queries       []reflectBoundShardQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
@@ -216,6 +220,7 @@ type reflectBatchQueryShard struct {
 }
 
 type extraBatchQueryShard struct {
+	CallerID      *tproto.CallerID
 	Extra         int
 	Queries       []reflectBoundShardQuery
 	TabletType    topo.TabletType
@@ -393,6 +398,7 @@ func TestQueryResultList(t *testing.T) {
 }
 
 type reflectKeyspaceIdQuery struct {
+	CallerID         *tproto.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -403,6 +409,7 @@ type reflectKeyspaceIdQuery struct {
 }
 
 type extraKeyspaceIdQuery struct {
+	CallerID         *tproto.CallerID
 	Extra            int
 	Sql              string
 	BindVariables    map[string]interface{}
@@ -465,6 +472,7 @@ func TestKeyspaceIdQuery(t *testing.T) {
 }
 
 type reflectKeyRangeQuery struct {
+	CallerID         *tproto.CallerID
 	Sql              string
 	BindVariables    map[string]interface{}
 	Keyspace         string
@@ -475,6 +483,7 @@ type reflectKeyRangeQuery struct {
 }
 
 type extraKeyRangeQuery struct {
+	CallerID         *tproto.CallerID
 	Extra            int
 	Sql              string
 	BindVariables    map[string]interface{}
@@ -544,6 +553,7 @@ type reflectBoundKeyspaceIdQuery struct {
 }
 
 type reflectKeyspaceIdBatchQuery struct {
+	CallerID      *tproto.CallerID
 	Queries       []reflectBoundKeyspaceIdQuery
 	TabletType    topo.TabletType
 	AsTransaction bool
@@ -551,6 +561,7 @@ type reflectKeyspaceIdBatchQuery struct {
 }
 
 type extraKeyspaceIdBatchQuery struct {
+	CallerID      *tproto.CallerID
 	Extra         int
 	Queries       []reflectBoundKeyspaceIdQuery
 	TabletType    topo.TabletType

@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // MarshalBson bson-encodes QueryShard.
@@ -19,6 +20,12 @@ func (queryShard *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter, key string)
 	bson.EncodeOptionalPrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
+	// *tproto.CallerID
+	if queryShard.CallerID == nil {
+		bson.EncodePrefix(buf, bson.Null, "CallerID")
+	} else {
+		(*queryShard.CallerID).MarshalBson(buf, "CallerID")
+	}
 	bson.EncodeString(buf, "Sql", queryShard.Sql)
 	// map[string]interface{}
 	{
@@ -65,6 +72,12 @@ func (queryShard *QueryShard) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		switch bson.ReadCString(buf) {
+		case "CallerID":
+			// *tproto.CallerID
+			if kind != bson.Null {
+				queryShard.CallerID = new(tproto.CallerID)
+				(*queryShard.CallerID).UnmarshalBson(buf, kind)
+			}
 		case "Sql":
 			queryShard.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
