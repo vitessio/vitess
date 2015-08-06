@@ -38,6 +38,12 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 
 // UnlockKeyspace unlocks a previously locked keyspace.
 func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspace string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UnlockKeyspaceForAction")
 	span.Annotate("action", n.Action)
@@ -82,6 +88,12 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 
 // UnlockShard unlocks a previously locked shard.
 func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, shard string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UnlockShardForAction")
 	span.Annotate("action", n.Action)
@@ -128,6 +140,12 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 
 // UnlockSrvShard unlocks a previously locked serving shard.
 func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, keyspace, shard string, lockPath string, actionError error) error {
+	// Detach from the parent timeout, but copy the trace span.
+	// We need to still release the lock even if the parent context timed out.
+	ctx = trace.CopySpan(context.TODO(), ctx)
+	ctx, cancel := context.WithTimeout(ctx, DefaultLockTimeout)
+	defer cancel()
+
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UnlockSrvShardForAction")
 	span.Annotate("action", n.Action)
