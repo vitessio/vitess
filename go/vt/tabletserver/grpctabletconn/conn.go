@@ -12,33 +12,38 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+const protocolName = "grpc"
+
 func init() {
-	tabletconn.RegisterDialer("grpc", DialTablet)
+	tabletconn.RegisterDialer(protocolName, DialTablet)
 }
 
 // gRPCQueryClient implements a gRPC implementation for TabletConn
 type gRPCQueryClient struct {
+	// endPoint is set at construction time, and never changed
+	endPoint *pbt.EndPoint
+
+	// mu protects the next fields
 	mu        sync.RWMutex
-	endPoint  *pbt.EndPoint
 	cc        *grpc.ClientConn
 	c         pbs.QueryClient
 	sessionID int64
+	target    *pb.Target
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
 	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
@@ -52,7 +57,8 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 		cc:       cc,
 		c:        c,
 	}
-	if keyspace != "" || shard != "" {
+	if tabletType == pbt.TabletType_UNKNOWN {
+		// we use session
 		gsir, err := c.GetSessionId(ctx, &pb.GetSessionIdRequest{
 			Keyspace: keyspace,
 			Shard:    shard,
@@ -61,11 +67,14 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 			cc.Close()
 			return nil, err
 		}
-		if gsir.Error != nil {
-			cc.Close()
-			return nil, tabletErrorFromRPCError(gsir.Error)
-		}
 		result.sessionID = gsir.SessionId
+	} else {
+		// we use target
+		result.target = &pb.Target{
+			Keyspace:   keyspace,
+			Shard:      shard,
+			TabletType: tabletType,
+		}
 	}
 
 	return result, nil
@@ -80,16 +89,16 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, query string, bindVars
 	}
 
 	req := &pb.ExecuteRequest{
-		Query:         tproto.BoundQueryToProto3(query, bindVars),
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query, bindVars),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
-	}
-	if er.Error != nil {
-		return nil, tabletErrorFromRPCError(er.Error)
 	}
 	return mproto.Proto3ToQueryResult(er.Result), nil
 }
@@ -108,10 +117,13 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	}
 
 	req := &pb.ExecuteBatchRequest{
-		Queries:       make([]*pb.BoundQuery, len(queries)),
-		AsTransaction: asTransaction,
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Queries:           make([]*pb.BoundQuery, len(queries)),
+		AsTransaction:     asTransaction,
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
 	for i, q := range queries {
 		req.Queries[i] = tproto.BoundQueryToProto3(q.Sql, q.BindVariables)
@@ -119,9 +131,6 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, queries []tproto.
 	ebr, err := conn.c.ExecuteBatch(ctx, req)
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
-	}
-	if ebr.Error != nil {
-		return nil, tabletErrorFromRPCError(ebr.Error)
 	}
 	return tproto.Proto3ToQueryResultList(ebr.Results), nil
 }
@@ -140,8 +149,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 	}
 
 	req := &pb.StreamExecuteRequest{
-		Query:     tproto.BoundQueryToProto3(query, bindVars),
-		SessionId: conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query, bindVars),
+		SessionId:         conn.sessionID,
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
@@ -156,11 +168,6 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, query string, bi
 				if err != io.EOF {
 					finalError = tabletErrorFromGRPC(err)
 				}
-				close(sr)
-				return
-			}
-			if ser.Error != nil {
-				finalError = tabletErrorFromRPCError(ser.Error)
 				close(sr)
 				return
 			}
@@ -186,14 +193,14 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context) (transactionID int64, er
 	}
 
 	req := &pb.BeginRequest{
-		SessionId: conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		SessionId:         conn.sessionID,
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
 		return 0, tabletErrorFromGRPC(err)
-	}
-	if br.Error != nil {
-		return 0, tabletErrorFromRPCError(br.Error)
 	}
 	return br.TransactionId, nil
 }
@@ -212,15 +219,15 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, transactionID int64) er
 	}
 
 	req := &pb.CommitRequest{
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
-	cr, err := conn.c.Commit(ctx, req)
+	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
 		return tabletErrorFromGRPC(err)
-	}
-	if cr.Error != nil {
-		return tabletErrorFromRPCError(cr.Error)
 	}
 	return nil
 }
@@ -239,15 +246,15 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, transactionID int64) 
 	}
 
 	req := &pb.RollbackRequest{
-		TransactionId: transactionID,
-		SessionId:     conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		TransactionId:     transactionID,
+		SessionId:         conn.sessionID,
 	}
-	rr, err := conn.c.Rollback(ctx, req)
+	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
 		return tabletErrorFromGRPC(err)
-	}
-	if rr.Error != nil {
-		return tabletErrorFromRPCError(rr.Error)
 	}
 	return nil
 }
@@ -267,17 +274,17 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	}
 
 	req := &pb.SplitQueryRequest{
-		Query:       tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
-		SplitColumn: splitColumn,
-		SplitCount:  int64(splitCount),
-		SessionId:   conn.sessionID,
+		Target:            conn.target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query:             tproto.BoundQueryToProto3(query.Sql, query.BindVariables),
+		SplitColumn:       splitColumn,
+		SplitCount:        int64(splitCount),
+		SessionId:         conn.sessionID,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
 		return nil, tabletErrorFromGRPC(err)
-	}
-	if sqr.Error != nil {
-		return nil, tabletErrorFromRPCError(sqr.Error)
 	}
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
@@ -329,6 +336,24 @@ func (conn *gRPCQueryClient) Close() {
 	cc.Close()
 }
 
+// SetTarget can be called to change the target used for subsequent calls.
+func (conn *gRPCQueryClient) SetTarget(keyspace, shard string, tabletType pbt.TabletType) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.target == nil {
+		return fmt.Errorf("cannot set target on sessionId based conn")
+	}
+	if tabletType == pbt.TabletType_UNKNOWN {
+		return fmt.Errorf("cannot set tablet type to UNKNOWN")
+	}
+	conn.target = &pb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	return nil
+}
+
 // EndPoint returns the rpc end point.
 func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
@@ -338,20 +363,4 @@ func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 // gRPC error.
 func tabletErrorFromGRPC(err error) error {
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
-}
-
-// tabletErrorFromRPCError reconstructs a tablet error from the
-// RPCError, using the RPCError code.
-func tabletErrorFromRPCError(rpcErr *pbv.RPCError) error {
-	ve := vterrors.FromVtRPCError(rpcErr)
-
-	// see if the range is in the tablet error range
-	if ve.Code >= int64(pbv.ErrorCodeDeprecated_TabletError) && ve.Code <= int64(pbv.ErrorCodeDeprecated_UnknownTabletError) {
-		return &tabletconn.ServerError{
-			Code: int(ve.Code - int64(pbv.ErrorCodeDeprecated_TabletError)),
-			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
-		}
-	}
-
-	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }

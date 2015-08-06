@@ -173,7 +173,7 @@ func (vsdw *VerticalSplitDiffWorker) init(ctx context.Context) error {
 	if len(vsdw.shardInfo.SourceShards[0].Tables) == 0 {
 		return fmt.Errorf("shard %v/%v has no tables in source shard[0]", vsdw.keyspace, vsdw.shard)
 	}
-	if vsdw.shardInfo.MasterAlias.IsZero() {
+	if topo.TabletAliasIsZero(vsdw.shardInfo.MasterAlias) {
 		return fmt.Errorf("shard %v/%v has no master", vsdw.keyspace, vsdw.shard)
 	}
 
@@ -224,7 +224,7 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.shardInfo.MasterAlias)
+	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, topo.ProtoToTabletAlias(vsdw.shardInfo.MasterAlias))
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", vsdw.shardInfo.MasterAlias, err)
 	}

@@ -10,11 +10,13 @@ import (
 
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var testKeyRange = key.KeyRange{
-	Start: key.KeyspaceId(key.Uint64Key(0).String()),
-	End:   key.KeyspaceId(key.Uint64Key(10).String()),
+var testKeyRange = &pb.KeyRange{
+	Start: key.Uint64Key(0).Bytes(),
+	End:   key.Uint64Key(10).Bytes(),
 }
 
 func TestKeyRangeFilterPass(t *testing.T) {

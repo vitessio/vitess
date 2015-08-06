@@ -386,6 +386,7 @@ func (rqsc *realQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *
 func (rqsc *realQueryServiceControl) IsHealthy() error {
 	return rqsc.sqlQueryRPCService.Execute(
 		context.Background(),
+		nil,
 		&proto.Query{
 			Sql:       "select 1 from dual",
 			SessionId: rqsc.sqlQueryRPCService.sessionID,

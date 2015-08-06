@@ -5,8 +5,9 @@
 package actionnode
 
 import (
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -39,12 +40,12 @@ type ApplySchemaShardArgs struct {
 // SetShardServedTypesArgs is the payload for SetShardServedTypes
 type SetShardServedTypesArgs struct {
 	Cells      []string
-	ServedType topo.TabletType
+	ServedType pb.TabletType
 }
 
 // MigrateServedTypesArgs is the payload for MigrateServedTypes
 type MigrateServedTypesArgs struct {
-	ServedType topo.TabletType
+	ServedType pb.TabletType
 }
 
 // keyspace action node structures
@@ -114,7 +115,7 @@ func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple 
 }
 
 // SetShardServedTypes returns an ActionNode
-func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode {
+func SetShardServedTypes(cells []string, servedType pb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionSetServedTypes,
 		Args: &SetShardServedTypesArgs{
@@ -125,7 +126,7 @@ func SetShardServedTypes(cells []string, servedType topo.TabletType) *ActionNode
 }
 
 // MigrateServedTypes returns an ActionNode
-func MigrateServedTypes(servedType topo.TabletType) *ActionNode {
+func MigrateServedTypes(servedType pb.TabletType) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionMigrateServedTypes,
 		Args: &MigrateServedTypesArgs{

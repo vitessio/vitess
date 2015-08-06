@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -47,15 +48,15 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 		if err != nil {
 			return fmt.Errorf("cannot get (or create) shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		}
-		if si.KeyRange != tablet.KeyRange {
+		if key.ProtoToKeyRange(si.KeyRange) != tablet.KeyRange {
 			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 		}
-		if tablet.Type == topo.TYPE_MASTER && !si.MasterAlias.IsZero() && si.MasterAlias != tablet.Alias && !force {
+		if tablet.Type == topo.TYPE_MASTER && !topo.TabletAliasIsZero(si.MasterAlias) && topo.ProtoToTabletAlias(si.MasterAlias) != tablet.Alias && !force {
 			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
 		}
 
 		// update the shard record if needed
-		if err := wr.updateShardCellsAndMaster(ctx, si, tablet.Alias, tablet.Type, force); err != nil {
+		if err := wr.updateShardCellsAndMaster(ctx, si, topo.TabletAliasToProto(tablet.Alias), topo.TabletTypeToProto(tablet.Type), force); err != nil {
 			return err
 		}
 	}
@@ -150,8 +151,8 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, for
 		}
 
 		// update it if the right alias is there
-		if si.MasterAlias == tabletAlias {
-			si.MasterAlias = topo.TabletAlias{}
+		if topo.TabletAliasEqual(si.MasterAlias, topo.TabletAliasToProto(tabletAlias)) {
+			si.MasterAlias = nil
 
 			// write it back
 			if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {

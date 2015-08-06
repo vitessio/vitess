@@ -5,7 +5,6 @@
 package topotools
 
 import (
-	"flag"
 	"fmt"
 	"sync"
 	"time"
@@ -18,8 +17,6 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-var _ = flag.Bool("lock_srvshard", false, "Unused")
 
 // RebuildShard updates the SrvShard objects and underlying serving graph.
 //
@@ -403,10 +400,12 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 // UpdateSrvShard creates the SrvShard object based on the global ShardInfo,
 // and writes it to the given cell.
 func UpdateSrvShard(ctx context.Context, ts topo.Server, cell string, si *topo.ShardInfo) error {
-	srvShard := &topo.SrvShard{
-		Name:       si.ShardName(),
-		KeyRange:   si.KeyRange,
-		MasterCell: si.MasterAlias.Cell,
+	srvShard := &pb.SrvShard{
+		Name:     si.ShardName(),
+		KeyRange: si.KeyRange,
+	}
+	if si.MasterAlias != nil {
+		srvShard.MasterCell = si.MasterAlias.Cell
 	}
 	return ts.UpdateSrvShard(ctx, cell, si.Keyspace(), si.ShardName(), srvShard)
 }

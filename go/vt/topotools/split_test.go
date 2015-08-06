@@ -1,16 +1,18 @@
 package topotools
 
 import (
+	"encoding/hex"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // helper methods for tests to be shorter
 
-func hki(hexValue string) key.KeyspaceId {
-	k, err := key.HexKeyspaceId(hexValue).Unhex()
+func hki(hexValue string) []byte {
+	k, err := hex.DecodeString(hexValue)
 	if err != nil {
 		panic(err)
 	}
@@ -19,9 +21,9 @@ func hki(hexValue string) key.KeyspaceId {
 
 func si(start, end string) *topo.ShardInfo {
 	s := hki(start)
-	e := hki((end))
-	return topo.NewShardInfo("keyspace", s.String()+"-"+e.String(), &topo.Shard{
-		KeyRange: key.KeyRange{
+	e := hki(end)
+	return topo.NewShardInfo("keyspace", start+"-"+end, &pb.Shard{
+		KeyRange: &pb.KeyRange{
 			Start: s,
 			End:   e,
 		},

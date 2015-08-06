@@ -5,12 +5,12 @@
 package worker
 
 import (
+	"encoding/hex"
 	"reflect"
 	"testing"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -32,9 +32,9 @@ func TestUint64FromKeyspaceId(t *testing.T) {
 		"1234cafe": "0x1234cafe00000000",
 	}
 	for input, want := range table {
-		keyspaceID, err := key.HexKeyspaceId(input).Unhex()
+		keyspaceID, err := hex.DecodeString(input)
 		if err != nil {
-			t.Errorf("Unhex error: %v", err)
+			t.Errorf("hex.DecodeString error: %v", err)
 			continue
 		}
 		if got := uint64FromKeyspaceId(keyspaceID); got != want {

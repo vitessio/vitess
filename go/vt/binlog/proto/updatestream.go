@@ -7,6 +7,8 @@ package proto
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // UpdateStream is the interface for the server
@@ -16,7 +18,7 @@ type UpdateStream interface {
 	ServeUpdateStream(position string, sendReply func(reply *StreamEvent) error) error
 
 	// StreamKeyRange streams events related to a KeyRange only
-	StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset, sendReply func(reply *BinlogTransaction) error) error
+	StreamKeyRange(position string, keyspaceIdType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset, sendReply func(reply *BinlogTransaction) error) error
 
 	// StreamTables streams events related to a set of Tables only
 	StreamTables(position string, tables []string, charset *mproto.Charset, sendReply func(reply *BinlogTransaction) error) error

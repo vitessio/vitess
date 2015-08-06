@@ -58,6 +58,22 @@ func (ta TabletAlias) IsZero() bool {
 	return ta.Cell == "" && ta.Uid == 0
 }
 
+// TabletAliasIsZero returns true iff cell and uid are empty
+func TabletAliasIsZero(ta *pb.TabletAlias) bool {
+	return ta == nil || (ta.Cell == "" && ta.Uid == 0)
+}
+
+// TabletAliasEqual returns true if two TabletAlias match
+func TabletAliasEqual(left, right *pb.TabletAlias) bool {
+	if left == nil {
+		return right == nil
+	}
+	if right == nil {
+		return false
+	}
+	return *left == *right
+}
+
 // String formats a TabletAlias
 func (ta TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
@@ -450,9 +466,13 @@ func (ti *TabletInfo) Version() int64 {
 // Complete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
 func (tablet *Tablet) Complete() error {
-	var err error
-	tablet.Shard, tablet.KeyRange, err = ValidateShardName(tablet.Shard)
-	return err
+	shard, kr, err := ValidateShardName(tablet.Shard)
+	if err != nil {
+		return err
+	}
+	tablet.Shard = shard
+	tablet.KeyRange = key.ProtoToKeyRange(kr)
+	return nil
 }
 
 // IsHealthEqual compares the tablet's health with the passed one, and

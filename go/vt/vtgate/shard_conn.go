@@ -297,7 +297,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 	allErrors := new(concurrency.AllErrorRecorder)
 	for _, endPoint := range endPoints {
 		perConnStartTime := time.Now()
-		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, perConnTimeout)
+		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, pb.TabletType_UNKNOWN, perConnTimeout)
 		if err == nil {
 			sdc.connectTimings.Record([]string{sdc.keyspace, sdc.shard, string(sdc.tabletType)}, perConnStartTime)
 			sdc.mu.Lock()

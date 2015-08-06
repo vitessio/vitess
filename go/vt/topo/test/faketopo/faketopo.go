@@ -70,7 +70,7 @@ func (ft FakeTopo) DeleteKeyspaceShards(ctx context.Context, keyspace string) er
 }
 
 // CreateShard implements topo.Server.
-func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *topo.Shard) error {
+func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
 	return errNotImplemented
 }
 
@@ -185,12 +185,12 @@ func (ft FakeTopo) WatchEndPoints(ctx context.Context, cell, keyspace, shard str
 }
 
 // UpdateSrvShard implements topo.Server.
-func (ft FakeTopo) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *topo.SrvShard) error {
+func (ft FakeTopo) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error {
 	return errNotImplemented
 }
 
 // GetSrvShard implements topo.Server.
-func (ft FakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*topo.SrvShard, error) {
+func (ft FakeTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error) {
 	return nil, errNotImplemented
 }
 

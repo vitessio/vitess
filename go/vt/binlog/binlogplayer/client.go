@@ -46,7 +46,7 @@ type Client interface {
 
 	// Ask the server to stream updates related to the provided keyrange.
 	// Should return context.Canceled if the context is canceled.
-	StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, ErrFunc, error)
+	StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange *pb.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, ErrFunc, error)
 }
 
 // ClientFactory is the factory method to create a Client

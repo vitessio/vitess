@@ -22,6 +22,7 @@ type TrackedBuffer struct {
 	nodeFormatter func(buf *TrackedBuffer, node SQLNode)
 }
 
+// NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
 	buf := &TrackedBuffer{
 		Buffer:        bytes.NewBuffer(make([]byte, 0, 128)),
@@ -88,8 +89,9 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 	}
 }
 
-// WriteArg writes a value argument into the buffer. arg should not contain
-// the ':' prefix. It also adds tracking info for future substitutions.
+// WriteArg writes a value argument into the buffer along with
+// tracking information for future substitutions. arg must contain
+// the ":" or "::" prefix.
 func (buf *TrackedBuffer) WriteArg(arg string) {
 	buf.bindLocations = append(buf.bindLocations, bindLocation{
 		offset: buf.Len(),
@@ -98,10 +100,13 @@ func (buf *TrackedBuffer) WriteArg(arg string) {
 	buf.WriteString(arg)
 }
 
+// ParsedQuery returns a ParsedQuery that contains bind
+// locations for easy substitution.
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
 	return &ParsedQuery{Query: buf.String(), bindLocations: buf.bindLocations}
 }
 
+// HasBindVars returns true if the parsed query uses bind vars.
 func (buf *TrackedBuffer) HasBindVars() bool {
 	return len(buf.bindLocations) != 0
 }

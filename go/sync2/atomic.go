@@ -10,76 +10,94 @@ import (
 	"time"
 )
 
-type AtomicInt32 int32
+// AtomicInt32 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int32 functions.
+type AtomicInt32 struct {
+	int32
+}
 
+// NewAtomicInt32 initializes a new AtomicInt32 with a given value.
+func NewAtomicInt32(n int32) AtomicInt32 {
+	return AtomicInt32{n}
+}
+
+// Add atomically adds n to the value.
 func (i *AtomicInt32) Add(n int32) int32 {
-	return atomic.AddInt32((*int32)(i), n)
+	return atomic.AddInt32(&i.int32, n)
 }
 
+// Set atomically sets n as new value.
 func (i *AtomicInt32) Set(n int32) {
-	atomic.StoreInt32((*int32)(i), n)
+	atomic.StoreInt32(&i.int32, n)
 }
 
+// Get atomically returns the current value.
 func (i *AtomicInt32) Get() int32 {
-	return atomic.LoadInt32((*int32)(i))
+	return atomic.LoadInt32(&i.int32)
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (i *AtomicInt32) CompareAndSwap(oldval, newval int32) (swapped bool) {
-	return atomic.CompareAndSwapInt32((*int32)(i), oldval, newval)
+	return atomic.CompareAndSwapInt32(&i.int32, oldval, newval)
 }
 
-type AtomicUint32 uint32
-
-func (i *AtomicUint32) Add(n uint32) uint32 {
-	return atomic.AddUint32((*uint32)(i), n)
+// AtomicInt64 is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int64 functions.
+type AtomicInt64 struct {
+	int64
 }
 
-func (i *AtomicUint32) Set(n uint32) {
-	atomic.StoreUint32((*uint32)(i), n)
+// NewAtomicInt64 initializes a new AtomicInt64 with a given value.
+func NewAtomicInt64(n int64) AtomicInt64 {
+	return AtomicInt64{n}
 }
 
-func (i *AtomicUint32) Get() uint32 {
-	return atomic.LoadUint32((*uint32)(i))
-}
-
-func (i *AtomicUint32) CompareAndSwap(oldval, newval uint32) (swapped bool) {
-	return atomic.CompareAndSwapUint32((*uint32)(i), oldval, newval)
-}
-
-type AtomicInt64 int64
-
+// Add atomically adds n to the value.
 func (i *AtomicInt64) Add(n int64) int64 {
-	return atomic.AddInt64((*int64)(i), n)
+	return atomic.AddInt64(&i.int64, n)
 }
 
+// Set atomically sets n as new value.
 func (i *AtomicInt64) Set(n int64) {
-	atomic.StoreInt64((*int64)(i), n)
+	atomic.StoreInt64(&i.int64, n)
 }
 
+// Get atomically returns the current value.
 func (i *AtomicInt64) Get() int64 {
-	return atomic.LoadInt64((*int64)(i))
+	return atomic.LoadInt64(&i.int64)
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (i *AtomicInt64) CompareAndSwap(oldval, newval int64) (swapped bool) {
-	return atomic.CompareAndSwapInt64((*int64)(i), oldval, newval)
+	return atomic.CompareAndSwapInt64(&i.int64, oldval, newval)
 }
 
-type AtomicDuration int64
+// AtomicDuration is a wrapper with a simpler interface around atomic.(Add|Store|Load|CompareAndSwap)Int64 functions.
+type AtomicDuration struct {
+	int64
+}
 
+// NewAtomicDuration initializes a new AtomicDuration with a given value.
+func NewAtomicDuration(duration time.Duration) AtomicDuration {
+	return AtomicDuration{int64(duration)}
+}
+
+// Add atomically adds duration to the value.
 func (d *AtomicDuration) Add(duration time.Duration) time.Duration {
-	return time.Duration(atomic.AddInt64((*int64)(d), int64(duration)))
+	return time.Duration(atomic.AddInt64(&d.int64, int64(duration)))
 }
 
+// Set atomically sets duration as new value.
 func (d *AtomicDuration) Set(duration time.Duration) {
-	atomic.StoreInt64((*int64)(d), int64(duration))
+	atomic.StoreInt64(&d.int64, int64(duration))
 }
 
+// Get atomically returns the current value.
 func (d *AtomicDuration) Get() time.Duration {
-	return time.Duration(atomic.LoadInt64((*int64)(d)))
+	return time.Duration(atomic.LoadInt64(&d.int64))
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (d *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped bool) {
-	return atomic.CompareAndSwapInt64((*int64)(d), int64(oldval), int64(newval))
+	return atomic.CompareAndSwapInt64(&d.int64, int64(oldval), int64(newval))
 }
 
 // AtomicString gives you atomic-style APIs for string, but
@@ -90,12 +108,14 @@ type AtomicString struct {
 	str string
 }
 
+// Set atomically sets str as new value.
 func (s *AtomicString) Set(str string) {
 	s.mu.Lock()
 	s.str = str
 	s.mu.Unlock()
 }
 
+// Get atomically returns the current value.
 func (s *AtomicString) Get() string {
 	s.mu.Lock()
 	str := s.str
@@ -103,6 +123,7 @@ func (s *AtomicString) Get() string {
 	return str
 }
 
+// CompareAndSwap atomatically swaps the old with the new value.
 func (s *AtomicString) CompareAndSwap(oldval, newval string) (swqpped bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

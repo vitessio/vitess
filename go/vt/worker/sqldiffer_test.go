@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // sqlDifferSqlQuery is a local QueryService implementation to support the tests
@@ -30,7 +32,7 @@ type sqlDifferSqlQuery struct {
 	t *testing.T
 }
 
-func (sq *sqlDifferSqlQuery) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *sqlDifferSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	sq.t.Logf("SqlDifferSqlQuery: got query: %v", *query)
 
 	// Send the headers

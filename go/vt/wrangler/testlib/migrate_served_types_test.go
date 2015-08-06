@@ -25,8 +25,8 @@ func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected 
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if len(si.ServedTypesMap) != expected {
-		t.Fatalf("shard %v has wrong served types: %#v", shard, si.ServedTypesMap)
+	if len(si.ServedTypes) != expected {
+		t.Fatalf("shard %v has wrong served types: %#v", shard, si.ServedTypes)
 	}
 }
 

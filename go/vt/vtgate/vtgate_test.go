@@ -79,8 +79,8 @@ func TestVTGateExecute(t *testing.T) {
 	}
 
 	rpcVTGate.Commit(context.Background(), q.Session)
-	if sbc.CommitCount != 1 {
-		t.Errorf("want 1, got %d", sbc.CommitCount)
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 
 	q.Session = new(proto.Session)
@@ -131,8 +131,8 @@ func TestVTGateExecuteShard(t *testing.T) {
 	}
 
 	rpcVTGate.Commit(context.Background(), q.Session)
-	if sbc.CommitCount != 1 {
-		t.Errorf("want 1, got %d", sbc.CommitCount)
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 
 	q.Session = new(proto.Session)
@@ -178,8 +178,8 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	if qr.Session != nil {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
@@ -201,8 +201,8 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
 	rpcVTGate.Commit(context.Background(), q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 	// Test for multiple shards
 	kid30, err := key.HexKeyspaceId("30").Unhex()
@@ -243,8 +243,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	if qr.Session != nil {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
@@ -269,8 +269,8 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
 	rpcVTGate.Commit(context.Background(), q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %v", sbc1.CommitCount.Get())
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %v", commitCount)
 	}
 	// Test for multiple shards
 	kr, err = key.ParseKeyRangeParts("10", "30")
@@ -317,8 +317,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	if qr.Session != nil {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
-	if sbc1.ExecCount != 1 {
-		t.Errorf("want 1, got %v\n", sbc1.ExecCount)
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v\n", execCount)
 	}
 	// Test for successful execution in transaction
 	q.Session = new(proto.Session)
@@ -340,8 +340,8 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
 	}
 	rpcVTGate.Commit(context.Background(), q.Session)
-	if sbc1.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc1.CommitCount.Get())
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 	// Test for multiple shards
 	kid30, err := key.HexKeyspaceId("30").Unhex()
@@ -526,8 +526,8 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want\n%#v\ngot\n%#v", want, qrs)
 	}
 	rpcVTGate.Commit(context.Background(), sq.Session)
-	if sbc.CommitCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.CommitCount.Get())
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
 	}
 	// Test for successful execution - multiple keyspaceids in single shard
 	sq.Session = nil

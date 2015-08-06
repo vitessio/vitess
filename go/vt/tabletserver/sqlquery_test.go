@@ -212,15 +212,15 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, &session, &txInfo); err == nil {
+	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err == nil {
 		t.Fatalf("call SqlQuery.Begin should fail because of an invalid session id: 0")
 	}
 
-	if err = sqlQuery.Commit(ctx, &session); err == nil {
+	if err = sqlQuery.Commit(ctx, nil, &session); err == nil {
 		t.Fatalf("call SqlQuery.Commit should fail because of an invalid session id: 0")
 	}
 
-	if err = sqlQuery.Rollback(ctx, &session); err == nil {
+	if err = sqlQuery.Rollback(ctx, nil, &session); err == nil {
 		t.Fatalf("call SqlQuery.Rollback should fail because of an invalid session id: 0")
 	}
 
@@ -231,12 +231,12 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("call SqlQuery.Execute should fail because of an invalid session id: 0")
 	}
 
 	streamSendReply := func(*mproto.QueryResult) error { return nil }
-	if err = sqlQuery.StreamExecute(ctx, &query, streamSendReply); err == nil {
+	if err = sqlQuery.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
 		t.Fatalf("call SqlQuery.StreamExecute should fail because of an invalid session id: 0")
 	}
 
@@ -256,7 +256,7 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err = sqlQuery.ExecuteBatch(ctx, &batchQuery, &batchReply); err == nil {
+	if err = sqlQuery.ExecuteBatch(ctx, nil, &batchQuery, &batchReply); err == nil {
 		t.Fatalf("call SqlQuery.ExecuteBatch should fail because of an invalid session id: 0")
 	}
 
@@ -280,7 +280,7 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 			},
 		},
 	}
-	if err = sqlQuery.SplitQuery(ctx, &splitQuery, &splitQueryReply); err == nil {
+	if err = sqlQuery.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
 		t.Fatalf("call SqlQuery.SplitQuery should fail because of an invalid session id: 0")
 	}
 }
@@ -311,7 +311,7 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, &session, &txInfo); err != nil {
+	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
 		t.Fatalf("call SqlQuery.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
@@ -322,10 +322,10 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, &query, &reply); err != nil {
+	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
-	if err := sqlQuery.Commit(ctx, &session); err != nil {
+	if err := sqlQuery.Commit(ctx, nil, &session); err != nil {
 		t.Fatalf("call SqlQuery.Commit failed")
 	}
 }
@@ -356,7 +356,7 @@ func TestSqlQueryRollback(t *testing.T) {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, &session, &txInfo); err != nil {
+	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
 		t.Fatalf("call SqlQuery.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
@@ -367,10 +367,10 @@ func TestSqlQueryRollback(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, &query, &reply); err != nil {
+	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
-	if err := sqlQuery.Rollback(ctx, &session); err != nil {
+	if err := sqlQuery.Rollback(ctx, nil, &session); err != nil {
 		t.Fatalf("call SqlQuery.Rollback failed")
 	}
 }
@@ -402,7 +402,7 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, &session, &txInfo); err != nil {
+	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
 		t.Fatalf("call SqlQuery.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
@@ -413,14 +413,14 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	sendReply := func(*mproto.QueryResult) error { return nil }
-	if err := sqlQuery.StreamExecute(ctx, &query, sendReply); err == nil {
+	if err := sqlQuery.StreamExecute(ctx, nil, &query, sendReply); err == nil {
 		t.Fatalf("SqlQuery.StreamExecute should fail: %s", query.Sql)
 	}
-	if err := sqlQuery.Rollback(ctx, &session); err != nil {
+	if err := sqlQuery.Rollback(ctx, nil, &session); err != nil {
 		t.Fatalf("call SqlQuery.Rollback failed")
 	}
 	query.TransactionId = 0
-	if err := sqlQuery.StreamExecute(ctx, &query, sendReply); err != nil {
+	if err := sqlQuery.StreamExecute(ctx, nil, &query, sendReply); err != nil {
 		t.Fatalf("SqlQuery.StreamExecute should success: %s, but get error: %v",
 			query.Sql, err)
 	}
@@ -462,7 +462,7 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err != nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should success: %v, but get error: %v",
 			query, err)
 	}
@@ -488,7 +488,7 @@ func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 	reply := proto.QueryResultList{
 		List: []mproto.QueryResult{},
 	}
-	err = sqlQuery.ExecuteBatch(ctx, &query, &reply)
+	err = sqlQuery.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
 }
 
@@ -519,7 +519,7 @@ func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
 	reply := proto.QueryResultList{
 		List: []mproto.QueryResult{},
 	}
-	err = sqlQuery.ExecuteBatch(ctx, &query, &reply)
+	err = sqlQuery.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
 }
 
@@ -552,7 +552,7 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should fail")
 	}
 }
@@ -591,7 +591,7 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should fail")
 	}
 }
@@ -642,7 +642,7 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should fail")
 	}
 
@@ -689,7 +689,7 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 			*sqlResult,
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err != nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should succeed")
 	}
 }
@@ -721,7 +721,7 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.ExecuteBatch should fail")
 	}
 }
@@ -779,7 +779,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.Execute should fail because of nested transaction")
 	}
 	sqlQuery.qe.txPool.SetTimeout(10)
@@ -830,7 +830,7 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, &query, &reply); err != nil {
+	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("SqlQuery.SplitQuery should success: %v, but get error: %v",
 			query, err)
 	}
@@ -869,7 +869,7 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.SplitQuery should fail")
 	}
 }
@@ -922,7 +922,7 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, &query, &reply); err == nil {
+	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err == nil {
 		t.Fatalf("SqlQuery.SplitQuery should fail")
 	}
 }

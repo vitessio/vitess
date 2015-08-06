@@ -15,10 +15,12 @@ func testingTaskCreator(taskName string) Task {
 	// Tasks for testing only.
 	case "TestingEchoTask":
 		return &TestingEchoTask{}
-	case "TestingEmitEchoTask":
-		return &TestingEmitEchoTask{}
 	case "TestingFailTask":
 		return &TestingFailTask{}
+	case "TestingEmitEchoTask":
+		return &TestingEmitEchoTask{}
+	case "TestingEmitEchoFailEchoTask":
+		return &TestingEmitEchoFailEchoTask{}
 	default:
 		return nil
 	}
@@ -39,6 +41,18 @@ func (t *TestingEchoTask) RequiredParameters() []string {
 	return []string{"echo_text"}
 }
 
+// TestingFailTask is used only for testing. It always fails.
+type TestingFailTask struct {
+}
+
+func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+	return nil, "something went wrong", errors.New("full error message")
+}
+
+func (t *TestingFailTask) RequiredParameters() []string {
+	return []string{}
+}
+
 // TestingEmitEchoTask is used only for testing. It emits a TestingEchoTask.
 type TestingEmitEchoTask struct {
 }
@@ -53,14 +67,20 @@ func (t *TestingEmitEchoTask) RequiredParameters() []string {
 	return []string{}
 }
 
-// TestingFailTask is used only for testing. It always fails.
-type TestingFailTask struct {
+// TestingEmitEchoFailEchoTask is used only for testing.
+// It emits three sequential tasks: Echo, Fail, Echo.
+type TestingEmitEchoFailEchoTask struct {
 }
 
-func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
-	return nil, "something went wrong", errors.New("full error message")
+func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTasks []*pb.TaskContainer, output string, err error) {
+	newTasks = []*pb.TaskContainer{
+		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
+		NewTaskContainerWithSingleTask("TestingFailTask", parameters),
+		NewTaskContainerWithSingleTask("TestingEchoTask", parameters),
+	}
+	return newTasks, "emitted tasks: Echo, Fail, Echo", nil
 }
 
-func (t *TestingFailTask) RequiredParameters() []string {
+func (t *TestingEmitEchoFailEchoTask) RequiredParameters() []string {
 	return []string{}
 }

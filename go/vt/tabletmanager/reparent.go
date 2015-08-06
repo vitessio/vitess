@@ -60,7 +60,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
-	if si.MasterAlias == tablet.Alias {
+	if si.MasterAlias != nil && *si.MasterAlias == *topo.TabletAliasToProto(tablet.Alias) {
 		// We may get called on the current master even when nothing has changed.
 		// If the global shard record is already updated, it means we successfully
 		// finished a previous reparent to this tablet.
@@ -69,9 +69,12 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
-		ShardInfo:  *si,
-		NewMaster:  *tablet.Tablet,
-		OldMaster:  topo.Tablet{Alias: si.MasterAlias, Type: topo.TYPE_MASTER},
+		ShardInfo: *si,
+		NewMaster: *tablet.Tablet,
+		OldMaster: topo.Tablet{
+			Alias: topo.ProtoToTabletAlias(si.MasterAlias),
+			Type:  topo.TYPE_MASTER,
+		},
 		ExternalID: externalID,
 	}
 	defer func() {
@@ -168,12 +171,12 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
-	if !oldMasterAlias.IsZero() {
+	if !topo.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
 			// Force the old master to spare.
 			var oldMasterTablet *topo.Tablet
-			err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
+			err := topo.UpdateTabletFields(ctx, agent.TopoServer, topo.ProtoToTabletAlias(oldMasterAlias),
 				func(tablet *topo.Tablet) error {
 					tablet.Type = topo.TYPE_SPARE
 					oldMasterTablet = tablet
@@ -217,8 +220,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *topo.Shard) error {
-		shard.MasterAlias = tablet.Alias
+	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
+		shard.MasterAlias = topo.TabletAliasToProto(tablet.Alias)
 		return nil
 	})
 	if err != nil {
@@ -228,7 +231,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// We already took care of updating the serving graph for the old and new masters.
 	// All that's left now is in case of a cross-cell reparent, we need to update the
 	// master cell setting in the SrvShard records of all cells.
-	if oldMasterAlias.Cell != tablet.Alias.Cell {
+	if oldMasterAlias == nil || oldMasterAlias.Cell != tablet.Alias.Cell {
 		event.DispatchUpdate(ev, "rebuilding shard serving graph")
 		log.Infof("finalizeTabletExternallyReparented: updating SrvShard in all cells for cross-cell reparent")
 		if err := topotools.UpdateAllSrvShards(ctx, agent.TopoServer, si); err != nil {

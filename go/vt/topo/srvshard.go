@@ -10,33 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 )
 
-// SrvShard contains a roll-up of the shard in the local namespace.
-// By design, it should not contain details about which shard is serving what,
-// but just internal details to the shard. It should also not contain
-// details that would change when tablets are added / removed in this
-// cell/shard.
-// In zk, it is under /zk/<cell>/vt/ns/<keyspace>/<shard>
-type SrvShard struct {
-	// Copied / inferred from Shard
-	Name     string
-	KeyRange key.KeyRange
-
-	// MasterCell indicates the cell that master tablet resides
-	MasterCell string
-
-	// For atomic updates
-	version int64
-}
-
-//go:generate bsongen -file $GOFILE -type SrvShard -o srvshard_bson.go
-
-// NewSrvShard returns an empty SrvShard with the given version.
-func NewSrvShard(version int64) *SrvShard {
-	return &SrvShard{
-		version: version,
-	}
-}
-
 // ShardReference is the structure used by SrvKeyspace to point to a Shard
 type ShardReference struct {
 	// Copied / inferred from Shard

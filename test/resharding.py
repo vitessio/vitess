@@ -676,7 +676,8 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_slave2, True, False)
     # Destination tablets would have query service disabled for other reasons than the migration,
     # so check the shard record instead of the tablets directly
-    utils.check_shard_query_services(self, destination_shards, 'replica', False)
+    # 3 is REPLICA, but the proto enum is not easily reachable.
+    utils.check_shard_query_services(self, destination_shards, 3, False) # 3 REPLICA
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
@@ -689,7 +690,7 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
     # Destination tablets would have query service disabled for other reasons than the migration,
     # so check the shard record instead of the tablets directly
-    utils.check_shard_query_services(self, destination_shards, 'replica', True)
+    utils.check_shard_query_services(self, destination_shards, 3, True) # 3 REPLICA
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
@@ -775,8 +776,7 @@ primary key (name)
     utils.run_vtctl(['RemoveShardCell', 'test_keyspace/80-', 'test_nj'], auto_log=True)
     utils.run_vtctl(['RemoveShardCell', 'test_keyspace/80-', 'test_ny'], auto_log=True)
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-'])
-    if shard['Cells']:
-      self.fail("Non-empty Cells record for shard: %s" % str(shard))
+    self.assertNotIn('cells', shard)
 
     # delete the original shard
     utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)

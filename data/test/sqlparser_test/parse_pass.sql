@@ -5,13 +5,15 @@ select 1.2e+1 from t
 select 1.2e-1 from t
 select 08.3 from t
 select -1 from t where b = -2
+select - -1 from t#select 1 from t
 select 1 from t // aa#select 1 from t
 select 1 from t -- aa#select 1 from t
 select /* simplest */ 1 from t
+select /* keyword col */ `By` from t#select /* keyword col */ `by` from t
 select /* double star **/ 1 from t
 select /* double */ /* comment */ 1 from t
 select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
-select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
+select /* back-quote keyword */ 1 from `By`#select /* back-quote keyword */ 1 from `By`
 select /* @ */ @@a from b
 select /* \0 */ '\0' from a
 select 1 /* drop this comment */ from t#select 1 from t
@@ -28,7 +30,9 @@ select /* select list */ 1, 2 from t
 select /* * */ * from t
 select /* column alias */ a b from t#select /* column alias */ a as b from t
 select /* column alias with as */ a as b from t
+select /* keyword column alias */ a as `By` from t#select /* keyword column alias */ a as `by` from t
 select /* a.* */ a.* from t
+select /* `By`.* */ `By`.* from t
 select /* select with bool expr */ a = b from t
 select /* case_when */ case when a = b then c end from t
 select /* case_when_else */ case when a = b then c else d end from t
@@ -39,11 +43,13 @@ select /* table list */ 1 from t1, t2
 select /* parenthessis in table list 1 */ 1 from (t1), t2
 select /* parenthessis in table list 2 */ 1 from t1, (t2)
 select /* use */ 1 from t1 use index (a) where b = 1
+select /* keyword index */ 1 from t1 use index (`By`) where b = 1#select /* keyword index */ 1 from t1 use index (`by`) where b = 1
 select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1
 select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1
 select /* table alias */ 1 from t t1#select /* table alias */ 1 from t as t1
 select /* table alias with as */ 1 from t as t1
+select /* keyword table alias */ 1 from t as `By`
 select /* join */ 1 from t1 join t2
 select /* straight_join */ 1 from t1 straight_join t2
 select /* left join */ 1 from t1 left join t2
@@ -55,6 +61,7 @@ select /* cross join */ 1 from t1 cross join t2
 select /* natural join */ 1 from t1 natural join t2
 select /* join on */ 1 from t1 join t2 on a = b
 select /* s.t */ 1 from s.t
+select /* keyword schema & table name */ 1 from `By`.`bY`
 select /* select in from */ 1 from (select 1 from t)
 select /* where */ 1 from t where a = b
 select /* and */ 1 from t where a = b and a = c
@@ -75,7 +82,9 @@ select /* is not null */ 1 from t where a is not null
 select /* < */ 1 from t where a < b
 select /* <= */ 1 from t where a <= b
 select /* >= */ 1 from t where a >= b
-select /* <> */ 1 from t where a != b
+select /* > */ 1 from t where a > b
+select /* != */ 1 from t where a != b
+select /* <> */ 1 from t where a <> b#select /* <> */ 1 from t where a != b
 select /* <=> */ 1 from t where a <=> b
 select /* != */ 1 from t where a != b
 select /* single value expre list */ 1 from t where a in (b)
@@ -92,6 +101,8 @@ select /* - */ 1 from t where a = b - c
 select /* * */ 1 from t where a = b * c
 select /* / */ 1 from t where a = b / c
 select /* % */ 1 from t where a = b % c
+select /* << */ 1 from t where a = b << c
+select /* >> */ 1 from t where a = b >> c
 select /* % no space */ 1 from t where a = b%c#select /* % no space */ 1 from t where a = b % c
 select /* u+ */ 1 from t where a = +b
 select /* u- */ 1 from t where a = -b
@@ -103,6 +114,7 @@ select /* if as func */ 1 from t where a = if(b)
 select /* function with distinct */ count(distinct a) from t
 select /* a */ a from t
 select /* a.b */ a.b from t
+select /* keyword a.b */ `By`.`bY` from t#select /* keyword a.b */ `By`.`by` from t
 select /* string */ 'a' from t
 select /* double quoted string */ "a" from t#select /* double quoted string */ 'a' from t
 select /* quote quote in string */ 'a''a' from t#select /* quote quote in string */ 'a\'a' from t
@@ -161,6 +173,7 @@ set /* simple */ a = 3
 set /* list */ a = 3, b = 4
 alter ignore table a add foo#alter table a
 alter table a add foo#alter table a
+alter table `By` add foo#alter table `By`
 alter table a alter foo#alter table a
 alter table a change foo#alter table a
 alter table a modify foo#alter table a
@@ -172,8 +185,10 @@ alter table a default foo#alter table a
 alter table a discard foo#alter table a
 alter table a import foo#alter table a
 alter table a rename b#rename table a b
+alter table `By` rename `bY`#rename table `By` `bY`
 alter table a rename to b#rename table a b
 create table a
+create table `by`
 create table if not exists a#create table a
 create index a on b#alter table b
 create unique index a on b#alter table b

@@ -5,7 +5,7 @@
 %{
 package sqlparser
 
-import "bytes"
+import "strings"
 
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
@@ -30,13 +30,6 @@ func decNesting(yylex interface{}) {
 func forceEOF(yylex interface{}) {
   yylex.(*Tokenizer).ForceEOF = true
 }
-
-var (
-  SHARE =        []byte("share")
-  MODE  =        []byte("mode")
-  IF_BYTES =     []byte("if")
-  VALUES_BYTES = []byte("values")
-)
 
 %}
 
@@ -74,6 +67,8 @@ var (
   insRows     InsertRows
   updateExprs UpdateExprs
   updateExpr  *UpdateExpr
+  sqlID       SQLName
+  sqlIDs      []SQLName
 }
 
 %token LEX_ERROR
@@ -81,7 +76,7 @@ var (
 %token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
-%token <empty> '(' '=' '<' '>' '~'
+%token <empty> '(' '=' '<' '>'
 
 %left <empty> UNION MINUS EXCEPT INTERSECT
 %left <empty> ','
@@ -90,11 +85,14 @@ var (
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
-%left <empty> '&' '|' '^'
+%left <empty> '|'
+%left <empty> '&'
 %left <empty> '+' '-'
 %left <empty> '*' '/' '%'
+%left <empty> SHIFT_LEFT SHIFT_RIGHT
+%left <empty> '^'
+%right <empty> '~' UNARY
 %nonassoc <empty> '.'
-%left <empty> UNARY
 %right <empty> CASE, WHEN, THEN, ELSE
 %left <empty> END
 
@@ -115,7 +113,6 @@ var (
 %type <str> distinct_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <bytes> as_lower_opt as_opt
 %type <expr> expression
 %type <tableExprs> table_expression_list
 %type <tableExpr> table_expression
@@ -123,7 +120,7 @@ var (
 %type <smTableExpr> simple_table_expression
 %type <tableName> dml_table_expression
 %type <indexHints> index_hint_list
-%type <bytes2> index_list
+%type <sqlIDs> index_list
 %type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
 %type <str> compare
@@ -133,9 +130,8 @@ var (
 %type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <rowTuple> row_tuple
-%type <bytes> keyword_as_func
+%type <str> keyword_as_func
 %type <subquery> subquery
-%type <byt> unary_operator
 %type <colName> column_name
 %type <caseExpr> case_expression
 %type <whens> when_expression_list
@@ -153,7 +149,8 @@ var (
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
 %type <empty> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
-%type <bytes> sql_id
+%type <sqlID> sql_id as_lower_opt
+%type <sqlID> table_id as_opt
 %type <empty> force_eof
 
 %%
@@ -225,58 +222,58 @@ set_statement:
   }
 
 create_statement:
-  CREATE TABLE not_exists_opt ID force_eof
+  CREATE TABLE not_exists_opt table_id force_eof
   {
     $$ = &DDL{Action: AST_CREATE, NewName: $4}
   }
-| CREATE constraint_opt INDEX sql_id using_opt ON ID force_eof
+| CREATE constraint_opt INDEX ID using_opt ON table_id force_eof
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AST_ALTER, Table: $7, NewName: $7}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_CREATE, NewName: $3}
+    $$ = &DDL{Action: AST_CREATE, NewName: SQLName($3)}
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE ID non_rename_operation force_eof
+  ALTER ignore_opt TABLE table_id non_rename_operation force_eof
   {
     $$ = &DDL{Action: AST_ALTER, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE ID RENAME to_opt ID
+| ALTER ignore_opt TABLE table_id RENAME to_opt table_id
   {
     // Change this to a rename statement
     $$ = &DDL{Action: AST_RENAME, Table: $4, NewName: $7}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AST_ALTER, Table: $3, NewName: $3}
+    $$ = &DDL{Action: AST_ALTER, Table: SQLName($3), NewName: SQLName($3)}
   }
 
 rename_statement:
-  RENAME TABLE ID TO ID
+  RENAME TABLE table_id TO table_id
   {
     $$ = &DDL{Action: AST_RENAME, Table: $3, NewName: $5}
   }
 
 drop_statement:
-  DROP TABLE exists_opt ID
+  DROP TABLE exists_opt table_id
   {
     $$ = &DDL{Action: AST_DROP, Table: $4}
   }
-| DROP INDEX sql_id ON ID
+| DROP INDEX ID ON table_id
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AST_ALTER, Table: $5, NewName: $5}
   }
 | DROP VIEW exists_opt sql_id force_eof
   {
-    $$ = &DDL{Action: AST_DROP, Table: $4}
+    $$ = &DDL{Action: AST_DROP, Table: SQLName($4)}
   }
 
 analyze_statement:
-  ANALYZE TABLE ID
+  ANALYZE TABLE table_id
   {
     $$ = &DDL{Action: AST_ALTER, Table: $3, NewName: $3}
   }
@@ -364,7 +361,7 @@ select_expression:
   {
     $$ = &NonStarExpr{Expr: $1, As: $2}
   }
-| ID '.' '*'
+| table_id '.' '*'
   {
     $$ = &StarExpr{TableName: $1}
   }
@@ -381,7 +378,7 @@ expression:
 
 as_lower_opt:
   {
-    $$ = nil
+    $$ = ""
   }
 | sql_id
   {
@@ -422,13 +419,13 @@ table_expression:
 
 as_opt:
   {
-    $$ = nil
+    $$ = ""
   }
-| ID
+| table_id
   {
     $$ = $1
   }
-| AS ID
+| AS table_id
   {
     $$ = $2
   }
@@ -472,11 +469,11 @@ join_type:
   }
 
 simple_table_expression:
-ID
+  table_id
   {
     $$ = &TableName{Name: $1}
   }
-| ID '.' ID
+| table_id '.' table_id
   {
     $$ = &TableName{Qualifier: $1, Name: $3}
   }
@@ -486,11 +483,11 @@ ID
   }
 
 dml_table_expression:
-ID
+  table_id
   {
     $$ = &TableName{Name: $1}
   }
-| ID '.' ID
+| table_id '.' table_id
   {
     $$ = &TableName{Qualifier: $1, Name: $3}
   }
@@ -515,7 +512,7 @@ index_hint_list:
 index_list:
   sql_id
   {
-    $$ = [][]byte{$1}
+    $$ = []SQLName{$1}
   }
 | index_list ',' sql_id
   {
@@ -701,32 +698,50 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: AST_MOD, Right: $3}
   }
-| unary_operator value_expression %prec UNARY
+| value_expression SHIFT_LEFT value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: AST_SHIFT_LEFT, Right: $3}
+  }
+| value_expression SHIFT_RIGHT value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: AST_SHIFT_RIGHT, Right: $3}
+  }
+| '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
-      switch $1 {
-      case '-':
+      $$ = num
+    } else {
+      $$ = &UnaryExpr{Operator: AST_UPLUS, Expr: $2}
+    }
+  }
+| '-'  value_expression %prec UNARY
+  {
+    if num, ok := $2.(NumVal); ok {
+      // Handle double negative
+      if num[0] == '-' {
+        $$ = num[1:]
+      } else {
         $$ = append(NumVal("-"), num...)
-      case '+':
-        $$ = num
-      default:
-        $$ = &UnaryExpr{Operator: $1, Expr: $2}
       }
     } else {
-      $$ = &UnaryExpr{Operator: $1, Expr: $2}
+      $$ = &UnaryExpr{Operator: AST_UMINUS, Expr: $2}
     }
+  }
+| '~'  value_expression
+  {
+    $$ = &UnaryExpr{Operator: AST_TILDA, Expr: $2}
   }
 | sql_id openb closeb
   {
-    $$ = &FuncExpr{Name: $1}
+    $$ = &FuncExpr{Name: string($1)}
   }
 | sql_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: string($1), Exprs: $3}
   }
 | sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
   }
 | keyword_as_func openb select_expression_list closeb
   {
@@ -740,25 +755,11 @@ value_expression:
 keyword_as_func:
   IF
   {
-    $$ = IF_BYTES
+    $$ = "if"
   }
 | VALUES
   {
-    $$ = VALUES_BYTES
-  }
-
-unary_operator:
-  '+'
-  {
-    $$ = AST_UPLUS
-  }
-| '-'
-  {
-    $$ = AST_UMINUS
-  }
-| '~'
-  {
-    $$ = AST_TILDA
+    $$ = "values"
   }
 
 case_expression:
@@ -806,7 +807,7 @@ column_name:
   {
     $$ = &ColName{Name: $1}
   }
-| ID '.' sql_id
+| table_id '.' sql_id
   {
     $$ = &ColName{Qualifier: $1, Name: $3}
   }
@@ -908,11 +909,11 @@ lock_opt:
   }
 | LOCK IN sql_id sql_id
   {
-    if !bytes.Equal($3, SHARE) {
+    if $3 != "share" {
       yylex.Error("expecting share")
       return 1
     }
-    if !bytes.Equal($4, MODE) {
+    if $4 != "mode" {
       yylex.Error("expecting mode")
       return 1
     }
@@ -1038,7 +1039,13 @@ using_opt:
 sql_id:
   ID
   {
-    $$ = bytes.ToLower($1)
+    $$ = SQLName(strings.ToLower(string($1)))
+  }
+
+table_id:
+  ID
+  {
+    $$ = SQLName($1)
   }
 
 openb:

@@ -73,12 +73,12 @@ func (client *client) ServeUpdateStream(ctx context.Context, position string) (c
 	}, nil
 }
 
-func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
+func (client *client) StreamKeyRange(ctx context.Context, position string, keyspaceIdType key.KeyspaceIdType, keyRange *pbt.KeyRange, charset *mproto.Charset) (chan *proto.BinlogTransaction, binlogplayer.ErrFunc, error) {
 	response := make(chan *proto.BinlogTransaction, 10)
 	query := &pb.StreamKeyRangeRequest{
 		Position:       position,
 		KeyspaceIdType: key.KeyspaceIdTypeToProto(keyspaceIdType),
-		KeyRange:       key.KeyRangeToProto(keyRange),
+		KeyRange:       keyRange,
 		Charset:        mproto.CharsetToProto(charset),
 	}
 

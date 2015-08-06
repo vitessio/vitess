@@ -48,6 +48,9 @@ func KeyRangeToProto(k KeyRange) *pb.KeyRange {
 
 // ProtoToKeyRange translates a proto KeyRange, or panics
 func ProtoToKeyRange(k *pb.KeyRange) KeyRange {
+	if k == nil {
+		return KeyRange{}
+	}
 	return KeyRange{
 		Start: KeyspaceId(k.Start),
 		End:   KeyspaceId(k.End),

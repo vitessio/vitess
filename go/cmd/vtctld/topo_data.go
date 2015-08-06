@@ -292,7 +292,7 @@ type Shard struct {
 	ShardName string
 
 	// Shard is the topo value of this shard
-	Shard *topo.Shard
+	Shard *pb.Shard
 }
 
 // Reset is part of the VersionedObject interface

@@ -498,14 +498,16 @@ index by_msg (msg)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'rdonly'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertNotIn('rdonly', shard_json['TabletControlMap'])
-    self.assertIn('replica', shard_json['TabletControlMap'])
-    self.assertIn('master', shard_json['TabletControlMap'])
+    self.assertEqual(len(shard_json['tablet_controls']), 2)
+    for tc in shard_json['tablet_controls']:
+      self.assertIn(tc['tablet_type'], [2, 3]) # MASTER, REPLICA
     utils.run_vtctl(['SetShardTabletControl', '--tables=moving.*,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertEqual(['moving.*', 'view1'],
-                     shard_json['TabletControlMap']['rdonly']['BlacklistedTables'])
+    for tc in shard_json['tablet_controls']:
+      if tc['tablet_type'] == 4:
+        break
+    self.assertEqual(['moving.*', 'view1'], tc['blacklisted_tables'])
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'rdonly'], auto_log=True)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
@@ -513,7 +515,7 @@ index by_msg (msg)
     utils.run_vtctl(['SetShardTabletControl', '--remove', 'source_keyspace/0',
                      'master'], auto_log=True)
     shard_json = utils.run_vtctl_json(['GetShard', 'source_keyspace/0'])
-    self.assertEqual(None, shard_json['TabletControlMap'])
+    self.assertNotIn('tablet_controls', shard_json)
 
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)

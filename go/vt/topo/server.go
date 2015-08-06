@@ -106,7 +106,7 @@ type Server interface {
 	// yet. The contents of the shard will be a new Shard{} object,
 	// with KeyRange populated by the result of ValidateShardName().
 	// Can return ErrNodeExists if it already exists.
-	CreateShard(ctx context.Context, keyspace, shard string, value *Shard) error
+	CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error
 
 	// UpdateShard updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
@@ -255,11 +255,11 @@ type Server interface {
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
-	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *SrvShard) error
+	UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error
 
 	// GetSrvShard reads a SrvShard record.
 	// Can return ErrNoNode.
-	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*SrvShard, error)
+	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
 
 	// DeleteSrvShard deletes a SrvShard record.
 	// Can return ErrNoNode.

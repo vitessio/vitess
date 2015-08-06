@@ -6,6 +6,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // QueryResultReader will stream rows towards the output channel.
@@ -42,7 +45,8 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, *remoteActionsTimeout)
+	// use sessionId for now
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, tablet.Keyspace, tablet.Shard, pb.TabletType_UNKNOWN, *remoteActionsTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +93,8 @@ func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
 
 // uint64FromKeyspaceId returns a 64 bits hex number as a string
 // (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
-	hex := string(keyspaceId.Hex())
+func uint64FromKeyspaceId(keyspaceId []byte) string {
+	hex := hex.EncodeToString(keyspaceId)
 	return "0x" + hex + strings.Repeat("0", 16-len(hex))
 }
 
@@ -107,41 +111,43 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
-	switch keyspaceIdType {
-	case key.KIT_UINT64:
-		if keyRange.Start != key.MinKey {
-			if keyRange.End != key.MaxKey {
-				// have start & end
-				where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceId(keyRange.Start), uint64FromKeyspaceId(keyRange.End))
+	if keyRange != nil {
+		switch keyspaceIdType {
+		case key.KIT_UINT64:
+			if len(keyRange.Start) > 0 {
+				if len(keyRange.End) > 0 {
+					// have start & end
+					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceId(keyRange.Start), uint64FromKeyspaceId(keyRange.End))
+				} else {
+					// have start only
+					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceId(keyRange.Start))
+				}
 			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceId(keyRange.Start))
+				if len(keyRange.End) > 0 {
+					// have end only
+					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceId(keyRange.End))
+				}
 			}
-		} else {
-			if keyRange.End != key.MaxKey {
-				// have end only
-				where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceId(keyRange.End))
-			}
-		}
-	case key.KIT_BYTES:
-		if keyRange.Start != key.MinKey {
-			if keyRange.End != key.MaxKey {
-				// have start & end
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", keyRange.Start.Hex(), keyRange.End.Hex())
+		case key.KIT_BYTES:
+			if len(keyRange.Start) > 0 {
+				if len(keyRange.End) > 0 {
+					// have start & end
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.Start), hex.EncodeToString(keyRange.End))
+				} else {
+					// have start only
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", hex.EncodeToString(keyRange.Start))
+				}
 			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", keyRange.Start.Hex())
+				if len(keyRange.End) > 0 {
+					// have end only
+					where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", hex.EncodeToString(keyRange.End))
+				}
 			}
-		} else {
-			if keyRange.End != key.MaxKey {
-				// have end only
-				where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", keyRange.End.Hex())
-			}
+		default:
+			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 		}
-	default:
-		return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
