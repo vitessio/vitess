@@ -26,7 +26,10 @@ func main() {
 	servenv.Init()
 
 	// The implementation chain.
-	c := newErrorClient(newSuccessClient(newTerminalClient()))
+	c := newCallerIDClient(
+		newErrorClient(
+			newSuccessClient(
+				newTerminalClient())))
 	for _, f := range vtgate.RegisterVTGates {
 		f(c)
 	}
