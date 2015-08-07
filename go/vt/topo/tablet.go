@@ -367,8 +367,8 @@ func (tablet *Tablet) ValidatePortmap() error {
 	return nil
 }
 
-// EndPoint returns an EndPoint associated with the tablet record
-func (tablet *Tablet) EndPoint() (*pb.EndPoint, error) {
+// TabletEndPoint returns an EndPoint associated with the tablet record
+func TabletEndPoint(tablet *Tablet) (*pb.EndPoint, error) {
 	if err := tablet.ValidatePortmap(); err != nil {
 		return nil, err
 	}
@@ -435,12 +435,6 @@ func (tablet *Tablet) IsSlaveType() bool {
 	return IsSlaveType(tablet.Type)
 }
 
-// IsAssigned returns if this tablet ever assigned data? A "scrap" node will
-// show up as assigned even though its data cannot be used for serving.
-func (tablet *Tablet) IsAssigned() bool {
-	return tablet.Keyspace != "" && tablet.Shard != ""
-}
-
 // String returns a string describing the tablet.
 func (tablet *Tablet) String() string {
 	return fmt.Sprintf("Tablet{%v}", tablet.Alias)
@@ -455,6 +449,13 @@ func (tablet *Tablet) JSON() string {
 type TabletInfo struct {
 	version int64 // node version - used to prevent stomping concurrent writes
 	*Tablet
+}
+
+// IsAssigned returns if this tablet ever assigned data?
+// A "scrap" node will show up as assigned even though its data
+// cannot be used for serving.
+func (tablet *TabletInfo) IsAssigned() bool {
+	return tablet.Keyspace != "" && tablet.Shard != ""
 }
 
 // Version returns the version of this tablet from last time it was read or

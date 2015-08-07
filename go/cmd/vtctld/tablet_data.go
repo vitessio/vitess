@@ -82,7 +82,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	if err != nil {
 		return err
 	}
-	ep, err := ti.EndPoint()
+	ep, err := topo.TabletEndPoint(ti.Tablet)
 	if err != nil {
 		return err
 	}

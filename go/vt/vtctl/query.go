@@ -218,7 +218,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	ep, err := tabletInfo.EndPoint()
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
@@ -255,7 +255,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	ep, err := tabletInfo.EndPoint()
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
 	}
