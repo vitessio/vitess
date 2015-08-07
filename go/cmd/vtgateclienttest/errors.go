@@ -8,12 +8,12 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
-	"golang.org/x/net/context"
 )
 
 // errorClient implements vtgateservice.VTGateService
