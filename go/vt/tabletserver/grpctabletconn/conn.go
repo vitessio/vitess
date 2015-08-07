@@ -7,6 +7,7 @@ package grpctabletconn
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbs "github.com/youtube/vitess/go/vt/proto/queryservice"
@@ -362,5 +364,23 @@ func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 // tabletErrorFromGRPC returns a tabletconn.OperationalError from the
 // gRPC error.
 func tabletErrorFromGRPC(err error) error {
+	if grpc.Code(err) == codes.Internal {
+		// server side error, convert it
+		var code int
+		errStr := err.Error()
+		switch {
+		case strings.Contains(errStr, "fatal: "):
+			code = tabletconn.ERR_FATAL
+		case strings.Contains(errStr, "retry: "):
+			code = tabletconn.ERR_RETRY
+		case strings.Contains(errStr, "tx_pool_full: "):
+			code = tabletconn.ERR_TX_POOL_FULL
+		case strings.Contains(errStr, "not_in_tx: "):
+			code = tabletconn.ERR_NOT_IN_TX
+		default:
+			code = tabletconn.ERR_NORMAL
+		}
+		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+	}
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
 }
