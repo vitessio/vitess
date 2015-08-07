@@ -145,22 +145,22 @@ index by_msg (msg)
                             table,
                             bindvars={
                                 'id': self.insert_index,
-                                'msg': 'value %u' % self.insert_index,
+                                'msg': 'value %d' % self.insert_index,
                                 })
       self.insert_index += 1
     return result
 
   def _check_values(self, tablet, dbname, table, first, count):
-    logging.debug('Checking %u values from %s/%s starting at %u', count, dbname,
+    logging.debug('Checking %d values from %s/%s starting at %d', count, dbname,
                   table, first)
-    rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%u order by id limit %u' % (table, first, count))
-    self.assertEqual(count, len(rows), 'got wrong number of rows: %u != %u' %
+    rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%d order by id limit %d' % (table, first, count))
+    self.assertEqual(count, len(rows), 'got wrong number of rows: %d != %d' %
                      (len(rows), count))
     for i in xrange(count):
-      self.assertEqual(first + i, rows[i][0], 'invalid id[%u]: %u != %u' %
+      self.assertEqual(first + i, rows[i][0], 'invalid id[%d]: %d != %d' %
                        (i, first + i, rows[i][0]))
-      self.assertEqual('value %u' % (first + i), rows[i][1],
-                       "invalid msg[%u]: 'value %u' != '%s'" %
+      self.assertEqual('value %d' % (first + i), rows[i][1],
+                       "invalid msg[%d]: 'value %d' != '%s'" %
                        (i, first + i, rows[i][1]))
 
   def _check_values_timeout(self, tablet, dbname, table, first, count,

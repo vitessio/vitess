@@ -307,7 +307,7 @@ def get_vars(port):
   if we can't get them.
   """
   try:
-    url = 'http://localhost:%u/debug/vars' % int(port)
+    url = 'http://localhost:%d/debug/vars' % int(port)
     f = urllib2.urlopen(url)
     data = f.read()
     f.close()
@@ -490,18 +490,18 @@ class VtGate(object):
   def addr(self):
     """addr returns the address of the vtgate process.
     """
-    return 'localhost:%u' % self.port
+    return 'localhost:%d' % self.port
 
   def secure_addr(self):
     """secure_addr returns the secure address of the vtgate process.
     """
-    return 'localhost:%u' % self.secure_port
+    return 'localhost:%d' % self.secure_port
 
   def rpc_endpoint(self):
     """rpc_endpoint returns the endpoint to use for RPCs.
     """
     if protocols_flavor().vtgate_protocol() == 'grpc':
-      return 'localhost:%u' % self.grpc_port
+      return 'localhost:%d' % self.grpc_port
     return self.addr()
 
   def get_status(self):
@@ -700,7 +700,7 @@ def run_vtworker_client(args, rpc_port):
   out, err = run(environment.binary_args('vtworkerclient') +
                  ['-vtworker_client_protocol',
                   protocols_flavor().vtworker_client_protocol(),
-                  '-server', 'localhost:%u' % rpc_port,
+                  '-server', 'localhost:%d' % rpc_port,
                   '-stderrthreshold', get_log_level()] + args,
                  trap_output=True)
   return out, err
@@ -849,7 +849,7 @@ def check_tablet_query_services(testcase, tablets, serving, tablet_control_disab
     check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled)
 
 def get_status(port):
-  return urllib2.urlopen('http://localhost:%u%s' % (port, environment.status_url)).read()
+  return urllib2.urlopen('http://localhost:%d%s' % (port, environment.status_url)).read()
 
 def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwargs):
   args = [environment.curl_bin, '--silent', '--no-buffer', '--location']
@@ -889,14 +889,14 @@ class Vtctld(object):
       self.grpc_port = environment.reserve_ports(1)
 
   def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
+    data = json.load(urllib2.urlopen('http://localhost:%d/dbtopo?format=json' %
                                      self.port))
     if data["Error"]:
       raise VtctldError(data)
     return data["Topology"]
 
   def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
+    data = json.load(urllib2.urlopen('http://localhost:%d/serving_graph/test_nj?format=json' % self.port))
     if data['Errors']:
       raise VtctldError(data['Errors'])
     return data["Keyspaces"]
@@ -961,10 +961,10 @@ class Vtctld(object):
       if python:
         from vtctl import grpc_vtctl_client
       rpc_port = self.grpc_port
-    return (protocol, 'localhost:%u' % rpc_port)
+    return (protocol, 'localhost:%d' % rpc_port)
 
   def process_args(self):
-    return ['-vtctld_addr', 'http://localhost:%u/' % self.port]
+    return ['-vtctld_addr', 'http://localhost:%d/' % self.port]
 
   def vtctl_client(self, args):
     if options.verbose == 2:

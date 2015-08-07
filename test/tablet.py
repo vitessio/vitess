@@ -103,7 +103,7 @@ class Tablet(object):
       # import the grpc update stream client implementation, change the port
       from vtdb import grpc_update_stream
       port = self.grpc_port
-    return (protocol, 'localhost:%u' % port)
+    return (protocol, 'localhost:%d' % port)
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     extra_env = {}
@@ -208,7 +208,7 @@ class Tablet(object):
   def assert_table_count(self, dbname, table, n, where=''):
     result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
     if result[0][0] != n:
-      raise utils.TestError('expected %u rows in %s' % (n, table), result)
+      raise utils.TestError('expected %d rows in %s' % (n, table), result)
 
   def reset_replication(self):
     self.mquery('', mysql_flavor().reset_replication_commands())
@@ -278,8 +278,8 @@ class Tablet(object):
         'UpdateTabletAddrs',
         '-hostname', 'localhost',
         '-ip-addr', '127.0.0.1',
-        '-mysql-port', '%u' % self.mysql_port,
-        '-vt-port', '%u' % self.port,
+        '-mysql-port', '%d' % self.mysql_port,
+        '-vt-port', '%d' % self.port,
         self.tablet_alias
     ]
     return utils.run_vtctl(args)
@@ -609,7 +609,7 @@ class Tablet(object):
     return utils.get_status(self.port)
 
   def get_healthz(self):
-    return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
+    return urllib2.urlopen('http://localhost:%d/healthz' % self.port).read()
 
   def kill_vttablet(self, wait=True):
     logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias, str(wait))
@@ -667,7 +667,7 @@ class Tablet(object):
         else:
           s = v['BinlogPlayerMapSize']
           if s != expected:
-            logging.debug("  vttablet's binlog player map has count %u != %u",
+            logging.debug("  vttablet's binlog player map has count %d != %d",
                           s, expected)
           else:
             break

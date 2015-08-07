@@ -54,7 +54,7 @@ class TestPythonClient(unittest.TestCase):
   CONNECT_TIMEOUT = 10.0
 
   def setUp(self):
-    addr = 'localhost:%u' % vtgateclienttest_port
+    addr = 'localhost:%d' % vtgateclienttest_port
     protocol = protocols_flavor().vtgate_python_protocol()
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
 

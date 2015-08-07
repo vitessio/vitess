@@ -23,8 +23,8 @@ class EtcdCluster:
     self.hostname = 'localhost'
     self.client_port = self.port_base
     self.peer_port = self.port_base + 1
-    self.client_addr = 'http://%s:%u' % (self.hostname, self.client_port)
-    self.peer_addr = 'http://%s:%u' % (self.hostname, self.peer_port)
+    self.client_addr = 'http://%s:%d' % (self.hostname, self.client_port)
+    self.peer_addr = 'http://%s:%d' % (self.hostname, self.peer_port)
     self.api_url = self.client_addr + '/v2'
 
     dirname = 'etcd_' + self.name
