@@ -18,6 +18,7 @@ from multiprocessing.pool import ThreadPool
 import environment
 import tablet
 import utils
+from protocols_flavor import protocols_flavor
 
 from net import gorpc
 from vtdb import keyrange
@@ -1021,12 +1022,15 @@ class TestFailures(unittest.TestCase):
     self.replica_tablet.wait_for_vttablet_state('SERVING')
     # TODO: expect to fail until we can detect vttablet shuts down gracefully
     # while VTGate is idle.
+    # NOTE: with grpc, it will reconnect, and not trigger an error.
+    if protocols_flavor().tabletconn_protocol() == 'grpc':
+      return
     try:
-      vtgate_conn._execute(
+      result = vtgate_conn._execute(
         "select 1 from vt_insert_test", {},
         KEYSPACE_NAME, 'replica',
         keyranges=[self.keyrange])
-      self.fail("DatabaseError should have been raised")
+      self.fail("DatabaseError should have been raised, but got %s" % str(result))
     except Exception, e:
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
