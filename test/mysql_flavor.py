@@ -105,7 +105,7 @@ class MariaDB(MysqlFlavor):
     (_flavor, gtid) = pos.split("/")
     return [
         "SET GLOBAL gtid_slave_pos = '%s'" % gtid,
-        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%u, "
+        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
         "MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos" %
         (host, port)]
 
@@ -143,7 +143,7 @@ class MySQL56(MysqlFlavor):
     return [
         "RESET MASTER",
         "SET GLOBAL gtid_purged = '%s'" % gtid,
-        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%u, "
+        "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
         "MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1" %
         (host, port)]
 

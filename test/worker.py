@@ -227,12 +227,12 @@ class TestBaseSplitClone(unittest.TestCase):
       msg - the value of `msg` column
       keyspace_id - the value of `keyspace_id` column
     """
-    k = "%u" % keyspace_id
+    k = "%d" % keyspace_id
     values_str = ''
     for i in xrange(num_values):
       if i != 0:
         values_str += ','
-      values_str += '(%u, "%s", 0x%x)' % (id_offset + i, msg, keyspace_id)
+      values_str += '(%d, "%s", 0x%x)' % (id_offset + i, msg, keyspace_id)
     tablet.mquery('vt_test_keyspace', [
         'begin',
         'insert into worker_test(id, msg, keyspace_id) values%s /* EMD keyspace_id:%s*/' % (values_str, k),
@@ -258,7 +258,7 @@ class TestBaseSplitClone(unittest.TestCase):
     for shard_num in xrange(num_shards):
         self._insert_values(tablet,
                             shard_offsets[shard_num] + offset,
-                            'msg-shard-%u' % shard_num,
+                            'msg-shard-%d' % shard_num,
                             shard_offsets[shard_num],
                             num_values)
 
@@ -480,7 +480,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
     utils.kill_sub_process(self.worker_proc)
 
   def test_webinterface(self):
-    worker_base_url = 'http://localhost:%u' % int(self.worker_port)
+    worker_base_url = 'http://localhost:%d' % int(self.worker_port)
     # Wait for /status to become available.
     timeout = 10
     while True:
@@ -493,7 +493,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       if done:
         break
       timeout = utils.wait_step('worker /status webpage must be available', timeout)
-      
+
     # Run the command twice to make sure it's idempotent.
     for _ in range(2):
       # Run Ping command.
@@ -505,7 +505,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       # Verify that the command logged something and its available at /status.
       status = urllib2.urlopen(worker_base_url + '/status').read()
       self.assertIn("Ping command was called with message: 'pong'", status, "Command did not log output to /status")
-      
+
       # Reset the job.
       urllib2.urlopen(worker_base_url + '/reset').read()
       status_after_reset = urllib2.urlopen(worker_base_url + '/status').read()

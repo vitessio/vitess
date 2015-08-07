@@ -62,7 +62,7 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace*'], auto_log=True)
 
     # vtgate API test
-    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.vtgate.port, trap_output=True)
+    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%d -mode getSrvKeyspaceNames test_nj' % utils.vtgate.port, trap_output=True)
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
@@ -74,7 +74,7 @@ class TopoOccTest(unittest.TestCase):
     self.rebuild()
 
     # vtgate zk API test
-    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vtgate.port, trap_output=True)
+    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%d -mode getSrvKeyspace test_nj test_keyspace' % utils.vtgate.port, trap_output=True)
     self.assertEqual(err, "Partitions[master] =\n" +
                      "  ShardReferences[0]={Start: , End: }\n" +
                      "Partitions[rdonly] =\n" +
@@ -91,7 +91,7 @@ class TopoOccTest(unittest.TestCase):
     self.rebuild()
 
     # vtgate zk API test
-    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.vtgate.port, trap_output=True)
+    out, err = utils.run(environment.binary_argstr('zkclient2')+' -server localhost:%d -mode getEndPoints test_nj test_keyspace 0 master' % utils.vtgate.port, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
 
@@ -132,9 +132,9 @@ class TestTopo(unittest.TestCase):
     # some checks on performance / stats
     rpcCalls = v['TopoReaderRpcQueryCount']['test_nj']
     if rpcCalls < MIN_QPS * 10:
-      self.fail('QPS is too low: %u < %u' % (rpcCalls / 10, MIN_QPS))
+      self.fail('QPS is too low: %d < %d' % (rpcCalls / 10, MIN_QPS))
     else:
-      logging.debug("Recorded qps: %u", rpcCalls / 10)
+      logging.debug("Recorded qps: %d", rpcCalls / 10)
     utils.vtgate.kill()
 
   def test_fake_zkocc_connection(self):

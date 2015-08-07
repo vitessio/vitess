@@ -62,7 +62,7 @@ class TestCustomSharding(unittest.TestCase):
     for x in xrange(count):
       bindvars = {
         'id':   start+x,
-        'name': 'row %u' % (start+x),
+        'name': 'row %d' % (start+x),
         }
       utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                  bindvars=bindvars)
@@ -77,7 +77,7 @@ class TestCustomSharding(unittest.TestCase):
                                       bindvars=bindvars)
       self.assertEqual(len(qr['Rows']), 1)
       v = qr['Rows'][0][0]
-      self.assertEqual(v, 'row %u' % (start+x))
+      self.assertEqual(v, 'row %d' % (start+x))
 
   def test_custom_end_to_end(self):
     """This test case runs through the common operations of a custom
@@ -200,8 +200,8 @@ primary key (id)
     self.assertEqual(len(rows), 20)
     expected = {}
     for i in xrange(10):
-     expected[100+i] = 'row %u' % (100+i)
-     expected[200+i] = 'row %u' % (200+i)
+     expected[100+i] = 'row %d' % (100+i)
+     expected[200+i] = 'row %d' % (200+i)
     self.assertEqual(rows, expected)
 
 if __name__ == '__main__':

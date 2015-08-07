@@ -26,7 +26,7 @@ from mysql_flavor import mysql_flavor
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
-master_host = 'localhost:%u' % master_tablet.port
+master_host = 'localhost:%d' % master_tablet.port
 
 master_start_position = None
 

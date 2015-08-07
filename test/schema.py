@@ -108,7 +108,7 @@ class TestSchema(unittest.TestCase):
   def setUp(self):
     for t in tablets:
       t.create_db(db_name)
-    
+
   def tearDown(self):
     # This test assumes that it can reset the tablets by simply cleaning their
     # databases without restarting the tablets.
@@ -126,7 +126,7 @@ class TestSchema(unittest.TestCase):
   def _check_tables(self, tablet, expectedCount):
     tables = tablet.mquery(db_name, 'show tables')
     self.assertEqual(len(tables), expectedCount,
-                     'Unexpected table count on %s (not %u): got tables: %s' %
+                     'Unexpected table count on %s (not %d): got tables: %s' %
                      (tablet.tablet_alias, expectedCount, str(tables)))
 
   def _check_db_not_created(self, tablet):

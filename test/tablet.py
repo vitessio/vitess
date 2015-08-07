@@ -103,7 +103,7 @@ class Tablet(object):
       # import the grpc update stream client implementation, change the port
       from vtdb import grpc_update_stream
       port = self.grpc_port
-    return (protocol, 'localhost:%u' % port)
+    return (protocol, 'localhost:%d' % port)
 
   def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
     extra_env = {}
@@ -208,7 +208,7 @@ class Tablet(object):
   def assert_table_count(self, dbname, table, n, where=''):
     result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
     if result[0][0] != n:
-      raise utils.TestError('expected %u rows in %s' % (n, table), result)
+      raise utils.TestError('expected %d rows in %s' % (n, table), result)
 
   def reset_replication(self):
     self.mquery('', mysql_flavor().reset_replication_commands())
@@ -278,8 +278,8 @@ class Tablet(object):
         'UpdateTabletAddrs',
         '-hostname', 'localhost',
         '-ip-addr', '127.0.0.1',
-        '-mysql-port', '%u' % self.mysql_port,
-        '-vt-port', '%u' % self.port,
+        '-mysql-port', '%d' % self.mysql_port,
+        '-vt-port', '%d' % self.port,
         self.tablet_alias
     ]
     return utils.run_vtctl(args)
@@ -564,6 +564,8 @@ class Tablet(object):
       v = utils.get_vars(port or self.port)
       last_seen_state = "?"
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for state %s' % expected)
         logging.debug(
             '  vttablet %s not answering at /debug/vars, waiting...',
             self.tablet_alias)
@@ -607,29 +609,33 @@ class Tablet(object):
     return utils.get_status(self.port)
 
   def get_healthz(self):
-    return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
+    return urllib2.urlopen('http://localhost:%d/healthz' % self.port).read()
 
   def kill_vttablet(self, wait=True):
     logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias, str(wait))
     if self.proc is not None:
       Tablet.tablets_running -= 1
-      self.proc.terminate()
-      if wait:
-        self.proc.wait()
+      if self.proc.poll() is None:
+        self.proc.terminate()
+        if wait:
+          self.proc.wait()
       self.proc = None
 
   def hard_kill_vttablet(self):
     logging.debug('hard killing vttablet: %s', self.tablet_alias)
     if self.proc is not None:
       Tablet.tablets_running -= 1
-      self.proc.kill()
-      self.proc.wait()
+      if self.proc.poll() is None:
+        self.proc.kill()
+        self.proc.wait()
       self.proc = None
 
   def wait_for_binlog_server_state(self, expected, timeout=30.0):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for binlog state %s' % expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'UpdateStreamState' not in v:
@@ -651,6 +657,8 @@ class Tablet(object):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for binlog count %s' % expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'BinlogPlayerMapSize' not in v:
@@ -659,7 +667,7 @@ class Tablet(object):
         else:
           s = v['BinlogPlayerMapSize']
           if s != expected:
-            logging.debug("  vttablet's binlog player map has count %u != %u",
+            logging.debug("  vttablet's binlog player map has count %d != %d",
                           s, expected)
           else:
             break

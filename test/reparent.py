@@ -101,7 +101,7 @@ class TestReparent(unittest.TestCase):
         len(ep['entries']), 1, 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['port_map']['vt']
     self.assertEqual(port, expected_port,
-                     'Unexpected port: %u != %u from %s' % (port, expected_port,
+                     'Unexpected port: %d != %d from %s' % (port, expected_port,
                                                             str(ep)))
     host = ep['entries'][0]['host']
     # Hostname was set explicitly to "localhost" with -tablet_hostname flag.

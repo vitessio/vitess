@@ -41,14 +41,14 @@ class ZkTopoServer(server.TopoServer):
         'init'])
     config = tmproot + '/test-zk-client-conf.json'
     with open(config, 'w') as f:
-      ca_server = 'localhost:%u' % (self.zk_client_port)
+      ca_server = 'localhost:%d' % (self.zk_client_port)
       if add_bad_host:
         ca_server += ',does.not.exists:1234'
       zk_cell_mapping = {
-          'test_nj': 'localhost:%u' % (self.zk_client_port),
-          'test_ny': 'localhost:%u' % (self.zk_client_port),
+          'test_nj': 'localhost:%d' % (self.zk_client_port),
+          'test_ny': 'localhost:%d' % (self.zk_client_port),
           'test_ca': ca_server,
-          'global': 'localhost:%u' % (self.zk_client_port),
+          'global': 'localhost:%d' % (self.zk_client_port),
       }
       json.dump(zk_cell_mapping, f)
     os.environ['ZK_CLIENT_CONFIG'] = config

@@ -162,7 +162,7 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Scrap"]), 1)
 
   def test_partial(self):
-    utils.pause("You can now run a browser and connect to http://%s:%u to manually check topology" % (socket.getfqdn(), utils.vtctld.port))
+    utils.pause("You can now run a browser and connect to http://%s:%d to manually check topology" % (socket.getfqdn(), utils.vtctld.port))
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
@@ -171,7 +171,7 @@ class TestVtctld(unittest.TestCase):
                    environment.topo_server().flavor())
       return
 
-    base = 'http://localhost:%u' % utils.vtctld.port
+    base = 'http://localhost:%d' % utils.vtctld.port
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
                      base + '/zk/global/vt/keyspaces/test_keyspace')
     self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
@@ -222,7 +222,7 @@ class TestVtctld(unittest.TestCase):
     self.assertIn('</html>', status) # end of page
     self.assertIn('/serving_graph/test_nj">test_nj', status) # vtctld link
 
-    utils.pause("You can now run a browser and connect to http://%s:%u%s to manually check vtgate status page" % (socket.getfqdn(), utils.vtgate.port, environment.status_url))
+    utils.pause("You can now run a browser and connect to http://%s:%d%s to manually check vtgate status page" % (socket.getfqdn(), utils.vtgate.port, environment.status_url))
 
 if __name__ == '__main__':
   utils.main()
