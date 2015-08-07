@@ -291,7 +291,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType topo.TabletType) {
 		if tablet.Type == topo.TYPE_SPARE {
 			newTabletType = targetTabletType
 		}
-		if tablet.Type == newTabletType && tablet.IsHealthEqual(health) {
+		if tablet.Type == newTabletType && topo.IsHealthEqual(health, tablet.Health) {
 			// no change in health, not logging anything,
 			// and we're done
 			return

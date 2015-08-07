@@ -164,8 +164,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 	if gRPCPort != 0 {
 		tablet.Portmap["grpc"] = gRPCPort
 	}
-	if err := tablet.Complete(); err != nil {
-		return fmt.Errorf("InitTablet tablet.Complete failed: %v", err)
+	if err := topo.TabletComplete(tablet); err != nil {
+		return fmt.Errorf("InitTablet TabletComplete failed: %v", err)
 	}
 
 	// now try to create the record
@@ -173,7 +173,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 	switch err {
 	case nil:
 		// it worked, we're good, can update the replication graph
-		if tablet.IsInReplicationGraph() {
+		if topo.IsInReplicationGraph(tablet.Type) {
 			if err := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); err != nil {
 				return fmt.Errorf("UpdateTabletReplicationData failed: %v", err)
 			}

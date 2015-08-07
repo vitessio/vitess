@@ -15,7 +15,6 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/key"
@@ -356,11 +355,16 @@ type Tablet struct {
 	KeyRange       key.KeyRange
 }
 
+// String returns a string describing the tablet.
+func (tablet *Tablet) String() string {
+	return fmt.Sprintf("Tablet{%v}", tablet.Alias)
+}
+
 // ValidatePortmap returns an error if the tablet's portmap doesn't
 // contain all the necessary ports for the tablet to be fully
 // operational. We only care about vt port now, as mysql may not even
 // be running.
-func (tablet *Tablet) ValidatePortmap() error {
+func TabletValidatePortMap(tablet *Tablet) error {
 	if _, ok := tablet.Portmap["vt"]; !ok {
 		return fmt.Errorf("no vt port available")
 	}
@@ -369,7 +373,7 @@ func (tablet *Tablet) ValidatePortmap() error {
 
 // TabletEndPoint returns an EndPoint associated with the tablet record
 func TabletEndPoint(tablet *Tablet) (*pb.EndPoint, error) {
-	if err := tablet.ValidatePortmap(); err != nil {
+	if err := TabletValidatePortMap(tablet); err != nil {
 		return nil, err
 	}
 
@@ -387,24 +391,9 @@ func TabletEndPoint(tablet *Tablet) (*pb.EndPoint, error) {
 	return entry, nil
 }
 
-// Addr returns hostname:vt port.
-func (tablet *Tablet) Addr() string {
-	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["vt"]))
-}
-
-// MysqlAddr returns hostname:mysql port.
-func (tablet *Tablet) MysqlAddr() string {
-	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["mysql"]))
-}
-
-// MysqlIPAddr returns ip:mysql port.
-func (tablet *Tablet) MysqlIPAddr() string {
-	return netutil.JoinHostPort(tablet.IPAddr, int32(tablet.Portmap["mysql"]))
-}
-
-// DbName is usually implied by keyspace. Having the shard information in the
+// TabletDbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
-func (tablet *Tablet) DbName() string {
+func TabletDbName(tablet *Tablet) string {
 	if tablet.DbNameOverride != "" {
 		return tablet.DbNameOverride
 	}
@@ -414,59 +403,9 @@ func (tablet *Tablet) DbName() string {
 	return vtDbPrefix + tablet.Keyspace
 }
 
-// IsInServingGraph returns if this tablet is in the serving graph
-func (tablet *Tablet) IsInServingGraph() bool {
-	return IsInServingGraph(tablet.Type)
-}
-
-// IsRunningQueryService returns if this tablet should be running
-// the query service.
-func (tablet *Tablet) IsRunningQueryService() bool {
-	return IsRunningQueryService(tablet.Type)
-}
-
-// IsInReplicationGraph returns if this tablet is in the replication graph.
-func (tablet *Tablet) IsInReplicationGraph() bool {
-	return IsInReplicationGraph(tablet.Type)
-}
-
-// IsSlaveType returns if this tablet's type is a slave
-func (tablet *Tablet) IsSlaveType() bool {
-	return IsSlaveType(tablet.Type)
-}
-
-// String returns a string describing the tablet.
-func (tablet *Tablet) String() string {
-	return fmt.Sprintf("Tablet{%v}", tablet.Alias)
-}
-
-// JSON returns a json verison of the tablet.
-func (tablet *Tablet) JSON() string {
-	return jscfg.ToJSON(tablet)
-}
-
-// TabletInfo is the container for a Tablet, read from the topology server.
-type TabletInfo struct {
-	version int64 // node version - used to prevent stomping concurrent writes
-	*Tablet
-}
-
-// IsAssigned returns if this tablet ever assigned data?
-// A "scrap" node will show up as assigned even though its data
-// cannot be used for serving.
-func (tablet *TabletInfo) IsAssigned() bool {
-	return tablet.Keyspace != "" && tablet.Shard != ""
-}
-
-// Version returns the version of this tablet from last time it was read or
-// updated.
-func (ti *TabletInfo) Version() int64 {
-	return ti.version
-}
-
-// Complete validates and normalizes the tablet. If the shard name
+// TabletComplete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
-func (tablet *Tablet) Complete() error {
+func TabletComplete(tablet *Tablet) error {
 	shard, kr, err := ValidateShardName(tablet.Shard)
 	if err != nil {
 		return err
@@ -476,14 +415,64 @@ func (tablet *Tablet) Complete() error {
 	return nil
 }
 
-// IsHealthEqual compares the tablet's health with the passed one, and
+// TabletInfo is the container for a Tablet, read from the topology server.
+type TabletInfo struct {
+	version int64 // node version - used to prevent stomping concurrent writes
+	*Tablet
+}
+
+// Addr returns hostname:vt port.
+func (tablet *TabletInfo) Addr() string {
+	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["vt"]))
+}
+
+// MysqlAddr returns hostname:mysql port.
+func (tablet *TabletInfo) MysqlAddr() string {
+	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["mysql"]))
+}
+
+// IsAssigned returns if this tablet ever assigned data?
+// A "scrap" node will show up as assigned even though its data
+// cannot be used for serving.
+func (tablet *TabletInfo) IsAssigned() bool {
+	return tablet.Keyspace != "" && tablet.Shard != ""
+}
+
+// DbName is usually implied by keyspace. Having the shard information in the
+// database name complicates mysql replication.
+func (tablet *TabletInfo) DbName() string {
+	return TabletDbName(tablet.Tablet)
+}
+
+// Version returns the version of this tablet from last time it was read or
+// updated.
+func (ti *TabletInfo) Version() int64 {
+	return ti.version
+}
+
+// IsInServingGraph returns if this tablet is in the serving graph
+func (tablet *TabletInfo) IsInServingGraph() bool {
+	return IsInServingGraph(tablet.Type)
+}
+
+// IsInReplicationGraph returns if this tablet is in the replication graph.
+func (tablet *TabletInfo) IsInReplicationGraph() bool {
+	return IsInReplicationGraph(tablet.Type)
+}
+
+// IsSlaveType returns if this tablet's type is a slave
+func (tablet *TabletInfo) IsSlaveType() bool {
+	return IsSlaveType(tablet.Type)
+}
+
+// IsHealthEqual compares the two health maps, and
 // returns true if they're equivalent.
-func (tablet *Tablet) IsHealthEqual(health map[string]string) bool {
-	if len(health) == 0 && len(tablet.Health) == 0 {
+func IsHealthEqual(left, right map[string]string) bool {
+	if len(left) == 0 && len(right) == 0 {
 		return true
 	}
 
-	return reflect.DeepEqual(health, tablet.Health)
+	return reflect.DeepEqual(left, right)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
@@ -594,7 +583,7 @@ func CreateTablet(ctx context.Context, ts Server, tablet *Tablet) error {
 	}
 
 	// Then add the tablet to the replication graphs
-	if !tablet.IsInReplicationGraph() {
+	if !IsInReplicationGraph(tablet.Type) {
 		return nil
 	}
 

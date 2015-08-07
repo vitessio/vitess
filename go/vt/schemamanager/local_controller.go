@@ -40,9 +40,9 @@ import (
 //                                |----01
 //                                     |--- create_table_table_03.sql
 // Schema Change Files: ${keyspace}/input/*.sql
-// Error Files:         ${keysapce}/error/${YYYY}/${MM}/${DD}/*.sql
-// Log Files:           ${keysapce}/log/${YYYY}/${MM}/${DD}/*.sql
-// Complete Files:      ${keysapce}/compelte/${YYYY}/${MM}/${DD}/*.sql
+// Error Files:         ${keyspace}/error/${YYYY}/${MM}/${DD}/*.sql
+// Log Files:           ${keyspace}/log/${YYYY}/${MM}/${DD}/*.sql
+// Complete Files:      ${keyspace}/complete/${YYYY}/${MM}/${DD}/*.sql
 type LocalController struct {
 	schemaChangeDir string
 	keyspace        string

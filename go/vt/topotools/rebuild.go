@@ -365,7 +365,7 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 	errs := concurrency.AllErrorRecorder{}
 
 	// Update the list that the tablet is supposed to be in (if any).
-	if tablet.IsInServingGraph() {
+	if topo.IsInServingGraph(tablet.Type) {
 		endpoint, err := topo.TabletEndPoint(tablet)
 		if err != nil {
 			return err

@@ -54,7 +54,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 	if agent.DBConfigs != nil {
 		// Update our DB config to match the info we have in the tablet
 		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = tablet.DbName()
+			agent.DBConfigs.App.DbName = topo.TabletDbName(tablet)
 		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
@@ -114,7 +114,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, bla
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, tablet.DbName(), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, topo.TabletDbName(tablet), blacklistedTables)
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()
 
-	allowQuery := newTablet.IsRunningQueryService()
+	allowQuery := topo.IsRunningQueryService(newTablet.Type)
 
 	// Read the shard to get SourceShards / TabletControlMap if
 	// we're going to use it.

@@ -434,7 +434,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet,
 
 	blm.mu.Lock()
 	if blm.dbConfig.DbName == "" {
-		blm.dbConfig.DbName = tablet.DbName()
+		blm.dbConfig.DbName = topo.TabletDbName(tablet)
 	}
 
 	// get the existing sources and build a map of sources to remove
@@ -447,7 +447,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet,
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, key.KeyRangeToProto(tablet.KeyRange), sourceShard, tablet.DbName())
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, key.KeyRangeToProto(tablet.KeyRange), sourceShard, topo.TabletDbName(tablet))
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
