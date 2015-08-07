@@ -105,7 +105,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	// this will be enough for clients to re-resolve the new master.
 	event.DispatchUpdate(ev, "writing new master endpoint")
 	log.Infof("fastTabletExternallyReparented: writing new master endpoint to serving graph")
-	ep, err := tablet.EndPoint()
+	ep, err := topo.TabletEndPoint(tablet.Tablet)
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
 	}

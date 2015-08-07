@@ -40,7 +40,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	endPoint, err := tablet.EndPoint()
+	endPoint, err := topo.TabletEndPoint(tablet.Tablet)
 	if err != nil {
 		return nil, err
 	}

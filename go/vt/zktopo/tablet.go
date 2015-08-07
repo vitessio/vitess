@@ -52,8 +52,13 @@ func tabletInfoFromJSON(data string, version int64) (*topo.TabletInfo, error) {
 func (zkts *Server) CreateTablet(ctx context.Context, tablet *topo.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
 
+	data, err := json.MarshalIndent(tablet, "  ", "  ")
+	if err != nil {
+		return err
+	}
+
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.JSON(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zkts.zconn, zkTabletPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = topo.ErrNodeExists
@@ -71,7 +76,12 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *topo.Tablet) error
 // UpdateTablet is part of the topo.Server interface
 func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
-	stat, err := zkts.zconn.Set(zkTabletPath, tablet.JSON(), int(existingVersion))
+	data, err := json.MarshalIndent(tablet.Tablet, "  ", "  ")
+	if err != nil {
+		return 0, err
+	}
+
+	stat, err := zkts.zconn.Set(zkTabletPath, string(data), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = topo.ErrBadVersion

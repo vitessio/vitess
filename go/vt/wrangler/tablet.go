@@ -25,11 +25,11 @@ import (
 // If Force is true, and a tablet with the same ID already exists, it
 // will be scrapped and deleted, and then recreated.
 func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, createShardAndKeyspace, update bool) error {
-	if err := tablet.Complete(); err != nil {
+	if err := topo.TabletComplete(tablet); err != nil {
 		return err
 	}
 
-	if tablet.IsInReplicationGraph() {
+	if topo.IsInReplicationGraph(tablet.Type) {
 		// get the shard, possibly creating it
 		var err error
 		var si *topo.ShardInfo
@@ -75,7 +75,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topo.Tablet, force, 
 						wr.Logger().Warningf("failed updating tablet %v: %v", tablet.Alias, err)
 						// now fall through the Scrap case
 					} else {
-						if !tablet.IsInReplicationGraph() {
+						if !topo.IsInReplicationGraph(tablet.Type) {
 							return nil
 						}
 
@@ -115,7 +115,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias topo.TabletAlias, for
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.Tablet.IsInServingGraph()
+	rebuildRequired := ti.IsInServingGraph()
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
@@ -219,13 +219,13 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias topo.Ta
 		}
 	}
 
-	if !ti.Tablet.IsInServingGraph() {
+	if !ti.IsInServingGraph() {
 		// re-read the tablet, see if we become serving
 		ti, err = wr.ts.GetTablet(ctx, tabletAlias)
 		if err != nil {
 			return false, "", "", "", err
 		}
-		if !ti.Tablet.IsInServingGraph() {
+		if !ti.IsInServingGraph() {
 			return false, "", "", "", nil
 		}
 	}
@@ -240,7 +240,7 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias topo.Tab
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.Tablet.IsInServingGraph()
+	rebuildRequired := ti.IsInServingGraph()
 
 	// change the type
 	if err := wr.tmc.ChangeType(ctx, ti, dbType); err != nil {

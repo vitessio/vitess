@@ -376,7 +376,7 @@ func (agent *ActionAgent) verifyTopology(ctx context.Context) error {
 
 func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 	ti := agent.Tablet()
-	if !ti.IsRunningQueryService() {
+	if !topo.IsRunningQueryService(ti.Type) {
 		return nil
 	}
 

@@ -346,7 +346,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		if err != nil {
 			return nil, err
 		}
-		typeChangeRequired := ti.Tablet.IsInServingGraph()
+		typeChangeRequired := ti.IsInServingGraph()
 		if typeChangeRequired {
 			// note we want to update the serving graph there
 			err = wr.changeTypeInternal(ctx, ti.Alias, topo.TYPE_SCHEMA_UPGRADE)
@@ -454,13 +454,13 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias topo.
 		}
 	}
 
-	createSql := sourceSd.ToSQLStrings()
+	createSQL := sourceSd.ToSQLStrings()
 	destTabletInfo, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(destShardInfo.MasterAlias))
 	if err != nil {
 		return err
 	}
-	for i, sqlLine := range createSql {
-		err = wr.applySqlShard(ctx, destTabletInfo, sqlLine, i == len(createSql)-1)
+	for i, sqlLine := range createSQL {
+		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
 		if err != nil {
 			return err
 		}
@@ -468,14 +468,14 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias topo.
 	return nil
 }
 
-// applySqlShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
+// applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
 // SQL statements, but doesn't return any results, so it's only useful for SQL statements
 // that would be run for their effects (e.g., CREATE).
 // It works by applying the SQL statement on the shard's master tablet with replication turned on.
 // Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySqlShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
+func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
 	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)

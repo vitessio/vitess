@@ -41,7 +41,7 @@ func (tn *TabletNode) ShortName() string {
 }
 
 func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
-	if err := ti.ValidatePortmap(); err != nil {
+	if err := topo.TabletValidatePortMap(ti.Tablet); err != nil {
 		log.Errorf("ValidatePortmap(%v): %v", ti.Alias, err)
 	}
 	return &TabletNode{

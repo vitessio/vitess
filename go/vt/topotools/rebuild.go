@@ -110,7 +110,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 				endpoints = topo.NewEndPoints()
 				serving[tablet.Type] = endpoints
 			}
-			entry, err := tablet.EndPoint()
+			entry, err := topo.TabletEndPoint(tablet.Tablet)
 			if err != nil {
 				log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
 				continue
@@ -365,8 +365,8 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 	errs := concurrency.AllErrorRecorder{}
 
 	// Update the list that the tablet is supposed to be in (if any).
-	if tablet.IsInServingGraph() {
-		endpoint, err := tablet.EndPoint()
+	if topo.IsInServingGraph(tablet.Type) {
+		endpoint, err := topo.TabletEndPoint(tablet)
 		if err != nil {
 			return err
 		}
