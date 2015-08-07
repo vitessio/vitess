@@ -36,6 +36,11 @@ func newCallerIDClient(fallback vtgateservice.VTGateService) *callerIDClient {
 	}
 }
 
+// checkCallerID will see if this module is handling the request,
+// and if it is, check the callerID from the context.
+// Returns false if the query is not for this module.
+// Returns true and the the error to return with the call
+// if this module is handling the request.
 func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bool, error) {
 	if !strings.HasPrefix(received, callerIDPrefix) {
 		return false, nil
