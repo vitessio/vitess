@@ -6,6 +6,7 @@ import warnings
 warnings.simplefilter('ignore')
 
 import logging
+import time
 import unittest
 
 import environment
@@ -446,7 +447,7 @@ class TestReparent(unittest.TestCase):
     """This test will start a master and 3 slaves. Then:
     - one slave will be the new master
     - one slave will be reparented to that new master
-    - one slave will be busted and ded in the water
+    - one slave will be busted and dead in the water
     and we'll call TabletExternallyReparented.
 
     Args:
@@ -505,27 +506,25 @@ class TestReparent(unittest.TestCase):
     # in brutal mode, we scrap the old master first
     if brutal:
       tablet_62344.scrap(force=True)
-      # we have some automated tools that do this too, so it's good to simulate
-      if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(environment.binary_args('zk') + ['rm', '-rf',
-                                                   tablet_62344.zk_tablet_path])
 
-    # update zk with the new graph
+    base_time = time.time()
+
+    # update topology with the new server
     utils.run_vtctl(['TabletExternallyReparented', tablet_62044.tablet_alias],
                     mode=utils.VTCTL_VTCTL, auto_log=True)
 
-    self._test_reparent_from_outside_check(brutal)
+    self._test_reparent_from_outside_check(brutal, base_time)
 
+    # RebuildReplicationGraph will rebuild the topo data from
+    # the tablet records. It is an emergency command only.
     utils.run_vtctl(['RebuildReplicationGraph', 'test_nj', 'test_keyspace'])
 
-    self._test_reparent_from_outside_check(brutal)
+    self._test_reparent_from_outside_check(brutal, base_time)
 
     tablet.kill_tablets([tablet_31981, tablet_62344, tablet_62044,
                          tablet_41983])
 
-  def _test_reparent_from_outside_check(self, brutal):
-    if environment.topo_server().flavor() != 'zookeeper':
-      return
+  def _test_reparent_from_outside_check(self, brutal, base_time):
 
     # make sure the shard replication graph is fine
     shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
@@ -545,9 +544,20 @@ class TestReparent(unittest.TestCase):
                      'Got unexpected nodes: %s != %s' % (str(expected_nodes),
                                                          str(hashed_nodes)))
 
+    # make sure the master status page says it's the master
     tablet_62044_master_status = tablet_62044.get_status()
     self.assertIn('Serving graph: test_keyspace 0 master',
                   tablet_62044_master_status)
+
+    # make sure the master health stream says it's the master too
+    # (health check is disabled on these servers, force it first)
+    utils.run_vtctl(["RunHealthCheck", tablet_62044.tablet_alias, "replica"])
+    health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                   '-count', '1',
+                                   tablet_62044.tablet_alias])
+    self.assertEqual(health['target']['tablet_type'], 2) # MASTER
+    # have to compare the int version, or the rounding errors can break
+    self.assertTrue(health['tablet_externally_reparented_timestamp'] >= int(base_time))
 
   # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):
