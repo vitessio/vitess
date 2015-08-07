@@ -564,6 +564,8 @@ class Tablet(object):
       v = utils.get_vars(port or self.port)
       last_seen_state = "?"
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for state %s' % expected)
         logging.debug(
             '  vttablet %s not answering at /debug/vars, waiting...',
             self.tablet_alias)
@@ -613,23 +615,27 @@ class Tablet(object):
     logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias, str(wait))
     if self.proc is not None:
       Tablet.tablets_running -= 1
-      self.proc.terminate()
-      if wait:
-        self.proc.wait()
+      if self.proc.poll() is None:
+        self.proc.terminate()
+        if wait:
+          self.proc.wait()
       self.proc = None
 
   def hard_kill_vttablet(self):
     logging.debug('hard killing vttablet: %s', self.tablet_alias)
     if self.proc is not None:
       Tablet.tablets_running -= 1
-      self.proc.kill()
-      self.proc.wait()
+      if self.proc.poll() is None:
+        self.proc.kill()
+        self.proc.wait()
       self.proc = None
 
   def wait_for_binlog_server_state(self, expected, timeout=30.0):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for binlog state %s' % expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'UpdateStreamState' not in v:
@@ -651,6 +657,8 @@ class Tablet(object):
     while True:
       v = utils.get_vars(self.port)
       if v == None:
+        if self.proc.poll() is not None:
+          raise utils.TestError('vttablet died while test waiting for binlog count %s' % expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'BinlogPlayerMapSize' not in v:
