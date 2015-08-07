@@ -95,7 +95,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	return q.server.StreamExecute(ctx, request.Target, &proto.Query{
+	if err := q.server.StreamExecute(ctx, request.Target, &proto.Query{
 		Sql:           string(request.Query.Sql),
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
@@ -103,7 +103,10 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		return stream.Send(&pb.StreamExecuteResponse{
 			Result: mproto.QueryResultToProto3(reply),
 		})
-	})
+	}); err != nil {
+		return grpc.Errorf(codes.Internal, "%v", err)
+	}
+	return nil
 }
 
 // Begin is part of the queryservice.QueryServer interface
