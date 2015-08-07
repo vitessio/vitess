@@ -556,7 +556,8 @@ class TestReparent(unittest.TestCase):
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
     self.assertEqual(health['target']['tablet_type'], 2) # MASTER
-    self.assertTrue(health['tablet_externally_reparented_timestamp'] >= base_time)
+    # have to compare the int version, or the rounding errors can break
+    self.assertTrue(health['tablet_externally_reparented_timestamp'] >= int(base_time))
 
   # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):
