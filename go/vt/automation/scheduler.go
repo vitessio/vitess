@@ -281,7 +281,7 @@ func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.Enqueue
 	clusterOp := NewClusterOperationInstance(clusterOpID, initialTask, &taskIDGenerator)
 
 	s.muOpList.Lock()
-	s.activeClusterOperations[clusterOpID] = clusterOp
+	s.activeClusterOperations[clusterOpID] = clusterOp.Clone()
 	s.muOpList.Unlock()
 	s.toBeScheduledClusterOperations <- clusterOp
 
