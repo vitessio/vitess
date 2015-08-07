@@ -19,7 +19,6 @@ import query_pb2 as query__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='queryservice.proto',
   package='queryservice',
-  syntax='proto3',
   serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\xe9\x04\n\x05Query\x12I\n\x0cGetSessionId\x12\x1a.query.GetSessionIdRequest\x1a\x1b.query.GetSessionIdResponse\"\x00\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
@@ -110,7 +109,7 @@ class EarlyAdopterQueryStub(object):
   def StreamHealth(self, request):
     raise NotImplementedError()
   StreamHealth.async = None
-def early_adopter_create_Query_server(servicer, port, private_key=None, certificate_chain=None):
+def early_adopter_create_Query_server(servicer, port, root_certificates, key_chain_pairs):
   import query_pb2
   import query_pb2
   import query_pb2
@@ -176,8 +175,8 @@ def early_adopter_create_Query_server(servicer, port, private_key=None, certific
       query_pb2.StreamHealthResponse.SerializeToString,
     ),
   }
-  return implementations.server("queryservice.Query", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
-def early_adopter_create_Query_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
+  return implementations.secure_server("queryservice.Query", method_service_descriptions, port, root_certificates, key_chain_pairs)
+def early_adopter_create_Query_stub(host, port):
   import query_pb2
   import query_pb2
   import query_pb2
@@ -234,5 +233,5 @@ def early_adopter_create_Query_stub(host, port, metadata_transformer=None, secur
       query_pb2.StreamHealthResponse.FromString,
     ),
   }
-  return implementations.stub("queryservice.Query", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
+  return implementations.insecure_stub("queryservice.Query", method_invocation_descriptions, host, port)
 # @@protoc_insertion_point(module_scope)

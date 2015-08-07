@@ -91,7 +91,7 @@ func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
 		message = errString
 	}
 	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCode_UnknownVtgateError,
+		Code:    vtrpc.ErrorCodeDeprecated_UnknownVtgateError,
 		Message: message,
 	}
 }
