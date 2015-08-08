@@ -85,7 +85,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		}
 
 		// Build up the serving graph from scratch.
-		serving := make(map[topo.TabletType]*pb.EndPoints)
+		serving := make(map[pb.TabletType]*pb.EndPoints)
 		for _, tablet := range tablets {
 			if !tablet.IsInReplicationGraph() {
 				// only valid case is a scrapped master in the
@@ -125,7 +125,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		// Write nodes that should exist.
 		for tabletType, endpoints := range serving {
 			wg.Add(1)
-			go func(tabletType topo.TabletType, endpoints *pb.EndPoints) {
+			go func(tabletType pb.TabletType, endpoints *pb.EndPoints) {
 				defer wg.Done()
 
 				log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, si.Keyspace(), si.ShardName(), tabletType)
@@ -163,7 +163,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		for tabletType, version := range versions {
 			if _, ok := serving[tabletType]; !ok {
 				wg.Add(1)
-				go func(tabletType topo.TabletType, version int64) {
+				go func(tabletType pb.TabletType, version int64) {
 					defer wg.Done()
 					log.Infof("removing stale db type from serving graph: %v", tabletType)
 					if err := ts.DeleteEndPoints(ctx, cell, si.Keyspace(), si.ShardName(), tabletType, version); err != nil && err != topo.ErrNoNode {
@@ -207,7 +207,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 	}
 }
 
-func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (map[topo.TabletType]int64, error) {
+func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, shard string) (map[pb.TabletType]int64, error) {
 	// Get all existing tablet types.
 	tabletTypes, err := ts.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 	if err != nil {
@@ -221,12 +221,12 @@ func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, s
 	// Get node versions.
 	wg := sync.WaitGroup{}
 	errs := concurrency.AllErrorRecorder{}
-	versions := make(map[topo.TabletType]int64)
+	versions := make(map[pb.TabletType]int64)
 	mu := sync.Mutex{}
 
 	for _, tabletType := range tabletTypes {
 		wg.Add(1)
-		go func(tabletType topo.TabletType) {
+		go func(tabletType pb.TabletType) {
 			defer wg.Done()
 
 			_, version, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
@@ -245,7 +245,7 @@ func getEndPointsVersions(ctx context.Context, ts topo.Server, cell, keyspace, s
 	return versions, errs.Error()
 }
 
-func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, endpoint *pb.EndPoint) error {
+func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, endpoint *pb.EndPoint) error {
 	return retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, true, /* create */
 		func(endpoints *pb.EndPoints) bool {
 			// Look for an existing entry to update.
@@ -266,7 +266,7 @@ func updateEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard s
 		})
 }
 
-func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, tabletUID uint32) error {
+func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, tabletUID uint32) error {
 	err := retryUpdateEndpoints(ctx, ts, cell, keyspace, shard, tabletType, false, /* create */
 		func(endpoints *pb.EndPoints) bool {
 			// Make a new list, excluding the given UID.
@@ -292,7 +292,7 @@ func removeEndpoint(ctx context.Context, ts topo.Server, cell, keyspace, shard s
 	return err
 }
 
-func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType topo.TabletType, create bool, updateFunc func(*pb.EndPoints) bool) error {
+func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, shard string, tabletType pb.TabletType, create bool, updateFunc func(*pb.EndPoints) bool) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -351,7 +351,7 @@ func retryUpdateEndpoints(ctx context.Context, ts topo.Server, cell, keyspace, s
 
 // UpdateTabletEndpoints fixes up any entries in the serving graph that relate
 // to a given tablet.
-func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tablet) (err error) {
+func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *pb.Tablet) (err error) {
 	srvTypes, err := ts.GetSrvTabletTypesPerShard(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		if err != topo.ErrNoNode {
@@ -384,7 +384,7 @@ func UpdateTabletEndpoints(ctx context.Context, ts topo.Server, tablet *topo.Tab
 	for _, srvType := range srvTypes {
 		if srvType != tablet.Type {
 			wg.Add(1)
-			go func(tabletType topo.TabletType) {
+			go func(tabletType pb.TabletType) {
 				defer wg.Done()
 				errs.RecordError(
 					removeEndpoint(ctx, ts, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard,

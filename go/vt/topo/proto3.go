@@ -48,48 +48,6 @@ func ProtoToTabletType(t pb.TabletType) TabletType {
 	return TabletType(strings.ToLower(pb.TabletType_name[int32(t)]))
 }
 
-// TabletToProto turns a Tablet into a proto
-func TabletToProto(t *Tablet) *pb.Tablet {
-	result := &pb.Tablet{
-		Alias:          TabletAliasToProto(t.Alias),
-		Hostname:       t.Hostname,
-		Ip:             t.IPAddr,
-		PortMap:        make(map[string]int32),
-		Keyspace:       t.Keyspace,
-		Shard:          t.Shard,
-		KeyRange:       key.KeyRangeToProto(t.KeyRange),
-		Type:           TabletTypeToProto(t.Type),
-		DbNameOverride: t.DbNameOverride,
-		Tags:           t.Tags,
-		HealthMap:      t.Health,
-	}
-	for k, v := range t.Portmap {
-		result.PortMap[k] = int32(v)
-	}
-	return result
-}
-
-// ProtoToTablet turns a proto to a Tablet
-func ProtoToTablet(t *pb.Tablet) *Tablet {
-	result := &Tablet{
-		Alias:          ProtoToTabletAlias(t.Alias),
-		Hostname:       t.Hostname,
-		IPAddr:         t.Ip,
-		Portmap:        make(map[string]int),
-		Keyspace:       t.Keyspace,
-		Shard:          t.Shard,
-		KeyRange:       key.ProtoToKeyRange(t.KeyRange),
-		Type:           ProtoToTabletType(t.Type),
-		DbNameOverride: t.DbNameOverride,
-		Tags:           t.Tags,
-		Health:         t.HealthMap,
-	}
-	for k, v := range t.PortMap {
-		result.Portmap[k] = int(v)
-	}
-	return result
-}
-
 // SrvKeyspaceToProto turns a Tablet into a proto
 func SrvKeyspaceToProto(s *SrvKeyspace) *pb.SrvKeyspace {
 	result := &pb.SrvKeyspace{

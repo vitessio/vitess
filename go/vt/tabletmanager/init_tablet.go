@@ -10,6 +10,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -19,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -35,7 +38,7 @@ func init() {
 }
 
 // InitTablet initializes the tablet record if necessary.
-func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
+func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	// only enabled if one of init_tablet_type (when healthcheck
 	// is disabled) or init_keyspace (when healthcheck is enabled)
 	// is passed in, then check other parameters
@@ -44,18 +47,23 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 	}
 
 	// figure out our default target type
-	var tabletType topo.TabletType
+	var tabletType pb.TabletType
 	if *initTabletType != "" {
 		if *targetTabletType != "" {
 			log.Fatalf("cannot specify both target_tablet_type and init_tablet_type parameters (as they might conflict)")
 		}
 
+		itt, ok := pb.TabletType_value[strings.ToUpper(*initTabletType)]
+		if !ok {
+			log.Fatalf("Invalid init tablet type: %v", *initTabletType)
+		}
+
 		// use the type specified on the command line
-		tabletType = topo.TabletType(*initTabletType)
+		tabletType = pb.TabletType(itt)
 		if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
 			log.Fatalf("InitTablet encountered unknown init_tablet_type '%v'", *initTabletType)
 		}
-		if tabletType == topo.TYPE_MASTER || tabletType == topo.TYPE_SCRAP {
+		if tabletType == pb.TabletType_MASTER || tabletType == pb.TabletType_SCRAP {
 			// We disallow TYPE_MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.
 			// We also disallow TYPE_SCRAP, obviously.
@@ -63,13 +71,13 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 		}
 
 	} else if *targetTabletType != "" {
-		if tabletType := topo.TabletType(*targetTabletType); tabletType == topo.TYPE_MASTER {
-			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, topo.TYPE_REPLICA)
+		if strings.ToUpper(*targetTabletType) == pb.TabletType_name[int32(pb.TabletType_MASTER)] {
+			log.Fatalf("target_tablet_type cannot be '%v'. Use '%v' instead.", tabletType, pb.TabletType_REPLICA)
 		}
 
 		// use spare, the healthcheck will turn us into what
 		// we need to be eventually
-		tabletType = topo.TYPE_SPARE
+		tabletType = pb.TabletType_SPARE
 
 	} else {
 		log.Fatalf("if init tablet is enabled, one of init_tablet_type or target_tablet_type needs to be specified")
@@ -81,7 +89,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 
 	// if we're assigned to a shard, make sure it exists, see if
 	// we are its master, and update its cells list if necessary
-	if tabletType != topo.TYPE_IDLE {
+	if tabletType != pb.TabletType_IDLE {
 		if *initKeyspace == "" || *initShard == "" {
 			log.Fatalf("if init tablet is enabled and the target type is not idle, init_keyspace and init_shard also need to be specified")
 		}
@@ -97,11 +105,11 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 		if err != nil {
 			return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 		}
-		if si.MasterAlias != nil && *si.MasterAlias == *topo.TabletAliasToProto(agent.TabletAlias) {
+		if si.MasterAlias != nil && topo.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
 			// we are the current master for this shard (probably
 			// means the master tablet process was just restarted),
 			// so InitTablet as master.
-			tabletType = topo.TYPE_MASTER
+			tabletType = pb.TabletType_MASTER
 		}
 
 		// See if we need to add the tablet's cell to the shard's cell
@@ -148,10 +156,10 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 	}
 
 	// create and populate tablet record
-	tablet := &topo.Tablet{
+	tablet := &pb.Tablet{
 		Alias:          agent.TabletAlias,
 		Hostname:       hostname,
-		Portmap:        make(map[string]int),
+		PortMap:        make(map[string]int32),
 		Keyspace:       *initKeyspace,
 		Shard:          *initShard,
 		Type:           tabletType,
@@ -159,10 +167,10 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 		Tags:           initTags,
 	}
 	if port != 0 {
-		tablet.Portmap["vt"] = port
+		tablet.PortMap["vt"] = port
 	}
 	if gRPCPort != 0 {
-		tablet.Portmap["grpc"] = gRPCPort
+		tablet.PortMap["grpc"] = gRPCPort
 	}
 	if err := topo.TabletComplete(tablet); err != nil {
 		return fmt.Errorf("InitTablet TabletComplete failed: %v", err)
@@ -207,7 +215,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int) error {
 
 	// and now update the serving graph. Note we do that in any case,
 	// to clean any inaccurate record from any part of the serving graph.
-	if tabletType != topo.TYPE_IDLE {
+	if tabletType != pb.TabletType_IDLE {
 		if err := topotools.UpdateTabletEndpoints(ctx, agent.TopoServer, tablet); err != nil {
 			return fmt.Errorf("UpdateTabletEndpoints failed: %v", err)
 		}

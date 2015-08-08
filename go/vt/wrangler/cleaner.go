@@ -12,6 +12,8 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Cleaner remembers a list of cleanup steps to perform.  Just record
@@ -129,8 +131,8 @@ func (cleaner *Cleaner) RemoveActionByName(name, target string) error {
 
 // ChangeSlaveTypeAction will change a server type to another type
 type ChangeSlaveTypeAction struct {
-	TabletAlias topo.TabletAlias
-	TabletType  topo.TabletType
+	TabletAlias *pb.TabletAlias
+	TabletType  pb.TabletType
 }
 
 // ChangeSlaveTypeActionName is the name of the action to change a slave type
@@ -139,7 +141,7 @@ const ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
 
 // RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
 // into the specified Cleaner
-func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, tabletType topo.TabletType) {
+func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *pb.TabletAlias, tabletType pb.TabletType) {
 	cleaner.Record(ChangeSlaveTypeActionName, tabletAlias.String(), &ChangeSlaveTypeAction{
 		TabletAlias: tabletAlias,
 		TabletType:  tabletType,
@@ -147,7 +149,7 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias topo.TabletAlias,
 }
 
 // FindChangeSlaveTypeActionByTarget finds the first action for the target
-func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias topo.TabletAlias) (*ChangeSlaveTypeAction, error) {
+func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias *pb.TabletAlias) (*ChangeSlaveTypeAction, error) {
 	action, err := cleaner.GetActionByName(ChangeSlaveTypeActionName, tabletAlias.String())
 	if err != nil {
 		return nil, err
@@ -171,7 +173,7 @@ func (csta ChangeSlaveTypeAction) CleanUp(ctx context.Context, wr *Wrangler) err
 // TabletTagAction will add / remove a tag to a tablet. If Value is
 // empty, will remove the tag.
 type TabletTagAction struct {
-	TabletAlias topo.TabletAlias
+	TabletAlias *pb.TabletAlias
 	Name        string
 	Value       string
 }
@@ -181,7 +183,7 @@ const TabletTagActionName = "TabletTagAction"
 
 // RecordTabletTagAction records a new TabletTagAction
 // into the specified Cleaner
-func RecordTabletTagAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, name, value string) {
+func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *pb.TabletAlias, name, value string) {
 	cleaner.Record(TabletTagActionName, tabletAlias.String(), &TabletTagAction{
 		TabletAlias: tabletAlias,
 		Name:        name,
@@ -191,7 +193,7 @@ func RecordTabletTagAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, name,
 
 // CleanUp is part of CleanerAction interface.
 func (tta TabletTagAction) CleanUp(ctx context.Context, wr *Wrangler) error {
-	return wr.TopoServer().UpdateTabletFields(ctx, tta.TabletAlias, func(tablet *topo.Tablet) error {
+	return wr.TopoServer().UpdateTabletFields(ctx, tta.TabletAlias, func(tablet *pb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}

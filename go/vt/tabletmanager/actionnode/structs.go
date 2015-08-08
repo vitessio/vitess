@@ -32,7 +32,7 @@ type SlaveWasRestartedArgs struct {
 
 // ApplySchemaShardArgs is the payload for ApplySchemaShard
 type ApplySchemaShardArgs struct {
-	MasterTabletAlias topo.TabletAlias
+	MasterTabletAlias *pb.TabletAlias
 	Change            string
 	Simple            bool
 }
@@ -66,11 +66,11 @@ type MigrateServedFromArgs struct {
 // ReparentShardArgs is the payload for ReparentShard
 type ReparentShardArgs struct {
 	Operation        string
-	MasterElectAlias topo.TabletAlias
+	MasterElectAlias *pb.TabletAlias
 }
 
 // ReparentShard returns an ActionNode
-func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionNode {
+func ReparentShard(operation string, masterElectAlias *pb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionReparent,
 		Args: &ReparentShardArgs{
@@ -81,7 +81,7 @@ func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionN
 }
 
 // ShardExternallyReparented returns an ActionNode
-func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
+func ShardExternallyReparented(tabletAlias *pb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionExternallyReparented,
 		Args:   &tabletAlias,
@@ -103,7 +103,7 @@ func CheckShard() *ActionNode {
 }
 
 // ApplySchemaShard returns an ActionNode
-func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
+func ApplySchemaShard(masterTabletAlias *pb.TabletAlias, change string, simple bool) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionApplySchema,
 		Args: &ApplySchemaShardArgs{

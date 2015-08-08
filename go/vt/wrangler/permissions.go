@@ -14,10 +14,12 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // GetPermissions returns the permissions set on a remote tablet
-func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
+func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAlias) (*myproto.Permissions, error) {
 	tablet, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
@@ -27,7 +29,7 @@ func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias topo.TabletA
 }
 
 // diffPermissions is a helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *myproto.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *myproto.Permissions, masterAlias *pb.TabletAlias, alias *pb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering permissions for %v", alias)
 	slavePermissions, err := wr.GetPermissions(ctx, alias)
@@ -53,7 +55,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering permissions for master %v", si.MasterAlias)
-	masterPermissions, err := wr.GetPermissions(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+	masterPermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -69,11 +71,11 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
-		if alias == topo.ProtoToTabletAlias(si.MasterAlias) {
+		if topo.TabletAliasEqual(alias, si.MasterAlias) {
 			continue
 		}
 		wg.Add(1)
-		go wr.diffPermissions(ctx, masterPermissions, topo.ProtoToTabletAlias(si.MasterAlias), alias, &wg, &er)
+		go wr.diffPermissions(ctx, masterPermissions, si.MasterAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -108,9 +110,9 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
-	referenceAlias := topo.ProtoToTabletAlias(si.MasterAlias)
+	referenceAlias := si.MasterAlias
 	log.Infof("Gathering permissions for reference master %v", referenceAlias)
-	referencePermissions, err := wr.GetPermissions(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+	referencePermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -126,7 +128,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		}
 
 		for _, alias := range aliases {
-			if alias == topo.ProtoToTabletAlias(si.MasterAlias) {
+			if topo.TabletAliasEqual(alias, si.MasterAlias) {
 				continue
 			}
 

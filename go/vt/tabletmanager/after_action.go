@@ -7,6 +7,7 @@ package tabletmanager
 // This file handles the agent state changes.
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/binlog"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -44,7 +46,7 @@ const keyrangeQueryRules string = "KeyrangeQueryRules"
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
 
-func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []string) error {
+func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []string) error {
 	// if the query service is already running, we're not starting it again
 	if agent.QueryServiceControl.IsServing() {
 		return nil
@@ -58,7 +60,7 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
-		if tablet.Type != topo.TYPE_MASTER {
+		if tablet.Type != pbt.TabletType_MASTER {
 			agent.DBConfigs.App.EnableInvalidator = true
 		} else {
 			agent.DBConfigs.App.EnableInvalidator = false
@@ -73,17 +75,17 @@ func (agent *ActionAgent) allowQueries(tablet *topo.Tablet, blacklistedTables []
 	return agent.QueryServiceControl.AllowQueries(&pb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
-		TabletType: topo.TabletTypeToProto(tablet.Type),
+		TabletType: tablet.Type,
 	}, agent.DBConfigs, agent.SchemaOverrides, agent.MysqlDaemon)
 }
 
 // loadKeyspaceAndBlacklistRules does what the name suggests:
 // 1. load and build keyrange query rules
 // 2. load and build blacklist query rules
-func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *topo.Tablet, blacklistedTables []string) (err error) {
+func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blacklistedTables []string) (err error) {
 	// Keyrange rules
 	keyrangeRules := tabletserver.NewQueryRules()
-	if tablet.KeyRange.IsPartial() {
+	if key.KeyRangeIsPartial(tablet.KeyRange) {
 		log.Infof("Restricting to keyrange: %v", tablet.KeyRange)
 		dmlPlans := []struct {
 			planID   planbuilder.PlanType
@@ -144,7 +146,7 @@ func (agent *ActionAgent) disallowQueries() {
 
 // changeCallback is run after every action that might
 // have changed something in the tablet record.
-func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topo.Tablet) error {
+func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *pbt.Tablet) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("ActionAgent.changeCallback")
 	defer span.Finish()
@@ -162,10 +164,10 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {
-			if newTablet.Type == topo.TYPE_MASTER {
+			if newTablet.Type == pbt.TabletType_MASTER {
 				allowQuery = len(shardInfo.SourceShards) == 0
 			}
-			if tc := shardInfo.GetTabletControl(topo.TabletTypeToProto(newTablet.Type)); tc != nil {
+			if tc := shardInfo.GetTabletControl(newTablet.Type); tc != nil {
 				if topo.InCellList(newTablet.Alias.Cell, tc.Cells) {
 					if tc.DisableQueryService {
 						allowQuery = false
@@ -180,7 +182,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// Read the keyspace on masters to get ShardingColumnType,
 	// for binlog replication, only if source shards are set.
 	var keyspaceInfo *topo.KeyspaceInfo
-	if newTablet.Type == topo.TYPE_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
+	if newTablet.Type == pbt.TabletType_MASTER && shardInfo != nil && len(shardInfo.SourceShards) > 0 {
 		keyspaceInfo, err = agent.TopoServer.GetKeyspace(ctx, newTablet.Keyspace)
 		if err != nil {
 			log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
@@ -203,7 +205,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 
 		// Transitioning from replica to master, so clients that were already
 		// connected don't keep on using the master as replica or rdonly.
-		case newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER:
+		case newTablet.Type == pbt.TabletType_MASTER && oldTablet.Type != pbt.TabletType_MASTER:
 			agent.disallowQueries()
 
 		// Having different parameters for the query service.
@@ -239,12 +241,17 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	statsType.Set(string(newTablet.Type))
 	statsKeyspace.Set(newTablet.Keyspace)
 	statsShard.Set(newTablet.Shard)
-	statsKeyRangeStart.Set(string(newTablet.KeyRange.Start.Hex()))
-	statsKeyRangeEnd.Set(string(newTablet.KeyRange.End.Hex()))
+	if newTablet.KeyRange != nil {
+		statsKeyRangeStart.Set(hex.EncodeToString(newTablet.KeyRange.Start))
+		statsKeyRangeEnd.Set(hex.EncodeToString(newTablet.KeyRange.End))
+	} else {
+		statsKeyRangeStart.Set("")
+		statsKeyRangeEnd.Set("")
+	}
 
 	// See if we need to start or stop any binlog player
 	if agent.BinlogPlayerMap != nil {
-		if newTablet.Type == topo.TYPE_MASTER {
+		if newTablet.Type == pbt.TabletType_MASTER {
 			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, keyspaceInfo, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()

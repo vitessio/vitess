@@ -140,7 +140,7 @@ type Server interface {
 	// CreateTablet creates the given tablet, assuming it doesn't exist
 	// yet. It does *not* create the tablet replication paths.
 	// Can return ErrNodeExists if it already exists.
-	CreateTablet(ctx context.Context, tablet *Tablet) error
+	CreateTablet(ctx context.Context, tablet *pb.Tablet) error
 
 	// UpdateTablet updates a given tablet. The version is used
 	// for atomic updates. UpdateTablet will return ErrNoNode if
@@ -153,21 +153,21 @@ type Server interface {
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
 	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias TabletAlias, update func(*Tablet) error) error
+	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.
 	// Can return ErrNoNode if the tablet doesn't exist.
-	DeleteTablet(ctx context.Context, alias TabletAlias) error
+	DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error
 
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias TabletAlias) (*TabletInfo, error)
+	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletInfo, error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
 	// Can return ErrNoNode if no tablet was ever created in that cell.
-	GetTabletsByCell(ctx context.Context, cell string) ([]TabletAlias, error)
+	GetTabletsByCell(ctx context.Context, cell string) ([]*pb.TabletAlias, error)
 
 	//
 	// Replication graph management, per cell.
@@ -210,12 +210,12 @@ type Server interface {
 	// GetSrvTabletTypesPerShard returns the existing serving types
 	// for a shard.
 	// Can return ErrNoNode.
-	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]TabletType, error)
+	GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]pb.TabletType, error)
 
 	// CreateEndPoints creates and sets the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// It returns ErrNodeExists if the record already exists.
-	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *pb.EndPoints) error
+	CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error
 
 	// UpdateEndPoints updates the serving records for a cell,
 	// keyspace, shard, tabletType.
@@ -224,19 +224,19 @@ type Server interface {
 	// Otherwise, it will Compare-And-Set only if the version matches.
 	// Can return ErrBadVersion.
 	// Can return ErrNoNode only if existingVersion is not -1.
-	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, addrs *pb.EndPoints, existingVersion int64) error
+	UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error
 
 	// GetEndPoints returns the EndPoints list of serving addresses
 	// for a TabletType inside a shard, as well as the node version.
 	// Can return ErrNoNode.
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (ep *pb.EndPoints, version int64, err error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (ep *pb.EndPoints, version int64, err error)
 
 	// DeleteEndPoints deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
 	// If existingVersion is -1, it will delete the records unconditionally.
 	// Otherwise, it will Compare-And-Delete only if the version matches.
 	// Can return ErrNoNode or ErrBadVersion.
-	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType, existingVersion int64) error
+	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error
 
 	// WatchEndPoints returns a channel that receives notifications
 	// every time EndPoints for the given type changes.
@@ -251,7 +251,7 @@ type Server interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType TabletType) (notifications <-chan *pb.EndPoints, stopWatching chan<- struct{}, err error)
+	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (notifications <-chan *pb.EndPoints, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.

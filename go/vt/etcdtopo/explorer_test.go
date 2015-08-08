@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -146,12 +145,12 @@ func TestHandlePathShard(t *testing.T) {
 }
 
 func TestHandlePathTablet(t *testing.T) {
-	input := path.Join(explorerRoot, "cell1", tabletDirPath("cell1-0000000123"))
+	input := path.Join(explorerRoot, "cell1", path.Join(tabletsDirPath, "cell1-0000000123"))
 	cells := []string{"cell1", "cell2", "cell3"}
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: "cell1", Uid: 123},
+	tablet := &pb.Tablet{
+		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 123},
 		Hostname: "example.com",
-		Portmap:  map[string]int{"vt": 4321},
+		PortMap:  map[string]int32{"vt": 4321},
 	}
 	want := jscfg.ToJSON(tablet)
 

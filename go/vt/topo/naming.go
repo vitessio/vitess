@@ -86,7 +86,7 @@ func NewEndPoints() *pb.EndPoints {
 
 // LookupVtName gets the list of EndPoints for a
 // cell/keyspace/shard/tablet type and converts the list to net.SRV records
-func LookupVtName(ctx context.Context, ts Server, cell, keyspace, shard string, tabletType TabletType, namedPort string) ([]*net.SRV, error) {
+func LookupVtName(ctx context.Context, ts Server, cell, keyspace, shard string, tabletType pb.TabletType, namedPort string) ([]*net.SRV, error) {
 	addrs, _, err := ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("LookupVtName(%v,%v,%v,%v) failed: %v", cell, keyspace, shard, tabletType, err)

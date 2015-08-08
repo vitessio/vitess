@@ -60,7 +60,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
-	if si.MasterAlias != nil && *si.MasterAlias == *topo.TabletAliasToProto(tablet.Alias) {
+	if si.MasterAlias != nil && topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
 		// We may get called on the current master even when nothing has changed.
 		// If the global shard record is already updated, it means we successfully
 		// finished a previous reparent to this tablet.
@@ -71,9 +71,9 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	ev := &events.Reparent{
 		ShardInfo: *si,
 		NewMaster: *tablet.Tablet,
-		OldMaster: topo.Tablet{
-			Alias: topo.ProtoToTabletAlias(si.MasterAlias),
-			Type:  topo.TYPE_MASTER,
+		OldMaster: pb.Tablet{
+			Alias: si.MasterAlias,
+			Type:  pb.TabletType_MASTER,
 		},
 		ExternalID: externalID,
 	}
@@ -89,8 +89,8 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
 	oldTablet := *tablet.Tablet
 	newTablet := oldTablet
-	newTablet.Type = topo.TYPE_MASTER
-	newTablet.Health = nil
+	newTablet.Type = pb.TabletType_MASTER
+	newTablet.HealthMap = nil
 	agent.setTablet(topo.NewTabletInfo(&newTablet, -1))
 	if err := agent.updateState(ctx, &oldTablet, "fastTabletExternallyReparented"); err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to change tablet state to MASTER: %v", err)
@@ -110,7 +110,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return fmt.Errorf("fastTabletExternallyReparented: failed to generate EndPoint for tablet %v: %v", tablet.Alias, err)
 	}
 	err = topo.UpdateEndPoints(ctx, agent.TopoServer, tablet.Alias.Cell,
-		si.Keyspace(), si.ShardName(), topo.TYPE_MASTER,
+		si.Keyspace(), si.ShardName(), pb.TabletType_MASTER,
 		&pb.EndPoints{Entries: []*pb.EndPoint{ep}}, -1)
 	if err != nil {
 		return fmt.Errorf("fastTabletExternallyReparented: failed to update master endpoint: %v", err)
@@ -151,11 +151,11 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	go func() {
 		defer wg.Done()
 		// Update our own record to master.
-		var updatedTablet *topo.Tablet
+		var updatedTablet *pb.Tablet
 		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
-			func(tablet *topo.Tablet) error {
-				tablet.Type = topo.TYPE_MASTER
-				tablet.Health = nil
+			func(tablet *pb.Tablet) error {
+				tablet.Type = pb.TabletType_MASTER
+				tablet.HealthMap = nil
 				updatedTablet = tablet
 				return nil
 			})
@@ -175,10 +175,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		wg.Add(1)
 		go func() {
 			// Force the old master to spare.
-			var oldMasterTablet *topo.Tablet
-			err := topo.UpdateTabletFields(ctx, agent.TopoServer, topo.ProtoToTabletAlias(oldMasterAlias),
-				func(tablet *topo.Tablet) error {
-					tablet.Type = topo.TYPE_SPARE
+			var oldMasterTablet *pb.Tablet
+			err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
+				func(tablet *pb.Tablet) error {
+					tablet.Type = pb.TabletType_SPARE
 					oldMasterTablet = tablet
 					return nil
 				})
@@ -221,7 +221,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
 	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
-		shard.MasterAlias = topo.TabletAliasToProto(tablet.Alias)
+		shard.MasterAlias = tablet.Alias
 		return nil
 	})
 	if err != nil {

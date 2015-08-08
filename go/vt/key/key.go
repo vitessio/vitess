@@ -194,6 +194,9 @@ func (kr KeyRange) IsPartial() bool {
 
 // Returns true if the KeyRange does not cover the entire space.
 func KeyRangeIsPartial(kr *pb.KeyRange) bool {
+	if kr == nil {
+		return false
+	}
 	return !(len(kr.Start) == 0 && len(kr.End) == 0)
 }
 

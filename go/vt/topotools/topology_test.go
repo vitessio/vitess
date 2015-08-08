@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestTabletNodeShortName(t *testing.T) {
@@ -76,11 +78,11 @@ func TestRangeShardNodesList(t *testing.T) {
 func TestKeyspaceNodesTabletTypes(t *testing.T) {
 	input := KeyspaceNodes{
 		ShardNodes: []*ShardNodes{
-			&ShardNodes{TabletNodes: TabletNodesByType{topo.TYPE_REPLICA: nil}},
-			&ShardNodes{TabletNodes: TabletNodesByType{topo.TYPE_MASTER: nil, topo.TYPE_REPLICA: nil}},
+			&ShardNodes{TabletNodes: TabletNodesByType{pb.TabletType_REPLICA: nil}},
+			&ShardNodes{TabletNodes: TabletNodesByType{pb.TabletType_MASTER: nil, pb.TabletType_REPLICA: nil}},
 		},
 	}
-	want := topo.MakeStringTypeList([]topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_MASTER})
+	want := topo.MakeStringTypeList([]pb.TabletType{pb.TabletType_REPLICA, pb.TabletType_MASTER})
 	got := topo.MakeStringTypeList(input.TabletTypes())
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("KeyspaceNodes.TabletTypes() = %v, want %v", got, want)

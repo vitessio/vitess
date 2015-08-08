@@ -18,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the actions that exist as RPC only on the ActionAgent.
@@ -154,7 +156,7 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TabletTypeToProto(tabletType), nil)
 }
 
 // Scrap scraps the live running tablet
@@ -184,7 +186,7 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 // RunHealthCheck will manually run the health check on the tablet
 // Should be called under RPCWrap.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType) {
-	agent.runHealthCheck(targetTabletType)
+	agent.runHealthCheck(topo.TabletTypeToProto(targetTabletType))
 }
 
 // ReloadSchema will reload the schema
@@ -409,9 +411,9 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	}
 
 	// Change our type to master if not already
-	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *topo.Tablet) error {
-		tablet.Type = topo.TYPE_MASTER
-		tablet.Health = nil
+	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *pb.Tablet) error {
+		tablet.Type = pb.TabletType_MASTER
+		tablet.HealthMap = nil
 		return nil
 	}); err != nil {
 		return myproto.ReplicationPosition{}, err
@@ -432,7 +434,7 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
-	ti, err := agent.TopoServer.GetTablet(ctx, parent)
+	ti, err := agent.TopoServer.GetTablet(ctx, topo.TabletAliasToProto(parent))
 	if err != nil {
 		return err
 	}
@@ -440,7 +442,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias
 	status := &myproto.ReplicationStatus{
 		Position:   replicationPosition,
 		MasterHost: ti.Hostname,
-		MasterPort: ti.Portmap["mysql"],
+		MasterPort: int(ti.PortMap["mysql"]),
 	}
 	cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 	if err != nil {
@@ -526,7 +528,7 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
 func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
-	ti, err := agent.TopoServer.GetTablet(ctx, parent)
+	ti, err := agent.TopoServer.GetTablet(ctx, topo.TabletAliasToProto(parent))
 	if err != nil {
 		return err
 	}
@@ -548,7 +550,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 	if wasReplicating {
 		cmds = append(cmds, mysqlctl.SqlStopSlave)
 	}
-	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, ti.Portmap["mysql"])
+	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
 	if err != nil {
 		return err
 	}
@@ -565,9 +567,9 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias
 	if err != nil {
 		return err
 	}
-	if tablet.Type == topo.TYPE_MASTER {
-		tablet.Type = topo.TYPE_SPARE
-		tablet.Health = nil
+	if tablet.Type == pb.TabletType_MASTER {
+		tablet.Type = pb.TabletType_SPARE
+		tablet.HealthMap = nil
 		if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
 			return err
 		}
@@ -590,8 +592,8 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	}
 
 	// Once this action completes, update authoritative tablet node first.
-	if tablet.Type == topo.TYPE_MASTER {
-		tablet.Type = topo.TYPE_SPARE
+	if tablet.Type == pb.TabletType_MASTER {
+		tablet.Type = pb.TabletType_SPARE
 	}
 	err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	if err != nil {
@@ -655,8 +657,8 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (myproto.Replication
 // is correctly represented in the replication graph
 func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Context, tablet *topo.TabletInfo) error {
 	// Update tablet regardless - trend towards consistency.
-	tablet.Type = topo.TYPE_MASTER
-	tablet.Health = nil
+	tablet.Type = pb.TabletType_MASTER
+	tablet.HealthMap = nil
 	err := topo.UpdateTablet(ctx, agent.TopoServer, tablet)
 	if err != nil {
 		return err
@@ -683,16 +685,16 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 // Backup takes a db backup and sends it to the BackupStorage
 // Should be called under RPCWrapLockAction.
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger) error {
-	// update our type to TYPE_BACKUP
+	// update our type to BACKUP
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return err
 	}
-	if tablet.Type == topo.TYPE_MASTER {
+	if tablet.Type == pb.TabletType_MASTER {
 		return fmt.Errorf("type MASTER cannot take backup, if you really need to do this, restart vttablet in replica mode")
 	}
 	originalType := tablet.Type
-	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topo.TYPE_BACKUP, make(map[string]string)); err != nil {
+	if err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, pb.TabletType_BACKUP, make(map[string]string)); err != nil {
 		return err
 	}
 
@@ -713,7 +715,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	// - if healthcheck is enabled, go to spare
 	// - if not, go back to original type
 	if agent.IsRunningHealthCheck() {
-		originalType = topo.TYPE_SPARE
+		originalType = pb.TabletType_SPARE
 	}
 	err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType, nil)
 	if err != nil {

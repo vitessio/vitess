@@ -7,7 +7,6 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -16,7 +15,7 @@ import (
 
 // SetSourceShards is a utility function to override the SourceShards fields
 // on a Shard.
-func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []topo.TabletAlias, tables []string) error {
+func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string, sources []*pb.TabletAlias, tables []string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
@@ -45,7 +44,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 			Uid:      uint32(i),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
-			KeyRange: key.KeyRangeToProto(ti.KeyRange),
+			KeyRange: ti.KeyRange,
 			Tables:   tables,
 		}
 		i++

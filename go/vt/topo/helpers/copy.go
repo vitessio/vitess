@@ -136,7 +136,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 			} else {
 				for _, tabletAlias := range tabletAliases {
 					wg.Add(1)
-					go func(tabletAlias topo.TabletAlias) {
+					go func(tabletAlias *pb.TabletAlias) {
 						defer wg.Done()
 
 						// read the source tablet
@@ -151,7 +151,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							err = toTS.UpdateTabletFields(ctx, ti.Alias, func(t *topo.Tablet) error {
+							err = toTS.UpdateTabletFields(ctx, ti.Alias, func(t *pb.Tablet) error {
 								*t = *ti.Tablet
 								return nil
 							})

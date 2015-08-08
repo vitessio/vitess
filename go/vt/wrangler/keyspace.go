@@ -193,19 +193,6 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	return rec.Error()
 }
 
-func removeType(tabletType topo.TabletType, types []topo.TabletType) ([]topo.TabletType, bool) {
-	result := make([]topo.TabletType, 0, len(types)-1)
-	found := false
-	for _, t := range types {
-		if t == tabletType {
-			found = true
-		} else {
-			result = append(result, t)
-		}
-	}
-	return result, found
-}
-
 func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.ShardInfo) (map[*topo.ShardInfo]myproto.ReplicationPosition, error) {
 	mu := sync.Mutex{}
 	result := make(map[*topo.ShardInfo]myproto.ReplicationPosition)
@@ -217,7 +204,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 			wr.Logger().Infof("Gathering master position for %v", si.MasterAlias)
-			ti, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -261,7 +248,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 
 				// and wait for it
 				wr.Logger().Infof("Waiting for %v to catch up", si.MasterAlias)
-				tablet, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
 					return
@@ -288,7 +275,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 			wr.Logger().Infof("RefreshState master %v", si.MasterAlias)
-			ti, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -623,11 +610,11 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 //   replication and starts accepting writes
 func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, tables []string, ev *events.MigrateServedFrom, filteredReplicationWaitTime time.Duration) error {
 	// Read the data we need
-	sourceMasterTabletInfo, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(sourceShard.MasterAlias))
+	sourceMasterTabletInfo, err := wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
 	if err != nil {
 		return err
 	}
-	destinationMasterTabletInfo, err := wr.ts.GetTablet(ctx, topo.ProtoToTabletAlias(destinationShard.MasterAlias))
+	destinationMasterTabletInfo, err := wr.ts.GetTablet(ctx, destinationShard.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -728,7 +715,7 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 	// ignore errors in this phase
 	wg := sync.WaitGroup{}
 	for _, ti := range tabletMap {
-		if ti.Type != topo.ProtoToTabletType(tabletType) {
+		if ti.Type != tabletType {
 			continue
 		}
 

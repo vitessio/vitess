@@ -22,7 +22,7 @@ import (
 // It can be constructed from a Tablet object, or from an EndPoint.
 type TabletNode struct {
 	Host  string
-	Alias topo.TabletAlias
+	Alias *pb.TabletAlias
 	Port  int32
 }
 
@@ -46,7 +46,7 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 	}
 	return &TabletNode{
 		Host:  ti.Hostname,
-		Port:  int32(ti.Portmap["vt"]),
+		Port:  ti.PortMap["vt"],
 		Alias: ti.Alias,
 	}
 }
@@ -54,21 +54,22 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
 	return &TabletNode{
 		Host: ep.Host,
-		Alias: topo.TabletAlias{
+		Alias: &pb.TabletAlias{
 			Uid:  ep.Uid,
-			Cell: cell},
+			Cell: cell,
+		},
 		Port: ep.PortMap[topo.DefaultPortName],
 	}
 }
 
 // TabletNodesByType maps tablet types to slices of tablet nodes.
-type TabletNodesByType map[topo.TabletType][]*TabletNode
+type TabletNodesByType map[pb.TabletType][]*TabletNode
 
 // ShardNodes represents all tablet nodes for a shard, indexed by tablet type.
 type ShardNodes struct {
 	Name        string
 	TabletNodes TabletNodesByType
-	ServedTypes []topo.TabletType
+	ServedTypes []pb.TabletType
 	Tag         interface{} // Tag is an arbitrary value manageable by a plugin.
 }
 
@@ -141,8 +142,8 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
-func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
-	var contained []topo.TabletType
+func (ks KeyspaceNodes) TabletTypes() []pb.TabletType {
+	var contained []pb.TabletType
 	for _, t := range topo.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)
@@ -152,7 +153,7 @@ func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
 }
 
 // HasType returns true if ks has any tablets with the named type.
-func (ks KeyspaceNodes) HasType(tabletType topo.TabletType) bool {
+func (ks KeyspaceNodes) HasType(tabletType pb.TabletType) bool {
 	for _, shardNodes := range ks.ShardNodes {
 		if _, ok := shardNodes.TabletNodes[tabletType]; ok {
 			return true
@@ -194,9 +195,9 @@ func DbTopology(ctx context.Context, ts topo.Server) (*Topology, error) {
 	for _, ti := range tabletInfos {
 		tablet := newTabletNodeFromTabletInfo(ti)
 		switch ti.Type {
-		case topo.TYPE_IDLE:
+		case pb.TabletType_IDLE:
 			topology.Idle = append(topology.Idle, tablet)
-		case topo.TYPE_SCRAP:
+		case pb.TabletType_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
 			if _, ok := assigned[ti.Keyspace]; !ok {
