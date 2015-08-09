@@ -543,8 +543,11 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteError(t, conn, fs)
 	testStreamExecute2Error(t, conn, fs)
 	testStreamExecuteShardError(t, conn, fs)
+	testStreamExecuteShard2Error(t, conn, fs)
 	testStreamExecuteKeyRangesError(t, conn, fs)
+	testStreamExecuteKeyRanges2Error(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
+	testStreamExecuteKeyspaceIds2Error(t, conn, fs)
 	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	fs.hasError = false
@@ -1070,6 +1073,32 @@ func testStreamExecuteShardError(t *testing.T, conn *vtgateconn.VTGateConn, fake
 	verifyError(t, err, "StreamExecuteShard")
 }
 
+func testStreamExecuteShard2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, errFunc, err := conn.StreamExecuteShard2(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatalf("StreamExecuteShard2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecuteShard2 failed: cannot read result1")
+	}
+
+	if !reflect.DeepEqual(qr, &streamResult1) {
+		t.Errorf("Unexpected result from StreamExecuteShard2: got %#v want %#v", qr, &streamResult1)
+	}
+	// signal to the server that the first result has been received
+	close(fake.errorWait)
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecuteShard2 channel wasn't closed")
+	}
+	err = errFunc()
+	verifyError(t, err, "StreamExecuteShard2")
+}
+
 func testStreamExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
@@ -1164,6 +1193,32 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 	verifyError(t, err, "StreamExecuteKeyRanges")
 }
 
+func testStreamExecuteKeyRanges2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, errFunc, err := conn.StreamExecuteKeyRanges2(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	if err != nil {
+		t.Fatalf("StreamExecuteKeyRanges2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecuteKeyRanges2 failed: cannot read result1")
+	}
+
+	if !reflect.DeepEqual(qr, &streamResult1) {
+		t.Errorf("Unexpected result from StreamExecuteKeyRanges2: got %#v want %#v", qr, &streamResult1)
+	}
+	// signal to the server that the first result has been received
+	close(fake.errorWait)
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecuteKeyRanges2 channel wasn't closed")
+	}
+	err = errFunc()
+	verifyError(t, err, "StreamExecuteKeyRanges2")
+}
+
 func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
@@ -1256,6 +1311,32 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 	}
 	err = errFunc()
 	verifyError(t, err, "StreamExecuteKeyspaceIds")
+}
+
+func testStreamExecuteKeyspaceIds2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, errFunc, err := conn.StreamExecuteKeyspaceIds2(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, execCase.keyspaceIdQuery.KeyspaceIds, execCase.keyspaceIdQuery.BindVariables, execCase.keyspaceIdQuery.TabletType)
+	if err != nil {
+		t.Fatalf("StreamExecuteKeyspaceIds2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecuteKeyspaceIds2 failed: cannot read result1")
+	}
+
+	if !reflect.DeepEqual(qr, &streamResult1) {
+		t.Errorf("Unexpected result from StreamExecuteKeyspaceIds2: got %#v want %#v", qr, &streamResult1)
+	}
+	// signal to the server that the first result has been received
+	close(fake.errorWait)
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecuteKeyspaceIds2 channel wasn't closed")
+	}
+	err = errFunc()
+	verifyError(t, err, "StreamExecuteKeyspaceIds2")
 }
 
 func testStreamExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {

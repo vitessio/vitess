@@ -285,6 +285,21 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	return sendStreamResults(c, sr)
 }
 
+func (conn *vtgateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.QueryShard{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteShard2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
 func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyRangeQuery{
 		CallerID:      getEffectiveCallerID(ctx),
@@ -300,6 +315,21 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	return sendStreamResults(c, sr)
 }
 
+func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.KeyRangeQuery{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyRanges:     keyRanges,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyRanges2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
 func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyspaceIdQuery{
 		CallerID:      getEffectiveCallerID(ctx),
@@ -312,6 +342,21 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	}
 	sr := make(chan *proto.QueryResult, 10)
 	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyspaceIds", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.KeyspaceIdQuery{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    tabletType,
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyspaceIds2", req, sr)
 	return sendStreamResults(c, sr)
 }
 

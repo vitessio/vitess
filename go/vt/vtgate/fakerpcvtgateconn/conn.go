@@ -225,13 +225,28 @@ func (conn *FakeVTGateConn) StreamExecuteShard(ctx context.Context, query string
 	panic("not implemented")
 }
 
+// StreamExecuteShard2 please see vtgateconn.Impl.StreamExecuteShard2
+func (conn *FakeVTGateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
 // StreamExecuteKeyRanges please see vtgateconn.Impl.StreamExecuteKeyRanges
 func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
+// StreamExecuteKeyRanges2 please see vtgateconn.Impl.StreamExecuteKeyRanges2
+func (conn *FakeVTGateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
 // StreamExecuteKeyspaceIds please see vtgateconn.Impl.StreamExecuteKeyspaceIds
 func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
+// StreamExecuteKeyspaceIds2 please see vtgateconn.Impl.StreamExecuteKeyspaceIds2
+func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 

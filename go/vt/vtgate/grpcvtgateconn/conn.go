@@ -285,6 +285,10 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	}, nil
 }
 
+func (conn *vtgateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	return conn.StreamExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType)
+}
+
 func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &pb.StreamExecuteKeyRangesRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
@@ -322,6 +326,10 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	}, nil
 }
 
+func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	return conn.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
+}
+
 func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &pb.StreamExecuteKeyspaceIdsRequest{
 		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
@@ -357,6 +365,10 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return sr, func() error {
 		return finalError
 	}, nil
+}
+
+func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	return conn.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
