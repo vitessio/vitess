@@ -119,7 +119,7 @@ func (sdc *ShardConn) Dial(ctx context.Context) error {
 func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, transactionID int64) (qr *mproto.QueryResult, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qr, innerErr = conn.Execute(ctx, query, bindVars, transactionID)
+		qr, innerErr = conn.Execute2(ctx, query, bindVars, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qr, err
@@ -129,7 +129,7 @@ func (sdc *ShardConn) Execute(ctx context.Context, query string, bindVars map[st
 func (sdc *ShardConn) ExecuteBatch(ctx context.Context, queries []tproto.BoundQuery, asTransaction bool, transactionID int64) (qrs *tproto.QueryResultList, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch(ctx, queries, asTransaction, transactionID)
+		qrs, innerErr = conn.ExecuteBatch2(ctx, queries, asTransaction, transactionID)
 		return innerErr
 	}, transactionID, false)
 	return qrs, err
@@ -142,7 +142,7 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 	var results <-chan *mproto.QueryResult
 	err := sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var err error
-		results, erFunc, err = conn.StreamExecute(ctx, query, bindVars, transactionID)
+		results, erFunc, err = conn.StreamExecute2(ctx, query, bindVars, transactionID)
 		usedConn = conn
 		return err
 	}, transactionID, true)
@@ -157,7 +157,7 @@ func (sdc *ShardConn) StreamExecute(ctx context.Context, query string, bindVars 
 func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		transactionID, innerErr = conn.Begin(ctx)
+		transactionID, innerErr = conn.Begin2(ctx)
 		return innerErr
 	}, 0, false)
 	return transactionID, err
@@ -166,14 +166,14 @@ func (sdc *ShardConn) Begin(ctx context.Context) (transactionID int64, err error
 // Commit commits the current transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Commit(ctx context.Context, transactionID int64) (err error) {
 	return sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		return conn.Commit(ctx, transactionID)
+		return conn.Commit2(ctx, transactionID)
 	}, transactionID, false)
 }
 
 // Rollback rolls back the current transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err error) {
 	return sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
-		return conn.Rollback(ctx, transactionID)
+		return conn.Rollback2(ctx, transactionID)
 	}, transactionID, false)
 }
 
