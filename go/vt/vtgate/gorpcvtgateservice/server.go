@@ -152,6 +152,32 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 	})
 }
 
+// StreamExecute2 is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sendReply func(interface{}) error) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		callerid.NewImmediateCallerID("gorpc client"))
+	vtgErr := vtg.server.StreamExecute(ctx, request, func(value *proto.QueryResult) error {
+		return sendReply(value)
+	})
+	if vtgErr == nil {
+		return nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(proto.QueryResult)
+		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return vtgErr
+}
+
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)

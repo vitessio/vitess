@@ -215,6 +215,11 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bin
 	return resultChan, func() error { return nil }, nil
 }
 
+// StreamExecute2 please see vtgateconn.Impl.StreamExecute2
+func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
 // StreamExecuteShard please see vtgateconn.Impl.StreamExecuteShard
 func (conn *FakeVTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")

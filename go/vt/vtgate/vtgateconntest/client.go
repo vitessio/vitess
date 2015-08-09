@@ -541,6 +541,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testExecuteBatchShardError(t, conn)
 	testExecuteBatchKeyspaceIdsError(t, conn)
 	testStreamExecuteError(t, conn, fs)
+	testStreamExecute2Error(t, conn, fs)
 	testStreamExecuteShardError(t, conn, fs)
 	testStreamExecuteKeyRangesError(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
@@ -947,6 +948,32 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	}
 	err = errFunc()
 	verifyError(t, err, "StreamExecute")
+}
+
+func testStreamExecute2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	ctx := newContext()
+	execCase := execMap["request1"]
+	stream, errFunc, err := conn.StreamExecute2(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	if err != nil {
+		t.Fatalf("StreamExecute2 failed: %v", err)
+	}
+	qr, ok := <-stream
+	if !ok {
+		t.Fatalf("StreamExecute2 failed: cannot read result1")
+	}
+
+	if !reflect.DeepEqual(qr, &streamResult1) {
+		t.Errorf("Unexpected result from StreamExecute2: got %#v want %#v", qr, &streamResult1)
+	}
+	// signal to the server that the first result has been received
+	close(fake.errorWait)
+	// After 1 result, we expect to get an error (no more results).
+	qr, ok = <-stream
+	if ok {
+		t.Fatalf("StreamExecute2 channel wasn't closed")
+	}
+	err = errFunc()
+	verifyError(t, err, "StreamExecute2")
 }
 
 func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {

@@ -244,6 +244,10 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	}, nil
 }
 
+func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	return conn.StreamExecute(ctx, query, bindVars, tabletType)
+}
+
 func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &pb.StreamExecuteShardsRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),

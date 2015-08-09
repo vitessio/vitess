@@ -101,6 +101,15 @@ func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVar
 	return conn.impl.StreamExecute(ctx, query, bindVars, tabletType)
 }
 
+// StreamExecute2 executes a streaming query on vtgate. It returns a
+// channel, an ErrFunc, and error. First check the error. Then you can
+// pull values from the channel till it's closed. Following this, you
+// can call ErrFunc to see if the stream ended normally or due to a
+// failure.
+func (conn *VTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecute2(ctx, query, bindVars, tabletType)
+}
+
 // StreamExecuteShard executes a streaming query on vtgate, on a set
 // of shards.  It returns a channel, an ErrFunc, and error. First
 // check the error. Then you can pull values from the channel till
@@ -321,6 +330,9 @@ type Impl interface {
 
 	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+
+	// StreamExecute2 executes a streaming query on vtgate.
+	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
 	StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
