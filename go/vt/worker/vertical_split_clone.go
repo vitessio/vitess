@@ -117,7 +117,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
-		result += "<b>Copying from</b>: " + vscw.sourceAlias.String() + "</br>\n"
+		result += "<b>Copying from</b>: " + topo.TabletAliasString(vscw.sourceAlias) + "</br>\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
@@ -139,7 +139,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "Running:\n"
-		result += "Copying from: " + vscw.sourceAlias.String() + "\n"
+		result += "Copying from: " + topo.TabletAliasString(vscw.sourceAlias) + "\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -429,7 +429,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
-				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, vscw.sourceAlias.String())
+				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topo.TabletAliasString(vscw.sourceAlias))
 				qrr, err := NewQueryResultReaderForTablet(ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
 				if err != nil {
 					processError("NewQueryResultReaderForTablet failed: %v", err)

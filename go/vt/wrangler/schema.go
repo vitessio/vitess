@@ -57,7 +57,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *myproto.Schema
 	}
 
 	log.Infof("Diffing schema for %v", alias)
-	myproto.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
+	myproto.DiffSchema(topo.TabletAliasString(masterTabletAlias), masterSchema, topo.TabletAliasString(alias), slaveSchema, er)
 }
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
@@ -307,7 +307,7 @@ func (wr *Wrangler) applySchemaShardSimple(ctx context.Context, statusArray []*t
 	// BeforeSchema. If not, we shouldn't proceed
 	log.Infof("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := myproto.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs := myproto.DiffSchemaToArray("master", preflight.BeforeSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
@@ -327,14 +327,14 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
-		diffs := myproto.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs := myproto.DiffSchemaToArray("after", preflight.AfterSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) == 0 {
 			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.Alias)
 			continue
 		}
 
 		// make sure the before schema matches
-		diffs = myproto.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs = myproto.DiffSchemaToArray("master", preflight.BeforeSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))

@@ -65,7 +65,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	span.StartClient("TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
-	span.Annotate("tablet", tabletAlias.String())
+	span.Annotate("tablet", TabletAliasString(tabletAlias))
 	defer span.Finish()
 
 	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *pb.ShardReplication) error {

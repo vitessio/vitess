@@ -136,7 +136,7 @@ func TestAPI(t *testing.T) {
 			}`},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
 				"Name": "TestTabletAction",
-				"Parameters": "cell:\"cell1\" uid:100 ",
+				"Parameters": "cell1-0000000100",
 				"Output": "TestTabletAction Result",
 				"Error": false
 			}`},

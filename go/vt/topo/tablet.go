@@ -378,7 +378,12 @@ type TabletInfo struct {
 
 // String returns a string describing the tablet.
 func (ti *TabletInfo) String() string {
-	return fmt.Sprintf("Tablet{%v}", ti.Alias)
+	return fmt.Sprintf("Tablet{%v}", TabletAliasString(ti.Alias))
+}
+
+// AliasString returns the string representation of the tablet alias
+func (ti *TabletInfo) AliasString() string {
+	return TabletAliasString(ti.Alias)
 }
 
 // Addr returns hostname:vt port.
@@ -447,7 +452,7 @@ func NewTabletInfo(tablet *pb.Tablet, version int64) *TabletInfo {
 func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
-	span.Annotate("tablet", alias.String())
+	span.Annotate("tablet", TabletAliasString(alias))
 	defer span.Finish()
 
 	return ts.GetTablet(ctx, alias)
@@ -457,7 +462,7 @@ func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletIn
 func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
-	span.Annotate("tablet", tablet.Alias.String())
+	span.Annotate("tablet", TabletAliasString(tablet.Alias))
 	defer span.Finish()
 
 	var version int64 = -1
@@ -477,7 +482,7 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 func UpdateTabletFields(ctx context.Context, ts Server, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
-	span.Annotate("tablet", alias.String())
+	span.Annotate("tablet", TabletAliasString(alias))
 	defer span.Finish()
 
 	return ts.UpdateTabletFields(ctx, alias, update)

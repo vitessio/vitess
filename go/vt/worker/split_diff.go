@@ -308,8 +308,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
-	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
-		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
+	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias)); err != nil {
+		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias), err)
 	}
 	cancel()
 	if err != nil {

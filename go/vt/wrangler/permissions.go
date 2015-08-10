@@ -39,7 +39,7 @@ func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *mypr
 	}
 
 	log.Infof("Diffing permissions for %v", alias)
-	myproto.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
+	myproto.DiffPermissions(topo.TabletAliasString(masterAlias), masterPermissions, topo.TabletAliasString(alias), slavePermissions, er)
 }
 
 // ValidatePermissionsShard validates all the permissions are the same

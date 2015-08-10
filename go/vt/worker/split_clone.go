@@ -117,7 +117,7 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 func (scw *SplitCloneWorker) formatSources() string {
 	result := ""
 	for _, alias := range scw.sourceAliases {
-		result += " " + alias.String()
+		result += " " + topo.TabletAliasString(alias)
 	}
 	return result
 }

@@ -467,7 +467,7 @@ func (agent *ActionAgent) Stop() {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (agent *ActionAgent) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": agent.TabletAlias.String()}
+	return map[string]string{"TABLET_ALIAS": topo.TabletAliasString(agent.TabletAlias)}
 }
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,

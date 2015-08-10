@@ -311,8 +311,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
-	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
-		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
+	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topo.TabletAliasString(vsdw.shardInfo.MasterAlias)); err != nil {
+		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topo.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 	cancel()
 	if err != nil {

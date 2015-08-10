@@ -141,7 +141,10 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 
 // ApplyTabletAction applies the provided action to the tablet.
 func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *pb.TabletAlias, r *http.Request) *ActionResult {
-	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
+	result := &ActionResult{
+		Name:       actionName,
+		Parameters: topo.TabletAliasString(tabletAlias),
+	}
 
 	action, ok := ar.tabletActions[actionName]
 	if !ok {
