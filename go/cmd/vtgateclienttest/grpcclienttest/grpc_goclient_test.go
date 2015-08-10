@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package grpcclienttest
 
 import (
 	"net"
@@ -10,6 +10,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/youtube/vitess/go/cmd/vtgateclienttest/goclienttest"
+	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 
 	// import the grpc client, it will register itself
@@ -18,7 +20,7 @@ import (
 
 // TestGRPCGoClient tests the go client using gRPC
 func TestGRPCGoClient(t *testing.T) {
-	service := createService()
+	service := services.CreateServices()
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", ":0")
@@ -33,5 +35,5 @@ func TestGRPCGoClient(t *testing.T) {
 	go server.Serve(listener)
 
 	// and run the test suite
-	testGoClient(t, "grpc", listener.Addr().String())
+	goclienttest.TestGoClient(t, "grpc", listener.Addr().String())
 }
