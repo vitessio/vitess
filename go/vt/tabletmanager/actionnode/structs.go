@@ -4,11 +4,7 @@
 
 package actionnode
 
-import (
-	"github.com/youtube/vitess/go/vt/topo"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-)
+import pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -25,7 +21,7 @@ Note it's OK to rename the structures as the type name is not saved in json.
 
 // SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
 type SlaveWasRestartedArgs struct {
-	Parent topo.TabletAlias
+	Parent *pb.TabletAlias
 }
 
 // shard action node structures

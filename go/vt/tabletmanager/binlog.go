@@ -70,7 +70,7 @@ type BinlogPlayerController struct {
 	stopPosition myproto.ReplicationPosition
 
 	// information about the individual tablet we're replicating from.
-	sourceTablet topo.TabletAlias
+	sourceTablet *pb.TabletAlias
 
 	// last error we've seen by the player.
 	lastError error
@@ -132,7 +132,7 @@ func (bpc *BinlogPlayerController) reset() {
 	bpc.ctx = nil
 	bpc.cancel = nil
 	bpc.done = nil
-	bpc.sourceTablet = topo.TabletAlias{}
+	bpc.sourceTablet = nil
 	bpc.lastError = nil
 }
 
@@ -193,7 +193,7 @@ func (bpc *BinlogPlayerController) Loop() {
 
 		// clear the source, remember the error
 		bpc.playerMutex.Lock()
-		bpc.sourceTablet = topo.TabletAlias{}
+		bpc.sourceTablet = nil
 		bpc.lastError = err
 		bpc.playerMutex.Unlock()
 
@@ -262,7 +262,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 	// save our current server
 	bpc.playerMutex.Lock()
-	bpc.sourceTablet = topo.TabletAlias{
+	bpc.sourceTablet = &pb.TabletAlias{
 		Cell: bpc.cell,
 		Uid:  addrs.Entries[newServerIndex].Uid,
 	}
@@ -581,7 +581,7 @@ type BinlogPlayerControllerStatus struct {
 	Counts              map[string]int64
 	Rates               map[string][]float64
 	State               string
-	SourceTablet        topo.TabletAlias
+	SourceTablet        *pb.TabletAlias
 	LastError           string
 }
 

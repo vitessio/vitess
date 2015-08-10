@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -19,7 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type timeoutError struct {
@@ -314,7 +317,7 @@ func (client *GoRPCTabletManagerClient) InitMaster(ctx context.Context, tablet *
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+func (client *GoRPCTabletManagerClient) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
 	args := &gorpcproto.PopulateReparentJournalArgs{
 		TimeCreatedNS:       timeCreatedNS,
 		ActionName:          actionName,
@@ -325,7 +328,7 @@ func (client *GoRPCTabletManagerClient) PopulateReparentJournal(ctx context.Cont
 }
 
 // InitSlave is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (client *GoRPCTabletManagerClient) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	args := &gorpcproto.InitSlaveArgs{
 		Parent:              parent,
 		ReplicationPosition: replicationPosition,
@@ -366,7 +369,7 @@ func (client *GoRPCTabletManagerClient) SlaveWasPromoted(ctx context.Context, ta
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (client *GoRPCTabletManagerClient) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	args := &gorpcproto.SetMasterArgs{
 		Parent:          parent,
 		TimeCreatedNS:   timeCreatedNS,

@@ -16,25 +16,6 @@ import (
 // This file contains the methods to convert topo structures to proto3.
 // Eventually we will use the proto3 data structures directly.
 
-// TabletAliasToProto turns a TabletAlias into a proto
-func TabletAliasToProto(t TabletAlias) *pb.TabletAlias {
-	return &pb.TabletAlias{
-		Cell: t.Cell,
-		Uid:  t.Uid,
-	}
-}
-
-// ProtoToTabletAlias turns a proto to a TabletAlias
-func ProtoToTabletAlias(t *pb.TabletAlias) TabletAlias {
-	if t == nil {
-		return TabletAlias{}
-	}
-	return TabletAlias{
-		Cell: t.Cell,
-		Uid:  t.Uid,
-	}
-}
-
 // TabletTypeToProto turns a TabletType into a proto
 func TabletTypeToProto(t TabletType) pb.TabletType {
 	if result, ok := pb.TabletType_value[strings.ToUpper(string(t))]; ok {

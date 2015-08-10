@@ -94,9 +94,9 @@ type RPCAgent interface {
 
 	InitMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
-	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error
 
-	InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+	InitSlave(ctx context.Context, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
 	DemoteMaster(ctx context.Context) (myproto.ReplicationPosition, error)
 
@@ -104,7 +104,7 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, swrd *actionnode.SlaveWasRestartedArgs) error
 
@@ -424,17 +424,17 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
 	cmds := mysqlctl.CreateReparentJournal()
-	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, masterAlias.String(), pos))
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topo.TabletAliasString(masterAlias), pos))
 
 	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
 }
 
 // InitSlave sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
-	ti, err := agent.TopoServer.GetTablet(ctx, topo.TabletAliasToProto(parent))
+func (agent *ActionAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
@@ -527,8 +527,8 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
-	ti, err := agent.TopoServer.GetTablet(ctx, topo.TabletAliasToProto(parent))
+func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+	ti, err := agent.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}

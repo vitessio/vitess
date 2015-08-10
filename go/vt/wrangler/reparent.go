@@ -144,7 +144,7 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *pb.TabletAl
 	}
 
 	// and do the remote command
-	return wr.TabletManagerClient().SetMaster(ctx, ti, topo.ProtoToTabletAlias(shardInfo.MasterAlias), 0, false)
+	return wr.TabletManagerClient().SetMaster(ctx, ti, shardInfo.MasterAlias, 0, false)
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.
@@ -266,14 +266,14 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 			go func(alias pb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, topo.ProtoToTabletAlias(&alias), rp)
+				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, initShardMasterOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
 			go func(alias pb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
 				wr.logger.Infof("initializing slave %v", alias)
-				if err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, topo.ProtoToTabletAlias(masterElectTabletAlias), rp, now); err != nil {
+				if err := wr.TabletManagerClient().InitSlave(ctx, tabletInfo, masterElectTabletAlias, rp, now); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
@@ -396,7 +396,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			go func(alias pb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, plannedReparentShardOperation, topo.ProtoToTabletAlias(&alias), rp)
+				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, plannedReparentShardOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
@@ -405,7 +405,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				wr.logger.Infof("setting new master on slave %v", alias)
 				// also restart replication on old master
 				forceStartSlave := topo.TabletAliasEqual(&alias, oldMasterTabletInfo.Alias)
-				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, topo.ProtoToTabletAlias(masterElectTabletAlias), now, forceStartSlave); err != nil {
+				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 					return
 				}
@@ -587,7 +587,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			go func(alias pb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, emergencyReparentShardOperation, topo.ProtoToTabletAlias(&alias), rp)
+				masterErr = wr.TabletManagerClient().PopulateReparentJournal(ctx, tabletInfo, now, emergencyReparentShardOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
@@ -598,7 +598,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				if status, ok := statusMap[alias]; ok {
 					forceStartSlave = status.SlaveIORunning || status.SlaveSQLRunning
 				}
-				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, topo.ProtoToTabletAlias(masterElectTabletAlias), now, forceStartSlave); err != nil {
+				if err := wr.TabletManagerClient().SetMaster(ctx, tabletInfo, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)

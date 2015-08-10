@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
@@ -21,7 +23,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // fakeRPCAgent implements tabletmanager.RPCAgent and fills in all
@@ -846,12 +849,12 @@ func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmcli
 var testPopulateReparentJournalCalled = false
 var testTimeCreatedNS int64 = 4569900
 var testActionName = "TestActionName"
-var testMasterAlias = topo.TabletAlias{
+var testMasterAlias = &pb.TabletAlias{
 	Cell: "ce",
 	Uid:  372,
 }
 
-func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+func (fra *fakeRPCAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -875,7 +878,7 @@ func agentRPCTestPopulateReparentJournalPanic(ctx context.Context, t *testing.T,
 
 var testInitSlaveCalled = false
 
-func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent topo.TabletAlias, pos myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (fra *fakeRPCAgent) InitSlave(ctx context.Context, parent *pb.TabletAlias, pos myproto.ReplicationPosition, timeCreatedNS int64) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -962,7 +965,7 @@ func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client
 var testSetMasterCalled = false
 var testForceStartSlave = true
 
-func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -984,7 +987,7 @@ func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclie
 }
 
 var testSlaveWasRestartedArgs = &actionnode.SlaveWasRestartedArgs{
-	Parent: topo.TabletAlias{
+	Parent: &pb.TabletAlias{
 		Cell: "prison",
 		Uid:  42,
 	},

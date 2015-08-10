@@ -40,22 +40,6 @@ const (
 	ReplicationLagHigh = "high"
 )
 
-// TabletAlias is the minimum required information to locate a tablet.
-//
-// Tablets are really globally unique, but crawling every cell to find
-// out where it lives is time consuming and expensive. This is only
-// needed during complex operations.  Tablet cell assignments don't
-// change that often, thus using a TabletAlias is efficient.
-type TabletAlias struct {
-	Cell string
-	Uid  uint32
-}
-
-// IsZero returns true iff cell and uid are empty
-func (ta TabletAlias) IsZero() bool {
-	return ta.Cell == "" && ta.Uid == 0
-}
-
 // TabletAliasIsZero returns true iff cell and uid are empty
 func TabletAliasIsZero(ta *pb.TabletAlias) bool {
 	return ta == nil || (ta.Cell == "" && ta.Uid == 0)
@@ -70,11 +54,6 @@ func TabletAliasEqual(left, right *pb.TabletAlias) bool {
 		return false
 	}
 	return *left == *right
-}
-
-// String formats a TabletAlias
-func (ta TabletAlias) String() string {
-	return fmtAlias(ta.Cell, ta.Uid)
 }
 
 // TabletAliasString formats a TabletAlias
