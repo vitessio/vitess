@@ -346,6 +346,11 @@ func TabletEndPoint(tablet *pb.Tablet) (*pb.EndPoint, error) {
 	return entry, nil
 }
 
+// TabletAddr returns hostname:vt port associated with a tablet
+func TabletAddr(tablet *Tablet) string {
+	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["vt"]))
+}
+
 // TabletDbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
 func TabletDbName(tablet *pb.Tablet) string {

@@ -10,24 +10,14 @@ package main
 import (
 	"flag"
 
+	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
-}
-
-// createService creates the implementation chain of all the test cases
-func createService() vtgateservice.VTGateService {
-	var s vtgateservice.VTGateService
-	s = newTerminalClient()
-	s = newSuccessClient(s)
-	s = newErrorClient(s)
-	s = newCallerIDClient(s)
-	return s
 }
 
 func main() {
@@ -37,7 +27,7 @@ func main() {
 	servenv.Init()
 
 	// The implementation chain.
-	s := createService()
+	s := services.CreateServices()
 	for _, f := range vtgate.RegisterVTGates {
 		f(s)
 	}

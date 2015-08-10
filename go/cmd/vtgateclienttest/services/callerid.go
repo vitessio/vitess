@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package services
 
 import (
 	"encoding/json"
@@ -22,7 +22,9 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-const callerIDPrefix = "callerid "
+// CallerIDPrefix is the prefix to send with queries to they go
+// through this test suite.
+const CallerIDPrefix = "callerid "
 
 // callerIDClient implements vtgateservice.VTGateService, and checks
 // the received callerid matches the one passed out of band by the client.
@@ -42,11 +44,11 @@ func newCallerIDClient(fallback vtgateservice.VTGateService) *callerIDClient {
 // Returns true and the the error to return with the call
 // if this module is handling the request.
 func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bool, error) {
-	if !strings.HasPrefix(received, callerIDPrefix) {
+	if !strings.HasPrefix(received, CallerIDPrefix) {
 		return false, nil
 	}
 
-	jsonCallerID := []byte(received[len(callerIDPrefix):])
+	jsonCallerID := []byte(received[len(CallerIDPrefix):])
 	expectedCallerID := &pb.CallerID{}
 	if err := json.Unmarshal(jsonCallerID, expectedCallerID); err != nil {
 		return true, fmt.Errorf("cannot unmarshal provided callerid: %v", err)
