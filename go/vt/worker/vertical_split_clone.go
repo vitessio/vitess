@@ -49,7 +49,7 @@ type VerticalSplitCloneWorker struct {
 	sourceKeyspace string
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias  topo.TabletAlias
+	sourceAlias  *pb.TabletAlias
 	sourceTablet *topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -57,8 +57,8 @@ type VerticalSplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases []topo.TabletAlias
-	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
+	reloadAliases []*pb.TabletAlias
+	reloadTablets map[pb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
 
@@ -270,7 +270,7 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	return vscw.ResolveDestinationMasters(ctx)
 }
@@ -490,7 +490,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables)
+		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []*pb.TabletAlias{vscw.sourceAlias}, vscw.tables)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("Failed to set source shards: %v", err)
@@ -515,7 +515,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 			if err != nil {
 				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
 			}
-		}(vscw.reloadTablets[tabletAlias])
+		}(vscw.reloadTablets[*tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError

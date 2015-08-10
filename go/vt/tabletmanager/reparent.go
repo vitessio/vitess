@@ -60,7 +60,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
-	if si.MasterAlias != nil && topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+	if topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
 		// We may get called on the current master even when nothing has changed.
 		// If the global shard record is already updated, it means we successfully
 		// finished a previous reparent to this tablet.

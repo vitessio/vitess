@@ -17,13 +17,13 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // sqlDifferSqlQuery is a local QueryService implementation to support the tests
@@ -77,25 +77,25 @@ func TestSqlDiffer(t *testing.T) {
 	ctx := context.Background()
 
 	supersetMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	supersetRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	supersetRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	subsetMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	subsetRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	subsetRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{supersetMaster, supersetRdonly1, supersetRdonly2, subsetMaster, subsetRdonly1, subsetRdonly2} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
 
-	wr.SetSourceShards(ctx, "destination_ks", "0", []topo.TabletAlias{supersetRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
+	wr.SetSourceShards(ctx, "destination_ks", "0", []*pbt.TabletAlias{supersetRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
 
 	// add the topo and schema data we'll need
 	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {

@@ -202,6 +202,12 @@ func KeyRangeIsPartial(kr *pb.KeyRange) bool {
 
 // Returns true if both key ranges cover the same area
 func KeyRangeEqual(left, right *pb.KeyRange) bool {
+	if left == nil {
+		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
+	}
+	if right == nil {
+		return len(left.Start) == 0 && len(left.End) == 0
+	}
 	return string(left.Start) == string(right.Start) &&
 		string(left.End) == string(right.End)
 }

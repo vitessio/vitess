@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type ExpectedExecuteFetch struct {
@@ -104,12 +106,12 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer vp.Close()
 
 	sourceMaster := NewFakeTablet(t, wr, "cell1", 0,
-		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-80"))
+		pb.TabletType_MASTER, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, TabletKeyspaceShard(t, "ks", "-80"))
+		pb.TabletType_RDONLY, TabletKeyspaceShard(t, "ks", "-80"))
 
 	destinationMaster := NewFakeTablet(t, wr, "cell1", 10,
-		topo.TYPE_MASTER, TabletKeyspaceShard(t, "ks", "-40"))
+		pb.TabletType_MASTER, TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*FakeTablet{sourceMaster, sourceRdonly, destinationMaster} {
 		ft.StartActionLoop(t, wr)
@@ -154,7 +156,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	db.AddQuery(createTable, &mproto.QueryResult{})
 	db.AddQuery(createTableView, &mproto.QueryResult{})
 
-	source := sourceRdonly.Tablet.Alias.String()
+	source := topo.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {
 		source = "ks/-80"
 	}

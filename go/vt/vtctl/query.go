@@ -110,7 +110,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateExecute command")
 	}
-	t, err := parseTabletType(*tabletType, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	t, err := parseTabletType(*tabletType, []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t)
+	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, topo.ProtoToTabletType(t))
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -141,7 +141,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateExecuteShard command")
 	}
-	t, err := parseTabletType(*tabletType, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	t, err := parseTabletType(*tabletType, []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
+	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, topo.ProtoToTabletType(t))
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -206,7 +206,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("the <tablet_alis> and <sql> arguments are required for the VtTabletExecute command")
 	}
-	tt, err := parseTabletType3(*tabletType)
+	tt, err := topo.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}

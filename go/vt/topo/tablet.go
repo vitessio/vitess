@@ -201,7 +201,8 @@ const (
 )
 
 // AllTabletTypes lists all the possible tablet types
-var AllTabletTypes = []pb.TabletType{pb.TabletType_IDLE,
+var AllTabletTypes = []pb.TabletType{
+	pb.TabletType_IDLE,
 	pb.TabletType_MASTER,
 	pb.TabletType_REPLICA,
 	pb.TabletType_RDONLY,
@@ -213,6 +214,27 @@ var AllTabletTypes = []pb.TabletType{pb.TabletType_IDLE,
 	pb.TabletType_RESTORE,
 	pb.TabletType_WORKER,
 	pb.TabletType_SCRAP,
+}
+
+var SlaveTabletTypes = []pb.TabletType{
+	pb.TabletType_REPLICA,
+	pb.TabletType_RDONLY,
+	pb.TabletType_BATCH,
+	pb.TabletType_SPARE,
+	pb.TabletType_EXPERIMENTAL,
+	pb.TabletType_SCHEMA_UPGRADE,
+	pb.TabletType_BACKUP,
+	pb.TabletType_RESTORE,
+	pb.TabletType_WORKER,
+}
+
+// ParseTabletType parses the tablet type into the enum
+func ParseTabletType(param string) (pb.TabletType, error) {
+	value, ok := pb.TabletType_value[strings.ToUpper(param)]
+	if !ok {
+		return pb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
+	}
+	return pb.TabletType(value), nil
 }
 
 // IsTypeInList returns true if the given type is in the list.

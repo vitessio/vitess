@@ -7,13 +7,16 @@ import (
 	"net/url"
 	"strings"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -42,7 +45,7 @@ type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keysp
 
 type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
 
-type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
+type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (output string, err error)
 
 type actionTabletRecord struct {
 	role   string
@@ -137,7 +140,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 }
 
 // ApplyTabletAction applies the provided action to the tablet.
-func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *pb.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
 
 	action, ok := ar.tabletActions[actionName]

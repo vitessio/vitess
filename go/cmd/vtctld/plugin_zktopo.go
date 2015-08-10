@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -63,13 +65,13 @@ func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
 }
 
 // GetSrvTypePath is part of the Explorer interface
-func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topo.TabletType) string {
+func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string {
 	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, string(tabletType))
 }
 
 // GetTabletPath is part of the Explorer interface
-func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
-	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUIDStr())
+func (ex ZkExplorer) GetTabletPath(alias *pb.TabletAlias) string {
+	return path.Join("/zk", alias.Cell, "vt/tablets", topo.TabletAliasUIDStr(alias))
 }
 
 // GetReplicationSlaves is part of the Explorer interface
@@ -126,14 +128,14 @@ func (ex ZkExplorer) HandlePath(actionRepo proto.ActionRepository, zkPath string
 }
 
 func (ex ZkExplorer) addTabletLinks(data string, result *ZkResult) {
-	t := &topo.Tablet{}
+	t := &pb.Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
 		return
 	}
 
-	if port, ok := t.Portmap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, int32(port))))
+	if port, ok := t.PortMap["vt"]; ok {
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
 	}
 }
 

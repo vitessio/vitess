@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func checkShardServedTypes(t *testing.T, ts topo.Server, shard string, expected int) {
@@ -37,27 +39,27 @@ func TestMigrateServedTypes(t *testing.T) {
 	defer vp.Close()
 
 	// create the source shard
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topo.TYPE_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topo.TYPE_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
 		TabletKeyspaceShard(t, "ks", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topo.TYPE_RDONLY,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, pb.TabletType_RDONLY,
 		TabletKeyspaceShard(t, "ks", "0"))
 
 	// create the first destination shard
-	dest1Master := NewFakeTablet(t, wr, "cell1", 20, topo.TYPE_MASTER,
+	dest1Master := NewFakeTablet(t, wr, "cell1", 20, pb.TabletType_MASTER,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, topo.TYPE_REPLICA,
+	dest1Replica := NewFakeTablet(t, wr, "cell1", 21, pb.TabletType_REPLICA,
 		TabletKeyspaceShard(t, "ks", "-80"))
-	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, topo.TYPE_RDONLY,
+	dest1Rdonly := NewFakeTablet(t, wr, "cell1", 22, pb.TabletType_RDONLY,
 		TabletKeyspaceShard(t, "ks", "-80"))
 
 	// create the second destination shard
-	dest2Master := NewFakeTablet(t, wr, "cell1", 30, topo.TYPE_MASTER,
+	dest2Master := NewFakeTablet(t, wr, "cell1", 30, pb.TabletType_MASTER,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, topo.TYPE_REPLICA,
+	dest2Replica := NewFakeTablet(t, wr, "cell1", 31, pb.TabletType_REPLICA,
 		TabletKeyspaceShard(t, "ks", "80-"))
-	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, topo.TYPE_RDONLY,
+	dest2Rdonly := NewFakeTablet(t, wr, "cell1", 32, pb.TabletType_RDONLY,
 		TabletKeyspaceShard(t, "ks", "80-"))
 
 	// double check the shards have the right served types
