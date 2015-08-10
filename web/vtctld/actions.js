@@ -59,7 +59,7 @@ app.factory('actions', function($mdDialog, keyspaces, shards, tablets) {
   svc.applyTablet = function(ev, action, tabletAlias) {
     confirm(ev, action, function() {
       var result = tablets.action({
-        tablet: tabletAlias.Cell+'-'+tabletAlias.Uid,
+        tablet: tabletAlias.cell+'-'+tabletAlias.uid,
         action: action.name
         }, '');
       showResult(ev, action, result);
