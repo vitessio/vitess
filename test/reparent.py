@@ -555,7 +555,8 @@ class TestReparent(unittest.TestCase):
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertEqual(health['target']['tablet_type'], 2) # MASTER
+    self.assertEqual(health['target']['tablet_type'],
+                     tablet.Tablet.tablet_type_value['MASTER'])
     # have to compare the int version, or the rounding errors can break
     self.assertTrue(health['tablet_externally_reparented_timestamp'] >= int(base_time))
 

@@ -238,7 +238,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 
-	statsType.Set(string(newTablet.Type))
+	statsType.Set(strings.ToLower(newTablet.Type.String()))
 	statsKeyspace.Set(newTablet.Keyspace)
 	statsShard.Set(newTablet.Shard)
 	if newTablet.KeyRange != nil {

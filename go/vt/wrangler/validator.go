@@ -132,7 +132,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 			continue
 		}
 		if tabletInfo.Type == pb.TabletType_MASTER {
-			if masterAlias.Cell != "" {
+			if masterAlias != nil {
 				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, masterAlias, alias)
 			} else {
 				masterAlias = alias
@@ -140,7 +140,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		}
 	}
 
-	if masterAlias.Cell == "" {
+	if masterAlias == nil {
 		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
 	} else if !topo.TabletAliasEqual(shardInfo.MasterAlias, masterAlias) {
 		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, masterAlias, shardInfo.MasterAlias)

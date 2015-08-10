@@ -676,8 +676,9 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_slave2, True, False)
     # Destination tablets would have query service disabled for other reasons than the migration,
     # so check the shard record instead of the tablets directly
-    # 3 is REPLICA, but the proto enum is not easily reachable.
-    utils.check_shard_query_services(self, destination_shards, 3, False) # 3 REPLICA
+    utils.check_shard_query_services(self, destination_shards,
+                                     tablet.Tablet.tablet_type_value['REPLICA'],
+                                     False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +
@@ -690,7 +691,9 @@ primary key (name)
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
     # Destination tablets would have query service disabled for other reasons than the migration,
     # so check the shard record instead of the tablets directly
-    utils.check_shard_query_services(self, destination_shards, 3, True) # 3 REPLICA
+    utils.check_shard_query_services(self, destination_shards,
+                                     tablet.Tablet.tablet_type_value['REPLICA'],
+                                     True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-c0 c0-\n' +

@@ -383,7 +383,7 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   it will raise a TestError.
   """
   while True:
-    if run_vtctl_json(['GetTablet', tablet_alias])['Type'] == expected_type:
+    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == expected_type:
       break
     timeout = wait_step(
       "%s's SlaveType to be %s" % (tablet_alias, expected_type),
