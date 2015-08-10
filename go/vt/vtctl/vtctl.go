@@ -915,7 +915,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, topo.ProtoToTabletType(servedType))
+	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, servedType)
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

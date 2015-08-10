@@ -271,9 +271,9 @@ func agentRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmcl
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testChangeTypeValue = topo.TYPE_REPLICA
+var testChangeTypeValue = pb.TabletType_REPLICA
 
-func (fra *fakeRPCAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
+func (fra *fakeRPCAgent) ChangeType(ctx context.Context, tabletType pb.TabletType) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -394,9 +394,9 @@ func agentRPCTestRefreshStatePanic(ctx context.Context, t *testing.T, client tmc
 	expectRPCWrapLockActionPanic(t, err)
 }
 
-var testRunHealthCheckValue = topo.TYPE_RDONLY
+var testRunHealthCheckValue = pb.TabletType_RDONLY
 
-func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType) {
+func (fra *fakeRPCAgent) RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

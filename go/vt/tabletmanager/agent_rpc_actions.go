@@ -42,7 +42,7 @@ type RPCAgent interface {
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
 
-	ChangeType(ctx context.Context, tabletType topo.TabletType) error
+	ChangeType(ctx context.Context, tabletType pb.TabletType) error
 
 	Scrap(ctx context.Context) error
 
@@ -52,7 +52,7 @@ type RPCAgent interface {
 
 	RefreshState(ctx context.Context)
 
-	RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType)
+	RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType)
 
 	ReloadSchema(ctx context.Context)
 
@@ -155,8 +155,8 @@ func (agent *ActionAgent) SetReadOnly(ctx context.Context, rdonly bool) error {
 
 // ChangeType changes the tablet type
 // Should be called under RPCWrapLockAction.
-func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topo.TabletType) error {
-	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topo.TabletTypeToProto(tabletType), nil)
+func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType pb.TabletType) error {
+	return topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, nil)
 }
 
 // Scrap scraps the live running tablet
@@ -185,8 +185,8 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) {
 
 // RunHealthCheck will manually run the health check on the tablet
 // Should be called under RPCWrap.
-func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType topo.TabletType) {
-	agent.runHealthCheck(topo.TabletTypeToProto(targetTabletType))
+func (agent *ActionAgent) RunHealthCheck(ctx context.Context, targetTabletType pb.TabletType) {
+	agent.runHealthCheck(targetTabletType)
 }
 
 // ReloadSchema will reload the schema

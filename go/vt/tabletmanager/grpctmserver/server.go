@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
@@ -115,7 +114,7 @@ func (s *server) ChangeType(ctx context.Context, request *pb.ChangeTypeRequest) 
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.ChangeTypeResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionChangeType, request, response, true, func() error {
-		return s.agent.ChangeType(ctx, topo.ProtoToTabletType(request.TabletType))
+		return s.agent.ChangeType(ctx, request.TabletType)
 	})
 }
 
@@ -140,7 +139,7 @@ func (s *server) RunHealthCheck(ctx context.Context, request *pb.RunHealthCheckR
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.RunHealthCheckResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, request, response, func() error {
-		s.agent.RunHealthCheck(ctx, topo.ProtoToTabletType(request.TabletType))
+		s.agent.RunHealthCheck(ctx, request.TabletType)
 		return nil
 	})
 }

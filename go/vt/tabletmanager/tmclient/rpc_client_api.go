@@ -54,7 +54,7 @@ type TabletManagerClient interface {
 	SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// ChangeType asks the remote tablet to change its type
-	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error
+	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error
 
 	// Scrap scraps the live running tablet
 	Scrap(ctx context.Context, tablet *topo.TabletInfo) error
@@ -69,7 +69,7 @@ type TabletManagerClient interface {
 	RefreshState(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
-	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
+	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error

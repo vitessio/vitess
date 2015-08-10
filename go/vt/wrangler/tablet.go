@@ -216,7 +216,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(ctx context.Context, tabletAlias *pb.Tab
 			return false, "", "", "", err
 		}
 	} else {
-		if err := wr.tmc.ChangeType(ctx, ti, topo.ProtoToTabletType(tabletType)); err != nil {
+		if err := wr.tmc.ChangeType(ctx, ti, tabletType); err != nil {
 			return false, "", "", "", err
 		}
 	}
@@ -245,7 +245,7 @@ func (wr *Wrangler) changeTypeInternal(ctx context.Context, tabletAlias *pb.Tabl
 	rebuildRequired := ti.IsInServingGraph()
 
 	// change the type
-	if err := wr.tmc.ChangeType(ctx, ti, topo.ProtoToTabletType(dbType)); err != nil {
+	if err := wr.tmc.ChangeType(ctx, ti, dbType); err != nil {
 		return err
 	}
 

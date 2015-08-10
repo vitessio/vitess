@@ -183,14 +183,14 @@ func (client *Client) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
-func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error {
+func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pbt.TabletType) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.ChangeType(ctx, &pb.ChangeTypeRequest{
-		TabletType: topo.TabletTypeToProto(dbType),
+		TabletType: dbType,
 	})
 	return err
 }
@@ -218,14 +218,14 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
-func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
+func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pbt.TabletType) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.RunHealthCheck(ctx, &pb.RunHealthCheckRequest{
-		TabletType: topo.TabletTypeToProto(targetTabletType),
+		TabletType: targetTabletType,
 	})
 	return err
 }

@@ -100,7 +100,7 @@ func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet 
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error {
+func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error {
 	return nil
 }
 
@@ -115,7 +115,7 @@ func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet 
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
-func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
+func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error {
 	return nil
 }
 

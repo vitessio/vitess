@@ -135,7 +135,7 @@ func (client *GoRPCTabletManagerClient) SetReadWrite(ctx context.Context, tablet
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error {
+func (client *GoRPCTabletManagerClient) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionChangeType, &dbType, &rpc.Unused{})
 }
 
@@ -150,7 +150,7 @@ func (client *GoRPCTabletManagerClient) RefreshState(ctx context.Context, tablet
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
-func (client *GoRPCTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
+func (client *GoRPCTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error {
 	return client.rpcCallTablet(ctx, tablet, actionnode.TabletActionRunHealthCheck, &targetTabletType, &rpc.Unused{})
 }
 
