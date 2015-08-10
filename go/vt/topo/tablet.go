@@ -130,6 +130,8 @@ func (tal TabletAliasList) Swap(i, j int) {
 // - the replication graph
 // - the services run by vttablet on a tablet
 // - the uptime expectancy
+//
+// DEPRECATED: use the proto3 topodata.TabletType enum instead.
 type TabletType string
 
 //go:generate bsongen -file $GOFILE -type TabletType -o tablet_type_bson.go
@@ -195,6 +197,8 @@ var AllTabletTypes = []pb.TabletType{
 	pb.TabletType_SCRAP,
 }
 
+// SlaveTabletTypes contains all the tablet type that can have replication
+// enabled.
 var SlaveTabletTypes = []pb.TabletType{
 	pb.TabletType_REPLICA,
 	pb.TabletType_RDONLY,
@@ -311,7 +315,7 @@ func IsSlaveType(tt pb.TabletType) bool {
 	return true
 }
 
-// ValidatePortmap returns an error if the tablet's portmap doesn't
+// TabletValidatePortMap returns an error if the tablet's portmap doesn't
 // contain all the necessary ports for the tablet to be fully
 // operational. We only care about vt port now, as mysql may not even
 // be running.
@@ -373,31 +377,31 @@ type TabletInfo struct {
 }
 
 // String returns a string describing the tablet.
-func (tablet *TabletInfo) String() string {
-	return fmt.Sprintf("Tablet{%v}", tablet.Alias)
+func (ti *TabletInfo) String() string {
+	return fmt.Sprintf("Tablet{%v}", ti.Alias)
 }
 
 // Addr returns hostname:vt port.
-func (tablet *TabletInfo) Addr() string {
-	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["vt"]))
+func (ti *TabletInfo) Addr() string {
+	return netutil.JoinHostPort(ti.Hostname, int32(ti.PortMap["vt"]))
 }
 
 // MysqlAddr returns hostname:mysql port.
-func (tablet *TabletInfo) MysqlAddr() string {
-	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["mysql"]))
+func (ti *TabletInfo) MysqlAddr() string {
+	return netutil.JoinHostPort(ti.Hostname, int32(ti.PortMap["mysql"]))
 }
 
 // IsAssigned returns if this tablet ever assigned data?
 // A "scrap" node will show up as assigned even though its data
 // cannot be used for serving.
-func (tablet *TabletInfo) IsAssigned() bool {
-	return tablet.Keyspace != "" && tablet.Shard != ""
+func (ti *TabletInfo) IsAssigned() bool {
+	return ti.Keyspace != "" && ti.Shard != ""
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
-func (tablet *TabletInfo) DbName() string {
-	return TabletDbName(tablet.Tablet)
+func (ti *TabletInfo) DbName() string {
+	return TabletDbName(ti.Tablet)
 }
 
 // Version returns the version of this tablet from last time it was read or
@@ -407,18 +411,18 @@ func (ti *TabletInfo) Version() int64 {
 }
 
 // IsInServingGraph returns if this tablet is in the serving graph
-func (tablet *TabletInfo) IsInServingGraph() bool {
-	return IsInServingGraph(tablet.Type)
+func (ti *TabletInfo) IsInServingGraph() bool {
+	return IsInServingGraph(ti.Type)
 }
 
 // IsInReplicationGraph returns if this tablet is in the replication graph.
-func (tablet *TabletInfo) IsInReplicationGraph() bool {
-	return IsInReplicationGraph(tablet.Type)
+func (ti *TabletInfo) IsInReplicationGraph() bool {
+	return IsInReplicationGraph(ti.Type)
 }
 
 // IsSlaveType returns if this tablet's type is a slave
-func (tablet *TabletInfo) IsSlaveType() bool {
-	return IsSlaveType(tablet.Type)
+func (ti *TabletInfo) IsSlaveType() bool {
+	return IsSlaveType(ti.Type)
 }
 
 // IsHealthEqual compares the two health maps, and
@@ -485,6 +489,9 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
+	}
+	if !TabletAliasEqual(tablet.Alias, tabletAlias) {
+		return fmt.Errorf("bad tablet alias data for tablet %v: %#v", TabletAliasString(tabletAlias), tablet.Alias)
 	}
 
 	// Some tablets have no information to generate valid replication paths.
