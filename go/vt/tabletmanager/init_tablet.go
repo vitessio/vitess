@@ -53,16 +53,13 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			log.Fatalf("cannot specify both target_tablet_type and init_tablet_type parameters (as they might conflict)")
 		}
 
-		itt, ok := pb.TabletType_value[strings.ToUpper(*initTabletType)]
-		if !ok {
-			log.Fatalf("Invalid init tablet type: %v", *initTabletType)
+		// use the type specified on the command line
+		var err error
+		tabletType, err = topo.ParseTabletType(*initTabletType)
+		if err != nil {
+			log.Fatalf("Invalid init tablet type %v: %v", *initTabletType, err)
 		}
 
-		// use the type specified on the command line
-		tabletType = pb.TabletType(itt)
-		if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
-			log.Fatalf("InitTablet encountered unknown init_tablet_type '%v'", *initTabletType)
-		}
 		if tabletType == pb.TabletType_MASTER || tabletType == pb.TabletType_SCRAP {
 			// We disallow TYPE_MASTER, so we don't have to change
 			// shard.MasterAlias, and deal with the corner cases.

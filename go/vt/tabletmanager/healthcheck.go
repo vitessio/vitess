@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"html/template"
 	"reflect"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -104,9 +103,9 @@ func (agent *ActionAgent) initHealthCheck() {
 		return
 	}
 
-	tt, ok := pbt.TabletType_value[strings.ToUpper(*targetTabletType)]
-	if !ok {
-		log.Fatalf("Invalid target tablet type: %v", *targetTabletType)
+	tt, err := topo.ParseTabletType(*targetTabletType)
+	if err != nil {
+		log.Fatalf("Invalid target tablet type %v: %v", *targetTabletType, err)
 	}
 
 	log.Infof("Starting periodic health check every %v with target_tablet_type=%v", *healthCheckInterval, *targetTabletType)
@@ -119,10 +118,10 @@ func (agent *ActionAgent) initHealthCheck() {
 		t.Stop()
 
 		// Now we can finish up and force ourselves to not healthy.
-		agent.terminateHealthChecks(pbt.TabletType(tt))
+		agent.terminateHealthChecks(tt)
 	})
 	t.Start(func() {
-		agent.runHealthCheck(pbt.TabletType(tt))
+		agent.runHealthCheck(tt)
 	})
 	t.Trigger()
 }

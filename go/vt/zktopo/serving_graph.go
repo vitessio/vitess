@@ -63,8 +63,8 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 		if tt == "action" || tt == "actionlog" {
 			continue
 		}
-		if ptt, ok := pb.TabletType_value[strings.ToUpper(tt)]; ok {
-			result = append(result, pb.TabletType(ptt))
+		if ptt, err := topo.ParseTabletType(tt); err == nil {
+			result = append(result, ptt)
 		}
 	}
 	return result, nil

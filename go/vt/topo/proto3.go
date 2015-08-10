@@ -18,10 +18,11 @@ import (
 
 // TabletTypeToProto turns a TabletType into a proto
 func TabletTypeToProto(t TabletType) pb.TabletType {
-	if result, ok := pb.TabletType_value[strings.ToUpper(string(t))]; ok {
-		return pb.TabletType(result)
+	if result, err := ParseTabletType(string(t)); err != nil {
+		panic(fmt.Errorf("unknown tablet type: %v", t))
+	} else {
+		return result
 	}
-	panic(fmt.Errorf("unknown tablet type: %v", t))
 }
 
 // ProtoToTabletType turns a proto to a TabletType

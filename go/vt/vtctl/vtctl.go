@@ -557,14 +557,14 @@ func tabletParamsToTabletAliases(params []string) ([]*pb.TabletAlias, error) {
 // parseTabletType parses the string tablet type and verifies
 // it is an accepted one
 func parseTabletType(param string, types []pb.TabletType) (pb.TabletType, error) {
-	tabletType, ok := pb.TabletType_value[strings.ToUpper(param)]
-	if !ok {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v", param)
+	tabletType, err := topo.ParseTabletType(param)
+	if err != nil {
+		return pb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
 	}
 	if !topo.IsTypeInList(pb.TabletType(tabletType), types) {
 		return pb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(types), " "))
 	}
-	return pb.TabletType(tabletType), nil
+	return tabletType, nil
 }
 
 // parseKeyspaceIdType parses the keyspace id type into the enum

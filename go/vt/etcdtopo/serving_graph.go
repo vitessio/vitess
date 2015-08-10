@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -43,8 +42,8 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 	tabletTypes := make([]pb.TabletType, 0, len(resp.Node.Nodes))
 	for _, n := range resp.Node.Nodes {
 		strType := path.Base(n.Key)
-		if tt, ok := pb.TabletType_value[strings.ToUpper(strType)]; ok {
-			tabletTypes = append(tabletTypes, pb.TabletType(tt))
+		if tt, err := topo.ParseTabletType(strType); err == nil {
+			tabletTypes = append(tabletTypes, tt)
 		}
 	}
 	return tabletTypes, nil
