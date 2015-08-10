@@ -66,7 +66,7 @@ func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
 
 // GetSrvTypePath is part of the Explorer interface
 func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string {
-	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, string(tabletType))
+	return path.Join("/zk", cell, "/vt/ns", keyspace, shard, strings.ToLower(tabletType.String()))
 }
 
 // GetTabletPath is part of the Explorer interface

@@ -38,7 +38,7 @@ var (
 <table width="100%" border="" frame="">
   <tr border="">
     <td width="25%" border="">
-      Alias: {{github_com_youtube_vitess_vtctld_tablet .AliasString}}<br>
+      Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.AliasString}}<br>
       Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}}<br>
       Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard .Tablet.Type}}<br>
       Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>

@@ -78,8 +78,23 @@ func TestRangeShardNodesList(t *testing.T) {
 func TestKeyspaceNodesTabletTypes(t *testing.T) {
 	input := KeyspaceNodes{
 		ShardNodes: []*ShardNodes{
-			&ShardNodes{TabletNodes: TabletNodesByType{pb.TabletType_REPLICA: nil}},
-			&ShardNodes{TabletNodes: TabletNodesByType{pb.TabletType_MASTER: nil, pb.TabletType_REPLICA: nil}},
+			&ShardNodes{
+				TabletNodes: []*TabletNodesByType{
+					&TabletNodesByType{
+						TabletType: pb.TabletType_REPLICA,
+					},
+				},
+			},
+			&ShardNodes{
+				TabletNodes: []*TabletNodesByType{
+					&TabletNodesByType{
+						TabletType: pb.TabletType_MASTER,
+					},
+					&TabletNodesByType{
+						TabletType: pb.TabletType_REPLICA,
+					},
+				},
+			},
 		},
 	}
 	want := topo.MakeStringTypeList([]pb.TabletType{pb.TabletType_REPLICA, pb.TabletType_MASTER})
