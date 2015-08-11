@@ -21,7 +21,7 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 		"vtworker_endpoint": "localhost:15001",
 	}
 
-	err := checkRequiredParameters(reshardingTask, parameters)
+	err := validateParameters(reshardingTask, parameters)
 	if err != nil {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}

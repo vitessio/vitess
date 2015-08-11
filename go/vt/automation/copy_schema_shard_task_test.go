@@ -28,7 +28,7 @@ func TestCopySchemaShardTask(t *testing.T) {
 		"vtctld_endpoint": "localhost:15000",
 	}
 
-	err := checkRequiredParameters(task, parameters)
+	err := validateParameters(task, parameters)
 	if err != nil {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}

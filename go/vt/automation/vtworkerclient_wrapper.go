@@ -7,6 +7,8 @@ package automation
 import (
 	"bytes"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
 	"golang.org/x/net/context"
 )
@@ -15,6 +17,7 @@ import (
 func ExecuteVtworker(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
 
+	log.Infof("Executing remote vtworker command: %v server: %v", args, server)
 	err := vtworkerclient.RunCommandAndWait(
 		ctx, server, args,
 		CreateLoggerEventToBufferFunction(&output))
