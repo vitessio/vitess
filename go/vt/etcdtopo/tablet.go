@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
@@ -24,8 +23,11 @@ func (s *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 		return err
 	}
 
-	data := jscfg.ToJSON(tablet)
-	_, err = cell.Create(tabletFilePath(tablet.Alias), data, 0 /* ttl */)
+	data, err := json.MarshalIndent(tablet, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = cell.Create(tabletFilePath(tablet.Alias), string(data), 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
@@ -44,9 +46,12 @@ func (s *Server) UpdateTablet(ctx context.Context, ti *topo.TabletInfo, existing
 		return -1, err
 	}
 
-	data := jscfg.ToJSON(ti.Tablet)
+	data, err := json.MarshalIndent(ti.Tablet, "", "  ")
+	if err != nil {
+		return -1, err
+	}
 	resp, err := cell.CompareAndSwap(tabletFilePath(ti.Alias),
-		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}

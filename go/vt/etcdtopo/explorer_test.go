@@ -5,6 +5,7 @@
 package etcdtopo
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"path"
@@ -12,11 +13,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
+
+func toJSON(t *testing.T, value interface{}) string {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatalf("cannot JSON encode: %v", err)
+	}
+	return string(data)
+}
 
 func TestSplitCellPath(t *testing.T) {
 	table := map[string][]string{
@@ -78,7 +86,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &pb.Keyspace{}
 	shard := &pb.Shard{}
-	want := jscfg.ToJSON(keyspace)
+	want := toJSON(t, keyspace)
 
 	ctx := context.Background()
 	ts := newTestServer(t, cells)
@@ -115,7 +123,7 @@ func TestHandlePathShard(t *testing.T) {
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &pb.Keyspace{}
 	shard := &pb.Shard{}
-	want := jscfg.ToJSON(shard)
+	want := toJSON(t, shard)
 
 	ctx := context.Background()
 	ts := newTestServer(t, cells)
@@ -152,7 +160,7 @@ func TestHandlePathTablet(t *testing.T) {
 		Hostname: "example.com",
 		PortMap:  map[string]int32{"vt": 4321},
 	}
-	want := jscfg.ToJSON(tablet)
+	want := toJSON(t, tablet)
 
 	ctx := context.Background()
 	ts := newTestServer(t, cells)
