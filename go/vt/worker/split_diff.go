@@ -392,7 +392,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				return
 			}
 
-			overlap, err := key.KeyRangesOverlap3(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
+			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
 			if err != nil {
 				newErr := fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
 				rec.RecordError(newErr)

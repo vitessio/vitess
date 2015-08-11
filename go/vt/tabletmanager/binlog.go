@@ -19,6 +19,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -210,7 +211,7 @@ func (bpc *BinlogPlayerController) Loop() {
 func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("%v: caught panic: %v", bpc, x)
+			log.Errorf("%v: caught panic: %v\n%s", bpc, x, tb.Stack(4))
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -283,7 +284,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 	// the data we have to replicate is the intersection of the
 	// source keyrange and our keyrange
-	overlap, err := key.KeyRangesOverlap3(bpc.sourceShard.KeyRange, bpc.keyRange)
+	overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
 	if err != nil {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
