@@ -10,7 +10,6 @@ import (
 	"sort"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
@@ -120,7 +119,11 @@ func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.Tabl
 			return "", err
 		}
 		lastTablet = tablet
-		return jscfg.ToJSON(tablet), nil
+		data, err := json.MarshalIndent(tablet, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
 	}
 	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {

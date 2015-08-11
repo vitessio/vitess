@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
@@ -21,10 +20,13 @@ import (
 
 // CreateKeyspace implements topo.Server.
 func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
-	data := jscfg.ToJSON(value)
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
 	global := s.getGlobal()
 
-	resp, err := global.Create(keyspaceFilePath(keyspace), data, 0 /* ttl */)
+	resp, err := global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
@@ -48,10 +50,13 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 
 // UpdateKeyspace implements topo.Server.
 func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	data := jscfg.ToJSON(ki.Keyspace)
+	data, err := json.MarshalIndent(ki.Keyspace, "", "  ")
+	if err != nil {
+		return -1, err
+	}
 
 	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(ki.KeyspaceName()),
-		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}

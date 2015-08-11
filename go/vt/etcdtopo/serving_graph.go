@@ -12,7 +12,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -55,8 +54,14 @@ func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard 
 	if err != nil {
 		return err
 	}
+
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	// Set only if it doesn't exist.
-	_, err = cell.Create(endPointsFilePath(keyspace, shard, tabletType), jscfg.ToJSON(addrs), 0 /* ttl */)
+	_, err = cell.Create(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -67,9 +72,14 @@ func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard 
 		return err
 	}
 
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	if existingVersion == -1 {
 		// Set unconditionally.
-		_, err := cell.Set(endPointsFilePath(keyspace, shard, tabletType), jscfg.ToJSON(addrs), 0 /* ttl */)
+		_, err := cell.Set(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
 		return convertError(err)
 	}
 
@@ -84,9 +94,12 @@ func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType pb
 		return err
 	}
 
-	data := jscfg.ToJSON(addrs)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, tabletType), data, 0, /* ttl */
+	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, tabletType), string(data), 0, /* ttl */
 		"" /* prevValue */, uint64(version))
 	return convertError(err)
 }
@@ -153,9 +166,12 @@ func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard s
 		return err
 	}
 
-	data := jscfg.ToJSON(srvShard)
+	data, err := json.MarshalIndent(srvShard, "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.Set(srvShardFilePath(keyspace, shard), data, 0 /* ttl */)
+	_, err = cell.Set(srvShardFilePath(keyspace, shard), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -199,9 +215,12 @@ func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace strin
 		return err
 	}
 
-	data := jscfg.ToJSON(srvKeyspace)
+	data, err := json.MarshalIndent(topo.SrvKeyspaceToProto(srvKeyspace), "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.Set(srvKeyspaceFilePath(keyspace), data, 0 /* ttl */)
+	_, err = cell.Set(srvKeyspaceFilePath(keyspace), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -231,11 +250,11 @@ func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) 
 		return nil, ErrBadResponse
 	}
 
-	value := topo.NewSrvKeyspace(int64(resp.Node.ModifiedIndex))
+	value := &pb.SrvKeyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving keyspace data (%v): %q", err, resp.Node.Value)
 	}
-	return value, nil
+	return topo.ProtoToSrvKeyspace(value), nil
 }
 
 // GetSrvKeyspaceNames implements topo.Server.

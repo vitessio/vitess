@@ -11,9 +11,10 @@ import (
 
 	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the reference test for clients. It tests
@@ -40,7 +41,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	query := services.CallerIDPrefix + string(data)
 
 	// test Execute forwards the callerID
-	if _, err := conn.Execute(ctx, query, nil, topo.TYPE_MASTER); err != nil {
+	if _, err := conn.Execute(ctx, query, nil, pb.TabletType_MASTER); err != nil {
 		t.Errorf("failed to pass callerid: %v", err)
 	}
 
