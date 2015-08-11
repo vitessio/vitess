@@ -13,7 +13,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
@@ -73,10 +72,13 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 // CreateEndPoints is part of the topo.Server interface
 func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data := jscfg.ToJSON(addrs)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
 
 	// Create only if it doesn't exist.
-	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		err = topo.ErrNodeExists
 	}
@@ -86,17 +88,20 @@ func (zkts *Server) CreateEndPoints(ctx context.Context, cell, keyspace, shard s
 // UpdateEndPoints is part of the topo.Server interface
 func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data := jscfg.ToJSON(addrs)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
 
 	if existingVersion == -1 {
 		// Update or create unconditionally.
-		_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err := zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				// Node already exists - just stomp away. Multiple writers shouldn't be here.
 				// We use RetryChange here because it won't update the node unnecessarily.
 				f := func(oldValue string, oldStat zk.Stat) (string, error) {
-					return data, nil
+					return string(data), nil
 				}
 				err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 			}
@@ -105,8 +110,7 @@ func (zkts *Server) UpdateEndPoints(ctx context.Context, cell, keyspace, shard s
 	}
 
 	// Compare And Set
-	_, err := zkts.zconn.Set(path, data, int(existingVersion))
-	if err != nil {
+	if _, err = zkts.zconn.Set(path, string(data), int(existingVersion)); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = topo.ErrBadVersion
 		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -153,16 +157,18 @@ func (zkts *Server) DeleteEndPoints(ctx context.Context, cell, keyspace, shard s
 // UpdateSrvShard is part of the topo.Server interface
 func (zkts *Server) UpdateSrvShard(ctx context.Context, cell, keyspace, shard string, srvShard *pb.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
-	data := jscfg.ToJSON(srvShard)
+	data, err := json.MarshalIndent(srvShard, "", "  ")
+	if err != nil {
+		return err
+	}
 
 	// Update or create unconditionally.
-	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
+	if _, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			// Node already exists - just stomp away. Multiple writers shouldn't be here.
 			// We use RetryChange here because it won't update the node unnecessarily.
 			f := func(oldValue string, oldStat zk.Stat) (string, error) {
-				return data, nil
+				return string(data), nil
 			}
 			err = zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 		}
@@ -205,10 +211,13 @@ func (zkts *Server) DeleteSrvShard(ctx context.Context, cell, keyspace, shard st
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
-	data := jscfg.ToJSON(topo.SrvKeyspaceToProto(srvKeyspace))
-	_, err := zkts.zconn.Set(path, data, -1)
+	data, err := json.MarshalIndent(topo.SrvKeyspaceToProto(srvKeyspace), "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zkts.zconn.Set(path, string(data), -1)
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
-		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zk.CreateRecursive(zkts.zconn, path, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	}
 	return err
 }
@@ -296,7 +305,11 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		addrs = topo.NewEndPoints()
 		addrs.Entries = append(addrs.Entries, addr)
 	}
-	return jscfg.ToJSON(addrs), nil
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // WatchEndPoints is part of the topo.Server interface
