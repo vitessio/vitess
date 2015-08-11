@@ -61,13 +61,9 @@ unit_test_race:
 unit_test_goveralls:
 	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
 	gover ./go/
-	# Travis doesn't set the token for forked pull requests, so skip
-	# upload if COVERALLS_TOKEN is unset.
-	if ! [ -z "$$COVERALLS_TOKEN" ]; then \
-		# -shallow ensures that goveralls does not return with a failure \
-		# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
-		goveralls -shallow -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
-	fi
+	# -shallow ensures that goveralls does not return with a failure \
+	# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
+	goveralls -shallow -coverprofile=gover.coverprofile -service=travis-ci
 
 ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
 queryservice_test_files = \
