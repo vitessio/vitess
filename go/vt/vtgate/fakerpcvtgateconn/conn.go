@@ -216,8 +216,18 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, query string, bin
 	return resultChan, func() error { return nil }, nil
 }
 
+// StreamExecute2 please see vtgateconn.Impl.StreamExecute2
+func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
 // StreamExecuteShard please see vtgateconn.Impl.StreamExecuteShard
 func (conn *FakeVTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
+// StreamExecuteShard2 please see vtgateconn.Impl.StreamExecuteShard2
+func (conn *FakeVTGateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
@@ -226,8 +236,18 @@ func (conn *FakeVTGateConn) StreamExecuteKeyRanges(ctx context.Context, query st
 	panic("not implemented")
 }
 
+// StreamExecuteKeyRanges2 please see vtgateconn.Impl.StreamExecuteKeyRanges2
+func (conn *FakeVTGateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
 // StreamExecuteKeyspaceIds please see vtgateconn.Impl.StreamExecuteKeyspaceIds
 func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	panic("not implemented")
+}
+
+// StreamExecuteKeyspaceIds2 please see vtgateconn.Impl.StreamExecuteKeyspaceIds2
+func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 

@@ -90,7 +90,7 @@ func RowsToProto3(rows [][]sqltypes.Value) []*pbq.Row {
 // Proto3ToRows converts a proto3 []Row to an internal data structure.
 func Proto3ToRows(rows []*pbq.Row) [][]sqltypes.Value {
 	if len(rows) == 0 {
-		return nil
+		return [][]sqltypes.Value{}
 	}
 
 	result := make([][]sqltypes.Value, len(rows))
