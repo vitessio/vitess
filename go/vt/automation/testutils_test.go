@@ -41,6 +41,10 @@ func (t *TestingEchoTask) RequiredParameters() []string {
 	return []string{"echo_text"}
 }
 
+func (t *TestingEchoTask) OptionalParameters() []string {
+	return nil
+}
+
 // TestingFailTask is used only for testing. It always fails.
 type TestingFailTask struct {
 }
@@ -50,7 +54,11 @@ func (t *TestingFailTask) Run(parameters map[string]string) (newTasks []*pb.Task
 }
 
 func (t *TestingFailTask) RequiredParameters() []string {
-	return []string{}
+	return []string{"echo_text"}
+}
+
+func (t *TestingFailTask) OptionalParameters() []string {
+	return nil
 }
 
 // TestingEmitEchoTask is used only for testing. It emits a TestingEchoTask.
@@ -64,7 +72,11 @@ func (t *TestingEmitEchoTask) Run(parameters map[string]string) (newTasks []*pb.
 }
 
 func (t *TestingEmitEchoTask) RequiredParameters() []string {
-	return []string{}
+	return []string{"echo_text"}
+}
+
+func (t *TestingEmitEchoTask) OptionalParameters() []string {
+	return nil
 }
 
 // TestingEmitEchoFailEchoTask is used only for testing.
@@ -82,5 +94,9 @@ func (t *TestingEmitEchoFailEchoTask) Run(parameters map[string]string) (newTask
 }
 
 func (t *TestingEmitEchoFailEchoTask) RequiredParameters() []string {
-	return []string{}
+	return []string{"echo_text"}
+}
+
+func (t *TestingEmitEchoFailEchoTask) OptionalParameters() []string {
+	return nil
 }

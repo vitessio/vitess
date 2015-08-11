@@ -28,3 +28,8 @@ func (t *CopySchemaShardTask) Run(parameters map[string]string) ([]*pb.TaskConta
 func (t *CopySchemaShardTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard", "dest_shard", "vtctld_endpoint"}
 }
+
+// OptionalParameters is part of the Task interface.
+func (t *CopySchemaShardTask) OptionalParameters() []string {
+	return nil
+}

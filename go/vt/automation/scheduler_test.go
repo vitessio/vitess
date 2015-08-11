@@ -145,7 +145,7 @@ func TestEnqueueFailsDueToMissingParameter(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because not all required parameters were provided. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
 	}
-	want := "Parameter echo_text is required, but not provided"
+	want := "required parameters are missing: [echo_text]"
 	if err.Error() != want {
 		t.Fatalf("Wrong error message. got: '%v' want: '%v'", err, want)
 	}
@@ -168,7 +168,7 @@ func TestEnqueueFailsDueToUnregisteredClusterOperation(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because it should not have been registered. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
 	}
-	want := "No ClusterOperation with name: TestingEchoTask is registered"
+	want := "no ClusterOperation with name: TestingEchoTask is registered"
 	if err.Error() != want {
 		t.Fatalf("Wrong error message. got: '%v' want: '%v'", err, want)
 	}
@@ -214,7 +214,7 @@ func TestEnqueueFailsBecauseTaskInstanceCannotBeCreated(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Scheduler should have failed to start cluster operation because the task could not be instantiated. Request: %v Error: %v Response: %v", enqueueRequest, err, enqueueResponse)
 	}
-	want := "No implementation found for: TestingEchoTask"
+	want := "no implementation found for: TestingEchoTask"
 	if err.Error() != want {
 		t.Fatalf("Wrong error message. got: '%v' want: '%v'", err, want)
 	}
@@ -238,13 +238,16 @@ func TestTaskEmitsTaskWhichCannotBeInstantiated(t *testing.T) {
 
 	enqueueRequest := &pb.EnqueueClusterOperationRequest{
 		Name: "TestingEmitEchoTask",
+		Parameters: map[string]string{
+			"echo_text": "to be emitted task should fail to instantiate",
+		},
 	}
 	enqueueResponse, err := scheduler.EnqueueClusterOperation(context.TODO(), enqueueRequest)
 	if err != nil {
 		t.Fatalf("Failed to start cluster operation. Request: %v Error: %v", enqueueRequest, err)
 	}
 
-	details := waitForClusterOperation(t, scheduler, enqueueResponse.Id, "emitted TestingEchoTask", "No implementation found for: TestingEchoTask")
+	details := waitForClusterOperation(t, scheduler, enqueueResponse.Id, "emitted TestingEchoTask", "no implementation found for: TestingEchoTask")
 	if len(details.SerialTasks) != 1 {
 		t.Errorf("A task has been emitted, but it shouldn't. Details:\n%v", proto.MarshalTextString(details))
 	}

@@ -27,7 +27,7 @@ func TestSplitCloneTask(t *testing.T) {
 		"vtworker_endpoint": "localhost:15001",
 	}
 
-	err := checkRequiredParameters(task, parameters)
+	err := validateParameters(task, parameters)
 	if err != nil {
 		t.Fatalf("Not all required parameters were specified: %v", err)
 	}
