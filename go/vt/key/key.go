@@ -248,6 +248,9 @@ func KeyRangesIntersect(first, second KeyRange) bool {
 
 // KeyRangesIntersect3 returns true if some Keyspace values exist in both ranges.
 func KeyRangesIntersect3(first, second *pb.KeyRange) bool {
+	if first == nil || second == nil {
+		return true
+	}
 	return (len(first.End) == 0 || string(second.Start) < string(first.End)) &&
 		(len(second.End) == 0 || string(first.Start) < string(second.End))
 }
@@ -280,6 +283,12 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 func KeyRangesOverlap3(first, second *pb.KeyRange) (*pb.KeyRange, error) {
 	if !KeyRangesIntersect3(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
+	}
+	if first == nil {
+		return second, nil
+	}
+	if second == nil {
+		return first, nil
 	}
 	// compute max(c,a) and min(b,d)
 	// start with (a,b)
