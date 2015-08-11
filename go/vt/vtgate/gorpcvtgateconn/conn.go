@@ -111,7 +111,7 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -121,7 +121,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyspaceIds:      keyspaceIds,
+		KeyspaceIds:      key.ProtoToKeyspaceIds(keyspaceIds),
 		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
@@ -139,7 +139,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -149,7 +149,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyRanges:        keyRanges,
+		KeyRanges:        key.ProtoToKeyRanges(keyRanges),
 		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
@@ -274,13 +274,13 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyRangeQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyRanges:     keyRanges,
+		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
 		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
@@ -289,13 +289,13 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyspaceIdQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyspaceIds:   keyspaceIds,
+		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
 		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
