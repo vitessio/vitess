@@ -120,7 +120,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, topo.ProtoToTabletType(t))
+	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables, t)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, topo.ProtoToTabletType(t))
+	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

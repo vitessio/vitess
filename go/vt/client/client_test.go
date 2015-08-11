@@ -21,6 +21,8 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -57,7 +59,7 @@ func TestDriver(t *testing.T) {
 	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	db, err := sql.Open("vitess", connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	r, err := db.Query("request1", int64(0))
 	if err != nil {
@@ -74,16 +76,17 @@ func TestDriver(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "foo", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	wantc := &conn{
 		Protocol:   "gorpc",
-		TabletType: "foo",
+		TabletType: "replica",
 		Streaming:  false,
 		Timeout:    30 * time.Second,
+		tabletType: pb.TabletType_REPLICA,
 	}
 	newc := *(c.(*conn))
 	newc.Address = ""
@@ -110,7 +113,7 @@ func TestExec(t *testing.T) {
 	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	s, _ := c.Prepare("request1")
 	if ni := s.NumInput(); ni != -1 {
@@ -139,7 +142,7 @@ func TestExec(t *testing.T) {
 	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	s, _ = c.Prepare("request1")
 	r, err = s.Exec([]driver.Value{int64(0)})
@@ -153,7 +156,7 @@ func TestQuery(t *testing.T) {
 	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	s, _ := c.Prepare("request1")
 	r, err := s.Query([]driver.Value{int64(0)})
@@ -196,7 +199,7 @@ func TestQuery(t *testing.T) {
 	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	s, _ = c.Prepare("request1")
 	r, err = s.Query([]driver.Value{int64(0)})
@@ -231,10 +234,10 @@ func TestQuery(t *testing.T) {
 }
 
 func TestTx(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "master", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	tx, err := c.Begin()
 	if err != nil {
@@ -258,7 +261,7 @@ func TestTx(t *testing.T) {
 
 	c, err = drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	tx, err = c.Begin()
 	if err != nil {
@@ -282,7 +285,7 @@ func TestTx(t *testing.T) {
 	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	_, err = c.Begin()
 	want = "transaction not allowed for streaming connection"
