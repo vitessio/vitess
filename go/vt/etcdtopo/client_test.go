@@ -16,7 +16,6 @@ import (
 type fakeNode struct {
 	node *etcd.Node
 
-	mu         sync.Mutex
 	watchIndex int
 	watches    map[int]chan *etcd.Response
 }
@@ -29,8 +28,6 @@ func newFakeNode(node *etcd.Node) *fakeNode {
 }
 
 func (fn *fakeNode) notify(action string) {
-	fn.mu.Lock()
-	defer fn.mu.Unlock()
 	for _, w := range fn.watches {
 		var node *etcd.Node
 		if fn.node != nil {
@@ -49,6 +46,7 @@ type fakeClient struct {
 	nodes map[string]*fakeNode
 	index uint64
 
+	// This mutex protects all the above fields, including subfields of each node.
 	sync.Mutex
 }
 
@@ -80,6 +78,7 @@ func (c *fakeClient) createParentDirs(key string) {
 
 func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	if prevValue != "" {
 		panic("not implemented")
@@ -87,17 +86,14 @@ func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex ui
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if n.node.ModifiedIndex != prevIndex {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
 	n.node = nil
-	c.Unlock()
 	n.notify("compareAndDelete")
 	return &etcd.Response{}, nil
 }
@@ -105,18 +101,16 @@ func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex ui
 func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if prevValue != "" && n.node.Value != prevValue {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 	if prevIndex != 0 && n.node.ModifiedIndex != prevIndex {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
@@ -125,17 +119,16 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	n.node.Value = value
 	c.nodes[key] = n
 	node := *n.node
-	c.Unlock()
 	n.notify("compareAndSwap")
 	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if ok && n.node != nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeNodeExist}
 	}
 
@@ -152,17 +145,16 @@ func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Respons
 		ModifiedIndex: c.index,
 	}
 	node := *n.node
-	c.Unlock()
 	n.notify("create")
 	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
@@ -177,7 +169,6 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 			}
 		}
 	}
-	c.Unlock()
 	for _, n = range notifyList {
 		n.notify("delete")
 	}
@@ -186,10 +177,10 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 
 func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
@@ -197,14 +188,12 @@ func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 		// If it's a dir, it must be empty.
 		for k := range c.nodes {
 			if strings.HasPrefix(k, key+"/") {
-				c.Unlock()
 				return nil, &etcd.EtcdError{ErrorCode: EcodeDirNotEmpty}
 			}
 		}
 	}
 
 	n.node = nil
-	c.Unlock()
 	n.notify("delete")
 
 	return &etcd.Response{}, nil
@@ -248,6 +237,7 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 
 func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	c.index++
 
@@ -264,7 +254,6 @@ func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, 
 		n.node = &etcd.Node{Key: key, Value: value, CreatedIndex: c.index, ModifiedIndex: c.index}
 	}
 	node := *n.node
-	c.Unlock()
 
 	n.notify("set")
 	return &etcd.Response{Node: &node}, nil
@@ -285,16 +274,16 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		panic("not implemented")
 	}
 
-	// We need a buffered forwarderfor 2 reasons:
-	// - in the select loop below, we only write to receiver if
-	// stop has not been closed. Otherwise we introduce race
-	// conditions.
-	// - we are waiting on forwarder and taking the node mutex.
-	// fakeNode.notify write to forwarder, and also takes the node
-	// mutex. Both can deadlock each-other. By buffering the
-	// channel, we make sure 10 notify() call can finish and not
-	// deadlock. We do a few of them in the serial locking code
-	// in tests.
+	// We need a buffered forwarder for 2 reasons:
+	// - In the select loop below, we only write to receiver if
+	//   stop has not been closed. Otherwise we introduce race
+	//   conditions.
+	// - We are waiting on forwarder and taking the mutex.
+	//   Callers of fakeNode.notify write to forwarder, and also take
+	//   the mutex. Both can deadlock each other. By buffering the
+	//   channel, we make sure 10 notify() call can finish and not
+	//   deadlock. We do a few of them in the serial locking code
+	//   in tests.
 	forwarder := make(chan *etcd.Response, 10)
 
 	// add the watch under the lock
@@ -305,22 +294,19 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		n = newFakeNode(nil)
 		c.nodes[prefix] = n
 	}
-	c.Unlock()
-
-	n.mu.Lock()
 	index := n.watchIndex
 	n.watchIndex++
 	n.watches[index] = forwarder
-	n.mu.Unlock()
+	c.Unlock()
 
 	// and wait until we stop, each action will write to forwarder, send
 	// these along.
 	for {
 		select {
 		case <-stop:
-			n.mu.Lock()
+			c.Lock()
 			delete(n.watches, index)
-			n.mu.Unlock()
+			c.Unlock()
 			return &etcd.Response{}, nil
 		case r := <-forwarder:
 			receiver <- r
