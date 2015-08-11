@@ -6,6 +6,7 @@ package testlib
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -306,22 +307,29 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 	}
 }
 
-var externalReparents = make(map[string]chan struct{})
+var (
+	externalReparents      = make(map[string]chan struct{})
+	externalReparentsMutex sync.Mutex
+)
 
 // makeWaitID generates a unique externalID that can be passed to
 // TabletExternallyReparented, and then to waitForExternalReparent.
 func makeWaitID() string {
+	externalReparentsMutex.Lock()
 	id := fmt.Sprintf("wait id %v", len(externalReparents))
 	externalReparents[id] = make(chan struct{})
+	externalReparentsMutex.Unlock()
 	return id
 }
 
 func init() {
 	event.AddListener(func(ev *events.Reparent) {
 		if ev.Status == "finished" {
+			externalReparentsMutex.Lock()
 			if c, ok := externalReparents[ev.ExternalID]; ok {
 				close(c)
 			}
+			externalReparentsMutex.Unlock()
 		}
 	})
 }
@@ -338,8 +346,12 @@ func waitForExternalReparent(t *testing.T, externalID string) {
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 
+	externalReparentsMutex.Lock()
+	c := externalReparents[externalID]
+	externalReparentsMutex.Unlock()
+
 	select {
-	case <-externalReparents[externalID]:
+	case <-c:
 		return
 	case <-timer.C:
 		t.Fatalf("deadline exceeded waiting for finalized external reparent %q", externalID)
