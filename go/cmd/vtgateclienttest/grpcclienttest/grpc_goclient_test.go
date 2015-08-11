@@ -13,9 +13,6 @@ import (
 	"github.com/youtube/vitess/go/cmd/vtgateclienttest/goclienttest"
 	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
-
-	// import the grpc client, it will register itself
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 // TestGRPCGoClient tests the go client using gRPC

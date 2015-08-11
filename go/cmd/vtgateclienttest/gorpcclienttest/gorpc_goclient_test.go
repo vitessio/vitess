@@ -14,9 +14,6 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
-
-	// import the gorpc client, it will register itself
-	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
 )
 
 // TestGoRPCGoClient tests the go client using goRPC
