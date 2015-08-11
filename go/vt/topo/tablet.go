@@ -347,8 +347,8 @@ func TabletEndPoint(tablet *pb.Tablet) (*pb.EndPoint, error) {
 }
 
 // TabletAddr returns hostname:vt port associated with a tablet
-func TabletAddr(tablet *Tablet) string {
-	return netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["vt"]))
+func TabletAddr(tablet *pb.Tablet) string {
+	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
 }
 
 // TabletDbName is usually implied by keyspace. Having the shard information in the
