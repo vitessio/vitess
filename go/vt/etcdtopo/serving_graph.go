@@ -286,7 +286,7 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 		}
 
 		for {
-			if _, err := cell.Client.Watch(filePath, uint64(modifiedVersion), false /* recursive */, watch, stop); err != nil {
+			if _, err := cell.Client.Watch(filePath, uint64(modifiedVersion+1), false /* recursive */, watch, stop); err != nil {
 				log.Errorf("Watch on %v failed, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
 				timer := time.After(WatchSleepDuration)
 				select {
