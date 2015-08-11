@@ -708,7 +708,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// now we can run the backup
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", tablet.Alias, time.Now().UTC().Format("2006-01-02.150405"))
+	name := fmt.Sprintf("%v.%v", topo.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
 	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, bucket, name, concurrency, agent.hookExtraEnv())
 
 	// and change our type back to the appropriate value:
