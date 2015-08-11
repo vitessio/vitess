@@ -199,7 +199,7 @@ func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace strin
 		return err
 	}
 
-	data := jscfg.ToJSON(srvKeyspace)
+	data := jscfg.ToJSON(topo.SrvKeyspaceToProto(srvKeyspace))
 
 	_, err = cell.Set(srvKeyspaceFilePath(keyspace), data, 0 /* ttl */)
 	return convertError(err)
@@ -231,11 +231,11 @@ func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) 
 		return nil, ErrBadResponse
 	}
 
-	value := topo.NewSrvKeyspace(int64(resp.Node.ModifiedIndex))
+	value := &pb.SrvKeyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving keyspace data (%v): %q", err, resp.Node.Value)
 	}
-	return value, nil
+	return topo.ProtoToSrvKeyspace(value), nil
 }
 
 // GetSrvKeyspaceNames implements topo.Server.

@@ -205,7 +205,7 @@ func (zkts *Server) DeleteSrvShard(ctx context.Context, cell, keyspace, shard st
 // UpdateSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
-	data := jscfg.ToJSON(srvKeyspace)
+	data := jscfg.ToJSON(topo.SrvKeyspaceToProto(srvKeyspace))
 	_, err := zkts.zconn.Set(path, data, -1)
 	if zookeeper.IsError(err, zookeeper.ZNONODE) {
 		_, err = zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -229,20 +229,20 @@ func (zkts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string
 // GetSrvKeyspace is part of the topo.Server interface
 func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
 	path := zkPathForVtKeyspace(cell, keyspace)
-	data, stat, err := zkts.zconn.Get(path)
+	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	srvKeyspace := topo.NewSrvKeyspace(int64(stat.Version()))
+	srvKeyspace := &pb.SrvKeyspace{}
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
 			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 		}
 	}
-	return srvKeyspace, nil
+	return topo.ProtoToSrvKeyspace(srvKeyspace), nil
 }
 
 // GetSrvKeyspaceNames is part of the topo.Server interface
