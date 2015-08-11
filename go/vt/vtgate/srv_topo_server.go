@@ -45,7 +45,7 @@ type SrvTopoServer interface {
 
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
 
-	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error)
+	GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error)
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
@@ -148,7 +148,7 @@ type endPointsEntry struct {
 	cell       string
 	keyspace   string
 	shard      string
-	tabletType topo.TabletType
+	tabletType pb.TabletType
 	remote     bool
 
 	// the mutex protects any access to this structure (read or write)
@@ -375,9 +375,9 @@ func (server *ResilientSrvTopoServer) GetSrvShard(ctx context.Context, cell, key
 }
 
 // GetEndPoints return all endpoints for the given cell, keyspace, shard, and tablet type.
-func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (result *pb.EndPoints, version int64, err error) {
+func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (result *pb.EndPoints, version int64, err error) {
 	shard = strings.ToLower(shard)
-	key := []string{cell, keyspace, shard, string(tabletType)}
+	key := []string{cell, keyspace, shard, strings.ToLower(tabletType.String())}
 
 	server.counts.Add(queryCategory, 1)
 	server.endPointCounters.queries.Add(key, 1)
@@ -440,7 +440,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(ctx context.Context, cell, ke
 
 	result, _, err = server.topoServer.GetEndPoints(newCtx, cell, keyspace, shard, tabletType)
 	// get remote endpoints for master if enabled
-	if err != nil && server.enableRemoteMaster && tabletType == topo.TYPE_MASTER {
+	if err != nil && server.enableRemoteMaster && tabletType == pb.TabletType_MASTER {
 		remote = true
 		server.counts.Add(remoteQueryCategory, 1)
 		server.endPointCounters.remoteLookups.Add(key, 1)
@@ -616,7 +616,7 @@ type EndPointsCacheStatus struct {
 	Cell          string
 	Keyspace      string
 	Shard         string
-	TabletType    topo.TabletType
+	TabletType    pb.TabletType
 	Value         *pb.EndPoints
 	OriginalValue *pb.EndPoints
 	LastError     error

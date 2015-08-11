@@ -22,7 +22,7 @@ import (
 // It can be constructed from a Tablet object, or from an EndPoint.
 type TabletNode struct {
 	Host  string
-	Alias topo.TabletAlias
+	Alias *pb.TabletAlias
 	Port  int32
 }
 
@@ -46,7 +46,7 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 	}
 	return &TabletNode{
 		Host:  ti.Hostname,
-		Port:  int32(ti.Portmap["vt"]),
+		Port:  ti.PortMap["vt"],
 		Alias: ti.Alias,
 	}
 }
@@ -54,21 +54,25 @@ func newTabletNodeFromTabletInfo(ti *topo.TabletInfo) *TabletNode {
 func newTabletNodeFromEndPoint(ep *pb.EndPoint, cell string) *TabletNode {
 	return &TabletNode{
 		Host: ep.Host,
-		Alias: topo.TabletAlias{
+		Alias: &pb.TabletAlias{
 			Uid:  ep.Uid,
-			Cell: cell},
+			Cell: cell,
+		},
 		Port: ep.PortMap[topo.DefaultPortName],
 	}
 }
 
 // TabletNodesByType maps tablet types to slices of tablet nodes.
-type TabletNodesByType map[topo.TabletType][]*TabletNode
+type TabletNodesByType struct {
+	TabletType pb.TabletType
+	Nodes      []*TabletNode
+}
 
 // ShardNodes represents all tablet nodes for a shard, indexed by tablet type.
 type ShardNodes struct {
 	Name        string
-	TabletNodes TabletNodesByType
-	ServedTypes []topo.TabletType
+	TabletNodes []*TabletNodesByType
+	ServedTypes []pb.TabletType
 	Tag         interface{} // Tag is an arbitrary value manageable by a plugin.
 }
 
@@ -141,8 +145,8 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
-func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
-	var contained []topo.TabletType
+func (ks KeyspaceNodes) TabletTypes() []pb.TabletType {
+	var contained []pb.TabletType
 	for _, t := range topo.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)
@@ -152,10 +156,12 @@ func (ks KeyspaceNodes) TabletTypes() []topo.TabletType {
 }
 
 // HasType returns true if ks has any tablets with the named type.
-func (ks KeyspaceNodes) HasType(tabletType topo.TabletType) bool {
+func (ks KeyspaceNodes) HasType(tabletType pb.TabletType) bool {
 	for _, shardNodes := range ks.ShardNodes {
-		if _, ok := shardNodes.TabletNodes[tabletType]; ok {
-			return true
+		for _, tabletNodes := range shardNodes.TabletNodes {
+			if tabletNodes.TabletType == tabletType {
+				return true
+			}
 		}
 	}
 	return false
@@ -190,22 +196,32 @@ func DbTopology(ctx context.Context, ts topo.Server) (*Topology, error) {
 		return nil, err
 	}
 
-	assigned := make(map[string]map[string]TabletNodesByType)
+	assigned := make(map[string]map[string][]*TabletNodesByType)
 	for _, ti := range tabletInfos {
 		tablet := newTabletNodeFromTabletInfo(ti)
 		switch ti.Type {
-		case topo.TYPE_IDLE:
+		case pb.TabletType_IDLE:
 			topology.Idle = append(topology.Idle, tablet)
-		case topo.TYPE_SCRAP:
+		case pb.TabletType_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
 			if _, ok := assigned[ti.Keyspace]; !ok {
-				assigned[ti.Keyspace] = make(map[string]TabletNodesByType)
+				assigned[ti.Keyspace] = make(map[string][]*TabletNodesByType)
 			}
-			if _, ok := assigned[ti.Keyspace][ti.Shard]; !ok {
-				assigned[ti.Keyspace][ti.Shard] = make(TabletNodesByType)
+			var tabletNode *TabletNodesByType
+			for _, tabletNodes := range assigned[ti.Keyspace][ti.Shard] {
+				if tabletNodes.TabletType == ti.Type {
+					tabletNode = tabletNodes
+					break
+				}
 			}
-			assigned[ti.Keyspace][ti.Shard][ti.Type] = append(assigned[ti.Keyspace][ti.Shard][ti.Type], tablet)
+			if tabletNode == nil {
+				tabletNode = &TabletNodesByType{
+					TabletType: ti.Type,
+				}
+				assigned[ti.Keyspace][ti.Shard] = append(assigned[ti.Keyspace][ti.Shard], tabletNode)
+			}
+			tabletNode.Nodes = append(tabletNode.Nodes, tablet)
 		}
 	}
 
@@ -278,8 +294,7 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 					displayedShards[shard] = true
 
 					sn := &ShardNodes{
-						Name:        shard,
-						TabletNodes: make(TabletNodesByType),
+						Name: shard,
 					}
 					kn.ShardNodes = append(kn.ShardNodes, sn)
 					wg.Add(1)
@@ -297,7 +312,20 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 								continue
 							}
 							for _, endPoint := range endPoints.Entries {
-								sn.TabletNodes[tabletType] = append(sn.TabletNodes[tabletType], newTabletNodeFromEndPoint(endPoint, cell))
+								var tabletNode *TabletNodesByType
+								for _, t := range sn.TabletNodes {
+									if t.TabletType == tabletType {
+										tabletNode = t
+										break
+									}
+								}
+								if tabletNode == nil {
+									tabletNode = &TabletNodesByType{
+										TabletType: tabletType,
+									}
+									sn.TabletNodes = append(sn.TabletNodes, tabletNode)
+								}
+								tabletNode.Nodes = append(tabletNode.Nodes, newTabletNodeFromEndPoint(endPoint, cell))
 							}
 						}
 					}(shard, sn)

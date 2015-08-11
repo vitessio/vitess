@@ -94,9 +94,10 @@ func TestVTGateExecuteShard(t *testing.T) {
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
 	q := proto.QueryShard{
-		Sql:      "query",
-		Keyspace: "TestVTGateExecuteShard",
-		Shards:   []string{"0"},
+		Sql:        "query",
+		Keyspace:   "TestVTGateExecuteShard",
+		Shards:     []string{"0"},
+		TabletType: topo.TYPE_REPLICA,
 	}
 	qr := new(proto.QueryResult)
 	err := rpcVTGate.ExecuteShard(context.Background(), &q, qr)
@@ -123,6 +124,7 @@ func TestVTGateExecuteShard(t *testing.T) {
 		ShardSessions: []*proto.ShardSession{{
 			Keyspace:      "TestVTGateExecuteShard",
 			Shard:         "0",
+			TabletType:    topo.TYPE_REPLICA,
 			TransactionId: 1,
 		}},
 	}
@@ -371,6 +373,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchShard",
 			Shards:        []string{"-20", "20-40"},
 		}},
+		TabletType: topo.TYPE_REPLICA,
 	}
 	qrl := new(proto.QueryResultList)
 	err := rpcVTGate.ExecuteBatchShard(context.Background(), &q, qrl)

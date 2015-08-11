@@ -219,8 +219,13 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			return ts.GetSrvTabletTypesPerShard(ctx, parts[0], parts[1], parts[2])
 		}
 
+		tabletType, err := topo.ParseTabletType(parts[3])
+		if err != nil {
+			return nil, fmt.Errorf("invalid tablet type %v: %v", parts[3], err)
+		}
+
 		// Get the endpoints object for a specific type.
-		ep, _, err := ts.GetEndPoints(ctx, parts[0], parts[1], parts[2], topo.TabletType(parts[3]))
+		ep, _, err := ts.GetEndPoints(ctx, parts[0], parts[1], parts[2], tabletType)
 		return ep, err
 	})
 

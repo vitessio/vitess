@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestInitTablet will test the InitTablet code creates / updates the
@@ -24,14 +26,14 @@ import (
 func TestInitTablet(t *testing.T) {
 	ctx := context.Background()
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
-	tabletAlias := topo.TabletAlias{
+	tabletAlias := &pb.TabletAlias{
 		Cell: "cell1",
 		Uid:  1,
 	}
 
 	// start with idle, and a tablet record that doesn't exist
-	port := 1234
-	gRPCPort := 3456
+	port := int32(1234)
+	gRPCPort := int32(3456)
 	mysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
 	agent := &ActionAgent{
 		TopoServer:         ts,
@@ -55,17 +57,17 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_IDLE {
+	if ti.Type != pb.TabletType_IDLE {
 		t.Errorf("wrong type for tablet: %v", ti.Type)
 	}
 	if ti.Hostname != "localhost" {
 		t.Errorf("wrong hostname for tablet: %v", ti.Hostname)
 	}
-	if ti.Portmap["vt"] != port {
-		t.Errorf("wrong port for tablet: %v", ti.Portmap["vt"])
+	if ti.PortMap["vt"] != port {
+		t.Errorf("wrong port for tablet: %v", ti.PortMap["vt"])
 	}
-	if ti.Portmap["grpc"] != gRPCPort {
-		t.Errorf("wrong gRPC port for tablet: %v", ti.Portmap["grpc"])
+	if ti.PortMap["grpc"] != gRPCPort {
+		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
 
 	// try again now that the node exists
@@ -77,11 +79,11 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Portmap["vt"] != port {
-		t.Errorf("wrong port for tablet: %v", ti.Portmap["vt"])
+	if ti.PortMap["vt"] != port {
+		t.Errorf("wrong port for tablet: %v", ti.PortMap["vt"])
 	}
-	if ti.Portmap["grpc"] != gRPCPort {
-		t.Errorf("wrong gRPC port for tablet: %v", ti.Portmap["grpc"])
+	if ti.PortMap["grpc"] != gRPCPort {
+		t.Errorf("wrong gRPC port for tablet: %v", ti.PortMap["grpc"])
 	}
 
 	// try with a keyspace and shard on the previously idle tablet,
@@ -95,7 +97,7 @@ func TestInitTablet(t *testing.T) {
 
 	// now let's use a different real tablet in a shard, that will create
 	// the keyspace and shard.
-	tabletAlias = topo.TabletAlias{
+	tabletAlias = &pb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
 	}
@@ -114,7 +116,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_REPLICA {
+	if ti.Type != pb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -128,7 +130,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_SPARE {
+	if ti.Type != pb.TabletType_SPARE {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -137,7 +139,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = topo.TabletAliasToProto(tabletAlias)
+	si.MasterAlias = tabletAlias
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
@@ -148,7 +150,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_MASTER {
+	if ti.Type != pb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 
@@ -165,7 +167,7 @@ func TestInitTablet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_MASTER {
+	if ti.Type != pb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
 	if ti.DbNameOverride != "DBNAME" {

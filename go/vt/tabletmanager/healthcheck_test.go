@@ -97,7 +97,7 @@ const (
 	uid      uint32 = 42
 )
 
-var tabletAlias = topo.TabletAlias{Cell: cell, Uid: uid}
+var tabletAlias = &pb.TabletAlias{Cell: cell, Uid: uid}
 
 // fakeHealthCheck implements health.Reporter interface
 type fakeHealthCheck struct {
@@ -124,17 +124,17 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 
-	port := 1234
-	tablet := &topo.Tablet{
+	port := int32(1234)
+	tablet := &pb.Tablet{
 		Alias:    tabletAlias,
 		Hostname: "host",
-		Portmap: map[string]int{
+		PortMap: map[string]int32{
 			"vt": port,
 		},
-		IPAddr:   "1.0.0.1",
+		Ip:       "1.0.0.1",
 		Keyspace: keyspace,
 		Shard:    shard,
-		Type:     topo.TYPE_SPARE,
+		Type:     pb.TabletType_SPARE,
 	}
 	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
@@ -153,7 +153,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 func TestHealthCheckControlsQueryService(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t)
-	targetTabletType := topo.TYPE_REPLICA
+	targetTabletType := pb.TabletType_REPLICA
 
 	// first health check, should change us to replica, and update the
 	// mysql port to 3306
@@ -166,8 +166,8 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if ti.Type != targetTabletType {
 		t.Errorf("First health check failed to go to replica: %v", ti.Type)
 	}
-	if ti.Portmap["mysql"] != 3306 {
-		t.Errorf("First health check failed to update mysql port: %v", ti.Portmap["mysql"])
+	if ti.PortMap["mysql"] != 3306 {
+		t.Errorf("First health check failed to update mysql port: %v", ti.PortMap["mysql"])
 	}
 	if !agent.QueryServiceControl.IsServing() {
 		t.Errorf("Query service should be running")
@@ -184,7 +184,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_SPARE {
+	if ti.Type != pb.TabletType_SPARE {
 		t.Errorf("Unhappy health check failed to go to spare: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {
@@ -200,7 +200,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 func TestQueryServiceNotStarting(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t)
-	targetTabletType := topo.TYPE_REPLICA
+	targetTabletType := pb.TabletType_REPLICA
 	agent.QueryServiceControl.(*tabletserver.TestQueryServiceControl).AllowQueriesError = fmt.Errorf("test cannot start query service")
 
 	before := time.Now()
@@ -209,7 +209,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_SPARE {
+	if ti.Type != pb.TabletType_SPARE {
 		t.Errorf("Happy health check which cannot start query service should stay spare: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {
@@ -225,7 +225,7 @@ func TestQueryServiceNotStarting(t *testing.T) {
 func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t)
-	targetTabletType := topo.TYPE_REPLICA
+	targetTabletType := pb.TabletType_REPLICA
 
 	// first health check, should change us to replica
 	before := time.Now()
@@ -255,7 +255,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_SPARE {
+	if ti.Type != pb.TabletType_SPARE {
 		t.Errorf("Happy health check which cannot start query service should stay spare: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {
@@ -271,7 +271,7 @@ func TestQueryServiceStopped(t *testing.T) {
 func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t)
-	targetTabletType := topo.TYPE_REPLICA
+	targetTabletType := pb.TabletType_REPLICA
 
 	// first health check, should change us to replica
 	before := time.Now()
@@ -297,7 +297,7 @@ func TestTabletControl(t *testing.T) {
 	}
 	si.TabletControls = []*pb.Shard_TabletControl{
 		&pb.Shard_TabletControl{
-			TabletType:          topo.TabletTypeToProto(targetTabletType),
+			TabletType:          targetTabletType,
 			DisableQueryService: true,
 		},
 	}
@@ -341,7 +341,7 @@ func TestTabletControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if ti.Type != topo.TYPE_SPARE {
+	if ti.Type != pb.TabletType_SPARE {
 		t.Errorf("Unhealthy health check should go to spare: %v", ti.Type)
 	}
 	if agent.QueryServiceControl.IsServing() {

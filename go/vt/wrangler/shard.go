@@ -168,7 +168,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			// We don't care about scrapping or updating the replication graph,
 			// because we're about to delete the entire replication graph.
 			wr.Logger().Infof("Deleting tablet %v", tabletAlias)
-			if err := wr.TopoServer().DeleteTablet(ctx, tabletAlias); err != nil && err != topo.ErrNoNode {
+			if err := wr.TopoServer().DeleteTablet(ctx, &tabletAlias); err != nil && err != topo.ErrNoNode {
 				// Unlike the errors below in non-recursive steps, we don't want to
 				// continue if a DeleteTablet fails. If we continue and delete the
 				// replication graph, the tablet record will be orphaned, since we'll
@@ -253,7 +253,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
 				wr.Logger().Infof("Deleting tablet %v", node.TabletAlias)
-				if err := wr.TopoServer().DeleteTablet(ctx, topo.ProtoToTabletAlias(node.TabletAlias)); err != nil && err != topo.ErrNoNode {
+				if err := wr.TopoServer().DeleteTablet(ctx, node.TabletAlias); err != nil && err != topo.ErrNoNode {
 					return fmt.Errorf("can't delete tablet %v: %v", node.TabletAlias, err)
 				}
 			}

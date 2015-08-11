@@ -339,7 +339,7 @@ type CellShardTablets struct {
 	ShardName string
 
 	// TabletAliases is the array os tablet aliases
-	TabletAliases []topo.TabletAlias
+	TabletAliases []*pb.TabletAlias
 }
 
 // Reset is part of the VersionedObject interface
@@ -365,10 +365,10 @@ func newCellShardTabletsCache(ts topo.Server) *VersionedObjectCacheMap {
 				Cell:          parts[0],
 				KeyspaceName:  parts[1],
 				ShardName:     parts[2],
-				TabletAliases: make([]topo.TabletAlias, len(sr.Nodes)),
+				TabletAliases: make([]*pb.TabletAlias, len(sr.Nodes)),
 			}
 			for i, node := range sr.Nodes {
-				result.TabletAliases[i] = topo.ProtoToTabletAlias(node.TabletAlias)
+				result.TabletAliases[i] = node.TabletAlias
 			}
 			return result, nil
 		})

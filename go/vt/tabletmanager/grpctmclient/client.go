@@ -24,6 +24,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
+	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type timeoutError struct {
@@ -53,7 +54,7 @@ func (client *Client) dial(ctx context.Context, tablet *topo.TabletInfo) (*grpc.
 
 	var cc *grpc.ClientConn
 	var err error
-	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.Portmap["grpc"]))
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
 	if connectTimeout == 0 {
 		cc, err = grpc.Dial(addr, grpc.WithBlock())
 	} else {
@@ -182,14 +183,14 @@ func (client *Client) SetReadWrite(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface
-func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error {
+func (client *Client) ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pbt.TabletType) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.ChangeType(ctx, &pb.ChangeTypeRequest{
-		TabletType: topo.TabletTypeToProto(dbType),
+		TabletType: dbType,
 	})
 	return err
 }
@@ -217,14 +218,14 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topo.TabletInfo)
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface
-func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error {
+func (client *Client) RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pbt.TabletType) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.RunHealthCheck(ctx, &pb.RunHealthCheckRequest{
-		TabletType: topo.TabletTypeToProto(targetTabletType),
+		TabletType: targetTabletType,
 	})
 	return err
 }
@@ -521,7 +522,7 @@ func (client *Client) InitMaster(ctx context.Context, tablet *topo.TabletInfo) (
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient interface
-func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error {
+func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *pbt.TabletAlias, pos myproto.ReplicationPosition) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
@@ -530,21 +531,21 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topo.
 	_, err = c.PopulateReparentJournal(ctx, &pb.PopulateReparentJournalRequest{
 		TimeCreatedNs:       timeCreatedNS,
 		ActionName:          actionName,
-		MasterAlias:         topo.TabletAliasToProto(masterAlias),
+		MasterAlias:         masterAlias,
 		ReplicationPosition: myproto.EncodeReplicationPosition(pos),
 	})
 	return err
 }
 
 // InitSlave is part of the tmclient.TabletManagerClient interface
-func (client *Client) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
+func (client *Client) InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *pbt.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.InitSlave(ctx, &pb.InitSlaveRequest{
-		Parent:              topo.TabletAliasToProto(parent),
+		Parent:              parent,
 		ReplicationPosition: myproto.EncodeReplicationPosition(replicationPosition),
 		TimeCreatedNs:       timeCreatedNS,
 	})
@@ -601,14 +602,14 @@ func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topo.TabletI
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface
-func (client *Client) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (client *Client) SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *pbt.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
 	cc, c, err := client.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer cc.Close()
 	_, err = c.SetMaster(ctx, &pb.SetMasterRequest{
-		Parent:          topo.TabletAliasToProto(parent),
+		Parent:          parent,
 		TimeCreatedNs:   timeCreatedNS,
 		ForceStartSlave: forceStartSlave,
 	})
@@ -623,7 +624,7 @@ func (client *Client) SlaveWasRestarted(ctx context.Context, tablet *topo.Tablet
 	}
 	defer cc.Close()
 	_, err = c.SlaveWasRestarted(ctx, &pb.SlaveWasRestartedRequest{
-		Parent: topo.TabletAliasToProto(args.Parent),
+		Parent: args.Parent,
 	})
 	return err
 }

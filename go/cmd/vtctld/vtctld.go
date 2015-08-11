@@ -19,6 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -118,7 +120,7 @@ func main() {
 
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -127,7 +129,7 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -136,38 +138,38 @@ func main() {
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTablet", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
-			if ti.Type != topo.TYPE_SPARE {
+			if ti.Type != pb.TabletType_SPARE {
 				return "", fmt.Errorf("Can only scrap spare tablets")
 			}
 			return "", wr.Scrap(ctx, tabletAlias, false, false)
 		})
 
 	actionRepo.RegisterTabletAction("ScrapTabletForce", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			// refuse to scrap tablets that are not spare
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
 			}
-			if ti.Type != topo.TYPE_SPARE {
+			if ti.Type != pb.TabletType_SPARE {
 				return "", fmt.Errorf("Can only scrap spare tablets")
 			}
 			return "", wr.Scrap(ctx, tabletAlias, true, false)
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.DeleteTablet(ctx, tabletAlias)
 		})
 
 	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 

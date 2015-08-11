@@ -4,11 +4,7 @@
 
 package actionnode
 
-import (
-	"github.com/youtube/vitess/go/vt/topo"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-)
+import pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 /*
 This file defines all the payload structures for the ActionNode objects.
@@ -25,14 +21,14 @@ Note it's OK to rename the structures as the type name is not saved in json.
 
 // SlaveWasRestartedArgs is the paylod for SlaveWasRestarted
 type SlaveWasRestartedArgs struct {
-	Parent topo.TabletAlias
+	Parent *pb.TabletAlias
 }
 
 // shard action node structures
 
 // ApplySchemaShardArgs is the payload for ApplySchemaShard
 type ApplySchemaShardArgs struct {
-	MasterTabletAlias topo.TabletAlias
+	MasterTabletAlias *pb.TabletAlias
 	Change            string
 	Simple            bool
 }
@@ -66,11 +62,11 @@ type MigrateServedFromArgs struct {
 // ReparentShardArgs is the payload for ReparentShard
 type ReparentShardArgs struct {
 	Operation        string
-	MasterElectAlias topo.TabletAlias
+	MasterElectAlias *pb.TabletAlias
 }
 
 // ReparentShard returns an ActionNode
-func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionNode {
+func ReparentShard(operation string, masterElectAlias *pb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionReparent,
 		Args: &ReparentShardArgs{
@@ -81,7 +77,7 @@ func ReparentShard(operation string, masterElectAlias topo.TabletAlias) *ActionN
 }
 
 // ShardExternallyReparented returns an ActionNode
-func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
+func ShardExternallyReparented(tabletAlias *pb.TabletAlias) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionExternallyReparented,
 		Args:   &tabletAlias,
@@ -103,7 +99,7 @@ func CheckShard() *ActionNode {
 }
 
 // ApplySchemaShard returns an ActionNode
-func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
+func ApplySchemaShard(masterTabletAlias *pb.TabletAlias, change string, simple bool) *ActionNode {
 	return (&ActionNode{
 		Action: ShardActionApplySchema,
 		Args: &ApplySchemaShardArgs{

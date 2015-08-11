@@ -70,7 +70,7 @@ type BinlogPlayerController struct {
 	stopPosition myproto.ReplicationPosition
 
 	// information about the individual tablet we're replicating from.
-	sourceTablet topo.TabletAlias
+	sourceTablet *pb.TabletAlias
 
 	// last error we've seen by the player.
 	lastError error
@@ -132,7 +132,7 @@ func (bpc *BinlogPlayerController) reset() {
 	bpc.ctx = nil
 	bpc.cancel = nil
 	bpc.done = nil
-	bpc.sourceTablet = topo.TabletAlias{}
+	bpc.sourceTablet = nil
 	bpc.lastError = nil
 }
 
@@ -193,7 +193,7 @@ func (bpc *BinlogPlayerController) Loop() {
 
 		// clear the source, remember the error
 		bpc.playerMutex.Lock()
-		bpc.sourceTablet = topo.TabletAlias{}
+		bpc.sourceTablet = nil
 		bpc.lastError = err
 		bpc.playerMutex.Unlock()
 
@@ -241,7 +241,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Find the server list for the source shard in our cell
-	addrs, _, err := bpc.ts.GetEndPoints(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
+	addrs, _, err := bpc.ts.GetEndPoints(bpc.ctx, bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, pb.TabletType_REPLICA)
 	if err != nil {
 		// If this calls fails because the context was canceled,
 		// we need to return nil.
@@ -262,7 +262,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 	// save our current server
 	bpc.playerMutex.Lock()
-	bpc.sourceTablet = topo.TabletAlias{
+	bpc.sourceTablet = &pb.TabletAlias{
 		Cell: bpc.cell,
 		Uid:  addrs.Entries[newServerIndex].Uid,
 	}
@@ -420,7 +420,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs.
-func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
+func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, keyspaceInfo *topo.KeyspaceInfo, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 	if shardInfo == nil {
 		log.Warningf("Could not read shardInfo, not changing anything")
@@ -447,7 +447,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *topo.Tablet,
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, key.KeyRangeToProto(tablet.KeyRange), sourceShard, topo.TabletDbName(tablet))
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topo.TabletDbName(tablet))
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
@@ -581,13 +581,21 @@ type BinlogPlayerControllerStatus struct {
 	Counts              map[string]int64
 	Rates               map[string][]float64
 	State               string
-	SourceTablet        topo.TabletAlias
+	SourceTablet        *pb.TabletAlias
 	LastError           string
 }
 
 // SourceShardAsHTML returns the SourceShard as HTML
 func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
 	return topo.SourceShardAsHTML(bpcs.SourceShard)
+}
+
+// SourceTabletAlias returns the string version of the SourceTablet alias, if set
+func (bpcs *BinlogPlayerControllerStatus) SourceTabletAlias() string {
+	if bpcs.SourceTablet != nil {
+		return topo.TabletAliasString(bpcs.SourceTablet)
+	}
+	return ""
 }
 
 // BinlogPlayerControllerStatusList is the list of statuses.

@@ -38,7 +38,7 @@ var (
 <table width="100%" border="" frame="">
   <tr border="">
     <td width="25%" border="">
-      Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.Alias.String}}<br>
+      Alias: {{github_com_youtube_vitess_vtctld_tablet .Tablet.AliasString}}<br>
       Keyspace: {{github_com_youtube_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_youtube_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}}<br>
       Serving graph: {{github_com_youtube_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}} {{github_com_youtube_vitess_vtctld_srv_shard .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}} {{github_com_youtube_vitess_vtctld_srv_type .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard .Tablet.Type}}<br>
       Replication graph: {{github_com_youtube_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
@@ -122,10 +122,10 @@ Binlog player state: {{.State}}</br>
       <td>{{.SourceShardAsHTML}}</td>
       <td>{{.State}}
         {{if eq .State "Running"}}
-          {{if .SourceTablet.IsZero}}
-            (picking source tablet)
+          {{if .SourceTabletAlias}}
+            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTabletAlias}})
           {{else}}
-            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTablet.String}})
+            (picking source tablet)
           {{end}}
         {{end}}</td>
       <td>{{if .StopPosition}}{{.StopPosition}}{{end}}</td>

@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestShardReplicationStatuses(t *testing.T) {
@@ -27,15 +29,15 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
-	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
+	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER)
+	slave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = topo.TabletAliasToProto(master.Tablet.Alias)
+	si.MasterAlias = master.Tablet.Alias
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
@@ -60,7 +62,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 		},
 	}
 	slave.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.Hostname
-	slave.FakeMysqlDaemon.CurrentMasterPort = master.Tablet.Portmap["mysql"]
+	slave.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.PortMap["mysql"])
 	slave.StartActionLoop(t, wr)
 	defer slave.StopActionLoop(t)
 
@@ -74,12 +76,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if len(ti) != 2 || len(rs) != 2 {
 		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	}
-	if ti[0].Alias == slave.Tablet.Alias {
+	if topo.TabletAliasEqual(ti[0].Alias, slave.Tablet.Alias) {
 		ti[0], ti[1] = ti[1], ti[0]
 		rs[0], rs[1] = rs[1], rs[0]
 	}
-	if ti[0].Alias != master.Tablet.Alias ||
-		ti[1].Alias != slave.Tablet.Alias ||
+	if !topo.TabletAliasEqual(ti[0].Alias, master.Tablet.Alias) ||
+		!topo.TabletAliasEqual(ti[1].Alias, slave.Tablet.Alias) ||
 		rs[0].MasterHost != "" ||
 		rs[1].MasterHost != master.Tablet.Hostname {
 		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
@@ -95,15 +97,15 @@ func TestReparentTablet(t *testing.T) {
 	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER)
-	slave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
+	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER)
+	slave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = topo.TabletAliasToProto(master.Tablet.Alias)
+	si.MasterAlias = master.Tablet.Alias
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
@@ -113,7 +115,7 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// slave loop
-	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.Portmap["mysql"])
+	slave.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", master.Tablet.Hostname, master.Tablet.PortMap["mysql"])
 	slave.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	slave.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"set master cmd 1",

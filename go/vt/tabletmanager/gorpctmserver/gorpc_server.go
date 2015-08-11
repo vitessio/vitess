@@ -19,8 +19,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletManager is the Go RPC implementation of the RPC service
@@ -105,7 +106,7 @@ func (tm *TabletManager) SetReadWrite(ctx context.Context, args *rpc.Unused, rep
 }
 
 // ChangeType wraps RPCAgent.ChangeType
-func (tm *TabletManager) ChangeType(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
+func (tm *TabletManager) ChangeType(ctx context.Context, args *pb.TabletType, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrapLockAction(ctx, actionnode.TabletActionChangeType, args, reply, true, func() error {
 		return tm.agent.ChangeType(ctx, *args)
@@ -130,7 +131,7 @@ func (tm *TabletManager) RefreshState(ctx context.Context, args *rpc.Unused, rep
 }
 
 // RunHealthCheck wraps RPCAgent.RunHealthCheck
-func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *topo.TabletType, reply *rpc.Unused) error {
+func (tm *TabletManager) RunHealthCheck(ctx context.Context, args *pb.TabletType, reply *rpc.Unused) error {
 	ctx = callinfo.RPCWrapCallInfo(ctx)
 	return tm.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, args, reply, func() error {
 		tm.agent.RunHealthCheck(ctx, *args)

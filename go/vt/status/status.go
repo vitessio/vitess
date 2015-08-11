@@ -15,6 +15,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -98,16 +100,17 @@ func VtctldSrvShard(cell, keyspace, shard string) template.HTML {
 
 // VtctldSrvType returns the tablet type, possibly linked to the
 // EndPoints page in vtctld.
-func VtctldSrvType(cell, keyspace, shard string, tabletType topo.TabletType) template.HTML {
+func VtctldSrvType(cell, keyspace, shard string, tabletType pb.TabletType) template.HTML {
+	strTabletType := strings.ToLower(tabletType.String())
 	if !topo.IsInServingGraph(tabletType) {
-		return template.HTML(tabletType)
+		return template.HTML(strTabletType)
 	}
-	return MakeVtctldRedirect(string(tabletType), map[string]string{
+	return MakeVtctldRedirect(strTabletType, map[string]string{
 		"type":        "srv_type",
 		"cell":        cell,
 		"keyspace":    keyspace,
 		"shard":       shard,
-		"tablet_type": string(tabletType),
+		"tablet_type": strTabletType,
 	})
 }
 

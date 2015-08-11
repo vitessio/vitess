@@ -501,7 +501,7 @@ func InCellList(cell string, cells []string) bool {
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]TabletAlias, error) {
+func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]*pb.TabletAlias, error) {
 	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
@@ -512,7 +512,7 @@ func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]TabletAlias, error) {
+func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]*pb.TabletAlias, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.FindAllTabletAliasesInShardbyCell")
 	span.Annotate("keyspace", keyspace)
@@ -527,10 +527,10 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 		return nil, err
 	}
 
-	resultAsMap := make(map[TabletAlias]bool)
+	resultAsMap := make(map[pb.TabletAlias]bool)
 	if si.MasterAlias != nil && !TabletAliasIsZero(si.MasterAlias) {
 		if InCellList(si.MasterAlias.Cell, cells) {
-			resultAsMap[ProtoToTabletAlias(si.MasterAlias)] = true
+			resultAsMap[*si.MasterAlias] = true
 		}
 	}
 
@@ -553,7 +553,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 
 			mutex.Lock()
 			for _, node := range sri.Nodes {
-				resultAsMap[ProtoToTabletAlias(node.TabletAlias)] = true
+				resultAsMap[*node.TabletAlias] = true
 			}
 			mutex.Unlock()
 		}(cell)
@@ -565,9 +565,10 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 		err = ErrPartialResult
 	}
 
-	result := make([]TabletAlias, 0, len(resultAsMap))
+	result := make([]*pb.TabletAlias, 0, len(resultAsMap))
 	for a := range resultAsMap {
-		result = append(result, a)
+		v := a
+		result = append(result, &v)
 	}
 	sort.Sort(TabletAliasList(result))
 	return result, err
@@ -576,14 +577,14 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 // GetTabletMapForShard returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShard(ctx context.Context, ts Server, keyspace, shard string) (map[TabletAlias]*TabletInfo, error) {
+func GetTabletMapForShard(ctx context.Context, ts Server, keyspace, shard string) (map[pb.TabletAlias]*TabletInfo, error) {
 	return GetTabletMapForShardByCell(ctx, ts, keyspace, shard, nil)
 }
 
 // GetTabletMapForShardByCell returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) (map[TabletAlias]*TabletInfo, error) {
+func GetTabletMapForShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) (map[pb.TabletAlias]*TabletInfo, error) {
 	// if we get a partial result, we keep going. It most likely means
 	// a cell is out of commission.
 	aliases, err := FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, cells)

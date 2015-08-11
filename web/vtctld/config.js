@@ -5,7 +5,7 @@ vtconfig = {
     return [
       {
         title: 'Status',
-        href: 'http://'+tablet.Hostname+':'+tablet.Portmap.vt+'/debug/status'
+        href: 'http://'+tablet.hostname+':'+tablet.port_map.vt+'/debug/status'
       }
     ];
   }

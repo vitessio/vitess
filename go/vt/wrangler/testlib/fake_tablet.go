@@ -18,7 +18,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/grpctmserver"
@@ -26,6 +25,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
@@ -44,7 +45,7 @@ import (
 // - a 'done' channel (used to terminate the fake event loop)
 type FakeTablet struct {
 	// Tablet and FakeMysqlDaemon are populated at NewFakeTablet time.
-	Tablet          *topo.Tablet
+	Tablet          *pb.Tablet
 	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 
 	// The following fields are created when we start the event loop for
@@ -64,35 +65,35 @@ type FakeTablet struct {
 // TabletOption is an interface for changing tablet parameters.
 // It's a way to pass multiple parameters to NewFakeTablet without
 // making it too cumbersome.
-type TabletOption func(tablet *topo.Tablet)
+type TabletOption func(tablet *pb.Tablet)
 
 // TabletKeyspaceShard is the option to set the tablet keyspace and shard
 func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
-	return func(tablet *topo.Tablet) {
+	return func(tablet *pb.Tablet) {
 		tablet.Keyspace = keyspace
-		shard, ks, err := topo.ValidateShardName(shard)
+		shard, kr, err := topo.ValidateShardName(shard)
 		if err != nil {
 			t.Fatalf("cannot ValidateShardName value %v", shard)
 		}
 		tablet.Shard = shard
-		tablet.KeyRange = key.ProtoToKeyRange(ks)
+		tablet.KeyRange = kr
 	}
 }
 
 // ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
 func ForceInitTablet() TabletOption {
-	return func(tablet *topo.Tablet) {
+	return func(tablet *pb.Tablet) {
 		// set the force_init field into the portmap as a hack
-		tablet.Portmap["force_init"] = 1
+		tablet.PortMap["force_init"] = 1
 	}
 }
 
 // StartHTTPServer is the tablet option to start the HTTP server when
 // starting a tablet.
 func StartHTTPServer() TabletOption {
-	return func(tablet *topo.Tablet) {
+	return func(tablet *pb.Tablet) {
 		// set the start_http_server field into the portmap as a hack
-		tablet.Portmap["start_http_server"] = 1
+		tablet.PortMap["start_http_server"] = 1
 	}
 }
 
@@ -100,19 +101,19 @@ func StartHTTPServer() TabletOption {
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
-func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topo.TabletType, options ...TabletOption) *FakeTablet {
+func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType pb.TabletType, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: uid},
+	tablet := &pb.Tablet{
+		Alias:    &pb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
-		Portmap: map[string]int{
-			"vt":    8100 + int(uid),
-			"mysql": 3300 + int(uid),
-			"grpc":  8200 + int(uid),
+		PortMap: map[string]int32{
+			"vt":    int32(8100 + uid),
+			"mysql": int32(3300 + uid),
+			"grpc":  int32(8200 + uid),
 		},
-		IPAddr:   fmt.Sprintf("%v.0.0.1", 100+uid),
+		Ip:       fmt.Sprintf("%v.0.0.1", 100+uid),
 		Keyspace: "test_keyspace",
 		Shard:    "0",
 		Type:     tabletType,
@@ -120,10 +121,10 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	for _, option := range options {
 		option(tablet)
 	}
-	_, startHTTPServer := tablet.Portmap["start_http_server"]
-	delete(tablet.Portmap, "start_http_server")
-	_, force := tablet.Portmap["force_init"]
-	delete(tablet.Portmap, "force_init")
+	_, startHTTPServer := tablet.PortMap["start_http_server"]
+	delete(tablet.PortMap, "start_http_server")
+	_, force := tablet.PortMap["force_init"]
+	delete(tablet.PortMap, "force_init")
 	if err := wr.InitTablet(context.Background(), tablet, force, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
@@ -152,10 +153,10 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
-	gRPCPort := ft.Listener.Addr().(*net.TCPAddr).Port
+	gRPCPort := int32(ft.Listener.Addr().(*net.TCPAddr).Port)
 
 	// if needed, listen on a random port for HTTP
-	vtPort := ft.Tablet.Portmap["vt"]
+	vtPort := ft.Tablet.PortMap["vt"]
 	if ft.StartHTTPServer {
 		ft.HTTPListener, err = net.Listen("tcp", ":0")
 		if err != nil {
@@ -166,7 +167,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 			Handler: handler,
 		}
 		go ft.HTTPServer.Serve(ft.HTTPListener)
-		vtPort = ft.HTTPListener.Addr().(*net.TCPAddr).Port
+		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
 
 	// create a test agent on that port, and re-read the record

@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestEmergencyReparentShard(t *testing.T) {
@@ -26,10 +28,10 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, pb.TabletType_REPLICA)
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
@@ -72,7 +74,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 455,
 		},
 	}
-	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
+	goodSlave1.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.PortMap["mysql"])
 	goodSlave1.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -92,7 +94,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			Sequence: 454,
 		},
 	}
-	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.Portmap["mysql"])
+	goodSlave2.FakeMysqlDaemon.SetMasterCommandsInput = fmt.Sprintf("%v:%v", newMaster.Tablet.Hostname, newMaster.Tablet.PortMap["mysql"])
 	goodSlave2.FakeMysqlDaemon.SetMasterCommandsResult = []string{"set master cmd 1"}
 	goodSlave2.StartActionLoop(t, wr)
 	goodSlave2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -101,7 +103,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	if err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, newMaster.Tablet.Alias.String()}); err != nil {
+	if err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, topo.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
 		t.Fatalf("EmergencyReparentShard failed: %v", err)
 	}
 
@@ -144,9 +146,9 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
-	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	moreAdvancedSlave := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
 
 	// new master
 	newMaster.FakeMysqlDaemon.Replicating = true

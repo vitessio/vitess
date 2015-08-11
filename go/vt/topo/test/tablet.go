@@ -11,9 +11,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func tabletEqual(left, right *topo.Tablet) (bool, error) {
+func tabletEqual(left, right *pb.Tablet) (bool, error) {
 	lj, err := json.Marshal(left)
 	if err != nil {
 		return false, err
@@ -28,19 +30,19 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 // CheckTablet verifies the topo server API is correct for managing tablets.
 func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(ctx, t, ts)
-	tablet := &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+	tablet := &pb.Tablet{
+		Alias:    &pb.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
-		IPAddr:   "10.11.12.13",
-		Portmap: map[string]int{
+		Ip:       "10.11.12.13",
+		PortMap: map[string]int32{
 			"vt":    3333,
 			"mysql": 3334,
 		},
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		KeyRange: newKeyRange("-10"),
+		Type:     pb.TabletType_MASTER,
+		KeyRange: newKeyRange3("-10"),
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -49,7 +51,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(ctx, topo.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(ctx, &pb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
@@ -71,7 +73,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || inCell[0] != tablet.Alias {
+	if len(inCell) != 1 || *inCell[0] != *tablet.Alias {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
@@ -88,7 +90,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
-	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *topo.Tablet) error {
+	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *pb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {

@@ -392,11 +392,12 @@ class TestTabletManager(unittest.TestCase):
         tablet.get_healthz()
 
   def wait_for_tablet_type_change(self, tablet_alias, expected_type):
+    t = tablet.Tablet.tablet_type_value[expected_type.upper()]
     timeout = 10
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
-      if ti['Type'] == expected_type:
-        logging.debug("Slave tablet went to %s, good" % expected_type)
+      if ti['type'] == t:
+        logging.debug('Slave tablet went to %s, good' % expected_type)
         break
       timeout = utils.wait_step('slave becomes ' + expected_type, timeout)
 
@@ -429,8 +430,8 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the master is still master
     ti = utils.run_vtctl_json(['GetTablet', tablet_62344.tablet_alias])
-    self.assertEqual(ti['Type'], 'master',
-                     "unexpected master type: %s" % ti['Type'])
+    self.assertEqual(ti['type'], tablet.Tablet.tablet_type_value['MASTER'],
+                     "unexpected master type: %s" % ti['type'])
 
     # stop replication, make sure we go unhealthy.
     utils.run_vtctl(['StopSlave', tablet_62044.tablet_alias])
@@ -491,39 +492,40 @@ class TestTabletManager(unittest.TestCase):
     # the replica was in lameduck for 5 seconds, should have been enough
     # to reset its state to spare
     ti = utils.run_vtctl_json(['GetTablet', tablet_62044.tablet_alias])
-    self.assertEqual(ti['Type'], 'spare', "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
-  
+    self.assertEqual(ti['type'], tablet.Tablet.tablet_type_value['SPARE'],
+                     "tablet didn't go to spare while in lameduck mode: %s" % str(ti))
+
   def test_health_check_worker_state_does_not_shutdown_query_service(self):
     # This test is similar to test_health_check, but has the following differences:
     # - the second tablet is an "rdonly" and not a "replica"
     # - the second tablet will be set to "worker" and we expect that the query service won't be shutdown
-    
+
     # Setup master and rdonly tablets.
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    
+
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
-      
+
     tablet_62344.start_vttablet(wait_for_state=None,
                                 target_tablet_type='replica')
     tablet_62044.start_vttablet(wait_for_state=None,
                                 target_tablet_type='rdonly',
                                 init_keyspace='test_keyspace',
                                 init_shard='0')
-    
+
     tablet_62344.wait_for_vttablet_state('SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
     self.check_healthz(tablet_62044, False)
-    
+
     # Enable replication.
     utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
                      tablet_62344.tablet_alias])
     # Trigger healthcheck to save time waiting for the next interval.
-    utils.run_vtctl(["RunHealthCheck", tablet_62044.tablet_alias, "rdonly"])
-    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, "rdonly")
+    utils.run_vtctl(["RunHealthCheck", tablet_62044.tablet_alias, 'rdonly'])
+    self.wait_for_tablet_type_change(tablet_62044.tablet_alias, 'rdonly')
     self.check_healthz(tablet_62044, True)
     tablet_62044.wait_for_vttablet_state('SERVING')
-    
+
     # Change from rdonly to worker and stop replication. (These actions are similar to the SplitClone vtworker command implementation.)
     # The tablet will become unhealthy, but the query service is still running.
     utils.run_vtctl(["ChangeSlaveType", tablet_62044.tablet_alias, "worker"])
@@ -618,10 +620,10 @@ class TestTabletManager(unittest.TestCase):
       timeout = 10
       while True:
         ti = utils.run_vtctl_json(['GetTablet', t.tablet_alias])
-        if 'mysql' in ti['Portmap']:
+        if 'mysql' in ti['port_map']:
           break
         timeout = utils.wait_step('mysql port in tablet record', timeout)
-      self.assertEqual(ti['Portmap']['mysql'], t.mysql_port)
+      self.assertEqual(ti['port_map']['mysql'], t.mysql_port)
 
     # all done
     tablet.kill_tablets([tablet_62344, tablet_62044])
