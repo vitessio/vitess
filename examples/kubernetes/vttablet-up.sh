@@ -13,6 +13,7 @@ keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 port=15002
+grpc_port=16002
 UID_BASE=${UID_BASE:-100}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
@@ -46,7 +47,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
 
       # Expand template variables
       sed_script=""
-      for var in alias cell uid keyspace shard shard_label port tablet_subdir vtdataroot_volume tablet_type; do
+      for var in alias cell uid keyspace shard shard_label port grpc_port tablet_subdir vtdataroot_volume tablet_type; do
         sed_script+="s,{{$var}},${!var},g;"
       done
 

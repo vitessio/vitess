@@ -32,7 +32,7 @@ const (
 
 var (
 	// TabletProtocol is exported for unit tests
-	TabletProtocol = flag.String("tablet_protocol", "gorpc", "how to talk to the vttablets")
+	TabletProtocol = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
 )
 
 // ServerError represents an error that was returned from

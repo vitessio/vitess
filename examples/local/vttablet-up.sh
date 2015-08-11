@@ -9,6 +9,7 @@ keyspace='test_keyspace'
 shard=0
 uid_base=100
 port_base=15100
+grpc_port_base=16100
 mysql_port_base=33100
 
 hostname=`hostname -f`
@@ -71,6 +72,7 @@ uids=${@:-'0 1 2'}
 for uid_index in $uids; do
   uid=$[$uid_base + $uid_index]
   port=$[$port_base + $uid_index]
+  grpc_port=$[$grpc_port_base + $uid_index]
   mysql_port=$[$mysql_port_base + $uid_index]
   printf -v alias '%s-%010d' $cell $uid
   printf -v tablet_dir 'vt_%010d' $uid
@@ -95,6 +97,8 @@ for uid_index in $uids; do
     -backup_storage_implementation file \
     -file_backup_storage_root $VTDATAROOT/backups \
     -restore_from_backup \
+    -grpc_port $grpc_port \
+    -service_map 'grpc-queryservice' \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
   echo "Access tablet $alias at http://$hostname:$port/debug/status"

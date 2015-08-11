@@ -26,7 +26,10 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
     return 'bson'
 
   def tabletconn_protocol(self):
-    return 'gorpc'
+    # GoRPC tabletconn doesn't work for the vtgate->vttablet interface,
+    # since the go/bson package no longer encodes the non-standard
+    # uint64 type.
+    return 'grpc'
 
   def vtgate_protocol(self):
     return 'gorpc'
@@ -40,6 +43,7 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   def service_map(self):
     return [
         'grpc-vtworker',
+        'grpc-queryservice',
         # enabled for vtgate_python_protocol
         'bsonrpc-vt-vtgateservice',
         ]

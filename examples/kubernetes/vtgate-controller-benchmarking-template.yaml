@@ -34,6 +34,7 @@ spec:
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15001
+              -tablet_protocol grpc
               -cell test" vitess
           env:
             - name: GOMAXPROCS
