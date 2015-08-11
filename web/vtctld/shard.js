@@ -33,7 +33,7 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
       if (tablet.streamHealth.target.tablet_type)
         return vtTabletTypes[tablet.streamHealth.target.tablet_type];
     }
-    return tablet.Type;
+    return vtTabletTypes[tablet.type];
   };
 
   $scope.tabletHealthError = function(tablet) {
@@ -89,7 +89,7 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
             // Annotate result with some extra stuff.
             tablet.links = vtconfig.tabletLinks(tablet);
           });
-          tablet.Alias = tabletAlias;
+          tablet.alias = tabletAlias;
 
           tabletData.push(tablet);
         });
@@ -114,9 +114,9 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
   function refreshStreamHealth() {
     if (selectedCell) {
       selectedCell.tablets.forEach(function (tablet) {
-        if (tablet.Alias) {
+        if (tablet.alias) {
           // Get latest streaming health result.
-          tabletinfo.get({tablet: tablet.Alias.cell+'-'+tablet.Alias.uid, info: 'health'}, function(health) {
+          tabletinfo.get({tablet: tablet.alias.cell+'-'+tablet.alias.uid, info: 'health'}, function(health) {
             tablet.streamHealth = health;
           });
         }
