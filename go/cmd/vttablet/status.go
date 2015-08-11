@@ -122,10 +122,10 @@ Binlog player state: {{.State}}</br>
       <td>{{.SourceShardAsHTML}}</td>
       <td>{{.State}}
         {{if eq .State "Running"}}
-          {{if .SourceTablet.IsZero}}
-            (picking source tablet)
+          {{if .SourceTabletAlias}}
+            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTabletAlias}})
           {{else}}
-            (from {{github_com_youtube_vitess_vtctld_tablet .SourceTablet.String}})
+            (picking source tablet)
           {{end}}
         {{end}}</td>
       <td>{{if .StopPosition}}{{.StopPosition}}{{end}}</td>

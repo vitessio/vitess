@@ -590,6 +590,14 @@ func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
 	return topo.SourceShardAsHTML(bpcs.SourceShard)
 }
 
+// SourceTabletAlias returns the string version of the SourceTablet alias, if set
+func (bpcs *BinlogPlayerControllerStatus) SourceTabletAlias() string {
+	if bpcs.SourceTablet != nil {
+		return topo.TabletAliasString(bpcs.SourceTablet)
+	}
+	return ""
+}
+
 // BinlogPlayerControllerStatusList is the list of statuses.
 type BinlogPlayerControllerStatusList []*BinlogPlayerControllerStatus
 
