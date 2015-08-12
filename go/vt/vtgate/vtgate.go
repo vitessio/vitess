@@ -360,11 +360,11 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
@@ -402,11 +402,11 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
@@ -444,11 +444,11 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
@@ -488,12 +488,12 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		},
 		query.NotInTransaction)
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
