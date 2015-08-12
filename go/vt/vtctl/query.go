@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/jscfg"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -182,10 +181,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	r, err := vtgateConn.SplitQuery(ctx, *keyspace, tproto.BoundQuery{
-		Sql:           subFlags.Arg(0),
-		BindVariables: *bindVariables,
-	}, *splitColumn, *splitCount)
+	r, err := vtgateConn.SplitQuery(ctx, *keyspace, subFlags.Arg(0), *bindVariables, *splitColumn, *splitCount)
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}

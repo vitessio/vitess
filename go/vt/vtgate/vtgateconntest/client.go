@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -2090,10 +2089,7 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, tproto.BoundQuery{
-		Sql:           splitQueryRequest.SQL,
-		BindVariables: splitQueryRequest.BindVariables,
-	}, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
@@ -2105,19 +2101,13 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, tproto.BoundQuery{
-		Sql:           splitQueryRequest.SQL,
-		BindVariables: splitQueryRequest.BindVariables,
-	}, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, tproto.BoundQuery{
-		Sql:           splitQueryRequest.SQL,
-		BindVariables: splitQueryRequest.BindVariables,
-	}, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	expectPanic(t, err)
 }
 

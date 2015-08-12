@@ -18,7 +18,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -54,8 +53,17 @@ type queryResponse struct {
 	err        error
 }
 
+// querySplitQuery contains all the fields we use to test SplitQuery
+type querySplitQuery struct {
+	Keyspace      string
+	SQL           string
+	BindVariables map[string]interface{}
+	SplitColumn   string
+	SplitCount    int
+}
+
 type splitQueryResponse struct {
-	splitQuery *proto.SplitQueryRequest
+	splitQuery *querySplitQuery
 	reply      []proto.SplitQueryPart
 	err        error
 }
@@ -127,15 +135,25 @@ func (conn *FakeVTGateConn) AddShardQuery(
 
 // AddSplitQuery adds a split query and expected result.
 func (conn *FakeVTGateConn) AddSplitQuery(
-	request *proto.SplitQueryRequest, expectedResult []proto.SplitQueryPart) {
-	splits := request.SplitCount
-	reply := make([]proto.SplitQueryPart, splits, splits)
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumn string,
+	splitCount int,
+	expectedResult []proto.SplitQueryPart) {
+	reply := make([]proto.SplitQueryPart, splitCount)
 	copy(reply, expectedResult)
-	key := getSplitQueryKey(request.Keyspace, &request.Query, request.SplitColumn, request.SplitCount)
+	key := getSplitQueryKey(keyspace, sql, splitColumn, splitCount)
 	conn.splitQueryMap[key] = &splitQueryResponse{
-		splitQuery: request,
-		reply:      expectedResult,
-		err:        nil,
+		splitQuery: &querySplitQuery{
+			Keyspace:      keyspace,
+			SQL:           sql,
+			BindVariables: bindVariables,
+			SplitColumn:   splitColumn,
+			SplitCount:    splitCount,
+		},
+		reply: expectedResult,
+		err:   nil,
 	}
 }
 
@@ -333,8 +351,8 @@ func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) 
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
-	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, &query, splitColumn, splitCount)]
+func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
 	if !ok {
 		return nil, fmt.Errorf(
 			"no match for keyspace: %s, query: %v, split column: %v, split count: %d",
@@ -359,7 +377,7 @@ func getShardQueryKey(sql string, shards []string) string {
 	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
-func getSplitQueryKey(keyspace string, query *tproto.BoundQuery, splitColumn string, splitCount int) string {
+func getSplitQueryKey(keyspace string, query string, splitColumn string, splitCount int) string {
 	return fmt.Sprintf("%s:%v:%v:%d", keyspace, query, splitColumn, splitCount)
 }
 

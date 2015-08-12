@@ -452,11 +452,14 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 	return vterrors.FromRPCError(reply.Err)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
 	request := &proto.SplitQueryRequest{
-		CallerID:    getEffectiveCallerID(ctx),
-		Keyspace:    keyspace,
-		Query:       query,
+		CallerID: getEffectiveCallerID(ctx),
+		Keyspace: keyspace,
+		Query: tproto.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
 		SplitColumn: splitColumn,
 		SplitCount:  splitCount,
 	}
