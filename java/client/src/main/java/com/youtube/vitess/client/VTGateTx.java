@@ -37,7 +37,7 @@ public class VTGateTx {
   }
 
   public QueryResult executeShard(Context ctx, ExecuteShardsRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("executeShard: not in transaction");
     }
@@ -47,7 +47,7 @@ public class VTGateTx {
   }
 
   public QueryResult executeKeyspaceIds(Context ctx, ExecuteKeyspaceIdsRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("executeKeyspaceIds: not in transaction");
     }
@@ -57,7 +57,7 @@ public class VTGateTx {
   }
 
   public QueryResult executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("executeKeyRanges: not in transaction");
     }
@@ -68,7 +68,7 @@ public class VTGateTx {
 
   public List<QueryResult> executeBatchKeyspaceIds(
       Context ctx, ExecuteBatchKeyspaceIdsRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("executeBatchKeyspaceIds: not in transaction");
     }
@@ -78,7 +78,7 @@ public class VTGateTx {
   }
 
   public List<QueryResult> executeBatchShards(Context ctx, ExecuteBatchShardsRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("executeBatchShards: not in transaction");
     }
@@ -89,7 +89,7 @@ public class VTGateTx {
 
 
   public CommitResponse commit(Context ctx, CommitRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("commit: not in transaction");
     }
@@ -100,7 +100,7 @@ public class VTGateTx {
   }
 
   public RollbackResponse rollback(Context ctx, RollbackRequest request)
-      throws VitessRpcException, VitessNotInTransactionException {
+      throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (this.session == null) {
       throw new VitessNotInTransactionException("rollback: not in transaction");
     }

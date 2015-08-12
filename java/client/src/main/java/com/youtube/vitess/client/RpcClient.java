@@ -34,46 +34,46 @@ import java.util.Iterator;
 public interface RpcClient extends Closeable {
   // executeShard sends a single query to a set of shards.
   ExecuteShardsResponse executeShard(
-      Context ctx, ExecuteShardsRequest request) throws VitessRpcException;
+      Context ctx, ExecuteShardsRequest request) throws VitessException, VitessRpcException;
 
   // executeKeyspaceIds sends a query with keyspace ids as bind variables.
   ExecuteKeyspaceIdsResponse executeKeyspaceIds(
-      Context ctx, ExecuteKeyspaceIdsRequest request) throws VitessRpcException;
+      Context ctx, ExecuteKeyspaceIdsRequest request) throws VitessException, VitessRpcException;
 
   // executeKeyRanges sends a query with a set of key ranges.
   ExecuteKeyRangesResponse executeKeyRanges(
-      Context ctx, ExecuteKeyRangesRequest request) throws VitessRpcException;
+      Context ctx, ExecuteKeyRangesRequest request) throws VitessException, VitessRpcException;
 
   // executeBatchKeyspaceIds sends a list of queries with keyspace ids as bind variables.
   ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
-      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws VitessRpcException;
+      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws VitessException, VitessRpcException;
 
   // executeBatchShards sends a list of queries to a set of shards.
   ExecuteBatchShardsResponse executeBatchShards(
-      Context ctx, ExecuteBatchShardsRequest request) throws VitessRpcException;
+      Context ctx, ExecuteBatchShardsRequest request) throws VitessException, VitessRpcException;
 
   // streamExecuteShard starts stream queries with multiple shards.
   Iterator<StreamExecuteShardsResponse> streamExecuteShard(
-      Context ctx, StreamExecuteShardsRequest request) throws VitessRpcException;
+      Context ctx, StreamExecuteShardsRequest request) throws VitessException, VitessRpcException;
 
   // streamExecuteKeyspaceIds starts a list of stream queries with keyspace ids as bind variables.
   Iterator<StreamExecuteKeyspaceIdsResponse> streamExecuteKeyspaceIds(
-      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessRpcException;
+      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessException, VitessRpcException;
 
   // streamExecuteKeyRanges starts stream query with a set of key ranges.
   Iterator<StreamExecuteKeyRangesResponse> streamExecuteKeyRanges(
-      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessRpcException;
+      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessException, VitessRpcException;
 
   // begin starts a transaction.
-  BeginResponse begin(Context ctx, BeginRequest request) throws VitessRpcException;
+  BeginResponse begin(Context ctx, BeginRequest request) throws VitessException, VitessRpcException;
 
   // commit commits a transaction.
-  CommitResponse commit(Context ctx, CommitRequest request) throws VitessRpcException;
+  CommitResponse commit(Context ctx, CommitRequest request) throws VitessException, VitessRpcException;
 
   // rollback rollbacks a pending transaction.
-  RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessRpcException;
+  RollbackResponse rollback(Context ctx, RollbackRequest request) throws VitessException, VitessRpcException;
 
   // getSrvKeyspace returns a list of serving keyspaces.
   GetSrvKeyspaceResponse getSrvKeyspace(
-      Context ctx, GetSrvKeyspaceRequest request) throws VitessRpcException;
+      Context ctx, GetSrvKeyspaceRequest request) throws VitessException, VitessRpcException;
 }

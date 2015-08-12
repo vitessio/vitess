@@ -27,7 +27,7 @@ import java.util.Iterator;
 
 /**
  * VTGateConn manages a VTGate connection.
- * TODO(shengzhe): define VitessException for app-level error
+ *
  * <p>Usage:
  *
  * <code>
@@ -79,46 +79,46 @@ public class VTGateConn implements Closeable {
   }
 
   public ExecuteShardsResponse ExecuteShard(Context ctx, ExecuteShardsRequest request)
-      throws VitessRpcException {
+      throws VitessException, VitessRpcException {
     return this.client.executeShard(ctx, request);
   }
 
   public ExecuteKeyspaceIdsResponse ExecuteKeyspaceIds(Context ctx, ExecuteKeyspaceIdsRequest request)
-      throws VitessRpcException {
+      throws VitessException, VitessRpcException {
     return this.client.executeKeyspaceIds(ctx, request);
   }
 
   public ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
-      throws VitessRpcException {
+      throws VitessException, VitessRpcException {
     return this.client.executeKeyRanges(ctx, request);
   }
 
   public ExecuteBatchKeyspaceIdsResponse executeBatchKeyspaceIds(
-      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws VitessRpcException {
+      Context ctx, ExecuteBatchKeyspaceIdsRequest request) throws VitessException, VitessRpcException {
     return this.client.executeBatchKeyspaceIds(ctx, request);
   }
 
   public ExecuteBatchShardsResponse executeBatchShards(Context ctx, ExecuteBatchShardsRequest request)
-      throws VitessRpcException {
+      throws VitessException, VitessRpcException {
     return this.client.executeBatchShards(ctx, request);
   }
 
   public Iterator<StreamExecuteShardsResponse> streamExecuteShard(
-      Context ctx, StreamExecuteShardsRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteShardsRequest request) throws VitessException, VitessRpcException {
     return this.client.streamExecuteShard(ctx, request);
   }
 
   public Iterator<StreamExecuteKeyspaceIdsResponse> streamExecuteKeyspaceIds(
-      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteKeyspaceIdsRequest request) throws VitessException, VitessRpcException {
     return this.client.streamExecuteKeyspaceIds(ctx, request);
   }
 
   public Iterator<StreamExecuteKeyRangesResponse> streamExecuteKeyRanges(
-      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessRpcException {
+      Context ctx, StreamExecuteKeyRangesRequest request) throws VitessException, VitessRpcException {
     return this.client.streamExecuteKeyRanges(ctx, request);
   }
 
-  public VTGateTx begin(Context ctx, BeginRequest request) throws VitessRpcException {
+  public VTGateTx begin(Context ctx, BeginRequest request) throws VitessException, VitessRpcException {
     BeginResponse response = this.client.begin(ctx, request);
     if (response.hasError()) {
       throw new VitessRpcException(response.getError().getMessage());
@@ -127,7 +127,7 @@ public class VTGateConn implements Closeable {
   }
 
   public GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
-      throws VitessRpcException {
+      throws VitessException, VitessRpcException {
     return this.client.getSrvKeyspace(ctx, request);
   }
 
