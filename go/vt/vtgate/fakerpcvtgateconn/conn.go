@@ -27,9 +27,29 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// queryExecute contains all the fields we use to test Execute
+type queryExecute struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
+// queryExecuteShards contains all the fields we use to test ExecuteShards
+type queryExecuteShards struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
 type queryResponse struct {
-	execQuery  *proto.Query
-	shardQuery *proto.QueryShard
+	execQuery  *queryExecute
+	shardQuery *queryExecuteShards
 	reply      *mproto.QueryResult
 	err        error
 }
@@ -62,20 +82,46 @@ func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 }
 
 // AddQuery adds a query and expected result.
-func (conn *FakeVTGateConn) AddQuery(request *proto.Query,
+func (conn *FakeVTGateConn) AddQuery(
+	sql string,
+	bindVariables map[string]interface{},
+	tabletType pb.TabletType,
+	session *proto.Session,
+	notInTransaction bool,
 	expectedResult *mproto.QueryResult) {
-	conn.execMap[request.Sql] = &queryResponse{
-		execQuery: request,
-		reply:     expectedResult,
+	conn.execMap[sql] = &queryResponse{
+		execQuery: &queryExecute{
+			SQL:              sql,
+			BindVariables:    bindVariables,
+			TabletType:       tabletType,
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		},
+		reply: expectedResult,
 	}
 }
 
 // AddShardQuery adds a shard query and expected result.
 func (conn *FakeVTGateConn) AddShardQuery(
-	request *proto.QueryShard, expectedResult *mproto.QueryResult) {
-	conn.execMap[getShardQueryKey(request)] = &queryResponse{
-		shardQuery: request,
-		reply:      expectedResult,
+	sql string,
+	bindVariables map[string]interface{},
+	keyspace string,
+	shards []string,
+	tabletType pb.TabletType,
+	session *proto.Session,
+	notInTransaction bool,
+	expectedResult *mproto.QueryResult) {
+	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
+		shardQuery: &queryExecuteShards{
+			SQL:              sql,
+			BindVariables:    bindVariables,
+			Keyspace:         keyspace,
+			Shards:           shards,
+			TabletType:       tabletType,
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		},
+		reply: expectedResult,
 	}
 }
 
@@ -99,16 +145,16 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	if session != nil {
 		s = session.(*proto.Session)
 	}
-	query := &proto.Query{
-		Sql:              sql,
+	response, ok := conn.execMap[sql]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:              sql,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
-	}
-	response, ok := conn.execMap[query.Sql]
-	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, nil, fmt.Errorf(
@@ -128,18 +174,18 @@ func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keysp
 	if session != nil {
 		s = session.(*proto.Session)
 	}
-	query := &proto.QueryShard{
-		Sql:              sql,
+	response, ok := conn.execMap[getShardQueryKey(sql, shards)]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteShards{
+		SQL:              sql,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Keyspace:         keyspace,
 		Shards:           shards,
 		Session:          s,
 		NotInTransaction: notInTransaction,
-	}
-	response, ok := conn.execMap[getShardQueryKey(query)]
-	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
 	}
 	if !reflect.DeepEqual(query, response.shardQuery) {
 		return nil, nil, fmt.Errorf(
@@ -308,9 +354,9 @@ func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string)
 func (conn *FakeVTGateConn) Close() {
 }
 
-func getShardQueryKey(request *proto.QueryShard) string {
-	sort.Strings(request.Shards)
-	return fmt.Sprintf("%s-%s", request.Sql, strings.Join(request.Shards, ":"))
+func getShardQueryKey(sql string, shards []string) string {
+	sort.Strings(shards)
+	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
 func getSplitQueryKey(keyspace string, query *tproto.BoundQuery, splitColumn string, splitCount int) string {
