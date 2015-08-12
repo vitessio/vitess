@@ -10,11 +10,11 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var routerSchema = createTestSchema(`
@@ -233,16 +233,17 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxConn) {
 }
 
 func routerExec(router *Router, sql string, bv map[string]interface{}) (*mproto.QueryResult, error) {
-	return router.Execute(context.Background(), &proto.Query{
-		Sql:           sql,
-		BindVariables: bv,
-		TabletType:    topo.TYPE_MASTER,
-	})
+	return router.Execute(context.Background(),
+		sql,
+		bv,
+		pb.TabletType_MASTER,
+		nil,
+		false)
 }
 
-func routerStream(router *Router, q *proto.Query) (qr *mproto.QueryResult, err error) {
+func routerStream(router *Router, sql string) (qr *mproto.QueryResult, err error) {
 	results := make(chan *mproto.QueryResult, 10)
-	err = router.StreamExecute(context.Background(), q, func(qr *mproto.QueryResult) error {
+	err = router.StreamExecute(context.Background(), sql, nil, pb.TabletType_MASTER, func(qr *mproto.QueryResult) error {
 		results <- qr
 		return nil
 	})

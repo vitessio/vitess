@@ -7,7 +7,6 @@ package vtgate
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -15,29 +14,27 @@ import (
 )
 
 type requestContext struct {
-	ctx    context.Context
-	query  *proto.Query
-	router *Router
+	ctx              context.Context
+	sql              string
+	bindVariables    map[string]interface{}
+	tabletType       pb.TabletType
+	session          *proto.Session
+	notInTransaction bool
+	router           *Router
 }
 
-func newRequestContext(ctx context.Context, query *proto.Query, router *Router) *requestContext {
+func newRequestContext(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, router *Router) *requestContext {
 	return &requestContext{
-		ctx:    ctx,
-		query:  query,
-		router: router,
+		ctx:              ctx,
+		sql:              sql,
+		bindVariables:    bindVariables,
+		tabletType:       tabletType,
+		session:          session,
+		notInTransaction: notInTransaction,
+		router:           router,
 	}
 }
 
 func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*mproto.QueryResult, error) {
-	q := &proto.Query{
-		Sql:           boundQuery.Sql,
-		BindVariables: boundQuery.BindVariables,
-		TabletType:    vc.query.TabletType,
-		Session:       vc.query.Session,
-	}
-	return vc.router.Execute(vc.ctx, q)
-}
-
-func (vc *requestContext) TabletType() pb.TabletType {
-	return topo.TabletTypeToProto(vc.query.TabletType)
+	return vc.router.Execute(vc.ctx, boundQuery.Sql, boundQuery.BindVariables, vc.tabletType, vc.session, false)
 }

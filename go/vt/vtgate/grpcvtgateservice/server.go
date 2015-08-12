@@ -35,15 +35,8 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.Query{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.Execute(ctx, query, reply)
+	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), tproto.Proto3ToBindVariables(request.Query.BindVariables), request.TabletType, proto.ProtoToSession(request.Session), request.NotInTransaction, reply)
 	response = &pb.ExecuteResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -246,16 +239,15 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.Query{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecute(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecute(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
 }
 
 // StreamExecuteShards is the RPC version of vtgateservice.VTGateService method

@@ -19,7 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	pb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // CallerIDPrefix is the prefix to send with queries to they go
@@ -49,7 +50,7 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 	}
 
 	jsonCallerID := []byte(received[len(CallerIDPrefix):])
-	expectedCallerID := &pb.CallerID{}
+	expectedCallerID := &pbv.CallerID{}
 	if err := json.Unmarshal(jsonCallerID, expectedCallerID); err != nil {
 		return true, fmt.Errorf("cannot unmarshal provided callerid: %v", err)
 	}
@@ -66,11 +67,11 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 	return true, nil
 }
 
-func (c *callerIDClient) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.Execute(ctx, query, reply)
+	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
 func (c *callerIDClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
@@ -119,11 +120,11 @@ func (c *callerIDClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery
 	return c.fallback.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
 }
 
-func (c *callerIDClient) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.StreamExecute(ctx, query, sendReply)
+	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
 func (c *callerIDClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {

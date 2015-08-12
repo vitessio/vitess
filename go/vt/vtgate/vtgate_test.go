@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file uses the sandbox_test framework.
@@ -41,12 +43,14 @@ func TestVTGateExecute(t *testing.T) {
 	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
-	q := proto.Query{
-		Sql:        "select * from t1",
-		TabletType: topo.TYPE_MASTER,
-	}
 	qr := new(proto.QueryResult)
-	err := rpcVTGate.Execute(context.Background(), &q, qr)
+	err := rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		pb.TabletType_MASTER,
+		nil,
+		false,
+		qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -59,12 +63,18 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	if !q.Session.InTransaction {
+	session := new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	rpcVTGate.Execute(context.Background(), &q, qr)
+	rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		pb.TabletType_MASTER,
+		session,
+		false,
+		qr)
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -74,19 +84,25 @@ func TestVTGateExecute(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
-	rpcVTGate.Commit(context.Background(), q.Session)
+	rpcVTGate.Commit(context.Background(), session)
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	rpcVTGate.Execute(context.Background(), &q, qr)
-	rpcVTGate.Rollback(context.Background(), q.Session)
+	session = new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	rpcVTGate.Execute(context.Background(),
+		"select * from t1",
+		nil,
+		pb.TabletType_MASTER,
+		session,
+		false,
+		qr)
+	rpcVTGate.Rollback(context.Background(), session)
 }
 
 func TestVTGateExecuteShard(t *testing.T) {
@@ -451,15 +467,15 @@ func TestVTGateStreamExecute(t *testing.T) {
 	sandbox := createSandbox(KsTestUnsharded)
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
-	q := proto.Query{
-		Sql:        "select * from t1",
-		TabletType: topo.TYPE_MASTER,
-	}
 	var qrs []*proto.QueryResult
-	err := rpcVTGate.StreamExecute(context.Background(), &q, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	err := rpcVTGate.StreamExecute(context.Background(),
+		"select * from t1",
+		nil,
+		pb.TabletType_MASTER,
+		func(r *proto.QueryResult) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}

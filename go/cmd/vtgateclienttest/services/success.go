@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // successClient implements vtgateservice.VTGateService
@@ -30,8 +32,8 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	return c.fallback.Execute(ctx, query, reply)
+func (c *successClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
 func (c *successClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
@@ -58,8 +60,8 @@ func (c *successClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery 
 	return c.fallback.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
 }
 
-func (c *successClient) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecute(ctx, query, sendReply)
+func (c *successClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
 func (c *successClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {

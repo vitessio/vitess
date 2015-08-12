@@ -36,7 +36,13 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.Execute(ctx, request, reply)
+	vtgErr := vtg.server.Execute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -147,9 +153,13 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecute(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 }
 
 // StreamExecute2 is the RPC version of vtgateservice.VTGateService method
@@ -158,9 +168,13 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sen
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.StreamExecute(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	vtgErr := vtg.server.StreamExecute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 	if vtgErr == nil {
 		return nil
 	}

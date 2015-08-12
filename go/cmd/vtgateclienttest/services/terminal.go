@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var errTerminal = errors.New("vtgate test client, errTerminal")
@@ -26,7 +28,7 @@ func newTerminalClient() *terminalClient {
 	return &terminalClient{}
 }
 
-func (c *terminalClient) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+func (c *terminalClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
@@ -54,7 +56,7 @@ func (c *terminalClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery
 	return errTerminal
 }
 
-func (c *terminalClient) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
+func (c *terminalClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return errTerminal
 }
 

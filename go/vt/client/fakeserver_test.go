@@ -11,6 +11,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -18,10 +20,17 @@ type fakeVTGateService struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	execCase, ok := execMap[query.Sql]
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.Query{
+		Sql:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       topo.ProtoToTabletType(tabletType),
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
@@ -61,10 +70,15 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQu
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	execCase, ok := execMap[query.Sql]
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.Query{
+		Sql:           sql,
+		BindVariables: bindVariables,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)

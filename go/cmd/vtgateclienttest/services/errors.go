@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // errorClient implements vtgateservice.VTGateService
@@ -36,11 +38,11 @@ func newErrorClient(fallback vtgateservice.VTGateService) *errorClient {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	if query.Sql == "return integrity error" {
+func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if sql == "return integrity error" {
 		return fmt.Errorf("vtgate test client, errorClient.Execute returning integrity error (errno 1062)")
 	}
-	return c.fallback.Execute(ctx, query, reply)
+	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
@@ -85,8 +87,8 @@ func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *p
 	return c.fallback.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
 }
 
-func (c *errorClient) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecute(ctx, query, sendReply)
+func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
 func (c *errorClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {

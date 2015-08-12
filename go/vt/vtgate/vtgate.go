@@ -154,9 +154,9 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"Execute", "Any", string(query.TabletType)}
+	statsKey := []string{"Execute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -165,14 +165,21 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.router.Execute(ctx, query)
+	qr, err := vtg.router.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := &proto.Query{
+			Sql:              sql,
+			BindVariables:    bindVariables,
+			TabletType:       topo.ProtoToTabletType(tabletType),
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecute)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
@@ -348,8 +355,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -363,7 +369,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	var rowCount int64
 	err := vtg.router.StreamExecute(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
@@ -376,11 +384,12 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := &proto.Query{
+			Sql:           sql,
+			BindVariables: bindVariables,
+			TabletType:    topo.ProtoToTabletType(tabletType),
+		}
 		logError(err, query, vtg.logStreamExecute)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }

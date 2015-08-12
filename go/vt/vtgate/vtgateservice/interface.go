@@ -10,13 +10,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VTGateService is the interface implemented by the VTGate service,
 // that RPC server implementations will call.
 type VTGateService interface {
 	// Regular query execution
-	Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error
+	Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error
 	ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error
 	ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error
 	ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error
@@ -25,7 +27,7 @@ type VTGateService interface {
 	ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error
 
 	// Streaming queries
-	StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error
+	StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error
 	StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error
 	StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error
 	StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error
