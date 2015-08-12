@@ -15,6 +15,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -76,21 +77,20 @@ func isConnError(err error) (int, bool) {
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 // This throws an error if a dml spans multiple keyspace_ids. Resharding depends
 // on being able to uniquely route a write.
-func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery) (*mproto.QueryResult, error) {
-	if isDml(query.Sql) && len(query.KeyspaceIds) > 1 {
+func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+	if isDml(sql) && len(keyspaceIds) > 1 {
 		return nil, fmt.Errorf("DML should not span multiple keyspace_ids")
 	}
-	tabletType := topo.TabletTypeToProto(query.TabletType)
-	mapToShards := func(keyspace string) (string, []string, error) {
+	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
-			keyspace,
+			k,
 			tabletType,
-			query.KeyspaceIds)
+			keyspaceIds)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, query.NotInTransaction)
+	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
@@ -291,18 +291,17 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
-	mapToShards := func(keyspace string) (string, []string, error) {
+func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
-			query.Keyspace,
+			k,
 			tabletType,
-			query.KeyspaceIds)
+			keyspaceIds)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
+	return res.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -322,7 +321,7 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.Ke
 			tabletType,
 			query.KeyRanges)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, mapToShards, sendReply)
 }
 
 // StreamExecute executes a streaming query on shards resolved by given func.
@@ -335,10 +334,8 @@ func (res *Resolver) StreamExecute(
 	bindVars map[string]interface{},
 	keyspace string,
 	tabletType pb.TabletType,
-	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
 	sendReply func(*mproto.QueryResult) error,
-	notInTransaction bool,
 ) error {
 	keyspace, shards, err := mapToShards(keyspace)
 	if err != nil {
@@ -351,9 +348,7 @@ func (res *Resolver) StreamExecute(
 		keyspace,
 		shards,
 		tabletType,
-		NewSafeSession(session),
-		sendReply,
-		notInTransaction)
+		sendReply)
 	return err
 }
 

@@ -123,7 +123,7 @@ func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindV
 }
 
 // ExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -131,10 +131,18 @@ func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteKeyspaceIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.KeyspaceIdQuery{
+		Sql:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       topo.ProtoToTabletType(tabletType),
+		Keyspace:         keyspace,
+		KeyspaceIds:      keyspaceIds,
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.keyspaceIDQuery) {
 		f.t.Errorf("ExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDQuery)
@@ -377,15 +385,21 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, query *p
 }
 
 // StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "StreamExecuteKeyspaceIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.KeyspaceIdQuery{
+		Sql:           sql,
+		BindVariables: bindVariables,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 	}
 	if !reflect.DeepEqual(query, execCase.keyspaceIDQuery) {
 		f.t.Errorf("StreamExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDQuery)

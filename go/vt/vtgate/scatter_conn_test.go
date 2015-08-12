@@ -62,10 +62,10 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, pb.TabletType_REPLICA, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, pb.TabletType_REPLICA, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
-		}, false)
+		})
 		return qr, err
 	})
 }
@@ -78,10 +78,10 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecute", shardVars, pb.TabletType_REPLICA, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecute", shardVars, pb.TabletType_REPLICA, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
-		}, false)
+		})
 		return qr, err
 	})
 }
@@ -191,9 +191,9 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
-	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, nil, func(*mproto.QueryResult) error {
+	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, func(*mproto.QueryResult) error {
 		return nil
-	}, false)
+	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
 	}
@@ -207,9 +207,9 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, pb.TabletType_REPLICA, nil, func(*mproto.QueryResult) error {
+	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, pb.TabletType_REPLICA, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
-	}, false)
+	})
 	want := "send error"
 	// Ensure that we handle send errors.
 	if err == nil || err.Error() != want {

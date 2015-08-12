@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -227,10 +227,9 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, strings.ToLower(tabletType.String())}
+	statsKey := []string{"ExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -239,14 +238,23 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, query)
+	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := &proto.KeyspaceIdQuery{
+			Sql:              sql,
+			BindVariables:    bindVariables,
+			Keyspace:         keyspace,
+			KeyspaceIds:      keyspaceIds,
+			TabletType:       topo.ProtoToTabletType(tabletType),
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
@@ -408,10 +416,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, strings.ToLower(tabletType.String())}
+	statsKey := []string{"StreamExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -423,7 +430,11 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		keyspace,
+		keyspaceIds,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
@@ -436,11 +447,14 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := &proto.KeyspaceIdQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+			Keyspace:      keyspace,
+			KeyspaceIds:   keyspaceIds,
+			TabletType:    topo.ProtoToTabletType(tabletType),
+		}
 		logError(err, query, vtg.logStreamExecuteKeyspaceIds)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }
@@ -507,7 +521,6 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		bindVariables,
 		keyspace,
 		tabletType,
-		nil,
 		func(keyspace string) (string, []string, error) {
 			return keyspace, shards, nil
 		},
@@ -519,8 +532,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
-		},
-		false)
+		})
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
@@ -568,7 +580,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	if srvKeyspace.ShardingColumnName != "" {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
-		keyRangeByShard := map[string]kproto.KeyRange{}
+		keyRangeByShard := map[string]key.KeyRange{}
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}

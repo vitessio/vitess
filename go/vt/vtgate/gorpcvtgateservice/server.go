@@ -82,7 +82,15 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -295,9 +303,15 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecuteKeyspaceIds(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 }
 
 // StreamExecuteKeyspaceIds2 is the RPC version of
@@ -307,9 +321,15 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 	if vtgErr == nil {
 		return nil
 	}

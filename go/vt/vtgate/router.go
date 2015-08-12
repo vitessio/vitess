@@ -140,9 +140,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVariables 
 		params.ks,
 		params.shardVars,
 		tabletType,
-		NewSafeSession(nil),
 		sendReply,
-		false,
 	)
 }
 

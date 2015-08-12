@@ -36,14 +36,15 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		query := &proto.KeyspaceIdQuery{
-			Sql:         "query",
-			Keyspace:    "TestResolverExecuteKeyspaceIds",
-			KeyspaceIds: []key.KeyspaceId{kid10, kid25},
-			TabletType:  topo.TYPE_MASTER,
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return res.ExecuteKeyspaceIds(context.Background(), query)
+		return res.ExecuteKeyspaceIds(context.Background(),
+			"query",
+			nil,
+			"TestResolverExecuteKeyspaceIds",
+			[]key.KeyspaceId{kid10, kid25},
+			pb.TabletType_MASTER,
+			nil,
+			false)
 	})
 }
 
@@ -141,30 +142,35 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	query := &proto.KeyspaceIdQuery{
-		Sql:         "query",
-		Keyspace:    "TestResolverStreamExecuteKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10, kid15},
-		TabletType:  topo.TYPE_MASTER,
-	}
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(context.Background(), query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
-			return nil
-		})
+		err = res.StreamExecuteKeyspaceIds(context.Background(),
+			"query",
+			nil,
+			"TestResolverStreamExecuteKeyspaceIds",
+			[]key.KeyspaceId{kid10, kid15},
+			pb.TabletType_MASTER,
+			func(r *mproto.QueryResult) error {
+				appendResult(qr, r)
+				return nil
+			})
 		return qr, err
 	})
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		query.KeyspaceIds = []key.KeyspaceId{kid10, kid15, kid25}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(context.Background(), query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
-			return nil
-		})
+		err = res.StreamExecuteKeyspaceIds(context.Background(),
+			"query",
+			nil,
+			"TestResolverStreamExecuteKeyspaceIds",
+			[]key.KeyspaceId{kid10, kid15, kid25},
+			pb.TabletType_MASTER,
+			func(r *mproto.QueryResult) error {
+				appendResult(qr, r)
+				return nil
+			})
 		return qr, err
 	})
 }
@@ -493,12 +499,6 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error encoding keyspace id")
 	}
-	query := &proto.KeyspaceIdQuery{
-		Sql:         "update table set a = b",
-		Keyspace:    "TestResolverExecuteKeyspaceIds",
-		KeyspaceIds: []key.KeyspaceId{kid10, kid25},
-		TabletType:  topo.TYPE_MASTER,
-	}
 	res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 
 	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
@@ -508,7 +508,14 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	s.MapTestConn("20-40", sbc1)
 
 	errStr := "DML should not span multiple keyspace_ids"
-	_, err = res.ExecuteKeyspaceIds(context.Background(), query)
+	_, err = res.ExecuteKeyspaceIds(context.Background(),
+		"update table set a = b",
+		nil,
+		"TestResolverExecuteKeyspaceIds",
+		[]key.KeyspaceId{kid10, kid25},
+		pb.TabletType_MASTER,
+		nil,
+		false)
 	if err == nil {
 		t.Errorf("want %v, got nil", errStr)
 	}

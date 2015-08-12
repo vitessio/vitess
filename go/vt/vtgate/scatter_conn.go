@@ -335,9 +335,7 @@ func (stc *ScatterConn) StreamExecute(
 	keyspace string,
 	shards []string,
 	tabletType pb.TabletType,
-	session *SafeSession,
 	sendReply func(reply *mproto.QueryResult) error,
-	notInTransaction bool,
 ) error {
 	results, allErrors := stc.multiGo(
 		ctx,
@@ -345,8 +343,8 @@ func (stc *ScatterConn) StreamExecute(
 		keyspace,
 		shards,
 		tabletType,
-		session,
-		notInTransaction,
+		NewSafeSession(nil),
+		false,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(ctx, query, bindVars, transactionId)
 			if sr != nil {
@@ -388,9 +386,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	keyspace string,
 	shardVars map[string]map[string]interface{},
 	tabletType pb.TabletType,
-	session *SafeSession,
 	sendReply func(reply *mproto.QueryResult) error,
-	notInTransaction bool,
 ) error {
 	results, allErrors := stc.multiGo(
 		ctx,
@@ -398,8 +394,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		keyspace,
 		getShards(shardVars),
 		tabletType,
-		session,
-		notInTransaction,
+		NewSafeSession(nil),
+		false,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
 			sr, errFunc := sdc.StreamExecute(ctx, query, shardVars[sdc.shard], transactionId)
 			if sr != nil {

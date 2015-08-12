@@ -87,17 +87,16 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdQuery{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		KeyspaceIds:      key.ProtoToKeyspaceIds(request.KeyspaceIds),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteKeyspaceIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteKeyspaceIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -296,18 +295,17 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdQuery{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		KeyspaceIds:   key.ProtoToKeyspaceIds(request.KeyspaceIds),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteKeyspaceIds(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecuteKeyspaceIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method

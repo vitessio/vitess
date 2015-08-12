@@ -11,6 +11,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
@@ -36,7 +37,7 @@ func (c *terminalClient) ExecuteShards(ctx context.Context, sql string, bindVari
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
@@ -68,7 +69,7 @@ func (c *terminalClient) StreamExecuteKeyRanges(ctx context.Context, query *prot
 	return errTerminal
 }
 
-func (c *terminalClient) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+func (c *terminalClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return errTerminal
 }
 

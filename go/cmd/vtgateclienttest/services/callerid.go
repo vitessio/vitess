@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -81,11 +82,11 @@ func (c *callerIDClient) ExecuteShards(ctx context.Context, sql string, bindVari
 	return c.fallback.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
-func (c *callerIDClient) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.ExecuteKeyspaceIds(ctx, query, reply)
+	return c.fallback.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
 }
 
 func (c *callerIDClient) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
@@ -141,11 +142,11 @@ func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, query *prot
 	return c.fallback.StreamExecuteKeyRanges(ctx, query, sendReply)
 }
 
-func (c *callerIDClient) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.StreamExecuteKeyspaceIds(ctx, query, sendReply)
+	return c.fallback.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, sendReply)
 }
 
 func (c *callerIDClient) Begin(ctx context.Context, outSession *proto.Session) error {
