@@ -181,18 +181,22 @@ var execMap = map[string]struct {
 	},
 	"txRequest": {
 		execQuery: &proto.Query{
-			Sql:           "txRequest",
-			BindVariables: map[string]interface{}{},
-			TabletType:    "master",
-			Session:       session1,
+			Sql: "txRequest",
+			BindVariables: map[string]interface{}{
+				"v1": int64(0),
+			},
+			TabletType: "master",
+			Session:    session1,
 		},
 		shardQuery: &proto.QueryShard{
-			Sql:           "txRequest",
-			BindVariables: map[string]interface{}{},
-			TabletType:    "master",
-			Keyspace:      "",
-			Shards:        []string{},
-			Session:       session1,
+			Sql: "txRequest",
+			BindVariables: map[string]interface{}{
+				"v1": int64(0),
+			},
+			TabletType: "master",
+			Keyspace:   "",
+			Shards:     []string{},
+			Session:    session1,
 		},
 		reply: &proto.QueryResult{
 			Result:  &mproto.QueryResult{},
