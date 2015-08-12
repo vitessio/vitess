@@ -166,50 +166,56 @@ func (res *Resolver) Execute(
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteEntityIds(
 	ctx context.Context,
-	query *proto.EntityIdsQuery,
+	sql string,
+	bindVariables map[string]interface{},
+	keyspace string,
+	entityColumnName string,
+	entityKeyspaceIDs []proto.EntityId,
+	tabletType pb.TabletType,
+	session *proto.Session,
+	notInTransaction bool,
 ) (*mproto.QueryResult, error) {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		ctx,
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
-		query.Keyspace,
-		query.EntityKeyspaceIDs,
+		keyspace,
+		entityKeyspaceIDs,
 		tabletType)
 	if err != nil {
 		return nil, err
 	}
-	query.Keyspace = newKeyspace
-	shards, sqls, bindVars := buildEntityIds(shardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
+	keyspace = newKeyspace
+	shards, sqls, bindVars := buildEntityIds(shardIDMap, sql, entityColumnName, bindVariables)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
 			ctx,
 			shards,
 			sqls,
 			bindVars,
-			query.Keyspace,
+			keyspace,
 			tabletType,
-			NewSafeSession(query.Session),
-			query.NotInTransaction)
+			NewSafeSession(session),
+			notInTransaction)
 		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
 				ctx,
 				res.scatterConn.toposerv,
 				res.scatterConn.cell,
-				query.Keyspace,
-				query.EntityKeyspaceIDs,
+				keyspace,
+				entityKeyspaceIDs,
 				tabletType)
 			if err != nil {
 				return nil, err
 			}
 			// check keyspace change for vertical resharding
-			if newKeyspace != query.Keyspace {
-				query.Keyspace = newKeyspace
+			if newKeyspace != keyspace {
+				keyspace = newKeyspace
 				resharding = true
 			}
 			// check shards change for horizontal resharding
-			newShards, newSqls, newBindVars := buildEntityIds(newShardIDMap, query.Sql, query.EntityColumnName, query.BindVariables)
+			newShards, newSqls, newBindVars := buildEntityIds(newShardIDMap, sql, entityColumnName, bindVariables)
 			if !StrsEquals(newShards, shards) {
 				shards = newShards
 				sqls = newSqls

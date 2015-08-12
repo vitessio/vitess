@@ -183,7 +183,7 @@ func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bi
 }
 
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -191,10 +191,19 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.E
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteEntityIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.EntityIdsQuery{
+		Sql:               sql,
+		BindVariables:     bindVariables,
+		TabletType:        topo.ProtoToTabletType(tabletType),
+		Keyspace:          keyspace,
+		EntityColumnName:  entityColumnName,
+		EntityKeyspaceIDs: entityKeyspaceIDs,
+		Session:           session,
+		NotInTransaction:  notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)

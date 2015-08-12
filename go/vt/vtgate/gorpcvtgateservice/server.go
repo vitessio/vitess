@@ -130,7 +130,16 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteEntityIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteEntityIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.EntityColumnName,
+		request.EntityKeyspaceIDs,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil

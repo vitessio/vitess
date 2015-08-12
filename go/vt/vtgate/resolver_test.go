@@ -80,11 +80,13 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		query := &proto.EntityIdsQuery{
-			Sql:              "query",
-			Keyspace:         "TestResolverExecuteEntityIds",
-			EntityColumnName: "col",
-			EntityKeyspaceIDs: []proto.EntityId{
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		return res.ExecuteEntityIds(context.Background(),
+			"query",
+			nil,
+			"TestResolverExecuteEntityIds",
+			"col",
+			[]proto.EntityId{
 				proto.EntityId{
 					ExternalID: 0,
 					KeyspaceID: kid10,
@@ -94,10 +96,9 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 					KeyspaceID: kid25,
 				},
 			},
-			TabletType: topo.TYPE_MASTER,
-		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return res.ExecuteEntityIds(context.Background(), query)
+			pb.TabletType_MASTER,
+			nil,
+			false)
 	})
 }
 

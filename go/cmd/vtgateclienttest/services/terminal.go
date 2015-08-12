@@ -45,7 +45,7 @@ func (c *terminalClient) ExecuteKeyRanges(ctx context.Context, sql string, bindV
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 

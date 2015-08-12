@@ -147,18 +147,17 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.EntityIdsQuery{
-		Sql:               string(request.Query.Sql),
-		BindVariables:     tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:          request.Keyspace,
-		EntityColumnName:  request.EntityColumnName,
-		EntityKeyspaceIDs: proto.ProtoToEntityIds(request.EntityKeyspaceIds),
-		TabletType:        topo.ProtoToTabletType(request.TabletType),
-		Session:           proto.ProtoToSession(request.Session),
-		NotInTransaction:  request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteEntityIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteEntityIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.EntityColumnName,
+		proto.ProtoToEntityIds(request.EntityKeyspaceIds),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteEntityIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}

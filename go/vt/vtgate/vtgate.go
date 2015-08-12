@@ -291,10 +291,9 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteEntityIds", query.Keyspace, strings.ToLower(tabletType.String())}
+	statsKey := []string{"ExecuteEntityIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -303,14 +302,24 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteEntityIds(ctx, query)
+	qr, err := vtg.resolver.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := &proto.EntityIdsQuery{
+			Sql:               sql,
+			BindVariables:     bindVariables,
+			Keyspace:          keyspace,
+			EntityColumnName:  entityColumnName,
+			EntityKeyspaceIDs: entityKeyspaceIDs,
+			TabletType:        topo.ProtoToTabletType(tabletType),
+			Session:           session,
+			NotInTransaction:  notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
