@@ -20,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -78,31 +80,33 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspa
 	if isDml(query.Sql) && len(query.KeyspaceIds) > 1 {
 		return nil, fmt.Errorf("DML should not span multiple keyspace_ids")
 	}
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			keyspace,
-			query.TabletType,
+			tabletType,
 			query.KeyspaceIds)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, query.NotInTransaction)
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			keyspace,
-			query.TabletType,
+			tabletType,
 			query.KeyRanges)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, query.NotInTransaction)
+	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, query.NotInTransaction)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
@@ -112,7 +116,7 @@ func (res *Resolver) Execute(
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
-	tabletType topo.TabletType,
+	tabletType pb.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
 	notInTransaction bool,
@@ -165,13 +169,14 @@ func (res *Resolver) ExecuteEntityIds(
 	ctx context.Context,
 	query *proto.EntityIdsQuery,
 ) (*mproto.QueryResult, error) {
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		ctx,
 		res.scatterConn.toposerv,
 		res.scatterConn.cell,
 		query.Keyspace,
 		query.EntityKeyspaceIDs,
-		query.TabletType)
+		tabletType)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +189,7 @@ func (res *Resolver) ExecuteEntityIds(
 			sqls,
 			bindVars,
 			query.Keyspace,
-			query.TabletType,
+			tabletType,
 			NewSafeSession(query.Session),
 			query.NotInTransaction)
 		if connErrorCode, ok := isConnError(err); ok && connErrorCode == tabletconn.ERR_RETRY {
@@ -195,7 +200,7 @@ func (res *Resolver) ExecuteEntityIds(
 				res.scatterConn.cell,
 				query.Keyspace,
 				query.EntityKeyspaceIDs,
-				query.TabletType)
+				tabletType)
 			if err != nil {
 				return nil, err
 			}
@@ -227,21 +232,22 @@ func (res *Resolver) ExecuteEntityIds(
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery) (*tproto.QueryResultList, error) {
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
-		shardQueries, err := boundKeyspaceIdQueriesToBoundShardQueries(ctx, res.scatterConn.toposerv, res.scatterConn.cell, query.TabletType, query.Queries)
+		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.scatterConn.toposerv, res.scatterConn.cell, tabletType, query.Queries)
 		if err != nil {
 			return nil, err
 		}
 		return boundShardQueriesToScatterBatchRequest(shardQueries), nil
 	}
-	return res.ExecuteBatch(ctx, query.TabletType, query.AsTransaction, query.Session, buildBatchRequest)
+	return res.ExecuteBatch(ctx, tabletType, query.AsTransaction, query.Session, buildBatchRequest)
 }
 
 // ExecuteBatch executes a group of queries based on shards resolved by given func.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatch(
 	ctx context.Context,
-	tabletType topo.TabletType,
+	tabletType pb.TabletType,
 	asTransaction bool,
 	session *proto.Session,
 	buildBatchRequest func() (*scatterBatchRequest, error),
@@ -286,16 +292,17 @@ func (res *Resolver) ExecuteBatch(
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
 func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*mproto.QueryResult) error) error {
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			query.Keyspace,
-			query.TabletType,
+			tabletType,
 			query.KeyspaceIds)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -305,16 +312,17 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
 func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
+	tabletType := topo.TabletTypeToProto(query.TabletType)
 	mapToShards := func(keyspace string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
 			query.Keyspace,
-			query.TabletType,
+			tabletType,
 			query.KeyRanges)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
+	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, sendReply, query.NotInTransaction)
 }
 
 // StreamExecute executes a streaming query on shards resolved by given func.
@@ -326,7 +334,7 @@ func (res *Resolver) StreamExecute(
 	sql string,
 	bindVars map[string]interface{},
 	keyspace string,
-	tabletType topo.TabletType,
+	tabletType pb.TabletType,
 	session *proto.Session,
 	mapToShards func(string) (string, []string, error),
 	sendReply func(*mproto.QueryResult) error,

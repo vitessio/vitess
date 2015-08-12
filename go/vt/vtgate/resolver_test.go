@@ -20,6 +20,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file uses the sandbox_test framework.
@@ -531,7 +533,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries), nil
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), topo.TYPE_MASTER, false, nil, buildBatchRequest)
+	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, false, nil, buildBatchRequest)
 	if err == nil {
 		t.Errorf("want got, got none")
 	}
@@ -544,7 +546,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	callcount = 0
-	_, err = res.ExecuteBatch(context.Background(), topo.TYPE_MASTER, true, nil, buildBatchRequest)
+	_, err = res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, true, nil, buildBatchRequest)
 	if err == nil {
 		t.Errorf("want got, got none")
 	}

@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -31,7 +31,7 @@ var danglingTabletConn = stats.NewInt("DanglingTabletConn")
 type ShardConn struct {
 	keyspace           string
 	shard              string
-	tabletType         topo.TabletType
+	tabletType         pb.TabletType
 	retryDelay         time.Duration
 	retryCount         int
 	connTimeoutTotal   time.Duration
@@ -51,9 +51,9 @@ type ShardConn struct {
 // NewShardConn creates a new ShardConn. It creates a Balancer using
 // serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
 // number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
+func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard string, tabletType pb.TabletType, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, tabletConnectTimings *stats.MultiTimings) *ShardConn {
 	getAddresses := func() (*pb.EndPoints, error) {
-		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, topo.TabletTypeToProto(tabletType))
+		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, fmt.Errorf("endpoints fetch error: %v", err)
 		}
@@ -61,7 +61,7 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	}
 	blc := NewBalancer(getAddresses, retryDelay)
 	var ticker *timer.RandTicker
-	if tabletType != topo.TYPE_MASTER {
+	if tabletType != pb.TabletType_MASTER {
 		ticker = timer.NewRandTicker(connLife, connLife/2)
 	}
 	sdc := &ShardConn{
@@ -258,7 +258,7 @@ func (sdc *ShardConn) getConn(ctx context.Context) (conn tabletconn.TabletConn, 
 		return conn, endPoint, false, nil
 	}
 
-	key := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
+	key := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()))
 	q, ok := sdc.consolidator.Create(key)
 	sdc.mu.Unlock()
 	if ok {
@@ -299,7 +299,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		perConnStartTime := time.Now()
 		conn, err = tabletconn.GetDialer()(ctx, endPoint, sdc.keyspace, sdc.shard, pb.TabletType_UNKNOWN, perConnTimeout)
 		if err == nil {
-			sdc.connectTimings.Record([]string{sdc.keyspace, sdc.shard, string(sdc.tabletType)}, perConnStartTime)
+			sdc.connectTimings.Record([]string{sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String())}, perConnStartTime)
 			sdc.mu.Lock()
 			defer sdc.mu.Unlock()
 			sdc.conn = conn
@@ -397,7 +397,7 @@ func (sdc *ShardConn) WrapError(in error, endPoint *pb.EndPoint, inTransaction b
 	if in == nil {
 		return nil
 	}
-	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, sdc.tabletType, endPoint)
+	shardIdentifier := fmt.Sprintf("%s.%s.%s, %+v", sdc.keyspace, sdc.shard, strings.ToLower(sdc.tabletType.String()), endPoint)
 	code := tabletconn.ERR_NORMAL
 	serverError, ok := in.(*tabletconn.ServerError)
 	if ok {

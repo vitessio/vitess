@@ -7,8 +7,11 @@ package vtgate
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type requestContext struct {
@@ -33,4 +36,8 @@ func (vc *requestContext) Execute(boundQuery *tproto.BoundQuery) (*mproto.QueryR
 		Session:       vc.query.Session,
 	}
 	return vc.router.Execute(vc.ctx, q)
+}
+
+func (vc *requestContext) TabletType() pb.TabletType {
+	return topo.TabletTypeToProto(vc.query.TabletType)
 }

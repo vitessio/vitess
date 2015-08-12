@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file uses the sandbox_test framework.
@@ -23,7 +25,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, topo.TYPE_REPLICA, nil, false)
+		return stc.Execute(context.Background(), "query", nil, "TestScatterConnExecute", shards, pb.TabletType_REPLICA, nil, false)
 	})
 }
 
@@ -34,7 +36,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		return stc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecute", shardVars, topo.TYPE_REPLICA, nil, false)
+		return stc.ExecuteMulti(context.Background(), "query", "TestScatterConnExecute", shardVars, pb.TabletType_REPLICA, nil, false)
 	})
 }
 
@@ -48,7 +50,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 			Shards:        shards,
 		}}
 		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
-		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topo.TYPE_REPLICA, false, nil)
+		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, pb.TabletType_REPLICA, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -60,7 +62,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topo.TYPE_REPLICA, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, pb.TabletType_REPLICA, nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		}, false)
@@ -76,7 +78,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		for _, shard := range shards {
 			shardVars[shard] = nil
 		}
-		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecute", shardVars, topo.TYPE_REPLICA, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecute", shardVars, pb.TabletType_REPLICA, nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		}, false)
@@ -180,7 +182,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": 1,
 		},
 	}
-	_, _ = stc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topo.TYPE_REPLICA, nil, false)
+	_, _ = stc.ExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, nil, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, shardVars["0"])
 	}
@@ -189,7 +191,7 @@ func TestMultiExecs(t *testing.T) {
 	}
 	sbc0.Queries = nil
 	sbc1.Queries = nil
-	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, topo.TYPE_REPLICA, nil, func(*mproto.QueryResult) error {
+	_ = stc.StreamExecuteMulti(context.Background(), "query", "TestMultiExecs", shardVars, pb.TabletType_REPLICA, nil, func(*mproto.QueryResult) error {
 		return nil
 	}, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, shardVars["0"]) {
@@ -205,7 +207,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, topo.TYPE_REPLICA, nil, func(*mproto.QueryResult) error {
+	err := stc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecuteSendError", []string{"0"}, pb.TabletType_REPLICA, nil, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
 	}, false)
 	want := "send error"
@@ -248,7 +250,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, topo.TYPE_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0"}, pb.TabletType_REPLICA, session, false)
 	wantSession := proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -261,7 +263,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v, got\n%+v", wantSession, *session.Session)
 	}
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, topo.TYPE_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnCommitSuccess", []string{"0", "1"}, pb.TabletType_REPLICA, session, false)
 	wantSession = proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -306,8 +308,8 @@ func TestScatterConnRollback(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, topo.TYPE_REPLICA, session, false)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, topo.TYPE_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0"}, pb.TabletType_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnRollback", []string{"0", "1"}, pb.TabletType_REPLICA, session, false)
 	err := stc.Rollback(context.Background(), session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -329,7 +331,7 @@ func TestScatterConnClose(t *testing.T) {
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, topo.TYPE_REPLICA, nil, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, pb.TabletType_REPLICA, nil, false)
 	stc.Close()
 	time.Sleep(1)
 	if closeCount := sbc.CloseCount.Get(); closeCount != 1 {
@@ -365,8 +367,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	s.MapTestConn("1", sbc1)
 	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topo.TYPE_REPLICA, session, true)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topo.TYPE_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, true)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, pb.TabletType_REPLICA, session, false)
 
 	wantSession := proto.Session{
 		InTransaction: true,
@@ -403,8 +405,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	s.MapTestConn("1", sbc1)
 	stc = NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	session = NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topo.TYPE_REPLICA, session, false)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topo.TYPE_REPLICA, session, true)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, pb.TabletType_REPLICA, session, true)
 
 	wantSession = proto.Session{
 		InTransaction: true,
@@ -441,8 +443,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	s.MapTestConn("1", sbc1)
 	stc = NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	session = NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topo.TYPE_REPLICA, session, false)
-	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topo.TYPE_REPLICA, session, true)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, pb.TabletType_REPLICA, session, false)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, pb.TabletType_REPLICA, session, true)
 
 	wantSession = proto.Session{
 		InTransaction: true,
