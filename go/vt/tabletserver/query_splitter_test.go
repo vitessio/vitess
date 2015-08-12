@@ -1,6 +1,7 @@
 package tabletserver
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -102,6 +103,20 @@ func TestValidateQuery(t *testing.T) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
+	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
+	query.Sql = "select * from test_table where count > :count"
+	got = splitter.validateQuery()
+	want = nil
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
+	}
+
+	splitter = NewQuerySplitter(query, "id2", 0, schemaInfo)
+	query.Sql = "invalid select * from test_table where count > :count"
+	if err := splitter.validateQuery(); err == nil {
+		t.Fatalf("validateQuery() = %v, want: nil", err)
+	}
+
 	// column id2 is indexed
 	splitter = NewQuerySplitter(query, "id2", 3, schemaInfo)
 	query.Sql = "select * from test_table where count > :count"
@@ -134,10 +149,10 @@ func TestGetWhereClause(t *testing.T) {
 	statement, _ := sqlparser.Parse(sql)
 	splitter.sel, _ = statement.(*sqlparser.Select)
 	splitter.splitColumn = "id"
-
+	bindVars := make(map[string]interface{})
 	// no boundary case, start = end = nil, should not change the where clause
 	nilValue := sqltypes.Value{}
-	clause := splitter.getWhereClause(nilValue, nilValue)
+	clause := splitter.getWhereClause(splitter.sel.Where, bindVars, nilValue, nilValue)
 	want := " where count > :count"
 	got := sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
@@ -145,26 +160,45 @@ func TestGetWhereClause(t *testing.T) {
 	}
 
 	// Set lower bound, should add the lower bound condition to where clause
-	start, _ := sqltypes.BuildValue(20)
-	clause = splitter.getWhereClause(start, nilValue)
-	want = " where count > :count and id >= 20"
+	startVal := int64(20)
+	start, _ := sqltypes.BuildValue(startVal)
+	bindVars = make(map[string]interface{})
+	bindVars[":count"] = 300
+	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, start, nilValue)
+	want = " where count > :count and id >= " + startBindVarName
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
 	}
-
+	v, ok := bindVars[startBindVarName]
+	if !ok {
+		t.Fatalf("bind var: %s not found got: nil, want: %v", startBindVarName, startVal)
+	}
+	if v != startVal {
+		t.Fatalf("bind var: %s not found got: %v, want: %v", startBindVarName, v, startVal)
+	}
 	// Set upper bound, should add the upper bound condition to where clause
-	end, _ := sqltypes.BuildValue(40)
-	clause = splitter.getWhereClause(nilValue, end)
-	want = " where count > :count and id < 40"
+	endVal := int64(40)
+	end, _ := sqltypes.BuildValue(endVal)
+	bindVars = make(map[string]interface{})
+	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, nilValue, end)
+	want = " where count > :count and id < " + endBindVarName
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
+	}
+	v, ok = bindVars[endBindVarName]
+	if !ok {
+		t.Fatalf("bind var: %s not found got: nil, want: %v", endBindVarName, endVal)
+	}
+	if v != endVal {
+		t.Fatalf("bind var: %s not found got: %v, want: %v", endBindVarName, v, endVal)
 	}
 
 	// Set both bounds, should add two conditions to where clause
-	clause = splitter.getWhereClause(start, end)
-	want = " where count > :count and id >= 20 and id < 40"
+	bindVars = make(map[string]interface{})
+	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, start, end)
+	want = fmt.Sprintf(" where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName)
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
@@ -174,21 +208,35 @@ func TestGetWhereClause(t *testing.T) {
 	sql = "select * from test_table"
 	statement, _ = sqlparser.Parse(sql)
 	splitter.sel, _ = statement.(*sqlparser.Select)
-
+	bindVars = make(map[string]interface{})
 	// no boundary case, start = end = nil should return no where clause
-	clause = splitter.getWhereClause(nilValue, nilValue)
+	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, nilValue, nilValue)
 	want = ""
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause for nil ranges, got:%v, want:%v", got, want)
 	}
-
+	bindVars = make(map[string]interface{})
 	// Set both bounds, should add two conditions to where clause
-	clause = splitter.getWhereClause(start, end)
-	want = " where id >= 20 and id < 40"
+	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, start, end)
+	want = fmt.Sprintf(" where id >= %s and id < %s", startBindVarName, endBindVarName)
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
+	}
+	v, ok = bindVars[startBindVarName]
+	if !ok {
+		t.Fatalf("bind var: %s not found got: nil, want: %v", startBindVarName, startVal)
+	}
+	if v != startVal {
+		t.Fatalf("bind var: %s not found got: %v, want: %v", startBindVarName, v, startVal)
+	}
+	v, ok = bindVars[endBindVarName]
+	if !ok {
+		t.Fatalf("bind var: %s not found got: nil, want: %v", endBindVarName, endVal)
+	}
+	if v != endVal {
+		t.Fatalf("bind var: %s not found got: %v, want: %v", endBindVarName, v, endVal)
 	}
 }
 
@@ -209,14 +257,14 @@ func TestSplitBoundaries(t *testing.T) {
 
 	splitter := &QuerySplitter{}
 	splitter.splitCount = 5
-	boundaries, err := splitter.splitBoundaries(pkMinMax)
+	boundaries, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(boundaries) != splitter.splitCount-1 {
 		t.Errorf("wrong number of boundaries got: %v, want: %v", len(boundaries), splitter.splitCount-1)
 	}
-	got, err := splitter.splitBoundaries(pkMinMax)
+	got, err := splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -231,7 +279,7 @@ func TestSplitBoundaries(t *testing.T) {
 	row = []sqltypes.Value{min, max}
 	rows = [][]sqltypes.Value{row}
 	pkMinMax.Rows = rows
-	got, err = splitter.splitBoundaries(pkMinMax)
+	got, err = splitter.splitBoundaries(mproto.VT_LONGLONG, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -250,7 +298,7 @@ func TestSplitBoundaries(t *testing.T) {
 	fields = []mproto.Field{minField, maxField}
 	pkMinMax.Rows = rows
 	pkMinMax.Fields = fields
-	got, err = splitter.splitBoundaries(pkMinMax)
+	got, err = splitter.splitBoundaries(mproto.VT_DOUBLE, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -279,7 +327,7 @@ func TestSplitQuery(t *testing.T) {
 		Type: mproto.VT_LONGLONG,
 	}
 	maxField := mproto.Field{
-		Name: "min",
+		Name: "max",
 		Type: mproto.VT_LONGLONG,
 	}
 	fields := []mproto.Field{minField, maxField}
@@ -288,29 +336,143 @@ func TestSplitQuery(t *testing.T) {
 	}
 
 	// Ensure that empty min max does not cause panic or return any error
-	splits, err := splitter.split(pkMinMax)
+	splits, err := splitter.split(mproto.VT_LONGLONG, pkMinMax)
 	if err != nil {
 		t.Errorf("unexpected error while splitting on empty pkMinMax, %s", err)
 	}
 
 	pkMinMax.Rows = [][]sqltypes.Value{[]sqltypes.Value{min, max}}
-	splits, err = splitter.split(pkMinMax)
+	splits, err = splitter.split(mproto.VT_LONGLONG, pkMinMax)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got := []string{}
+	got := []proto.BoundQuery{}
 	for _, split := range splits {
 		if split.RowCount != 100 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 100)
 		}
-		got = append(got, split.Query.Sql)
+		got = append(got, split.Query)
 	}
-	want := []string{
-		"select * from test_table where count > :count and id < 100",
-		"select * from test_table where count > :count and id >= 100 and id < 200",
-		"select * from test_table where count > :count and id >= 200",
+	want := []proto.BoundQuery{
+		{
+			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			BindVariables: map[string]interface{}{endBindVarName: int64(100)},
+		},
+		{
+			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			BindVariables: map[string]interface{}{
+				startBindVarName: int64(100),
+				endBindVarName:   int64(200),
+			},
+		},
+		{
+			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			BindVariables: map[string]interface{}{startBindVarName: int64(200)},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("wrong splits, got: %v, want: %v", got, want)
 	}
+}
+
+func TestSplitQueryFractionalColumn(t *testing.T) {
+	schemaInfo := getSchemaInfo()
+	query := &proto.BoundQuery{
+		Sql: "select * from test_table where count > :count",
+	}
+	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter.validateQuery()
+	min, _ := sqltypes.BuildValue(10.5)
+	max, _ := sqltypes.BuildValue(490.5)
+	minField := mproto.Field{
+		Name: "min",
+		Type: mproto.VT_FLOAT,
+	}
+	maxField := mproto.Field{
+		Name: "max",
+		Type: mproto.VT_FLOAT,
+	}
+	fields := []mproto.Field{minField, maxField}
+	pkMinMax := &mproto.QueryResult{
+		Fields: fields,
+		Rows:   [][]sqltypes.Value{[]sqltypes.Value{min, max}},
+	}
+
+	splits, err := splitter.split(mproto.VT_FLOAT, pkMinMax)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := []proto.BoundQuery{}
+	for _, split := range splits {
+		if split.RowCount != 160 {
+			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 160)
+		}
+		got = append(got, split.Query)
+	}
+	want := []proto.BoundQuery{
+		{
+			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			BindVariables: map[string]interface{}{endBindVarName: 170.5},
+		},
+		{
+			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			BindVariables: map[string]interface{}{
+				startBindVarName: 170.5,
+				endBindVarName:   330.5,
+			},
+		},
+		{
+			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			BindVariables: map[string]interface{}{startBindVarName: 330.5},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wrong splits, got: %v, want: %v", got, want)
+	}
+}
+
+func TestSplitQueryStringColumn(t *testing.T) {
+	schemaInfo := getSchemaInfo()
+	query := &proto.BoundQuery{
+		Sql: "select * from test_table where count > :count",
+	}
+	splitter := NewQuerySplitter(query, "", 3, schemaInfo)
+	splitter.validateQuery()
+	splits, err := splitter.split(mproto.VT_VAR_STRING, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := []proto.BoundQuery{}
+	for _, split := range splits {
+		if split.RowCount != 1431655765 {
+			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 1431655765)
+		}
+		got = append(got, split.Query)
+	}
+	want := []proto.BoundQuery{
+		{
+			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt64(0x55555555)[4:]},
+		},
+		{
+			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			BindVariables: map[string]interface{}{
+				startBindVarName: hexToByteUInt64(0x55555555)[4:],
+				endBindVarName:   hexToByteUInt64(0xAAAAAAAA)[4:],
+			},
+		},
+		{
+			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			BindVariables: map[string]interface{}{startBindVarName: hexToByteUInt64(0xAAAAAAAA)[4:]},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wrong splits, got: %v, want: %v", got, want)
+	}
+}
+
+func hexToByteUInt64(val uint64) []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, val)
+	return buf
 }

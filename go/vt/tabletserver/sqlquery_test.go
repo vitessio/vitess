@@ -799,7 +799,17 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 			},
 		},
 	})
-
+	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeNumeric([]byte("1")),
+			},
+		},
+	})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -837,7 +847,30 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 }
 
 func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
-	setUpSqlQueryTest()
+	db := setUpSqlQueryTest()
+	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeNumeric([]byte("1")),
+				sqltypes.MakeNumeric([]byte("100")),
+			},
+		},
+	})
+	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeNumeric([]byte("1")),
+			},
+		},
+	})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -891,6 +924,17 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 			},
 		},
 	}
+	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+		Fields: []mproto.Field{
+			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			[]sqltypes.Value{
+				sqltypes.MakeNumeric([]byte("1")),
+			},
+		},
+	})
 	db.AddQuery(pkMinMaxQuery, pkMinMaxQueryResp)
 
 	config := testUtils.newQueryServiceConfig()
