@@ -25,8 +25,8 @@ public class BsonifyTest {
   @Test
   public void testResultParse() throws InvalidFieldException {
     BSONObject result = new BasicBSONObject();
-    result.put("RowsAffected", UnsignedLong.valueOf("12"));
-    result.put("InsertId", UnsignedLong.valueOf("12345"));
+    result.put("RowsAffected", 12L);
+    result.put("InsertId", 12345L);
     
     BasicBSONList fields = new BasicBSONList();
     fields.add(newField("col_0", FieldType.VT_DECIMAL, Flag.VT_ZEROVALUE_FLAG));

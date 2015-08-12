@@ -85,7 +85,7 @@ public class FakeGoServer extends Thread {
       BSONObject respHead = new BasicBSONObject();
       respHead.put(Constants.SERVICE_METHOD,
           ((String) reqHead.get(Constants.SERVICE_METHOD)).getBytes());
-      respHead.put(Constants.SEQ, (UnsignedLong) reqHead.get(Constants.SEQ));
+      respHead.put(Constants.SEQ, reqHead.get(Constants.SEQ));
       if (!"Arith.Multiply".equals((String) reqHead.get(Constants.SERVICE_METHOD))) {
         respHead
             .put(Constants.ERROR, ("rpc: can't find method " + (String) reqHead
