@@ -117,17 +117,16 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyRangeQuery{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		KeyRanges:        key.ProtoToKeyRanges(request.KeyRanges),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteKeyRanges(ctx, query, reply)
+	executeErr := vtg.server.ExecuteKeyRanges(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyRanges(request.KeyRanges),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteKeyRangesResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -267,27 +266,6 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 		})
 }
 
-// StreamExecuteKeyRanges is the RPC version of
-// vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequest, stream pbs.Vitess_StreamExecuteKeyRangesServer) (err error) {
-	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyRangeQuery{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		KeyRanges:     key.ProtoToKeyRanges(request.KeyRanges),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteKeyRanges(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteKeyRangesResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
-		})
-	})
-}
-
 // StreamExecuteKeyspaceIds is the RPC version of
 // vtgateservice.VTGateService method
 func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIdsRequest, stream pbs.Vitess_StreamExecuteKeyspaceIdsServer) (err error) {
@@ -303,6 +281,26 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
+		})
+}
+
+// StreamExecuteKeyRanges is the RPC version of
+// vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequest, stream pbs.Vitess_StreamExecuteKeyRangesServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.CallerId,
+		callerid.NewImmediateCallerID("grpc client"))
+	return vtg.server.StreamExecuteKeyRanges(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyRanges(request.KeyRanges),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
 				Result: mproto.QueryResultToProto3(value.Result),
 			})
 		})

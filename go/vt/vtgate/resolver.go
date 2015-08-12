@@ -95,18 +95,17 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 
 // ExecuteKeyRanges executes a non-streaming query based on KeyRanges.
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery) (*mproto.QueryResult, error) {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
-	mapToShards := func(keyspace string) (string, []string, error) {
+func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
+	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
-			keyspace,
+			k,
 			tabletType,
-			query.KeyRanges)
+			keyRanges)
 	}
-	return res.Execute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, query.Session, mapToShards, query.NotInTransaction)
+	return res.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, mapToShards, notInTransaction)
 }
 
 // Execute executes a non-streaming query based on shards resolved by given func.
@@ -310,18 +309,17 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*mproto.QueryResult) error) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
-	mapToShards := func(keyspace string) (string, []string, error) {
+func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*mproto.QueryResult) error) error {
+	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
 			res.scatterConn.toposerv,
 			res.scatterConn.cell,
-			query.Keyspace,
+			k,
 			tabletType,
-			query.KeyRanges)
+			keyRanges)
 	}
-	return res.StreamExecute(ctx, query.Sql, query.BindVariables, query.Keyspace, tabletType, mapToShards, sendReply)
+	return res.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, mapToShards, sendReply)
 }
 
 // StreamExecute executes a streaming query on shards resolved by given func.

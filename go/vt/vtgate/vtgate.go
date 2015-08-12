@@ -259,10 +259,9 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, strings.ToLower(tabletType.String())}
+	statsKey := []string{"ExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -271,14 +270,23 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, query)
+	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := &proto.KeyRangeQuery{
+			Sql:              sql,
+			BindVariables:    bindVariables,
+			Keyspace:         keyspace,
+			KeyRanges:        keyRanges,
+			TabletType:       topo.ProtoToTabletType(tabletType),
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
@@ -465,10 +473,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
-	tabletType := topo.TabletTypeToProto(query.TabletType)
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, strings.ToLower(tabletType.String())}
+	statsKey := []string{"StreamExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -480,7 +487,11 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		keyspace,
+		keyRanges,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
@@ -493,11 +504,14 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := &proto.KeyRangeQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+			Keyspace:      keyspace,
+			KeyRanges:     keyRanges,
+			TabletType:    topo.ProtoToTabletType(tabletType),
+		}
 		logError(err, query, vtg.logStreamExecuteKeyRanges)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }

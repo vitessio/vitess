@@ -58,14 +58,15 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		query := &proto.KeyRangeQuery{
-			Sql:        "query",
-			Keyspace:   "TestResolverExecuteKeyRanges",
-			KeyRanges:  []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
-			TabletType: topo.TYPE_MASTER,
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return res.ExecuteKeyRanges(context.Background(), query)
+		return res.ExecuteKeyRanges(context.Background(),
+			"query",
+			nil,
+			"TestResolverExecuteKeyRanges",
+			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			pb.TabletType_MASTER,
+			nil,
+			false)
 	})
 }
 
@@ -188,32 +189,37 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	query := &proto.KeyRangeQuery{
-		Sql:        "query",
-		Keyspace:   "TestResolverStreamExecuteKeyRanges",
-		KeyRanges:  []key.KeyRange{key.KeyRange{Start: kid10, End: kid15}},
-		TabletType: topo.TYPE_MASTER,
-	}
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(), query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
-			return nil
-		})
+		err = res.StreamExecuteKeyRanges(context.Background(),
+			"query",
+			nil,
+			"TestResolverStreamExecuteKeyRanges",
+			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid15}},
+			pb.TabletType_MASTER,
+			func(r *mproto.QueryResult) error {
+				appendResult(qr, r)
+				return nil
+			})
 		return qr, err
 	})
 	// streaming multiple shards
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		query.KeyRanges = []key.KeyRange{key.KeyRange{Start: kid10, End: kid25}}
 		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(), query, func(r *mproto.QueryResult) error {
-			appendResult(qr, r)
-			return nil
-		})
+		err = res.StreamExecuteKeyRanges(context.Background(),
+			"query",
+			nil,
+			"TestResolverStreamExecuteKeyRanges",
+			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			pb.TabletType_MASTER,
+			func(r *mproto.QueryResult) error {
+				appendResult(qr, r)
+				return nil
+			})
 		return qr, err
 	})
 }
