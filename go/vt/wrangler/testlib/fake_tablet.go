@@ -131,7 +131,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon()
-	fakeMysqlDaemon.MysqlPort = 3300 + int(uid)
+	fakeMysqlDaemon.MysqlPort = 3300 + int32(uid)
 
 	return &FakeTablet{
 		Tablet:          tablet,

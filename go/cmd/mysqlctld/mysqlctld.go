@@ -51,7 +51,7 @@ func main() {
 	dbconfigs.RegisterFlags(flags)
 	flag.Parse()
 
-	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), *mysqlPort)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUID), int32(*mysqlPort))
 	if *mysqlSocket != "" {
 		mycnf.SocketFile = *mysqlSocket
 	}
