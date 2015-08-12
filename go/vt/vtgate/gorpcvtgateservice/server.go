@@ -58,7 +58,15 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteShard(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -198,9 +206,15 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryS
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecuteShard(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 }
 
 // StreamExecuteShard2 is the RPC version of vtgateservice.VTGateService method
@@ -209,9 +223,15 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.Query
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.StreamExecuteShard(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	vtgErr := vtg.server.StreamExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 	if vtgErr == nil {
 		return nil
 	}

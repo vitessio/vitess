@@ -45,11 +45,11 @@ func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map
 	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
-	if query.Sql == "return integrity error" {
+func (c *errorClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if sql == "return integrity error" {
 		return fmt.Errorf("vtgate test client, errorClient.ExecuteShard returning integrity error (errno 1062)")
 	}
-	return c.fallback.ExecuteShard(ctx, query, reply)
+	return c.fallback.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
 func (c *errorClient) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
@@ -91,8 +91,8 @@ func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariabl
 	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
-func (c *errorClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecuteShard(ctx, query, sendReply)
+func (c *errorClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	return c.fallback.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
 }
 
 func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {

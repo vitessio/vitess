@@ -32,7 +32,7 @@ func (c *terminalClient) Execute(ctx context.Context, sql string, bindVariables 
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 
@@ -60,7 +60,7 @@ func (c *terminalClient) StreamExecute(ctx context.Context, sql string, bindVari
 	return errTerminal
 }
 
-func (c *terminalClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+func (c *terminalClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return errTerminal
 }
 

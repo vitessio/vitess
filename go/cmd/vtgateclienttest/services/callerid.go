@@ -74,11 +74,11 @@ func (c *callerIDClient) Execute(ctx context.Context, sql string, bindVariables 
 	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
-func (c *callerIDClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.ExecuteShard(ctx, query, reply)
+	return c.fallback.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
 func (c *callerIDClient) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
@@ -127,11 +127,11 @@ func (c *callerIDClient) StreamExecute(ctx context.Context, sql string, bindVari
 	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
-func (c *callerIDClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
-	if ok, err := c.checkCallerID(ctx, query.Sql); ok {
+func (c *callerIDClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.StreamExecuteShard(ctx, query, sendReply)
+	return c.fallback.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
 }
 
 func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {

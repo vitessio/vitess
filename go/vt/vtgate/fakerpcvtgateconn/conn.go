@@ -122,8 +122,8 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	return &reply, s, nil
 }
 
-// ExecuteShard please see vtgateconn.Impl.ExecuteShard
-func (conn *FakeVTGateConn) ExecuteShard(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+// ExecuteShards please see vtgateconn.Impl.ExecuteShard
+func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -143,7 +143,7 @@ func (conn *FakeVTGateConn) ExecuteShard(ctx context.Context, sql string, keyspa
 	}
 	if !reflect.DeepEqual(query, response.shardQuery) {
 		return nil, nil, fmt.Errorf(
-			"ExecuteShard: %+v, want %+v", query, response.shardQuery)
+			"ExecuteShards: %+v, want %+v", query, response.shardQuery)
 	}
 	var reply mproto.QueryResult
 	reply = *response.reply
@@ -221,13 +221,13 @@ func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bi
 	panic("not implemented")
 }
 
-// StreamExecuteShard please see vtgateconn.Impl.StreamExecuteShard
-func (conn *FakeVTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+// StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
+func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
-// StreamExecuteShard2 please see vtgateconn.Impl.StreamExecuteShard2
-func (conn *FakeVTGateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+// StreamExecuteShards2 please see vtgateconn.Impl.StreamExecuteShards2
+func (conn *FakeVTGateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 

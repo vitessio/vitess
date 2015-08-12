@@ -68,7 +68,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *pb.Session
 	if session != nil {
 		s = session.(*pb.Session)
@@ -248,7 +248,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 	return conn.StreamExecute(ctx, query, bindVars, tabletType)
 }
 
-func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &pb.StreamExecuteShardsRequest{
 		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
 		Query:      tproto.BoundQueryToProto3(query, bindVars),
@@ -285,8 +285,8 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	}, nil
 }
 
-func (conn *vtgateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	return conn.StreamExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType)
+func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pbt.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	return conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pbt.KeyRange, bindVars map[string]interface{}, tabletType pbt.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {

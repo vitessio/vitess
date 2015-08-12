@@ -155,7 +155,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.ExecuteShard(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
+	qr, err := vtgateConn.ExecuteShards(ctx, subFlags.Arg(0), *keyspace, shards, *bindVariables, t)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

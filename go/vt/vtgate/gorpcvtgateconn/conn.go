@@ -83,7 +83,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -272,7 +272,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.QueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
@@ -287,7 +287,7 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.QueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,

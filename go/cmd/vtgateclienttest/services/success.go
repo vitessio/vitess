@@ -36,8 +36,8 @@ func (c *successClient) Execute(ctx context.Context, sql string, bindVariables m
 	return c.fallback.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
 }
 
-func (c *successClient) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
-	return c.fallback.ExecuteShard(ctx, query, reply)
+func (c *successClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	return c.fallback.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
 }
 
 func (c *successClient) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
@@ -64,8 +64,8 @@ func (c *successClient) StreamExecute(ctx context.Context, sql string, bindVaria
 	return c.fallback.StreamExecute(ctx, sql, bindVariables, tabletType, sendReply)
 }
 
-func (c *successClient) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
-	return c.fallback.StreamExecuteShard(ctx, query, sendReply)
+func (c *successClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	return c.fallback.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, sendReply)
 }
 
 func (c *successClient) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {

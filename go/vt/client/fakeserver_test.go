@@ -39,8 +39,8 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	return nil
 }
 
-// ExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+// ExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return nil
 }
 
@@ -103,8 +103,8 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 	return nil
 }
 
-// StreamExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return nil
 }
 

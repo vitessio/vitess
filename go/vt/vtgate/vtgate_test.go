@@ -105,18 +105,20 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Rollback(context.Background(), session)
 }
 
-func TestVTGateExecuteShard(t *testing.T) {
-	sandbox := createSandbox("TestVTGateExecuteShard")
+func TestVTGateExecuteShards(t *testing.T) {
+	sandbox := createSandbox("TestVTGateExecuteShards")
 	sbc := &sandboxConn{}
 	sandbox.MapTestConn("0", sbc)
-	q := proto.QueryShard{
-		Sql:        "query",
-		Keyspace:   "TestVTGateExecuteShard",
-		Shards:     []string{"0"},
-		TabletType: topo.TYPE_REPLICA,
-	}
 	qr := new(proto.QueryResult)
-	err := rpcVTGate.ExecuteShard(context.Background(), &q, qr)
+	err := rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		pb.TabletType_REPLICA,
+		nil,
+		false,
+		qr)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -129,34 +131,50 @@ func TestVTGateExecuteShard(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qr.Session)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	if !q.Session.InTransaction {
+	session := new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
-	rpcVTGate.ExecuteShard(context.Background(), &q, qr)
+	rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		pb.TabletType_REPLICA,
+		session,
+		false,
+		qr)
 	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
-			Keyspace:      "TestVTGateExecuteShard",
+			Keyspace:      "TestVTGateExecuteShards",
 			Shard:         "0",
 			TabletType:    topo.TYPE_REPLICA,
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, q.Session) {
-		t.Errorf("want \n%+v, got \n%+v", wantSession, q.Session)
+	if !reflect.DeepEqual(wantSession, session) {
+		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
-	rpcVTGate.Commit(context.Background(), q.Session)
+	rpcVTGate.Commit(context.Background(), session)
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	rpcVTGate.ExecuteShard(context.Background(), &q, qr)
-	rpcVTGate.Rollback(context.Background(), q.Session)
+	session = new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateExecuteShards",
+		[]string{"0"},
+		pb.TabletType_REPLICA,
+		session,
+		false,
+		qr)
+	rpcVTGate.Rollback(context.Background(), session)
 	/*
 		// Flaky: This test should be run manually.
 		runtime.Gosched()
@@ -651,52 +669,27 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 }
 
 func TestVTGateStreamExecuteShard(t *testing.T) {
-	s := createSandbox("TestVTGateStreamExecuteShard")
+	s := createSandbox("TestVTGateStreamExecuteShards")
 	sbc := &sandboxConn{}
 	s.MapTestConn("0", sbc)
-	q := proto.QueryShard{
-		Sql:        "query",
-		Keyspace:   "TestVTGateStreamExecuteShard",
-		Shards:     []string{"0"},
-		TabletType: topo.TYPE_MASTER,
-	}
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err := rpcVTGate.StreamExecuteShard(context.Background(), &q, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
+	err := rpcVTGate.StreamExecuteShards(context.Background(),
+		"query",
+		nil,
+		"TestVTGateStreamExecuteShards",
+		[]string{"0"},
+		pb.TabletType_MASTER,
+		func(r *proto.QueryResult) error {
+			qrs = append(qrs, r)
+			return nil
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 	row := new(proto.QueryResult)
 	row.Result = singleRowResult
 	want := []*proto.QueryResult{row}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
-	}
-
-	q.Session = new(proto.Session)
-	qrs = nil
-	rpcVTGate.Begin(context.Background(), q.Session)
-	err = rpcVTGate.StreamExecuteShard(context.Background(), &q, func(r *proto.QueryResult) error {
-		qrs = append(qrs, r)
-		return nil
-	})
-	want = []*proto.QueryResult{
-		row,
-		&proto.QueryResult{
-			Session: &proto.Session{
-				InTransaction: true,
-				ShardSessions: []*proto.ShardSession{{
-					Keyspace:      "TestVTGateStreamExecuteShard",
-					Shard:         "0",
-					TransactionId: 1,
-					TabletType:    topo.TYPE_MASTER,
-				}},
-			},
-		},
-	}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}

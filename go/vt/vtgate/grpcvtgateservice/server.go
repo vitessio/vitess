@@ -57,17 +57,16 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.QueryShard{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		Shards:           request.Shards,
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteShard(ctx, query, reply)
+	executeErr := vtg.server.ExecuteShards(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.Shards,
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteShardsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -256,18 +255,17 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.QueryShard{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		Shards:        request.Shards,
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteShard(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteShardsResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecuteShards(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.Shards,
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteShardsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
 }
 
 // StreamExecuteKeyRanges is the RPC version of
