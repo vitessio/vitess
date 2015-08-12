@@ -106,8 +106,8 @@ func NewMysqld(dbaName, appName string, config *Mycnf, dba, app, repl *sqldb.Con
 		appPool:       appPool,
 		replParams:    repl,
 		dbaMysqlStats: dbaMysqlStats,
-		TabletDir:     TabletDir(config.ServerId),
-		SnapshotDir:   SnapshotDir(config.ServerId),
+		TabletDir:     TabletDir(config.ServerID),
+		SnapshotDir:   SnapshotDir(config.ServerID),
 	}
 }
 

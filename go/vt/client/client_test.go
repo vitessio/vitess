@@ -10,19 +10,20 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	_ "github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateconn"
-	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
+	"google.golang.org/grpc"
+
+	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+
+	// load the gRPC vtgate conn driver
+	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 var (
@@ -39,24 +40,17 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("Cannot listen: %v", err))
 	}
 
-	// Create a Go Rpc server and listen on the port
-	server := rpcplus.NewServer()
-	server.Register(gorpcvtgateservice.New(service))
-
-	// create the HTTP server, serve the server from it
-	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
-	httpServer := http.Server{
-		Handler: handler,
-	}
-	go httpServer.Serve(listener)
+	// Create a gRPC server and listen on the port
+	server := grpc.NewServer()
+	grpcvtgateservice.RegisterForTest(server, service)
+	go server.Serve(listener)
 
 	testAddress = listener.Addr().String()
 	os.Exit(m.Run())
 }
 
 func TestDriver(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	db, err := sql.Open("vitess", connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -76,13 +70,13 @@ func TestDriver(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantc := &conn{
-		Protocol:   "gorpc",
+		Protocol:   "grpc",
 		TabletType: "replica",
 		Streaming:  false,
 		Timeout:    30 * time.Second,
@@ -110,7 +104,7 @@ func TestDial(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +133,7 @@ func TestExec(t *testing.T) {
 	}
 	_ = c.Close()
 
-	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr = fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +147,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +190,7 @@ func TestQuery(t *testing.T) {
 	}
 	_ = c.Close()
 
-	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr = fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -234,7 +228,7 @@ func TestQuery(t *testing.T) {
 }
 
 func TestTx(t *testing.T) {
-	connStr := fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "master", "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr := fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "master", "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err := drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)
@@ -244,7 +238,7 @@ func TestTx(t *testing.T) {
 		t.Error(err)
 	}
 	s, _ := c.Prepare("txRequest")
-	_, err = s.Exec(nil)
+	_, err = s.Exec([]driver.Value{int64(0)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -268,7 +262,7 @@ func TestTx(t *testing.T) {
 		t.Error(err)
 	}
 	s, _ = c.Prepare("txRequest")
-	_, err = s.Query(nil)
+	_, err = s.Query([]driver.Value{int64(0)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -282,7 +276,7 @@ func TestTx(t *testing.T) {
 	}
 	_ = c.Close()
 
-	connStr = fmt.Sprintf(`{"protocol": "gorpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
+	connStr = fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "tablet_type": "rdonly", "streaming": true, "timeout": %d}`, testAddress, int64(30*time.Second))
 	c, err = drv{}.Open(connStr)
 	if err != nil {
 		t.Fatal(err)

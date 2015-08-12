@@ -548,7 +548,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias,
 	// Create the list of commands to set the master
 	cmds := []string{}
 	if wasReplicating {
-		cmds = append(cmds, mysqlctl.SqlStopSlave)
+		cmds = append(cmds, mysqlctl.SQLStopSlave)
 	}
 	smc, err := agent.MysqlDaemon.SetMasterCommands(ti.Hostname, int(ti.PortMap["mysql"]))
 	if err != nil {
@@ -556,7 +556,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias,
 	}
 	cmds = append(cmds, smc...)
 	if shouldbeReplicating {
-		cmds = append(cmds, mysqlctl.SqlStartSlave)
+		cmds = append(cmds, mysqlctl.SQLStartSlave)
 	}
 	if err := agent.MysqlDaemon.ExecuteSuperQueryList(cmds); err != nil {
 		return err

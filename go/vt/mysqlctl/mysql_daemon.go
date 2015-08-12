@@ -29,7 +29,7 @@ type MysqlDaemon interface {
 	RunMysqlUpgrade() error
 
 	// GetMysqlPort returns the current port mysql is listening on.
-	GetMysqlPort() (int, error)
+	GetMysqlPort() (int32, error)
 
 	// replication related methods
 	SlaveStatus() (proto.ReplicationStatus, error)
@@ -95,7 +95,7 @@ type FakeMysqlDaemon struct {
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
-	MysqlPort int
+	MysqlPort int32
 
 	// Replicating is updated when calling StartSlave / StopSlave
 	// (it is not used at all when calling SlaveStatus, it is the
@@ -220,7 +220,7 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetMysqlPort() (int, error) {
+func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	if fmd.MysqlPort == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
@@ -325,9 +325,9 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(queryList []string) error {
 
 		// intercept some queries to update our status
 		switch query {
-		case SqlStartSlave:
+		case SQLStartSlave:
 			fmd.Replicating = true
-		case SqlStopSlave:
+		case SQLStopSlave:
 			fmd.Replicating = false
 		}
 	}
