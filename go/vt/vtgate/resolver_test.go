@@ -17,7 +17,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -112,18 +111,17 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		query := &proto.KeyspaceIdBatchQuery{
-			Queries: []proto.BoundKeyspaceIdQuery{{
+		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
+			[]proto.BoundKeyspaceIdQuery{{
 				Sql:           "query",
 				BindVariables: nil,
 				Keyspace:      "TestResolverExecuteBatchKeyspaceIds",
 				KeyspaceIds:   []key.KeyspaceId{kid10, kid25},
 			}},
-			TabletType:    topo.TYPE_MASTER,
-			AsTransaction: false,
-		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(), query)
+			pb.TabletType_MASTER,
+			false,
+			nil)
 		if err != nil {
 			return nil, err
 		}

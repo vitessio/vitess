@@ -178,14 +178,13 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.BatchQueryShard{
-		Session:       proto.ProtoToSession(request.Session),
-		Queries:       proto.ProtoToBoundShardQueries(request.Queries),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-		AsTransaction: request.AsTransaction,
-	}
 	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchShard(ctx, query, reply)
+	executeErr := vtg.server.ExecuteBatchShards(ctx,
+		proto.ProtoToBoundShardQueries(request.Queries),
+		request.TabletType,
+		request.AsTransaction,
+		proto.ProtoToSession(request.Session),
+		reply)
 	response = &pb.ExecuteBatchShardsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -207,14 +206,13 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdBatchQuery{
-		Session:       proto.ProtoToSession(request.Session),
-		Queries:       proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-		AsTransaction: request.AsTransaction,
-	}
 	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+		proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
+		request.TabletType,
+		request.AsTransaction,
+		proto.ProtoToSession(request.Session),
+		reply)
 	response = &pb.ExecuteBatchKeyspaceIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}

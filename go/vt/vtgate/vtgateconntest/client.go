@@ -213,22 +213,27 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 	return nil
 }
 
-// ExecuteBatchShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+// ExecuteBatchShards is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "ExecuteBatchShard")
-	batchQuery.CallerID = nil
-	execCase, ok := execMap[batchQuery.Queries[0].Sql]
+	f.checkCallerID(ctx, "ExecuteBatchShards")
+	execCase, ok := execMap[queries[0].Sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", batchQuery.Queries[0].Sql)
+		return fmt.Errorf("no match for: %s", queries[0].Sql)
 	}
-	if !reflect.DeepEqual(batchQuery, execCase.batchQueryShard) {
-		f.t.Errorf("ExecuteBatchShard: %+v, want %+v", batchQuery, execCase.batchQueryShard)
+	query := &proto.BatchQueryShard{
+		Queries:       queries,
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		AsTransaction: asTransaction,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, execCase.batchQueryShard) {
+		f.t.Errorf("ExecuteBatchShard: %+v, want %+v", query, execCase.batchQueryShard)
 		return nil
 	}
 	reply.Error = execCase.reply.Error
@@ -240,7 +245,7 @@ func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *p
 }
 
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -248,13 +253,18 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQu
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteBatchKeyspaceIds")
-	batchQuery.CallerID = nil
-	execCase, ok := execMap[batchQuery.Queries[0].Sql]
+	execCase, ok := execMap[queries[0].Sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", batchQuery.Queries[0].Sql)
+		return fmt.Errorf("no match for: %s", queries[0].Sql)
 	}
-	if !reflect.DeepEqual(batchQuery, execCase.keyspaceIDBatchQuery) {
-		f.t.Errorf("ExecuteBatchKeyspaceIds: %+v, want %+v", batchQuery, execCase.keyspaceIDBatchQuery)
+	query := &proto.KeyspaceIdBatchQuery{
+		Queries:       queries,
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		AsTransaction: asTransaction,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, execCase.keyspaceIDBatchQuery) {
+		f.t.Errorf("ExecuteBatchKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDBatchQuery)
 		return nil
 	}
 	reply.Error = execCase.reply.Error

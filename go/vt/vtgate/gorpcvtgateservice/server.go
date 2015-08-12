@@ -155,7 +155,12 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteBatchShard(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteBatchShards(ctx,
+		request.Queries,
+		topo.TabletTypeToProto(request.TabletType),
+		request.AsTransaction,
+		request.Session,
+		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -172,7 +177,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+		request.Queries,
+		topo.TabletTypeToProto(request.TabletType),
+		request.AsTransaction,
+		request.Session,
+		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil

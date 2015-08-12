@@ -74,7 +74,7 @@ type VTGate struct {
 	logExecuteKeyspaceIds       *logutil.ThrottledLogger
 	logExecuteKeyRanges         *logutil.ThrottledLogger
 	logExecuteEntityIds         *logutil.ThrottledLogger
-	logExecuteBatchShard        *logutil.ThrottledLogger
+	logExecuteBatchShards       *logutil.ThrottledLogger
 	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
 	logStreamExecute            *logutil.ThrottledLogger
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
@@ -111,7 +111,7 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
 		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
 		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
-		logExecuteBatchShard:        logutil.NewThrottledLogger("ExecuteBatchShard", 5*time.Second),
+		logExecuteBatchShards:       logutil.NewThrottledLogger("ExecuteBatchShards", 5*time.Second),
 		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
 		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
@@ -323,11 +323,10 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 	return nil
 }
 
-// ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
-	tabletType := topo.TabletTypeToProto(batchQuery.TabletType)
+// ExecuteBatchShards executes a group of queries on the specified shards.
+func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteBatchShard", "", ""}
+	statsKey := []string{"ExecuteBatchShards", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -339,10 +338,10 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 	qrs, err := vtg.resolver.ExecuteBatch(
 		ctx,
 		tabletType,
-		batchQuery.AsTransaction,
-		batchQuery.Session,
+		asTransaction,
+		session,
 		func() (*scatterBatchRequest, error) {
-			return boundShardQueriesToScatterBatchRequest(batchQuery.Queries), nil
+			return boundShardQueriesToScatterBatchRequest(queries), nil
 		})
 	if err == nil {
 		reply.List = qrs.List
@@ -352,14 +351,20 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
-		reply.Error = handleExecuteError(err, statsKey, batchQuery, vtg.logExecuteBatchShard)
+		query := &proto.BatchQueryShard{
+			Queries:       queries,
+			TabletType:    topo.ProtoToTabletType(tabletType),
+			AsTransaction: asTransaction,
+			Session:       session,
+		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
 	}
-	reply.Session = batchQuery.Session
+	reply.Session = session
 	return nil
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -372,7 +377,10 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		ctx,
-		query)
+		queries,
+		tabletType,
+		asTransaction,
+		session)
 	if err == nil {
 		reply.List = qrs.List
 		var rowCount int64
@@ -381,9 +389,15 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
+		query := &proto.KeyspaceIdBatchQuery{
+			Queries:       queries,
+			TabletType:    topo.ProtoToTabletType(tabletType),
+			AsTransaction: asTransaction,
+			Session:       session,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 

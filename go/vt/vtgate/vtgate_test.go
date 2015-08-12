@@ -456,26 +456,27 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 }
 
-func TestVTGateExecuteBatchShard(t *testing.T) {
-	s := createSandbox("TestVTGateExecuteBatchShard")
+func TestVTGateExecuteBatchShards(t *testing.T) {
+	s := createSandbox("TestVTGateExecuteBatchShards")
 	s.MapTestConn("-20", &sandboxConn{})
 	s.MapTestConn("20-40", &sandboxConn{})
-	q := proto.BatchQueryShard{
-		Queries: []proto.BoundShardQuery{{
+	qrl := new(proto.QueryResultList)
+	err := rpcVTGate.ExecuteBatchShards(context.Background(),
+		[]proto.BoundShardQuery{{
 			Sql:           "query",
 			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShard",
+			Keyspace:      "TestVTGateExecuteBatchShards",
 			Shards:        []string{"-20", "20-40"},
 		}, {
 			Sql:           "query",
 			BindVariables: nil,
-			Keyspace:      "TestVTGateExecuteBatchShard",
+			Keyspace:      "TestVTGateExecuteBatchShards",
 			Shards:        []string{"-20", "20-40"},
 		}},
-		TabletType: topo.TYPE_REPLICA,
-	}
-	qrl := new(proto.QueryResultList)
-	err := rpcVTGate.ExecuteBatchShard(context.Background(), &q, qrl)
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		qrl)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -489,11 +490,26 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	rpcVTGate.ExecuteBatchShard(context.Background(), &q, qrl)
-	if len(q.Session.ShardSessions) != 2 {
-		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
+	session := new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	rpcVTGate.ExecuteBatchShards(context.Background(),
+		[]proto.BoundShardQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestVTGateExecuteBatchShards",
+			Shards:        []string{"-20", "20-40"},
+		}, {
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestVTGateExecuteBatchShards",
+			Shards:        []string{"-20", "20-40"},
+		}},
+		pb.TabletType_MASTER,
+		false,
+		session,
+		qrl)
+	if len(session.ShardSessions) != 2 {
+		t.Errorf("want 2, got %d", len(session.ShardSessions))
 	}
 }
 
@@ -509,8 +525,9 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	q := proto.KeyspaceIdBatchQuery{
-		Queries: []proto.BoundKeyspaceIdQuery{{
+	qrl := new(proto.QueryResultList)
+	err = rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+		[]proto.BoundKeyspaceIdQuery{{
 			Sql:           "query",
 			BindVariables: nil,
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
@@ -521,10 +538,10 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
 			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
 		}},
-		TabletType: topo.TYPE_MASTER,
-	}
-	qrl := new(proto.QueryResultList)
-	err = rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(), &q, qrl)
+		pb.TabletType_MASTER,
+		false,
+		nil,
+		qrl)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -538,11 +555,26 @@ func TestVTGateExecuteBatchKeyspaceIds(t *testing.T) {
 		t.Errorf("want nil, got %+v\n", qrl.Session)
 	}
 
-	q.Session = new(proto.Session)
-	rpcVTGate.Begin(context.Background(), q.Session)
-	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(), &q, qrl)
-	if len(q.Session.ShardSessions) != 2 {
-		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
+	session := new(proto.Session)
+	rpcVTGate.Begin(context.Background(), session)
+	rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+		[]proto.BoundKeyspaceIdQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+		}, {
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestVTGateExecuteBatchKeyspaceIds",
+			KeyspaceIds:   []key.KeyspaceId{kid10, kid30},
+		}},
+		pb.TabletType_MASTER,
+		false,
+		session,
+		qrl)
+	if len(session.ShardSessions) != 2 {
+		t.Errorf("want 2, got %d", len(session.ShardSessions))
 	}
 }
 

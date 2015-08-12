@@ -103,22 +103,22 @@ func (c *callerIDClient) ExecuteEntityIds(ctx context.Context, sql string, bindV
 	return c.fallback.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
 }
 
-func (c *callerIDClient) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
-	if len(batchQuery.Queries) == 1 {
-		if ok, err := c.checkCallerID(ctx, batchQuery.Queries[0].Sql); ok {
+func (c *callerIDClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+	if len(queries) == 1 {
+		if ok, err := c.checkCallerID(ctx, queries[0].Sql); ok {
 			return err
 		}
 	}
-	return c.fallback.ExecuteBatchShard(ctx, batchQuery, reply)
+	return c.fallback.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
-func (c *callerIDClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
-	if len(batchQuery.Queries) == 1 {
-		if ok, err := c.checkCallerID(ctx, batchQuery.Queries[0].Sql); ok {
+func (c *callerIDClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+	if len(queries) == 1 {
+		if ok, err := c.checkCallerID(ctx, queries[0].Sql); ok {
 			return err
 		}
 	}
-	return c.fallback.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+	return c.fallback.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
 func (c *callerIDClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {

@@ -74,18 +74,18 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 	return c.fallback.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
-	if len(batchQuery.Queries) == 1 && batchQuery.Queries[0].Sql == "return integrity error" {
-		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchShard returning integrity error (errno 1062)")
+func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
+		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchShards returning integrity error (errno 1062)")
 	}
-	return c.fallback.ExecuteBatchShard(ctx, batchQuery, reply)
+	return c.fallback.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
-func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
-	if len(batchQuery.Queries) == 1 && batchQuery.Queries[0].Sql == "return integrity error" {
+func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
+	if len(queries) == 1 && queries[0].Sql == "return integrity error" {
 		return fmt.Errorf("vtgate test client, errorClient.ExecuteBatchKeyspaceIds returning integrity error (errno 1062)")
 	}
-	return c.fallback.ExecuteBatchKeyspaceIds(ctx, batchQuery, reply)
+	return c.fallback.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
 }
 
 func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
