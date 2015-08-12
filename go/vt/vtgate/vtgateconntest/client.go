@@ -511,7 +511,7 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -519,9 +519,17 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQuer
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "SplitQuery")
-	req.CallerID = nil
-	if !reflect.DeepEqual(req, splitQueryRequest) {
-		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", req, splitQueryRequest)
+	query := &proto.SplitQueryRequest{
+		Keyspace: keyspace,
+		Query: tproto.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		},
+		SplitColumn: splitColumn,
+		SplitCount:  splitCount,
+	}
+	if !reflect.DeepEqual(query, splitQueryRequest) {
+		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
 	}
 	*reply = *splitQueryResult
 	return nil

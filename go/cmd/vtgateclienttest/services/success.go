@@ -88,8 +88,8 @@ func (c *successClient) Rollback(ctx context.Context, inSession *proto.Session) 
 	return c.fallback.Rollback(ctx, inSession)
 }
 
-func (c *successClient) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	return c.fallback.SplitQuery(ctx, req, reply)
+func (c *successClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+	return c.fallback.SplitQuery(ctx, keyspace, sql, bindVariables, splitColumn, splitCount, reply)
 }
 
 func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {

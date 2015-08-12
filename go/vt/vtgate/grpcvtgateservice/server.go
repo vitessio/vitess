@@ -369,17 +369,14 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.SplitQueryRequest{
-		Keyspace: request.Keyspace,
-		Query: tproto.BoundQuery{
-			Sql:           string(request.Query.Sql),
-			BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		},
-		SplitColumn: request.SplitColumn,
-		SplitCount:  int(request.SplitCount),
-	}
 	reply := new(proto.SplitQueryResult)
-	if err := vtg.server.SplitQuery(ctx, query, reply); err != nil {
+	if err := vtg.server.SplitQuery(ctx,
+		request.Keyspace,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.SplitColumn,
+		int(request.SplitCount),
+		reply); err != nil {
 		return nil, err
 	}
 	return proto.SplitQueryPartsToProto(reply.Splits), nil

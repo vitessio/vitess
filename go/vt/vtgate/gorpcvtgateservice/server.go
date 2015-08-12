@@ -468,7 +468,13 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *proto.SplitQueryRequ
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.SplitQuery(ctx, request, reply)
+	vtgErr := vtg.server.SplitQuery(ctx,
+		request.Keyspace,
+		request.Query.Sql,
+		request.Query.BindVariables,
+		request.SplitColumn,
+		request.SplitCount,
+		reply)
 	vtgate.AddVtGateErrorToSplitQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil

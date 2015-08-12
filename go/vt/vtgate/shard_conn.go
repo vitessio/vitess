@@ -178,10 +178,13 @@ func (sdc *ShardConn) Rollback(ctx context.Context, transactionID int64) (err er
 }
 
 // SplitQuery splits a query into sub queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
+func (sdc *ShardConn) SplitQuery(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
 	err = sdc.withRetry(ctx, func(conn tabletconn.TabletConn) error {
 		var innerErr error
-		queries, innerErr = conn.SplitQuery(ctx, query, splitColumn, splitCount)
+		queries, innerErr = conn.SplitQuery(ctx, tproto.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVariables,
+		}, splitColumn, splitCount)
 		return innerErr
 	}, 0, false)
 	return

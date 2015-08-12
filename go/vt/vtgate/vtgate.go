@@ -607,13 +607,13 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error
 // original query. Number of sub queries will be a multiple of N that is
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	sc := vtg.resolver.scatterConn
-	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, req.Keyspace, pb.TabletType_RDONLY)
+	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, keyspace, pb.TabletType_RDONLY)
 	if err != nil {
 		return err
 	}
-	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
+	perShardSplitCount := int(math.Ceil(float64(splitCount) / float64(len(shards))))
 	if srvKeyspace.ShardingColumnName != "" {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
@@ -621,7 +621,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}
-		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, req.Query, req.SplitColumn, perShardSplitCount, keyRangeByShard, keyspace)
+		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
 		if err != nil {
 			return err
 		}
@@ -635,7 +635,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	for i, shard := range shards {
 		shardNames[i] = shard.Name
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, req.Query, req.SplitColumn, perShardSplitCount, shardNames, keyspace)
+	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
 	if err != nil {
 		return err
 	}

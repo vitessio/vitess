@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	kproto "github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -761,15 +760,14 @@ func TestVTGateSplitQuery(t *testing.T) {
 	}
 	sql := "select col1, col2 from table"
 	splitCount := 24
-	req := proto.SplitQueryRequest{
-		Keyspace: keyspace,
-		Query: tproto.BoundQuery{
-			Sql: sql,
-		},
-		SplitCount: splitCount,
-	}
 	result := new(proto.SplitQueryResult)
-	err := rpcVTGate.SplitQuery(context.Background(), &req, result)
+	err := rpcVTGate.SplitQuery(context.Background(),
+		keyspace,
+		sql,
+		nil,
+		"",
+		splitCount,
+		result)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}

@@ -161,11 +161,11 @@ func (c *callerIDClient) Rollback(ctx context.Context, inSession *proto.Session)
 	return c.fallback.Rollback(ctx, inSession)
 }
 
-func (c *callerIDClient) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
-	if ok, err := c.checkCallerID(ctx, req.Query.Sql); ok {
+func (c *callerIDClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
-	return c.fallback.SplitQuery(ctx, req, reply)
+	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
 }
 
 func (c *callerIDClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {

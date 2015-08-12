@@ -142,7 +142,7 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	return nil
 }
 

@@ -470,10 +470,10 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // splits received from a shard, it construct a KeyRange queries by
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
 	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
-		queries, err := sdc.SplitQuery(ctx, query, splitColumn, splitCount)
+		queries, err := sdc.SplitQuery(ctx, sql, bindVariables, splitColumn, splitCount)
 		if err != nil {
 			return err
 		}
@@ -520,10 +520,10 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, query tproto.Bou
 // KeyRange queries by appending that shard's name to the
 // splits. Aggregates all splits across all shards in no specific
 // order and returns.
-func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int, shards []string, keyspace string) ([]proto.SplitQueryPart, error) {
+func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]proto.SplitQueryPart, error) {
 	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
-		queries, err := sdc.SplitQuery(ctx, query, splitColumn, splitCount)
+		queries, err := sdc.SplitQuery(ctx, sql, bindVariables, splitColumn, splitCount)
 		if err != nil {
 			return err
 		}
