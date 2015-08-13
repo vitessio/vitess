@@ -194,7 +194,7 @@ func (s *Scheduler) validateTaskContainers(newTaskContainers []*pb.TaskContainer
 		for _, newTaskProto := range newTaskContainer.ParallelTasks {
 			err := s.validateTaskSpecification(newTaskProto.Name, newTaskProto.Parameters)
 			if err != nil {
-				return fmt.Errorf("Error: %v Task: %v", err, newTaskProto)
+				return fmt.Errorf("error: %v task: %v", err, newTaskProto)
 			}
 		}
 	}
@@ -228,7 +228,7 @@ func (s *Scheduler) validateTaskSpecification(taskName string, parameters map[st
 	if err != nil {
 		return err
 	}
-	errParameters := checkRequiredParameters(taskInstanceForParametersCheck, parameters)
+	errParameters := validateParameters(taskInstanceForParametersCheck, parameters)
 	if errParameters != nil {
 		return errParameters
 	}
@@ -242,16 +242,33 @@ func (s *Scheduler) createTaskInstance(taskName string) (Task, error) {
 
 	task := taskCreator(taskName)
 	if task == nil {
-		return nil, fmt.Errorf("No implementation found for: %v", taskName)
+		return nil, fmt.Errorf("no implementation found for: %v", taskName)
 	}
 	return task, nil
 }
 
-// checkRequiredParameters returns an error if not all required parameters are provided in "parameters".
-func checkRequiredParameters(task Task, parameters map[string]string) error {
-	for _, requiredParameter := range task.RequiredParameters() {
-		if _, ok := parameters[requiredParameter]; !ok {
-			return fmt.Errorf("Parameter %v is required, but not provided", requiredParameter)
+// validateParameters returns an error if not all required parameters are provided in "parameters".
+// Unknown parameters (neither required nor optional) result in an error.
+func validateParameters(task Task, parameters map[string]string) error {
+	validParams := make(map[string]bool)
+	var missingParams []string
+	for _, reqParam := range task.RequiredParameters() {
+		if _, ok := parameters[reqParam]; ok {
+			validParams[reqParam] = true
+		} else {
+			missingParams = append(missingParams, reqParam)
+		}
+	}
+	if len(missingParams) > 0 {
+		return fmt.Errorf("required parameters are missing: %v", missingParams)
+	}
+	for _, optParam := range task.OptionalParameters() {
+		validParams[optParam] = true
+	}
+	for param := range parameters {
+		if !validParams[param] {
+			return fmt.Errorf("parameter %v is not allowed. Allowed required parameters: %v optional parameters: %v",
+				param, task.RequiredParameters(), task.OptionalParameters())
 		}
 	}
 	return nil
@@ -263,11 +280,11 @@ func (s *Scheduler) EnqueueClusterOperation(ctx context.Context, req *pb.Enqueue
 	defer s.mu.Unlock()
 
 	if s.state != stateRunning {
-		return nil, fmt.Errorf("Scheduler is not running. State: %v", s.state)
+		return nil, fmt.Errorf("scheduler is not running. State: %v", s.state)
 	}
 
 	if s.registeredClusterOperations[req.Name] != true {
-		return nil, fmt.Errorf("No ClusterOperation with name: %v is registered", req.Name)
+		return nil, fmt.Errorf("no ClusterOperation with name: %v is registered", req.Name)
 	}
 
 	err := s.validateTaskSpecification(req.Name, req.Parameters)

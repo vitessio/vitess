@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
@@ -19,10 +18,13 @@ import (
 
 // CreateShard implements topo.Server.
 func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value *pb.Shard) error {
-	data := jscfg.ToJSON(value)
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
 	global := s.getGlobal()
 
-	resp, err := global.Create(shardFilePath(keyspace, shard), data, 0 /* ttl */)
+	resp, err := global.Create(shardFilePath(keyspace, shard), string(data), 0 /* ttl */)
 	if err != nil {
 		return convertError(err)
 	}
@@ -46,10 +48,13 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 
 // UpdateShard implements topo.Server.
 func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	data := jscfg.ToJSON(si.Shard)
+	data, err := json.MarshalIndent(si.Shard, "", "  ")
+	if err != nil {
+		return -1, err
+	}
 
 	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(si.Keyspace(), si.ShardName()),
-		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}

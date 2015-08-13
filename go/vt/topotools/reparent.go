@@ -15,13 +15,15 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // RestartSlavesExternal will tell all the slaves in the provided list
 // that they have a new master, and also tell all the masters. The
 // masters will be scrapped if they don't answer.
 // We execute all the actions in parallel.
-func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTabletAlias topo.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *actionnode.SlaveWasRestartedArgs) error) {
+func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, masterTabletMap map[pb.TabletAlias]*topo.TabletInfo, masterElectTabletAlias *pb.TabletAlias, slaveWasRestarted func(*topo.TabletInfo, *actionnode.SlaveWasRestartedArgs) error) {
 	wg := sync.WaitGroup{}
 
 	swrd := actionnode.SlaveWasRestartedArgs{
@@ -53,7 +55,7 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 				// We don't rebuild the Shard just yet though.
 				log.Warningf("Old master %v is not restarting in time, forcing it to spare: %v", ti.Alias, err)
 
-				ti.Type = topo.TYPE_SPARE
+				ti.Type = pb.TabletType_SPARE
 				if err := topo.UpdateTablet(context.TODO(), ts, ti); err != nil {
 					log.Warningf("Failed to change old master %v to spare: %v", ti.Alias, err)
 				}

@@ -272,7 +272,7 @@ func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard s
 	return nil, fmt.Errorf("Unsupported")
 }
 
-func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pbt.EndPoints, int64, error) {
+func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pbt.TabletType) (*pbt.EndPoints, int64, error) {
 	sand := getSandbox(keyspace)
 	sand.EndPointCounter.Add(1)
 	if sct.callbackGetEndPoints != nil {

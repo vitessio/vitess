@@ -8,11 +8,13 @@ import (
 	"net"
 	"testing"
 
-	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
 	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
 	"github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"google.golang.org/grpc"
+
+	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -24,7 +26,7 @@ func TestGoRPCTMServer(t *testing.T) {
 		t.Fatalf("Cannot listen: %v", err)
 	}
 	host := listener.Addr().(*net.TCPAddr).IP.String()
-	port := listener.Addr().(*net.TCPAddr).Port
+	port := int32(listener.Addr().(*net.TCPAddr).Port)
 
 	// Create a gRPC server and listen on the port
 	s := grpc.NewServer()
@@ -34,13 +36,13 @@ func TestGoRPCTMServer(t *testing.T) {
 
 	// Create a gRPG client to talk to the fake tablet
 	client := &grpctmclient.Client{}
-	ti := topo.NewTabletInfo(&topo.Tablet{
-		Alias: topo.TabletAlias{
+	ti := topo.NewTabletInfo(&pb.Tablet{
+		Alias: &pb.TabletAlias{
 			Cell: "test",
 			Uid:  123,
 		},
 		Hostname: host,
-		Portmap: map[string]int{
+		PortMap: map[string]int32{
 			"grpc": port,
 		},
 	}, 0)

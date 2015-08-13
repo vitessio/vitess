@@ -40,7 +40,7 @@ type Tee struct {
 
 	keyspaceVersionMapping map[string]versionMapping
 	shardVersionMapping    map[string]versionMapping
-	tabletVersionMapping   map[topo.TabletAlias]versionMapping
+	tabletVersionMapping   map[pb.TabletAlias]versionMapping
 
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
@@ -72,7 +72,7 @@ func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 		lockSecond:             lockSecond,
 		keyspaceVersionMapping: make(map[string]versionMapping),
 		shardVersionMapping:    make(map[string]versionMapping),
-		tabletVersionMapping:   make(map[topo.TabletAlias]versionMapping),
+		tabletVersionMapping:   make(map[pb.TabletAlias]versionMapping),
 		keyspaceLockPaths:      make(map[string]string),
 		shardLockPaths:         make(map[string]string),
 		srvShardLockPaths:      make(map[string]string),
@@ -352,7 +352,7 @@ func (tee *Tee) DeleteShard(ctx context.Context, keyspace, shard string) error {
 //
 
 // CreateTablet is part of the topo.Server interface
-func (tee *Tee) CreateTablet(ctx context.Context, tablet *topo.Tablet) error {
+func (tee *Tee) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 	err := tee.primary.CreateTablet(ctx, tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
@@ -376,10 +376,10 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, exist
 	// and tablet version in second topo, replace the version number.
 	// if not, this will probably fail and log.
 	tee.mu.Lock()
-	tvm, ok := tee.tabletVersionMapping[tablet.Alias]
+	tvm, ok := tee.tabletVersionMapping[*tablet.Alias]
 	if ok && tvm.readFromVersion == existingVersion {
 		existingVersion = tvm.readFromSecondVersion
-		delete(tee.tabletVersionMapping, tablet.Alias)
+		delete(tee.tabletVersionMapping, *tablet.Alias)
 	}
 	tee.mu.Unlock()
 	if newVersion2, serr := tee.secondary.UpdateTablet(ctx, tablet, existingVersion); serr != nil {
@@ -396,7 +396,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, exist
 					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias, gerr)
 				} else {
 					tee.mu.Lock()
-					tee.tabletVersionMapping[tablet.Alias] = versionMapping{
+					tee.tabletVersionMapping[*tablet.Alias] = versionMapping{
 						readFromVersion:       newVersion,
 						readFromSecondVersion: ti.Version(),
 					}
@@ -408,7 +408,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, exist
 		}
 	} else {
 		tee.mu.Lock()
-		tee.tabletVersionMapping[tablet.Alias] = versionMapping{
+		tee.tabletVersionMapping[*tablet.Alias] = versionMapping{
 			readFromVersion:       newVersion,
 			readFromSecondVersion: newVersion2,
 		}
@@ -418,7 +418,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, exist
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
+func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error {
 	if err := tee.primary.UpdateTabletFields(ctx, tabletAlias, update); err != nil {
 		// failed on primary, not updating secondary
 		return err
@@ -432,7 +432,7 @@ func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias topo.TabletA
 }
 
 // DeleteTablet is part of the topo.Server interface
-func (tee *Tee) DeleteTablet(ctx context.Context, alias topo.TabletAlias) error {
+func (tee *Tee) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
 	if err := tee.primary.DeleteTablet(ctx, alias); err != nil {
 		return err
 	}
@@ -445,7 +445,7 @@ func (tee *Tee) DeleteTablet(ctx context.Context, alias topo.TabletAlias) error 
 }
 
 // GetTablet is part of the topo.Server interface
-func (tee *Tee) GetTablet(ctx context.Context, alias topo.TabletAlias) (*topo.TabletInfo, error) {
+func (tee *Tee) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*topo.TabletInfo, error) {
 	ti, err := tee.readFrom.GetTablet(ctx, alias)
 	if err != nil {
 		return nil, err
@@ -458,7 +458,7 @@ func (tee *Tee) GetTablet(ctx context.Context, alias topo.TabletAlias) (*topo.Ta
 	}
 
 	tee.mu.Lock()
-	tee.tabletVersionMapping[alias] = versionMapping{
+	tee.tabletVersionMapping[*alias] = versionMapping{
 		readFromVersion:       ti.Version(),
 		readFromSecondVersion: ti2.Version(),
 	}
@@ -467,7 +467,7 @@ func (tee *Tee) GetTablet(ctx context.Context, alias topo.TabletAlias) (*topo.Ta
 }
 
 // GetTabletsByCell is part of the topo.Server interface
-func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]topo.TabletAlias, error) {
+func (tee *Tee) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.TabletAlias, error) {
 	return tee.readFrom.GetTabletsByCell(ctx, cell)
 }
 
@@ -574,12 +574,12 @@ func (tee *Tee) UnlockSrvShardForAction(ctx context.Context, cell, keyspace, sha
 }
 
 // GetSrvTabletTypesPerShard is part of the topo.Server interface
-func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]topo.TabletType, error) {
+func (tee *Tee) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspace, shard string) ([]pb.TabletType, error) {
 	return tee.readFrom.GetSrvTabletTypesPerShard(ctx, cell, keyspace, shard)
 }
 
 // CreateEndPoints is part of the topo.Server interface
-func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints) error {
+func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error {
 	if err := tee.primary.CreateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
@@ -592,7 +592,7 @@ func (tee *Tee) CreateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // UpdateEndPoints is part of the topo.Server interface
-func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
+func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	if err := tee.primary.UpdateEndPoints(ctx, cell, keyspace, shard, tabletType, addrs, existingVersion); err != nil {
 		return err
 	}
@@ -605,12 +605,12 @@ func (tee *Tee) UpdateEndPoints(ctx context.Context, cell, keyspace, shard strin
 }
 
 // GetEndPoints is part of the topo.Server interface
-func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
+func (tee *Tee) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error) {
 	return tee.readFrom.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 
 // DeleteEndPoints is part of the topo.Server interface
-func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
+func (tee *Tee) DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error {
 	err := tee.primary.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, existingVersion)
 	if err != nil && err != topo.ErrNoNode {
 		return err
@@ -694,7 +694,7 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 
 // WatchEndPoints is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType topo.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
+func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
 	return tee.primary.WatchEndPoints(ctx, cell, keyspace, shard, tabletType)
 }
 

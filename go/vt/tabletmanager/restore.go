@@ -10,8 +10,9 @@ import (
 
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -34,8 +35,8 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	// always authorized)
 	tablet := agent.Tablet()
 	originalType := tablet.Type
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topo.Tablet) error {
-		tablet.Type = topo.TYPE_RESTORE
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *pb.Tablet) error {
+		tablet.Type = pb.TabletType_RESTORE
 		return nil
 	}); err != nil {
 		return fmt.Errorf("Cannot change type to RESTORE: %v", err)
@@ -58,7 +59,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 		if si.MasterAlias == nil {
 			return fmt.Errorf("Shard %v/%v has no master", tablet.Keyspace, tablet.Shard)
 		}
-		ti, err := agent.TopoServer.GetTablet(ctx, topo.ProtoToTabletAlias(si.MasterAlias))
+		ti, err := agent.TopoServer.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
 			return fmt.Errorf("Cannot read master tablet %v: %v", si.MasterAlias, err)
 		}
@@ -67,7 +68,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 		status := &myproto.ReplicationStatus{
 			Position:   pos,
 			MasterHost: ti.Hostname,
-			MasterPort: ti.Portmap["mysql"],
+			MasterPort: int(ti.PortMap["mysql"]),
 		}
 		cmds, err := agent.MysqlDaemon.StartReplicationCommands(status)
 		if err != nil {
@@ -79,7 +80,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context) error {
 	}
 
 	// change type back to original type
-	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topo.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *pb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {

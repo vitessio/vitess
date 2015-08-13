@@ -15,6 +15,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // FHtmlize writes data to w as debug HTML (using definition lists).
@@ -127,7 +129,7 @@ var FuncMap = template.FuncMap{
 		}
 		return template.HTML(link(shard.Name, explorer.GetSrvShardPath(cell, keyspace, shard.Name)))
 	},
-	"tablet": func(alias topo.TabletAlias, shortname string) template.HTML {
+	"tablet": func(alias *pb.TabletAlias, shortname string) template.HTML {
 		if explorer == nil {
 			return template.HTML(shortname)
 		}

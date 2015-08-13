@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -39,6 +41,10 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.tabletType, err = topo.ParseTabletType(c.TabletType)
+	if err != nil {
+		return nil, err
+	}
 	err = c.dial()
 	if err != nil {
 		return nil, err
@@ -49,9 +55,11 @@ func (d drv) Open(name string) (driver.Conn, error) {
 type conn struct {
 	Protocol   string
 	Address    string
-	TabletType topo.TabletType `json:"tablet_type"`
+	TabletType string `json:"tablet_type"`
 	Streaming  bool
 	Timeout    time.Duration
+
+	tabletType pb.TabletType
 	vtgateConn *vtgateconn.VTGateConn
 	tx         *vtgateconn.VTGateTx
 }
@@ -129,15 +137,15 @@ func (s *stmt) NumInput() int {
 func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
 	defer cancel()
-	var qr *mproto.QueryResult
-	var err error
 	if s.c.Streaming {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
+	var qr *mproto.QueryResult
+	var err error
 	if s.c.tx == nil {
-		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType)
 	} else {
-		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType, false)
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType, false)
 	}
 	if err != nil {
 		return nil, err
@@ -148,7 +156,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
 	if s.c.Streaming {
-		qrc, errFunc, err := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		qrc, errFunc, err := s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletType)
 		if err != nil {
 			return nil, err
 		}
@@ -158,9 +166,9 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	var qr *mproto.QueryResult
 	var err error
 	if s.c.tx == nil {
-		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType)
+		qr, err = s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType)
 	} else {
-		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.TabletType, false)
+		qr, err = s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletType, false)
 	}
 	if err != nil {
 		return nil, err

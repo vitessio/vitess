@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -55,7 +57,7 @@ func getEffectiveCallerID(ctx context.Context) *tproto.CallerID {
 	return nil
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -64,7 +66,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 		CallerID:         getEffectiveCallerID(ctx),
 		Sql:              query,
 		BindVariables:    bindVars,
-		TabletType:       tabletType,
+		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -81,7 +83,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -92,7 +94,7 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
 		Shards:           shards,
-		TabletType:       tabletType,
+		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -109,7 +111,7 @@ func (conn *vtgateConn) ExecuteShard(ctx context.Context, query string, keyspace
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -119,8 +121,8 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyspaceIds:      keyspaceIds,
-		TabletType:       tabletType,
+		KeyspaceIds:      key.ProtoToKeyspaceIds(keyspaceIds),
+		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -137,7 +139,7 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -147,8 +149,8 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 		Sql:              query,
 		BindVariables:    bindVars,
 		Keyspace:         keyspace,
-		KeyRanges:        keyRanges,
-		TabletType:       tabletType,
+		KeyRanges:        key.ProtoToKeyRanges(keyRanges),
+		TabletType:       topo.ProtoToTabletType(tabletType),
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
@@ -165,7 +167,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -177,7 +179,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		Keyspace:          keyspace,
 		EntityColumnName:  entityColumnName,
 		EntityKeyspaceIDs: entityKeyspaceIDs,
-		TabletType:        tabletType,
+		TabletType:        topo.ProtoToTabletType(tabletType),
 		Session:           s,
 		NotInTransaction:  notInTransaction,
 	}
@@ -194,7 +196,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return result.Result, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -202,7 +204,7 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.B
 	request := proto.BatchQueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    tabletType,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -219,7 +221,7 @@ func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.B
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
@@ -227,7 +229,7 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	request := proto.KeyspaceIdBatchQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Queries:       queries,
-		TabletType:    tabletType,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		AsTransaction: asTransaction,
 		Session:       s,
 	}
@@ -244,12 +246,12 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 	return result.List, result.Session, nil
 }
 
-func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.Query{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
-		TabletType:    tabletType,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -257,14 +259,27 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.Query{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecute2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.QueryShard{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
 		Shards:        shards,
-		TabletType:    tabletType,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -272,14 +287,29 @@ func (conn *vtgateConn) StreamExecuteShard(ctx context.Context, query string, ke
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.QueryShard{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteShard2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyRangeQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyRanges:     keyRanges,
-		TabletType:    tabletType,
+		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -287,14 +317,29 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	return sendStreamResults(c, sr)
 }
 
-func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.KeyRangeQuery{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyRanges:     key.ProtoToKeyRanges(keyRanges),
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyRanges2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
+func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	req := &proto.KeyspaceIdQuery{
 		CallerID:      getEffectiveCallerID(ctx),
 		Sql:           query,
 		BindVariables: bindVars,
 		Keyspace:      keyspace,
-		KeyspaceIds:   keyspaceIds,
-		TabletType:    tabletType,
+		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
+		TabletType:    topo.ProtoToTabletType(tabletType),
 		Session:       nil,
 	}
 	sr := make(chan *proto.QueryResult, 10)
@@ -302,15 +347,46 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return sendStreamResults(c, sr)
 }
 
+func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+	req := &proto.KeyspaceIdQuery{
+		CallerID:      getEffectiveCallerID(ctx),
+		Sql:           query,
+		BindVariables: bindVars,
+		Keyspace:      keyspace,
+		KeyspaceIds:   key.ProtoToKeyspaceIds(keyspaceIds),
+		TabletType:    topo.ProtoToTabletType(tabletType),
+		Session:       nil,
+	}
+	sr := make(chan *proto.QueryResult, 10)
+	c := conn.rpcConn.StreamGo("VTGate.StreamExecuteKeyspaceIds2", req, sr)
+	return sendStreamResults(c, sr)
+}
+
 func sendStreamResults(c *rpcplus.Call, sr chan *proto.QueryResult) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	srout := make(chan *mproto.QueryResult, 1)
+	var vtErr error
 	go func() {
 		defer close(srout)
 		for r := range sr {
-			srout <- r.Result
+			vtErr = vterrors.FromRPCError(r.Err)
+			// If we get a QueryResult with an RPCError, that was an extra QueryResult sent by
+			// the server specifically to indicate an error, and we shouldn't surface it to clients.
+			if vtErr == nil {
+				srout <- r.Result
+			}
 		}
 	}()
-	return srout, func() error { return c.Error }, nil
+	// errFunc will return either an RPC-layer error or an application error, if one exists.
+	// It will only return the most recent application error (i.e, from the QueryResult that
+	// most recently contained an error). It will prioritize an RPC-layer error over an apperror,
+	// if both exist.
+	errFunc := func() error {
+		if c.Error != nil {
+			return c.Error
+		}
+		return vtErr
+	}
+	return srout, errFunc, nil
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
@@ -376,11 +452,14 @@ func (conn *vtgateConn) Rollback2(ctx context.Context, session interface{}) erro
 	return vterrors.FromRPCError(reply.Err)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
 	request := &proto.SplitQueryRequest{
-		CallerID:    getEffectiveCallerID(ctx),
-		Keyspace:    keyspace,
-		Query:       query,
+		CallerID: getEffectiveCallerID(ctx),
+		Keyspace: keyspace,
+		Query: tproto.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
 		SplitColumn: splitColumn,
 		SplitCount:  splitCount,
 	}

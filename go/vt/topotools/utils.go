@@ -13,16 +13,18 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, addr, portName string, port int) (topo.TabletAlias, error) {
+func FindTabletByIPAddrAndPort(tabletMap map[pb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (pb.TabletAlias, error) {
 	for alias, ti := range tabletMap {
-		if ti.IPAddr == addr && ti.Portmap[portName] == port {
+		if ti.Ip == addr && ti.PortMap[portName] == port {
 			return alias, nil
 		}
 	}
-	return topo.TabletAlias{}, topo.ErrNoNode
+	return pb.TabletAlias{}, topo.ErrNoNode
 }
 
 // GetAllTablets returns a sorted list of tablets.
@@ -40,7 +42,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[tabletAlias]
+		tabletInfo, ok := tabletMap[*tabletAlias]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
@@ -91,11 +93,11 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.Tabl
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
 //   the old master, and any tablet in a weird state, left over, ...
-func SortedTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (map[topo.TabletAlias]*topo.TabletInfo, map[topo.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[topo.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
+func SortedTabletMap(tabletMap map[pb.TabletAlias]*topo.TabletInfo) (map[pb.TabletAlias]*topo.TabletInfo, map[pb.TabletAlias]*topo.TabletInfo) {
+	slaveMap := make(map[pb.TabletAlias]*topo.TabletInfo)
+	masterMap := make(map[pb.TabletAlias]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
+		if ti.Type != pb.TabletType_MASTER && ti.Type != pb.TabletType_SCRAP {
 			slaveMap[alias] = ti
 		} else {
 			masterMap[alias] = ti

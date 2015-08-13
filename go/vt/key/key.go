@@ -174,7 +174,7 @@ func ParseKeyRangeParts(start, end string) (KeyRange, error) {
 	return KeyRange{Start: s, End: e}, nil
 }
 
-// Parse a start and end hex values and build a proto KeyRange
+// ParseKeyRangeParts3 parses a start and end hex values and build a proto KeyRange
 func ParseKeyRangeParts3(start, end string) (*pb.KeyRange, error) {
 	s, err := hex.DecodeString(start)
 	if err != nil {
@@ -192,18 +192,27 @@ func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
-// Returns true if the KeyRange does not cover the entire space.
+// KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
 func KeyRangeIsPartial(kr *pb.KeyRange) bool {
+	if kr == nil {
+		return false
+	}
 	return !(len(kr.Start) == 0 && len(kr.End) == 0)
 }
 
-// Returns true if both key ranges cover the same area
+// KeyRangeEqual returns true if both key ranges cover the same area
 func KeyRangeEqual(left, right *pb.KeyRange) bool {
+	if left == nil {
+		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
+	}
+	if right == nil {
+		return len(left.Start) == 0 && len(left.End) == 0
+	}
 	return string(left.Start) == string(right.Start) &&
 		string(left.End) == string(right.End)
 }
 
-// Returns true if both key ranges have the same start
+// KeyRangeStartEqual returns true if both key ranges have the same start
 func KeyRangeStartEqual(left, right *pb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.Start) == 0
@@ -214,7 +223,7 @@ func KeyRangeStartEqual(left, right *pb.KeyRange) bool {
 	return string(left.Start) == string(right.Start)
 }
 
-// Returns true if both key ranges have the same end
+// KeyRangeEndEqual returns true if both key ranges have the same end
 func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.End) == 0
@@ -239,38 +248,24 @@ func KeyRangesIntersect(first, second KeyRange) bool {
 
 // KeyRangesIntersect3 returns true if some Keyspace values exist in both ranges.
 func KeyRangesIntersect3(first, second *pb.KeyRange) bool {
+	if first == nil || second == nil {
+		return true
+	}
 	return (len(first.End) == 0 || string(second.Start) < string(first.End)) &&
 		(len(second.End) == 0 || string(first.Start) < string(second.End))
 }
 
 // KeyRangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
-	if !KeyRangesIntersect(first, second) {
-		return KeyRange{}, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
-	}
-	// compute max(c,a) and min(b,d)
-	// start with (a,b)
-	result := first
-	// if c > a, then use c
-	if second.Start > first.Start {
-		result.Start = second.Start
-	}
-	// if b is maxed out, or
-	// (d is not maxed out and d < b)
-	//                           ^ valid test as neither b nor d are max
-	// then use d
-	if first.End == MaxKey || (second.End != MaxKey && second.End < first.End) {
-		result.End = second.End
-	}
-	return result, nil
-}
-
-// KeyRangesOverlap3 returns the overlap between two KeyRanges.
-// They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap3(first, second *pb.KeyRange) (*pb.KeyRange, error) {
+func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
 	if !KeyRangesIntersect3(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
+	}
+	if first == nil {
+		return second, nil
+	}
+	if second == nil {
+		return first, nil
 	}
 	// compute max(c,a) and min(b,d)
 	// start with (a,b)

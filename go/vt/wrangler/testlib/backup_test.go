@@ -22,6 +22,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestBackupRestore(t *testing.T) {
@@ -65,10 +67,10 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a master tablet, not started, just for shard health
-	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
 
 	// create a single tablet, set it up so we can do backups
-	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
+	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
 	sourceTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
@@ -91,7 +93,7 @@ func TestBackupRestore(t *testing.T) {
 	defer sourceTablet.StopActionLoop(t)
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", sourceTablet.Tablet.Alias.String()}); err != nil {
+	if err := vp.Run([]string{"Backup", topo.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
 
@@ -107,7 +109,7 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// create a destination tablet, set it up so we can do restores
-	destTablet := NewFakeTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA)
+	destTablet := NewFakeTablet(t, wr, "cell1", 2, pb.TabletType_REPLICA)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
 	destTablet.FakeMysqlDaemon.Replicating = true
 	destTablet.FakeMysqlDaemon.CurrentMasterPosition = myproto.ReplicationPosition{
@@ -131,7 +133,7 @@ func TestBackupRestore(t *testing.T) {
 	destTablet.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           sourceTablet.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         master.Tablet.Portmap["mysql"],
+		MasterPort:         int(master.Tablet.PortMap["mysql"]),
 		MasterConnectRetry: 10,
 	}
 	destTablet.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}

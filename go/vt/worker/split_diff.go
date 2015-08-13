@@ -18,6 +18,8 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -39,8 +41,8 @@ type SplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases    []topo.TabletAlias
-	destinationAlias topo.TabletAlias
+	sourceAliases    []*pb.TabletAlias
+	destinationAlias *pb.TabletAlias
 
 	// populated during WorkerStateDiff
 	sourceSchemaDefinitions     []*myproto.SchemaDefinition
@@ -186,7 +188,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	}
 
 	// find an appropriate endpoint in the source shards
-	sdw.sourceAliases = make([]topo.TabletAlias, len(sdw.shardInfo.SourceShards))
+	sdw.sourceAliases = make([]*pb.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
 		sdw.sourceAliases[i], err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
@@ -218,7 +220,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, topo.ProtoToTabletAlias(sdw.shardInfo.MasterAlias))
+	masterInfo, err := sdw.wr.TopoServer().GetTablet(ctx, sdw.shardInfo.MasterAlias)
 	if err != nil {
 		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", sdw.shardInfo.MasterAlias, err)
 	}
@@ -269,7 +271,7 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
 		}
-		action.TabletType = topo.TYPE_SPARE
+		action.TabletType = pb.TabletType_SPARE
 	}
 
 	// 3 - ask the master of the destination shard to resume filtered
@@ -300,14 +302,14 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
-	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
-		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
+	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias)); err != nil {
+		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias), err)
 	}
 	cancel()
 	if err != nil {
@@ -342,16 +344,16 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	}()
 	for i, sourceAlias := range sdw.sourceAliases {
 		wg.Add(1)
-		go func(i int, sourceAlias topo.TabletAlias) {
+		go func(i int, sourceAlias pb.TabletAlias) {
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			sdw.sourceSchemaDefinitions[i], err = sdw.wr.GetSchema(
-				shortCtx, sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+				shortCtx, &sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 			cancel()
 			rec.RecordError(err)
 			sdw.wr.Logger().Infof("Got schema from source[%v] %v", i, sourceAlias)
 			wg.Done()
-		}(i, sourceAlias)
+		}(i, *sourceAlias)
 	}
 	wg.Wait()
 	if rec.HasErrors() {
@@ -390,7 +392,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				return
 			}
 
-			overlap, err := key.KeyRangesOverlap3(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
+			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
 			if err != nil {
 				newErr := fmt.Errorf("Source shard doesn't overlap with destination????: %v", err)
 				rec.RecordError(newErr)

@@ -70,7 +70,7 @@ func (th *tabletHealth) lastAccessed() time.Time {
 	return th.accessed
 }
 
-func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias) (err error) {
+func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias *pbt.TabletAlias) (err error) {
 	defer func() {
 		th.mu.Lock()
 		th.err = err
@@ -129,24 +129,24 @@ type tabletHealthCache struct {
 	ts topo.Server
 
 	mu        sync.Mutex
-	tabletMap map[topo.TabletAlias]*tabletHealth
+	tabletMap map[pbt.TabletAlias]*tabletHealth
 }
 
 func newTabletHealthCache(ts topo.Server) *tabletHealthCache {
 	return &tabletHealthCache{
 		ts:        ts,
-		tabletMap: make(map[topo.TabletAlias]*tabletHealth),
+		tabletMap: make(map[pbt.TabletAlias]*tabletHealth),
 	}
 }
 
-func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias topo.TabletAlias) (*pb.StreamHealthResponse, error) {
+func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias *pbt.TabletAlias) (*pb.StreamHealthResponse, error) {
 	thc.mu.Lock()
 
-	th, ok := thc.tabletMap[tabletAlias]
+	th, ok := thc.tabletMap[*tabletAlias]
 	if !ok {
 		// No existing stream, so start one.
 		th = newTabletHealth()
-		thc.tabletMap[tabletAlias] = th
+		thc.tabletMap[*tabletAlias] = th
 
 		go func() {
 			log.Infof("starting health stream for tablet %v", tabletAlias)
@@ -161,8 +161,8 @@ func (thc *tabletHealthCache) Get(ctx context.Context, tabletAlias topo.TabletAl
 	return th.lastResult(ctx)
 }
 
-func (thc *tabletHealthCache) delete(tabletAlias topo.TabletAlias) {
+func (thc *tabletHealthCache) delete(tabletAlias *pbt.TabletAlias) {
 	thc.mu.Lock()
-	delete(thc.tabletMap, tabletAlias)
+	delete(thc.tabletMap, *tabletAlias)
 	thc.mu.Unlock()
 }

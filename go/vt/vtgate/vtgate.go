@@ -21,7 +21,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	kproto "github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -31,6 +31,8 @@ import (
 	// import vindexes implementations
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const errDupKey = "errno 1062"
@@ -68,16 +70,16 @@ type VTGate struct {
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
-	logExecuteShard             *logutil.ThrottledLogger
+	logExecuteShards            *logutil.ThrottledLogger
 	logExecuteKeyspaceIds       *logutil.ThrottledLogger
 	logExecuteKeyRanges         *logutil.ThrottledLogger
 	logExecuteEntityIds         *logutil.ThrottledLogger
-	logExecuteBatchShard        *logutil.ThrottledLogger
+	logExecuteBatchShards       *logutil.ThrottledLogger
 	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
 	logStreamExecute            *logutil.ThrottledLogger
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
-	logStreamExecuteShard       *logutil.ThrottledLogger
+	logStreamExecuteShards      *logutil.ThrottledLogger
 }
 
 // RegisterVTGate defines the type of registration mechanism.
@@ -105,16 +107,16 @@ func Init(serv SrvTopoServer, schema *planbuilder.Schema, cell string, retryDela
 		inFlight:    sync2.NewAtomicInt64(0),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
-		logExecuteShard:             logutil.NewThrottledLogger("ExecuteShard", 5*time.Second),
+		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
 		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
 		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
-		logExecuteBatchShard:        logutil.NewThrottledLogger("ExecuteBatchShard", 5*time.Second),
+		logExecuteBatchShards:       logutil.NewThrottledLogger("ExecuteBatchShards", 5*time.Second),
 		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
 		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
-		logStreamExecuteShard:       logutil.NewThrottledLogger("StreamExecuteShard", 5*time.Second),
+		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 	}
 	// Resuse resolver's scatterConn.
 	rpcVTGate.router = NewRouter(serv, cell, schema, "VTGateRouter", rpcVTGate.resolver.scatterConn)
@@ -152,9 +154,9 @@ func (vtg *VTGate) InitializeConnections(ctx context.Context) (err error) {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"Execute", "Any", string(query.TabletType)}
+	statsKey := []string{"Execute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -163,21 +165,28 @@ func (vtg *VTGate) Execute(ctx context.Context, query *proto.Query, reply *proto
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.router.Execute(ctx, query)
+	qr, err := vtg.router.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := map[string]interface{}{
+			"Sql":              sql,
+			"BindVariables":    bindVariables,
+			"TabletType":       strings.ToLower(tabletType.String()),
+			"Session":          session,
+			"NotInTransaction": notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecute)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
-// ExecuteShard executes a non-streaming query on the specified shards.
-func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+// ExecuteShards executes a non-streaming query on the specified shards.
+func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteShard", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteShards", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -188,30 +197,39 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, query *proto.QueryShard, re
 
 	qr, err := vtg.resolver.Execute(
 		ctx,
-		query.Sql,
-		query.BindVariables,
-		query.Keyspace,
-		query.TabletType,
-		query.Session,
+		sql,
+		bindVariables,
+		keyspace,
+		tabletType,
+		session,
 		func(keyspace string) (string, []string, error) {
-			return query.Keyspace, query.Shards, nil
+			return keyspace, shards, nil
 		},
-		query.NotInTransaction,
+		notInTransaction,
 	)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
-		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteShard)
+		query := map[string]interface{}{
+			"Sql":              sql,
+			"BindVariables":    bindVariables,
+			"Keyspace":         keyspace,
+			"Shards":           shards,
+			"TabletType":       strings.ToLower(tabletType.String()),
+			"Session":          session,
+			"NotInTransaction": notInTransaction,
+		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteShards)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -220,21 +238,30 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, query *proto.Keyspace
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, query)
+	qr, err := vtg.resolver.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := map[string]interface{}{
+			"Sql":              sql,
+			"BindVariables":    bindVariables,
+			"Keyspace":         keyspace,
+			"KeyspaceIds":      keyspaceIds,
+			"TabletType":       strings.ToLower(tabletType.String()),
+			"Session":          session,
+			"NotInTransaction": notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -243,21 +270,30 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQu
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, query)
+	qr, err := vtg.resolver.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := map[string]interface{}{
+			"Sql":              sql,
+			"BindVariables":    bindVariables,
+			"Keyspace":         keyspace,
+			"KeyRanges":        keyRanges,
+			"TabletType":       strings.ToLower(tabletType.String()),
+			"Session":          session,
+			"NotInTransaction": notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteEntityIds", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"ExecuteEntityIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -266,21 +302,31 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQ
 		return errTooManyInFlight
 	}
 
-	qr, err := vtg.resolver.ExecuteEntityIds(ctx, query)
+	qr, err := vtg.resolver.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction)
 	if err == nil {
 		reply.Result = qr
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 	} else {
+		query := map[string]interface{}{
+			"Sql":               sql,
+			"BindVariables":     bindVariables,
+			"Keyspace":          keyspace,
+			"EntityColumnName":  entityColumnName,
+			"EntityKeyspaceIDs": entityKeyspaceIDs,
+			"TabletType":        strings.ToLower(tabletType.String()),
+			"Session":           session,
+			"NotInTransaction":  notInTransaction,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
-// ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+// ExecuteBatchShards executes a group of queries on the specified shards.
+func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	startTime := time.Now()
-	statsKey := []string{"ExecuteBatchShard", "", ""}
+	statsKey := []string{"ExecuteBatchShards", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -291,11 +337,11 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 
 	qrs, err := vtg.resolver.ExecuteBatch(
 		ctx,
-		batchQuery.TabletType,
-		batchQuery.AsTransaction,
-		batchQuery.Session,
+		tabletType,
+		asTransaction,
+		session,
 		func() (*scatterBatchRequest, error) {
-			return boundShardQueriesToScatterBatchRequest(batchQuery.Queries), nil
+			return boundShardQueriesToScatterBatchRequest(queries), nil
 		})
 	if err == nil {
 		reply.List = qrs.List
@@ -305,14 +351,20 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, batchQuery *proto.Batc
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
-		reply.Error = handleExecuteError(err, statsKey, batchQuery, vtg.logExecuteBatchShard)
+		query := map[string]interface{}{
+			"Queries":       queries,
+			"TabletType":    strings.ToLower(tabletType.String()),
+			"AsTransaction": asTransaction,
+			"Session":       session,
+		}
+		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
 	}
-	reply.Session = batchQuery.Session
+	reply.Session = session
 	return nil
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteBatchKeyspaceIds", "", ""}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -325,7 +377,10 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 
 	qrs, err := vtg.resolver.ExecuteBatchKeyspaceIds(
 		ctx,
-		query)
+		queries,
+		tabletType,
+		asTransaction,
+		session)
 	if err == nil {
 		reply.List = qrs.List
 		var rowCount int64
@@ -334,16 +389,22 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, query *proto.Key
 		}
 		vtg.rowsReturned.Add(statsKey, rowCount)
 	} else {
+		query := map[string]interface{}{
+			"Queries":       queries,
+			"TabletType":    strings.ToLower(tabletType.String()),
+			"AsTransaction": asTransaction,
+			"Session":       session,
+		}
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 	}
-	reply.Session = query.Session
+	reply.Session = session
 	return nil
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecute", "Any", string(query.TabletType)}
+	statsKey := []string{"StreamExecute", "Any", strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -355,24 +416,27 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 	var rowCount int64
 	err := vtg.router.StreamExecute(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := map[string]interface{}{
+			"Sql":           sql,
+			"BindVariables": bindVariables,
+			"TabletType":    strings.ToLower(tabletType.String()),
+		}
 		logError(err, query, vtg.logStreamExecute)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }
@@ -383,9 +447,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, query *proto.Query, sendRe
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecuteKeyspaceIds", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"StreamExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -397,24 +461,31 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyspaceIds(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		keyspace,
+		keyspaceIds,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := map[string]interface{}{
+			"Sql":           sql,
+			"BindVariables": bindVariables,
+			"Keyspace":      keyspace,
+			"KeyspaceIds":   keyspaceIds,
+			"TabletType":    strings.ToLower(tabletType.String()),
+		}
 		logError(err, query, vtg.logStreamExecuteKeyspaceIds)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }
@@ -425,9 +496,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.Ke
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecuteKeyRanges", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"StreamExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -439,32 +510,39 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyR
 	var rowCount int64
 	err := vtg.resolver.StreamExecuteKeyRanges(
 		ctx,
-		query,
+		sql,
+		bindVariables,
+		keyspace,
+		keyRanges,
+		tabletType,
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
 		})
-	vtg.rowsReturned.Add(statsKey, rowCount)
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
+		query := map[string]interface{}{
+			"Sql":           sql,
+			"BindVariables": bindVariables,
+			"Keyspace":      keyspace,
+			"KeyRanges":     keyRanges,
+			"TabletType":    strings.ToLower(tabletType.String()),
+		}
 		logError(err, query, vtg.logStreamExecuteKeyRanges)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return formatError(err)
 }
 
-// StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteShards executes a streaming query on the specified shards.
+func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
-	statsKey := []string{"StreamExecuteShard", query.Keyspace, string(query.TabletType)}
+	statsKey := []string{"StreamExecuteShards", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
 
 	x := vtg.inFlight.Add(1)
@@ -476,32 +554,33 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, query *proto.QuerySha
 	var rowCount int64
 	err := vtg.resolver.StreamExecute(
 		ctx,
-		query.Sql,
-		query.BindVariables,
-		query.Keyspace,
-		query.TabletType,
-		query.Session,
+		sql,
+		bindVariables,
+		keyspace,
+		tabletType,
 		func(keyspace string) (string, []string, error) {
-			return query.Keyspace, query.Shards, nil
+			return keyspace, shards, nil
 		},
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			reply.Result = mreply
 			rowCount += int64(len(mreply.Rows))
+			vtg.rowsReturned.Add(statsKey, int64(len(mreply.Rows)))
 			// Note we don't populate reply.Session here,
 			// as it may change incrementaly as responses are sent.
 			return sendReply(reply)
-		},
-		query.NotInTransaction)
-	vtg.rowsReturned.Add(statsKey, rowCount)
+		})
 
 	if err != nil {
 		normalErrors.Add(statsKey, 1)
-		logError(err, query, vtg.logStreamExecuteShard)
-	}
-	// Now we can send the final Sessoin info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
+		query := map[string]interface{}{
+			"Sql":           sql,
+			"BindVariables": bindVariables,
+			"Keyspace":      keyspace,
+			"Shards":        shards,
+			"TabletType":    strings.ToLower(tabletType.String()),
+		}
+		logError(err, query, vtg.logStreamExecuteShards)
 	}
 	return formatError(err)
 }
@@ -528,21 +607,21 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error
 // original query. Number of sub queries will be a multiple of N that is
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	sc := vtg.resolver.scatterConn
-	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, req.Keyspace, topo.TYPE_RDONLY)
+	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, keyspace, pb.TabletType_RDONLY)
 	if err != nil {
 		return err
 	}
-	perShardSplitCount := int(math.Ceil(float64(req.SplitCount) / float64(len(shards))))
+	perShardSplitCount := int(math.Ceil(float64(splitCount) / float64(len(shards))))
 	if srvKeyspace.ShardingColumnName != "" {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
-		keyRangeByShard := map[string]kproto.KeyRange{}
+		keyRangeByShard := map[string]key.KeyRange{}
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}
-		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, req.Query, req.SplitColumn, perShardSplitCount, keyRangeByShard, keyspace)
+		splits, err := vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
 		if err != nil {
 			return err
 		}
@@ -556,7 +635,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest,
 	for i, shard := range shards {
 		shardNames[i] = shard.Name
 	}
-	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, req.Query, req.SplitColumn, perShardSplitCount, shardNames, keyspace)
+	splits, err := vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
 	if err != nil {
 		return err
 	}
@@ -571,7 +650,7 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.S
 
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
 // as errors in those components, but logged to Info in VTGate itself.
-func logError(err error, query interface{}, logger *logutil.ThrottledLogger) {
+func logError(err error, query map[string]interface{}, logger *logutil.ThrottledLogger) {
 	logMethod := logger.Errorf
 	if isErrorCausedByVTGate(err) {
 		logMethod = logger.Errorf
@@ -614,7 +693,7 @@ func isErrorCausedByVTGate(err error) bool {
 	return false
 }
 
-func handleExecuteError(err error, statsKey []string, query interface{}, logger *logutil.ThrottledLogger) string {
+func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) string {
 	errStr := err.Error() + ", vtgate: " + servenv.ListeningURL.String()
 	if strings.Contains(errStr, errDupKey) {
 		infoErrors.Add("DupKey", 1)

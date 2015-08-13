@@ -12,9 +12,10 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyRangeToShardMap(t *testing.T) {
@@ -51,7 +52,7 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, topo.TYPE_MASTER)
+		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER)
 		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
 		if err != nil {
 			t.Errorf("want nil, got %v", err)
@@ -95,7 +96,7 @@ func TestMapExactShards(t *testing.T) {
 			}
 			keyRange = krArray[0]
 		}
-		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, topo.TYPE_MASTER, keyRange)
+		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER, keyRange)
 		if err != nil && err.Error() != testCase.err {
 			t.Errorf("gotShards: %v, want %s", err, testCase.err)
 		}
@@ -254,7 +255,7 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		shardQueries, err := boundKeyspaceIdQueriesToBoundShardQueries(context.Background(), ts, "", topo.TYPE_MASTER, testCase.idQueries)
+		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(context.Background(), ts, "", pb.TabletType_MASTER, testCase.idQueries)
 		if err != nil {
 			t.Error(err)
 		}

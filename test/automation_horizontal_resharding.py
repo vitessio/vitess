@@ -44,11 +44,6 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
               ' --param keyspace=' + keyspace +
               ' --param source_shard_list=' + source_shard_list +
               ' --param dest_shard_list=' + dest_shard_list +
-              ' --param source_shard_rdonly_list=' +
-              worker.shard_rdonly1.tablet_alias +
-              ' --param dest_shard_rdonly_list=' +
-              worker.shard_0_rdonly1.tablet_alias + ',' +
-              worker.shard_1_rdonly1.tablet_alias +
               ' --param vtctld_endpoint=' + vtctld_endpoint +
               ' --param vtworker_endpoint=' + vtworker_endpoint)
 

@@ -29,11 +29,11 @@ import (
 )
 
 const (
-	// SqlStartSlave is the SQl command issued to start MySQL replication
-	SqlStartSlave = "START SLAVE"
+	// SQLStartSlave is the SQl command issued to start MySQL replication
+	SQLStartSlave = "START SLAVE"
 
-	// SqlStopSlave is the SQl command issued to stop MySQL replication
-	SqlStopSlave = "STOP SLAVE"
+	// SQLStopSlave is the SQl command issued to stop MySQL replication
+	SQLStopSlave = "STOP SLAVE"
 )
 
 func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
@@ -118,7 +118,7 @@ func WaitForSlaveStart(mysqld MysqlDaemon, slaveStartDeadline int) error {
 
 // StartSlave starts a slave on the provided MysqldDaemon
 func StartSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
-	if err := md.ExecuteSuperQueryList([]string{SqlStartSlave}); err != nil {
+	if err := md.ExecuteSuperQueryList([]string{SQLStartSlave}); err != nil {
 		return err
 	}
 
@@ -135,11 +135,11 @@ func StopSlave(md MysqlDaemon, hookExtraEnv map[string]string) error {
 		return err
 	}
 
-	return md.ExecuteSuperQueryList([]string{SqlStopSlave})
+	return md.ExecuteSuperQueryList([]string{SQLStopSlave})
 }
 
 // GetMysqlPort returns mysql port
-func (mysqld *Mysqld) GetMysqlPort() (int, error) {
+func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	qr, err := mysqld.FetchSuperQuery("SHOW VARIABLES LIKE 'port'")
 	if err != nil {
 		return 0, err
@@ -151,7 +151,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int(utemp), nil
+	return int32(utemp), nil
 }
 
 // IsReadOnly return true if the instance is read only

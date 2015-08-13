@@ -11,8 +11,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the code to run a sanity check in a system with
@@ -25,7 +26,7 @@ type SourceSpec struct {
 	Shard    string
 	SQL      string
 
-	alias topo.TabletAlias
+	alias *pb.TabletAlias
 }
 
 // SQLDiffWorker runs a sanity check in in a system with a lookup
@@ -191,7 +192,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.subset.alias, err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	// sleep for a few seconds
 	time.Sleep(5 * time.Second)
@@ -219,7 +220,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", worker.superset.alias, err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	return nil
 }

@@ -164,7 +164,7 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(self._populate_vt_insert_test)
     self._exec_vt_txn(['delete from vt_insert_test'])
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare')
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, tablet.Tablet.tablet_type_value['SPARE'])
     logging.debug('dialing replica update stream service')
     replica_conn = self._get_replica_stream_conn()
     try:
@@ -189,7 +189,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug('_test_service_enabled starting @ %s', start_position)
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
     logging.debug('sleeping a bit for the replica action to complete')
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, tablet.Tablet.tablet_type_value['REPLICA'], 30)
     thd = threading.Thread(target=self.perform_writes, name='write_thd',
                            args=(100,))
     thd.daemon = True
@@ -222,7 +222,7 @@ class TestUpdateStream(unittest.TestCase):
       for stream_event in replica_conn.stream_update(start_position):
         if first:
           utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
-          utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'spare', 30)
+          utils.wait_for_tablet_type(replica_tablet.tablet_alias, tablet.Tablet.tablet_type_value['SPARE'], 30)
           first = False
         else:
           if stream_event.category == update_stream.StreamEvent.POS:
@@ -347,7 +347,7 @@ class TestUpdateStream(unittest.TestCase):
     self._test_service_enabled()
     # The above tests leaves the service in disabled state, hence enabling it.
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
-    utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica', 30)
+    utils.wait_for_tablet_type(replica_tablet.tablet_alias, tablet.Tablet.tablet_type_value['REPLICA'], 30)
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()

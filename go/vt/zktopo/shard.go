@@ -11,7 +11,6 @@ import (
 	"sort"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
@@ -34,11 +33,16 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 		path.Join(shardPath, "actionlog"),
 	}
 
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	alreadyExists := false
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = jscfg.ToJSON(value)
+			c = string(data)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -63,7 +67,11 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 // UpdateShard is part of the topo.Server interface
 func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	stat, err := zkts.zconn.Set(shardPath, jscfg.ToJSON(si.Shard), int(existingVersion))
+	data, err := json.MarshalIndent(si.Shard, "", "  ")
+	if err != nil {
+		return -1, err
+	}
+	stat, err := zkts.zconn.Set(shardPath, string(data), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode

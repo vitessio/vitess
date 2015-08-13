@@ -59,7 +59,7 @@ type ActionAgent struct {
 	QueryServiceControl tabletserver.QueryServiceControl
 	HealthReporter      health.Reporter
 	TopoServer          topo.Server
-	TabletAlias         topo.TabletAlias
+	TabletAlias         *pb.TabletAlias
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	SchemaOverrides     []tabletserver.SchemaOverride
@@ -130,10 +130,10 @@ func NewActionAgent(
 	batchCtx context.Context,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.QueryServiceControl,
-	tabletAlias topo.TabletAlias,
+	tabletAlias *pb.TabletAlias,
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
-	port, gRPCPort int,
+	port, gRPCPort int32,
 	overridesFile string,
 	lockTimeout time.Duration,
 ) (agent *ActionAgent, err error) {
@@ -181,7 +181,7 @@ func NewActionAgent(
 		}
 	}
 
-	if err := agent.Start(batchCtx, mysqlPort, port, gRPCPort); err != nil {
+	if err := agent.Start(batchCtx, int32(mysqlPort), port, gRPCPort); err != nil {
 		return nil, err
 	}
 
@@ -214,7 +214,7 @@ func NewActionAgent(
 
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
-func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, vtPort, grpcPort int, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
+func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon) *ActionAgent {
 	agent := &ActionAgent{
 		QueryServiceControl: tabletserver.NewTestQueryServiceControl(),
 		HealthReporter:      health.DefaultAggregator,
@@ -235,7 +235,7 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias to
 	return agent
 }
 
-func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *topo.Tablet, reason string) error {
+func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet, reason string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
 	agent.mutex.Unlock()
@@ -386,7 +386,7 @@ func (agent *ActionAgent) verifyServingAddrs(ctx context.Context) error {
 
 // Start validates and updates the topology records for the tablet, and performs
 // the initial state change callback to start tablet services.
-func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int) error {
+func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort int32) error {
 	var err error
 	if _, err = agent.readTablet(ctx); err != nil {
 		return err
@@ -407,27 +407,27 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
-	f := func(tablet *topo.Tablet) error {
+	f := func(tablet *pb.Tablet) error {
 		tablet.Hostname = hostname
-		tablet.IPAddr = ipAddr
-		if tablet.Portmap == nil {
-			tablet.Portmap = make(map[string]int)
+		tablet.Ip = ipAddr
+		if tablet.PortMap == nil {
+			tablet.PortMap = make(map[string]int32)
 		}
 		if mysqlPort != 0 {
 			// only overwrite mysql port if we know it, otherwise
 			// leave it as is.
-			tablet.Portmap["mysql"] = mysqlPort
+			tablet.PortMap["mysql"] = mysqlPort
 		}
 		if vtPort != 0 {
-			tablet.Portmap["vt"] = vtPort
+			tablet.PortMap["vt"] = vtPort
 		} else {
-			delete(tablet.Portmap, "vt")
+			delete(tablet.PortMap, "vt")
 		}
-		delete(tablet.Portmap, "vts")
+		delete(tablet.PortMap, "vts")
 		if gRPCPort != 0 {
-			tablet.Portmap["grpc"] = gRPCPort
+			tablet.PortMap["grpc"] = gRPCPort
 		} else {
-			delete(tablet.Portmap, "grpc")
+			delete(tablet.PortMap, "grpc")
 		}
 		return nil
 	}
@@ -448,7 +448,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 		return err
 	}
 
-	oldTablet := &topo.Tablet{}
+	oldTablet := &pb.Tablet{}
 	if err = agent.updateState(ctx, oldTablet, "Start"); err != nil {
 		log.Warningf("Initial updateState failed, will need a state change before running properly: %v", err)
 	}
@@ -467,7 +467,7 @@ func (agent *ActionAgent) Stop() {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (agent *ActionAgent) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": agent.TabletAlias.String()}
+	return map[string]string{"TABLET_ALIAS": topo.TabletAliasString(agent.TabletAlias)}
 }
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
@@ -479,12 +479,12 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 		return nil
 	}
 
-	if mport == tablet.Portmap["mysql"] {
+	if mport == tablet.PortMap["mysql"] {
 		return nil
 	}
 
-	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
-	tablet.Portmap["mysql"] = mport
+	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
+	tablet.PortMap["mysql"] = mport
 	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil

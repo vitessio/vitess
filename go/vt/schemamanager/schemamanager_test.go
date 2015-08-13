@@ -293,9 +293,9 @@ func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard
 	return topo.NewShardInfo(keyspace, shard, value, 0), nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias topo.TabletAlias) (*topo.TabletInfo, error) {
+func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*topo.TabletInfo, error) {
 	return &topo.TabletInfo{
-		Tablet: &topo.Tablet{
+		Tablet: &pb.Tablet{
 			Alias:    tabletAlias,
 			Keyspace: "test_keyspace",
 		},

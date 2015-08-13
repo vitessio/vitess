@@ -79,8 +79,8 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 	if *flagServerID != 0 {
 		log.Info("mycnf_server_id is specified, using command line parameters for mysql config")
 		return &Mycnf{
-			ServerId:              uint32(*flagServerID),
-			MysqlPort:             *flagMysqlPort,
+			ServerID:              uint32(*flagServerID),
+			MysqlPort:             int32(*flagMysqlPort),
 			DataDir:               *flagDataDir,
 			InnodbDataHomeDir:     *flagInnodbDataHomeDir,
 			InnodbLogGroupHomeDir: *flagInnodbLogGroupHomeDir,

@@ -6,6 +6,7 @@ package testlib
 
 import (
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -16,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
-	"testing"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TestInitMasterShard is the good scenario test, where everything
@@ -29,9 +30,9 @@ func TestInitMasterShard(t *testing.T) {
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 2, topo.TYPE_REPLICA)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 2, pb.TabletType_REPLICA)
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
@@ -62,7 +63,7 @@ func TestInitMasterShard(t *testing.T) {
 	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         master.Tablet.Portmap["mysql"],
+		MasterPort:         int(master.Tablet.PortMap["mysql"]),
 		MasterConnectRetry: 10,
 	}
 	goodSlave1.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
@@ -79,7 +80,7 @@ func TestInitMasterShard(t *testing.T) {
 	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         master.Tablet.Portmap["mysql"],
+		MasterPort:         int(master.Tablet.PortMap["mysql"]),
 		MasterConnectRetry: 10,
 	}
 	goodSlave2.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1", "cmd2"}
@@ -92,7 +93,7 @@ func TestInitMasterShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run InitShardMaster
-	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, master.Tablet.Alias.String()}); err != nil {
+	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, topo.TabletAliasString(master.Tablet.Alias)}); err != nil {
 		t.Fatalf("InitShardMaster failed: %v", err)
 	}
 
@@ -104,7 +105,7 @@ func TestInitMasterShard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if topo.ProtoToTabletAlias(si.MasterAlias) != master.Tablet.Alias {
+	if !topo.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 	if err := master.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
@@ -124,10 +125,10 @@ func TestInitMasterShardChecks(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
-	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
 
 	// InitShardMaster with an unknown tablet
-	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, topo.TabletAlias{
+	if err := wr.InitShardMaster(ctx, master.Tablet.Keyspace, master.Tablet.Shard, &pb.TabletAlias{
 		Cell: master.Tablet.Alias.Cell,
 		Uid:  master.Tablet.Alias.Uid + 1,
 	}, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is not in the shard") {
@@ -137,7 +138,7 @@ func TestInitMasterShardChecks(t *testing.T) {
 	// InitShardMaster with two masters in the shard, no force flag
 	// (master2 needs to run InitTablet with -force, as it is the second
 	// master in the same shard)
-	master2 := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_MASTER, ForceInitTablet())
+	master2 := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER, ForceInitTablet())
 	if err := wr.InitShardMaster(ctx, master2.Tablet.Keyspace, master2.Tablet.Shard, master2.Tablet.Alias, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is not the only master in the shard") {
 		t.Errorf("InitShardMaster with two masters returned wrong error: %v", err)
 	}
@@ -162,9 +163,9 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// Create a master, a couple slaves
-	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
-	goodSlave := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
-	badSlave := NewFakeTablet(t, wr, "cell2", 2, topo.TYPE_REPLICA)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
+	badSlave := NewFakeTablet(t, wr, "cell2", 2, pb.TabletType_REPLICA)
 
 	// Master: set a plausible ReplicationPosition to return,
 	// and expect to add entry in _vt.reparent_journal
@@ -191,7 +192,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	goodSlave.FakeMysqlDaemon.StartReplicationCommandsStatus = &myproto.ReplicationStatus{
 		Position:           master.FakeMysqlDaemon.CurrentMasterPosition,
 		MasterHost:         master.Tablet.Hostname,
-		MasterPort:         master.Tablet.Portmap["mysql"],
+		MasterPort:         int(master.Tablet.PortMap["mysql"]),
 		MasterConnectRetry: 10,
 	}
 	goodSlave.FakeMysqlDaemon.StartReplicationCommandsResult = []string{"cmd1"}
@@ -241,7 +242,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if topo.ProtoToTabletAlias(si.MasterAlias) != master.Tablet.Alias {
+	if !topo.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 }

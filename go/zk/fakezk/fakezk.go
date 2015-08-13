@@ -126,9 +126,11 @@ func (conn *zconn) Children(zkPath string) (children []string, stat zk.Stat, err
 	if len(rest) != 0 {
 		return nil, nil, zkError(zookeeper.ZNONODE, "children", zkPath)
 	}
+	node.Lock()
 	for name := range node.children {
 		children = append(children, name)
 	}
+	node.Unlock()
 	return children, node, nil
 }
 
@@ -145,10 +147,12 @@ func (conn *zconn) ChildrenW(zkPath string) (children []string, stat zk.Stat, wa
 		return nil, nil, nil, zkError(zookeeper.ZNONODE, "childrenw", zkPath)
 	}
 	c := make(chan zookeeper.Event, 1)
+	node.Lock()
 	node.childrenWatches = append(node.childrenWatches, c)
 	for name := range node.children {
 		children = append(children, name)
 	}
+	node.Unlock()
 	return children, node, c, nil
 }
 
@@ -179,7 +183,9 @@ func (conn *zconn) ExistsW(zkPath string) (stat zk.Stat, watch <-chan zookeeper.
 		conn.existWatches[zkPath] = append(watches, c)
 		return nil, c, nil
 	}
+	node.Lock()
 	node.existWatches = append(node.existWatches, c)
+	node.Unlock()
 	return node, c, nil
 
 }
@@ -199,6 +205,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 	if len(rest) > 1 {
 		return "", zkError(zookeeper.ZNONODE, "create", zkPath)
 	}
+
+	node.Lock()
+	defer node.Unlock()
 
 	zxid := conn.getZxid()
 	name := rest[0]
@@ -260,6 +269,9 @@ func (conn *zconn) Set(zkPath, value string, version int) (stat zk.Stat, err err
 		return nil, zkError(zookeeper.ZNONODE, "set", zkPath)
 	}
 
+	node.Lock()
+	defer node.Unlock()
+
 	if version != -1 && node.version != version {
 		return nil, zkError(zookeeper.ZBADVERSION, "set", zkPath)
 	}
@@ -284,6 +296,9 @@ func (conn *zconn) Delete(zkPath string, version int) (err error) {
 	if err != nil {
 		return err
 	}
+
+	node.Lock()
+	defer node.Unlock()
 
 	if len(rest) > 0 {
 		return zkError(zookeeper.ZNONODE, "delete", zkPath)
@@ -328,7 +343,9 @@ func (conn *zconn) Close() error {
 			close(c)
 		}
 	}
+	conn.root.Lock()
 	conn.root.closeAllWatches()
+	conn.root.Unlock()
 	return nil
 }
 
@@ -378,7 +395,9 @@ func (conn *zconn) getNode(zkPath string, op string) (node *stat, parent *stat, 
 	current := conn.root
 	for i, el := range elements {
 		candidateParent := current
+		current.Lock()
 		candidate, ok := current.children[el]
+		current.Unlock()
 		if !ok {
 			return current, parent, elements[i:], nil
 		}
@@ -416,9 +435,14 @@ type stat struct {
 	existWatches    []chan zookeeper.Event
 	changeWatches   []chan zookeeper.Event
 	childrenWatches []chan zookeeper.Event
+
+	// This mutex protects all above fields.
+	// All exported methods of stat will acquire the lock.
+	// The caller is responsible for locking before touching anything unexported.
+	sync.Mutex
 }
 
-func (st stat) closeAllWatches() {
+func (st *stat) closeAllWatches() {
 	for _, c := range st.existWatches {
 		close(c)
 	}
@@ -433,40 +457,60 @@ func (st stat) closeAllWatches() {
 	}
 }
 
-func (st stat) Czxid() int64 {
+func (st *stat) Czxid() int64 {
+	st.Lock()
+	defer st.Unlock()
 	return st.czxid
 }
-func (st stat) Mzxid() int64 {
+func (st *stat) Mzxid() int64 {
+	st.Lock()
+	defer st.Unlock()
 	return st.mzxid
 }
-func (st stat) CTime() time.Time {
+func (st *stat) CTime() time.Time {
+	st.Lock()
+	defer st.Unlock()
 	return st.ctime
 }
-func (st stat) MTime() time.Time {
+func (st *stat) MTime() time.Time {
+	st.Lock()
+	defer st.Unlock()
 	return st.mtime
 }
-func (st stat) Version() int {
+func (st *stat) Version() int {
+	st.Lock()
+	defer st.Unlock()
 	return st.version
 }
-func (st stat) CVersion() int {
+func (st *stat) CVersion() int {
+	st.Lock()
+	defer st.Unlock()
 	return st.cversion
 }
-func (st stat) AVersion() int {
+func (st *stat) AVersion() int {
+	st.Lock()
+	defer st.Unlock()
 	return st.aversion
 }
-func (st stat) EphemeralOwner() int64 {
+func (st *stat) EphemeralOwner() int64 {
 	return 0
 }
 
-func (st stat) DataLength() int {
+func (st *stat) DataLength() int {
+	st.Lock()
+	defer st.Unlock()
 	return len(st.content)
 }
 
-func (st stat) NumChildren() int {
+func (st *stat) NumChildren() int {
+	st.Lock()
+	defer st.Unlock()
 	return len(st.children)
 }
 
-func (st stat) Pzxid() int64 {
+func (st *stat) Pzxid() int64 {
+	st.Lock()
+	defer st.Unlock()
 	return st.pzxid
 }
 
@@ -475,7 +519,7 @@ func (st *stat) nextSequence() string {
 	return fmt.Sprintf("%010d", st.sequence)
 }
 
-func (st stat) fprintRecursive(level int, buf *bytes.Buffer) {
+func (st *stat) fprintRecursive(level int, buf *bytes.Buffer) {
 	start := strings.Repeat("  ", level)
 	fmt.Fprintf(buf, "%v-%v:\n", start, st.name)
 	if st.content != "" {
@@ -489,7 +533,11 @@ func (st stat) fprintRecursive(level int, buf *bytes.Buffer) {
 }
 
 func (conn *zconn) String() string {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
 	b := new(bytes.Buffer)
+	conn.root.Lock()
 	conn.root.fprintRecursive(0, b)
+	conn.root.Unlock()
 	return b.String()
 }

@@ -7,10 +7,13 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -18,10 +21,17 @@ type fakeVTGateService struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
-	execCase, ok := execMap[query.Sql]
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.Query{
+		Sql:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       topo.ProtoToTabletType(tabletType),
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
@@ -30,41 +40,46 @@ func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, rep
 	return nil
 }
 
-// ExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+// ExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return nil
 }
 
 // ExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return nil
 }
 
 // ExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return nil
 }
 
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return nil
 }
 
 // ExecuteBatchShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	return nil
 }
 
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	return nil
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
-	execCase, ok := execMap[query.Sql]
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &proto.Query{
+		Sql:           sql,
+		BindVariables: bindVariables,
+		TabletType:    topo.ProtoToTabletType(tabletType),
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		return fmt.Errorf("request mismatch: got %+v, want %+v", query, execCase.execQuery)
@@ -89,18 +104,18 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, query *proto.Quer
 	return nil
 }
 
-// StreamExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
-	return nil
-}
-
-// StreamExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return nil
 }
 
 // StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+	return nil
+}
+
+// StreamExecuteKeyRanges is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	return nil
 }
 
@@ -127,7 +142,7 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 }
 
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	return nil
 }
 
@@ -181,18 +196,22 @@ var execMap = map[string]struct {
 	},
 	"txRequest": {
 		execQuery: &proto.Query{
-			Sql:           "txRequest",
-			BindVariables: map[string]interface{}{},
-			TabletType:    "",
-			Session:       session1,
+			Sql: "txRequest",
+			BindVariables: map[string]interface{}{
+				"v1": int64(0),
+			},
+			TabletType: "master",
+			Session:    session1,
 		},
 		shardQuery: &proto.QueryShard{
-			Sql:           "txRequest",
-			BindVariables: map[string]interface{}{},
-			TabletType:    "",
-			Keyspace:      "",
-			Shards:        []string{},
-			Session:       session1,
+			Sql: "txRequest",
+			BindVariables: map[string]interface{}{
+				"v1": int64(0),
+			},
+			TabletType: "master",
+			Keyspace:   "",
+			Shards:     []string{},
+			Session:    session1,
 		},
 		reply: &proto.QueryResult{
 			Result:  &mproto.QueryResult{},

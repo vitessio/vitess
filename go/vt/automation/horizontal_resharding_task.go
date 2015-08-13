@@ -81,3 +81,8 @@ func (t *HorizontalReshardingTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard_list", "dest_shard_list",
 		"vtctld_endpoint", "vtworker_endpoint"}
 }
+
+// OptionalParameters is part of the Task interface.
+func (t *HorizontalReshardingTask) OptionalParameters() []string {
+	return []string{"exclude_tables"}
+}

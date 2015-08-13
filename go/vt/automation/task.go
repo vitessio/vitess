@@ -15,6 +15,9 @@ type Task interface {
 	// "output" may be empty. It contains any text which maybe must e.g. to debug the task or show it in the UI.
 	Run(parameters map[string]string) (newTaskContainers []*pb.TaskContainer, output string, err error)
 
-	// RequiredParameters() returns a list of parameter keys which must be provided as input for run().
+	// RequiredParameters() returns a list of parameter keys which must be provided as input for Run().
 	RequiredParameters() []string
+
+	// OptionalParameters() returns a list of parameter keys which are optional input for Run().
+	OptionalParameters() []string
 }
