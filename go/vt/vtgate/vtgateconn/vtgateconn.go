@@ -80,9 +80,9 @@ func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return res, err
 }
 
-// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, tabletType, asTransaction, nil)
+// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
 
@@ -264,12 +264,12 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 	return res, err
 }
 
-// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
-		return nil, fmt.Errorf("executeBatchShard: not in transaction")
+		return nil, fmt.Errorf("executeBatchShards: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, tabletType, asTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, tx.session)
 	tx.session = session
 	return res, err
 }
@@ -349,8 +349,8 @@ type Impl interface {
 	// ExecuteEntityIds executes a non-streaming query for multiple entities.
 	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
-	// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-	ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+	ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
 	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)

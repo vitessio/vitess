@@ -165,7 +165,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pbt.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pbt.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	var s *pb.Session
 	if session != nil {
 		s = session.(*pb.Session)
