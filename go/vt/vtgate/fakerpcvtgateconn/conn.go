@@ -232,8 +232,8 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 	panic("not implemented")
 }
 
-// ExecuteBatchShard please see vtgateconn.Impl.ExecuteBatchShard
-func (conn *FakeVTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+// ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
+func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	panic("not implemented")
 }
 
