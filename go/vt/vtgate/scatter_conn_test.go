@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -319,6 +320,25 @@ func TestScatterConnRollback(t *testing.T) {
 	}
 	if rollbackCount := sbc1.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
+	}
+}
+
+func TestScatterConnClose(t *testing.T) {
+	s := createSandbox("TestScatterConnClose")
+	sbc := &sandboxConn{}
+	s.MapTestConn("0", sbc)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	stc.Execute(context.Background(), "query1", nil, "TestScatterConnClose", []string{"0"}, "", nil, false)
+	stc.Close()
+	// retry for 10s as Close() is async.
+	for i := 0; i < 10; i++ {
+		if closeCount := sbc.CloseCount.Get(); closeCount == 1 {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if closeCount := sbc.CloseCount.Get(); closeCount != 1 {
+		t.Errorf("want 1, got %d", closeCount)
 	}
 }
 
