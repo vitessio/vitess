@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -64,8 +63,17 @@ func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
 	}
 }
 
+// queryExecute contains all the fields we use to test Execute
+type queryExecute struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -73,10 +81,16 @@ func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, rep
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "Execute")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       tabletType,
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
@@ -86,30 +100,61 @@ func (f *fakeVTGateService) Execute(ctx context.Context, query *proto.Query, rep
 	return nil
 }
 
-// ExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteShard(ctx context.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+// queryExecuteShards contains all the fields we use to test ExecuteShards
+type queryExecuteShards struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
+// ExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "ExecuteShard")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	f.checkCallerID(ctx, "ExecuteShards")
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteShards{
+		SQL:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       tabletType,
+		Keyspace:         keyspace,
+		Shards:           shards,
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.shardQuery) {
-		f.t.Errorf("ExecuteShard: %+v, want %+v", query, execCase.shardQuery)
+		f.t.Errorf("ExecuteShards: %+v, want %+v", query, execCase.shardQuery)
 		return nil
 	}
 	*reply = *execCase.reply
 	return nil
 }
 
+// queryExecuteKeyspaceIds contains all the fields we use to test
+// ExecuteKeyspaceIds
+type queryExecuteKeyspaceIds struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyspaceIds      []key.KeyspaceId
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
 // ExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -117,21 +162,40 @@ func (f *fakeVTGateService) ExecuteKeyspaceIds(ctx context.Context, query *proto
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteKeyspaceIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
 	}
-	if !reflect.DeepEqual(query, execCase.keyspaceIdQuery) {
-		f.t.Errorf("ExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIdQuery)
+	query := &queryExecuteKeyspaceIds{
+		SQL:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       tabletType,
+		Keyspace:         keyspace,
+		KeyspaceIds:      keyspaceIds,
+		Session:          session,
+		NotInTransaction: notInTransaction,
+	}
+	if !reflect.DeepEqual(query, execCase.keyspaceIDQuery) {
+		f.t.Errorf("ExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDQuery)
 		return nil
 	}
 	*reply = *execCase.reply
 	return nil
 }
 
+// queryExecuteKeyRanges contains all the fields we use to test ExecuteKeyRanges
+type queryExecuteKeyRanges struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	KeyRanges        []key.KeyRange
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
 // ExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -139,10 +203,18 @@ func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.K
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteKeyRanges")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteKeyRanges{
+		SQL:              sql,
+		BindVariables:    bindVariables,
+		TabletType:       tabletType,
+		Keyspace:         keyspace,
+		KeyRanges:        keyRanges,
+		Session:          session,
+		NotInTransaction: notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.keyRangeQuery) {
 		f.t.Errorf("ExecuteKeyRanges: %+v, want %+v", query, execCase.keyRangeQuery)
@@ -152,8 +224,20 @@ func (f *fakeVTGateService) ExecuteKeyRanges(ctx context.Context, query *proto.K
 	return nil
 }
 
+// queryExecuteEntityIds contains all the fields we use to test ExecuteEntityIds
+type queryExecuteEntityIds struct {
+	SQL               string
+	BindVariables     map[string]interface{}
+	Keyspace          string
+	EntityColumnName  string
+	EntityKeyspaceIDs []proto.EntityId
+	TabletType        pb.TabletType
+	Session           *proto.Session
+	NotInTransaction  bool
+}
+
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.EntityIdsQuery, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -161,10 +245,19 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.E
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteEntityIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteEntityIds{
+		SQL:               sql,
+		BindVariables:     bindVariables,
+		TabletType:        tabletType,
+		Keyspace:          keyspace,
+		EntityColumnName:  entityColumnName,
+		EntityKeyspaceIDs: entityKeyspaceIDs,
+		Session:           session,
+		NotInTransaction:  notInTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)
@@ -174,22 +267,36 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, query *proto.E
 	return nil
 }
 
-// ExecuteBatchShard is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+// queryExecuteBatchShards contains all the fields we use to test
+// ExecuteBatchShards
+type queryExecuteBatchShards struct {
+	Queries       []proto.BoundShardQuery
+	TabletType    pb.TabletType
+	AsTransaction bool
+	Session       *proto.Session
+}
+
+// ExecuteBatchShards is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "ExecuteBatchShard")
-	batchQuery.CallerID = nil
-	execCase, ok := execMap[batchQuery.Queries[0].Sql]
+	f.checkCallerID(ctx, "ExecuteBatchShards")
+	execCase, ok := execMap[queries[0].Sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", batchQuery.Queries[0].Sql)
+		return fmt.Errorf("no match for: %s", queries[0].Sql)
 	}
-	if !reflect.DeepEqual(batchQuery, execCase.batchQueryShard) {
-		f.t.Errorf("ExecuteBatchShard: %+v, want %+v", batchQuery, execCase.batchQueryShard)
+	query := &queryExecuteBatchShards{
+		Queries:       queries,
+		TabletType:    tabletType,
+		AsTransaction: asTransaction,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, execCase.batchQueryShard) {
+		f.t.Errorf("ExecuteBatchShard: %+v, want %+v", query, execCase.batchQueryShard)
 		return nil
 	}
 	reply.Error = execCase.reply.Error
@@ -200,8 +307,17 @@ func (f *fakeVTGateService) ExecuteBatchShard(ctx context.Context, batchQuery *p
 	return nil
 }
 
+// queryExecuteBatchKeyspaceIds contains all the fields we use to test
+// ExecuteBatchKeyspaceIds
+type queryExecuteBatchKeyspaceIds struct {
+	Queries       []proto.BoundKeyspaceIdQuery
+	TabletType    pb.TabletType
+	AsTransaction bool
+	Session       *proto.Session
+}
+
 // ExecuteBatchKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQuery *proto.KeyspaceIdBatchQuery, reply *proto.QueryResultList) error {
+func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session, reply *proto.QueryResultList) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -209,13 +325,18 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQu
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "ExecuteBatchKeyspaceIds")
-	batchQuery.CallerID = nil
-	execCase, ok := execMap[batchQuery.Queries[0].Sql]
+	execCase, ok := execMap[queries[0].Sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", batchQuery.Queries[0].Sql)
+		return fmt.Errorf("no match for: %s", queries[0].Sql)
 	}
-	if !reflect.DeepEqual(batchQuery, execCase.keyspaceIdBatchQuery) {
-		f.t.Errorf("ExecuteBatchKeyspaceIds: %+v, want %+v", batchQuery, execCase.keyspaceIdBatchQuery)
+	query := &queryExecuteBatchKeyspaceIds{
+		Queries:       queries,
+		TabletType:    tabletType,
+		AsTransaction: asTransaction,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, execCase.keyspaceIDBatchQuery) {
+		f.t.Errorf("ExecuteBatchKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDBatchQuery)
 		return nil
 	}
 	reply.Error = execCase.reply.Error
@@ -227,16 +348,20 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, batchQu
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, query *proto.Query, sendReply func(*proto.QueryResult) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	execCase, ok := execMap[query.Sql]
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
 	}
 	f.checkCallerID(ctx, "StreamExecute")
-	query.CallerID = nil
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		TabletType:    tabletType,
+	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("StreamExecute: %+v, want %+v", query, execCase.execQuery)
 		return nil
@@ -268,16 +393,22 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, query *proto.Quer
 	return nil
 }
 
-// StreamExecuteShard is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShard(ctx context.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteShards is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "StreamExecuteShard")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	f.checkCallerID(ctx, "StreamExecuteShards")
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteShards{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Keyspace:      keyspace,
+		Shards:        shards,
+		TabletType:    tabletType,
 	}
 	if !reflect.DeepEqual(query, execCase.shardQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.shardQuery)
@@ -310,19 +441,25 @@ func (f *fakeVTGateService) StreamExecuteShard(ctx context.Context, query *proto
 	return nil
 }
 
-// StreamExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, query *proto.KeyRangeQuery, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteKeyspaceIds is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "StreamExecuteKeyRanges")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	f.checkCallerID(ctx, "StreamExecuteKeyspaceIds")
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
 	}
-	if !reflect.DeepEqual(query, execCase.keyRangeQuery) {
-		f.t.Errorf("StreamExecuteKeyRanges: %+v, want %+v", query, execCase.keyRangeQuery)
+	query := &queryExecuteKeyspaceIds{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Keyspace:      keyspace,
+		KeyspaceIds:   keyspaceIds,
+		TabletType:    tabletType,
+	}
+	if !reflect.DeepEqual(query, execCase.keyspaceIDQuery) {
+		f.t.Errorf("StreamExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIDQuery)
 		return nil
 	}
 	if execCase.reply.Result != nil {
@@ -352,19 +489,25 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, query *p
 	return nil
 }
 
-// StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, query *proto.KeyspaceIdQuery, sendReply func(*proto.QueryResult) error) error {
+// StreamExecuteKeyRanges is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "StreamExecuteKeyspaceIds")
-	query.CallerID = nil
-	execCase, ok := execMap[query.Sql]
+	f.checkCallerID(ctx, "StreamExecuteKeyRanges")
+	execCase, ok := execMap[sql]
 	if !ok {
-		return fmt.Errorf("no match for: %s", query.Sql)
+		return fmt.Errorf("no match for: %s", sql)
 	}
-	if !reflect.DeepEqual(query, execCase.keyspaceIdQuery) {
-		f.t.Errorf("StreamExecuteKeyspaceIds: %+v, want %+v", query, execCase.keyspaceIdQuery)
+	query := &queryExecuteKeyRanges{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Keyspace:      keyspace,
+		KeyRanges:     keyRanges,
+		TabletType:    tabletType,
+	}
+	if !reflect.DeepEqual(query, execCase.keyRangeQuery) {
+		f.t.Errorf("StreamExecuteKeyRanges: %+v, want %+v", query, execCase.keyRangeQuery)
 		return nil
 	}
 	if execCase.reply.Result != nil {
@@ -439,8 +582,17 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *proto.Sessi
 	return nil
 }
 
+// querySplitQuery contains all the fields we use to test SplitQuery
+type querySplitQuery struct {
+	Keyspace      string
+	SQL           string
+	BindVariables map[string]interface{}
+	SplitColumn   string
+	SplitCount    int
+}
+
 // SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) error {
+func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -448,9 +600,15 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, req *proto.SplitQuer
 		panic(fmt.Errorf("test forced panic"))
 	}
 	f.checkCallerID(ctx, "SplitQuery")
-	req.CallerID = nil
-	if !reflect.DeepEqual(req, splitQueryRequest) {
-		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", req, splitQueryRequest)
+	query := &querySplitQuery{
+		Keyspace:      keyspace,
+		SQL:           sql,
+		BindVariables: bindVariables,
+		SplitColumn:   splitColumn,
+		SplitCount:    splitCount,
+	}
+	if !reflect.DeepEqual(query, splitQueryRequest) {
+		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
 	}
 	*reply = *splitQueryResult
 	return nil
@@ -500,14 +658,14 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	fs := fakeServer.(*fakeVTGateService)
 
 	testExecute(t, conn)
-	testExecuteShard(t, conn)
+	testExecuteShards(t, conn)
 	testExecuteKeyspaceIds(t, conn)
 	testExecuteKeyRanges(t, conn)
 	testExecuteEntityIds(t, conn)
 	testExecuteBatchShard(t, conn)
 	testExecuteBatchKeyspaceIds(t, conn)
 	testStreamExecute(t, conn)
-	testStreamExecuteShard(t, conn)
+	testStreamExecuteShards(t, conn)
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
 	fs.hasCallerID = false
@@ -535,7 +693,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testRollback2Error(t, conn, fs)
 
 	testExecuteError(t, conn)
-	testExecuteShardError(t, conn)
+	testExecuteShardsError(t, conn)
 	testExecuteKeyspaceIdsError(t, conn)
 	testExecuteKeyRangesError(t, conn)
 	testExecuteEntityIdsError(t, conn)
@@ -543,8 +701,8 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testExecuteBatchKeyspaceIdsError(t, conn)
 	testStreamExecuteError(t, conn, fs)
 	testStreamExecute2Error(t, conn, fs)
-	testStreamExecuteShardError(t, conn, fs)
-	testStreamExecuteShard2Error(t, conn, fs)
+	testStreamExecuteShardsError(t, conn, fs)
+	testStreamExecuteShards2Error(t, conn, fs)
 	testStreamExecuteKeyRangesError(t, conn, fs)
 	testStreamExecuteKeyRanges2Error(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
@@ -567,14 +725,14 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testRollback2Panic(t, conn, fs)
 
 	testExecutePanic(t, conn)
-	testExecuteShardPanic(t, conn)
+	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
 	testExecuteKeyRangesPanic(t, conn)
 	testExecuteEntityIdsPanic(t, conn)
 	testExecuteBatchShardPanic(t, conn)
 	testExecuteBatchKeyspaceIdsPanic(t, conn)
 	testStreamExecutePanic(t, conn)
-	testStreamExecuteShardPanic(t, conn)
+	testStreamExecuteShardsPanic(t, conn)
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testSplitQueryPanic(t, conn)
@@ -604,7 +762,7 @@ func verifyError(t *testing.T, err error, method string) {
 func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	qr, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -619,7 +777,7 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	_, err = conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -629,21 +787,21 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	verifyError(t, err, "Execute")
 }
 
 func testExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	expectPanic(t, err)
 }
 
-func testExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType))
+	qr, err := conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -651,38 +809,38 @@ func testExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteShard(ctx, "none", "", []string{}, nil, pb.TabletType_RDONLY)
+	_, err = conn.ExecuteShards(ctx, "none", "", []string{}, nil, pb.TabletType_RDONLY)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType))
+	_, err = conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteShardError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType))
-	verifyError(t, err, "ExecuteShard")
+	_, err := conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
+	verifyError(t, err, "ExecuteShards")
 }
 
-func testExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteShardsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteShard(ctx, execCase.execQuery.Sql, "ks", []string{"1", "2"}, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	_, err := conn.ExecuteShards(ctx, execCase.execQuery.SQL, "ks", []string{"1", "2"}, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	expectPanic(t, err)
 }
 
 func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	qr, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -697,7 +855,7 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	_, err = conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -707,21 +865,21 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	verifyError(t, err, "ExecuteKeyspaceIds")
 }
 
 func testExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	expectPanic(t, err)
 }
 
 func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	qr, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -736,7 +894,7 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	_, err = conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -746,21 +904,21 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	verifyError(t, err, "ExecuteKeyRanges")
 }
 
 func testExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	expectPanic(t, err)
 }
 
 func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType))
+	qr, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
 	if err != nil {
 		t.Error(err)
 	}
@@ -775,7 +933,7 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType))
+	_, err = conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -785,21 +943,21 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteEntityIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType))
+	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
 	verifyError(t, err, "ExecuteEntityIds")
 }
 
 func testExecuteEntityIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType))
+	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
 	expectPanic(t, err)
 }
 
 func testExecuteBatchShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	ql, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	ql, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -814,7 +972,7 @@ func testExecuteBatchShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err = conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -824,21 +982,21 @@ func testExecuteBatchShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteBatchShardError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	verifyError(t, err, "ExecuteBatchShard")
 }
 
 func testExecuteBatchShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err := conn.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	expectPanic(t, err)
 }
 
 func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	ql, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.batchQueryShard.AsTransaction)
+	ql, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -853,7 +1011,7 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	want = "app error"
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
@@ -863,21 +1021,21 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testExecuteBatchKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	verifyError(t, err, "ExecuteBatchKeyspaceIds")
 }
 
 func testExecuteBatchKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	expectPanic(t, err)
 }
 
 func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -914,7 +1072,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc, err = conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err = conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -931,7 +1089,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -957,7 +1115,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 func testStreamExecute2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecute2(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecute2(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecute2 failed: %v", err)
 	}
@@ -983,7 +1141,7 @@ func testStreamExecute2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fa
 func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -994,10 +1152,10 @@ func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
-func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1020,7 +1178,7 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	packets, errFunc, err = conn.StreamExecuteShard(ctx, "none", "", []string{}, nil, pb.TabletType_REPLICA)
+	packets, errFunc, err = conn.StreamExecuteShards(ctx, "none", "", []string{}, nil, pb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1034,7 +1192,7 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc, err = conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err = conn.StreamExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1048,62 +1206,62 @@ func testStreamExecuteShard(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
-func testStreamExecuteShardError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+func testStreamExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
-		t.Fatalf("StreamExecuteShard failed: %v", err)
+		t.Fatalf("StreamExecuteShards failed: %v", err)
 	}
 	qr, ok := <-stream
 	if !ok {
-		t.Fatalf("StreamExecuteShard failed: cannot read result1")
+		t.Fatalf("StreamExecuteShards failed: cannot read result1")
 	}
 
 	if !reflect.DeepEqual(qr, &streamResult1) {
-		t.Errorf("Unexpected result from StreamExecuteShard: got %#v want %#v", qr, &streamResult1)
+		t.Errorf("Unexpected result from StreamExecuteShards: got %#v want %#v", qr, &streamResult1)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
 	qr, ok = <-stream
 	if ok {
-		t.Fatalf("StreamExecuteShard channel wasn't closed")
+		t.Fatalf("StreamExecuteShards channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecuteShard")
+	verifyError(t, err, "StreamExecuteShards")
 }
 
-func testStreamExecuteShard2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+func testStreamExecuteShards2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteShard2(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteShards2(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
-		t.Fatalf("StreamExecuteShard2 failed: %v", err)
+		t.Fatalf("StreamExecuteShards2 failed: %v", err)
 	}
 	qr, ok := <-stream
 	if !ok {
-		t.Fatalf("StreamExecuteShard2 failed: cannot read result1")
+		t.Fatalf("StreamExecuteShards2 failed: cannot read result1")
 	}
 
 	if !reflect.DeepEqual(qr, &streamResult1) {
-		t.Errorf("Unexpected result from StreamExecuteShard2: got %#v want %#v", qr, &streamResult1)
+		t.Errorf("Unexpected result from StreamExecuteShards2: got %#v want %#v", qr, &streamResult1)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
 	qr, ok = <-stream
 	if ok {
-		t.Fatalf("StreamExecuteShard2 channel wasn't closed")
+		t.Fatalf("StreamExecuteShards2 channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecuteShard2")
+	verifyError(t, err, "StreamExecuteShards2")
 }
 
-func testStreamExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecuteShardsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1117,7 +1275,7 @@ func testStreamExecuteShardPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1154,7 +1312,7 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	packets, errFunc, err = conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1171,7 +1329,7 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecuteKeyRanges failed: %v", err)
 	}
@@ -1197,7 +1355,7 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 func testStreamExecuteKeyRanges2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteKeyRanges2(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteKeyRanges2(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecuteKeyRanges2 failed: %v", err)
 	}
@@ -1223,7 +1381,7 @@ func testStreamExecuteKeyRanges2Error(t *testing.T, conn *vtgateconn.VTGateConn,
 func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1237,7 +1395,7 @@ func testStreamExecuteKeyRangesPanic(t *testing.T, conn *vtgateconn.VTGateConn) 
 func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1274,7 +1432,7 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	execCase = execMap["errorRequst"]
-	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	packets, errFunc, err = conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1291,7 +1449,7 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecuteKeyspaceIds failed: %v", err)
 	}
@@ -1317,7 +1475,7 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 func testStreamExecuteKeyspaceIds2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, errFunc, err := conn.StreamExecuteKeyspaceIds2(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	stream, errFunc, err := conn.StreamExecuteKeyspaceIds2(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Fatalf("StreamExecuteKeyspaceIds2 failed: %v", err)
 	}
@@ -1343,7 +1501,7 @@ func testStreamExecuteKeyspaceIds2Error(t *testing.T, conn *vtgateconn.VTGateCon
 func testStreamExecuteKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType))
+	packets, errFunc, err := conn.StreamExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1363,7 +1521,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType), false)
+	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1372,12 +1530,12 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	// ExecuteShard
+	// ExecuteShards
 	tx, err = conn.Begin(ctx)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType), false)
+	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1391,7 +1549,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType), false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1405,7 +1563,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType), false)
+	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1419,7 +1577,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType), false)
+	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1433,7 +1591,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1447,7 +1605,7 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1465,31 +1623,31 @@ func testTxPassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType), true)
+	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType), true)
+	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType), true)
+	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType), true)
+	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType), true)
+	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1506,7 +1664,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType), false)
+	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1515,12 +1673,12 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Error(err)
 	}
 
-	// ExecuteShard
+	// ExecuteShards
 	tx, err = conn.Begin2(ctx)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType), false)
+	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1534,7 +1692,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType), false)
+	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1548,7 +1706,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType), false)
+	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1562,7 +1720,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType), false)
+	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1576,7 +1734,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1590,7 +1748,7 @@ func testTx2Pass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1609,31 +1767,31 @@ func testTx2PassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.Execute(ctx, execCase.execQuery.Sql, execCase.execQuery.BindVariables, topo.TabletTypeToProto(execCase.execQuery.TabletType), true)
+	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteShard(ctx, execCase.shardQuery.Sql, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, topo.TabletTypeToProto(execCase.shardQuery.TabletType), true)
+	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIdQuery.Sql, execCase.keyspaceIdQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIdQuery.KeyspaceIds), execCase.keyspaceIdQuery.BindVariables, topo.TabletTypeToProto(execCase.keyspaceIdQuery.TabletType), true)
+	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, key.KeyspaceIdsToProto(execCase.keyspaceIDQuery.KeyspaceIds), execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.Sql, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, topo.TabletTypeToProto(execCase.keyRangeQuery.TabletType), true)
+	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, key.KeyRangesToProto(execCase.keyRangeQuery.KeyRanges), execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.Sql, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, topo.TabletTypeToProto(execCase.entityIdsQuery.TabletType), true)
+	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, true)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, topo.TabletTypeToProto(execCase.batchQueryShard.TabletType), execCase.batchQueryShard.AsTransaction)
+	_, err = tx.ExecuteBatchShard(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIdBatchQuery.Queries, topo.TabletTypeToProto(execCase.keyspaceIdBatchQuery.TabletType), execCase.keyspaceIdBatchQuery.AsTransaction)
+	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1794,40 +1952,40 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
-	want = "executeShard: not in transaction"
+	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	want = "executeShards: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteBatchShard(ctx, nil, pb.TabletType_REPLICA, false)
 	want = "executeBatchShard: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, pb.TabletType_REPLICA, false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	err = tx.Commit(ctx)
@@ -1871,40 +2029,40 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
-	_, err = tx.ExecuteShard(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
-	want = "executeShard: not in transaction"
+	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
+	want = "executeShards: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteKeyspaceIds(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteKeyRanges(ctx, "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeKeyRanges: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteEntityIds(ctx, "", "", "", nil, nil, pb.TabletType_REPLICA, false)
 	want = "executeEntityIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteBatchShard(ctx, nil, pb.TabletType_REPLICA, false)
 	want = "executeBatchShard: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteBatchKeyspaceIds(ctx, nil, pb.TabletType_REPLICA, false)
 	want = "executeBatchKeyspaceIds: not in transaction"
 	if err == nil || err.Error() != want {
-		t.Errorf("ExecuteShard: %v, want %v", err, want)
+		t.Errorf("ExecuteShards: %v, want %v", err, want)
 	}
 
 	err = tx.Commit2(ctx)
@@ -1931,7 +2089,7 @@ func testTx2Fail(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
@@ -1943,13 +2101,13 @@ func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.Query, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
+	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
 	expectPanic(t, err)
 }
 
@@ -1983,37 +2141,37 @@ var testCallerID = &pbv.CallerID{
 }
 
 var execMap = map[string]struct {
-	execQuery            *proto.Query
-	shardQuery           *proto.QueryShard
-	keyspaceIdQuery      *proto.KeyspaceIdQuery
-	keyRangeQuery        *proto.KeyRangeQuery
-	entityIdsQuery       *proto.EntityIdsQuery
-	batchQueryShard      *proto.BatchQueryShard
-	keyspaceIdBatchQuery *proto.KeyspaceIdBatchQuery
+	execQuery            *queryExecute
+	shardQuery           *queryExecuteShards
+	keyspaceIDQuery      *queryExecuteKeyspaceIds
+	keyRangeQuery        *queryExecuteKeyRanges
+	entityIdsQuery       *queryExecuteEntityIds
+	batchQueryShard      *queryExecuteBatchShards
+	keyspaceIDBatchQuery *queryExecuteBatchKeyspaceIds
 	reply                *proto.QueryResult
 	err                  error
 }{
 	"request1": {
-		execQuery: &proto.Query{
-			Sql: "request1",
+		execQuery: &queryExecute{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "request1",
+		shardQuery: &queryExecuteShards{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		keyspaceIdQuery: &proto.KeyspaceIdQuery{
-			Sql: "request1",
+		keyspaceIDQuery: &queryExecuteKeyspaceIds{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2021,11 +2179,11 @@ var execMap = map[string]struct {
 			KeyspaceIds: []key.KeyspaceId{
 				key.KeyspaceId("a"),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		keyRangeQuery: &proto.KeyRangeQuery{
-			Sql: "request1",
+		keyRangeQuery: &queryExecuteKeyRanges{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2036,11 +2194,11 @@ var execMap = map[string]struct {
 					End:   key.KeyspaceId("e"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		entityIdsQuery: &proto.EntityIdsQuery{
-			Sql: "request1",
+		entityIdsQuery: &queryExecuteEntityIds{
+			SQL: "request1",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2052,10 +2210,10 @@ var execMap = map[string]struct {
 					KeyspaceID: key.KeyspaceId("k"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		batchQueryShard: &proto.BatchQueryShard{
+		batchQueryShard: &queryExecuteBatchShards{
 			Queries: []proto.BoundShardQuery{
 				proto.BoundShardQuery{
 					Sql: "request1",
@@ -2066,11 +2224,11 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       nil,
 		},
-		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
+		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
 			Queries: []proto.BoundKeyspaceIdQuery{
 				proto.BoundKeyspaceIdQuery{
 					Sql: "request1",
@@ -2083,7 +2241,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       nil,
 		},
@@ -2094,26 +2252,26 @@ var execMap = map[string]struct {
 		},
 	},
 	"errorRequst": {
-		execQuery: &proto.Query{
-			Sql: "errorRequst",
+		execQuery: &queryExecute{
+			SQL: "errorRequst",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "errorRequst",
+		shardQuery: &queryExecuteShards{
+			SQL: "errorRequst",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Keyspace:   "",
 			Shards:     []string{"s1", "s2"},
 			Session:    nil,
 		},
-		keyspaceIdQuery: &proto.KeyspaceIdQuery{
-			Sql: "errorRequst",
+		keyspaceIDQuery: &queryExecuteKeyspaceIds{
+			SQL: "errorRequst",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2121,11 +2279,11 @@ var execMap = map[string]struct {
 			KeyspaceIds: []key.KeyspaceId{
 				key.KeyspaceId("a"),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		keyRangeQuery: &proto.KeyRangeQuery{
-			Sql: "errorRequst",
+		keyRangeQuery: &queryExecuteKeyRanges{
+			SQL: "errorRequst",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2136,11 +2294,11 @@ var execMap = map[string]struct {
 					End:   key.KeyspaceId("e"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		entityIdsQuery: &proto.EntityIdsQuery{
-			Sql: "errorRequst",
+		entityIdsQuery: &queryExecuteEntityIds{
+			SQL: "errorRequst",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2152,10 +2310,10 @@ var execMap = map[string]struct {
 					KeyspaceID: key.KeyspaceId("k"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    nil,
 		},
-		batchQueryShard: &proto.BatchQueryShard{
+		batchQueryShard: &queryExecuteBatchShards{
 			Queries: []proto.BoundShardQuery{
 				proto.BoundShardQuery{
 					Sql: "errorRequst",
@@ -2166,11 +2324,11 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: false,
 			Session:       nil,
 		},
-		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
+		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
 			Queries: []proto.BoundKeyspaceIdQuery{
 				proto.BoundKeyspaceIdQuery{
 					Sql: "errorRequst",
@@ -2183,7 +2341,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: false,
 			Session:       nil,
 		},
@@ -2194,26 +2352,26 @@ var execMap = map[string]struct {
 		},
 	},
 	"txRequest": {
-		execQuery: &proto.Query{
-			Sql: "txRequest",
+		execQuery: &queryExecute{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: topo.TYPE_MASTER,
+			TabletType: pb.TabletType_MASTER,
 			Session:    session1,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "txRequest",
+		shardQuery: &queryExecuteShards{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType: topo.TYPE_MASTER,
+			TabletType: pb.TabletType_MASTER,
 			Keyspace:   "",
 			Shards:     []string{"s1", "s2"},
 			Session:    session1,
 		},
-		keyspaceIdQuery: &proto.KeyspaceIdQuery{
-			Sql: "txRequest",
+		keyspaceIDQuery: &queryExecuteKeyspaceIds{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2221,11 +2379,11 @@ var execMap = map[string]struct {
 			KeyspaceIds: []key.KeyspaceId{
 				key.KeyspaceId("a"),
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    session1,
 		},
-		keyRangeQuery: &proto.KeyRangeQuery{
-			Sql: "txRequest",
+		keyRangeQuery: &queryExecuteKeyRanges{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2236,11 +2394,11 @@ var execMap = map[string]struct {
 					End:   key.KeyspaceId("e"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    session1,
 		},
-		entityIdsQuery: &proto.EntityIdsQuery{
-			Sql: "txRequest",
+		entityIdsQuery: &queryExecuteEntityIds{
+			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2252,10 +2410,10 @@ var execMap = map[string]struct {
 					KeyspaceID: key.KeyspaceId("k"),
 				},
 			},
-			TabletType: topo.TYPE_RDONLY,
+			TabletType: pb.TabletType_RDONLY,
 			Session:    session1,
 		},
-		batchQueryShard: &proto.BatchQueryShard{
+		batchQueryShard: &queryExecuteBatchShards{
 			Queries: []proto.BoundShardQuery{
 				proto.BoundShardQuery{
 					Sql: "txRequest",
@@ -2266,11 +2424,11 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
-		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
+		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
 			Queries: []proto.BoundKeyspaceIdQuery{
 				proto.BoundKeyspaceIdQuery{
 					Sql: "txRequest",
@@ -2283,7 +2441,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2294,28 +2452,28 @@ var execMap = map[string]struct {
 		},
 	},
 	"txRequestNIT": {
-		execQuery: &proto.Query{
-			Sql: "txRequestNIT",
+		execQuery: &queryExecute{
+			SQL: "txRequestNIT",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType:       topo.TYPE_MASTER,
+			TabletType:       pb.TabletType_MASTER,
 			Session:          session1,
 			NotInTransaction: true,
 		},
-		shardQuery: &proto.QueryShard{
-			Sql: "txRequestNIT",
+		shardQuery: &queryExecuteShards{
+			SQL: "txRequestNIT",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
-			TabletType:       topo.TYPE_MASTER,
+			TabletType:       pb.TabletType_MASTER,
 			Keyspace:         "",
 			Shards:           []string{"s1", "s2"},
 			Session:          session1,
 			NotInTransaction: true,
 		},
-		keyspaceIdQuery: &proto.KeyspaceIdQuery{
-			Sql: "txRequestNIT",
+		keyspaceIDQuery: &queryExecuteKeyspaceIds{
+			SQL: "txRequestNIT",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2323,12 +2481,12 @@ var execMap = map[string]struct {
 			KeyspaceIds: []key.KeyspaceId{
 				key.KeyspaceId("a"),
 			},
-			TabletType:       topo.TYPE_RDONLY,
+			TabletType:       pb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
-		keyRangeQuery: &proto.KeyRangeQuery{
-			Sql: "txRequestNIT",
+		keyRangeQuery: &queryExecuteKeyRanges{
+			SQL: "txRequestNIT",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2339,12 +2497,12 @@ var execMap = map[string]struct {
 					End:   key.KeyspaceId("e"),
 				},
 			},
-			TabletType:       topo.TYPE_RDONLY,
+			TabletType:       pb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
-		entityIdsQuery: &proto.EntityIdsQuery{
-			Sql: "txRequestNIT",
+		entityIdsQuery: &queryExecuteEntityIds{
+			SQL: "txRequestNIT",
 			BindVariables: map[string]interface{}{
 				"bind1": int64(0),
 			},
@@ -2356,11 +2514,11 @@ var execMap = map[string]struct {
 					KeyspaceID: key.KeyspaceId("k"),
 				},
 			},
-			TabletType:       topo.TYPE_RDONLY,
+			TabletType:       pb.TabletType_RDONLY,
 			Session:          session1,
 			NotInTransaction: true,
 		},
-		batchQueryShard: &proto.BatchQueryShard{
+		batchQueryShard: &queryExecuteBatchShards{
 			Queries: []proto.BoundShardQuery{
 				proto.BoundShardQuery{
 					Sql: "txRequestNIT",
@@ -2371,11 +2529,11 @@ var execMap = map[string]struct {
 					Shards:   []string{"-80", "80-"},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
-		keyspaceIdBatchQuery: &proto.KeyspaceIdBatchQuery{
+		keyspaceIDBatchQuery: &queryExecuteBatchKeyspaceIds{
 			Queries: []proto.BoundKeyspaceIdQuery{
 				proto.BoundKeyspaceIdQuery{
 					Sql: "txRequestNIT",
@@ -2388,7 +2546,7 @@ var execMap = map[string]struct {
 					},
 				},
 			},
-			TabletType:    topo.TYPE_RDONLY,
+			TabletType:    pb.TabletType_RDONLY,
 			AsTransaction: true,
 			Session:       session1,
 		},
@@ -2458,13 +2616,11 @@ var session2 = &proto.Session{
 	},
 }
 
-var splitQueryRequest = &proto.SplitQueryRequest{
+var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks",
-	Query: tproto.BoundQuery{
-		Sql: "in for SplitQuery",
-		BindVariables: map[string]interface{}{
-			"bind1": int64(43),
-		},
+	SQL:      "in for SplitQuery",
+	BindVariables: map[string]interface{}{
+		"bind1": int64(43),
 	},
 	SplitColumn: "split_column",
 	SplitCount:  13,

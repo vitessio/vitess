@@ -35,15 +35,8 @@ func (vtg *VTGate) Execute(ctx context.Context, request *pb.ExecuteRequest) (res
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.Query{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.Execute(ctx, query, reply)
+	executeErr := vtg.server.Execute(ctx, string(request.Query.Sql), tproto.Proto3ToBindVariables(request.Query.BindVariables), request.TabletType, proto.ProtoToSession(request.Session), request.NotInTransaction, reply)
 	response = &pb.ExecuteResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -64,17 +57,16 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *pb.ExecuteShardsR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.QueryShard{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		Shards:           request.Shards,
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteShard(ctx, query, reply)
+	executeErr := vtg.server.ExecuteShards(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.Shards,
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteShardsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -95,17 +87,16 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdQuery{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		KeyspaceIds:      key.ProtoToKeyspaceIds(request.KeyspaceIds),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteKeyspaceIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteKeyspaceIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteKeyspaceIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -126,17 +117,16 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyRangeQuery{
-		Sql:              string(request.Query.Sql),
-		BindVariables:    tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:         request.Keyspace,
-		KeyRanges:        key.ProtoToKeyRanges(request.KeyRanges),
-		TabletType:       topo.ProtoToTabletType(request.TabletType),
-		Session:          proto.ProtoToSession(request.Session),
-		NotInTransaction: request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteKeyRanges(ctx, query, reply)
+	executeErr := vtg.server.ExecuteKeyRanges(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyRanges(request.KeyRanges),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteKeyRangesResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -157,18 +147,17 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEnti
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.EntityIdsQuery{
-		Sql:               string(request.Query.Sql),
-		BindVariables:     tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:          request.Keyspace,
-		EntityColumnName:  request.EntityColumnName,
-		EntityKeyspaceIDs: proto.ProtoToEntityIds(request.EntityKeyspaceIds),
-		TabletType:        topo.ProtoToTabletType(request.TabletType),
-		Session:           proto.ProtoToSession(request.Session),
-		NotInTransaction:  request.NotInTransaction,
-	}
 	reply := new(proto.QueryResult)
-	executeErr := vtg.server.ExecuteEntityIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteEntityIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.EntityColumnName,
+		proto.ProtoToEntityIds(request.EntityKeyspaceIds),
+		request.TabletType,
+		proto.ProtoToSession(request.Session),
+		request.NotInTransaction,
+		reply)
 	response = &pb.ExecuteEntityIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -189,14 +178,13 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *pb.ExecuteBa
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.BatchQueryShard{
-		Session:       proto.ProtoToSession(request.Session),
-		Queries:       proto.ProtoToBoundShardQueries(request.Queries),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-		AsTransaction: request.AsTransaction,
-	}
 	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchShard(ctx, query, reply)
+	executeErr := vtg.server.ExecuteBatchShards(ctx,
+		proto.ProtoToBoundShardQueries(request.Queries),
+		request.TabletType,
+		request.AsTransaction,
+		proto.ProtoToSession(request.Session),
+		reply)
 	response = &pb.ExecuteBatchShardsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -218,14 +206,13 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *pb.Exec
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdBatchQuery{
-		Session:       proto.ProtoToSession(request.Session),
-		Queries:       proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-		AsTransaction: request.AsTransaction,
-	}
 	reply := new(proto.QueryResultList)
-	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, query, reply)
+	executeErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+		proto.ProtoToBoundKeyspaceIdQueries(request.Queries),
+		request.TabletType,
+		request.AsTransaction,
+		proto.ProtoToSession(request.Session),
+		reply)
 	response = &pb.ExecuteBatchKeyspaceIdsResponse{
 		Error: vtgate.VtGateErrorToVtRPCError(executeErr, reply.Error),
 	}
@@ -246,16 +233,15 @@ func (vtg *VTGate) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Vi
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.Query{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecute(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecute(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
 }
 
 // StreamExecuteShards is the RPC version of vtgateservice.VTGateService method
@@ -264,39 +250,17 @@ func (vtg *VTGate) StreamExecuteShards(request *pb.StreamExecuteShardsRequest, s
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.QueryShard{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		Shards:        request.Shards,
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteShard(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteShardsResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecuteShards(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		request.Shards,
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteShardsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
-}
-
-// StreamExecuteKeyRanges is the RPC version of
-// vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequest, stream pbs.Vitess_StreamExecuteKeyRangesServer) (err error) {
-	defer vtg.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.CallerId,
-		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyRangeQuery{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		KeyRanges:     key.ProtoToKeyRanges(request.KeyRanges),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteKeyRanges(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteKeyRangesResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
-		})
-	})
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
@@ -306,18 +270,37 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.KeyspaceIdQuery{
-		Sql:           string(request.Query.Sql),
-		BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		Keyspace:      request.Keyspace,
-		KeyspaceIds:   key.ProtoToKeyspaceIds(request.KeyspaceIds),
-		TabletType:    topo.ProtoToTabletType(request.TabletType),
-	}
-	return vtg.server.StreamExecuteKeyspaceIds(ctx, query, func(value *proto.QueryResult) error {
-		return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
-			Result: mproto.QueryResultToProto3(value.Result),
+	return vtg.server.StreamExecuteKeyspaceIds(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
 		})
-	})
+}
+
+// StreamExecuteKeyRanges is the RPC version of
+// vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequest, stream pbs.Vitess_StreamExecuteKeyRangesServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.CallerId,
+		callerid.NewImmediateCallerID("grpc client"))
+	return vtg.server.StreamExecuteKeyRanges(ctx,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.Keyspace,
+		key.ProtoToKeyRanges(request.KeyRanges),
+		request.TabletType,
+		func(value *proto.QueryResult) error {
+			return stream.Send(&pb.StreamExecuteKeyRangesResponse{
+				Result: mproto.QueryResultToProto3(value.Result),
+			})
+		})
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -386,17 +369,14 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.CallerId,
 		callerid.NewImmediateCallerID("grpc client"))
-	query := &proto.SplitQueryRequest{
-		Keyspace: request.Keyspace,
-		Query: tproto.BoundQuery{
-			Sql:           string(request.Query.Sql),
-			BindVariables: tproto.Proto3ToBindVariables(request.Query.BindVariables),
-		},
-		SplitColumn: request.SplitColumn,
-		SplitCount:  int(request.SplitCount),
-	}
 	reply := new(proto.SplitQueryResult)
-	if err := vtg.server.SplitQuery(ctx, query, reply); err != nil {
+	if err := vtg.server.SplitQuery(ctx,
+		request.Keyspace,
+		string(request.Query.Sql),
+		tproto.Proto3ToBindVariables(request.Query.BindVariables),
+		request.SplitColumn,
+		int(request.SplitCount),
+		reply); err != nil {
 		return nil, err
 	}
 	return proto.SplitQueryPartsToProto(reply.Splits), nil

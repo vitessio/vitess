@@ -13,8 +13,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -78,11 +76,8 @@ func TestUnsharded(t *testing.T) {
 func TestStreamUnsharded(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	q := proto.Query{
-		Sql:        "select * from music_user_map where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	result, err := routerStream(router, &q)
+	sql := "select * from music_user_map where id = 1"
+	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -113,21 +108,15 @@ func TestStreamUnshardedFail(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-	q := proto.Query{
-		Sql:        "select * from music_user_map where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err := routerStream(router, &q)
+	sql := "select * from music_user_map where id = 1"
+	_, err := routerStream(router, sql)
 	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	q = proto.Query{
-		Sql:        "update music_user_map set a = 1 where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	_, err = routerStream(router, &q)
+	sql = "update music_user_map set a = 1 where id = 1"
+	_, err = routerStream(router, sql)
 	want = `query "update music_user_map set a = 1 where id = 1" cannot be used for streaming`
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
@@ -221,11 +210,8 @@ func TestSelectEqualNotFound(t *testing.T) {
 func TestStreamSelectEqual(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	q := proto.Query{
-		Sql:        "select * from user where id = 1",
-		TabletType: topo.TYPE_MASTER,
-	}
-	result, err := routerStream(router, &q)
+	sql := "select * from user where id = 1"
+	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -360,11 +346,8 @@ func TestSelectIN(t *testing.T) {
 func TestStreamSelectIN(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 
-	q := proto.Query{
-		Sql:        "select * from user where id in (1)",
-		TabletType: topo.TYPE_MASTER,
-	}
-	result, err := routerStream(router, &q)
+	sql := "select * from user where id in (1)"
+	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -373,8 +356,8 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	q.Sql = "select * from user where id in (1, 3)"
-	result, err = routerStream(router, &q)
+	sql = "select * from user where id in (1, 3)"
+	result, err = routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -390,8 +373,8 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	q.Sql = "select * from user where name = 'foo'"
-	result, err = routerStream(router, &q)
+	sql = "select * from user where name = 'foo'"
+	result, err = routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -466,11 +449,8 @@ func TestSelectKeyrange(t *testing.T) {
 func TestStreamSelectKeyrange(t *testing.T) {
 	router, _, _, _ := createRouterEnv()
 
-	q := proto.Query{
-		Sql:        "select * from user where keyrange('', '\x20')",
-		TabletType: topo.TYPE_MASTER,
-	}
-	result, err := routerStream(router, &q)
+	sql := "select * from user where keyrange('', '\x20')"
+	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -479,8 +459,8 @@ func TestStreamSelectKeyrange(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
-	q.Sql = "select * from user where keyrange('\x40', '\x60')"
-	result, err = routerStream(router, &q)
+	sql = "select * from user where keyrange('\x40', '\x60')"
+	result, err = routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
@@ -567,11 +547,8 @@ func TestStreamSelectScatter(t *testing.T) {
 	scatterConn := NewScatterConn(serv, "", "aa", 1*time.Second, 10, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
 	router := NewRouter(serv, "aa", routerSchema, "", scatterConn)
 
-	q := proto.Query{
-		Sql:        "select * from user",
-		TabletType: topo.TYPE_MASTER,
-	}
-	result, err := routerStream(router, &q)
+	sql := "select * from user"
+	result, err := routerStream(router, sql)
 	if err != nil {
 		t.Error(err)
 	}
