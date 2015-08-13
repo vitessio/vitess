@@ -3,6 +3,9 @@
 		"unit": {
 			"Command": "godep go test ./go/..."
 		},
+		"java_vtgate_client": {
+			"Command": "make build java_vtgate_client_test"
+		},
     "queryservice_vtocc": {
       "File": "queryservice_test.py",
       "Args": "-m -e vtocc"

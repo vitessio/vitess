@@ -22,8 +22,13 @@ fi
 # Mirror permissions to "other" from the owning group (for which we assume it has at least rX permissions).
 chmod -R o=g .
 
-args="$args --rm -e USER=vitess -v /dev/log:/dev/log"
+args="$args -e USER=vitess -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
+
+# Share maven dependency cache so they don't have to be redownloaded every time.
+mkdir -p /tmp/mavencache
+chmod 777 /tmp/mavencache
+args="$args -v /tmp/mavencache:/home/vitess/.m2"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
@@ -49,7 +54,7 @@ if tty -s; then
   exitcode=$?
 else
   # non-interactive shell (kill child on signal)
-  trap 'docker rm -f $testid 2>/dev/null' SIGTERM SIGINT
+  trap 'docker kill $testid &>/dev/null' SIGTERM SIGINT
   docker run $args vitess/bootstrap:$flavor bash -c "$bashcmd" &
   wait $!
   exitcode=$?
@@ -58,8 +63,11 @@ fi
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
   # Use Docker user to clean up first, to avoid permission errors.
-  docker run $args vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
+  docker run --rm -v $hostdir:/vt/vtdataroot vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
   rm -rf $hostdir
 fi
+
+# Delete the container
+docker rm -f $testid &>/dev/null
 
 exit $exitcode

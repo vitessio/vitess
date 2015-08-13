@@ -13,7 +13,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     make \
     memcached \
     mercurial \
-    openjdk-7-jre-headless \
+    openjdk-7-jdk \
     pkg-config \
     python-dev \
     python-mysqldb \
@@ -22,6 +22,12 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     python-virtualenv \
     unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Maven 3.1+
+RUN mkdir -p /vt/dist && \
+    cd /vt/dist && \
+    curl -sL http://www.carfab.com/apachesoftware/maven/maven-3/3.3.3/binaries/apache-maven-3.3.3-bin.tar.gz | tar -xz && \
+    mv apache-maven-3.3.3 maven
 
 # Install etcd v2.0
 RUN mkdir -p /go/src/github.com/coreos && \
@@ -41,7 +47,7 @@ ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/dist/py-cbson/lib/python2.7/site-packages:$VTROOT/dist/py-vt-bson-0.3.2/lib/python2.7/site-packages:$VTROOT/py-vtdb
 ENV GOBIN $VTROOT/bin
 ENV GOPATH $VTROOT
-ENV PATH $VTROOT/bin:$PATH
+ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV CGO_CFLAGS -I$VTROOT/dist/vt-zookeeper-3.3.5/include/c-client-src
@@ -57,7 +63,8 @@ RUN $VTTOP/travis/install_protobuf.sh
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
-    mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+    mkdir -p /vt/vtdataroot /home/vitess && \
+    chown -R vitess:vitess /vt /home/vitess
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
