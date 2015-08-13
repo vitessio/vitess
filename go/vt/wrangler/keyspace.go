@@ -203,7 +203,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			wr.Logger().Infof("Gathering master position for %v", si.MasterAlias)
+			wr.Logger().Infof("Gathering master position for %v", topo.TabletAliasString(si.MasterAlias))
 			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -216,7 +216,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 				return
 			}
 
-			wr.Logger().Infof("Got master position for %v", si.MasterAlias)
+			wr.Logger().Infof("Got master position for %v", topo.TabletAliasString(si.MasterAlias))
 			mu.Lock()
 			result[si] = pos
 			mu.Unlock()
@@ -247,7 +247,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 				}
 
 				// and wait for it
-				wr.Logger().Infof("Waiting for %v to catch up", si.MasterAlias)
+				wr.Logger().Infof("Waiting for %v to catch up", topo.TabletAliasString(si.MasterAlias))
 				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
@@ -257,7 +257,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 				if err := wr.tmc.WaitBlpPosition(ctx, tablet, blpPosition, waitTime); err != nil {
 					rec.RecordError(err)
 				} else {
-					wr.Logger().Infof("%v caught up", si.MasterAlias)
+					wr.Logger().Infof("%v caught up", topo.TabletAliasString(si.MasterAlias))
 				}
 			}
 		}(si)
@@ -274,7 +274,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			wr.Logger().Infof("RefreshState master %v", si.MasterAlias)
+			wr.Logger().Infof("RefreshState master %v", topo.TabletAliasString(si.MasterAlias))
 			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -284,7 +284,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
 				rec.RecordError(err)
 			} else {
-				wr.Logger().Infof("%v responded", si.MasterAlias)
+				wr.Logger().Infof("%v responded", topo.TabletAliasString(si.MasterAlias))
 			}
 		}(si)
 	}
@@ -721,13 +721,13 @@ func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo
 
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
-			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.Alias)
+			wr.Logger().Infof("Calling RefreshState on tablet %v", ti.AliasString())
 			// Setting an upper bound timeout to fail faster in case of an error.
 			// Using 60 seconds because RefreshState should not take more than 30 seconds.
 			// (RefreshState will restart the tablet's QueryService and most time will be spent on the shutdown, i.e. waiting up to 30 seconds on transactions (see Config.TransactionTimeout)).
 			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
-				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.Alias, err)
+				wr.Logger().Warningf("RefreshTablesByShard: failed to refresh %v: %v", ti.AliasString(), err)
 			}
 			cancel()
 			wg.Done()

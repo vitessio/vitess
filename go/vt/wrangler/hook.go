@@ -43,7 +43,7 @@ func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ctx context.Context, ti *topo.
 	}
 
 	if hr.ExitStatus == hk.HOOK_DOES_NOT_EXIST {
-		log.Infof("Hook %v doesn't exist on tablet %v", hook.Name, ti.Alias)
+		log.Infof("Hook %v doesn't exist on tablet %v", hook.Name, ti.AliasString())
 		return nil
 	}
 

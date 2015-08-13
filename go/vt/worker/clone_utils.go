@@ -43,14 +43,14 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 		return ti, fmt.Errorf("no master in destination shard %v/%v", keyspace, shard)
 	}
 
-	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
+	wr.Logger().Infof("Found target master alias %v in shard %v/%v", topo.TabletAliasString(si.MasterAlias), keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), si.MasterAlias)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
-			si.MasterAlias, keyspace, shard)
+			topo.TabletAliasString(si.MasterAlias), keyspace, shard)
 	}
 	return ti, nil
 }
@@ -238,11 +238,11 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-// runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
+// runSQLCommands will send the sql commands to the remote tablet.
+func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
 	ti, err := r.GetDestinationMaster(shard)
 	if err != nil {
-		return fmt.Errorf("runSqlCommands failed: %v", err)
+		return fmt.Errorf("runSQLCommands failed: %v", err)
 	}
 
 	for _, command := range commands {
