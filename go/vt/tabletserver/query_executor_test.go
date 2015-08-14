@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
@@ -208,6 +210,60 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
+func TestQueryExecutorPlanUpsertPk(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
+	want := &mproto.QueryResult{
+		Rows: make([][]sqltypes.Value, 0),
+	}
+	query := "insert into test_table values(1) on duplicate key update val=1"
+	ctx := context.Background()
+	sqlQuery := newTestSQLQuery(ctx, enableRowCache|enableStrict)
+	qre := newTestQueryExecutor(ctx, sqlQuery, query, 0)
+	defer sqlQuery.disallowQueries()
+	checkPlanID(t, planbuilder.PLAN_UPSERT_PK, qre.plan.PlanId)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+
+	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	_, err = qre.Execute()
+	wantErr := "error: rejected"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSqlError(mysql.ErrDupEntry, "err"),
+	)
+	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
+	_, err = qre.Execute()
+	wantErr = "error: upsert failed to update a dup key row"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+
+	db.AddQuery(
+		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		&mproto.QueryResult{RowsAffected: 1},
+	)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &mproto.QueryResult{
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)

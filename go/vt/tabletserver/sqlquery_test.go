@@ -527,7 +527,7 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 	db := setUpSqlQueryTest()
 	testUtils := newTestUtils()
 	// make "begin" query fail
-	db.AddRejectedQuery("begin")
+	db.AddRejectedQuery("begin", errRejected)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -561,7 +561,7 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 	db := setUpSqlQueryTest()
 	testUtils := newTestUtils()
 	// make "commit" query fail
-	db.AddRejectedQuery("commit")
+	db.AddRejectedQuery("commit", errRejected)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -607,8 +607,8 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db.AddQuery(expanedSql, sqlResult)
 
 	// make this query fail
-	db.AddRejectedQuery(sql)
-	db.AddRejectedQuery(expanedSql)
+	db.AddRejectedQuery(sql, errRejected)
+	db.AddRejectedQuery(expanedSql, errRejected)
 
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -662,7 +662,7 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db.AddQuery(expanedSql, sqlResult)
 
 	// cause execution error for this particular sql query
-	db.AddRejectedQuery(sql)
+	db.AddRejectedQuery(sql, errRejected)
 
 	config := testUtils.newQueryServiceConfig()
 	config.EnableAutoCommit = true

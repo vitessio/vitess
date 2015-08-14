@@ -412,6 +412,46 @@ cases = [
          'commit']),
 
     MultiCase(
+        'upsert single row present/absent',
+        ['begin',
+         Case(sql="insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = 1",
+              rewritten="insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+              rowcount=1),
+         Case(sql='select * from upsert_test',
+              result=[(1L, 1L)]),
+         Case(sql="insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
+              rewritten=[
+                  "insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+                  "update upsert_test set id2 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 )"],
+              rowcount=1),
+         Case(sql='select * from upsert_test',
+              result=[(1L, 2L)]),
+         'commit',
+         'begin',
+         'delete from upsert_test',
+         'commit']),
+
+    MultiCase(
+        'upsert changes pk',
+        ['begin',
+         Case(sql="insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id1 = 1",
+              rewritten="insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+              rowcount=1),
+         Case(sql='select * from upsert_test',
+              result=[(1L, 1L)]),
+         Case(sql="insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id1 = 2",
+              rewritten=[
+                  "insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+                  "update upsert_test set id1 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 ) (2 )"],
+              rowcount=1),
+         Case(sql='select * from upsert_test',
+              result=[(2L, 1L)]),
+         'commit',
+         'begin',
+         'delete from upsert_test',
+         'commit']),
+
+    MultiCase(
         'update',
         ['begin',
          Case(sql="update /* pk */ vtocc_a set foo='bar' where eid = 1 and id = 1",

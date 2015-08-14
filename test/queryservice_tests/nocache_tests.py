@@ -143,11 +143,32 @@ class TestNocache(framework.TestCase):
       with self.assertRaises(dbexceptions.DatabaseError):
         self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
       with self.assertRaises(dbexceptions.DatabaseError):
-        self.env.execute("insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1")
-      with self.assertRaises(dbexceptions.DatabaseError):
         self.env.execute("update vtocc_a set eid = 1+1 where eid = 1 and id = 1")
       with self.assertRaises(dbexceptions.DatabaseError):
         self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+
+      self.env.execute("delete from upsert_test")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into upsert_test(id1, id2) values (1, 1), (2, 2) on duplicate key update id1 = 1")
+
+      self.env.execute("delete from upsert_test")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into upsert_test(id1, id2) select eid, id from vtocc_a limit 1 on duplicate key update id2 = id1")
+
+      self.env.execute("delete from upsert_test")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id1 = 2+1")
+
+      self.env.execute("delete from upsert_test")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into upsert_test(id1, id2) values (1, 1)")
+        self.env.execute("insert into upsert_test(id1, id2) values (2, 1) on duplicate key update id2 = 2")
+
+      # TODO(sougou): add test for values clause after bug fix on handling
+      # values.
+      self.env.execute("delete from upsert_test")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = last_insert_id(id1)")
     finally:
       self.env.conn.rollback()
 
