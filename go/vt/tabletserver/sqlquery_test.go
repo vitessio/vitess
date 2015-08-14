@@ -19,28 +19,28 @@ import (
 )
 
 func TestSqlQueryAllowQueriesFailBadConn(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	db.EnableConnFail()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
 	dbconfigs := testUtils.newDBConfigs()
 	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail")
 	}
-	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
 }
 
 func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	// disable strict mode
 	config.StrictMode = false
 	sqlQuery := NewSqlQuery(config)
-	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
 	dbconfigs := testUtils.newDBConfigs()
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
@@ -48,15 +48,15 @@ func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
 	if err == nil {
 		t.Fatalf("SqlQuery.allowQueries should fail because strict mode is disabled while rowcache is enabled.")
 	}
-	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
 }
 
 func TestSqlQueryAllowQueries(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	checkSqlQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
 	dbconfigs := testUtils.newDBConfigs()
 	sqlQuery.setState(StateServing)
 	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
@@ -73,7 +73,7 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 }
 
 func TestSqlQueryCheckMysql(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -89,7 +89,7 @@ func TestSqlQueryCheckMysql(t *testing.T) {
 }
 
 func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -107,7 +107,7 @@ func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
 }
 
 func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -126,7 +126,7 @@ func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 }
 
 func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnablePublishStats = true
@@ -151,7 +151,7 @@ func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
 }
 
 func TestSqlQueryGetSessionId(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -196,7 +196,7 @@ func TestSqlQueryGetSessionId(t *testing.T) {
 }
 
 func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -286,17 +286,17 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 }
 
 func TestSqlQueryCommitTransaciton(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
-	executeSql := "select * from test_table limit 1000"
-	executeSqlResult := &mproto.QueryResult{
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	db.AddQuery(executeSql, executeSqlResult)
+	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -316,7 +316,7 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
-		Sql:           executeSql,
+		Sql:           executeSQL,
 		BindVariables: nil,
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
@@ -331,17 +331,17 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 }
 
 func TestSqlQueryRollback(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
-	executeSql := "select * from test_table limit 1000"
-	executeSqlResult := &mproto.QueryResult{
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	db.AddQuery(executeSql, executeSqlResult)
+	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -361,7 +361,7 @@ func TestSqlQueryRollback(t *testing.T) {
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
-		Sql:           executeSql,
+		Sql:           executeSQL,
 		BindVariables: nil,
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
@@ -376,17 +376,17 @@ func TestSqlQueryRollback(t *testing.T) {
 }
 
 func TestSqlQueryStreamExecute(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
-	executeSql := "select * from test_table limit 1000"
-	executeSqlResult := &mproto.QueryResult{
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			[]sqltypes.Value{sqltypes.MakeString([]byte("row01"))},
 		},
 	}
-	db.AddQuery(executeSql, executeSqlResult)
+	db.AddQuery(executeSQL, executeSQLResult)
 
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -407,7 +407,7 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
-		Sql:           executeSql,
+		Sql:           executeSQL,
 		BindVariables: nil,
 		SessionId:     session.SessionId,
 		TransactionId: session.TransactionId,
@@ -427,14 +427,14 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatch(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
-	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSql, sqlResult)
+	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -469,7 +469,7 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -493,7 +493,7 @@ func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -524,7 +524,7 @@ func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	// make "begin" query fail
 	db.AddRejectedQuery("begin")
@@ -558,7 +558,7 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	// make "commit" query fail
 	db.AddRejectedQuery("commit")
@@ -597,18 +597,18 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
-	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSql, sqlResult)
+	db.AddQuery(expanedSQL, sqlResult)
 
 	// make this query fail
 	db.AddRejectedQuery(sql)
-	db.AddRejectedQuery(expanedSql)
+	db.AddRejectedQuery(expanedSQL)
 
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -652,14 +652,14 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
-	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSql, sqlResult)
+	db.AddQuery(expanedSQL, sqlResult)
 
 	// cause execution error for this particular sql query
 	db.AddRejectedQuery(sql)
@@ -695,7 +695,7 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 }
 
 func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	setUpSqlQueryTest()
+	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
@@ -727,14 +727,14 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 }
 
 func TestExecuteBatchNestedTransaction(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
-	expanedSql := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSql, sqlResult)
+	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
@@ -786,7 +786,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 }
 
 func TestSqlQuerySplitQuery(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
@@ -799,7 +799,7 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
 		},
@@ -847,7 +847,7 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 }
 
 func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
@@ -860,7 +860,7 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
 		},
@@ -908,7 +908,7 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 }
 
 func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
-	db := setUpSqlQueryTest()
+	db := setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
 	pkMinMaxQueryResp := &mproto.QueryResult{
@@ -924,7 +924,7 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 			},
 		},
 	}
-	db.AddQuery("SELECT pk FROM test_table LIMIT 1", &mproto.QueryResult{
+	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
 		},
@@ -1055,7 +1055,7 @@ func TestTerseErrors2(t *testing.T) {
 	})
 }
 
-func setUpSqlQueryTest() *fakesqldb.DB {
+func setUpSQLQueryTest() *fakesqldb.DB {
 	db := fakesqldb.Register()
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
@@ -1063,7 +1063,7 @@ func setUpSqlQueryTest() *fakesqldb.DB {
 	return db
 }
 
-func checkSqlQueryState(t *testing.T, sqlQuery *SqlQuery, expectState string) {
+func checkSQLQueryState(t *testing.T, sqlQuery *SqlQuery, expectState string) {
 	if sqlQuery.GetState() != expectState {
 		t.Fatalf("sqlquery should in state: %s, but get state: %s", expectState, sqlQuery.GetState())
 	}

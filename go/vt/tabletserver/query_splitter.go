@@ -201,8 +201,8 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 	if whereClause != nil {
 		clauses = &sqlparser.AndExpr{
-			Left:  whereClause.Expr,
-			Right: clauses,
+			Left:  &sqlparser.ParenBoolExpr{Expr: whereClause.Expr},
+			Right: &sqlparser.ParenBoolExpr{Expr: clauses},
 		}
 	}
 	return &sqlparser.Where{
@@ -310,7 +310,7 @@ func (qs *QuerySplitter) splitBoundariesFloatColumn(pkMinMax *mproto.QueryResult
 // TODO(shengzhe): support split based on min, max from the string column.
 func (qs *QuerySplitter) splitBoundariesStringColumn() ([]sqltypes.Value, error) {
 	firstRow := int64(0x0)
-	lastRow := int64(0xFFFFFFFF)
+	lastRow := int64(0xFFFFFFFFFFFFFF)
 	splitRange := lastRow - firstRow + 1
 	splitSize := splitRange / int64(qs.splitCount)
 	qs.rowCount = splitSize

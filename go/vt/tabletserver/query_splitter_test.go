@@ -165,7 +165,7 @@ func TestGetWhereClause(t *testing.T) {
 	bindVars = make(map[string]interface{})
 	bindVars[":count"] = 300
 	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, start, nilValue)
-	want = " where count > :count and id >= " + startBindVarName
+	want = " where (count > :count) and (id >= " + startBindVarName + ")"
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
@@ -182,7 +182,7 @@ func TestGetWhereClause(t *testing.T) {
 	end, _ := sqltypes.BuildValue(endVal)
 	bindVars = make(map[string]interface{})
 	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, nilValue, end)
-	want = " where count > :count and id < " + endBindVarName
+	want = " where (count > :count) and (id < " + endBindVarName + ")"
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
@@ -198,7 +198,7 @@ func TestGetWhereClause(t *testing.T) {
 	// Set both bounds, should add two conditions to where clause
 	bindVars = make(map[string]interface{})
 	clause = splitter.getWhereClause(splitter.sel.Where, bindVars, start, end)
-	want = fmt.Sprintf(" where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName)
+	want = fmt.Sprintf(" where (count > :count) and (id >= %s and id < %s)", startBindVarName, endBindVarName)
 	got = sqlparser.String(clause)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("incorrect where clause, got:%v, want:%v", got, want)
@@ -355,18 +355,18 @@ func TestSplitQuery(t *testing.T) {
 	}
 	want := []proto.BoundQuery{
 		{
-			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id < " + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: int64(100)},
 		},
 		{
-			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			Sql: fmt.Sprintf("select * from test_table where (count > :count) and (id >= %s and id < %s)", startBindVarName, endBindVarName),
 			BindVariables: map[string]interface{}{
 				startBindVarName: int64(100),
 				endBindVarName:   int64(200),
 			},
 		},
 		{
-			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id >= " + startBindVarName + ")",
 			BindVariables: map[string]interface{}{startBindVarName: int64(200)},
 		},
 	}
@@ -411,18 +411,18 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 	}
 	want := []proto.BoundQuery{
 		{
-			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id < " + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: 170.5},
 		},
 		{
-			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			Sql: fmt.Sprintf("select * from test_table where (count > :count) and (id >= %s and id < %s)", startBindVarName, endBindVarName),
 			BindVariables: map[string]interface{}{
 				startBindVarName: 170.5,
 				endBindVarName:   330.5,
 			},
 		},
 		{
-			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id >= " + startBindVarName + ")",
 			BindVariables: map[string]interface{}{startBindVarName: 330.5},
 		},
 	}
@@ -444,25 +444,25 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	}
 	got := []proto.BoundQuery{}
 	for _, split := range splits {
-		if split.RowCount != 1431655765 {
+		if split.RowCount != 24019198012642645 {
 			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 1431655765)
 		}
 		got = append(got, split.Query)
 	}
 	want := []proto.BoundQuery{
 		{
-			Sql:           "select * from test_table where count > :count and id < " + endBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id < " + endBindVarName + ")",
 			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt64(0x55555555)[4:]},
 		},
 		{
-			Sql: fmt.Sprintf("select * from test_table where count > :count and id >= %s and id < %s", startBindVarName, endBindVarName),
+			Sql: fmt.Sprintf("select * from test_table where (count > :count) and (id >= %s and id < %s)", startBindVarName, endBindVarName),
 			BindVariables: map[string]interface{}{
 				startBindVarName: hexToByteUInt64(0x55555555)[4:],
 				endBindVarName:   hexToByteUInt64(0xAAAAAAAA)[4:],
 			},
 		},
 		{
-			Sql:           "select * from test_table where count > :count and id >= " + startBindVarName,
+			Sql:           "select * from test_table where (count > :count) and (id >= " + startBindVarName + ")",
 			BindVariables: map[string]interface{}{startBindVarName: hexToByteUInt64(0xAAAAAAAA)[4:]},
 		},
 	}

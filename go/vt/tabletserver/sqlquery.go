@@ -679,7 +679,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (int64, err
 		return mproto.VT_NULL, err
 	}
 	defer conn.Recycle()
-	query := fmt.Sprintf("SELECT %v FROM %v LIMIT 1", columnName, tableName)
+	query := fmt.Sprintf("SELECT %v FROM %v LIMIT 0", columnName, tableName)
 	result, err := qre.execSQL(conn, query, true)
 	if err != nil {
 		return mproto.VT_NULL, err
