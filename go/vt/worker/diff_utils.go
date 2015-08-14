@@ -91,10 +91,10 @@ func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
 	return result
 }
 
-// uint64FromKeyspaceId returns a 64 bits hex number as a string
+// uint64FromKeyspaceID returns a 64 bits hex number as a string
 // (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceId(keyspaceId []byte) string {
-	hex := hex.EncodeToString(keyspaceId)
+func uint64FromKeyspaceID(keyspaceID []byte) string {
+	hex := hex.EncodeToString(keyspaceID)
 	return "0x" + hex + strings.Repeat("0", 16-len(hex))
 }
 
@@ -103,7 +103,7 @@ func uint64FromKeyspaceId(keyspaceId []byte) string {
 // with the Primary Key columns in front.
 func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
+	log.Infof("SQL query for %v/%v: %v", topo.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
@@ -111,23 +111,23 @@ func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAl
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange *pb.KeyRange, keyspaceIDType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	if keyRange != nil {
-		switch keyspaceIdType {
+		switch keyspaceIDType {
 		case key.KIT_UINT64:
 			if len(keyRange.Start) > 0 {
 				if len(keyRange.End) > 0 {
 					// have start & end
-					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceId(keyRange.Start), uint64FromKeyspaceId(keyRange.End))
+					where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceID(keyRange.Start), uint64FromKeyspaceID(keyRange.End))
 				} else {
 					// have start only
-					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceId(keyRange.Start))
+					where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceID(keyRange.Start))
 				}
 			} else {
 				if len(keyRange.End) > 0 {
 					// have end only
-					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceId(keyRange.End))
+					where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceID(keyRange.End))
 				}
 			}
 		case key.KIT_BYTES:
@@ -146,12 +146,12 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 				}
 			}
 		default:
-			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
+			return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIDType)
 		}
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
+	log.Infof("SQL query for %v/%v: %v", topo.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 

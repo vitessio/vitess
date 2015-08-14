@@ -82,9 +82,9 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 			go func(alias *pb.TabletAlias) {
 				defer wg.Done()
 				if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-					results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
+					results <- fmt.Errorf("Validate(%v) failed: %v", topo.TabletAliasString(alias), err)
 				} else {
-					wr.Logger().Infof("tablet %v is valid", alias)
+					wr.Logger().Infof("tablet %v is valid", topo.TabletAliasString(alias))
 				}
 			}(alias)
 		}
@@ -128,12 +128,12 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 	for _, alias := range aliases {
 		tabletInfo, ok := tabletMap[*alias]
 		if !ok {
-			results <- fmt.Errorf("tablet %v not found in map", alias)
+			results <- fmt.Errorf("tablet %v not found in map", topo.TabletAliasString(alias))
 			continue
 		}
 		if tabletInfo.Type == pb.TabletType_MASTER {
 			if masterAlias != nil {
-				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, masterAlias, alias)
+				results <- fmt.Errorf("shard %v/%v already has master %v but found other master %v", keyspace, shard, topo.TabletAliasString(masterAlias), topo.TabletAliasString(alias))
 			} else {
 				masterAlias = alias
 			}
@@ -143,7 +143,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 	if masterAlias == nil {
 		results <- fmt.Errorf("no master for shard %v/%v", keyspace, shard)
 	} else if !topo.TabletAliasEqual(shardInfo.MasterAlias, masterAlias) {
-		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, masterAlias, shardInfo.MasterAlias)
+		results <- fmt.Errorf("master mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topo.TabletAliasString(masterAlias), topo.TabletAliasString(shardInfo.MasterAlias))
 	}
 
 	for _, alias := range aliases {
@@ -151,9 +151,9 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		go func(alias *pb.TabletAlias) {
 			defer wg.Done()
 			if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-				results <- fmt.Errorf("Validate(%v) failed: %v", alias, err)
+				results <- fmt.Errorf("Validate(%v) failed: %v", topo.TabletAliasString(alias), err)
 			} else {
-				wr.Logger().Infof("tablet %v is valid", alias)
+				wr.Logger().Infof("tablet %v is valid", topo.TabletAliasString(alias))
 			}
 		}(alias)
 	}
@@ -179,7 +179,7 @@ func normalizeIP(ip string) string {
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[pb.TabletAlias]*topo.TabletInfo, results chan<- error) {
 	masterTablet, ok := tabletMap[*shardInfo.MasterAlias]
 	if !ok {
-		results <- fmt.Errorf("master %v not in tablet map", shardInfo.MasterAlias)
+		results <- fmt.Errorf("master %v not in tablet map", topo.TabletAliasString(shardInfo.MasterAlias))
 		return
 	}
 
@@ -189,7 +189,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		return
 	}
 	if len(slaveList) == 0 {
-		results <- fmt.Errorf("no slaves of tablet %v found", shardInfo.MasterAlias)
+		results <- fmt.Errorf("no slaves of tablet %v found", topo.TabletAliasString(shardInfo.MasterAlias))
 		return
 	}
 
@@ -214,7 +214,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		}
 
 		if !slaveIPMap[normalizeIP(tablet.Ip)] {
-			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", tablet.Alias, tablet.Ip, slaveList)
+			results <- fmt.Errorf("slave %v not replicating: %v slave list: %q", topo.TabletAliasString(tablet.Alias), tablet.Ip, slaveList)
 		}
 	}
 }
@@ -226,7 +226,7 @@ func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[pb.TabletAlia
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo); err != nil {
-				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
+				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", topo.TabletAliasString(&tabletAlias), err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
 	}

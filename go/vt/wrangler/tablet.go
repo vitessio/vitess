@@ -54,7 +54,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 		}
 		if tablet.Type == pb.TabletType_MASTER && !topo.TabletAliasIsZero(si.MasterAlias) && !topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !force {
-			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
+			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topo.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
 		}
 
 		// update the shard record if needed
@@ -69,12 +69,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		if update || force {
 			oldTablet, err := wr.ts.GetTablet(ctx, tablet.Alias)
 			if err != nil {
-				wr.Logger().Warningf("failed reading tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Warningf("failed reading tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
 					if err := topo.UpdateTablet(ctx, wr.ts, oldTablet); err != nil {
-						wr.Logger().Warningf("failed updating tablet %v: %v", tablet.Alias, err)
+						wr.Logger().Warningf("failed updating tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
 						// now fall through the Scrap case
 					} else {
 						if !topo.IsInReplicationGraph(tablet.Type) {
@@ -82,7 +82,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 						}
 
 						if err := topo.UpdateTabletReplicationData(ctx, wr.ts, tablet); err != nil {
-							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", tablet.Alias, err)
+							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", topo.TabletAliasString(tablet.Alias), err)
 							// now fall through the Scrap case
 						} else {
 							return nil
@@ -93,12 +93,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		}
 		if force {
 			if err = wr.Scrap(ctx, tablet.Alias, force, false); err != nil {
-				wr.Logger().Errorf("failed scrapping tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Errorf("failed scrapping tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
 				return err
 			}
 			if err := wr.ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 				// we ignore this
-				wr.Logger().Errorf("failed deleting tablet %v: %v", tablet.Alias, err)
+				wr.Logger().Errorf("failed deleting tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
 			}
 			return topo.CreateTablet(ctx, wr.ts, tablet)
 		}
@@ -161,7 +161,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias *pb.TabletAlias, forc
 				return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
-			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", tabletAlias, ti.Keyspace, ti.Shard, si.MasterAlias)
+			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", topo.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, si.MasterAlias)
 		}
 
 		// and unlock

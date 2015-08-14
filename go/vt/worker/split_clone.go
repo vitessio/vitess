@@ -280,7 +280,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", scw.sourceAliases[i], si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topo.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
 
 	// get the tablet info for them, and stop their replication
@@ -288,20 +288,20 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for i, alias := range scw.sourceAliases {
 		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
 		if err != nil {
-			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
+			return fmt.Errorf("cannot read tablet %v: %v", topo.TabletAliasString(alias), err)
 		}
 
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot stop replication on tablet %v", alias)
+			return fmt.Errorf("cannot stop replication on tablet %v", topo.TabletAliasString(alias))
 		}
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
 		if err != nil {
-			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", alias, err)
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(alias), err)
 		}
 		action.TabletType = pb.TabletType_SPARE
 	}
@@ -384,10 +384,10 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
+		return fmt.Errorf("cannot get schema from source %v: %v", topo.TabletAliasString(scw.sourceAliases[0]), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return fmt.Errorf("no tables matching the table filter in tablet %v", scw.sourceAliases[0])
+		return fmt.Errorf("no tables matching the table filter in tablet %v", topo.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.Mu.Lock()
@@ -549,7 +549,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			go func(shardName string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSqlCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
+				if err := runSQLCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
 			}(si.ShardName())
@@ -590,12 +590,12 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
+				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 				cancel()
 				if err != nil {
-					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
+					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
 				}
 			}(scw.reloadTablets[shardIndex][*tabletAlias])
 		}
