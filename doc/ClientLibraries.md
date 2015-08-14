@@ -25,6 +25,7 @@ The following principles are followed by each client library:
 * Language specific idiomatic constructs to provide helpful constructs to application developers. Integration with language database drivers will lower the barrier of entry for application developers. Full integration may require the use of v3 API:
   * For Python, compliance with DB API.
   * For Java, compliance with JDBC.
+  * For PHP, compliance with PDO.
   * For Go, the database/sql package.
 * If a well-known Map-Reduce framework exists for the language, both a data source and a sink should be provided for that language. For instance, in Java, we provide a Hadoop data source and a sink.
 * Higher level libraries can also be provided if they make sense. For instance, we have object-based helper classes in Python (used by YouTube) that we provide.
