@@ -104,7 +104,6 @@ var keywords = map[string]int{
 	"use":            USE,
 	"using":          USING,
 	"values":         VALUES,
-	"value":          VALUE,
 	"view":           VIEW,
 	"when":           WHEN,
 	"where":          WHERE,

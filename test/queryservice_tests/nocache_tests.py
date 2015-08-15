@@ -163,12 +163,6 @@ class TestNocache(framework.TestCase):
       with self.assertRaises(dbexceptions.DatabaseError):
         self.env.execute("insert into upsert_test(id1, id2) values (1, 1)")
         self.env.execute("insert into upsert_test(id1, id2) values (2, 1) on duplicate key update id2 = 2")
-
-      # TODO(sougou): add test for values clause after bug fix on handling
-      # values.
-      self.env.execute("delete from upsert_test")
-      with self.assertRaises(dbexceptions.DatabaseError):
-        self.env.execute("insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = last_insert_id(id1)")
     finally:
       self.env.conn.rollback()
 
