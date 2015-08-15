@@ -249,11 +249,15 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
 	_, err = qre.Execute()
-	wantErr = "error: upsert failed to update a dup key row"
+	wantErr = "error: err (errno 1062)"
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSqlError(mysql.ErrDupEntry, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
 		&mproto.QueryResult{RowsAffected: 1},
@@ -263,7 +267,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
 	want = &mproto.QueryResult{
-		RowsAffected: 1,
+		RowsAffected: 2,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)

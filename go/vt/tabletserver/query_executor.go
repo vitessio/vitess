@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
@@ -492,14 +493,19 @@ func (qre *QueryExecutor) execUpsertPK(conn poolConn, invalidator CacheInvalidat
 	if terr.SqlError != mysql.ErrDupEntry {
 		return nil, err
 	}
+	// If the error didn't match pk, just return the error without updating.
+	if !strings.Contains(terr.Message, "'PRIMARY'") {
+		return nil, err
+	}
 	result, err = qre.execDMLPKRows(conn, qre.plan.UpsertQuery, pkRows, invalidator)
 	if err != nil {
 		return nil, err
 	}
-	if result.RowsAffected != 1 {
-		return nil, NewTabletError(ErrFail, "upsert failed to update a dup key row")
+	// Follow MySQL convention. RowsAffected must be 2 if a row was updated.
+	if result.RowsAffected == 1 {
+		result.RowsAffected = 2
 	}
-	return result, nil
+	return result, err
 }
 
 func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {

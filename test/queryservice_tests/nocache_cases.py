@@ -423,7 +423,14 @@ cases = [
               rewritten=[
                   "insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
                   "update upsert_test set id2 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 )"],
-              rowcount=1),
+              rowcount=2),
+         Case(sql='select * from upsert_test',
+              result=[(1L, 2L)]),
+         Case(sql="insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = 2",
+              rewritten=[
+                  "insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+                  "update upsert_test set id2 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 )"],
+              rowcount=0),
          Case(sql='select * from upsert_test',
               result=[(1L, 2L)]),
          'commit',
@@ -443,7 +450,7 @@ cases = [
               rewritten=[
                   "insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
                   "update upsert_test set id1 = 2 where id1 in (1) /* _stream upsert_test (id1 ) (1 ) (2 )"],
-              rowcount=1),
+              rowcount=2),
          Case(sql='select * from upsert_test',
               result=[(2L, 1L)]),
          'commit',
