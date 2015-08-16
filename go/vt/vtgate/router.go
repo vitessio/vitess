@@ -481,6 +481,9 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 				return "", 0, err
 			}
 		} else {
+			// TODO(sougou): I think we have to ignore dup key error if this was
+			// an upsert. For now, I'm punting on this because this would be a very
+			// uncommon use case. We should revisit this when work on v3 resumes.
 			err = colVindex.Vindex.(planbuilder.Functional).Create(vcursor, vindexKey)
 			if err != nil {
 				return "", 0, err
