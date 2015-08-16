@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/key"
@@ -35,7 +34,7 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
@@ -57,7 +56,7 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
@@ -79,7 +78,7 @@ func TestResolverExecuteEntityIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteEntityIds(context.Background(),
 			"query",
 			nil,
@@ -111,7 +110,7 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qrs, err := res.ExecuteBatchKeyspaceIds(context.Background(),
 			[]proto.BoundKeyspaceIdQuery{{
 				Sql:           "query",
@@ -144,7 +143,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	}
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
@@ -159,7 +158,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 		return qr, err
 	})
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
@@ -191,7 +190,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(context.Background(),
 			"query",
@@ -207,7 +206,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	})
 	// streaming multiple shards
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
 		err = res.StreamExecuteKeyRanges(context.Background(),
 			"query",
@@ -504,7 +503,7 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error encoding keyspace id")
 	}
-	res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 0, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 
 	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
 	sbc0 := &sandboxConn{}
@@ -527,11 +526,11 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverExecBatchAsTransaction(t *testing.T) {
-	s := createSandbox(KsTestUnshardedServedFrom)
+	s := createSandbox("TestResolverExecBatchAsTransaction")
 	sbc := &sandboxConn{mustFailRetry: 20}
 	s.MapTestConn("0", sbc)
 
-	res := NewResolver(new(sandboxTopo), "", "aa", 1*time.Millisecond, 2, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -539,7 +538,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		queries := []proto.BoundShardQuery{{
 			Sql:           "query",
 			BindVariables: nil,
-			Keyspace:      KsTestUnshardedServedFrom,
+			Keyspace:      "TestResolverExecBatchAsTransaction",
 			Shards:        []string{"0"},
 		}}
 		return boundShardQueriesToScatterBatchRequest(queries), nil

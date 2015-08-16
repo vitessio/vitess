@@ -75,7 +75,7 @@ type sandbox struct {
 	SrvKeyspaceMustFail int
 
 	// EndPointCounter tracks how often GetEndPoints was called
-	EndPointCounter int
+	EndPointCounter sync2.AtomicInt64
 
 	// EndPointMustFail specifies how often GetEndPoints must fail before succeeding
 	EndPointMustFail int
@@ -107,7 +107,7 @@ func (s *sandbox) Reset() {
 	s.TestConns = make(map[string]map[uint32]tabletconn.TabletConn)
 	s.SrvKeyspaceCounter = 0
 	s.SrvKeyspaceMustFail = 0
-	s.EndPointCounter = 0
+	s.EndPointCounter.Set(0)
 	s.EndPointMustFail = 0
 	s.DialCounter = 0
 	s.DialMustFail = 0
@@ -274,7 +274,7 @@ func (sct *sandboxTopo) GetSrvShard(ctx context.Context, cell, keyspace, shard s
 
 func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pbt.TabletType) (*pbt.EndPoints, int64, error) {
 	sand := getSandbox(keyspace)
-	sand.EndPointCounter++
+	sand.EndPointCounter.Add(1)
 	if sct.callbackGetEndPoints != nil {
 		sct.callbackGetEndPoints(sct)
 	}
