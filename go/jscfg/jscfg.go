@@ -5,13 +5,7 @@
 // Package jscfg implements a simple API for reading and writing JSON files.
 package jscfg
 
-import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-
-	"github.com/youtube/vitess/go/ioutil2"
-)
+import "encoding/json"
 
 // ToJSON converts a structure to JSON, or panics
 func ToJSON(val interface{}) string {
@@ -22,25 +16,4 @@ func ToJSON(val interface{}) string {
 		panic(err)
 	}
 	return string(data)
-}
-
-// WriteJSON atomically write a marshaled structure to disk.
-func WriteJSON(filename string, val interface{}) error {
-	data, err := json.MarshalIndent(val, "  ", "  ")
-	if err != nil {
-		return fmt.Errorf("WriteJSON failed: %v %v", filename, err)
-	}
-	return ioutil2.WriteFileAtomic(filename, data, 0660)
-}
-
-// ReadJSON reads and unmarshals a JSON file
-func ReadJSON(filename string, val interface{}) error {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("ReadJSON failed: %T %v", val, err)
-	}
-	if err = json.Unmarshal(data, val); err != nil {
-		return fmt.Errorf("ReadJSON failed: %T %v %v", val, filename, err)
-	}
-	return nil
 }
