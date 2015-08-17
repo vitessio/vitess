@@ -281,20 +281,19 @@ message RealtimeStats {
   // we do not send queries to servers that are not healthy.
   string health_error = 1;
 
-  // TODO(mberlin): Add an health error for filtered replication?
-
   // seconds_behind_master is populated for slaves only. It indicates
   // how far behind on (MySQL) replication a slave currently is.  It is used
   // by clients for subset selection (so we don't try to send traffic
   // to tablets that are too far behind).
+  // NOTE: This field must not be evaluated if "health_error" is not empty.
   // TODO(mberlin): Let's switch it to int64 instead?
   uint32 seconds_behind_master = 2;
 
-  // filtered_replication_synced_until_timestamp is populated for the receiving
+  // seconds_behind_master_filtered_replication is populated for the receiving
   // master of an ongoing filtered replication only.
-  // It is used to find out how far the receiving master lags behind the
-  // source shard.
-  int64 filtered_replication_synced_until_timestamp = 3;
+  // It specifies how far the receiving master lags behind the sending master.
+  // NOTE: This field must not be evaluated if "health_error" is not empty.
+  int64 seconds_behind_master_filtered_replication = 3;
 
   // cpu_usage is used for load-based balancing
   double cpu_usage = 4;

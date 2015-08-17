@@ -802,15 +802,16 @@ type RealtimeStats struct {
 	// how far behind on (MySQL) replication a slave currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
 	// TODO(mberlin): Let's switch it to int64 instead?
 	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
-	// filtered_replication_synced_until_timestamp is populated for the receiving
+	// seconds_behind_master_filtered_replication is populated for the receiving
 	// master of an ongoing filtered replication only.
-	// It is used to find out how far the receiving master lags behind the
-	// source shard.
-	FilteredReplicationSyncedUntilTimestamp int64 `protobuf:"varint,4,opt,name=filtered_replication_synced_until_timestamp" json:"filtered_replication_synced_until_timestamp,omitempty"`
+	// It specifies how far the receiving master lags behind the sending master.
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,3,opt,name=seconds_behind_master_filtered_replication" json:"seconds_behind_master_filtered_replication,omitempty"`
 	// cpu_usage is used for load-based balancing
-	CpuUsage float64 `protobuf:"fixed64,3,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+	CpuUsage float64 `protobuf:"fixed64,4,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
 }
 
 func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
