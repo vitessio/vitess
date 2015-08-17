@@ -43,43 +43,35 @@ import java.util.Map;
  *
  * <p>Usage:
  *
- * <code>
+ * <pre>
  *   RpcClient client = RpcClientFactory.create(
  *     InetAddresses.forUriString("${VTGATE_ADDR}", Duration.millis(500)));
  *   VTGateConn conn = VTGateConn.WithRpcClient(client);
  *   Context ctx = Context.withDeadline(DateTime.now().plusMillis(500));
+ *   CallerID callerId = CallerID.newBuilder().setPrincipal("username").build();
  *
  *   try {
+ *     byte ksid[] = computeKeyspaceId(...);
+ *     QueryResult result = conn.executeKeyspaceIds(ctx,
+ *         "INSERT INTO test_table (col1,col2) VALUES(:val1,:val2)",
+ *         "test_keyspace",     // keyspace
+ *         Arrays.asList(ksid), // keyspaceIds
+ *         ImmutableMap.of(     // bindVars
+ *            "val1", 123,
+ *            "val2", 456
+ *            ),
+ *         TabletType.MASTER    // tabletType
+ *         );
  *
- *       CallerID callerId = CallerID.newBuilder().setPrincipal("username").build();
- *       BindVariable bindVars = BindVariable.newBuilder()
- *           .setType(Type.TYPE_INT)
- *           .setValueInt(12345)
- *           .build();
- *       BoundQuery.Builder queryBuilder = BoundQuery.newBuilder()
- *           .setSql(ByteString.copyFrom("INSERT INTO test_table VALUES(1, 2, 3)", Charsets.UTF_8));
- *       queryBuilder.getMutableBindVariables().put("keyspaceid_01", bindVars);
- *       BoundQuery query = queryBuilder.build();
- *       ExecuteKeyspaceIdsRequest.newBuilder()
- *           .setCallerId(callerId)
- *           .setQuery(query)
- *           .setKeyspace("my_keyspace")
- *           .setKeyspaceIds(0, ByteString.copyFrom("keyspaceid_01", Charsets.UTF_8))
- *           .setTabletType(TabletType.MASTER)
- *           .build();
- *
- *       ExecuteKeyspaceIdsResponse response = conn.executeKeyspaceIds(ctx, request);
- *       if (response.hasError()) {
- *         // handle error.
- *       }
- *       QueryResult result = response.getResult();
- *       for (Row row : result.getRowsList()) {
- *         // process each row.
- *       }
- *  } catch (VitessRpcException e) {
+ *     for (Row row : result.getRowsList()) {
+ *       // process each row.
+ *     }
+ *   } catch (VitessException e) {
+ *     // ...
+ *   } catch (VitessRpcException e) {
  *     // ...
  *   }
- * </code>
+ * </pre>
  * */
 public class VTGateConn implements Closeable {
   private RpcClient client;
