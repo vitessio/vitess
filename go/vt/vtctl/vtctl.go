@@ -95,19 +95,20 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -234,6 +235,9 @@ var commands = []commandGroup{
 			command{"ShardReplicationFix", commandShardReplicationFix,
 				"<cell> <keyspace/shard>",
 				"Walks through a ShardReplication object and fixes the first error that it encounters."},
+			command{"WaitForFilteredReplication", commandWaitForFilteredReplication,
+				"[-max_delay <max_delay, default 30s>] <keyspace/shard>",
+				"Blocks until the specified shard has caught up with the filtered replication of its source shard."},
 			command{"RemoveShardCell", commandRemoveShardCell,
 				"[-force] [-recursive] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
@@ -1328,6 +1332,88 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	return topo.FixShardReplication(ctx, wr.TopoServer(), wr.Logger(), cell, keyspace, shard)
+}
+
+func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	// Allowed tolerance up to which the local clock may run ahead. Otherwise, the command will fail.
+	const allowedAheadTime = time.Second
+	maxDelay := subFlags.Duration("max_delay", 30*time.Second,
+		"Specifies the maximum delay, in seconds, the filtered replication of the"+
+			" given destination shard should lag behind the source shard. When"+
+			" higher, the command will block and wait for the delay to decrease.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("The <keyspace/shard> argument is required for the WaitForFilteredReplication command.")
+	}
+	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(shardInfo.SourceShards) == 0 {
+		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
+	}
+	alias := shardInfo.MasterAlias
+	if topo.TabletAliasIsZero(alias) {
+		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
+	if err != nil {
+		return err
+	}
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint for master tablet record: %v record: %v", err, tabletInfo)
+	}
+
+	// pass in a non-UNKNOWN tablet type to not use sessionId
+	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", pb.TabletType_MASTER, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
+	}
+
+	stream, errFunc, err := conn.StreamHealth(ctx)
+	if err != nil {
+		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
+	}
+	var lastSeenDelay int
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context was done before filtered replication did caught up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
+		case shr, ok := <-stream:
+			if !ok {
+				return fmt.Errorf("stream ended early: %v", errFunc())
+			}
+			gotTarget := shr.GetTarget()
+			if gotTarget == nil {
+				return fmt.Errorf("stream health record did not include Target: %v", shr)
+			}
+			if gotTarget.Keyspace != keyspace || gotTarget.Shard != shard {
+				return fmt.Errorf("received health record for wrong tablet. Expected tablet: %v/%v received health record: %v", keyspace, shard, shr)
+			}
+			if gotTarget.TabletType != pb.TabletType_MASTER {
+				return fmt.Errorf("tablet: %v should be master, but is not. type: %v", alias, gotTarget.TabletType.String())
+			}
+
+			now := time.Now()
+			lastSync := time.Unix(shr.GetRealtimeStats().FilteredReplicationSyncedUntilTimestamp, 0 /* nsecs */)
+			lastSeenDelay := now.Sub(lastSync)
+			if lastSeenDelay < -allowedAheadTime {
+				return fmt.Errorf("cannot reliably wait for the filtered replication to catch up. The local clock (runs behind) or the tablet clock (runs ahead) is not synchronized. seen delay: %v local clock now: %v last sync on tablet (%v): %v", lastSeenDelay, now, alias, lastSync)
+			}
+			if lastSeenDelay <= *maxDelay {
+				wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+				return nil
+			}
+			wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
+		}
+	}
 }
 
 func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
