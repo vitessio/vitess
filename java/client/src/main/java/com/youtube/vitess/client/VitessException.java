@@ -4,7 +4,6 @@ package com.youtube.vitess.client;
  * VitessException indicates an error returned by VTGate.
  */
 public class VitessException extends Exception {
-
   public VitessException() {
     super();
   }

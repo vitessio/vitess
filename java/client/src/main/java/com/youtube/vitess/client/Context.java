@@ -9,7 +9,9 @@ import org.joda.time.DateTime;
  * TODO(shengzhe): implement Context.
  */
 public class Context {
-  public static Context withDeadline(DateTime deadline) { return new Context(); }
+  public static Context withDeadline(DateTime deadline) {
+    return new Context();
+  }
 
   private Context() {}
 }
