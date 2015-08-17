@@ -11,10 +11,6 @@ import time
 import unittest
 import urllib2
 
-from zk import zkocc
-from vtdb import topology
-from vtdb import vtclient
-
 import environment
 import framework
 import tablet
@@ -38,6 +34,9 @@ def setUpModule():
     setup_procs = [master_tablet.init_mysql(),
                    replica_tablet.init_mysql()]
     utils.wait_procs(setup_procs)
+
+    # start a vtctld so the vtctl insert commands are just RPCs, not forks
+    utils.Vtctld().start()
 
     # Start up a master mysql and vttablet
     logging.debug('Setting up tablets')
@@ -85,9 +84,6 @@ def tearDownModule():
 
 class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                               'test_nj', 30.0)
-    topology.read_topology(self.vtgate_client)
     self.perform_insert(400)
 
   def tearDown(self):
@@ -103,10 +99,10 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def perform_insert(self, count):
     for i in xrange(count):
-      self._exec_vt_txn(["insert into vt_insert_test (msg) values ('test %s')" % i])
+      self._exec_vt_txn("insert into vt_insert_test (msg) values ('test %s')" % i)
 
   def perform_delete(self):
-    self._exec_vt_txn(['delete from vt_insert_test',])
+    self._exec_vt_txn('delete from vt_insert_test')
 
   def _wait_for_replica(self):
     master_position = utils.mysql_query(master_tablet.tablet_uid,
@@ -148,20 +144,20 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def test_outofband_statements(self):
     start = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
-    self._exec_vt_txn(["insert into vt_insert_test (id, msg) values (1000000, 'start')"])
+    self._exec_vt_txn("insert into vt_insert_test (id, msg) values (1000000, 'start')")
     self._wait_for_replica()
     time.sleep(1.0)
 
     # Test update statement
     result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
-    self.assertEqual(result, [(1000000, 'start')])
+    self.assertEqual(result, [['1000000', 'start']])
     utils.mysql_write_query(master_tablet.tablet_uid,
                             'vt_test_keyspace',
                             "update vt_insert_test set msg = 'foo' where id = 1000000")
     self._wait_for_replica()
     time.sleep(1.0)
     result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
-    self.assertEqual(result, [(1000000, 'foo')])
+    self.assertEqual(result, [['1000000', 'foo']])
     end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(start, end1)
 
@@ -183,7 +179,7 @@ class RowCacheInvalidator(unittest.TestCase):
     self._wait_for_replica()
     time.sleep(1.0)
     result = self._exec_replica_query('select * from vt_insert_test where id = 1000000')
-    self.assertEqual(result, [(1000000, 'bar')])
+    self.assertEqual(result, [['1000000', 'bar']])
     end3 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
     self.assertEqual(end2, end3)
 
@@ -292,30 +288,12 @@ class RowCacheInvalidator(unittest.TestCase):
     # and restore the type
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
 
-  def _vtdb_conn(self):
-    conn = vtclient.VtOCCConnection(self.vtgate_client, 'test_keyspace', '0',
-                                    'master', 30)
-    conn.connect()
-    return conn
-
-  def _exec_vt_txn(self, query_list=None):
-    if query_list is None:
-      return
-    vtdb_conn = self._vtdb_conn()
-    vtdb_cursor = vtdb_conn.cursor()
-    vtdb_conn.begin()
-    for q in query_list:
-      vtdb_cursor.execute(q, {})
-    vtdb_conn.commit()
+  def _exec_vt_txn(self, query):
+    master_tablet.execute(query, auto_log=False)
 
   def _exec_replica_query(self, query):
-    conn = vtclient.VtOCCConnection(self.vtgate_client, 'test_keyspace', '0',
-                                    'replica', 30)
-    conn.connect()
-    cursor = conn.cursor()
-    cursor.execute(query, {})
-    conn.close()
-    return list(cursor)
+    result = replica_tablet.execute(query, auto_log=False)
+    return result['Rows']
 
 
 if __name__ == '__main__':
