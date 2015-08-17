@@ -264,7 +264,7 @@ func (m *Target) String() string { return proto.CompactTextString(m) }
 func (*Target) ProtoMessage()    {}
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
-// caller. If possible, this enformation is secure. For instance,
+// caller. If possible, this information is secure. For instance,
 // if using unique certificates that guarantee that VTGate->VTTablet
 // traffic cannot be spoofed, then VTTablet can trust this information,
 // and VTTablet will use it for tablet ACLs, for instance.
@@ -799,7 +799,7 @@ type RealtimeStats struct {
 	// we do not send queries to servers that are not healthy.
 	HealthError string `protobuf:"bytes,1,opt,name=health_error" json:"health_error,omitempty"`
 	// seconds_behind_master is populated for slaves only. It indicates
-	// how far nehind on replication a slave currently is.  It is used
+	// how far behind on replication a slave currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
 	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
