@@ -379,19 +379,19 @@ primary key (name)
 
   def _check_binlog_server_vars(self, tablet):
     v = utils.get_vars(tablet.port)
-    self.assertTrue('UpdateStreamKeyRangeStatements' in v)
-    self.assertTrue('UpdateStreamKeyRangeTransactions' in v)
+    self.assertIn('UpdateStreamKeyRangeStatements', v)
+    self.assertIn('UpdateStreamKeyRangeTransactions', v)
 
   def _check_binlog_player_vars(self, tablet, seconds_behind_master_max = 0):
     v = utils.get_vars(tablet.port)
-    self.assertTrue('BinlogPlayerMapSize' in v)
-    self.assertTrue('BinlogPlayerSecondsBehindMaster' in v)
-    self.assertTrue('BinlogPlayerSecondsBehindMasterMap' in v)
-    self.assertTrue('BinlogPlayerSourceShardNameMap' in v)
-    self.assertTrue('0' in v['BinlogPlayerSourceShardNameMap'])
+    self.assertIn('BinlogPlayerMapSize', v)
+    self.assertIn('BinlogPlayerSecondsBehindMaster', v)
+    self.assertIn('BinlogPlayerSecondsBehindMasterMap', v)
+    self.assertIn('BinlogPlayerSourceShardNameMap', v)
+    self.assertIn('0', v['BinlogPlayerSourceShardNameMap'])
     self.assertEquals(v['BinlogPlayerSourceShardNameMap']['0'], 'test_keyspace/80-')
-    self.assertTrue('BinlogPlayerSourceTabletAliasMap' in v)
-    self.assertTrue('0' in v['BinlogPlayerSourceTabletAliasMap'])
+    self.assertIn('BinlogPlayerSourceTabletAliasMap', v)
+    self.assertIn('0', v['BinlogPlayerSourceTabletAliasMap'])
     if seconds_behind_master_max != 0:
       self.assertTrue(v['BinlogPlayerSecondsBehindMaster'] <
                       seconds_behind_master_max,

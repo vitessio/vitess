@@ -114,7 +114,7 @@ class TestStream(framework.TestCase):
         cu.fetchall()
       errMsg1 = "error: the query was killed either because it timed out or was canceled: Lost connectioy to MySQL server during query (errno 2013)"
       errMsg2 = "error: Query execution was interrupted (errno 1317)"
-      self.assertTrue(cm.exception not in (errMsg1, errMsg2), "did not raise interruption error: %s" % str(cm.exception))
+      self.assertNotIn(cm.exception, (errMsg1, errMsg2), "did not raise interruption error: %s" % str(cm.exception))
       cu.close()
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))

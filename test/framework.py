@@ -16,7 +16,7 @@ class TestCase(unittest.TestCase):
     cls.env = env
 
   def assertContains(self, b, a):
-    self.assertTrue(a in b, "%r not found in %r" % (a, b))
+    self.assertIn(a, b)
 
 class MultiDict(dict):
   def __getattr__(self, name):
