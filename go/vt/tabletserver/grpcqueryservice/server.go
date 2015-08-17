@@ -194,6 +194,7 @@ func (q *query) StreamHealth(request *pb.StreamHealthRequest, stream pbs.Query_S
 		for shr := range c {
 			// we send until the client disconnects
 			if err := stream.Send(shr); err != nil {
+				// TODO(mberlin): Shouldn't we explicitly close c here?
 				return
 			}
 		}
