@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
@@ -235,7 +234,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	if os == nil {
 		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
 	}
-	scw.wr.Logger().Infof("Found overlapping shards: %v\n", jscfg.ToJSON(os))
+	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all

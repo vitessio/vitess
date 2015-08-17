@@ -4,20 +4,14 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import logging
-import threading
-import struct
-import time
 import unittest
 
-from vtdb import keyrange_constants
-from vtdb import keyspace
+from vtdb import vtgate_client
 
 import environment
 import utils
 import tablet
-
-from zk import zkocc
+from protocols_flavor import protocols_flavor
 
 SHARDED_KEYSPACE = "TEST_KEYSPACE_SHARDED"
 UNSHARDED_KEYSPACE = "TEST_KEYSPACE_UNSHARDED"
@@ -172,10 +166,13 @@ def setup_unsharded_keyspace():
 ALL_DB_TYPES = ['master', 'rdonly', 'replica']
 
 class TestKeyspace(unittest.TestCase):
-  def _read_keyspace(self, keyspace_name):
-    vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                          "test_nj", 30.0)
-    return keyspace.read_keyspace(vtgate_client, keyspace_name)
+  def _read_srv_keyspace(self, keyspace_name):
+    addr = utils.vtgate.rpc_endpoint()
+    protocol = protocols_flavor().vtgate_python_protocol()
+    conn = vtgate_client.connect(protocol, addr, 30.0)
+    result = conn.get_srv_keyspace(keyspace_name)
+    conn.close()
+    return result
 
   def test_get_keyspace(self):
     ki = utils.run_vtctl_json(['GetKeyspace', UNSHARDED_KEYSPACE])
@@ -283,27 +280,27 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(['DeleteKeyspace', '-recursive', 'test_delete_keyspace'])
 
   def test_shard_count(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
+    sharded_ks = self._read_srv_keyspace(SHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_count(db_type), 2)
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
+    unsharded_ks = self._read_srv_keyspace(UNSHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_count(db_type), 1)
 
   def test_shard_names(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
+    sharded_ks = self._read_srv_keyspace(SHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(sharded_ks.get_shard_names(db_type), ['-80', '80-'])
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
+    unsharded_ks = self._read_srv_keyspace(UNSHARDED_KEYSPACE)
     for db_type in ALL_DB_TYPES:
       self.assertEqual(unsharded_ks.get_shard_names(db_type), ['0'])
 
   def test_keyspace_id_to_shard_name(self):
-    sharded_ks = self._read_keyspace(SHARDED_KEYSPACE)
+    sharded_ks = self._read_srv_keyspace(SHARDED_KEYSPACE)
     for _, sn in enumerate(shard_names):
       for keyspace_id in shard_kid_map[sn]:
         self.assertEqual(sharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id, 'master'), sn)
-    unsharded_ks = self._read_keyspace(UNSHARDED_KEYSPACE)
+    unsharded_ks = self._read_srv_keyspace(UNSHARDED_KEYSPACE)
     for keyspace_id in shard_kid_map[sn]:
       self.assertEqual(unsharded_ks.keyspace_id_to_shard_name_for_db_type(keyspace_id, 'master'), '0')
 
