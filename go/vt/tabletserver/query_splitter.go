@@ -28,8 +28,8 @@ type QuerySplitter struct {
 }
 
 const (
-	startBindVarName = ":_splitquery_start"
-	endBindVarName   = ":_splitquery_end"
+	startBindVarName = "_splitquery_start"
+	endBindVarName   = "_splitquery_end"
 )
 
 // NewQuerySplitter creates a new QuerySplitter. query is the original query
@@ -157,7 +157,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		startClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.AST_GE,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(startBindVarName)),
+			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
 		}
 		if start.IsNumeric() {
 			v, _ := start.ParseInt64()
@@ -174,7 +174,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		endClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.AST_LT,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(endBindVarName)),
+			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
 		}
 		if end.IsNumeric() {
 			v, _ := end.ParseInt64()

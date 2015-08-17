@@ -679,6 +679,9 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (int64, err
 		return mproto.VT_NULL, err
 	}
 	defer conn.Recycle()
+	// TODO(shengzhe): use AST to represent the query to avoid sql injection.
+	// current code is safe because QuerySplitter.validateQuery is called before
+	// calling this.
 	query := fmt.Sprintf("SELECT %v FROM %v LIMIT 0", columnName, tableName)
 	result, err := qre.execSQL(conn, query, true)
 	if err != nil {
@@ -696,6 +699,9 @@ func getColumnMinMax(qre *QueryExecutor, columnName, tableName string) (*mproto.
 		return nil, err
 	}
 	defer conn.Recycle()
+	// TODO(shengzhe): use AST to represent the query to avoid sql injection.
+	// current code is safe because QuerySplitter.validateQuery is called before
+	// calling this.
 	minMaxSQL := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", columnName, columnName, tableName)
 	return qre.execSQL(conn, minMaxSQL, true)
 }
