@@ -1,13 +1,13 @@
 package wrangler
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -220,13 +220,19 @@ type LegacyZknsAddrs struct {
 }
 
 func writeAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
-	data := jscfg.ToJSON(addr)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addr, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 func writeAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
-	data := jscfg.ToJSON(addrs)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }

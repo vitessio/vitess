@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -123,8 +122,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
 }
 
 func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -158,8 +156,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
 }
 
 func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -185,8 +182,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(r))
-	return nil
+	return printJSON(wr, r)
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -229,8 +225,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -33,7 +33,11 @@ func (n *ActionNode) LockKeyspace(ctx context.Context, ts topo.Server, keyspace 
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
 
-	return ts.LockKeyspaceForAction(ctx, keyspace, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockKeyspaceForAction(ctx, keyspace, j)
 }
 
 // UnlockKeyspace unlocks a previously locked keyspace.
@@ -60,7 +64,16 @@ func (n *ActionNode) UnlockKeyspace(ctx context.Context, ts topo.Server, keyspac
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockKeyspaceForAction(ctx, keyspace, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -83,7 +96,11 @@ func (n *ActionNode) LockShard(ctx context.Context, ts topo.Server, keyspace, sh
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.LockShardForAction(ctx, keyspace, shard, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockShardForAction(ctx, keyspace, shard, j)
 }
 
 // UnlockShard unlocks a previously locked shard.
@@ -111,7 +128,16 @@ func (n *ActionNode) UnlockShard(ctx context.Context, ts topo.Server, keyspace, 
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockShardForAction(ctx, keyspace, shard, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
@@ -135,7 +161,11 @@ func (n *ActionNode) LockSrvShard(ctx context.Context, ts topo.Server, cell, key
 	span.Annotate("cell", cell)
 	defer span.Finish()
 
-	return ts.LockSrvShardForAction(ctx, cell, keyspace, shard, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		return "", err
+	}
+	return ts.LockSrvShardForAction(ctx, cell, keyspace, shard, j)
 }
 
 // UnlockSrvShard unlocks a previously locked serving shard.
@@ -164,7 +194,16 @@ func (n *ActionNode) UnlockSrvShard(ctx context.Context, ts topo.Server, cell, k
 		n.Error = ""
 		n.State = ActionStateDone
 	}
-	err := ts.UnlockSrvShardForAction(ctx, cell, keyspace, shard, lockPath, n.ToJSON())
+	j, err := n.ToJSON()
+	if err != nil {
+		if actionError != nil {
+			// this will be masked
+			log.Warningf("node.ToJSON failed: %v", err)
+			return actionError
+		}
+		return err
+	}
+	err = ts.UnlockSrvShardForAction(ctx, cell, keyspace, shard, lockPath, j)
 	if actionError != nil {
 		if err != nil {
 			// this will be masked

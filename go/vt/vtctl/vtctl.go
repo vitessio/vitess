@@ -84,6 +84,7 @@ COMMAND ARGUMENT DEFINITIONS
 package vtctl
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -96,7 +97,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -567,8 +567,8 @@ func parseTabletType(param string, types []pb.TabletType) (pb.TabletType, error)
 	return tabletType, nil
 }
 
-// parseKeyspaceIdType parses the keyspace id type into the enum
-func parseKeyspaceIdType(param string) (pb.KeyspaceIdType, error) {
+// parseKeyspaceIDType parses the keyspace id type into the enum
+func parseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
 	if param == "" {
 		return pb.KeyspaceIdType_UNSET, nil
 	}
@@ -660,10 +660,10 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		return err
 	}
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(tabletInfo))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, tabletInfo)
 }
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -986,10 +986,10 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 	query := subFlags.Arg(1)
 	qr, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *wantFields, *disableBinlogs, *reloadSchema)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, qr)
 }
 
 func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1006,10 +1006,10 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
 	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
-	if err == nil {
-		log.Infof(hr.String())
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, hr)
 }
 
 func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1053,10 +1053,10 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return err
 	}
 	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(shardInfo))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, shardInfo)
 }
 
 func commandRebuildShardGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1389,7 +1389,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	keyspace := subFlags.Arg(0)
-	kit, err := parseKeyspaceIdType(*shardingColumnType)
+	kit, err := parseKeyspaceIDType(*shardingColumnType)
 	if err != nil {
 		return err
 	}
@@ -1453,10 +1453,10 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	keyspace := subFlags.Arg(0)
 	keyspaceInfo, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(keyspaceInfo))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, keyspaceInfo)
 }
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1477,7 +1477,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 	kit := pb.KeyspaceIdType_UNSET
 	if subFlags.NArg() >= 3 {
 		var err error
-		kit, err = parseKeyspaceIdType(subFlags.Arg(2))
+		kit, err = parseKeyspaceIDType(subFlags.Arg(2))
 		if err != nil {
 			return err
 		}
@@ -1615,11 +1615,10 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 
 	keyspace := subFlags.Arg(0)
 	result, err := topo.FindAllShardsInKeyspace(ctx, wr.TopoServer(), keyspace)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(result))
+	if err != nil {
+		return err
 	}
-	return err
-
+	return printJSON(wr, result)
 }
 
 func commandResolve(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1741,16 +1740,16 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	}
 
 	sd, err := wr.GetSchema(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews)
-	if err == nil {
-		if *tableNamesOnly {
-			for _, td := range sd.TableDefinitions {
-				wr.Logger().Printf("%v\n", td.Name)
-			}
-		} else {
-			wr.Logger().Printf("%v\n", jscfg.ToJSON(sd))
-		}
+	if err != nil {
+		return err
 	}
-	return err
+	if *tableNamesOnly {
+		for _, td := range sd.TableDefinitions {
+			wr.Logger().Printf("%v\n", td.Name)
+		}
+		return nil
+	}
+	return printJSON(wr, sd)
 }
 
 func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1824,10 +1823,10 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	scr, err := wr.ApplySchemaKeyspace(ctx, keyspace, change, true, *force, *waitSlaveTimeout)
-	if err == nil {
-		log.Infof(scr.String())
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, scr)
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1991,10 +1990,10 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(srvKeyspace))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, srvKeyspace)
 }
 
 func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2028,10 +2027,10 @@ func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	srvShard, err := wr.TopoServer().GetSrvShard(ctx, subFlags.Arg(0), keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(srvShard))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, srvShard)
 }
 
 func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2051,10 +2050,10 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	endPoints, _, err := wr.TopoServer().GetEndPoints(ctx, subFlags.Arg(0), keyspace, shard, tabletType)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(endPoints))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, endPoints)
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2070,10 +2069,10 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	shardReplication, err := wr.TopoServer().GetShardReplication(ctx, subFlags.Arg(0), keyspace, shard)
-	if err == nil {
-		wr.Logger().Printf("%v\n", jscfg.ToJSON(shardReplication))
+	if err != nil {
+		return err
 	}
-	return err
+	return printJSON(wr, shardReplication)
 }
 
 func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2144,6 +2143,17 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*myproto.Replica
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets
+}
+
+// printJSON will print the JSON version of the structure to the logger
+// console output, or an error to the logger's Error channel.
+func printJSON(wr *wrangler.Wrangler, val interface{}) error {
+	data, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal data: %v", err)
+	}
+	wr.Logger().Printf("%v\n", string(data))
+	return nil
 }
 
 // RunCommand will execute the command using the provided wrangler.
