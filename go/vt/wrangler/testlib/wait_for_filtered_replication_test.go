@@ -59,13 +59,13 @@ func TestWaitForFilteredReplication_unsyncClocks(t *testing.T) {
 
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
-		FilteredReplicationSyncedUntilTimestamp: time.Now().Add(-time.Hour).Unix(),
+		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
-	// Tablet is one hour ahead of the local clock.
+	// Receiving master's clock is running one hour ahead of the sending master.
 	negativeDelayFunc := func() *pbq.RealtimeStats {
 		return &pbq.RealtimeStats{
-			FilteredReplicationSyncedUntilTimestamp: time.Now().Add(time.Hour).Unix(),
+			SecondsBehindMasterFilteredReplication: -3600,
 		}
 	}
 
@@ -80,13 +80,13 @@ func TestWaitForFilteredReplication_unsyncClocksTolerance(t *testing.T) {
 
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
-		FilteredReplicationSyncedUntilTimestamp: time.Now().Add(-time.Hour).Unix(),
+		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
-	// Tablet is half a second ahead of the local clock.
+	// Tablet is a second ahead of the local clock.
 	slightNegativeDelayFunc := func() *pbq.RealtimeStats {
 		return &pbq.RealtimeStats{
-			FilteredReplicationSyncedUntilTimestamp: time.Now().Add(time.Second / 2).Unix(),
+			SecondsBehindMasterFilteredReplication: -1,
 		}
 	}
 
@@ -96,13 +96,13 @@ func TestWaitForFilteredReplication_unsyncClocksTolerance(t *testing.T) {
 func waitForFilteredReplicationDefaultDelay(t *testing.T, target *pbq.Target, expectedErr string) {
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
-		FilteredReplicationSyncedUntilTimestamp: time.Now().Add(-time.Hour).Unix(),
+		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
 	// Replication caught up.
 	oneSecondDelayFunc := func() *pbq.RealtimeStats {
 		return &pbq.RealtimeStats{
-			FilteredReplicationSyncedUntilTimestamp: time.Now().Add(-time.Second).Unix(),
+			SecondsBehindMasterFilteredReplication: 1,
 		}
 	}
 
