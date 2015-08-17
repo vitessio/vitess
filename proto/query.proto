@@ -294,10 +294,10 @@ message RealtimeStats {
   // master of an ongoing filtered replication only.
   // It is used to find out how far the receiving master lags behind the
   // source shard.
-  int64 filtered_replication_synced_until_timestamp = 4;
+  int64 filtered_replication_synced_until_timestamp = 3;
 
   // cpu_usage is used for load-based balancing
-  double cpu_usage = 3;
+  double cpu_usage = 4;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis
