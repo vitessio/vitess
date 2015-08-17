@@ -799,10 +799,16 @@ type RealtimeStats struct {
 	// we do not send queries to servers that are not healthy.
 	HealthError string `protobuf:"bytes,1,opt,name=health_error" json:"health_error,omitempty"`
 	// seconds_behind_master is populated for slaves only. It indicates
-	// how far behind on replication a slave currently is.  It is used
+	// how far behind on (MySQL) replication a slave currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
+	// TODO(mberlin): Let's switch it to int64 instead?
 	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
+	// filtered_replication_synced_until_timestamp is populated for the receiving
+	// master of an ongoing filtered replication only.
+	// It is used to find out how far the receiving master lags behind the
+	// source shard.
+	FilteredReplicationSyncedUntilTimestamp int64 `protobuf:"varint,4,opt,name=filtered_replication_synced_until_timestamp" json:"filtered_replication_synced_until_timestamp,omitempty"`
 	// cpu_usage is used for load-based balancing
 	CpuUsage float64 `protobuf:"fixed64,3,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
 }
