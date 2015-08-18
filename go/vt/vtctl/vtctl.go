@@ -1335,8 +1335,6 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	// Allowed tolerance up to which the local clock may run ahead. Otherwise, the command will fail.
-	const allowedAheadTime = 2 * time.Second
 	maxDelay := subFlags.Duration("max_delay", 30*time.Second,
 		"Specifies the maximum delay, in seconds, the filtered replication of the"+
 			" given destination shard should lag behind the source shard. When"+
@@ -1403,8 +1401,8 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 
 			delaySecs := shr.RealtimeStats.SecondsBehindMasterFilteredReplication
 			lastSeenDelay := time.Duration(delaySecs) * time.Second
-			if lastSeenDelay < -allowedAheadTime {
-				return fmt.Errorf("cannot reliably wait for the filtered replication to catch up. The tablet clock (runs ahead) is not synchronized. seen delay: %v on tablet: %v", lastSeenDelay, alias)
+			if lastSeenDelay < 0 {
+				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
 			}
 			if lastSeenDelay <= *maxDelay {
 				wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())

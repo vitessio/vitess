@@ -52,47 +52,6 @@ func TestWaitForFilteredReplication_wrongTarget(t *testing.T) {
 	waitForFilteredReplicationDefaultDelay(t, target, "received health record for wrong tablet")
 }
 
-// TestWaitForFilteredReplication_unsyncClocks tests that
-// vtctl WaitForFilteredReplication fails if the calculated delay is negative.
-func TestWaitForFilteredReplication_unsyncClocks(t *testing.T) {
-	target := &pbq.Target{Keyspace: keyspace, Shard: destShard, TabletType: pbt.TabletType_MASTER}
-
-	// Replication is lagging behind.
-	oneHourDelay := &pbq.RealtimeStats{
-		SecondsBehindMasterFilteredReplication: 3600,
-	}
-
-	// Receiving master's clock is running one hour ahead of the sending master.
-	negativeDelayFunc := func() *pbq.RealtimeStats {
-		return &pbq.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: -3600,
-		}
-	}
-
-	waitForFilteredReplication(t, target, "cannot reliably wait for the filtered replication to catch up", oneHourDelay, negativeDelayFunc)
-}
-
-// TestWaitForFilteredReplication_unsyncClocksTolerance tests that
-// vtctl WaitForFilteredReplication succeeds as long as the calculated
-// negative delay is above a certain tolerance.
-func TestWaitForFilteredReplication_unsyncClocksTolerance(t *testing.T) {
-	target := &pbq.Target{Keyspace: keyspace, Shard: destShard, TabletType: pbt.TabletType_MASTER}
-
-	// Replication is lagging behind.
-	oneHourDelay := &pbq.RealtimeStats{
-		SecondsBehindMasterFilteredReplication: 3600,
-	}
-
-	// Tablet is a second ahead of the local clock.
-	slightNegativeDelayFunc := func() *pbq.RealtimeStats {
-		return &pbq.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: -1,
-		}
-	}
-
-	waitForFilteredReplication(t, target, "", oneHourDelay, slightNegativeDelayFunc)
-}
-
 func waitForFilteredReplicationDefaultDelay(t *testing.T, target *pbq.Target, expectedErr string) {
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
