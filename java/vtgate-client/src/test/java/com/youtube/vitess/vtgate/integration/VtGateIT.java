@@ -1,6 +1,7 @@
 package com.youtube.vitess.vtgate.integration;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedLong;
 
 import com.youtube.vitess.vtgate.BindVariable;
@@ -303,13 +304,16 @@ public class VtGateIT {
   public void testSplitQueryMultipleSplitsPerShard() throws Exception {
     int rowCount = 30;
     Util.insertRows(testEnv, 1, 30);
-    List<String> expectedSqls =
-        Lists.newArrayList("select id, keyspace_id from vtgate_test where id < 10",
-            "select id, keyspace_id from vtgate_test where id < 11",
-            "select id, keyspace_id from vtgate_test where id >= 10 and id < 19",
-            "select id, keyspace_id from vtgate_test where id >= 11 and id < 19",
-            "select id, keyspace_id from vtgate_test where id >= 19",
-            "select id, keyspace_id from vtgate_test where id >= 19");
+    Map<String, List<BindVariable>> expectedSqls = Maps.newHashMap();
+    expectedSqls.put("select id, keyspace_id from vtgate_test where id < :_splitquery_end",
+        Lists.newArrayList(BindVariable.forInt("_splitquery_end", 10)));
+    expectedSqls.put(
+        "select id, keyspace_id from vtgate_test where id >= :_splitquery_start "
+            + "and id < :_splitquery_end",
+        Lists.newArrayList(BindVariable.forInt("_splitquery_start", 10),
+            BindVariable.forInt("_splitquery_end", 19)));
+    expectedSqls.put("select id, keyspace_id from vtgate_test where id >= :_splitquery_start",
+        Lists.newArrayList(BindVariable.forInt("_splitquery_start", 19)));
     Util.waitForTablet("rdonly", rowCount, 3, testEnv);
     VtGate vtgate = VtGate.connect("localhost:" + testEnv.getPort(), 0, testEnv.getRpcClientFactory());
     int splitCount = 6;
@@ -322,11 +326,11 @@ public class VtGateIT {
     Set<String> shardsInSplits = new HashSet<>();
     for (Query q : queries.keySet()) {
       String sql = q.getSql();
-      Assert.assertTrue(expectedSqls.contains(sql));
-      expectedSqls.remove(sql);
+      List<BindVariable> bindVars = expectedSqls.get(sql);
+      Assert.assertNotNull(bindVars);
       Assert.assertEquals("test_keyspace", q.getKeyspace());
       Assert.assertEquals("rdonly", q.getTabletType());
-      Assert.assertEquals(0, q.getBindVars().size());
+      Assert.assertEquals(bindVars.size(), q.getBindVars().size());
       Assert.assertEquals(null, q.getKeyspaceIds());
       String start = Hex.encodeHexString(q.getKeyRanges().get(0).get("Start"));
       String end = Hex.encodeHexString(q.getKeyRanges().get(0).get("End"));
@@ -335,7 +339,6 @@ public class VtGateIT {
 
     // Verify the keyrange queries in splits cover the entire keyspace
     Assert.assertTrue(shardsInSplits.containsAll(testEnv.getShardKidMap().keySet()));
-    Assert.assertTrue(expectedSqls.size() == 0);
   }
 
   @Test
