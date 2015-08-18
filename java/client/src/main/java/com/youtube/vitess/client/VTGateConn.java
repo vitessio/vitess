@@ -47,8 +47,10 @@ import java.util.Map;
  *   RpcClient client = RpcClientFactory.create(
  *     InetAddresses.forUriString("${VTGATE_ADDR}", Duration.millis(500)));
  *   VTGateConn conn = VTGateConn.WithRpcClient(client);
- *   Context ctx = Context.withDeadline(DateTime.now().plusMillis(500));
  *   CallerID callerId = CallerID.newBuilder().setPrincipal("username").build();
+ *   Context ctx = Context.getDefault()
+ *                     .withDeadlineAfter(Duration.millis(500))
+ *                     .withCallerId(callerId);
  *
  *   try {
  *     byte ksid[] = computeKeyspaceId(...);
@@ -88,6 +90,7 @@ public class VTGateConn implements Closeable {
       TabletType tabletType) throws VitessException, VitessRpcException {
     ExecuteRequest request =
         ExecuteRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
             .build();
@@ -101,6 +104,7 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     ExecuteShardsRequest request =
         ExecuteShardsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllShards(shards)
@@ -116,6 +120,7 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     ExecuteKeyspaceIdsRequest request =
         ExecuteKeyspaceIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
@@ -131,6 +136,7 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     ExecuteKeyRangesRequest request =
         ExecuteKeyRangesRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
@@ -146,6 +152,7 @@ public class VTGateConn implements Closeable {
       TabletType tabletType) throws VitessException, VitessRpcException {
     ExecuteEntityIdsRequest request =
         ExecuteEntityIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .setEntityColumnName(entityColumnName)
@@ -162,6 +169,7 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     ExecuteBatchShardsRequest request =
         ExecuteBatchShardsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
@@ -176,6 +184,7 @@ public class VTGateConn implements Closeable {
       boolean asTransaction) throws VitessException, VitessRpcException {
     ExecuteBatchKeyspaceIdsRequest request =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
@@ -189,6 +198,7 @@ public class VTGateConn implements Closeable {
       Map<String, ?> bindVars, TabletType tabletType) throws VitessRpcException {
     StreamExecuteRequest request =
         StreamExecuteRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
             .build();
@@ -200,6 +210,7 @@ public class VTGateConn implements Closeable {
       throws VitessRpcException {
     StreamExecuteShardsRequest request =
         StreamExecuteShardsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllShards(shards)
@@ -213,6 +224,7 @@ public class VTGateConn implements Closeable {
       throws VitessRpcException {
     StreamExecuteKeyspaceIdsRequest request =
         StreamExecuteKeyspaceIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
@@ -226,6 +238,7 @@ public class VTGateConn implements Closeable {
       TabletType tabletType) throws VitessRpcException {
     StreamExecuteKeyRangesRequest request =
         StreamExecuteKeyRangesRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
@@ -235,7 +248,7 @@ public class VTGateConn implements Closeable {
   }
 
   public VTGateTx begin(Context ctx) throws VitessException, VitessRpcException {
-    BeginRequest request = BeginRequest.newBuilder().build();
+    BeginRequest request = BeginRequest.newBuilder().setCallerId(ctx.getCallerId()).build();
     BeginResponse response = this.client.begin(ctx, request);
     return VTGateTx.withRpcClientAndSession(this.client, response.getSession());
   }
@@ -245,6 +258,7 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     SplitQueryRequest request =
         SplitQueryRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setKeyspace(keyspace)
             .setQuery(Proto.bindQuery(query, bindVars))
             .setSplitColumn(splitColumn)

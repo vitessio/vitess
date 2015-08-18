@@ -52,6 +52,7 @@ public class VTGateTx {
     }
     ExecuteRequest request =
         ExecuteRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
             .setSession(this.session)
@@ -70,6 +71,7 @@ public class VTGateTx {
     }
     ExecuteShardsRequest request =
         ExecuteShardsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllShards(shards)
@@ -90,6 +92,7 @@ public class VTGateTx {
     }
     ExecuteKeyspaceIdsRequest request =
         ExecuteKeyspaceIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
@@ -110,6 +113,7 @@ public class VTGateTx {
     }
     ExecuteKeyRangesRequest request =
         ExecuteKeyRangesRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
@@ -131,6 +135,7 @@ public class VTGateTx {
     }
     ExecuteEntityIdsRequest request =
         ExecuteEntityIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .setEntityColumnName(entityColumnName)
@@ -152,6 +157,7 @@ public class VTGateTx {
     }
     ExecuteBatchShardsRequest request =
         ExecuteBatchShardsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
@@ -172,6 +178,7 @@ public class VTGateTx {
     }
     ExecuteBatchKeyspaceIdsRequest request =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
@@ -188,7 +195,8 @@ public class VTGateTx {
     if (this.session == null) {
       throw new VitessNotInTransactionException("commit: not in transaction");
     }
-    CommitRequest request = CommitRequest.newBuilder().setSession(this.session).build();
+    CommitRequest request =
+        CommitRequest.newBuilder().setCallerId(ctx.getCallerId()).setSession(this.session).build();
     this.client.commit(ctx, request);
     this.session = null;
   }
@@ -198,7 +206,11 @@ public class VTGateTx {
     if (this.session == null) {
       throw new VitessNotInTransactionException("rollback: not in transaction");
     }
-    RollbackRequest request = RollbackRequest.newBuilder().setSession(this.session).build();
+    RollbackRequest request =
+        RollbackRequest.newBuilder()
+            .setCallerId(ctx.getCallerId())
+            .setSession(this.session)
+            .build();
     this.client.rollback(ctx, request);
     this.session = null;
   }
