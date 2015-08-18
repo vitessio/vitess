@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"sync"
 	"time"
@@ -34,7 +35,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
@@ -112,12 +112,17 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 	if overridesFile == "" {
 		return schemaOverrides
 	}
-	if err := jscfg.ReadJSON(overridesFile, &schemaOverrides); err != nil {
+	data, err := ioutil.ReadFile(overridesFile)
+	if err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
-	} else {
-		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
-		log.Infof("schemaOverrides: %s\n", data)
+		return schemaOverrides
 	}
+	if err = json.Unmarshal(data, &schemaOverrides); err != nil {
+		log.Warningf("can't parse overridesFile %v: %v", overridesFile, err)
+		return schemaOverrides
+	}
+	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
+	log.Infof("schemaOverrides: %s\n", data)
 	return schemaOverrides
 }
 

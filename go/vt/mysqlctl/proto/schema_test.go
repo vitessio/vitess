@@ -203,7 +203,7 @@ func TestSchemaDiff(t *testing.T) {
 	testDiff(t, nil, nil, "sd1", "sd2", nil)
 
 	testDiff(t, sd1, nil, "sd1", "sd2", []string{
-		fmt.Sprintf("sd1 and sd2 are different, sd1: %v, sd2: null", sd1),
+		fmt.Sprintf("sd1 and sd2 are different, sd1: %v, sd2: <nil>", sd1),
 	})
 
 	testDiff(t, sd1, sd3, "sd1", "sd3", []string{

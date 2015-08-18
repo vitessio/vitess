@@ -10,12 +10,11 @@
 package actionnode
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
 	"time"
-
-	"github.com/youtube/vitess/go/jscfg"
 )
 
 const (
@@ -264,19 +263,31 @@ type ActionNode struct {
 }
 
 // ToJSON returns a JSON representation of the object.
-func (n *ActionNode) ToJSON() string {
-	result := jscfg.ToJSON(n) + "\n"
+func (n *ActionNode) ToJSON() (string, error) {
+	data, err := json.MarshalIndent(n, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("cannot JSON-marshal node: %v", err)
+	}
+	result := string(data) + "\n"
 	if n.Args == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJSON(n.Args) + "\n"
+		data, err := json.MarshalIndent(n.Args, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("cannot JSON-marshal node args: %v", err)
+		}
+		result += string(data) + "\n"
 	}
 	if n.Reply == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJSON(n.Reply) + "\n"
+		data, err := json.MarshalIndent(n.Reply, "", "  ")
+		if err != nil {
+			return "", fmt.Errorf("cannot JSON-marshal node reply: %v", err)
+		}
+		result += string(data) + "\n"
 	}
-	return result
+	return result, nil
 }
 
 // SetGuid will set the ActionGuid field for the action node

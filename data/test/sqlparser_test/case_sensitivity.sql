@@ -17,7 +17,6 @@ select A() from b#select a() from b
 select A(B, C) from b#select a(b, c) from b
 select A(distinct B, C) from b#select a(distinct b, c) from b
 select IF(B, C) from b#select if(b, c) from b
-select VALUES(B, C) from b#select values(b, c) from b
 select * from b use index (A)#select * from b use index (a)
 insert into A(A, B) values (1, 2)#insert into A(a, b) values (1, 2)
 CREATE TABLE A#create table A

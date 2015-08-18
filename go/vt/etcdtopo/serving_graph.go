@@ -271,15 +271,15 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 	return getNodeNames(resp)
 }
 
-// WatchEndPoints is part of the topo.Server interface
-func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
+// WatchSrvKeyspace is part of the topo.Server interface
+func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("WatchEndPoints cannot get cell: %v", err)
+		return nil, nil, fmt.Errorf("WatchSrvKeyspace cannot get cell: %v", err)
 	}
-	filePath := endPointsFilePath(keyspace, shard, tabletType)
+	filePath := srvKeyspaceFilePath(keyspace)
 
-	notifications := make(chan *pb.EndPoints, 10)
+	notifications := make(chan *topo.SrvKeyspace, 10)
 	stopWatching := make(chan struct{})
 
 	// The watch go routine will stop if the 'stop' channel is closed.
@@ -288,12 +288,22 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	go func() {
-		// get the current version of the file
-		ep, modifiedVersion, err := s.GetEndPoints(ctx, cellName, keyspace, shard, tabletType)
-		if err != nil {
+		var srvKeyspace *topo.SrvKeyspace
+		var modifiedVersion int64
+
+		resp, err := cell.Get(filePath, false /* sort */, false /* recursive */)
+		if err != nil || resp.Node == nil {
 			// node doesn't exist
-			modifiedVersion = 0
-			ep = nil
+		} else {
+			if resp.Node.Value != "" {
+				sk := &pb.SrvKeyspace{}
+				if err := json.Unmarshal([]byte(resp.Node.Value), sk); err != nil {
+					log.Warningf("bad SrvKeyspace data (%v): %q", err, resp.Node.Value)
+				} else {
+					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
+					modifiedVersion = int64(resp.Node.ModifiedIndex)
+				}
+			}
 		}
 
 		// re-check for stop here to be safe, in case the
@@ -301,7 +311,7 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 		select {
 		case <-stop:
 			return
-		case notifications <- ep:
+		case notifications <- srvKeyspace:
 		}
 
 		for {
@@ -325,15 +335,16 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 		for {
 			select {
 			case resp := <-watch:
-				var ep *pb.EndPoints
+				var srvKeyspace *topo.SrvKeyspace
 				if resp.Node != nil && resp.Node.Value != "" {
-					ep = &pb.EndPoints{}
-					if err := json.Unmarshal([]byte(resp.Node.Value), ep); err != nil {
+					sk := &pb.SrvKeyspace{}
+					if err := json.Unmarshal([]byte(resp.Node.Value), sk); err != nil {
 						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
 						continue
 					}
+					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
 				}
-				notifications <- ep
+				notifications <- srvKeyspace
 			case <-stopWatching:
 				close(stop)
 				close(notifications)

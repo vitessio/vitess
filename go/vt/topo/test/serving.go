@@ -212,93 +212,93 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 }
 
-// CheckWatchEndPoints makes sure WatchEndPoints works as expected
-func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
+// CheckWatchSrvKeyspace makes sure WatchSrvKeyspace works as expected
+func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
 	cell := getLocalCell(ctx, t, ts)
 	keyspace := "test_keyspace"
-	shard := "-10"
-	tabletType := pb.TabletType_MASTER
 
 	// start watching, should get nil first
-	notifications, stopWatching, err := ts.WatchEndPoints(ctx, cell, keyspace, shard, tabletType)
+	notifications, stopWatching, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
-		t.Fatalf("WatchEndPoints failed: %v", err)
+		t.Fatalf("WatchSrvKeyspace failed: %v", err)
 	}
-	ep, ok := <-notifications
-	if !ok || ep != nil {
-		t.Fatalf("first value is wrong: %v %v", ep, ok)
+	sk, ok := <-notifications
+	if !ok || sk != nil {
+		t.Fatalf("first value is wrong: %v %v", sk, ok)
 	}
 
-	// update the endpoints, should get a notification
-	endPoints := &pb.EndPoints{
-		Entries: []*pb.EndPoint{
-			&pb.EndPoint{
-				Uid:  1,
-				Host: "host1",
-				PortMap: map[string]int32{
-					"vt":    1234,
-					"mysql": 1235,
-					"grpc":  1236,
+	// update the SrvKeyspace, should get a notification
+	srvKeyspace := &topo.SrvKeyspace{
+		ShardingColumnName: "test_column",
+		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
+			topo.TYPE_RDONLY: &topo.KeyspacePartition{
+				ShardReferences: []topo.ShardReference{
+					topo.ShardReference{
+						Name: "0",
+					},
 				},
 			},
 		},
+		ServedFrom: map[topo.TabletType]string{
+			topo.TYPE_MASTER: "other_keyspace",
+		},
 	}
-	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, endPoints, -1); err != nil {
-		t.Fatalf("UpdateEndPoints failed: %v", err)
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
+		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
 	}
 	for {
-		ep, ok := <-notifications
+		sk, ok := <-notifications
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if ep == nil {
+		if sk == nil {
 			// duplicate notification of the first value, that's OK
 			continue
 		}
 		// non-empty value, that one should be ours
-		if !reflect.DeepEqual(endPoints, ep) {
-			t.Fatalf("first value is wrong: %v %v", ep, ok)
+		if !reflect.DeepEqual(sk, srvKeyspace) {
+			t.Fatalf("first value is wrong: got %v expected %v", sk, srvKeyspace)
 		}
 		break
 	}
 
-	// delete the endpoints, should get a notification
-	if err := ts.DeleteEndPoints(ctx, cell, keyspace, shard, tabletType, -1); err != nil {
-		t.Fatalf("DeleteEndPoints failed: %v", err)
+	// delete the SrvKeyspace, should get a notification
+	if err := ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
+		t.Fatalf("DeleteSrvKeyspace failed: %v", err)
 	}
 	for {
-		ep, ok := <-notifications
+		sk, ok := <-notifications
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if ep == nil {
+		if sk == nil {
 			break
 		}
 
 		// duplicate notification of the first value, that's OK,
 		// but value better be good.
-		if !reflect.DeepEqual(endPoints, ep) {
-			t.Fatalf("duplicate notification value is bad: %v", ep)
+		if !reflect.DeepEqual(srvKeyspace, sk) {
+			t.Fatalf("duplicate notification value is bad: %v", sk)
 		}
 	}
 
 	// re-create the value, a bit different, should get a notification
-	endPoints.Entries[0].Uid = 2
-	if err := topo.UpdateEndPoints(ctx, ts, cell, keyspace, shard, tabletType, endPoints, -1); err != nil {
-		t.Fatalf("UpdateEndPoints failed: %v", err)
+	srvKeyspace.SplitShardCount = 2
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace); err != nil {
+		t.Fatalf("UpdateSrvKeyspace failed: %v", err)
 	}
 	for {
-		ep, ok := <-notifications
+		sk, ok := <-notifications
 		if !ok {
 			t.Fatalf("watch channel is closed???")
 		}
-		if ep == nil {
+		if sk == nil {
 			// duplicate notification of the closed value, that's OK
 			continue
 		}
 		// non-empty value, that one should be ours
-		if !reflect.DeepEqual(endPoints, ep) {
-			t.Fatalf("value after delete / re-create is wrong: %v %v", ep, ok)
+		if !reflect.DeepEqual(srvKeyspace, sk) {
+			t.Fatalf("value after delete / re-create is wrong: %v %v", sk, ok)
 		}
 		break
 	}
@@ -307,12 +307,12 @@ func CheckWatchEndPoints(ctx context.Context, t *testing.T, ts topo.Server) {
 	// notifications channel too
 	close(stopWatching)
 	for {
-		ep, ok := <-notifications
+		sk, ok := <-notifications
 		if !ok {
 			break
 		}
-		if !reflect.DeepEqual(endPoints, ep) {
-			t.Fatalf("duplicate notification value is bad: %v", ep)
+		if !reflect.DeepEqual(srvKeyspace, sk) {
+			t.Fatalf("duplicate notification value is bad: %v", sk)
 		}
 	}
 }

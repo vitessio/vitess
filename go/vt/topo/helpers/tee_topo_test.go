@@ -72,10 +72,10 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(ctx, t, ts)
 }
 
-func TestWatchEndPoints(t *testing.T) {
+func TestWatchSrvKeyspace(t *testing.T) {
 	zktopo.WatchSleepDuration = 2 * time.Millisecond
 	ts := newFakeTeeServer(t)
-	test.CheckWatchEndPoints(context.Background(), t, ts)
+	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
 }
 
 func TestShardReplication(t *testing.T) {

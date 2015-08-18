@@ -73,7 +73,8 @@ func forceEOF(yylex interface{}) {
 
 %token LEX_ERROR
 %token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
-%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC VALUES INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> ALL DISTINCT AS EXISTS IN IS LIKE BETWEEN NULL ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYRANGE
+%token <empty> VALUES LAST_INSERT_ID
 %token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> LE GE NE NULL_SAFE_EQUAL
 %token <empty> '(' '=' '<' '>'
@@ -756,10 +757,6 @@ keyword_as_func:
   IF
   {
     $$ = "if"
-  }
-| VALUES
-  {
-    $$ = "values"
   }
 
 case_expression:

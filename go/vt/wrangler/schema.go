@@ -49,14 +49,14 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *pb.TabletAlia
 // helper method to asynchronously diff a schema
 func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias *pb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Infof("Gathering schema for %v", alias)
+	log.Infof("Gathering schema for %v", topo.TabletAliasString(alias))
 	slaveSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	log.Infof("Diffing schema for %v", alias)
+	log.Infof("Diffing schema for %v", topo.TabletAliasString(alias))
 	myproto.DiffSchema(topo.TabletAliasString(masterTabletAlias), masterSchema, topo.TabletAliasString(alias), slaveSchema, er)
 }
 
@@ -71,7 +71,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering schema for master %v", si.MasterAlias)
+	log.Infof("Gathering schema for master %v", topo.TabletAliasString(si.MasterAlias))
 	masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
-	log.Infof("Gathering schema for reference master %v", referenceAlias)
+	log.Infof("Gathering schema for reference master %v", topo.TabletAliasString(referenceAlias))
 	referenceSchema, err := wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func (wr *Wrangler) applySchemaShard(ctx context.Context, shardInfo *topo.ShardI
 	// quick check for errors
 	for _, status := range statusArray {
 		if status.lastError != nil {
-			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.ti.Alias, status.lastError)
+			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.ti.AliasString(), status.lastError)
 		}
 	}
 
@@ -310,9 +310,9 @@ func (wr *Wrangler) applySchemaShardSimple(ctx context.Context, statusArray []*t
 		diffs := myproto.DiffSchemaToArray("master", preflight.BeforeSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias, strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
 			}
 		}
 	}
@@ -329,7 +329,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		// if already applied, we skip this guy
 		diffs := myproto.DiffSchemaToArray("after", preflight.AfterSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) == 0 {
-			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.Alias)
+			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.AliasString())
 			continue
 		}
 
@@ -337,9 +337,9 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		diffs = myproto.DiffSchemaToArray("master", preflight.BeforeSchema, topo.TabletAliasString(status.ti.Alias), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias, strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.AliasString(), strings.Join(diffs, "\n"))
 			}
 		}
 
@@ -358,7 +358,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		}
 
 		// apply the schema change
-		log.Infof("Applying schema change to slave %v in complex mode", status.ti.Alias)
+		log.Infof("Applying schema change to slave %v in complex mode", status.ti.AliasString())
 		sc := &myproto.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 		_, err = wr.ApplySchema(ctx, status.ti.Alias, sc)
 		if err != nil {
@@ -376,7 +376,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !topo.TabletAliasIsZero(newParentTabletAlias) {
-		log.Infof("Reparenting with new master set to %v", newParentTabletAlias)
+		log.Infof("Reparenting with new master set to %v", topo.TabletAliasString(newParentTabletAlias))
 		oldMasterAlias := shardInfo.MasterAlias
 
 		// Create reusable Reparent event with available info
@@ -391,7 +391,7 @@ func (wr *Wrangler) applySchemaShardComplex(ctx context.Context, statusArray []*
 		// with the previous implementation of the reparent.
 		// (this code will be refactored at some point anyway)
 		if err := wr.Scrap(ctx, oldMasterAlias, false, false); err != nil {
-			wr.Logger().Warningf("Scrapping old master %v from shard %v/%v failed: %v", oldMasterAlias, shardInfo.Keyspace(), shardInfo.ShardName(), err)
+			wr.Logger().Warningf("Scrapping old master %v from shard %v/%v failed: %v", topo.TabletAliasString(oldMasterAlias), shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
 	}
 	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil

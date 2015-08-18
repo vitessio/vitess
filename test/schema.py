@@ -136,19 +136,13 @@ class TestSchema(unittest.TestCase):
       tablet.mquery(db_name, 'show tables')
 
   def _apply_schema(self, keyspace, sql):
-    out, _  = utils.run_vtctl(['ApplySchema',
-                               '-sql='+sql,
-                               keyspace],
-                               trap_output=True,
-                               raise_on_error=True)
-    return out
+    utils.run_vtctl(['ApplySchema',
+                     '-sql='+sql,
+                     keyspace])
 
   def _get_schema(self, tablet_alias):
-    out, _ = utils.run_vtctl(['GetSchema',
-                              tablet_alias],
-                              trap_output=True,
-                              raise_on_error=True)
-    return out
+    return utils.run_vtctl_json(['GetSchema',
+                                 tablet_alias])
 
   def _create_test_table_sql(self, table):
     return 'CREATE TABLE %s ( \
@@ -222,23 +216,23 @@ class TestSchema(unittest.TestCase):
     finally:
       # Include shard2 tablets for tearDown.
       tablets.extend(tablets_shard2)
-    
+
     shard_2_master.init_tablet(  'master',  'test_keyspace', '2')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '2')
-    
+
     # We intentionally don't want to create a db on these tablets.
     shard_2_master.start_vttablet(wait_for_state=None)
     shard_2_replica1.start_vttablet(wait_for_state=None)
-    
+
     shard_2_master.wait_for_vttablet_state('NOT_SERVING')
     shard_2_replica1.wait_for_vttablet_state('NOT_SERVING')
-    
+
     for t in tablets_shard2:
       t.reset_replication()
     utils.run_vtctl(['InitShardMaster', test_keyspace+'/2',
                      shard_2_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['ValidateKeyspace', '-ping-tablets', test_keyspace])
-    
+
   def test_vtctl_copyschemashard_use_tablet_as_source(self):
     self._test_vtctl_copyschemashard(shard_0_master.tablet_alias)
 
@@ -247,9 +241,9 @@ class TestSchema(unittest.TestCase):
 
   def _test_vtctl_copyschemashard(self, source):
     self._apply_initial_schema()
-    
+
     self._setUp_tablets_shard_2()
-    
+
     # CopySchemaShard is responsible for creating the db; one shouldn't exist before
     # the command is run.
     self._check_db_not_created(shard_2_master)
@@ -261,7 +255,7 @@ class TestSchema(unittest.TestCase):
                        source,
                        'test_keyspace/2'],
                       auto_log=True)
-  
+
       # shard_2_master should look the same as the replica we copied from
       self._check_tables(shard_2_master, 4)
       utils.wait_for_replication_pos(shard_2_master, shard_2_replica1)

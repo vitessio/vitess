@@ -12,12 +12,15 @@ create table vtocc_c(eid bigint, name varchar(128), foo varbinary(128), primary 
 create table vtocc_d(eid bigint, id int) comment 'vtocc_nocache'
 create table vtocc_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128), primary key(eid, id, name)) comment 'vtocc_nocache'
 create table vtocc_f(vb varbinary(16) default 'ab', id int, primary key(vb)) comment 'vtocc_nocache'
+create table upsert_test(id1 int, id2 int, primary key (id1)) comment 'vtocc_nocache'
+create unique index id2_idx on upsert_test(id2)
 begin
 delete from vtocc_a
 delete from vtocc_c
 insert into vtocc_a(eid, id, name, foo) values(1, 1, 'abcd', 'efgh'), (1, 2, 'bcde', 'fghi')
 insert into vtocc_b(eid, id) values(1, 1), (1, 2)
 insert into vtocc_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30')
+delete from upsert_test
 commit
 
 create table vtocc_cached1(eid bigint, name varchar(128), foo varbinary(128), primary key(eid))
@@ -77,6 +80,7 @@ drop table if exists vtocc_c
 drop table if exists vtocc_d
 drop table if exists vtocc_e
 drop table if exists vtocc_f
+drop table if exists upsert_test
 drop table if exists vtocc_cached1
 drop table if exists vtocc_cached2
 drop table if exists vtocc_renamed

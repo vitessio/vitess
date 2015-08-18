@@ -155,7 +155,7 @@ insert /* value expression list */ into a values (a + 1, 2 * 3)
 insert /* column list */ into a(a, b) values (1, 2)
 insert /* qualified column list */ into a(a, a.b) values (1, 2)
 insert /* select */ into a select b, c from d
-insert /* on duplicate */ into a values (1, 2) on duplicate key update b = values(a), c = d
+insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d
 update /* simple */ a set b = 3
 update /* a.b */ a.b set b = 3
 update /* b.c */ a set b.c = 3

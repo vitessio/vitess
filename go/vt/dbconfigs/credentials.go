@@ -10,12 +10,13 @@ package dbconfigs
 // link with this library, so we should be safe.
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
+	"io/ioutil"
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 )
 
 var (
@@ -74,8 +75,15 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 	// read the json file only once
 	if fcs.dbCredentials == nil {
 		fcs.dbCredentials = make(map[string][]string)
-		if err := jscfg.ReadJSON(*dbCredentialsFile, &fcs.dbCredentials); err != nil {
+
+		data, err := ioutil.ReadFile(*dbCredentialsFile)
+		if err != nil {
 			log.Warningf("Failed to read dbCredentials file: %v", *dbCredentialsFile)
+			return "", "", err
+		}
+
+		if err = json.Unmarshal(data, &fcs.dbCredentials); err != nil {
+			log.Warningf("Failed to parse dbCredentials file: %v", *dbCredentialsFile)
 			return "", "", err
 		}
 	}

@@ -31,7 +31,7 @@ type Conn struct {
 type DB struct {
 	isConnFail   bool
 	data         map[string]*proto.QueryResult
-	rejectedData map[string]*proto.QueryResult
+	rejectedData map[string]error
 	queryCalled  map[string]int
 	mu           sync.Mutex
 }
@@ -67,18 +67,10 @@ func (db *DB) DeleteQuery(query string) {
 }
 
 // AddRejectedQuery adds a query which will be rejected at execution time.
-func (db *DB) AddRejectedQuery(query string) {
+func (db *DB) AddRejectedQuery(query string, err error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.rejectedData[strings.ToLower(query)] = &proto.QueryResult{}
-}
-
-// HasRejectedQuery returns true if this query will be rejected.
-func (db *DB) HasRejectedQuery(query string) bool {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	_, ok := db.rejectedData[strings.ToLower(query)]
-	return ok
+	db.rejectedData[strings.ToLower(query)] = err
 }
 
 // DeleteRejectedQuery deletes query from the fake DB.
@@ -138,8 +130,8 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 	if conn.IsClosed() {
 		return nil, fmt.Errorf("connection is closed")
 	}
-	if conn.db.HasRejectedQuery(query) {
-		return nil, fmt.Errorf("unsupported query, reject query: %s", query)
+	if err, ok := conn.db.rejectedData[query]; ok {
+		return nil, err
 	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
@@ -158,12 +150,9 @@ func (conn *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*pro
 		copy(qr.Fields, result.Fields)
 	}
 
-	rowCount := int(qr.RowsAffected)
-	rows := make([][]sqltypes.Value, rowCount)
-	if rowCount > 0 {
-		for i := 0; i < rowCount; i++ {
-			rows[i] = result.Rows[i]
-		}
+	rows := make([][]sqltypes.Value, 0, len(result.Rows))
+	for _, r := range result.Rows {
+		rows = append(rows, r)
 	}
 	qr.Rows = rows
 	return qr, nil
@@ -204,8 +193,8 @@ func (conn *Conn) ExecuteStreamFetch(query string) error {
 	if conn.IsClosed() {
 		return fmt.Errorf("connection is closed")
 	}
-	if conn.db.HasRejectedQuery(query) {
-		return fmt.Errorf("unsupported query, reject query: %s", query)
+	if err, ok := conn.db.rejectedData[query]; ok {
+		return err
 	}
 	result, ok := conn.db.GetQuery(query)
 	if !ok {
@@ -283,7 +272,7 @@ func Register() *DB {
 	name := fmt.Sprintf("fake-%d", rand.Int63())
 	db := &DB{
 		data:         make(map[string]*proto.QueryResult),
-		rejectedData: make(map[string]*proto.QueryResult),
+		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
 	}
 	sqldb.Register(name, func(sqldb.ConnParams) (sqldb.Conn, error) {

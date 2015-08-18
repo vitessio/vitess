@@ -19,6 +19,7 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='automation.proto',
   package='automation',
+  syntax='proto3',
   serialized_pb=_b('\n\x10\x61utomation.proto\x12\nautomation\"\x90\x01\n\x10\x43lusterOperation\x12\n\n\x02id\x18\x01 \x01(\t\x12/\n\x0cserial_tasks\x18\x02 \x03(\x0b\x32\x19.automation.TaskContainer\x12\x30\n\x05state\x18\x03 \x01(\x0e\x32!.automation.ClusterOperationState\x12\r\n\x05\x65rror\x18\x04 \x01(\t\"N\n\rTaskContainer\x12(\n\x0eparallel_tasks\x18\x01 \x03(\x0b\x32\x10.automation.Task\x12\x13\n\x0b\x63oncurrency\x18\x02 \x01(\x05\"\xce\x01\n\x04Task\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x34\n\nparameters\x18\x02 \x03(\x0b\x32 .automation.Task.ParametersEntry\x12\n\n\x02id\x18\x03 \x01(\t\x12$\n\x05state\x18\x04 \x01(\x0e\x32\x15.automation.TaskState\x12\x0e\n\x06output\x18\x05 \x01(\t\x12\r\n\x05\x65rror\x18\x06 \x01(\t\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xb1\x01\n\x1e\x45nqueueClusterOperationRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12N\n\nparameters\x18\x02 \x03(\x0b\x32:.automation.EnqueueClusterOperationRequest.ParametersEntry\x1a\x31\n\x0fParametersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"-\n\x1f\x45nqueueClusterOperationResponse\x12\n\n\x02id\x18\x01 \x01(\t\"-\n\x1fGetClusterOperationStateRequest\x12\n\n\x02id\x18\x01 \x01(\t\"T\n GetClusterOperationStateResponse\x12\x30\n\x05state\x18\x01 \x01(\x0e\x32!.automation.ClusterOperationState\"/\n!GetClusterOperationDetailsRequest\x12\n\n\x02id\x18\x01 \x01(\t\"V\n\"GetClusterOperationDetailsResponse\x12\x30\n\ncluster_op\x18\x02 \x01(\x0b\x32\x1c.automation.ClusterOperation*\x9a\x01\n\x15\x43lusterOperationState\x12#\n\x1fUNKNOWN_CLUSTER_OPERATION_STATE\x10\x00\x12!\n\x1d\x43LUSTER_OPERATION_NOT_STARTED\x10\x01\x12\x1d\n\x19\x43LUSTER_OPERATION_RUNNING\x10\x02\x12\x1a\n\x16\x43LUSTER_OPERATION_DONE\x10\x03*K\n\tTaskState\x12\x16\n\x12UNKNOWN_TASK_STATE\x10\x00\x12\x0f\n\x0bNOT_STARTED\x10\x01\x12\x0b\n\x07RUNNING\x10\x02\x12\x08\n\x04\x44ONE\x10\x03\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -139,6 +140,7 @@ _CLUSTEROPERATION = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -176,6 +178,7 @@ _TASKCONTAINER = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -213,6 +216,7 @@ _TASK_PARAMETERSENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -277,6 +281,7 @@ _TASK = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -314,6 +319,7 @@ _ENQUEUECLUSTEROPERATIONREQUEST_PARAMETERSENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -350,6 +356,7 @@ _ENQUEUECLUSTEROPERATIONREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -380,6 +387,7 @@ _ENQUEUECLUSTEROPERATIONRESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -410,6 +418,7 @@ _GETCLUSTEROPERATIONSTATEREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -440,6 +449,7 @@ _GETCLUSTEROPERATIONSTATERESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -470,6 +480,7 @@ _GETCLUSTEROPERATIONDETAILSREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -500,6 +511,7 @@ _GETCLUSTEROPERATIONDETAILSRESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],

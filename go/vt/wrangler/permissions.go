@@ -31,14 +31,14 @@ func (wr *Wrangler) GetPermissions(ctx context.Context, tabletAlias *pb.TabletAl
 // diffPermissions is a helper method to asynchronously diff a permissions
 func (wr *Wrangler) diffPermissions(ctx context.Context, masterPermissions *myproto.Permissions, masterAlias *pb.TabletAlias, alias *pb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Infof("Gathering permissions for %v", alias)
+	log.Infof("Gathering permissions for %v", topo.TabletAliasString(alias))
 	slavePermissions, err := wr.GetPermissions(ctx, alias)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	log.Infof("Diffing permissions for %v", alias)
+	log.Infof("Diffing permissions for %v", topo.TabletAliasString(alias))
 	myproto.DiffPermissions(topo.TabletAliasString(masterAlias), masterPermissions, topo.TabletAliasString(alias), slavePermissions, er)
 }
 
@@ -54,7 +54,7 @@ func (wr *Wrangler) ValidatePermissionsShard(ctx context.Context, keyspace, shar
 	if topo.TabletAliasIsZero(si.MasterAlias) {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	log.Infof("Gathering permissions for master %v", si.MasterAlias)
+	log.Infof("Gathering permissions for master %v", topo.TabletAliasString(si.MasterAlias))
 	masterPermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(ctx context.Context, keyspace st
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
-	log.Infof("Gathering permissions for reference master %v", referenceAlias)
+	log.Infof("Gathering permissions for reference master %v", topo.TabletAliasString(referenceAlias))
 	referencePermissions, err := wr.GetPermissions(ctx, si.MasterAlias)
 	if err != nil {
 		return err

@@ -104,6 +104,18 @@ func (v Value) ParseUint64() (val uint64, err error) {
 	return strconv.ParseUint(string(n.raw()), 10, 64)
 }
 
+// ParseFloat64 will parse a Fractional value into an float64
+func (v Value) ParseFloat64() (val float64, err error) {
+	if v.Inner == nil {
+		return 0, fmt.Errorf("value is null")
+	}
+	n, ok := v.Inner.(Fractional)
+	if !ok {
+		return 0, fmt.Errorf("value is not Fractional")
+	}
+	return strconv.ParseFloat(string(n.raw()), 64)
+}
+
 // EncodeSql encodes the value into an SQL statement. Can be binary.
 func (v Value) EncodeSql(b BinWriter) {
 	if v.Inner == nil {

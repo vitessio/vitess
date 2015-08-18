@@ -86,8 +86,7 @@ site_integration_test_files = \
 	tabletmanager.py \
 	update_stream.py \
 	vtdb_test.py \
-	vtgatev2_test.py \
-	zkocc_test.py
+	vtgatev2_test.py
 
 # These tests should be run by developers after making code changes.
 # Integration tests are grouped into 3 suites.
@@ -98,7 +97,6 @@ small_integration_test_files = \
 	tablet_test.py \
 	sql_builder_test.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	schema.py \
 	keyspace_test.py \
 	keyrange_test.py \
@@ -111,8 +109,7 @@ small_integration_test_files = \
 	update_stream.py \
 	custom_sharding.py \
 	initial_sharding_bytes.py \
-	initial_sharding.py \
-	zkocc_test.py
+	initial_sharding.py
 
 # TODO(mberlin): Remove -v option to worker.py when we found out what causes 10 minute Travis timeouts.
 medium_integration_test_files = \
@@ -140,7 +137,6 @@ worker_integration_test_files = \
 	resharding.py \
 	resharding_bytes.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	initial_sharding.py \
 	initial_sharding_bytes.py \
 	worker.py
