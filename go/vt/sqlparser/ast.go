@@ -48,6 +48,13 @@ func String(node SQLNode) string {
 	return buf.String()
 }
 
+// GenerateParsedQuery returns a ParsedQuery of the ast.
+func GenerateParsedQuery(node SQLNode) *ParsedQuery {
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf("%v", node)
+	return buf.ParsedQuery()
+}
+
 // Statement represents a statement.
 type Statement interface {
 	IStatement()
@@ -129,6 +136,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 // Insert represents an INSERT statement.
 type Insert struct {
 	Comments Comments
+	Ignore   string
 	Table    *TableName
 	Columns  Columns
 	Rows     InsertRows
@@ -136,8 +144,8 @@ type Insert struct {
 }
 
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("insert %vinto %v%v %v%v",
-		node.Comments,
+	buf.Myprintf("insert %v%sinto %v%v %v%v",
+		node.Comments, node.Ignore,
 		node.Table, node.Columns, node.Rows, node.OnDup)
 }
 
@@ -397,13 +405,13 @@ type IndexHints struct {
 }
 
 const (
-	AST_USE    = "use"
-	AST_IGNORE = "ignore"
-	AST_FORCE  = "force"
+	AST_USE    = "use "
+	AST_IGNORE = "ignore "
+	AST_FORCE  = "force "
 )
 
 func (node *IndexHints) Format(buf *TrackedBuffer) {
-	buf.Myprintf(" %s index ", node.Type)
+	buf.Myprintf(" %sindex ", node.Type)
 	prefix := "("
 	for _, n := range node.Indexes {
 		buf.Myprintf("%s%v", prefix, n)
