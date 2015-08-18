@@ -9,8 +9,8 @@
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <groupId>com.youtube.vitess.grpc</groupId>
-    <artifactId>vitess-grpc</artifactId>
+    <groupId>com.youtube.vitess</groupId>
+    <artifactId>grpc-client</artifactId>
 
     <dependencies>
         <dependency>
