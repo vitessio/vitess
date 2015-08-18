@@ -162,6 +162,27 @@ cases = [
   # (1.foo, 1.bar, 2.foo, 2.bar)
 
   MultiCase(
+      "upsert should invalidate rowcache",
+      [Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+             result=[(1L, 'bar', 'abcd1', 'fghi')],
+             rowcount=1,
+             rewritten=[],
+             cache_hits=1),
+       'begin',
+       Case2(sql="insert into vtocc_cached2 values(1, 'bar', 'abcd1', 'fghi') on duplicate key update foo='fghi'",
+             rowcount=0,
+             rewritten=[
+                 "insert into vtocc_cached2 values (1, 'bar', 'abcd1', 'fghi') /* _stream vtocc_cached2 (eid bid ) (1 'YmFy' )",
+                 "update vtocc_cached2 set foo = 'fghi' where (eid = 1 and bid = 'bar') /* _stream vtocc_cached2 (eid bid ) (1 'YmFy' )"]),
+       'commit',
+       Case2(sql="select * from vtocc_cached2 where eid = 1 and bid = 'bar'",
+            result=[(1L, 'bar', 'abcd1', 'fghi')],
+            rowcount=1,
+            rewritten=["select eid, bid, name, foo from vtocc_cached2 where (eid = 1 and bid = 'bar')"],
+            cache_misses=1)]),
+  # (1.foo, 1.bar, 2.foo, 2.bar)
+
+  MultiCase(
       "delete",
       ['begin',
        "delete from vtocc_cached2 where eid = 1 and bid = 'bar'",

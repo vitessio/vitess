@@ -84,7 +84,7 @@ func TestDBConnKill(t *testing.T) {
 	}
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
-	db.AddRejectedQuery(newKillQuery)
+	db.AddRejectedQuery(newKillQuery, errRejected)
 	err = dbConn.Kill()
 	testUtils.checkTabletError(t, err, ErrFail, "Could not kill query")
 

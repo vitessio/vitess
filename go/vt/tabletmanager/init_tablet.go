@@ -189,7 +189,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		// it. So we read it first.
 		oldTablet, err := agent.TopoServer.GetTablet(ctx, tablet.Alias)
 		if err != nil {
-			fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
+			return fmt.Errorf("InitTablet failed to read existing tablet record: %v", err)
 		}
 
 		// Sanity check the keyspace and shard
