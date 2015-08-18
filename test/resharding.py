@@ -407,7 +407,7 @@ primary key (name)
   def _check_stream_health_equals_binlog_player_vars(self, tablet):
     blp_stats = utils.get_vars(tablet.port)
     # Enforce health check because it's not running by default as tablets are not started with it.
-    utils.run_vtctl(["RunHealthCheck", tablet.tablet_alias, 'master'])
+    utils.run_vtctl(["RunHealthCheck", tablet.tablet_alias, 'replica'])
     stream_health, _ = utils.run_vtctl(['VtTabletStreamHealth',
                                         '-count', '1',
                                         tablet.tablet_alias],

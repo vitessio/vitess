@@ -911,7 +911,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	servedType, err := parseTabletType(subFlags.Arg(1), []pb.TabletType{pb.TabletType_MASTER, pb.TabletType_REPLICA, pb.TabletType_RDONLY})
+	servedType, err := parseTabletType(subFlags.Arg(1), []pb.TabletType{pb.TabletType_REPLICA, pb.TabletType_RDONLY})
 	if err != nil {
 		return err
 	}
