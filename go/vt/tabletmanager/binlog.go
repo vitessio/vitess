@@ -332,18 +332,15 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysql
 
 // RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
-	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
-		sbm := int64(0)
+	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(stats.IntFunc(func() int64 {
 		blm.mu.Lock()
-		for _, bpc := range blm.players {
-			psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
-			if psbm > sbm {
-				sbm = psbm
-			}
-		}
-		blm.mu.Unlock()
-		return sbm
+		defer blm.mu.Unlock()
+		return int64(len(blm.players))
+	})))
+	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
+		blm.mu.Lock()
+		defer blm.mu.Unlock()
+		return blm.maxSecondsBehindMaster_UNGUARDED()
 	}))
 	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
 		blm.mu.Lock()
@@ -378,11 +375,24 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	}))
 }
 
-func (blm *BinlogPlayerMap) size() int64 {
+func (blm *BinlogPlayerMap) isRunningFilteredReplication() bool {
 	blm.mu.Lock()
-	result := len(blm.players)
-	blm.mu.Unlock()
-	return int64(result)
+	defer blm.mu.Unlock()
+	return len(blm.players) != 0
+}
+
+// maxSecondsBehindMaster returns the maximum of the secondsBehindMaster
+// value of all binlog players i.e. the highest seen filtered replication lag.
+// NOTE: Caller must own a lock on blm.mu.
+func (blm *BinlogPlayerMap) maxSecondsBehindMaster_UNGUARDED() int64 {
+	sbm := int64(0)
+	for _, bpc := range blm.players {
+		psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+		if psbm > sbm {
+			sbm = psbm
+		}
+	}
+	return sbm
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
@@ -624,6 +634,7 @@ type BinlogPlayerMapStatus struct {
 }
 
 // Status returns the BinlogPlayerMapStatus for the BinlogPlayerMap.
+// It is used to display the complete status in the webinterface.
 func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	// Create the result, take care of the stopped state.
 	result := &BinlogPlayerMapStatus{}
@@ -665,5 +676,26 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	}
 	sort.Sort(result.Controllers)
 
+	return result
+}
+
+// BinlogPlayerMapStatusSummary contains aggregated health information e.g.
+// the maximum replication delay across all binlog players.
+type BinlogPlayerMapStatusSummary struct {
+	// TODO(mberlin): Record here LastError and State != Running as well?
+	maxSecondsBehindMaster int64
+	binlogPlayersCount int32
+}
+
+// StatusSummary returns a summary of the state of all active binlog players.
+// It is used by the QueryService.StreamHealth RPC.
+func (blm *BinlogPlayerMap) StatusSummary() *BinlogPlayerMapStatusSummary {
+	result := &BinlogPlayerMapStatusSummary{}
+	
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	result.maxSecondsBehindMaster = blm.maxSecondsBehindMaster_UNGUARDED()
+	result.binlogPlayersCount = int32(len(blm.players))
+	
 	return result
 }
