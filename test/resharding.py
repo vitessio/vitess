@@ -5,10 +5,10 @@
 # be found in the LICENSE file.
 
 import base64
+import json
 import logging
-import os
-import threading
 import struct
+import threading
 import time
 import unittest
 
@@ -404,6 +404,26 @@ primary key (name)
                           v['BinlogPlayerSecondsBehindMasterMap']['0'],
                           seconds_behind_master_max))
 
+  def _check_stream_health_equals_binlog_player_vars(self, tablet):
+    blp_stats = utils.get_vars(tablet.port)
+    # Enforce health check because it's not running by default as tablets are not started with it.
+    utils.run_vtctl(["RunHealthCheck", tablet.tablet_alias, 'master'])
+    stream_health, _ = utils.run_vtctl(['VtTabletStreamHealth',
+                                        '-count', '1',
+                                        tablet.tablet_alias],
+                                       trap_output=True, auto_log=True)
+    logging.debug("Got health: %s", stream_health)
+    data = json.loads(stream_health)
+    self.assertIn('realtime_stats', data)
+    self.assertNotIn('health_error', data['realtime_stats'])
+    # count is > 0 and therefore not omitted by the Go JSON marshaller.
+    self.assertIn('binlog_players_count', data['realtime_stats'])
+    self.assertEqual(blp_stats['BinlogPlayerMapSize'],
+                     data['realtime_stats']['binlog_players_count'])
+    self.assertEqual(blp_stats['BinlogPlayerSecondsBehindMaster'],
+                     data['realtime_stats'].get(
+                         'seconds_behind_master_filtered_replication', 0))
+
   def _test_keyrange_constraints(self):
     with self.assertRaisesRegexp(dbexceptions.DatabaseError, '.*enforce keyspace_id range.*'):
       self._exec_dml(
@@ -552,6 +572,9 @@ primary key (name)
 
     # check that binlog server exported the stats vars
     self._check_binlog_server_vars(shard_1_slave1)
+
+    self._check_stream_health_equals_binlog_player_vars(shard_2_master)
+    self._check_stream_health_equals_binlog_player_vars(shard_3_master)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
