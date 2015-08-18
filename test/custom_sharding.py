@@ -193,7 +193,8 @@ primary key (id)
     rows = {}
     for q in s:
       qr = utils.vtgate.execute_shard(q['QueryShard']['Sql'],
-                                      'test_keyspace', ",".join(q['QueryShard']['Shards']))
+                                      'test_keyspace', ",".join(q['QueryShard']['Shards']),
+                                      tablet_type='master', bindvars=q['QueryShard']['BindVariables'])
       for r in qr['Rows']:
         id = int(r[0])
         rows[id] = r[1]
