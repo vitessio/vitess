@@ -679,23 +679,13 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	return result
 }
 
-// BinlogPlayerMapStatusSummary contains aggregated health information e.g.
+// StatusSummary returns aggregated health information e.g.
 // the maximum replication delay across all binlog players.
-type BinlogPlayerMapStatusSummary struct {
-	// TODO(mberlin): Record here LastError and State != Running as well?
-	maxSecondsBehindMaster int64
-	binlogPlayersCount int32
-}
-
-// StatusSummary returns a summary of the state of all active binlog players.
 // It is used by the QueryService.StreamHealth RPC.
-func (blm *BinlogPlayerMap) StatusSummary() *BinlogPlayerMapStatusSummary {
-	result := &BinlogPlayerMapStatusSummary{}
-	
+func (blm *BinlogPlayerMap) StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int32) {
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
-	result.maxSecondsBehindMaster = blm.maxSecondsBehindMaster_UNGUARDED()
-	result.binlogPlayersCount = int32(len(blm.players))
-	
-	return result
+	maxSecondsBehindMaster = blm.maxSecondsBehindMaster_UNGUARDED()
+	binlogPlayersCount = int32(len(blm.players))
+	return
 }

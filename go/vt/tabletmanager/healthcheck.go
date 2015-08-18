@@ -259,9 +259,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	stats := &pb.RealtimeStats{
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
-	blpStats := agent.BinlogPlayerMap.StatusSummary()
-	stats.SecondsBehindMasterFilteredReplication = blpStats.maxSecondsBehindMaster
-	stats.BinlogPlayersCount = blpStats.binlogPlayersCount
+	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
 	if err != nil {
 		stats.HealthError = err.Error()
 	}
