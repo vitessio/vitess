@@ -45,9 +45,9 @@ public class Proto {
       } else if (item instanceof Integer) {
         // List of Int32
         builder.setType(BindVariable.Type.TYPE_INT_LIST);
-        builder.addValueIntList((int) item);
+        builder.addValueIntList((Integer) item);
         while (itr.hasNext())
-          builder.addValueIntList((int) itr.next());
+          builder.addValueIntList((Integer) itr.next());
       } else if (item instanceof Long) {
         // List of Int64
         builder.setType(BindVariable.Type.TYPE_INT_LIST);
@@ -61,9 +61,9 @@ public class Proto {
       } else if (item instanceof Float) {
         // List of Float
         builder.setType(BindVariable.Type.TYPE_FLOAT_LIST);
-        builder.addValueFloatList((float) item);
+        builder.addValueFloatList((Float) item);
         while (itr.hasNext())
-          builder.addValueFloatList((float) itr.next());
+          builder.addValueFloatList((Float) itr.next());
       } else if (item instanceof Double) {
         // List of Double
         builder.setType(BindVariable.Type.TYPE_FLOAT_LIST);
