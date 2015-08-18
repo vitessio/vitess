@@ -497,6 +497,8 @@ func (qre *QueryExecutor) execUpsertPK(conn poolConn, invalidator CacheInvalidat
 	if !strings.Contains(terr.Message, "'PRIMARY'") {
 		return nil, err
 	}
+	// At this point, we know the insert failed due to a duplicate pk row.
+	// So, we just update the row.
 	result, err = qre.execDMLPKRows(conn, qre.plan.UpsertQuery, pkRows, invalidator)
 	if err != nil {
 		return nil, err
