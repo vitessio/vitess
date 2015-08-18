@@ -149,7 +149,7 @@ define run_integration_tests
 	cd test ; \
 	for t in $1 ; do \
 		echo $$(date): Running test/$$t... ; \
-		output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		output=$$(time timeout 5m ./$$t $$VT_TEST_FLAGS 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
 			echo "$$output" >&2 ; \
 			exit 1 ; \
