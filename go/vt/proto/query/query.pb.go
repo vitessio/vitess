@@ -809,9 +809,15 @@ type RealtimeStats struct {
 	// master of an ongoing filtered replication only.
 	// It specifies how far the receiving master lags behind the sending master.
 	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	// NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
 	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,3,opt,name=seconds_behind_master_filtered_replication" json:"seconds_behind_master_filtered_replication,omitempty"`
+	// bin_log_players_count is the number of currently running binlog players.
+	// if the value is 0, it means that filtered replication is currently not
+	// running on the tablet. If >0, filtered replication is running.
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	BinlogPlayersCount int32 `protobuf:"varint,4,opt,name=binlog_players_count" json:"binlog_players_count,omitempty"`
 	// cpu_usage is used for load-based balancing
-	CpuUsage float64 `protobuf:"fixed64,4,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
 }
 
 func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
