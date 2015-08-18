@@ -425,10 +425,10 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = REASON_COMPLEX_EXPR
 		return plan, nil
 	}
-	plan.OuterQuery = GenerateInsertNoUpdate(ins)
 	plan.PKValues = pkValues
 	if ins.OnDup == nil {
 		plan.PlanId = PLAN_INSERT_PK
+		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
 		return plan, nil
 	}
 	if len(rowList) > 1 {
@@ -445,6 +445,10 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		return nil, err
 	}
 	plan.PlanId = PLAN_UPSERT_PK
+	newins := *ins
+	newins.Ignore = ""
+	newins.OnDup = nil
+	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
 	upd := &sqlparser.Update{
 		Comments: ins.Comments,
 		Table:    ins.Table,
