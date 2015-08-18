@@ -340,7 +340,7 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
 		blm.mu.Lock()
 		defer blm.mu.Unlock()
-		return blm.maxSecondsBehindMaster_UNGUARDED()
+		return blm.maxSecondsBehindMasterUNGUARDED()
 	}))
 	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
 		blm.mu.Lock()
@@ -381,10 +381,10 @@ func (blm *BinlogPlayerMap) isRunningFilteredReplication() bool {
 	return len(blm.players) != 0
 }
 
-// maxSecondsBehindMaster returns the maximum of the secondsBehindMaster
+// maxSecondsBehindMasterUNGUARDED returns the maximum of the secondsBehindMaster
 // value of all binlog players i.e. the highest seen filtered replication lag.
 // NOTE: Caller must own a lock on blm.mu.
-func (blm *BinlogPlayerMap) maxSecondsBehindMaster_UNGUARDED() int64 {
+func (blm *BinlogPlayerMap) maxSecondsBehindMasterUNGUARDED() int64 {
 	sbm := int64(0)
 	for _, bpc := range blm.players {
 		psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
@@ -685,7 +685,7 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 func (blm *BinlogPlayerMap) StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int32) {
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
-	maxSecondsBehindMaster = blm.maxSecondsBehindMaster_UNGUARDED()
+	maxSecondsBehindMaster = blm.maxSecondsBehindMasterUNGUARDED()
 	binlogPlayersCount = int32(len(blm.players))
 	return
 }
