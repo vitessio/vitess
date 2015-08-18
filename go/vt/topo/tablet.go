@@ -235,7 +235,7 @@ func IsTypeInList(tabletType pb.TabletType, types []pb.TabletType) bool {
 func MakeStringTypeList(types []pb.TabletType) []string {
 	strs := make([]string, len(types))
 	for i, t := range types {
-		strs[i] = t.String()
+		strs[i] = strings.ToLower(t.String())
 	}
 	sort.Strings(strs)
 	return strs
