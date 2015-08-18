@@ -692,10 +692,10 @@ func (tee *Tee) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string,
 	return tee.readFrom.GetSrvKeyspaceNames(ctx, cell)
 }
 
-// WatchEndPoints is part of the topo.Server interface.
+// WatchSrvKeyspace is part of the topo.Server interface.
 // We only watch for changes on the primary.
-func (tee *Tee) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
-	return tee.primary.WatchEndPoints(ctx, cell, keyspace, shard, tabletType)
+func (tee *Tee) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+	return tee.primary.WatchSrvKeyspace(ctx, cell, keyspace)
 }
 
 //

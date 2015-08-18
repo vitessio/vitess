@@ -48,11 +48,11 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(context.Background(), t, ts)
 }
 
-func TestWatchEndPoints(t *testing.T) {
+func TestWatchSrvKeyspace(t *testing.T) {
 	WatchSleepDuration = 2 * time.Millisecond
 	ts := NewTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckWatchEndPoints(context.Background(), t, ts)
+	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {
