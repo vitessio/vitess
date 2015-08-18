@@ -2,12 +2,11 @@ package actionnode
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // These tests encode a slaveWasRestartedTestArgs (same as
@@ -15,7 +14,7 @@ import (
 // decode it as a SlaveWasRestartedArgs, and vice versa
 
 type slaveWasRestartedTestArgs struct {
-	Parent               topo.TabletAlias
+	Parent               *pb.TabletAlias
 	ExpectedMasterAddr   string
 	ExpectedMasterIPAddr string
 	ScrapStragglers      bool
@@ -23,7 +22,7 @@ type slaveWasRestartedTestArgs struct {
 
 func TestMissingFieldsJson(t *testing.T) {
 	swra := &slaveWasRestartedTestArgs{
-		Parent: topo.TabletAlias{
+		Parent: &pb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
@@ -31,36 +30,38 @@ func TestMissingFieldsJson(t *testing.T) {
 		ExpectedMasterIPAddr: "i1",
 		ScrapStragglers:      true,
 	}
-	data := jscfg.ToJSON(swra)
+	data, err := json.MarshalIndent(swra, "", "  ")
+	if err != nil {
+		t.Fatalf("cannot marshal: %v", err)
+	}
 
 	output := &SlaveWasRestartedArgs{}
-	decoder := json.NewDecoder(strings.NewReader(data))
-	err := decoder.Decode(output)
-	if err != nil {
+	if err = json.Unmarshal(data, output); err != nil {
 		t.Errorf("Cannot re-decode struct without field: %v", err)
 	}
 }
 
 func TestExtraFieldsJson(t *testing.T) {
 	swra := &SlaveWasRestartedArgs{
-		Parent: topo.TabletAlias{
+		Parent: &pb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
 	}
-	data := jscfg.ToJSON(swra)
+	data, err := json.MarshalIndent(swra, "", "  ")
+	if err != nil {
+		t.Fatalf("cannot marshal: %v", err)
+	}
 
 	output := &slaveWasRestartedTestArgs{}
-	decoder := json.NewDecoder(strings.NewReader(data))
-	err := decoder.Decode(output)
-	if err != nil {
+	if err = json.Unmarshal(data, output); err != nil {
 		t.Errorf("Cannot re-decode struct without field: %v", err)
 	}
 }
 
 func TestMissingFieldsBson(t *testing.T) {
 	swra := &slaveWasRestartedTestArgs{
-		Parent: topo.TabletAlias{
+		Parent: &pb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},
@@ -82,7 +83,7 @@ func TestMissingFieldsBson(t *testing.T) {
 
 func TestExtraFieldsBson(t *testing.T) {
 	swra := &SlaveWasRestartedArgs{
-		Parent: topo.TabletAlias{
+		Parent: &pb.TabletAlias{
 			Uid:  1,
 			Cell: "aa",
 		},

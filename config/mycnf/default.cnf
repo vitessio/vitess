@@ -40,7 +40,7 @@ query_cache_type = 2
 read-only
 read_buffer_size = 1M
 read_rnd_buffer_size = 1M
-server-id = {{.ServerId}}
+server-id = {{.ServerID}}
 skip-name-resolve
 # we now need networking for replication. this is a tombstone to simpler times.
 #skip_networking

@@ -36,7 +36,13 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.Execute(ctx, request, reply)
+	vtgErr := vtg.server.Execute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -52,7 +58,15 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteShard(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -68,7 +82,15 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -84,7 +106,15 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteKeyRanges(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteKeyRanges(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyRanges,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -100,7 +130,16 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteEntityIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteEntityIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.EntityColumnName,
+		request.EntityKeyspaceIDs,
+		topo.TabletTypeToProto(request.TabletType),
+		request.Session,
+		request.NotInTransaction,
+		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -116,7 +155,12 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteBatchShard(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteBatchShards(ctx,
+		request.Queries,
+		topo.TabletTypeToProto(request.TabletType),
+		request.AsTransaction,
+		request.Session,
+		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -133,7 +177,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx, request, reply)
+	vtgErr := vtg.server.ExecuteBatchKeyspaceIds(ctx,
+		request.Queries,
+		topo.TabletTypeToProto(request.TabletType),
+		request.AsTransaction,
+		request.Session,
+		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil
@@ -147,9 +196,43 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, request *proto.Query, send
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecute(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+}
+
+// StreamExecute2 is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sendReply func(interface{}) error) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		callerid.NewImmediateCallerID("gorpc client"))
+	vtgErr := vtg.server.StreamExecute(ctx,
+		request.Sql,
+		request.BindVariables,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+	if vtgErr == nil {
+		return nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(proto.QueryResult)
+		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return vtgErr
 }
 
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -158,21 +241,47 @@ func (vtg *VTGate) StreamExecuteShard(ctx context.Context, request *proto.QueryS
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecuteShard(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
 }
 
-// StreamExecuteKeyRanges is the RPC version of
-// vtgateservice.VTGateService method
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
+// StreamExecuteShard2 is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.QueryShard, sendReply func(interface{}) error) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecuteKeyRanges(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	vtgErr := vtg.server.StreamExecuteShards(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.Shards,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+	if vtgErr == nil {
+		return nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(proto.QueryResult)
+		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return vtgErr
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
@@ -182,9 +291,99 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	return vtg.server.StreamExecuteKeyspaceIds(ctx, request, func(value *proto.QueryResult) error {
-		return sendReply(value)
-	})
+	return vtg.server.StreamExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+}
+
+// StreamExecuteKeyspaceIds2 is the RPC version of
+// vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto.KeyspaceIdQuery, sendReply func(interface{}) error) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		callerid.NewImmediateCallerID("gorpc client"))
+	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyspaceIds,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+	if vtgErr == nil {
+		return nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(proto.QueryResult)
+		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return vtgErr
+}
+
+// StreamExecuteKeyRanges is the RPC version of
+// vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		callerid.NewImmediateCallerID("gorpc client"))
+	return vtg.server.StreamExecuteKeyRanges(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyRanges,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+}
+
+// StreamExecuteKeyRanges2 is the RPC version of
+// vtgateservice.VTGateService method
+func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.KeyRangeQuery, sendReply func(interface{}) error) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = callerid.NewContext(ctx,
+		callerid.GoRPCEffectiveCallerID(request.CallerID),
+		callerid.NewImmediateCallerID("gorpc client"))
+	vtgErr := vtg.server.StreamExecuteKeyRanges(ctx,
+		request.Sql,
+		request.BindVariables,
+		request.Keyspace,
+		request.KeyRanges,
+		topo.TabletTypeToProto(request.TabletType),
+		func(value *proto.QueryResult) error {
+			return sendReply(value)
+		})
+	if vtgErr == nil {
+		return nil
+	}
+	if *vtgate.RPCErrorOnlyInReply {
+		// If there was an app error, send a QueryResult back with it.
+		qr := new(proto.QueryResult)
+		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+		// problems where the client will get out of sync with the number of QueryResults sent.
+		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+		// (signalling that all clients are able to handle new-style errors).
+		return sendReply(qr)
+	}
+	return vtgErr
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -269,7 +468,13 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *proto.SplitQueryRequ
 	ctx = callerid.NewContext(ctx,
 		callerid.GoRPCEffectiveCallerID(request.CallerID),
 		callerid.NewImmediateCallerID("gorpc client"))
-	vtgErr := vtg.server.SplitQuery(ctx, request, reply)
+	vtgErr := vtg.server.SplitQuery(ctx,
+		request.Keyspace,
+		request.Query.Sql,
+		request.Query.BindVariables,
+		request.SplitColumn,
+		request.SplitCount,
+		reply)
 	vtgate.AddVtGateErrorToSplitQueryResult(vtgErr, reply)
 	if *vtgate.RPCErrorOnlyInReply {
 		return nil

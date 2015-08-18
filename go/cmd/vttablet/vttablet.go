@@ -105,11 +105,11 @@ func main() {
 	registerHealthReporter(mysqld)
 
 	// Depends on both query and updateStream.
-	gRPCPort := 0
+	gRPCPort := int32(0)
 	if servenv.GRPCPort != nil {
-		gRPCPort = *servenv.GRPCPort
+		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, *servenv.Port, gRPCPort, *overridesFile, *lockTimeout)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort, *overridesFile, *lockTimeout)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

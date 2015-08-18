@@ -15,7 +15,8 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	ctlproto "github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -54,13 +55,13 @@ func (ex Explorer) GetSrvShardPath(cell, keyspace, shard string) string {
 }
 
 // GetSrvTypePath implements vtctld Explorer.
-func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType topo.TabletType) string {
-	return path.Join(explorerRoot, cell, endPointsDirPath(keyspace, shard, string(tabletType)))
+func (ex Explorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string {
+	return path.Join(explorerRoot, cell, endPointsDirPath(keyspace, shard, tabletType))
 }
 
 // GetTabletPath implements vtctld Explorer.
-func (ex Explorer) GetTabletPath(alias topo.TabletAlias) string {
-	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias.String()))
+func (ex Explorer) GetTabletPath(alias *pb.TabletAlias) string {
+	return path.Join(explorerRoot, alias.Cell, tabletDirPath(alias))
 }
 
 // GetReplicationSlaves implements vtctld Explorer.
@@ -131,7 +132,7 @@ func (ex Explorer) HandlePath(actionRepo ctlproto.ActionRepository, rPath string
 		if keyspace, shard, err := splitShardDirPath(rPath); err == nil {
 			actionRepo.PopulateShardActions(result.Actions, keyspace, shard)
 		}
-	} else if m, _ := path.Match(tabletDirPath("*"), rPath); m {
+	} else if m, _ := path.Match(path.Join(tabletsDirPath, "*"), rPath); m {
 		actionRepo.PopulateTabletActions(result.Actions, path.Base(rPath), r)
 		addTabletLinks(result, result.Data)
 	}
@@ -194,13 +195,13 @@ func splitShardDirPath(p string) (keyspace, shard string, err error) {
 }
 
 func addTabletLinks(result *explorerResult, data string) {
-	t := &topo.Tablet{}
+	t := &pb.Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
 		return
 	}
 
-	if port, ok := t.Portmap["vt"]; ok {
-		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, int32(port))))
+	if port, ok := t.PortMap["vt"]; ok {
+		result.Links["status"] = template.URL(fmt.Sprintf("http://%v/debug/status", netutil.JoinHostPort(t.Hostname, port)))
 	}
 }

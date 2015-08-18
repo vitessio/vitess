@@ -12,6 +12,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 //-----------------------------------------------
@@ -267,11 +269,12 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 		} else {
 			goto Error
 		}
-	case key.KeyRange:
+	case *pb.KeyRange:
 		if op < QR_IN || op > QR_NOTIN {
 			goto Error
 		}
-		converted = bvcKeyRange(v)
+		b := bvcKeyRange(*v)
+		converted = &b
 	default:
 		return NewTabletError(ErrFail, "type %T not allowed as condition operand (%v)", value, value)
 	}
@@ -584,35 +587,35 @@ func (reval bvcre) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	panic("unexpected:")
 }
 
-type bvcKeyRange key.KeyRange
+type bvcKeyRange pb.KeyRange
 
-func (krval bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool {
+func (krval *bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	switch op {
 	case QR_IN:
 		switch num, status := getuint64(bv); status {
 		case QR_OK:
-			k := key.Uint64Key(num).KeyspaceId()
-			return key.KeyRange(krval).Contains(k)
+			k := key.Uint64Key(num).Bytes()
+			return key.KeyRangeContains((*pb.KeyRange)(krval), k)
 		case QR_OUT_OF_RANGE:
 			return false
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
 		case QR_OK:
-			return key.KeyRange(krval).Contains(key.KeyspaceId(str))
+			return key.KeyRangeContains((*pb.KeyRange)(krval), []byte(str))
 		}
 	case QR_NOTIN:
 		switch num, status := getuint64(bv); status {
 		case QR_OK:
-			k := key.Uint64Key(num).KeyspaceId()
-			return !key.KeyRange(krval).Contains(k)
+			k := key.Uint64Key(num).Bytes()
+			return !key.KeyRangeContains((*pb.KeyRange)(krval), k)
 		case QR_OUT_OF_RANGE:
 			return true
 		}
 		// Not a number. Check string.
 		switch str, status := getstring(bv); status {
 		case QR_OK:
-			return !key.KeyRange(krval).Contains(key.KeyspaceId(str))
+			return !key.KeyRangeContains((*pb.KeyRange)(krval), []byte(str))
 		}
 	default:
 		panic("unexpected:")
@@ -870,7 +873,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 			err = NewTabletError(ErrFail, "want keyrange for Value")
 			return
 		}
-		var keyrange key.KeyRange
+		keyrange := &pb.KeyRange{}
 		strstart, ok := kr["Start"]
 		if !ok {
 			err = NewTabletError(ErrFail, "Start missing in KeyRange")
@@ -881,7 +884,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 			err = NewTabletError(ErrFail, "want string for Start")
 			return
 		}
-		keyrange.Start = key.KeyspaceId(start)
+		keyrange.Start = []byte(start)
 
 		strend, ok := kr["End"]
 		if !ok {
@@ -893,7 +896,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 			err = NewTabletError(ErrFail, "want string for End")
 			return
 		}
-		keyrange.End = key.KeyspaceId(end)
+		keyrange.End = []byte(end)
 		value = keyrange
 	}
 

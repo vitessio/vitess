@@ -5,9 +5,7 @@
 // Package events contains event structs used by the tabletmanager package.
 package events
 
-import (
-	"github.com/youtube/vitess/go/vt/topo"
-)
+import pb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 // StateChange is an event that describes state changes in the tablet as seen
 // by the TabletManager. It is triggered after the tablet has processed a state
@@ -15,9 +13,9 @@ import (
 // noticed that an external process modified its topo record.
 type StateChange struct {
 	// OldTablet is the topo record of the tablet before the change.
-	OldTablet topo.Tablet
+	OldTablet pb.Tablet
 	// NewTablet is the topo record representing the current state.
-	NewTablet topo.Tablet
+	NewTablet pb.Tablet
 	// Reason is an optional string that describes the source of the change.
 	Reason string
 }

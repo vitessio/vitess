@@ -196,9 +196,15 @@ class TestVtctld(unittest.TestCase):
     self.assertItemsEqual(s0['Name'], "-80")
     s1 = self.serving_data["test_keyspace"]['ShardNodes'][1]
     self.assertItemsEqual(s1['Name'], "80-")
-    self.assertItemsEqual(sorted(s0['TabletNodes'].keys()),
-                          ["master", "replica"])
-    self.assertEqual(len(s0['TabletNodes']['master']), 1)
+    types = []
+    for tn in s0['TabletNodes']:
+      tt = tn['TabletType']
+      types.append(tt)
+      if tt == tablet.Tablet.tablet_type_value['MASTER']:
+        self.assertEqual(len(tn['Nodes']), 1)
+    self.assertItemsEqual(sorted(types), [
+        tablet.Tablet.tablet_type_value['MASTER'],
+        tablet.Tablet.tablet_type_value['REPLICA']])
     self.assertEqual(self.serving_data["redirected_keyspace"]['ServedFrom']['master'],
                      'test_keyspace')
 

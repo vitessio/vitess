@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -89,11 +88,11 @@ func TestVerticalSplitDiff(t *testing.T) {
 	ctx := context.Background()
 
 	sourceMaster := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 1,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 2,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "source_ks", "0"))
 
 	// Create the destination keyspace with the appropriate ServedFromMap
 	ki := &pbt.Keyspace{
@@ -115,18 +114,18 @@ func TestVerticalSplitDiff(t *testing.T) {
 	wr.TopoServer().CreateKeyspace(ctx, "destination_ks", ki)
 
 	destMaster := testlib.NewFakeTablet(t, wr, "cell1", 10,
-		topo.TYPE_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_MASTER, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly1 := testlib.NewFakeTablet(t, wr, "cell1", 11,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 	destRdonly2 := testlib.NewFakeTablet(t, wr, "cell1", 12,
-		topo.TYPE_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
+		pbt.TabletType_RDONLY, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, destMaster, destRdonly1, destRdonly2} {
 		ft.StartActionLoop(t, wr)
 		defer ft.StopActionLoop(t)
 	}
 
-	wr.SetSourceShards(ctx, "destination_ks", "0", []topo.TabletAlias{sourceRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
+	wr.SetSourceShards(ctx, "destination_ks", "0", []*pbt.TabletAlias{sourceRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
 
 	// add the topo and schema data we'll need
 	if err := wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, true); err != nil {

@@ -11,7 +11,6 @@ import (
 	"sort"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
@@ -39,11 +38,16 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 		path.Join(keyspacePath, "shards"),
 	}
 
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	alreadyExists := false
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = jscfg.ToJSON(value)
+			c = string(data)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -68,8 +72,11 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 // UpdateKeyspace is part of the topo.Server interface
 func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
-	data := jscfg.ToJSON(ki.Keyspace)
-	stat, err := zkts.zconn.Set(keyspacePath, data, int(existingVersion))
+	data, err := json.MarshalIndent(ki.Keyspace, "", "  ")
+	if err != nil {
+		return -1, err
+	}
+	stat, err := zkts.zconn.Set(keyspacePath, string(data), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode

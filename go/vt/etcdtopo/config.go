@@ -7,8 +7,12 @@ package etcdtopo
 import (
 	"flag"
 	"path"
+	"strings"
 
 	"github.com/youtube/vitess/go/flagutil"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
@@ -65,12 +69,12 @@ func shardFilePath(keyspace, shard string) string {
 	return path.Join(shardDirPath(keyspace, shard), shardFilename)
 }
 
-func tabletDirPath(tablet string) string {
-	return path.Join(tabletsDirPath, tablet)
+func tabletDirPath(tabletAlias *pb.TabletAlias) string {
+	return path.Join(tabletsDirPath, topo.TabletAliasString(tabletAlias))
 }
 
-func tabletFilePath(tablet string) string {
-	return path.Join(tabletDirPath(tablet), tabletFilename)
+func tabletFilePath(tabletAlias *pb.TabletAlias) string {
+	return path.Join(tabletDirPath(tabletAlias), tabletFilename)
 }
 
 func keyspaceReplicationDirPath(keyspace string) string {
@@ -101,10 +105,10 @@ func srvShardFilePath(keyspace, shard string) string {
 	return path.Join(srvShardDirPath(keyspace, shard), srvShardFilename)
 }
 
-func endPointsDirPath(keyspace, shard, tabletType string) string {
-	return path.Join(srvShardDirPath(keyspace, shard), tabletType)
+func endPointsDirPath(keyspace, shard string, tabletType pb.TabletType) string {
+	return path.Join(srvShardDirPath(keyspace, shard), strings.ToLower(tabletType.String()))
 }
 
-func endPointsFilePath(keyspace, shard, tabletType string) string {
+func endPointsFilePath(keyspace, shard string, tabletType pb.TabletType) string {
 	return path.Join(endPointsDirPath(keyspace, shard, tabletType), endPointsFilename)
 }

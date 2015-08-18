@@ -11,6 +11,8 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Explorer allows exploring a topology server.
@@ -41,11 +43,11 @@ type Explorer interface {
 	// GetShardTypePath returns an explorer path that will contain
 	// information about the named tablet type in the named shard
 	// in the named keyspace in the serving graph for cell.
-	GetSrvTypePath(cell, keyspace, shard string, tabletType topo.TabletType) string
+	GetSrvTypePath(cell, keyspace, shard string, tabletType pb.TabletType) string
 
 	// GetTabletPath returns an explorer path that will contain
 	// information about the tablet named by alias.
-	GetTabletPath(alias topo.TabletAlias) string
+	GetTabletPath(alias *pb.TabletAlias) string
 
 	// GetReplicationSlaves returns an explorer path that contains
 	// replication slaves for the named cell, keyspace, and shard.
@@ -132,7 +134,11 @@ func handleExplorerRedirect(r *http.Request) (string, error) {
 		if keyspace == "" || shard == "" || cell == "" || tabletType == "" {
 			return "", errors.New("keyspace, shard, cell, and tablet_type are required for this redirect")
 		}
-		return explorer.GetSrvTypePath(cell, keyspace, shard, topo.TabletType(tabletType)), nil
+		tt, err := topo.ParseTabletType(tabletType)
+		if err != nil {
+			return "", fmt.Errorf("cannot parse tablet type %v: %v", tabletType, err)
+		}
+		return explorer.GetSrvTypePath(cell, keyspace, shard, tt), nil
 	case "tablet":
 		alias := r.FormValue("alias")
 		if alias == "" {

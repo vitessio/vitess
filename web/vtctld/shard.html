@@ -31,9 +31,9 @@
   <div layout="row" layout-align="start center">
     <h3 flex="50">Master Tablet</h3>
     <div flex>
-      <span ng-if="!shard.MasterAlias.Uid">None</span>
-      <span ng-if="shard.MasterAlias.Uid"
-        ng-bind="shard.MasterAlias.Cell+'-'+shard.MasterAlias.Uid"></span>
+      <span ng-if="!shard.master_alias.uid">None</span>
+      <span ng-if="shard.master_alias.uid"
+        ng-bind="shard.master_alias.cell+'-'+shard.master_alias.uid"></span>
     </div>
   </div>
 </div>
@@ -56,7 +56,7 @@
 
    <md-toolbar ng-class="tabletAccent(tablet)">
    <div class="md-toolbar-tools">
-    <h3>{{tablet.Alias.Cell}}-{{tablet.Alias.Uid}} [{{tabletType(tablet)}}]</h3>
+    <h3>{{tablet.alias.cell}}-{{tablet.alias.uid}} [{{tabletType(tablet)}}]</h3>
     <span flex></span>
     <md-menu>
     <md-button class="md-icon-button" aria-label="Tablet actions" ng-click="$mdOpenMenu()" md-menu-origin>
@@ -65,7 +65,7 @@
     </md-button>
     <md-menu-content>
     <md-menu-item ng-repeat="action in tabletActions">
-      <md-button ng-click="actions.applyTablet($event, action, tablet.Alias)">{{actions.label(action)}}</md-button>
+      <md-button ng-click="actions.applyTablet($event, action, tablet.alias)">{{actions.label(action)}}</md-button>
     </md-menu-item>
     </md-menu-content>
     </md-menu>
@@ -76,14 +76,14 @@
 
   <div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
   <strong>Host</strong>
-  <a href="http://{{tablet.Hostname}}:{{tablet.Portmap.vt}}">{{tablet.Hostname}}:{{tablet.Portmap.vt}}</a>
+  <a href="http://{{tablet.hostname}}:{{tablet.port_map.vt}}">{{tablet.hostname}}:{{tablet.port_map.vt}}</a>
   </div>
 
   <md-divider></md-divider>
 
   <div class="card-table-row" layout="row" layout-align="space-between" layout-wrap>
   <strong>IP Address</strong>
-  <a href="http://{{tablet.IPAddr}}:{{tablet.Portmap.vt}}">{{tablet.IPAddr}}:{{tablet.Portmap.vt}}</a>
+  <a href="http://{{tablet.ip}}:{{tablet.port_map.vt}}">{{tablet.ip}}:{{tablet.port_map.vt}}</a>
   </div>
 
   <md-divider></md-divider>

@@ -10,7 +10,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -41,33 +40,33 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &topo.Tablet{
-		Alias: topo.TabletAlias{
+	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
 		},
 		Hostname: "masterhost",
-		IPAddr:   "1.2.3.4",
-		Portmap: map[string]int{
+		Ip:       "1.2.3.4",
+		PortMap: map[string]int32{
 			"vt":    8101,
 			"gprc":  8102,
 			"mysql": 3306,
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topo.TYPE_MASTER,
+		Type:           pb.TabletType_MASTER,
 		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
+		KeyRange:       nil,
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &topo.Tablet{
-		Alias: topo.TabletAlias{
+	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,
 		},
-		IPAddr: "2.3.4.5",
-		Portmap: map[string]int{
+		Ip: "2.3.4.5",
+		PortMap: map[string]int32{
 			"vt":    8101,
 			"grpc":  8102,
 			"mysql": 3306,
@@ -76,9 +75,9 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topo.TYPE_REPLICA,
+		Type:           pb.TabletType_REPLICA,
 		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
+		KeyRange:       nil,
 	}); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}

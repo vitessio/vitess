@@ -9,7 +9,8 @@ import (
 
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 /*
@@ -32,13 +33,13 @@ gorpc_server.go to only use the '2' structures. Everything worked the same.
 type PopulateReparentJournalArgs struct {
 	TimeCreatedNS       int64
 	ActionName          string
-	MasterAlias         topo.TabletAlias
+	MasterAlias         *pb.TabletAlias
 	ReplicationPosition myproto.ReplicationPosition
 }
 
 // InitSlaveArgs has arguments for InitSlave
 type InitSlaveArgs struct {
-	Parent              topo.TabletAlias
+	Parent              *pb.TabletAlias
 	ReplicationPosition myproto.ReplicationPosition
 	TimeCreatedNS       int64
 	WaitTimeout         time.Duration // pass in zero to wait indefinitely
@@ -46,7 +47,7 @@ type InitSlaveArgs struct {
 
 // SetMasterArgs has arguments for SetMaster
 type SetMasterArgs struct {
-	Parent          topo.TabletAlias
+	Parent          *pb.TabletAlias
 	TimeCreatedNS   int64
 	ForceStartSlave bool
 	WaitTimeout     time.Duration // pass in zero to wait indefinitely

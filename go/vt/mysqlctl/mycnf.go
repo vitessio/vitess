@@ -22,15 +22,14 @@ import (
 // parameters to start mysqld. It can be used to generate standard
 // my.cnf files from a server id and mysql port. It can also be
 // populated from an existing my.cnf, or by command line parameters.
-// command line parameters.
 type Mycnf struct {
-	// ServerId is the unique id for this server.
+	// ServerID is the unique id for this server.
 	// Used to create a bunch of named directories.
-	ServerId uint32
+	ServerID uint32
 
 	// MysqlPort is the port for the MySQL server running on this machine.
 	// It is mainly used to communicate with topology server.
-	MysqlPort int
+	MysqlPort int32
 
 	// DataDir is where the table files are
 	// (used by vt software for Clone)
@@ -147,19 +146,19 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 		mycnf.mycnfMap[lval] = rval
 	}
 
-	serverIdStr := mycnf.lookupAndCheck("server-id")
-	serverId, err := strconv.Atoi(serverIdStr)
+	serverIDStr := mycnf.lookupAndCheck("server-id")
+	serverID, err := strconv.Atoi(serverIDStr)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to convert server-id %v", err)
 	}
-	mycnf.ServerId = uint32(serverId)
+	mycnf.ServerID = uint32(serverID)
 
 	portStr := mycnf.lookupAndCheck("port")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, fmt.Errorf("Failed: failed to convert port %v", err)
 	}
-	mycnf.MysqlPort = port
+	mycnf.MysqlPort = int32(port)
 	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
 	mycnf.InnodbDataHomeDir = mycnf.lookupAndCheck("innodb_data_home_dir")
 	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")

@@ -12,7 +12,6 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -25,7 +24,7 @@ import (
 var WatchSleepDuration = 30 * time.Second
 
 // GetSrvTabletTypesPerShard implements topo.Server.
-func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]topo.TabletType, error) {
+func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspace, shard string) ([]pb.TabletType, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -39,34 +38,48 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 		return nil, ErrBadResponse
 	}
 
-	tabletTypes := make([]topo.TabletType, 0, len(resp.Node.Nodes))
+	tabletTypes := make([]pb.TabletType, 0, len(resp.Node.Nodes))
 	for _, n := range resp.Node.Nodes {
-		tabletTypes = append(tabletTypes, topo.TabletType(path.Base(n.Key)))
+		strType := path.Base(n.Key)
+		if tt, err := topo.ParseTabletType(strType); err == nil {
+			tabletTypes = append(tabletTypes, tt)
+		}
 	}
 	return tabletTypes, nil
 }
 
 // CreateEndPoints implements topo.Server.
-func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints) error {
+func (s *Server) CreateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
+
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+
 	// Set only if it doesn't exist.
-	_, err = cell.Create(endPointsFilePath(keyspace, shard, string(tabletType)), jscfg.ToJSON(addrs), 0 /* ttl */)
+	_, err = cell.Create(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
 // UpdateEndPoints implements topo.Server.
-func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
+func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(addrs, "", "  ")
 	if err != nil {
 		return err
 	}
 
 	if existingVersion == -1 {
 		// Set unconditionally.
-		_, err := cell.Set(endPointsFilePath(keyspace, shard, string(tabletType)), jscfg.ToJSON(addrs), 0 /* ttl */)
+		_, err := cell.Set(endPointsFilePath(keyspace, shard, tabletType), string(data), 0 /* ttl */)
 		return convertError(err)
 	}
 
@@ -75,27 +88,30 @@ func (s *Server) UpdateEndPoints(ctx context.Context, cellName, keyspace, shard 
 }
 
 // updateEndPoints updates the EndPoints file only if the version matches.
-func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType topo.TabletType, addrs *pb.EndPoints, version int64) error {
+func (s *Server) updateEndPoints(cellName, keyspace, shard string, tabletType pb.TabletType, addrs *pb.EndPoints, version int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
 
-	data := jscfg.ToJSON(addrs)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, string(tabletType)), data, 0, /* ttl */
+	_, err = cell.CompareAndSwap(endPointsFilePath(keyspace, shard, tabletType), string(data), 0, /* ttl */
 		"" /* prevValue */, uint64(version))
 	return convertError(err)
 }
 
 // GetEndPoints implements topo.Server.
-func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (*pb.EndPoints, int64, error) {
+func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType) (*pb.EndPoints, int64, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, -1, err
 	}
 
-	resp, err := cell.Get(endPointsFilePath(keyspace, shard, string(tabletType)), false /* sort */, false /* recursive */)
+	resp, err := cell.Get(endPointsFilePath(keyspace, shard, tabletType), false /* sort */, false /* recursive */)
 	if err != nil {
 		return nil, -1, convertError(err)
 	}
@@ -113,12 +129,12 @@ func (s *Server) GetEndPoints(ctx context.Context, cellName, keyspace, shard str
 }
 
 // DeleteEndPoints implements topo.Server.
-func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType, existingVersion int64) error {
+func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
-	dirPath := endPointsDirPath(keyspace, shard, string(tabletType))
+	dirPath := endPointsDirPath(keyspace, shard, tabletType)
 
 	if existingVersion == -1 {
 		// Delete unconditionally.
@@ -127,7 +143,7 @@ func (s *Server) DeleteEndPoints(ctx context.Context, cellName, keyspace, shard 
 	}
 
 	// Delete EndPoints file only if version matches.
-	if _, err := cell.CompareAndDelete(endPointsFilePath(keyspace, shard, string(tabletType)), "" /* prevValue */, uint64(existingVersion)); err != nil {
+	if _, err := cell.CompareAndDelete(endPointsFilePath(keyspace, shard, tabletType), "" /* prevValue */, uint64(existingVersion)); err != nil {
 		return convertError(err)
 	}
 	// Delete the parent dir only if it's empty.
@@ -150,9 +166,12 @@ func (s *Server) UpdateSrvShard(ctx context.Context, cellName, keyspace, shard s
 		return err
 	}
 
-	data := jscfg.ToJSON(srvShard)
+	data, err := json.MarshalIndent(srvShard, "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.Set(srvShardFilePath(keyspace, shard), data, 0 /* ttl */)
+	_, err = cell.Set(srvShardFilePath(keyspace, shard), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -196,9 +215,12 @@ func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace strin
 		return err
 	}
 
-	data := jscfg.ToJSON(srvKeyspace)
+	data, err := json.MarshalIndent(topo.SrvKeyspaceToProto(srvKeyspace), "", "  ")
+	if err != nil {
+		return err
+	}
 
-	_, err = cell.Set(srvKeyspaceFilePath(keyspace), data, 0 /* ttl */)
+	_, err = cell.Set(srvKeyspaceFilePath(keyspace), string(data), 0 /* ttl */)
 	return convertError(err)
 }
 
@@ -228,11 +250,11 @@ func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) 
 		return nil, ErrBadResponse
 	}
 
-	value := topo.NewSrvKeyspace(int64(resp.Node.ModifiedIndex))
+	value := &pb.SrvKeyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving keyspace data (%v): %q", err, resp.Node.Value)
 	}
-	return value, nil
+	return topo.ProtoToSrvKeyspace(value), nil
 }
 
 // GetSrvKeyspaceNames implements topo.Server.
@@ -250,12 +272,12 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 }
 
 // WatchEndPoints is part of the topo.Server interface
-func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType topo.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
+func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("WatchEndPoints cannot get cell: %v", err)
 	}
-	filePath := endPointsFilePath(keyspace, shard, string(tabletType))
+	filePath := endPointsFilePath(keyspace, shard, tabletType)
 
 	notifications := make(chan *pb.EndPoints, 10)
 	stopWatching := make(chan struct{})
@@ -283,7 +305,7 @@ func (s *Server) WatchEndPoints(ctx context.Context, cellName, keyspace, shard s
 		}
 
 		for {
-			if _, err := cell.Client.Watch(filePath, uint64(modifiedVersion), false /* recursive */, watch, stop); err != nil {
+			if _, err := cell.Client.Watch(filePath, uint64(modifiedVersion+1), false /* recursive */, watch, stop); err != nil {
 				log.Errorf("Watch on %v failed, waiting for %v to retry: %v", filePath, WatchSleepDuration, err)
 				timer := time.After(WatchSleepDuration)
 				select {

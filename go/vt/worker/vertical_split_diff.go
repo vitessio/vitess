@@ -18,6 +18,8 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // VerticalSplitDiffWorker executes a diff between a destination shard and its
@@ -39,8 +41,8 @@ type VerticalSplitDiffWorker struct {
 	shardInfo    *topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias      topo.TabletAlias
-	destinationAlias topo.TabletAlias
+	sourceAlias      *pb.TabletAlias
+	destinationAlias *pb.TabletAlias
 
 	// populated during WorkerStateDiff
 	sourceSchemaDefinition      *myproto.SchemaDefinition
@@ -224,18 +226,18 @@ func (vsdw *VerticalSplitDiffWorker) findTargets(ctx context.Context) error {
 func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	vsdw.SetState(WorkerStateSyncReplication)
 
-	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, topo.ProtoToTabletAlias(vsdw.shardInfo.MasterAlias))
+	masterInfo, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.shardInfo.MasterAlias)
 	if err != nil {
-		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", vsdw.shardInfo.MasterAlias, err)
+		return fmt.Errorf("synchronizeReplication: cannot get Tablet record for master %v: %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 
 	// 1 - stop the master binlog replication, get its current position
-	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", vsdw.shardInfo.MasterAlias)
+	vsdw.wr.Logger().Infof("Stopping master binlog replication on %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	blpPositionList, err := vsdw.wr.TabletManagerClient().StopBlp(shortCtx, masterInfo)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("StopBlp on master %v failed: %v", vsdw.shardInfo.MasterAlias, err)
+		return fmt.Errorf("StopBlp on master %v failed: %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 	wrangler.RecordStartBlpAction(vsdw.cleaner, masterInfo)
 
@@ -252,7 +254,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	}
 
 	// stop replication
-	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", vsdw.sourceAlias, pos.Position)
+	vsdw.wr.Logger().Infof("Stopping slave %v at a minimum of %v", topo.TabletAliasString(vsdw.sourceAlias), pos.Position)
 	sourceTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.sourceAlias)
 	if err != nil {
 		return err
@@ -261,7 +263,7 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	stoppedAt, err := vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, sourceTablet, pos.Position, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", vsdw.sourceAlias, pos.Position, err)
+		return fmt.Errorf("cannot stop slave %v at right binlog position %v: %v", topo.TabletAliasString(vsdw.sourceAlias), pos.Position, err)
 	}
 	stopPositionList.Entries[0].Uid = ss.Uid
 	stopPositionList.Entries[0].Position = stoppedAt
@@ -271,23 +273,23 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.sourceAlias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vsdw.sourceAlias, err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(vsdw.sourceAlias), err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	// 3 - ask the master of the destination shard to resume filtered
 	//     replication up to the new list of positions
-	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", vsdw.shardInfo.MasterAlias, stopPositionList)
+	vsdw.wr.Logger().Infof("Restarting master %v until it catches up to %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	masterPos, err := vsdw.wr.TabletManagerClient().RunBlpUntil(shortCtx, masterInfo, &stopPositionList, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", vsdw.shardInfo.MasterAlias, stopPositionList, err)
+		return fmt.Errorf("RunBlpUntil on %v until %v failed: %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias), stopPositionList, err)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
 	//     that master binlog position, and stop its replication.
-	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", vsdw.destinationAlias, masterPos)
+	vsdw.wr.Logger().Infof("Waiting for destination tablet %v to catch up to %v", topo.TabletAliasString(vsdw.destinationAlias), masterPos)
 	destinationTablet, err := vsdw.wr.TopoServer().GetTablet(ctx, vsdw.destinationAlias)
 	if err != nil {
 		return err
@@ -296,25 +298,25 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	_, err = vsdw.wr.TabletManagerClient().StopSlaveMinimum(shortCtx, destinationTablet, masterPos, *remoteActionsTimeout)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", vsdw.destinationAlias, masterPos, err)
+		return fmt.Errorf("StopSlaveMinimum on %v at %v failed: %v", topo.TabletAliasString(vsdw.destinationAlias), masterPos, err)
 	}
 	wrangler.RecordStartSlaveAction(vsdw.cleaner, destinationTablet)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(vsdw.cleaner, vsdw.destinationAlias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vsdw.destinationAlias, err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(vsdw.destinationAlias), err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	// 5 - restart filtered replication on destination master
-	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", vsdw.shardInfo.MasterAlias)
+	vsdw.wr.Logger().Infof("Restarting filtered replication on master %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias))
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = vsdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
-	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String()); err != nil {
-		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, vsdw.shardInfo.MasterAlias.String(), err)
+	if err := vsdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topo.TabletAliasString(vsdw.shardInfo.MasterAlias)); err != nil {
+		vsdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topo.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 	cancel()
 	if err != nil {
-		return fmt.Errorf("StartBlp on %v failed: %v", vsdw.shardInfo.MasterAlias, err)
+		return fmt.Errorf("StartBlp on %v failed: %v", topo.TabletAliasString(vsdw.shardInfo.MasterAlias), err)
 	}
 
 	return nil
@@ -339,7 +341,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			shortCtx, vsdw.destinationAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
-		vsdw.wr.Logger().Infof("Got schema from destination %v", vsdw.destinationAlias)
+		vsdw.wr.Logger().Infof("Got schema from destination %v", topo.TabletAliasString(vsdw.destinationAlias))
 		wg.Done()
 	}()
 	wg.Add(1)
@@ -350,7 +352,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 			shortCtx, vsdw.sourceAlias, nil /* tables */, vsdw.excludeTables, false /* includeViews */)
 		cancel()
 		rec.RecordError(err)
-		vsdw.wr.Logger().Infof("Got schema from source %v", vsdw.sourceAlias)
+		vsdw.wr.Logger().Infof("Got schema from source %v", topo.TabletAliasString(vsdw.sourceAlias))
 		wg.Done()
 	}()
 	wg.Wait()

@@ -70,6 +70,23 @@ class Tablet(object):
       }
   }
 
+  # this will eventually be coming from the proto3
+  tablet_type_value = {
+      "UNKNOWN":        0,
+      "IDLE":           1,
+      "MASTER":         2,
+      "REPLICA":        3,
+      "RDONLY":         4,
+      "BATCH":          4,
+      "SPARE":          5,
+      "EXPERIMENTAL":   6,
+      "SCHEMA_UPGRADE": 7,
+      "BACKUP":         8,
+      "RESTORE":        9,
+      "WORKER":         10,
+      "SCRAP":          11,
+      }
+
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
                use_mysqlctld=False):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
@@ -681,7 +698,7 @@ class Tablet(object):
     if Tablet.tablets_running > 0:
       raise utils.TestError('This test is not killing all its vttablets')
 
-  def execute(self, sql, bindvars=None, transaction_id=None):
+  def execute(self, sql, bindvars=None, transaction_id=None, auto_log=True):
     """execute uses 'vtctl VtTabletExecute' to execute a command.
     """
     args = [
@@ -694,7 +711,7 @@ class Tablet(object):
     if transaction_id:
       args.extend(['-transaction_id', str(transaction_id)])
     args.extend([self.tablet_alias, sql])
-    return utils.run_vtctl_json(args)
+    return utils.run_vtctl_json(args, auto_log=auto_log)
 
 
 def kill_tablets(tablets):

@@ -23,8 +23,12 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*pb.TaskContainer,
 	//                        '--destination_pack_count', '1',
 	//                        '--destination_writer_count', '1',
 	//                        '--strategy=-populate_blp_checkpoint',
-	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"],
-		[]string{"SplitClone", "--strategy=-populate_blp_checkpoint", keyspaceAndSourceShard})
+	args := []string{"SplitClone", "--strategy=-populate_blp_checkpoint"}
+	if excludeTables, ok := parameters["exclude_tables"]; ok {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+	args = append(args, keyspaceAndSourceShard)
+	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
 	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
 	if err == nil {
@@ -37,4 +41,9 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*pb.TaskContainer,
 // RequiredParameters is part of the Task interface.
 func (t *SplitCloneTask) RequiredParameters() []string {
 	return []string{"keyspace", "source_shard", "vtworker_endpoint"}
+}
+
+// OptionalParameters is part of the Task interface.
+func (t *SplitCloneTask) OptionalParameters() []string {
+	return []string{"exclude_tables"}
 }

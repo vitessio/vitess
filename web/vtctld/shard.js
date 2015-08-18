@@ -33,7 +33,7 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
       if (tablet.streamHealth.target.tablet_type)
         return vtTabletTypes[tablet.streamHealth.target.tablet_type];
     }
-    return tablet.Type;
+    return vtTabletTypes[tablet.type];
   };
 
   $scope.tabletHealthError = function(tablet) {
@@ -67,10 +67,10 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
       // Group them by cell.
       var cellMap = {};
       tabletAliases.forEach(function(tabletAlias) {
-        if (cellMap[tabletAlias.Cell] === undefined)
-          cellMap[tabletAlias.Cell] = [];
+        if (cellMap[tabletAlias.cell] === undefined)
+          cellMap[tabletAlias.cell] = [];
 
-        cellMap[tabletAlias.Cell].push(tabletAlias);
+        cellMap[tabletAlias.cell].push(tabletAlias);
       });
 
       // Turn the cell map into a list, sorted by cell name.
@@ -78,18 +78,18 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
       Object.keys(cellMap).sort().forEach(function(cellName) {
         // Sort the tablets within each cell.
         var tabletAliases = cellMap[cellName];
-        tabletAliases.sort(function(a, b) { return a.Uid - b.Uid; });
+        tabletAliases.sort(function(a, b) { return a.uid - b.uid; });
 
         // Fetch tablet data.
         var tabletData = [];
         tabletAliases.forEach(function(tabletAlias) {
-          var alias = tabletAlias.Cell+'-'+tabletAlias.Uid;
+          var alias = tabletAlias.cell+'-'+tabletAlias.uid;
 
           var tablet = tablets.get({tablet: alias}, function(tablet) {
             // Annotate result with some extra stuff.
             tablet.links = vtconfig.tabletLinks(tablet);
           });
-          tablet.Alias = tabletAlias;
+          tablet.alias = tabletAlias;
 
           tabletData.push(tablet);
         });
@@ -114,9 +114,9 @@ app.controller('ShardCtrl', function($scope, $routeParams, $timeout, $route,
   function refreshStreamHealth() {
     if (selectedCell) {
       selectedCell.tablets.forEach(function (tablet) {
-        if (tablet.Alias) {
+        if (tablet.alias) {
           // Get latest streaming health result.
-          tabletinfo.get({tablet: tablet.Alias.Cell+'-'+tablet.Alias.Uid, info: 'health'}, function(health) {
+          tabletinfo.get({tablet: tablet.alias.cell+'-'+tablet.alias.uid, info: 'health'}, function(health) {
             tablet.streamHealth = health;
           });
         }

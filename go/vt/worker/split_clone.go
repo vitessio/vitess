@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
@@ -53,7 +52,7 @@ type SplitCloneWorker struct {
 	destinationShards []*topo.ShardInfo
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAliases []topo.TabletAlias
+	sourceAliases []*pb.TabletAlias
 	sourceTablets []*topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -61,8 +60,8 @@ type SplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases [][]topo.TabletAlias
-	reloadTablets []map[topo.TabletAlias]*topo.TabletInfo
+	reloadAliases [][]*pb.TabletAlias
+	reloadTablets []map[pb.TabletAlias]*topo.TabletInfo
 
 	ev *events.SplitClone
 
@@ -117,7 +116,7 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 func (scw *SplitCloneWorker) formatSources() string {
 	result := ""
 	for _, alias := range scw.sourceAliases {
-		result += " " + alias.String()
+		result += " " + topo.TabletAliasString(alias)
 	}
 	return result
 }
@@ -235,7 +234,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	if os == nil {
 		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
 	}
-	scw.wr.Logger().Infof("Found overlapping shards: %v\n", jscfg.ToJSON(os))
+	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all
@@ -274,13 +273,13 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	var err error
 
 	// find an appropriate endpoint in the source shards
-	scw.sourceAliases = make([]topo.TabletAlias, len(scw.sourceShards))
+	scw.sourceAliases = make([]*pb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.cell, si.Keyspace(), si.ShardName())
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", scw.sourceAliases[i], si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topo.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
 
 	// get the tablet info for them, and stop their replication
@@ -288,22 +287,22 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for i, alias := range scw.sourceAliases {
 		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
 		if err != nil {
-			return fmt.Errorf("cannot read tablet %v: %v", alias, err)
+			return fmt.Errorf("cannot read tablet %v: %v", topo.TabletAliasString(alias), err)
 		}
 
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot stop replication on tablet %v", alias)
+			return fmt.Errorf("cannot stop replication on tablet %v", topo.TabletAliasString(alias))
 		}
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
 		if err != nil {
-			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", alias, err)
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(alias), err)
 		}
-		action.TabletType = topo.TYPE_SPARE
+		action.TabletType = pb.TabletType_SPARE
 	}
 
 	return scw.ResolveDestinationMasters(ctx)
@@ -354,8 +353,8 @@ func (scw *SplitCloneWorker) GetDestinationMaster(shardName string) (*topo.Table
 // Find all tablets on all destination shards. This should be done immediately before reloading
 // the schema on these tablets, to minimize the chances of the topo changing in between.
 func (scw *SplitCloneWorker) findReloadTargets(ctx context.Context) error {
-	scw.reloadAliases = make([][]topo.TabletAlias, len(scw.destinationShards))
-	scw.reloadTablets = make([]map[topo.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.reloadAliases = make([][]*pb.TabletAlias, len(scw.destinationShards))
+	scw.reloadTablets = make([]map[pb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
 		reloadAliases, reloadTablets, err := resolveReloadTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
@@ -384,10 +383,10 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", scw.sourceAliases[0], err)
+		return fmt.Errorf("cannot get schema from source %v: %v", topo.TabletAliasString(scw.sourceAliases[0]), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return fmt.Errorf("no tables matching the table filter in tablet %v", scw.sourceAliases[0])
+		return fmt.Errorf("no tables matching the table filter in tablet %v", topo.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.Mu.Lock()
@@ -549,7 +548,7 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			go func(shardName string) {
 				defer destinationWaitGroup.Done()
 				scw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-				if err := runSqlCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
+				if err := runSQLCommands(ctx, scw.wr, scw, shardName, queries); err != nil {
 					processError("blp_checkpoint queries failed: %v", err)
 				}
 			}(si.ShardName())
@@ -590,14 +589,14 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 			destinationWaitGroup.Add(1)
 			go func(ti *topo.TabletInfo) {
 				defer destinationWaitGroup.Done()
-				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
+				scw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 				err := scw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 				cancel()
 				if err != nil {
-					processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
+					processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
 				}
-			}(scw.reloadTablets[shardIndex][tabletAlias])
+			}(scw.reloadTablets[shardIndex][*tabletAlias])
 		}
 	}
 	destinationWaitGroup.Wait()

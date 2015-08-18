@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPermissions(t *testing.T) {
@@ -27,15 +29,15 @@ func TestPermissions(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	master := NewFakeTablet(t, wr, "cell1", 0, topo.TYPE_MASTER)
-	replica := NewFakeTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA)
+	master := NewFakeTablet(t, wr, "cell1", 0, pb.TabletType_MASTER)
+	replica := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_REPLICA)
 
 	// mark the master inside the shard
 	si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	si.MasterAlias = topo.TabletAliasToProto(master.Tablet.Alias)
+	si.MasterAlias = master.Tablet.Alias
 	if err := topo.UpdateShard(ctx, ts, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}

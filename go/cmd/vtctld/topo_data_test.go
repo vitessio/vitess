@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -325,12 +324,12 @@ func TestCellShardTabletsCache(t *testing.T) {
 		Cell:         "cell1",
 		KeyspaceName: "ks1",
 		ShardName:    "s1",
-		TabletAliases: []topo.TabletAlias{
-			topo.TabletAlias{
+		TabletAliases: []*pb.TabletAlias{
+			&pb.TabletAlias{
 				Cell: "cell1",
 				Uid:  12,
 			},
-			topo.TabletAlias{
+			&pb.TabletAlias{
 				Cell: "cell1",
 				Uid:  13,
 			},

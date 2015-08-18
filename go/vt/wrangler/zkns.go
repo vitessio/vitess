@@ -1,13 +1,13 @@
 package wrangler
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -150,9 +150,13 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 	cell := parts[2]
 	keyspace := parts[5]
 	shard := parts[6]
-	tabletType := topo.TabletType(parts[7])
-	if tabletType == "action" || tabletType == "actionlog" {
+	tabletTypeStr := parts[7]
+	if tabletTypeStr == "action" || tabletTypeStr == "actionlog" {
 		return nil, nil
+	}
+	tabletType, err := topo.ParseTabletType(tabletTypeStr)
+	if err != nil {
+		return nil, err
 	}
 	addrs, _, err := wr.ts.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 	if err != nil {
@@ -216,13 +220,19 @@ type LegacyZknsAddrs struct {
 }
 
 func writeAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
-	data := jscfg.ToJSON(addr)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addr, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 func writeAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
-	data := jscfg.ToJSON(addrs)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }

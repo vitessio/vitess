@@ -85,7 +85,7 @@ func (mysqld *Mysqld) DemoteMaster() (rp proto.ReplicationPosition, err error) {
 // PromoteSlave will promote a slave to be the new master.
 func (mysqld *Mysqld) PromoteSlave(hookExtraEnv map[string]string) (proto.ReplicationPosition, error) {
 	// we handle replication, just stop it
-	cmds := []string{SqlStopSlave}
+	cmds := []string{SQLStopSlave}
 
 	// Promote to master.
 	flavor, err := mysqld.flavor()

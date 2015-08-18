@@ -12,20 +12,22 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file uses the sandbox_test framework.
 
 func TestExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
-		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil, false)
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour)
+		return stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, nil, false)
 	})
 }
 
 func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, false, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour)
 		queries := []proto.BoundShardQuery{{
 			Sql:           "query",
 			BindVariables: nil,
@@ -33,7 +35,7 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 			Shards:        shards,
 		}}
 		scatterRequest := boundShardQueriesToScatterBatchRequest(queries)
-		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, topo.TYPE_RDONLY, false, nil)
+		qrs, err := stc.ExecuteBatch(context.Background(), scatterRequest, pb.TabletType_RDONLY, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -43,12 +45,12 @@ func TestBatchExecuteKeyspaceAlias(t *testing.T) {
 
 func TestStreamExecuteKeyspaceAlias(t *testing.T) {
 	testVerticalSplitGeneric(t, true, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+		stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, topo.TYPE_RDONLY, nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(context.Background(), "query", nil, KsTestUnshardedServedFrom, shards, pb.TabletType_RDONLY, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
-		}, false)
+		})
 		return qr, err
 	})
 }
@@ -58,7 +60,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	s.MapTestConn("0", sbc)
 
-	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 2*time.Millisecond, 1*time.Millisecond, 24*time.Hour)
+	stc := NewScatterConn(new(sandboxTopo), "", "aa", 1*time.Millisecond, 3, 20*time.Millisecond, 10*time.Millisecond, 24*time.Hour)
 	session := NewSafeSession(&proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -68,7 +70,7 @@ func TestInTransactionKeyspaceAlias(t *testing.T) {
 			TransactionId: 1,
 		}},
 	})
-	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, topo.TYPE_MASTER, session, false)
+	_, err := stc.Execute(context.Background(), "query", nil, KsTestUnshardedServedFrom, []string{"0"}, pb.TabletType_MASTER, session, false)
 	want := "shard, host: TestUnshardedServedFrom.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want '%v', got '%v'", want, err)

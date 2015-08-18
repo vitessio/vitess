@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
@@ -52,9 +51,13 @@ func (s *Server) updateShardReplication(sri *topo.ShardReplicationInfo, existing
 		return -1, err
 	}
 
-	data := jscfg.ToJSON(sri.ShardReplication)
+	data, err := json.MarshalIndent(sri.ShardReplication, "", "  ")
+	if err != nil {
+		return -1, err
+	}
+
 	resp, err := cell.CompareAndSwap(shardReplicationFilePath(sri.Keyspace(), sri.Shard()),
-		data, 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
+		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
 	}
@@ -71,9 +74,12 @@ func (s *Server) createShardReplication(sri *topo.ShardReplicationInfo) (int64, 
 		return -1, err
 	}
 
-	data := jscfg.ToJSON(sri.ShardReplication)
+	data, err := json.MarshalIndent(sri.ShardReplication, "", "  ")
+	if err != nil {
+		return -1, err
+	}
 	resp, err := cell.Create(shardReplicationFilePath(sri.Keyspace(), sri.Shard()),
-		data, 0 /* ttl */)
+		string(data), 0 /* ttl */)
 	if err != nil {
 		return -1, convertError(err)
 	}

@@ -3,6 +3,9 @@
 		"unit": {
 			"Command": "godep go test ./go/..."
 		},
+		"java_vtgate_client": {
+			"Command": "make build java_vtgate_client_test"
+		},
     "queryservice_vtocc": {
       "File": "queryservice_test.py",
       "Args": "-m -e vtocc"
@@ -67,9 +70,6 @@
     },
     "vtgatev2": {
       "File": "vtgatev2_test.py"
-    },
-    "zkocc": {
-      "File": "zkocc_test.py"
     },
     "initial_sharding_bytes": {
       "File": "initial_sharding_bytes.py"

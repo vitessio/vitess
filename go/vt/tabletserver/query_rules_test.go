@@ -12,6 +12,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestQueryRules(t *testing.T) {
@@ -290,8 +292,8 @@ var creationCases = []BVCreation{
 	{"a", true, true, QR_MATCH, "a", false},
 	{"a", true, true, QR_NOMATCH, "a", false},
 
-	{"a", true, true, QR_IN, key.KeyRange{}, false},
-	{"a", true, true, QR_NOTIN, key.KeyRange{}, false},
+	{"a", true, true, QR_IN, &pb.KeyRange{}, false},
+	{"a", true, true, QR_NOTIN, &pb.KeyRange{}, false},
 
 	{"a", true, true, QR_MATCH, int64(1), true},
 	{"a", true, true, QR_NOMATCH, int64(1), true},
@@ -463,20 +465,22 @@ func makere(s string) bvcre {
 	return bvcre{re}
 }
 
-func numKeyRange(start, end uint64) bvcKeyRange {
-	kr := key.KeyRange{
-		Start: key.Uint64Key(start).KeyspaceId(),
-		End:   key.Uint64Key(end).KeyspaceId(),
+func numKeyRange(start, end uint64) *bvcKeyRange {
+	kr := pb.KeyRange{
+		Start: key.Uint64Key(start).Bytes(),
+		End:   key.Uint64Key(end).Bytes(),
 	}
-	return bvcKeyRange(kr)
+	b := bvcKeyRange(kr)
+	return &b
 }
 
-func strKeyRange(start, end string) bvcKeyRange {
-	kr := key.KeyRange{
-		Start: key.KeyspaceId(start),
-		End:   key.KeyspaceId(end),
+func strKeyRange(start, end string) *bvcKeyRange {
+	kr := pb.KeyRange{
+		Start: []byte(start),
+		End:   []byte(end),
 	}
-	return bvcKeyRange(kr)
+	b := bvcKeyRange(kr)
+	return &b
 }
 
 func TestBVConditions(t *testing.T) {
@@ -697,7 +701,7 @@ func TestValidJSON(t *testing.T) {
 		qrs := NewQueryRules()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
 		if err != nil {
-			t.Errorf("Unexpected error for case %d: %v", i, err)
+			t.Fatalf("Unexpected error for case %d: %v", i, err)
 		}
 		bvc := qrs.rules[0].bindVarConds[0]
 		if bvc.op != tcase.op {
@@ -721,8 +725,8 @@ func TestValidJSON(t *testing.T) {
 				t.Errorf("want non-nil")
 			}
 		case KEYRANGE:
-			if kr := bvc.value.(bvcKeyRange); kr.Start != "1" || kr.End != "2" {
-				t.Errorf(`Execting {"1", "2"}, got %v`, kr)
+			if kr := bvc.value.(*bvcKeyRange); string(kr.Start) != "1" || string(kr.End) != "2" {
+				t.Errorf(`Expecting {"1", "2"}, got %v`, kr)
 			}
 		}
 	}
@@ -836,7 +840,7 @@ func TestBuildQueryRuleFailureModes(t *testing.T) {
 	var errStr string
 
 	_, err = BuildQueryRule(map[string]interface{}{
-		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": QR_IN, "Value": key.KeyRange{}}},
+		"BindVarConds": []interface{}{map[string]interface{}{"Name": "a", "OnAbsent": true, "Operator": QR_IN, "Value": &pb.KeyRange{}}},
 	})
 	if err == nil {
 		t.Fatalf("should get an error")
@@ -923,7 +927,7 @@ func TestBadAddBindVarCond(t *testing.T) {
 	if err == nil {
 		t.Fatalf("invalid op: QR_NOTIN for value type: string")
 	}
-	err = qr1.AddBindVarCond("a", true, false, QR_LT, key.KeyRange{})
+	err = qr1.AddBindVarCond("a", true, false, QR_LT, &pb.KeyRange{})
 	if err == nil {
 		t.Fatalf("invalid op: QR_LT for value type: key.KeyRange")
 	}

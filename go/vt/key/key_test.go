@@ -5,8 +5,11 @@
 package key
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"testing"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKey(t *testing.T) {
@@ -27,14 +30,14 @@ func TestKey(t *testing.T) {
 			t.Logf("json: %v", string(data))
 		}
 
-		k_r := new(KeyspaceId)
-		err = json.Unmarshal(data, k_r)
+		kr := new(KeyspaceId)
+		err = json.Unmarshal(data, kr)
 		if err != nil {
 			t.Errorf("reserialize error: %v", err)
 		}
 
-		if k != *k_r {
-			t.Errorf("keyspace compare failed: %#v != %#v", k, k_r)
+		if k != *kr {
+			t.Errorf("keyspace compare failed: %#v != %#v", k, kr)
 		}
 	}
 
@@ -196,25 +199,25 @@ func TestIntersectOverlap(t *testing.T) {
 	}
 
 	for _, el := range table {
-		a, err := HexKeyspaceId(el.a).Unhex()
+		a, err := hex.DecodeString(el.a)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		b, err := HexKeyspaceId(el.b).Unhex()
+		b, err := hex.DecodeString(el.b)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		left := KeyRange{Start: a, End: b}
-		c, err := HexKeyspaceId(el.c).Unhex()
+		left := &pb.KeyRange{Start: a, End: b}
+		c, err := hex.DecodeString(el.c)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		d, err := HexKeyspaceId(el.d).Unhex()
+		d, err := hex.DecodeString(el.d)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		right := KeyRange{Start: c, End: d}
-		if c := KeyRangesIntersect(left, right); c != el.intersects {
+		right := &pb.KeyRange{Start: c, End: d}
+		if c := KeyRangesIntersect3(left, right); c != el.intersects {
 			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
 		}
 		overlap, err := KeyRangesOverlap(left, right)
@@ -222,7 +225,7 @@ func TestIntersectOverlap(t *testing.T) {
 			if err != nil {
 				t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
 			} else {
-				got := string(overlap.Start.Hex()) + "-" + string(overlap.End.Hex())
+				got := hex.EncodeToString(overlap.Start) + "-" + hex.EncodeToString(overlap.End)
 				if got != el.overlap {
 					t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
 				}

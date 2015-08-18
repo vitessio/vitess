@@ -11,11 +11,11 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -51,43 +51,43 @@ type VTGateConn struct {
 
 // Execute executes a non-streaming query on vtgate.
 // This is using v3 API.
-func (conn *VTGateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+func (conn *VTGateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (*mproto.QueryResult, error) {
 	res, _, err := conn.impl.Execute(ctx, query, bindVars, tabletType, false, nil)
 	return res, err
 }
 
-// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
-func (conn *VTGateConn) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType, false, nil)
+// ExecuteShards executes a non-streaming query for multiple shards on vtgate.
+func (conn *VTGateConn) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (*mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, false, nil)
 	return res, err
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
-func (conn *VTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+func (conn *VTGateConn) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (*mproto.QueryResult, error) {
 	res, _, err := conn.impl.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, false, nil)
 	return res, err
 }
 
 // ExecuteKeyRanges executes a non-streaming query on a key range.
-func (conn *VTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+func (conn *VTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (*mproto.QueryResult, error) {
 	res, _, err := conn.impl.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, false, nil)
 	return res, err
 }
 
 // ExecuteEntityIds executes a non-streaming query for multiple entities.
-func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType) (*mproto.QueryResult, error) {
+func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pb.TabletType) (*mproto.QueryResult, error) {
 	res, _, err := conn.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, false, nil)
 	return res, err
 }
 
-// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (conn *VTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
-	res, _, err := conn.impl.ExecuteBatchShard(ctx, queries, tabletType, asTransaction, nil)
+// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+	res, _, err := conn.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
 	res, _, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, nil)
 	return res, err
 }
@@ -97,17 +97,35 @@ func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 // pull values from the channel till it's closed. Following this, you
 // can call ErrFunc to see if the stream ended normally or due to a
 // failure.
-func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecute(ctx, query, bindVars, tabletType)
 }
 
-// StreamExecuteShard executes a streaming query on vtgate, on a set
+// StreamExecute2 executes a streaming query on vtgate. It returns a
+// channel, an ErrFunc, and error. First check the error. Then you can
+// pull values from the channel till it's closed. Following this, you
+// can call ErrFunc to see if the stream ended normally or due to a
+// failure.
+func (conn *VTGateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecute2(ctx, query, bindVars, tabletType)
+}
+
+// StreamExecuteShards executes a streaming query on vtgate, on a set
 // of shards.  It returns a channel, an ErrFunc, and error. First
 // check the error. Then you can pull values from the channel till
 // it's closed. Following this, you can call ErrFunc to see if the
 // stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
-	return conn.impl.StreamExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType)
+func (conn *VTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType)
+}
+
+// StreamExecuteShards2 executes a streaming query on vtgate, on a set
+// of shards.  It returns a channel, an ErrFunc, and error. First
+// check the error. Then you can pull values from the channel till
+// it's closed. Following this, you can call ErrFunc to see if the
+// stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecuteShards2(ctx, query, keyspace, shards, bindVars, tabletType)
 }
 
 // StreamExecuteKeyRanges executes a streaming query on vtgate, on a
@@ -115,8 +133,17 @@ func (conn *VTGateConn) StreamExecuteShard(ctx context.Context, query string, ke
 // error. First check the error. Then you can pull values from the
 // channel till it's closed. Following this, you can call ErrFunc to
 // see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType)
+}
+
+// StreamExecuteKeyRanges2 executes a streaming query on vtgate, on a
+// set of keyranges.  It returns a channel, an ErrFunc, and
+// error. First check the error. Then you can pull values from the
+// channel till it's closed. Following this, you can call ErrFunc to
+// see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecuteKeyRanges2(ctx, query, keyspace, keyRanges, bindVars, tabletType)
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on vtgate, for
@@ -124,8 +151,17 @@ func (conn *VTGateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 // error. First check the error. Then you can pull values from the
 // channel till it's closed. Following this, you can call ErrFunc to
 // see if the stream ended normally or due to a failure.
-func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
+}
+
+// StreamExecuteKeyspaceIds2 executes a streaming query on vtgate, for
+// the given keyspaceIds.  It returns a channel, an ErrFunc, and
+// error. First check the error. Then you can pull values from the
+// channel till it's closed. Following this, you can call ErrFunc to
+// see if the stream ended normally or due to a failure.
+func (conn *VTGateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error) {
+	return conn.impl.StreamExecuteKeyspaceIds2(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
 }
 
 // Begin starts a transaction and returns a VTGateTX.
@@ -162,8 +198,8 @@ func (conn *VTGateConn) Close() {
 
 // SplitQuery splits a query into equally sized smaller queries by
 // appending primary key range clauses to the original query
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, splitColumn, splitCount)
+func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount)
 }
 
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
@@ -179,7 +215,7 @@ type VTGateTx struct {
 }
 
 // Execute executes a query on vtgate within the current transaction.
-func (tx *VTGateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
+func (tx *VTGateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("execute: not in transaction")
 	}
@@ -188,18 +224,18 @@ func (tx *VTGateTx) Execute(ctx context.Context, query string, bindVars map[stri
 	return res, err
 }
 
-// ExecuteShard executes a query for multiple shards on vtgate within the current transaction.
-func (tx *VTGateTx) ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
+// ExecuteShards executes a query for multiple shards on vtgate within the current transaction.
+func (tx *VTGateTx) ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
 	if tx.session == nil {
-		return nil, fmt.Errorf("executeShard: not in transaction")
+		return nil, fmt.Errorf("executeShards: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteShard(ctx, query, keyspace, shards, bindVars, tabletType, notInTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, notInTransaction, tx.session)
 	tx.session = session
 	return res, err
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
-func (tx *VTGateTx) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeKeyspaceIds: not in transaction")
 	}
@@ -209,7 +245,7 @@ func (tx *VTGateTx) ExecuteKeyspaceIds(ctx context.Context, query string, keyspa
 }
 
 // ExecuteKeyRanges executes a non-streaming query on a key range.
-func (tx *VTGateTx) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeKeyRanges: not in transaction")
 	}
@@ -219,7 +255,7 @@ func (tx *VTGateTx) ExecuteKeyRanges(ctx context.Context, query string, keyspace
 }
 
 // ExecuteEntityIds executes a non-streaming query for multiple entities.
-func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool) (*mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeEntityIds: not in transaction")
 	}
@@ -228,18 +264,18 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 	return res, err
 }
 
-// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-func (tx *VTGateTx) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
-		return nil, fmt.Errorf("executeBatchShard: not in transaction")
+		return nil, fmt.Errorf("executeBatchShards: not in transaction")
 	}
-	res, session, err := tx.impl.ExecuteBatchShard(ctx, queries, tabletType, asTransaction, tx.session)
+	res, session, err := tx.impl.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, tx.session)
 	tx.session = session
 	return res, err
 }
 
 // ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
+func (tx *VTGateTx) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool) ([]mproto.QueryResult, error) {
 	if tx.session == nil {
 		return nil, fmt.Errorf("executeBatchKeyspaceIds: not in transaction")
 	}
@@ -299,37 +335,49 @@ type ErrFunc func() error
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
 	// Execute executes a non-streaming query on vtgate.
-	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
+	Execute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
-	// ExecuteShard executes a non-streaming query for multiple shards on vtgate.
-	ExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
+	// ExecuteShards executes a non-streaming query for multiple shards on vtgate.
+	ExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
 	// ExecuteKeyspaceIds executes a non-streaming query for multiple keyspace_ids.
-	ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
+	ExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
 	// ExecuteKeyRanges executes a non-streaming query on a key range.
-	ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
+	ExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
 	// ExecuteEntityIds executes a non-streaming query for multiple entities.
-	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType topo.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
+	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error)
 
-	// ExecuteBatchShard executes a set of non-streaming queries for multiple shards.
-	ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
+	ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// ExecuteBatchKeyspaceIds executes a set of non-streaming queries for multiple keyspace ids.
-	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType topo.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
+	ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error)
 
 	// StreamExecute executes a streaming query on vtgate.
-	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
-	// StreamExecuteShard executes a streaming query on vtgate, on a set of shards.
-	StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+	// StreamExecute2 executes a streaming query on vtgate.
+	StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+
+	// StreamExecuteShards executes a streaming query on vtgate, on a set of shards.
+	StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+
+	// StreamExecuteShards2 executes a streaming query on vtgate, on a set of shards.
+	StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteKeyRanges executes a streaming query on vtgate, on a set of keyranges.
-	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []key.KeyRange, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+
+	// StreamExecuteKeyRanges2 executes a streaming query on vtgate, on a set of keyranges.
+	StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*pb.KeyRange, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// StreamExecuteKeyspaceIds executes a streaming query on vtgate, for the given keyspaceIds.
-	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds []key.KeyspaceId, bindVars map[string]interface{}, tabletType topo.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
+
+	// StreamExecuteKeyspaceIds2 executes a streaming query on vtgate, for the given keyspaceIds.
+	StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, ErrFunc, error)
 
 	// Begin starts a transaction and returns a VTGateTX.
 	Begin(ctx context.Context) (interface{}, error)
@@ -351,7 +399,7 @@ type Impl interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query.
-	SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
+	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)

@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // TabletManagerProtocol is the implementation to use for tablet
@@ -52,7 +54,7 @@ type TabletManagerClient interface {
 	SetReadWrite(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// ChangeType asks the remote tablet to change its type
-	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType topo.TabletType) error
+	ChangeType(ctx context.Context, tablet *topo.TabletInfo, dbType pb.TabletType) error
 
 	// Scrap scraps the live running tablet
 	Scrap(ctx context.Context, tablet *topo.TabletInfo) error
@@ -67,7 +69,7 @@ type TabletManagerClient interface {
 	RefreshState(ctx context.Context, tablet *topo.TabletInfo) error
 
 	// RunHealthCheck asks the remote tablet to run a health check cycle
-	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType topo.TabletType) error
+	RunHealthCheck(ctx context.Context, tablet *topo.TabletInfo, targetTabletType pb.TabletType) error
 
 	// ReloadSchema asks the remote tablet to reload its schema
 	ReloadSchema(ctx context.Context, tablet *topo.TabletInfo) error
@@ -146,12 +148,12 @@ type TabletManagerClient interface {
 
 	// PopulateReparentJournal asks the master to insert a row in
 	// its reparent_journal table.
-	PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias topo.TabletAlias, pos myproto.ReplicationPosition) error
+	PopulateReparentJournal(ctx context.Context, tablet *topo.TabletInfo, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error
 
 	// InitSlave tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table.
-	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
+	InitSlave(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, replicationPosition myproto.ReplicationPosition, timeCreatedNS int64) error
 
 	// DemoteMaster tells the soon-to-be-former master it's gonna change,
 	// and it should go read-only and return its current position.
@@ -166,7 +168,7 @@ type TabletManagerClient interface {
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
-	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent topo.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, tablet *topo.TabletInfo, parent *pb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs) error

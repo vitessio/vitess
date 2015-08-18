@@ -21,6 +21,8 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 //
@@ -41,14 +43,14 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 		return ti, fmt.Errorf("no master in destination shard %v/%v", keyspace, shard)
 	}
 
-	wr.Logger().Infof("Found target master alias %v in shard %v/%v", si.MasterAlias, keyspace, shard)
+	wr.Logger().Infof("Found target master alias %v in shard %v/%v", topo.TabletAliasString(si.MasterAlias), keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), topo.ProtoToTabletAlias(si.MasterAlias))
+	ti, err = topo.GetTablet(shortCtx, wr.TopoServer(), si.MasterAlias)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to get master tablet from alias %v in shard %v/%v",
-			si.MasterAlias, keyspace, shard)
+			topo.TabletAliasString(si.MasterAlias), keyspace, shard)
 	}
 	return ti, nil
 }
@@ -56,7 +58,7 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 // Does a topo lookup for a single shard, and returns:
 //	1. Slice of all tablet aliases for the shard.
 //	2. Map of tablet alias : tablet record for all tablets.
-func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []topo.TabletAlias, reloadTablets map[topo.TabletAlias]*topo.TabletInfo, err error) {
+func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*pb.TabletAlias, reloadTablets map[pb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	reloadAliases, err = topo.FindAllTabletAliasesInShard(shortCtx, wr.TopoServer(), keyspace, shard)
@@ -236,11 +238,11 @@ func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	return data.String(), nil
 }
 
-// runSqlCommands will send the sql commands to the remote tablet.
-func runSqlCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
+// runSQLCommands will send the sql commands to the remote tablet.
+func runSQLCommands(ctx context.Context, wr *wrangler.Wrangler, r Resolver, shard string, commands []string) error {
 	ti, err := r.GetDestinationMaster(shard)
 	if err != nil {
-		return fmt.Errorf("runSqlCommands failed: %v", err)
+		return fmt.Errorf("runSQLCommands failed: %v", err)
 	}
 
 	for _, command := range commands {

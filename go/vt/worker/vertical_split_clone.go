@@ -49,7 +49,7 @@ type VerticalSplitCloneWorker struct {
 	sourceKeyspace string
 
 	// populated during WorkerStateFindTargets, read-only after that
-	sourceAlias  topo.TabletAlias
+	sourceAlias  *pb.TabletAlias
 	sourceTablet *topo.TabletInfo
 
 	// populated during WorkerStateCopy
@@ -57,8 +57,8 @@ type VerticalSplitCloneWorker struct {
 	startTime   time.Time
 	// aliases of tablets that need to have their schema reloaded.
 	// Only populated once, read-only after that.
-	reloadAliases []topo.TabletAlias
-	reloadTablets map[topo.TabletAlias]*topo.TabletInfo
+	reloadAliases []*pb.TabletAlias
+	reloadTablets map[pb.TabletAlias]*topo.TabletInfo
 
 	ev *events.VerticalSplitClone
 
@@ -117,7 +117,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
-		result += "<b>Copying from</b>: " + vscw.sourceAlias.String() + "</br>\n"
+		result += "<b>Copying from</b>: " + topo.TabletAliasString(vscw.sourceAlias) + "</br>\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
@@ -139,7 +139,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "Running:\n"
-		result += "Copying from: " + vscw.sourceAlias.String() + "\n"
+		result += "Copying from: " + topo.TabletAliasString(vscw.sourceAlias) + "\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -249,12 +249,12 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
-	vscw.wr.Logger().Infof("Using tablet %v as the source", vscw.sourceAlias)
+	vscw.wr.Logger().Infof("Using tablet %v as the source", topo.TabletAliasString(vscw.sourceAlias))
 
 	// get the tablet info for it
 	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(ctx, vscw.sourceAlias)
 	if err != nil {
-		return fmt.Errorf("cannot read tablet %v: %v", vscw.sourceTablet, err)
+		return fmt.Errorf("cannot read tablet %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
 	}
 
 	// stop replication on it
@@ -262,15 +262,15 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot stop replication on tablet %v", vscw.sourceAlias)
+		return fmt.Errorf("cannot stop replication on tablet %v", topo.TabletAliasString(vscw.sourceAlias))
 	}
 
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", vscw.sourceAlias, err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
 	}
-	action.TabletType = topo.TYPE_SPARE
+	action.TabletType = pb.TabletType_SPARE
 
 	return vscw.ResolveDestinationMasters(ctx)
 }
@@ -336,7 +336,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, true)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", vscw.sourceAlias, err)
+		return fmt.Errorf("cannot get schema from source %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter")
@@ -429,7 +429,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
-				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, vscw.sourceAlias.String())
+				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topo.TabletAliasString(vscw.sourceAlias))
 				qrr, err := NewQueryResultReaderForTablet(ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
 				if err != nil {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
@@ -474,7 +474,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		go func(shardName string) {
 			defer destinationWaitGroup.Done()
 			vscw.wr.Logger().Infof("Making and populating blp_checkpoint table")
-			if err := runSqlCommands(ctx, vscw.wr, vscw, shardName, queries); err != nil {
+			if err := runSQLCommands(ctx, vscw.wr, vscw, shardName, queries); err != nil {
 				processError("blp_checkpoint queries failed: %v", err)
 			}
 		}(vscw.destinationShard)
@@ -490,7 +490,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	} else {
 		vscw.wr.Logger().Infof("Setting SourceShard on shard %v/%v", vscw.destinationKeyspace, vscw.destinationShard)
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []topo.TabletAlias{vscw.sourceAlias}, vscw.tables)
+		err := vscw.wr.SetSourceShards(shortCtx, vscw.destinationKeyspace, vscw.destinationShard, []*pb.TabletAlias{vscw.sourceAlias}, vscw.tables)
 		cancel()
 		if err != nil {
 			return fmt.Errorf("Failed to set source shards: %v", err)
@@ -508,14 +508,14 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 		destinationWaitGroup.Add(1)
 		go func(ti *topo.TabletInfo) {
 			defer destinationWaitGroup.Done()
-			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.Alias)
+			vscw.wr.Logger().Infof("Reloading schema on tablet %v", ti.AliasString())
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 			err := vscw.wr.TabletManagerClient().ReloadSchema(shortCtx, ti)
 			cancel()
 			if err != nil {
-				processError("ReloadSchema failed on tablet %v: %v", ti.Alias, err)
+				processError("ReloadSchema failed on tablet %v: %v", ti.AliasString(), err)
 			}
-		}(vscw.reloadTablets[tabletAlias])
+		}(vscw.reloadTablets[*tabletAlias])
 	}
 	destinationWaitGroup.Wait()
 	return firstError

@@ -13,12 +13,21 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 )
 
+type nodeEvent struct {
+	index uint64
+	resp  *etcd.Response
+}
+
 type fakeNode struct {
 	node *etcd.Node
 
-	mu         sync.Mutex
 	watchIndex int
 	watches    map[int]chan *etcd.Response
+
+	// history contains a record of all changes to this node.
+	// The contract of Watch() specifies that it should replay all changes
+	// since the provided cluster index before subscribing to live updates.
+	history []nodeEvent
 }
 
 func newFakeNode(node *etcd.Node) *fakeNode {
@@ -28,19 +37,23 @@ func newFakeNode(node *etcd.Node) *fakeNode {
 	}
 }
 
-func (fn *fakeNode) notify(action string) {
-	fn.mu.Lock()
-	defer fn.mu.Unlock()
+func (fn *fakeNode) notify(modifiedIndex uint64, action string) {
+	var node *etcd.Node
+	if fn.node != nil {
+		node = &etcd.Node{}
+		*node = *fn.node
+	}
+	resp := &etcd.Response{
+		Action: action,
+		Node:   node,
+	}
+
+	// Log all changes.
+	fn.history = append(fn.history, nodeEvent{index: modifiedIndex, resp: resp})
+
+	// Notify anyone waiting for live updates.
 	for _, w := range fn.watches {
-		var node *etcd.Node
-		if fn.node != nil {
-			node = &etcd.Node{}
-			*node = *fn.node
-		}
-		w <- &etcd.Response{
-			Action: action,
-			Node:   node,
-		}
+		w <- resp
 	}
 }
 
@@ -49,6 +62,7 @@ type fakeClient struct {
 	nodes map[string]*fakeNode
 	index uint64
 
+	// This mutex protects all the above fields, including subfields of each node.
 	sync.Mutex
 }
 
@@ -80,6 +94,7 @@ func (c *fakeClient) createParentDirs(key string) {
 
 func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	if prevValue != "" {
 		panic("not implemented")
@@ -87,36 +102,31 @@ func (c *fakeClient) CompareAndDelete(key string, prevValue string, prevIndex ui
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if n.node.ModifiedIndex != prevIndex {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
 	c.index++
 	n.node = nil
-	c.Unlock()
-	n.notify("compareAndDelete")
+	n.notify(c.index, "compareAndDelete")
 	return &etcd.Response{}, nil
 }
 
 func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	prevValue string, prevIndex uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 	if prevValue != "" && n.node.Value != prevValue {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 	if prevIndex != 0 && n.node.ModifiedIndex != prevIndex {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeTestFailed}
 	}
 
@@ -125,17 +135,16 @@ func (c *fakeClient) CompareAndSwap(key string, value string, ttl uint64,
 	n.node.Value = value
 	c.nodes[key] = n
 	node := *n.node
-	c.Unlock()
-	n.notify("compareAndSwap")
+	n.notify(c.index, "compareAndSwap")
 	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if ok && n.node != nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeNodeExist}
 	}
 
@@ -152,20 +161,20 @@ func (c *fakeClient) Create(key string, value string, ttl uint64) (*etcd.Respons
 		ModifiedIndex: c.index,
 	}
 	node := *n.node
-	c.Unlock()
-	n.notify("create")
+	n.notify(c.index, "create")
 	return &etcd.Response{Node: &node}, nil
 }
 
 func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
+	c.index++
 	n.node = nil
 	notifyList := []*fakeNode{n}
 
@@ -177,19 +186,18 @@ func (c *fakeClient) Delete(key string, recursive bool) (*etcd.Response, error) 
 			}
 		}
 	}
-	c.Unlock()
 	for _, n = range notifyList {
-		n.notify("delete")
+		n.notify(c.index, "delete")
 	}
 	return &etcd.Response{}, nil
 }
 
 func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	n, ok := c.nodes[key]
 	if !ok || n.node == nil {
-		c.Unlock()
 		return nil, &etcd.EtcdError{ErrorCode: EcodeKeyNotFound}
 	}
 
@@ -197,15 +205,14 @@ func (c *fakeClient) DeleteDir(key string) (*etcd.Response, error) {
 		// If it's a dir, it must be empty.
 		for k := range c.nodes {
 			if strings.HasPrefix(k, key+"/") {
-				c.Unlock()
 				return nil, &etcd.EtcdError{ErrorCode: EcodeDirNotEmpty}
 			}
 		}
 	}
 
+	c.index++
 	n.node = nil
-	c.Unlock()
-	n.notify("delete")
+	n.notify(c.index, "delete")
 
 	return &etcd.Response{}, nil
 }
@@ -248,6 +255,7 @@ func (c *fakeClient) Get(key string, sortFiles, recursive bool) (*etcd.Response,
 
 func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, error) {
 	c.Lock()
+	defer c.Unlock()
 
 	c.index++
 
@@ -264,9 +272,8 @@ func (c *fakeClient) Set(key string, value string, ttl uint64) (*etcd.Response, 
 		n.node = &etcd.Node{Key: key, Value: value, CreatedIndex: c.index, ModifiedIndex: c.index}
 	}
 	node := *n.node
-	c.Unlock()
 
-	n.notify("set")
+	n.notify(c.index, "set")
 	return &etcd.Response{Node: &node}, nil
 }
 
@@ -285,19 +292,19 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		panic("not implemented")
 	}
 
-	// We need a buffered forwarderfor 2 reasons:
-	// - in the select loop below, we only write to receiver if
-	// stop has not been closed. Otherwise we introduce race
-	// conditions.
-	// - we are waiting on forwarder and taking the node mutex.
-	// fakeNode.notify write to forwarder, and also takes the node
-	// mutex. Both can deadlock each-other. By buffering the
-	// channel, we make sure 10 notify() call can finish and not
-	// deadlock. We do a few of them in the serial locking code
-	// in tests.
+	// We need a buffered forwarder for 2 reasons:
+	// - In the select loop below, we only write to receiver if
+	//   stop has not been closed. Otherwise we introduce race
+	//   conditions.
+	// - We are waiting on forwarder and taking the mutex.
+	//   Callers of fakeNode.notify write to forwarder, and also take
+	//   the mutex. Both can deadlock each other. By buffering the
+	//   channel, we make sure 10 notify() call can finish and not
+	//   deadlock. We do a few of them in the serial locking code
+	//   in tests.
 	forwarder := make(chan *etcd.Response, 10)
 
-	// add the watch under the lock
+	// Fetch history and subscribe to live updates.
 	c.Lock()
 	c.createParentDirs(prefix)
 	n, ok := c.nodes[prefix]
@@ -305,22 +312,34 @@ func (c *fakeClient) Watch(prefix string, waitIndex uint64, recursive bool,
 		n = newFakeNode(nil)
 		c.nodes[prefix] = n
 	}
-	c.Unlock()
-
-	n.mu.Lock()
 	index := n.watchIndex
 	n.watchIndex++
 	n.watches[index] = forwarder
-	n.mu.Unlock()
+	history := n.history
+	c.Unlock()
 
-	// and wait until we stop, each action will write to forwarder, send
-	// these along.
+	defer func() {
+		// Unsubscribe from live updates.
+		c.Lock()
+		delete(n.watches, index)
+		c.Unlock()
+	}()
+
+	// Before we begin processing live updates, catch up on history as requested.
+	for _, event := range history {
+		if event.index >= waitIndex {
+			select {
+			case <-stop:
+				return &etcd.Response{}, nil
+			case receiver <- event.resp:
+			}
+		}
+	}
+
+	// Process live updates.
 	for {
 		select {
 		case <-stop:
-			n.mu.Lock()
-			delete(n.watches, index)
-			n.mu.Unlock()
 			return &etcd.Response{}, nil
 		case r := <-forwarder:
 			receiver <- r

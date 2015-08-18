@@ -15,7 +15,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -52,21 +51,21 @@ func TestAPI(t *testing.T) {
 		KeyRange: &pb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
-	topo.CreateTablet(ctx, ts, &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: "cell1", Uid: 100},
+	topo.CreateTablet(ctx, ts, &pb.Tablet{
+		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 100},
 		Keyspace: "ks1",
 		Shard:    "-80",
-		Type:     topo.TYPE_REPLICA,
-		KeyRange: key.KeyRange{Start: "", End: "\x80"},
-		Portmap:  map[string]int{"vt": 100},
+		Type:     pb.TabletType_REPLICA,
+		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
+		PortMap:  map[string]int32{"vt": 100},
 	})
-	topo.CreateTablet(ctx, ts, &topo.Tablet{
-		Alias:    topo.TabletAlias{Cell: "cell2", Uid: 200},
+	topo.CreateTablet(ctx, ts, &pb.Tablet{
+		Alias:    &pb.TabletAlias{Cell: "cell2", Uid: 200},
 		Keyspace: "ks1",
 		Shard:    "-80",
-		Type:     topo.TYPE_REPLICA,
-		KeyRange: key.KeyRange{Start: "", End: "\x80"},
-		Portmap:  map[string]int{"vt": 200},
+		Type:     pb.TabletType_REPLICA,
+		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
+		PortMap:  map[string]int32{"vt": 200},
 	})
 	topotools.RebuildShard(ctx, logutil.NewConsoleLogger(), ts, "ks1", "-80", cells, 10*time.Second)
 
@@ -80,7 +79,7 @@ func TestAPI(t *testing.T) {
 			return "TestShardAction Result", nil
 		})
 	actionRepo.RegisterTabletAction("TestTabletAction", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *pb.TabletAlias, r *http.Request) (string, error) {
 			return "TestTabletAction Result", nil
 		})
 
@@ -118,27 +117,22 @@ func TestAPI(t *testing.T) {
 
 		// Tablets
 		{"GET", "tablets/?shard=ks1%2F-80", `[
-				{"Cell":"cell1","Uid":100},
-				{"Cell":"cell2","Uid":200}
+				{"cell":"cell1","uid":100},
+				{"cell":"cell2","uid":200}
 			]`},
 		{"GET", "tablets/?cell=cell1", `[
-				{"Cell":"cell1","Uid":100}
+				{"cell":"cell1","uid":100}
 			]`},
 		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", `[
-				{"Cell":"cell2","Uid":200}
+				{"cell":"cell2","uid":200}
 			]`},
 		{"GET", "tablets/cell1-100", `{
-				"Alias": {"Cell": "cell1", "Uid": 100},
-				"Hostname": "",
-				"IPAddr": "",
-				"Portmap": {"vt": 100},
-				"Tags": null,
-				"Health": null,
-				"Keyspace": "ks1",
-				"Shard": "-80",
-				"Type": "replica",
-				"DbNameOverride": "",
-				"KeyRange": {"Start": "", "End": "80"}
+				"alias": {"cell": "cell1", "uid": 100},
+				"port_map": {"vt": 100},
+				"keyspace": "ks1",
+				"shard": "-80",
+				"key_range": {"end": "gA=="},
+				"type": 3
 			}`},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", `{
 				"Name": "TestTabletAction",
@@ -148,7 +142,7 @@ func TestAPI(t *testing.T) {
 			}`},
 
 		// EndPoints
-		{"GET", "endpoints/cell1/ks1/-80/", `["replica"]`},
+		{"GET", "endpoints/cell1/ks1/-80/", `[3]`},
 		{"GET", "endpoints/cell1/ks1/-80/replica", `{
 				"entries": [{
 						"uid": 100,

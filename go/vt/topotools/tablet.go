@@ -28,17 +28,18 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // ConfigureTabletHook configures the right parameters for a hook
 // running locally on a tablet.
-func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
+func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
-	hk.ExtraEnv["TABLET_ALIAS"] = tabletAlias.String()
+	hk.ExtraEnv["TABLET_ALIAS"] = topo.TabletAliasString(tabletAlias)
 }
 
 // Scrap will update the tablet type to 'Scrap', and remove it from
@@ -48,7 +49,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 // probably dead. So if 'force' is true, we will also remove pending
 // remote actions.  And if 'force' is false, we also run an optional
 // hook.
-func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
+func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, force bool) error {
 	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 	// If you are already scrap, skip updating replication data. It won't
 	// be there anyway.
 	wasAssigned := tablet.IsAssigned()
-	tablet.Type = topo.TYPE_SCRAP
+	tablet.Type = pb.TabletType_SCRAP
 	// Update the tablet first, since that is canonical.
 	err = topo.UpdateTablet(ctx, ts, tablet)
 	if err != nil {
@@ -99,7 +100,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, fo
 // - if health is nil, we don't touch the Tablet's Health record.
 // - if health is an empty map, we clear the Tablet's Health record.
 // - if health has values, we overwrite the Tablet's Health record.
-func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, health map[string]string) error {
+func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, newType pb.TabletType, health map[string]string) error {
 	tablet, err := ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
@@ -110,17 +111,17 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias topo.TabletAlia
 	}
 
 	tablet.Type = newType
-	if newType == topo.TYPE_IDLE {
+	if newType == pb.TabletType_IDLE {
 		tablet.Keyspace = ""
 		tablet.Shard = ""
-		tablet.KeyRange = key.KeyRange{}
-		tablet.Health = health
+		tablet.KeyRange = nil
+		tablet.HealthMap = health
 	}
 	if health != nil {
 		if len(health) == 0 {
-			tablet.Health = nil
+			tablet.HealthMap = nil
 		} else {
-			tablet.Health = health
+			tablet.HealthMap = health
 		}
 	}
 	return topo.UpdateTablet(ctx, ts, tablet)

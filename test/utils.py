@@ -383,7 +383,7 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   it will raise a TestError.
   """
   while True:
-    if run_vtctl_json(['GetTablet', tablet_alias])['Type'] == expected_type:
+    if run_vtctl_json(['GetTablet', tablet_alias])['type'] == expected_type:
       break
     timeout = wait_step(
       "%s's SlaveType to be %s" % (tablet_alias, expected_type),
@@ -596,8 +596,11 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
     result = vtctld.vtctl_client(clargs)
     return result, ""
   elif mode == VTCTL_RPC:
-    logging.debug("vtctl: %s", " ".join(clargs))
-    result = vtctl_client.execute_vtctl_command(vtctld_connection, clargs, info_to_debug=True, action_timeout=120)
+    if auto_log:
+      logging.debug("vtctl: %s", " ".join(clargs))
+    result = vtctl_client.execute_vtctl_command(vtctld_connection, clargs,
+                                                info_to_debug=True,
+                                                action_timeout=120)
     return result, ""
 
   raise Exception('Unknown mode: %s', mode)
@@ -625,8 +628,8 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
 
 # run_vtctl_json runs the provided vtctl command and returns the result
 # parsed as json
-def run_vtctl_json(clargs):
-  stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
+def run_vtctl_json(clargs, auto_log=True):
+  stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=auto_log)
   return json.loads(stdout)
 
 def get_log_level():
@@ -920,8 +923,9 @@ class Vtctld(object):
       args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
+    stdout_fd = open(os.path.join(environment.tmproot, 'vtctld.stdout'), 'w')
     stderr_fd = open(os.path.join(environment.tmproot, 'vtctld.stderr'), 'w')
-    self.proc = run_bg(args, stderr=stderr_fd)
+    self.proc = run_bg(args, stdout=stdout_fd, stderr=stderr_fd)
 
     # wait for the process to listen to RPC
     timeout = 30

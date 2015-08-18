@@ -18,8 +18,12 @@ type SplitDiffTask struct {
 // Run is part of the Task interface.
 func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndDestShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["dest_shard"])
-	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"],
-		[]string{"SplitDiff", keyspaceAndDestShard})
+	args := []string{"SplitDiff"}
+	if excludeTables, ok := parameters["exclude_tables"]; ok {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+	args = append(args, keyspaceAndDestShard)
+	output, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], args)
 
 	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
 	if err == nil {
@@ -32,4 +36,9 @@ func (t *SplitDiffTask) Run(parameters map[string]string) ([]*pb.TaskContainer, 
 // RequiredParameters is part of the Task interface.
 func (t *SplitDiffTask) RequiredParameters() []string {
 	return []string{"keyspace", "dest_shard", "vtworker_endpoint"}
+}
+
+// OptionalParameters is part of the Task interface.
+func (t *SplitDiffTask) OptionalParameters() []string {
+	return []string{"exclude_tables"}
 }

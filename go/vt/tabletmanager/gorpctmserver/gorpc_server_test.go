@@ -14,6 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/agentrpctest"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // the test here creates a fake server implementation, a fake client
@@ -24,7 +26,8 @@ func TestGoRPCTMServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
+	defer listener.Close()
+	port := int32(listener.Addr().(*net.TCPAddr).Port)
 
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
@@ -41,13 +44,13 @@ func TestGoRPCTMServer(t *testing.T) {
 
 	// Create a Go Rpc client to talk to the fake tablet
 	client := &gorpctmclient.GoRPCTabletManagerClient{}
-	ti := topo.NewTabletInfo(&topo.Tablet{
-		Alias: topo.TabletAlias{
+	ti := topo.NewTabletInfo(&pb.Tablet{
+		Alias: &pb.TabletAlias{
 			Cell: "test",
 			Uid:  123,
 		},
 		Hostname: "localhost",
-		Portmap: map[string]int{
+		PortMap: map[string]int32{
 			"vt": port,
 		},
 	}, 0)

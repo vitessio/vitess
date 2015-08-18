@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
@@ -51,7 +50,11 @@ func (zkts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keys
 		if err := update(sr); err != nil {
 			return "", err
 		}
-		return jscfg.ToJSON(sr), nil
+		data, err := json.MarshalIndent(sr, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
 	}
 	err := zkts.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {

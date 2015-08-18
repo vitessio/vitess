@@ -14,9 +14,10 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
+
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
@@ -54,10 +55,10 @@ func TestVersion(t *testing.T) {
 	defer vp.Close()
 
 	// couple tablets is enough
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topo.TYPE_MASTER,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, pb.TabletType_MASTER,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topo.TYPE_REPLICA,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, pb.TabletType_REPLICA,
 		TabletKeyspaceShard(t, "source", "0"),
 		StartHTTPServer())
 

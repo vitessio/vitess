@@ -28,7 +28,6 @@ from vtdb import dbexceptions
 from vtdb import vtdb_logger
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
-from zk import zkocc
 
 conn_class = vtgatev2
 

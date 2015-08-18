@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
-	"github.com/youtube/vitess/go/vt/topo"
 
 	pb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	pbs "github.com/youtube/vitess/go/vt/proto/tabletmanagerservice"
@@ -115,7 +114,7 @@ func (s *server) ChangeType(ctx context.Context, request *pb.ChangeTypeRequest) 
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.ChangeTypeResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionChangeType, request, response, true, func() error {
-		return s.agent.ChangeType(ctx, topo.ProtoToTabletType(request.TabletType))
+		return s.agent.ChangeType(ctx, request.TabletType)
 	})
 }
 
@@ -140,7 +139,7 @@ func (s *server) RunHealthCheck(ctx context.Context, request *pb.RunHealthCheckR
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.RunHealthCheckResponse{}
 	return response, s.agent.RPCWrap(ctx, actionnode.TabletActionRunHealthCheck, request, response, func() error {
-		s.agent.RunHealthCheck(ctx, topo.ProtoToTabletType(request.TabletType))
+		s.agent.RunHealthCheck(ctx, request.TabletType)
 		return nil
 	})
 }
@@ -366,7 +365,7 @@ func (s *server) PopulateReparentJournal(ctx context.Context, request *pb.Popula
 		if err != nil {
 			return err
 		}
-		return s.agent.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, topo.ProtoToTabletAlias(request.MasterAlias), position)
+		return s.agent.PopulateReparentJournal(ctx, request.TimeCreatedNs, request.ActionName, request.MasterAlias, position)
 	})
 }
 
@@ -378,7 +377,7 @@ func (s *server) InitSlave(ctx context.Context, request *pb.InitSlaveRequest) (*
 		if err != nil {
 			return err
 		}
-		return s.agent.InitSlave(ctx, topo.ProtoToTabletAlias(request.Parent), position, request.TimeCreatedNs)
+		return s.agent.InitSlave(ctx, request.Parent, position, request.TimeCreatedNs)
 	})
 }
 
@@ -422,7 +421,7 @@ func (s *server) SetMaster(ctx context.Context, request *pb.SetMasterRequest) (*
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response := &pb.SetMasterResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSetMaster, request, response, true, func() error {
-		return s.agent.SetMaster(ctx, topo.ProtoToTabletAlias(request.Parent), request.TimeCreatedNs, request.ForceStartSlave)
+		return s.agent.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.ForceStartSlave)
 	})
 }
 
@@ -431,7 +430,7 @@ func (s *server) SlaveWasRestarted(ctx context.Context, request *pb.SlaveWasRest
 	response := &pb.SlaveWasRestartedResponse{}
 	return response, s.agent.RPCWrapLockAction(ctx, actionnode.TabletActionSlaveWasRestarted, request, response, true, func() error {
 		return s.agent.SlaveWasRestarted(ctx, &actionnode.SlaveWasRestartedArgs{
-			Parent: topo.ProtoToTabletAlias(request.Parent),
+			Parent: request.Parent,
 		})
 	})
 }

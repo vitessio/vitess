@@ -63,8 +63,6 @@ func (kp *KeyspacePartition) HasShard(name string) bool {
 // keyspace, shards and local details.
 // By design, it should not contain details about the Shards themselves,
 // but just which shards to use for serving.
-// FIXME(alainjobart) KeyspacePartition has SrvShard, to be replaced by
-// ShardReference.
 // In zk, it is in /zk/<cell>/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// Shards to use per type, only contains complete partitions.
@@ -75,16 +73,6 @@ type SrvKeyspace struct {
 	ShardingColumnType key.KeyspaceIdType
 	ServedFrom         map[TabletType]string
 	SplitShardCount    int32
-
-	// For atomic updates
-	version int64
 }
 
 //go:generate bsongen -file $GOFILE -type SrvKeyspace -o srvkeyspace_bson.go
-
-// NewSrvKeyspace returns an empty SrvKeyspace with the given version.
-func NewSrvKeyspace(version int64) *SrvKeyspace {
-	return &SrvKeyspace{
-		version: version,
-	}
-}
