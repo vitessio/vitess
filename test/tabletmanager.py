@@ -7,10 +7,6 @@ warnings.simplefilter("ignore")
 
 import json
 import logging
-import os
-import signal
-from subprocess import PIPE
-import threading
 import time
 import unittest
 import urllib
@@ -21,7 +17,6 @@ import utils
 import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
-from vtdb import dbexceptions
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
