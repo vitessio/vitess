@@ -23,9 +23,11 @@ import org.joda.time.Instant;
  * the native Context class can be used.
  */
 public class Context {
+  private static final Context DEFAULT_CONTEXT = new Context();
+
   // getDefault returns an empty context.
   public static Context getDefault() {
-    return new Context();
+    return DEFAULT_CONTEXT;
   }
 
   // withDeadline returns a derived context with the specified maximum deadline.
