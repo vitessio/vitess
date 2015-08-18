@@ -990,6 +990,8 @@ var testStreamHealthStreamHealthResponse = &pb.StreamHealthResponse{
 	RealtimeStats: &pb.RealtimeStats{
 		HealthError:         "random error",
 		SecondsBehindMaster: 234,
+		BinlogPlayersCount: 1,
+		SecondsBehindMasterFilteredReplication: 2,
 		CpuUsage:            1.0,
 	},
 }

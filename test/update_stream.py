@@ -198,8 +198,8 @@ class TestUpdateStream(unittest.TestCase):
     if v['UpdateStreamState'] != 'Enabled':
       self.fail("Update stream service should be 'Enabled' but is '%s'" %
                 v['UpdateStreamState'])
-    self.assertTrue('DML' in v['UpdateStreamEvents'])
-    self.assertTrue('POS' in v['UpdateStreamEvents'])
+    self.assertIn('DML', v['UpdateStreamEvents'])
+    self.assertIn('POS', v['UpdateStreamEvents'])
 
     logging.debug('Testing enable -> disable switch starting @ %s',
                   start_position)
