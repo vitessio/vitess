@@ -713,6 +713,42 @@ class Tablet(object):
     args.extend([self.tablet_alias, sql])
     return utils.run_vtctl_json(args, auto_log=auto_log)
 
+  def begin(self, auto_log=True):
+    """begin uses 'vtctl VtTabletBegin' to start a transaction.
+    """
+    args = [
+        'VtTabletBegin',
+        '-keyspace', self.keyspace,
+        '-shard', self.shard,
+        self.tablet_alias,
+        ]
+    result = utils.run_vtctl_json(args, auto_log=auto_log)
+    return result['transaction_id']
+
+  def commit(self, transaction_id, auto_log=True):
+    """commit uses 'vtctl VtTabletCommit' to commit a transaction.
+    """
+    args = [
+        'VtTabletCommit',
+        '-keyspace', self.keyspace,
+        '-shard', self.shard,
+        self.tablet_alias,
+        str(transaction_id),
+        ]
+    return utils.run_vtctl(args, auto_log=auto_log)
+
+  def rollback(self, transaction_id, auto_log=True):
+    """rollback uses 'vtctl VtTabletRollback' to rollback a transaction.
+    """
+    args = [
+        'VtTabletRollback',
+        '-keyspace', self.keyspace,
+        '-shard', self.shard,
+        self.tablet_alias,
+        str(transaction_id),
+        ]
+    return utils.run_vtctl(args, auto_log=auto_log)
+
 
 def kill_tablets(tablets):
   for t in tablets:

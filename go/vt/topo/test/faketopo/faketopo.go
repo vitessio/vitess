@@ -179,8 +179,8 @@ func (ft FakeTopo) DeleteEndPoints(ctx context.Context, cell, keyspace, shard st
 	return errNotImplemented
 }
 
-// WatchEndPoints implements topo.Server.
-func (ft FakeTopo) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
+// WatchSrvKeyspace implements topo.Server.WatchSrvKeyspace
+func (ft FakeTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
 	return nil, nil, errNotImplemented
 }
 

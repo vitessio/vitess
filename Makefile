@@ -97,7 +97,6 @@ small_integration_test_files = \
 	tablet_test.py \
 	sql_builder_test.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	schema.py \
 	keyspace_test.py \
 	keyrange_test.py \
@@ -138,7 +137,6 @@ worker_integration_test_files = \
 	resharding.py \
 	resharding_bytes.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	initial_sharding.py \
 	initial_sharding_bytes.py \
 	worker.py

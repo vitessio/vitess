@@ -238,12 +238,12 @@ type Server interface {
 	// Can return ErrNoNode or ErrBadVersion.
 	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error
 
-	// WatchEndPoints returns a channel that receives notifications
-	// every time EndPoints for the given type changes.
+	// WatchSrvKeyspace returns a channel that receives notifications
+	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly
-	// quickly after this is set. A value of nil means the Endpoints
+	// quickly after this is set. A value of nil means the SrvKeyspace
 	// object doesn't exist or is empty. To stop watching this
-	// EndPoints object, close the stopWatching channel.
+	// SrvKeyspace object, close the stopWatching channel.
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
@@ -251,7 +251,7 @@ type Server interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (notifications <-chan *pb.EndPoints, stopWatching chan<- struct{}, err error)
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *SrvKeyspace, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.

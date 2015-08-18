@@ -17,9 +17,6 @@
     "vertical_split": {
       "File": "vertical_split.py"
     },
-    "vertical_split_vtgate": {
-      "File": "vertical_split_vtgate.py"
-    },
     "schema": {
       "File": "schema.py"
     },

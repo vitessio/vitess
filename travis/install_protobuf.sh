@@ -11,9 +11,9 @@ if [ "$protobuf_dist" != "" ]; then
   cd $protobuf_dist
 fi
 
-wget https://github.com/google/protobuf/archive/v3.0.0-alpha-2.tar.gz
-tar -xvzf v3.0.0-alpha-2.tar.gz
-cd protobuf-3.0.0-alpha-2
+wget https://github.com/google/protobuf/archive/v3.0.0-alpha-3.tar.gz
+tar -xvzf v3.0.0-alpha-3.tar.gz
+cd protobuf-3.0.0-alpha-3
 ./autogen.sh
 if [ "$protobuf_dist" != "" ]; then
   ./configure --prefix=$protobuf_dist
