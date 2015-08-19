@@ -93,7 +93,7 @@ public class VTGateConn implements Closeable {
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
             .build();
-    ExecuteResponse response = this.client.execute(ctx, request);
+    ExecuteResponse response = client.execute(ctx, request);
     Proto.checkError(response.getError());
     return response.getResult();
   }
@@ -109,7 +109,7 @@ public class VTGateConn implements Closeable {
             .addAllShards(shards)
             .setTabletType(tabletType)
             .build();
-    ExecuteShardsResponse response = this.client.executeShards(ctx, request);
+    ExecuteShardsResponse response = client.executeShards(ctx, request);
     Proto.checkError(response.getError());
     return response.getResult();
   }
@@ -125,7 +125,7 @@ public class VTGateConn implements Closeable {
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
             .setTabletType(tabletType)
             .build();
-    ExecuteKeyspaceIdsResponse response = this.client.executeKeyspaceIds(ctx, request);
+    ExecuteKeyspaceIdsResponse response = client.executeKeyspaceIds(ctx, request);
     Proto.checkError(response.getError());
     return response.getResult();
   }
@@ -141,7 +141,7 @@ public class VTGateConn implements Closeable {
             .addAllKeyRanges(keyRanges)
             .setTabletType(tabletType)
             .build();
-    ExecuteKeyRangesResponse response = this.client.executeKeyRanges(ctx, request);
+    ExecuteKeyRangesResponse response = client.executeKeyRanges(ctx, request);
     Proto.checkError(response.getError());
     return response.getResult();
   }
@@ -158,7 +158,7 @@ public class VTGateConn implements Closeable {
             .addAllEntityKeyspaceIds(Iterables.transform(entityIds, Proto.OBJECT_TO_ENTITY_ID))
             .setTabletType(tabletType)
             .build();
-    ExecuteEntityIdsResponse response = this.client.executeEntityIds(ctx, request);
+    ExecuteEntityIdsResponse response = client.executeEntityIds(ctx, request);
     Proto.checkError(response.getError());
     return response.getResult();
   }
@@ -173,7 +173,7 @@ public class VTGateConn implements Closeable {
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
             .build();
-    ExecuteBatchShardsResponse response = this.client.executeBatchShards(ctx, request);
+    ExecuteBatchShardsResponse response = client.executeBatchShards(ctx, request);
     Proto.checkError(response.getError());
     return response.getResultsList();
   }
@@ -188,7 +188,7 @@ public class VTGateConn implements Closeable {
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
             .build();
-    ExecuteBatchKeyspaceIdsResponse response = this.client.executeBatchKeyspaceIds(ctx, request);
+    ExecuteBatchKeyspaceIdsResponse response = client.executeBatchKeyspaceIds(ctx, request);
     Proto.checkError(response.getError());
     return response.getResultsList();
   }
@@ -201,7 +201,7 @@ public class VTGateConn implements Closeable {
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
             .build();
-    return this.client.streamExecute(ctx, request);
+    return client.streamExecute(ctx, request);
   }
 
   public StreamIterator<QueryResult> streamExecuteShards(Context ctx, String query, String keyspace,
@@ -215,7 +215,7 @@ public class VTGateConn implements Closeable {
             .addAllShards(shards)
             .setTabletType(tabletType)
             .build();
-    return this.client.streamExecuteShards(ctx, request);
+    return client.streamExecuteShards(ctx, request);
   }
 
   public StreamIterator<QueryResult> streamExecuteKeyspaceIds(Context ctx, String query,
@@ -229,7 +229,7 @@ public class VTGateConn implements Closeable {
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
             .setTabletType(tabletType)
             .build();
-    return this.client.streamExecuteKeyspaceIds(ctx, request);
+    return client.streamExecuteKeyspaceIds(ctx, request);
   }
 
   public StreamIterator<QueryResult> streamExecuteKeyRanges(Context ctx, String query,
@@ -243,13 +243,13 @@ public class VTGateConn implements Closeable {
             .addAllKeyRanges(keyRanges)
             .setTabletType(tabletType)
             .build();
-    return this.client.streamExecuteKeyRanges(ctx, request);
+    return client.streamExecuteKeyRanges(ctx, request);
   }
 
   public VTGateTx begin(Context ctx) throws VitessException, VitessRpcException {
     BeginRequest request = BeginRequest.newBuilder().setCallerId(ctx.getCallerId()).build();
-    BeginResponse response = this.client.begin(ctx, request);
-    return VTGateTx.withRpcClientAndSession(this.client, response.getSession());
+    BeginResponse response = client.begin(ctx, request);
+    return VTGateTx.withRpcClientAndSession(client, response.getSession());
   }
 
   public List<SplitQueryResponse.Part> splitQuery(Context ctx, String keyspace, String query,
@@ -263,7 +263,7 @@ public class VTGateConn implements Closeable {
             .setSplitColumn(splitColumn)
             .setSplitCount(splitCount)
             .build();
-    SplitQueryResponse response = this.client.splitQuery(ctx, request);
+    SplitQueryResponse response = client.splitQuery(ctx, request);
     return response.getSplitsList();
   }
 
@@ -271,12 +271,12 @@ public class VTGateConn implements Closeable {
       throws VitessException, VitessRpcException {
     GetSrvKeyspaceRequest request =
         GetSrvKeyspaceRequest.newBuilder().setKeyspace(keyspace).build();
-    GetSrvKeyspaceResponse response = this.client.getSrvKeyspace(ctx, request);
+    GetSrvKeyspaceResponse response = client.getSrvKeyspace(ctx, request);
     return response.getSrvKeyspace();
   }
 
   @Override
   public void close() throws IOException {
-    this.client.close();
+    client.close();
   }
 }

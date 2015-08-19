@@ -57,20 +57,20 @@ public class GrpcClient implements RpcClient {
 
   public GrpcClient(ChannelImpl channel) {
     this.channel = channel;
-    this.asyncStub = VitessGrpc.newStub(channel);
-    this.blockingStub = VitessGrpc.newBlockingStub(channel);
+    asyncStub = VitessGrpc.newStub(channel);
+    blockingStub = VitessGrpc.newBlockingStub(channel);
   }
 
   @Override
   public void close() throws IOException {
-    this.channel.shutdown();
+    channel.shutdown();
   }
 
   @Override
   public ExecuteResponse execute(Context ctx, ExecuteRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.execute(request);
+      return blockingStub.execute(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -81,7 +81,7 @@ public class GrpcClient implements RpcClient {
   public ExecuteShardsResponse executeShards(Context ctx, ExecuteShardsRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeShards(request);
+      return blockingStub.executeShards(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -92,7 +92,7 @@ public class GrpcClient implements RpcClient {
   public ExecuteKeyspaceIdsResponse executeKeyspaceIds(
       Context ctx, ExecuteKeyspaceIdsRequest request) throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeKeyspaceIds(request);
+      return blockingStub.executeKeyspaceIds(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -103,7 +103,7 @@ public class GrpcClient implements RpcClient {
   public ExecuteKeyRangesResponse executeKeyRanges(Context ctx, ExecuteKeyRangesRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeKeyRanges(request);
+      return blockingStub.executeKeyRanges(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -114,7 +114,7 @@ public class GrpcClient implements RpcClient {
   public ExecuteEntityIdsResponse executeEntityIds(Context ctx, ExecuteEntityIdsRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeEntityIds(request);
+      return blockingStub.executeEntityIds(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -125,7 +125,7 @@ public class GrpcClient implements RpcClient {
   public ExecuteBatchShardsResponse executeBatchShards(
       Context ctx, ExecuteBatchShardsRequest request) throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeBatchShards(request);
+      return blockingStub.executeBatchShards(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -137,7 +137,7 @@ public class GrpcClient implements RpcClient {
       Context ctx, ExecuteBatchKeyspaceIdsRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.executeBatchKeyspaceIds(request);
+      return blockingStub.executeBatchKeyspaceIds(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -156,7 +156,7 @@ public class GrpcClient implements RpcClient {
               return response.getResult();
             }
           };
-      this.asyncStub.streamExecute(request, adapter);
+      asyncStub.streamExecute(request, adapter);
       return adapter;
     } catch (Exception e) {
       throw new VitessRpcException("grpc error", e);
@@ -175,7 +175,7 @@ public class GrpcClient implements RpcClient {
               return response.getResult();
             }
           };
-      this.asyncStub.streamExecuteShards(request, adapter);
+      asyncStub.streamExecuteShards(request, adapter);
       return adapter;
     } catch (Exception e) {
       throw new VitessRpcException("grpc error", e);
@@ -195,7 +195,7 @@ public class GrpcClient implements RpcClient {
               return response.getResult();
             }
           };
-      this.asyncStub.streamExecuteKeyspaceIds(request, adapter);
+      asyncStub.streamExecuteKeyspaceIds(request, adapter);
       return adapter;
     } catch (Exception e) {
       throw new VitessRpcException("grpc error", e);
@@ -214,7 +214,7 @@ public class GrpcClient implements RpcClient {
               return response.getResult();
             }
           };
-      this.asyncStub.streamExecuteKeyRanges(request, adapter);
+      asyncStub.streamExecuteKeyRanges(request, adapter);
       return adapter;
     } catch (Exception e) {
       throw new VitessRpcException("grpc error", e);
@@ -225,7 +225,7 @@ public class GrpcClient implements RpcClient {
   public BeginResponse begin(Context ctx, BeginRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.begin(request);
+      return blockingStub.begin(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -236,7 +236,7 @@ public class GrpcClient implements RpcClient {
   public CommitResponse commit(Context ctx, CommitRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.commit(request);
+      return blockingStub.commit(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -247,7 +247,7 @@ public class GrpcClient implements RpcClient {
   public RollbackResponse rollback(Context ctx, RollbackRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.rollback(request);
+      return blockingStub.rollback(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -258,7 +258,7 @@ public class GrpcClient implements RpcClient {
   public SplitQueryResponse splitQuery(Context ctx, SplitQueryRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.splitQuery(request);
+      return blockingStub.splitQuery(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);
@@ -269,7 +269,7 @@ public class GrpcClient implements RpcClient {
   public GetSrvKeyspaceResponse getSrvKeyspace(Context ctx, GetSrvKeyspaceRequest request)
       throws VitessException, VitessRpcException {
     try (GrpcContext gctx = new GrpcContext(ctx)) {
-      return this.blockingStub.getSrvKeyspace(request);
+      return blockingStub.getSrvKeyspace(request);
     } catch (Exception e) {
       checkGrpcError(e);
       throw new VitessRpcException("grpc error", e);

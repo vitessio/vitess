@@ -41,20 +41,20 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
     synchronized (this) {
       try {
         // Wait until the previous value has been consumed.
-        while (this.nextValue != null) {
+        while (nextValue != null) {
           // If there's been an error, drain the rest of the stream without blocking.
-          if (this.error != null)
+          if (error != null)
             return;
 
-          this.wait();
+          wait();
         }
 
-        this.nextValue = getResult(value);
-        this.notifyAll();
+        nextValue = getResult(value);
+        notifyAll();
       } catch (InterruptedException e) {
-        this.onError(e);
+        onError(e);
       } catch (VitessException e) {
-        this.onError(e);
+        onError(e);
       }
     }
   }
@@ -62,16 +62,16 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
   @Override
   public void onCompleted() {
     synchronized (this) {
-      this.completed = true;
-      this.notifyAll();
+      completed = true;
+      notifyAll();
     }
   }
 
   @Override
   public void onError(Throwable error) {
     synchronized (this) {
-      this.error = error;
-      this.notifyAll();
+      error = error;
+      notifyAll();
     }
   }
 
@@ -80,22 +80,22 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
     synchronized (this) {
       try {
         // Wait for a new value to show up.
-        while (this.nextValue == null) {
-          if (this.completed)
+        while (nextValue == null) {
+          if (completed)
             return false;
-          if (this.error != null) {
-            if (this.error instanceof VitessException)
-              throw (VitessException) this.error;
+          if (error != null) {
+            if (error instanceof VitessException)
+              throw (VitessException) error;
             else
-              throw new VitessRpcException("error in gRPC StreamIterator", this.error);
+              throw new VitessRpcException("error in gRPC StreamIterator", error);
           }
 
-          this.wait();
+          wait();
         }
 
         return true;
       } catch (InterruptedException e) {
-        this.onError(e);
+        onError(e);
         throw new VitessRpcException("error in gRPC StreamIterator", e);
       }
     }
@@ -104,10 +104,10 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
   @Override
   public E next() throws NoSuchElementException, VitessException, VitessRpcException {
     synchronized (this) {
-      if (this.hasNext()) {
-        E value = this.nextValue;
-        this.nextValue = null;
-        this.notifyAll();
+      if (hasNext()) {
+        E value = nextValue;
+        nextValue = null;
+        notifyAll();
         return value;
       } else {
         throw new NoSuchElementException("stream completed");

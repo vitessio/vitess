@@ -36,7 +36,7 @@ public class Context {
       // You can't make a derived context with a later deadline than the parent.
       return this;
     }
-    return new Context(deadline, this.callerId);
+    return new Context(deadline, callerId);
   }
 
   /**
@@ -44,7 +44,7 @@ public class Context {
    * specified relative to the current time.
    */
   public Context withDeadlineAfter(Duration duration) {
-    return this.withDeadline(Instant.now().plus(duration));
+    return withDeadline(Instant.now().plus(duration));
   }
 
   // withCallerId returns a derived context with the specified callerId.
@@ -53,15 +53,15 @@ public class Context {
       // Nothing changed.
       return this;
     }
-    return new Context(this.deadline, callerId);
+    return new Context(deadline, callerId);
   }
 
   public Instant getDeadline() {
-    return this.deadline;
+    return deadline;
   }
 
   public CallerID getCallerId() {
-    return this.callerId;
+    return callerId;
   }
 
   private Instant deadline;
