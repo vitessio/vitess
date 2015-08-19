@@ -31,23 +31,35 @@ const destShard = "-80"
 // WaitForFilteredReplication ensures that the dest shard has caught up
 // with the source shard up to a maximum replication delay (in seconds).
 func TestWaitForFilteredReplication(t *testing.T) {
-	waitForFilteredReplicationDefaultDelay(t, "" /* expectedErr */)
-}
-
-func waitForFilteredReplicationDefaultDelay(t *testing.T, expectedErr string) {
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
+		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
 	// Replication caught up.
 	oneSecondDelayFunc := func() *pbq.RealtimeStats {
 		return &pbq.RealtimeStats{
+			BinlogPlayersCount:                     1,
 			SecondsBehindMasterFilteredReplication: 1,
 		}
 	}
 
-	waitForFilteredReplication(t, expectedErr, oneHourDelay, oneSecondDelayFunc)
+	waitForFilteredReplication(t, "" /* expectedErr */, oneHourDelay, oneSecondDelayFunc)
+}
+
+// TestWaitForFilteredReplication_noFilteredReplication checks that
+// vtctl WaitForFilteredReplication fails when no filtered replication is
+// running (judging by the tablet's returned stream health record).
+func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
+	noFilteredReplication := &pbq.RealtimeStats{
+		BinlogPlayersCount: 0,
+	}
+	noFilteredReplicationFunc := func() *pbq.RealtimeStats {
+		return noFilteredReplication
+	}
+
+	waitForFilteredReplication(t, "no filtered replication running", noFilteredReplication, noFilteredReplicationFunc)
 }
 
 func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {

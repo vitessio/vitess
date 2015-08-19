@@ -1389,7 +1389,16 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 				return fmt.Errorf("stream ended early: %v", errFunc())
 			}
 
-			delaySecs := shr.RealtimeStats.SecondsBehindMasterFilteredReplication
+			stats := shr.RealtimeStats
+			if stats == nil {
+				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
+			}
+
+			if stats.BinlogPlayersCount == 0 {
+				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
+			}
+
+			delaySecs := stats.SecondsBehindMasterFilteredReplication
 			lastSeenDelay := time.Duration(delaySecs) * time.Second
 			if lastSeenDelay < 0 {
 				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
