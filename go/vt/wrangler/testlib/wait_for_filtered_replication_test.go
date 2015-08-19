@@ -62,6 +62,19 @@ func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
 	waitForFilteredReplication(t, "no filtered replication running", noFilteredReplication, noFilteredReplicationFunc)
 }
 
+// TestWaitForFilteredReplication_unhealthy checks that
+// vtctl WaitForFilteredReplication fails eventually when a tablet is not healthy.
+func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
+	unhealthy := &pbq.RealtimeStats{
+		HealthError: "WaitForFilteredReplication: unhealthy test",
+	}
+	unhealthyFunc := func() *pbq.RealtimeStats {
+		return unhealthy
+	}
+
+	waitForFilteredReplication(t, "tablet is not healthy", unhealthy, unhealthyFunc)
+}
+
 func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)

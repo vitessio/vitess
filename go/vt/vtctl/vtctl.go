@@ -1380,6 +1380,11 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
 	}
 	var lastSeenDelay int
+	healthErrorInARow := 0
+	// In case of automated reshardings, a tablet may still report itself as
+	// unhealthy e.g. because CopySchemaShard wasn't run yet and the db doesn't
+	// exist yet.
+	const allowedHealthErrorInARow = 3
 	for {
 		select {
 		case <-ctx.Done():
@@ -1388,10 +1393,22 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 			if !ok {
 				return fmt.Errorf("stream ended early: %v", errFunc())
 			}
-
 			stats := shr.RealtimeStats
 			if stats == nil {
 				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
+			}
+			if stats.HealthError != "" {
+				healthErrorInARow++
+				if healthErrorInARow >= allowedHealthErrorInARow {
+					return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
+				}
+				wr.Logger().Printf("Tablet is not healthy. Waiting for %v more health"+
+					" record(s) before the command will fail."+
+					" tablet: %v health record: %v\n",
+					(allowedHealthErrorInARow - healthErrorInARow), alias, shr)
+				continue
+			} else {
+				healthErrorInARow = 0
 			}
 
 			if stats.BinlogPlayersCount == 0 {
