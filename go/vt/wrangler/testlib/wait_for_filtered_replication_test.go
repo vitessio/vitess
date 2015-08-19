@@ -31,44 +31,51 @@ const destShard = "-80"
 // WaitForFilteredReplication ensures that the dest shard has caught up
 // with the source shard up to a maximum replication delay (in seconds).
 func TestWaitForFilteredReplication(t *testing.T) {
-	target := &pbq.Target{Keyspace: keyspace, Shard: destShard, TabletType: pbt.TabletType_MASTER}
-
-	waitForFilteredReplicationDefaultDelay(t, target, "" /* expectedErr */)
-}
-
-// TestWaitForFilteredReplication_nonMasterFails tests that
-// vtctl WaitForFilteredReplication fails if the queried tablet is not MASTER.
-func TestWaitForFilteredReplication_nonMasterFails(t *testing.T) {
-	target := &pbq.Target{Keyspace: keyspace, Shard: destShard, TabletType: pbt.TabletType_REPLICA}
-
-	waitForFilteredReplicationDefaultDelay(t, target, "should be master, but is not")
-}
-
-// TestWaitForFilteredReplication_wrongTarget tests that
-// vtctl WaitForFilteredReplication fails if the target is different than expected.
-func TestWaitForFilteredReplication_wrongTarget(t *testing.T) {
-	target := &pbq.Target{Keyspace: keyspace, Shard: "wrongshard", TabletType: pbt.TabletType_MASTER}
-
-	waitForFilteredReplicationDefaultDelay(t, target, "received health record for wrong tablet")
-}
-
-func waitForFilteredReplicationDefaultDelay(t *testing.T, target *pbq.Target, expectedErr string) {
 	// Replication is lagging behind.
 	oneHourDelay := &pbq.RealtimeStats{
+		BinlogPlayersCount:                     1,
 		SecondsBehindMasterFilteredReplication: 3600,
 	}
 
 	// Replication caught up.
 	oneSecondDelayFunc := func() *pbq.RealtimeStats {
 		return &pbq.RealtimeStats{
+			BinlogPlayersCount:                     1,
 			SecondsBehindMasterFilteredReplication: 1,
 		}
 	}
 
-	waitForFilteredReplication(t, target, expectedErr, oneHourDelay, oneSecondDelayFunc)
+	waitForFilteredReplication(t, "" /* expectedErr */, oneHourDelay, oneSecondDelayFunc)
 }
 
-func waitForFilteredReplication(t *testing.T, target *pbq.Target, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {
+// TestWaitForFilteredReplication_noFilteredReplication checks that
+// vtctl WaitForFilteredReplication fails when no filtered replication is
+// running (judging by the tablet's returned stream health record).
+func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
+	noFilteredReplication := &pbq.RealtimeStats{
+		BinlogPlayersCount: 0,
+	}
+	noFilteredReplicationFunc := func() *pbq.RealtimeStats {
+		return noFilteredReplication
+	}
+
+	waitForFilteredReplication(t, "no filtered replication running", noFilteredReplication, noFilteredReplicationFunc)
+}
+
+// TestWaitForFilteredReplication_unhealthy checks that
+// vtctl WaitForFilteredReplication fails eventually when a tablet is not healthy.
+func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
+	unhealthy := &pbq.RealtimeStats{
+		HealthError: "WaitForFilteredReplication: unhealthy test",
+	}
+	unhealthyFunc := func() *pbq.RealtimeStats {
+		return unhealthy
+	}
+
+	waitForFilteredReplication(t, "tablet is not healthy", unhealthy, unhealthyFunc)
+}
+
+func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *pbq.RealtimeStats, broadcastStatsFunc func() *pbq.RealtimeStats) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 	vp := NewVtctlPipe(t, ts)
@@ -92,7 +99,6 @@ func waitForFilteredReplication(t *testing.T, target *pbq.Target, expectedErr st
 	testConfig.EnablePublishStats = false
 	testConfig.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
 	qs := tabletserver.NewSqlQuery(testConfig)
-	qs.SetTargetForTest(target)
 	grpcqueryservice.RegisterForTest(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

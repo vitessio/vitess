@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
@@ -17,6 +19,7 @@ import (
 func ExecuteVtctl(ctx context.Context, server string, args []string) (string, error) {
 	var output bytes.Buffer
 
+	log.Infof("Executing remote vtctl command: %v server: %v", args, server)
 	err := vtctlclient.RunCommandAndWait(
 		ctx, server, args,
 		// TODO(mberlin): Should these values be configurable as flags?
