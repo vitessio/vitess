@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -146,21 +147,6 @@ type ShardInfo struct {
 	*pb.Shard
 }
 
-// Keyspace returns the keyspace a shard belongs to
-func (si *ShardInfo) Keyspace() string {
-	return si.keyspace
-}
-
-// ShardName returns the shard name for a shard
-func (si *ShardInfo) ShardName() string {
-	return si.shardName
-}
-
-// Version returns the shard version from last time it was read or updated.
-func (si *ShardInfo) Version() int64 {
-	return si.version
-}
-
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.
@@ -171,6 +157,26 @@ func NewShardInfo(keyspace, shard string, value *pb.Shard, version int64) *Shard
 		version:   version,
 		Shard:     value,
 	}
+}
+
+// Keyspace returns the keyspace a shard belongs to.
+func (si *ShardInfo) Keyspace() string {
+	return si.keyspace
+}
+
+// ShardName returns the shard name for a shard.
+func (si *ShardInfo) ShardName() string {
+	return si.shardName
+}
+
+// Version returns the shard version from last time it was read or updated.
+func (si *ShardInfo) Version() int64 {
+	return si.version
+}
+
+// HasMaster returns true if the Shard has an assigned Master.
+func (si *ShardInfo) HasMaster() bool {
+	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
 }
 
 // HasCell returns true if the cell is listed in the Cells for the shard.
@@ -271,7 +277,7 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 		}
 	}
 
-	for st, _ := range servedTypes {
+	for st := range servedTypes {
 		s.ServedTypes = append(s.ServedTypes, &pb.Shard_ServedType{
 			TabletType: st,
 		})
@@ -528,7 +534,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	}
 
 	resultAsMap := make(map[pb.TabletAlias]bool)
-	if si.MasterAlias != nil && !TabletAliasIsZero(si.MasterAlias) {
+	if si.HasMaster() {
 		if InCellList(si.MasterAlias.Cell, cells) {
 			resultAsMap[*si.MasterAlias] = true
 		}
@@ -570,7 +576,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 		v := a
 		result = append(result, &v)
 	}
-	sort.Sort(TabletAliasList(result))
+	sort.Sort(topoproto.TabletAliasList(result))
 	return result, err
 }
 

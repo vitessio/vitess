@@ -58,8 +58,10 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 	}
 
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, value, -1),
-		Status:    "created",
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        value,
+		Status:       "created",
 	})
 	return nil
 }
@@ -80,8 +82,10 @@ func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existin
 	}
 
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *si,
-		Status:    "updated",
+		KeyspaceName: si.Keyspace(),
+		ShardName:    si.ShardName(),
+		Shard:        si.Shard,
+		Status:       "updated",
 	})
 	return int64(stat.Version()), nil
 }
@@ -148,8 +152,10 @@ func (zkts *Server) DeleteShard(ctx context.Context, keyspace, shard string) err
 	}
 
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil, -1),
-		Status:    "deleted",
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        nil,
+		Status:       "deleted",
 	})
 	return nil
 }

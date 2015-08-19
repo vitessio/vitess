@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -445,7 +446,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, k
 
 	blm.mu.Lock()
 	if blm.dbConfig.DbName == "" {
-		blm.dbConfig.DbName = topo.TabletDbName(tablet)
+		blm.dbConfig.DbName = topoproto.TabletDbName(tablet)
 	}
 
 	// get the existing sources and build a map of sources to remove
@@ -458,7 +459,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, k
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topo.TabletDbName(tablet))
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topoproto.TabletDbName(tablet))
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
@@ -604,7 +605,7 @@ func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
 // SourceTabletAlias returns the string version of the SourceTablet alias, if set
 func (bpcs *BinlogPlayerControllerStatus) SourceTabletAlias() string {
 	if bpcs.SourceTablet != nil {
-		return topo.TabletAliasString(bpcs.SourceTablet)
+		return topoproto.TabletAliasString(bpcs.SourceTablet)
 	}
 	return ""
 }

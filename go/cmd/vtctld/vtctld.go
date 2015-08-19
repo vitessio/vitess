@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -241,7 +242,7 @@ func main() {
 			http.Error(w, "no alias provided", http.StatusBadRequest)
 			return
 		}
-		tabletAlias, err := topo.ParseTabletAliasString(alias)
+		tabletAlias, err := topoproto.ParseTabletAlias(alias)
 		if err != nil {
 			http.Error(w, "bad alias provided", http.StatusBadRequest)
 			return

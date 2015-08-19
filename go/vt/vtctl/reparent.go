@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -57,7 +58,7 @@ func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action DemoteMaster requires <tablet alias>")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -80,7 +81,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("action ReparentTablet requires <tablet alias>")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func commandInitShardMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}

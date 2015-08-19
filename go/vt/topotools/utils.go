@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -33,7 +34,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	if err != nil {
 		return nil, err
 	}
-	sort.Sort(topo.TabletAliasList(aliases))
+	sort.Sort(topoproto.TabletAliasList(aliases))
 
 	tabletMap, err := topo.GetTabletMap(ctx, ts, aliases)
 	if err != nil {

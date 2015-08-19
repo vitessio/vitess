@@ -24,24 +24,18 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 	}
 	global := s.getGlobal()
 
-	resp, err := global.Create(shardFilePath(keyspace, shard), string(data), 0 /* ttl */)
-	if err != nil {
+	if _, err = global.Create(shardFilePath(keyspace, shard), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err := initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
+	if err = initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
 		return err
 	}
 
-	// We don't return ErrBadResponse in this case because the Create() suceeeded
-	// and we don't really need the version to satisfy our contract - we're only
-	// logging it.
-	version := int64(-1)
-	if resp.Node != nil {
-		version = int64(resp.Node.ModifiedIndex)
-	}
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, value, version),
-		Status:    "created",
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        value,
+		Status:       "created",
 	})
 	return nil
 }
@@ -63,8 +57,10 @@ func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVe
 	}
 
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *si,
-		Status:    "updated",
+		KeyspaceName: si.Keyspace(),
+		ShardName:    si.ShardName(),
+		Shard:        si.Shard,
+		Status:       "updated",
 	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
@@ -110,8 +106,10 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string) error 
 	}
 
 	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil, -1),
-		Status:    "deleted",
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        nil,
+		Status:       "deleted",
 	})
 	return nil
 }

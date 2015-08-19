@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
@@ -60,7 +61,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
 	}
-	if topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
 		// We may get called on the current master even when nothing has changed.
 		// If the global shard record is already updated, it means we successfully
 		// finished a previous reparent to this tablet.
@@ -171,7 +172,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
-	if !topo.TabletAliasIsZero(oldMasterAlias) {
+	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
 			// Force the old master to spare.

@@ -16,6 +16,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
@@ -426,7 +427,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
 	cmds := mysqlctl.CreateReparentJournal()
-	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topo.TabletAliasString(masterAlias), pos))
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
 
 	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
 }
@@ -708,7 +709,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// now we can run the backup
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", topo.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
+	name := fmt.Sprintf("%v.%v", topoproto.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
 	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, bucket, name, concurrency, agent.hookExtraEnv())
 
 	// and change our type back to the appropriate value:

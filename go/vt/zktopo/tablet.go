@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -25,7 +26,7 @@ This file contains the tablet management parts of zktopo.Server
 
 // TabletPathForAlias converts a tablet alias to the zk path
 func TabletPathForAlias(alias *pb.TabletAlias) string {
-	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, topo.TabletAliasUIDStr(alias))
+	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, topoproto.TabletAliasUIDStr(alias))
 }
 
 func tabletDirectoryForCell(cell string) string {
@@ -200,7 +201,7 @@ func (zkts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*pb.Ta
 	sort.Strings(children)
 	result := make([]*pb.TabletAlias, len(children))
 	for i, child := range children {
-		uid, err := topo.ParseUID(child)
+		uid, err := topoproto.ParseUID(child)
 		if err != nil {
 			return nil, err
 		}

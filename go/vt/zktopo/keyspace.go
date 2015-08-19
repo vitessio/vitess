@@ -63,7 +63,8 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value, -1),
+		KeyspaceName: keyspace,
+		Keyspace:     value,
 		Status:       "created",
 	})
 	return nil
@@ -85,7 +86,8 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, e
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *ki,
+		KeyspaceName: ki.KeyspaceName(),
+		Keyspace:     ki.Keyspace,
 		Status:       "updated",
 	})
 	return int64(stat.Version()), nil
@@ -103,7 +105,8 @@ func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
 		Status:       "deleted",
 	})
 	return nil
@@ -150,7 +153,8 @@ func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) e
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
 		Status:       "deleted all shards",
 	})
 	return nil

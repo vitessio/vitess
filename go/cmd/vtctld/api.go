@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -177,14 +178,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 		// Get tablet health.
 		if parts := strings.Split(tabletPath, "/"); len(parts) == 2 && parts[1] == "health" {
-			tabletAlias, err := topo.ParseTabletAliasString(parts[0])
+			tabletAlias, err := topoproto.ParseTabletAlias(parts[0])
 			if err != nil {
 				return nil, err
 			}
 			return tabletHealthCache.Get(ctx, tabletAlias)
 		}
 
-		tabletAlias, err := topo.ParseTabletAliasString(tabletPath)
+		tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +220,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			return ts.GetSrvTabletTypesPerShard(ctx, parts[0], parts[1], parts[2])
 		}
 
-		tabletType, err := topo.ParseTabletType(parts[3])
+		tabletType, err := topoproto.ParseTabletType(parts[3])
 		if err != nil {
 			return nil, fmt.Errorf("invalid tablet type %v: %v", parts[3], err)
 		}

@@ -107,6 +107,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -135,7 +136,7 @@ var commands = []commandGroup{
 				"[-force] [-parent] [-update] [-db-name-override=<db name>] [-hostname=<hostname>] [-mysql_port=<port>] [-port=<port>] [-grpc_port=<port>] [-keyspace=<keyspace>] [-shard=<shard>] [-parent_alias=<parent alias>] <tablet alias> <tablet type>",
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
+					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
 			command{"GetTablet", commandGetTablet,
 				"<tablet alias>",
 				"Outputs a JSON structure that contains information about the Tablet."},
@@ -165,7 +166,7 @@ var commands = []commandGroup{
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
 					"NOTE: This command automatically updates the serving graph.\n" +
 					"Valid <tablet type> values are:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " ")},
+					"  " + strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
 			command{"Ping", commandPing,
 				"<tablet alias>",
 				"Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations."},
@@ -421,7 +422,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", topo.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
+	return fmt.Sprintf("%v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, strings.ToLower(ti.Type.String()), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags))
 }
 
 func fmtAction(action *actionnode.ActionNode) string {
@@ -550,7 +551,7 @@ func tabletParamsToTabletAliases(params []string) ([]*pb.TabletAlias, error) {
 	result := make([]*pb.TabletAlias, len(params))
 	var err error
 	for i, param := range params {
-		result[i], err = topo.ParseTabletAliasString(param)
+		result[i], err = topoproto.ParseTabletAlias(param)
 		if err != nil {
 			return nil, err
 		}
@@ -561,12 +562,12 @@ func tabletParamsToTabletAliases(params []string) ([]*pb.TabletAlias, error) {
 // parseTabletType parses the string tablet type and verifies
 // it is an accepted one
 func parseTabletType(param string, types []pb.TabletType) (pb.TabletType, error) {
-	tabletType, err := topo.ParseTabletType(param)
+	tabletType, err := topoproto.ParseTabletType(param)
 	if err != nil {
 		return pb.TabletType_UNKNOWN, fmt.Errorf("invalid tablet type %v: %v", param, err)
 	}
-	if !topo.IsTypeInList(pb.TabletType(tabletType), types) {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(types), " "))
+	if !topoproto.IsTypeInList(pb.TabletType(tabletType), types) {
+		return pb.TabletType_UNKNOWN, fmt.Errorf("Type %v is not one of: %v", tabletType, strings.Join(topoproto.MakeStringTypeList(types), " "))
 	}
 	return tabletType, nil
 }
@@ -586,7 +587,7 @@ func parseKeyspaceIDType(param string) (pb.KeyspaceIdType, error) {
 // parseServingTabletType3 parses the tablet type into the enum,
 // and makes sure the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH)
 func parseServingTabletType3(param string) (pb.TabletType, error) {
-	servedType, err := topo.ParseTabletType(param)
+	servedType, err := topoproto.ParseTabletType(param)
 	if err != nil {
 		return pb.TabletType_UNKNOWN, err
 	}
@@ -618,11 +619,11 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("The <tablet alias> and <tablet type> arguments are both required for the InitTablet command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
+	tabletType, err := parseTabletType(subFlags.Arg(1), topoproto.AllTabletTypes)
 	if err != nil {
 		return err
 	}
@@ -659,7 +660,7 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		return fmt.Errorf("The <tablet alias> argument is required for the GetTablet command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -687,7 +688,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("malformed address: %v", *ipAddr)
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -726,7 +727,7 @@ func commandScrapTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("The <tablet alias> argument is required for the ScrapTablet command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -761,7 +762,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("The <tablet alias> argument is required for the SetReadOnly command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -780,7 +781,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("The <tablet alias> argument is required for the SetReadWrite command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -799,7 +800,7 @@ func commandStartSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return fmt.Errorf("action StartSlave requires <tablet alias>")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -818,7 +819,7 @@ func commandStopSlave(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		return fmt.Errorf("action StopSlave requires <tablet alias>")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -840,11 +841,11 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("The <tablet alias> and <db type> arguments are required for the ChangeSlaveType command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
-	newType, err := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
+	newType, err := parseTabletType(subFlags.Arg(1), topoproto.AllTabletTypes)
 	if err != nil {
 		return err
 	}
@@ -871,7 +872,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the Ping command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -889,7 +890,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the RefreshState command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -907,7 +908,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("The <tablet alias> and <target tablet type> arguments are required for the RunHealthCheck command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -929,7 +930,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("The <tablet alias> and <duration> arguments are required for the Sleep command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -953,7 +954,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return fmt.Errorf("The Backup command requires the <tablet alias> argument.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -984,7 +985,7 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("The <tablet alias> and <sql command> arguments are required for the ExecuteFetchAsDba command.")
 	}
 
-	alias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1004,7 +1005,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("The <tablet alias> and <hook name> arguments are required for the ExecuteHook command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1097,7 +1098,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("The <tablet alias> argument is required for the TabletExternallyReparented command.")
 	}
 
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1292,7 +1293,7 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1311,7 +1312,7 @@ func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, s
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(1))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1362,10 +1363,10 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if len(shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
 	}
-	alias := shardInfo.MasterAlias
-	if topo.TabletAliasIsZero(alias) {
+	if !shardInfo.HasMaster() {
 		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
 	}
+	alias := shardInfo.MasterAlias
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
 	if err != nil {
 		return err
@@ -1740,7 +1741,7 @@ func commandResolve(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 		return fmt.Errorf("The Resolve command requires a single argument, the value of which must be in the format <keyspace>.<shard>.<db type>:<port name>.")
 	}
 
-	tabletType, err := parseTabletType(parts[2], topo.AllTabletTypes)
+	tabletType, err := parseTabletType(parts[2], topoproto.AllTabletTypes)
 	if err != nil {
 		return err
 	}
@@ -1808,7 +1809,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	aliases := make([]*pb.TabletAlias, len(paths))
 	var err error
 	for i, path := range paths {
-		aliases[i], err = topo.ParseTabletAliasString(path)
+		aliases[i], err = topoproto.ParseTabletAlias(path)
 		if err != nil {
 			return err
 		}
@@ -1827,7 +1828,7 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the GetSchema command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1860,7 +1861,7 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the ReloadSchema command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1958,7 +1959,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err == nil {
 		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard)
 	}
-	sourceTabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err == nil {
 		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard)
 	}
@@ -1999,7 +2000,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the GetPermissions command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}

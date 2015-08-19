@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -147,7 +148,7 @@ func (ks *KeyspaceNodes) hasOnlyNumericShardNames() bool {
 // contains.
 func (ks KeyspaceNodes) TabletTypes() []pb.TabletType {
 	var contained []pb.TabletType
-	for _, t := range topo.AllTabletTypes {
+	for _, t := range topoproto.AllTabletTypes {
 		if ks.HasType(t) {
 			contained = append(contained, t)
 		}

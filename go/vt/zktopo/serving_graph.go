@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -62,7 +63,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 		if tt == "action" || tt == "actionlog" {
 			continue
 		}
-		if ptt, err := topo.ParseTabletType(tt); err == nil {
+		if ptt, err := topoproto.ParseTabletType(tt); err == nil {
 			result = append(result, ptt)
 		}
 	}

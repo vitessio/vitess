@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
@@ -97,7 +98,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// We add the tag before calling ChangeSlaveType, so the destination
 	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
-	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topo.TabletAliasString(tabletAlias))
+	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
 	if err := wr.TopoServer().UpdateTabletFields(ctx, tabletAlias, func(tablet *pb.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
@@ -112,7 +113,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
 
-	wr.Logger().Infof("Changing tablet %v to '%v'", topo.TabletAliasString(tabletAlias), pb.TabletType_WORKER)
+	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), pb.TabletType_WORKER)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = wr.ChangeType(shortCtx, tabletAlias, pb.TabletType_WORKER, false /*force*/)
 	cancel()

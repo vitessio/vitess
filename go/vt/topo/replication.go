@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -65,7 +66,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	span.StartClient("TopoServer.UpdateShardReplicationFields")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
-	span.Annotate("tablet", TabletAliasString(tabletAlias))
+	span.Annotate("tablet", topoproto.TabletAliasString(tabletAlias))
 	defer span.Finish()
 
 	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *pb.ShardReplication) error {

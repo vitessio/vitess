@@ -18,7 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/filebackupstorage"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -93,7 +93,7 @@ func TestBackupRestore(t *testing.T) {
 	defer sourceTablet.StopActionLoop(t)
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", topo.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
+	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
 

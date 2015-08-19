@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -214,11 +215,11 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("the <tablet_alias> and <sql> arguments are required for the VtTabletExecute command")
 	}
-	tt, err := topo.ParseTabletType(*tabletType)
+	tt, err := topoproto.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -255,11 +256,11 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <tablet_alias> argument is required for the VtTabletBegin command")
 	}
-	tt, err := topo.ParseTabletType(*tabletType)
+	tt, err := topoproto.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -303,11 +304,11 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	tt, err := topo.ParseTabletType(*tabletType)
+	tt, err := topoproto.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -344,11 +345,11 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	tt, err := topo.ParseTabletType(*tabletType)
+	tt, err := topoproto.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -379,7 +380,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletStreamHealth command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
@@ -53,8 +54,8 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 		}
-		if tablet.Type == pb.TabletType_MASTER && !topo.TabletAliasIsZero(si.MasterAlias) && !topo.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !force {
-			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topo.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
+		if tablet.Type == pb.TabletType_MASTER && si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && !force {
+			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
 		}
 
 		// update the shard record if needed
@@ -69,12 +70,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		if update || force {
 			oldTablet, err := wr.ts.GetTablet(ctx, tablet.Alias)
 			if err != nil {
-				wr.Logger().Warningf("failed reading tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
+				wr.Logger().Warningf("failed reading tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
 					if err := topo.UpdateTablet(ctx, wr.ts, oldTablet); err != nil {
-						wr.Logger().Warningf("failed updating tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
+						wr.Logger().Warningf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 						// now fall through the Scrap case
 					} else {
 						if !topo.IsInReplicationGraph(tablet.Type) {
@@ -82,7 +83,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 						}
 
 						if err := topo.UpdateTabletReplicationData(ctx, wr.ts, tablet); err != nil {
-							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", topo.TabletAliasString(tablet.Alias), err)
+							wr.Logger().Warningf("failed updating tablet replication data for %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 							// now fall through the Scrap case
 						} else {
 							return nil
@@ -93,12 +94,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		}
 		if force {
 			if err = wr.Scrap(ctx, tablet.Alias, force, false); err != nil {
-				wr.Logger().Errorf("failed scrapping tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
+				wr.Logger().Errorf("failed scrapping tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 				return err
 			}
 			if err := wr.ts.DeleteTablet(ctx, tablet.Alias); err != nil {
 				// we ignore this
-				wr.Logger().Errorf("failed deleting tablet %v: %v", topo.TabletAliasString(tablet.Alias), err)
+				wr.Logger().Errorf("failed deleting tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 			}
 			return topo.CreateTablet(ctx, wr.ts, tablet)
 		}
@@ -153,7 +154,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias *pb.TabletAlias, forc
 		}
 
 		// update it if the right alias is there
-		if topo.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+		if topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 			si.MasterAlias = nil
 
 			// write it back
@@ -161,7 +162,7 @@ func (wr *Wrangler) Scrap(ctx context.Context, tabletAlias *pb.TabletAlias, forc
 				return wr.unlockShard(ctx, ti.Keyspace, ti.Shard, actionNode, lockPath, err)
 			}
 		} else {
-			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", topo.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, si.MasterAlias)
+			wr.Logger().Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, si.MasterAlias)
 		}
 
 		// and unlock

@@ -13,6 +13,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -76,12 +77,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if len(ti) != 2 || len(rs) != 2 {
 		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	}
-	if topo.TabletAliasEqual(ti[0].Alias, slave.Tablet.Alias) {
+	if topoproto.TabletAliasEqual(ti[0].Alias, slave.Tablet.Alias) {
 		ti[0], ti[1] = ti[1], ti[0]
 		rs[0], rs[1] = rs[1], rs[0]
 	}
-	if !topo.TabletAliasEqual(ti[0].Alias, master.Tablet.Alias) ||
-		!topo.TabletAliasEqual(ti[1].Alias, slave.Tablet.Alias) ||
+	if !topoproto.TabletAliasEqual(ti[0].Alias, master.Tablet.Alias) ||
+		!topoproto.TabletAliasEqual(ti[1].Alias, slave.Tablet.Alias) ||
 		rs[0].MasterHost != "" ||
 		rs[1].MasterHost != master.Tablet.Hostname {
 		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)

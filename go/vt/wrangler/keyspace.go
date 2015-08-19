@@ -15,6 +15,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
@@ -203,7 +204,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			wr.Logger().Infof("Gathering master position for %v", topo.TabletAliasString(si.MasterAlias))
+			wr.Logger().Infof("Gathering master position for %v", topoproto.TabletAliasString(si.MasterAlias))
 			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -216,7 +217,7 @@ func (wr *Wrangler) getMastersPosition(ctx context.Context, shards []*topo.Shard
 				return
 			}
 
-			wr.Logger().Infof("Got master position for %v", topo.TabletAliasString(si.MasterAlias))
+			wr.Logger().Infof("Got master position for %v", topoproto.TabletAliasString(si.MasterAlias))
 			mu.Lock()
 			result[si] = pos
 			mu.Unlock()
@@ -247,7 +248,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 				}
 
 				// and wait for it
-				wr.Logger().Infof("Waiting for %v to catch up", topo.TabletAliasString(si.MasterAlias))
+				wr.Logger().Infof("Waiting for %v to catch up", topoproto.TabletAliasString(si.MasterAlias))
 				tablet, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					rec.RecordError(err)
@@ -257,7 +258,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 				if err := wr.tmc.WaitBlpPosition(ctx, tablet, blpPosition, waitTime); err != nil {
 					rec.RecordError(err)
 				} else {
-					wr.Logger().Infof("%v caught up", topo.TabletAliasString(si.MasterAlias))
+					wr.Logger().Infof("%v caught up", topoproto.TabletAliasString(si.MasterAlias))
 				}
 			}
 		}(si)
@@ -274,7 +275,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
-			wr.Logger().Infof("RefreshState master %v", topo.TabletAliasString(si.MasterAlias))
+			wr.Logger().Infof("RefreshState master %v", topoproto.TabletAliasString(si.MasterAlias))
 			ti, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
@@ -284,7 +285,7 @@ func (wr *Wrangler) refreshMasters(ctx context.Context, shards []*topo.ShardInfo
 			if err := wr.tmc.RefreshState(ctx, ti); err != nil {
 				rec.RecordError(err)
 			} else {
-				wr.Logger().Infof("%v responded", topo.TabletAliasString(si.MasterAlias))
+				wr.Logger().Infof("%v responded", topoproto.TabletAliasString(si.MasterAlias))
 			}
 		}(si)
 	}

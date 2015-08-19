@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -117,7 +118,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsHTML() template.HTML {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "<b>Running</b>:</br>\n"
-		result += "<b>Copying from</b>: " + topo.TabletAliasString(vscw.sourceAlias) + "</br>\n"
+		result += "<b>Copying from</b>: " + topoproto.TabletAliasString(vscw.sourceAlias) + "</br>\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "<b>ETA</b>: " + eta.String() + "</br>\n"
 		result += strings.Join(statuses, "</br>\n")
@@ -139,7 +140,7 @@ func (vscw *VerticalSplitCloneWorker) StatusAsText() string {
 	switch vscw.State {
 	case WorkerStateCopy:
 		result += "Running:\n"
-		result += "Copying from: " + topo.TabletAliasString(vscw.sourceAlias) + "\n"
+		result += "Copying from: " + topoproto.TabletAliasString(vscw.sourceAlias) + "\n"
 		statuses, eta := formatTableStatuses(vscw.tableStatus, vscw.startTime)
 		result += "ETA: " + eta.String() + "\n"
 		result += strings.Join(statuses, "\n")
@@ -249,12 +250,12 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("FindWorkerTablet() failed for %v/%v/0: %v", vscw.cell, vscw.sourceKeyspace, err)
 	}
-	vscw.wr.Logger().Infof("Using tablet %v as the source", topo.TabletAliasString(vscw.sourceAlias))
+	vscw.wr.Logger().Infof("Using tablet %v as the source", topoproto.TabletAliasString(vscw.sourceAlias))
 
 	// get the tablet info for it
 	vscw.sourceTablet, err = vscw.wr.TopoServer().GetTablet(ctx, vscw.sourceAlias)
 	if err != nil {
-		return fmt.Errorf("cannot read tablet %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
+		return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
 
 	// stop replication on it
@@ -262,13 +263,13 @@ func (vscw *VerticalSplitCloneWorker) findTargets(ctx context.Context) error {
 	err = vscw.wr.TabletManagerClient().StopSlave(shortCtx, vscw.sourceTablet)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot stop replication on tablet %v", topo.TabletAliasString(vscw.sourceAlias))
+		return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(vscw.sourceAlias))
 	}
 
 	wrangler.RecordStartSlaveAction(vscw.cleaner, vscw.sourceTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(vscw.cleaner, vscw.sourceAlias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
 	action.TabletType = pb.TabletType_SPARE
 
@@ -336,7 +337,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := vscw.wr.GetSchema(shortCtx, vscw.sourceAlias, vscw.tables, nil, true)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", topo.TabletAliasString(vscw.sourceAlias), err)
+		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(vscw.sourceAlias), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
 		return fmt.Errorf("no tables matching the table filter")
@@ -429,7 +430,7 @@ func (vscw *VerticalSplitCloneWorker) copy(ctx context.Context) error {
 				vscw.tableStatus[tableIndex].threadStarted()
 
 				// build the query, and start the streaming
-				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topo.TabletAliasString(vscw.sourceAlias))
+				selectSQL := buildSQLFromChunks(vscw.wr, td, chunks, chunkIndex, topoproto.TabletAliasString(vscw.sourceAlias))
 				qrr, err := NewQueryResultReaderForTablet(ctx, vscw.wr.TopoServer(), vscw.sourceAlias, selectSQL)
 				if err != nil {
 					processError("NewQueryResultReaderForTablet failed: %v", err)
