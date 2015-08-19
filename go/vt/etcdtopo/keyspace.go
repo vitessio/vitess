@@ -26,23 +26,16 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 	}
 	global := s.getGlobal()
 
-	resp, err := global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */)
-	if err != nil {
+	if _, err = global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err := initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
+	if err = initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
 		return err
 	}
 
-	// We don't return ErrBadResponse in this case because the Create() suceeeded
-	// and we don't really need the version to satisfy our contract - we're only
-	// logging it.
-	version := int64(-1)
-	if resp.Node != nil {
-		version = int64(resp.Node.ModifiedIndex)
-	}
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value, version),
+		KeyspaceName: keyspace,
+		Keyspace:     value,
 		Status:       "created",
 	})
 	return nil
@@ -65,7 +58,8 @@ func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exis
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *ki,
+		KeyspaceName: ki.KeyspaceName(),
+		Keyspace:     ki.Keyspace,
 		Status:       "updated",
 	})
 	return int64(resp.Node.ModifiedIndex), nil
@@ -127,7 +121,8 @@ func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) erro
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
 		Status:       "deleted all shards",
 	})
 	return nil
@@ -141,7 +136,8 @@ func (s *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	}
 
 	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
 		Status:       "deleted",
 	})
 	return nil
