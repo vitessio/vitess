@@ -24,7 +24,8 @@ class GrpcContext implements AutoCloseable {
 
   @Override
   public void close() throws Exception {
-    if (ctx != null)
+    if (ctx != null) {
       ctx.detach();
+    }
   }
 }

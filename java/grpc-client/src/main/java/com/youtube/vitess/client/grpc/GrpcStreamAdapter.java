@@ -43,8 +43,9 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
         // Wait until the previous value has been consumed.
         while (nextValue != null) {
           // If there's been an error, drain the rest of the stream without blocking.
-          if (error != null)
+          if (error != null) {
             return;
+          }
 
           wait();
         }
@@ -81,13 +82,15 @@ abstract class GrpcStreamAdapter<V, E> implements StreamObserver<V>, StreamItera
       try {
         // Wait for a new value to show up.
         while (nextValue == null) {
-          if (completed)
+          if (completed) {
             return false;
+          }
           if (error != null) {
-            if (error instanceof VitessException)
+            if (error instanceof VitessException) {
               throw (VitessException) error;
-            else
+            } else {
               throw new VitessRpcException("error in gRPC StreamIterator", error);
+            }
           }
 
           wait();
