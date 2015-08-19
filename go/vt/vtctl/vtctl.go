@@ -1340,6 +1340,12 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		"Specifies the maximum delay, in seconds, the filtered replication of the"+
 			" given destination shard should lag behind the source shard. When"+
 			" higher, the command will block and wait for the delay to decrease.")
+	// In case of automated reshardings, a tablet may still report itself as
+	// unhealthy e.g. because CopySchemaShard wasn't run yet and the db doesn't
+	// exist yet.
+	allowedHealthErrorsInARow := subFlags.Int("allowed_health_errors_in_a_row", 3,
+		"Limit of observed health errors in a row after which the command will fail and no longer wait for the tablet to become healthy.")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1381,6 +1387,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
 	}
 	var lastSeenDelay int
+	healthErrorsInARow := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -1389,18 +1396,29 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 			if !ok {
 				return fmt.Errorf("stream ended early: %v", errFunc())
 			}
-			gotTarget := shr.Target
-			if gotTarget == nil {
-				return fmt.Errorf("stream health record did not include Target: %v", shr)
+			stats := shr.RealtimeStats
+			if stats == nil {
+				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
 			}
-			if gotTarget.Keyspace != keyspace || gotTarget.Shard != shard {
-				return fmt.Errorf("received health record for wrong tablet. Expected tablet: %v/%v received health record: %v", keyspace, shard, shr)
-			}
-			if gotTarget.TabletType != pb.TabletType_MASTER {
-				return fmt.Errorf("tablet: %v should be master, but is not. type: %v", alias, gotTarget.TabletType.String())
+			if stats.HealthError != "" {
+				healthErrorsInARow++
+				if healthErrorsInARow >= *allowedHealthErrorsInARow {
+					return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
+				}
+				wr.Logger().Printf("Tablet is not healthy. Waiting for %v more health"+
+					" record(s) before the command will fail."+
+					" tablet: %v health record: %v\n",
+					(*allowedHealthErrorsInARow - healthErrorsInARow), alias, shr)
+				continue
+			} else {
+				healthErrorsInARow = 0
 			}
 
-			delaySecs := shr.RealtimeStats.SecondsBehindMasterFilteredReplication
+			if stats.BinlogPlayersCount == 0 {
+				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
+			}
+
+			delaySecs := stats.SecondsBehindMasterFilteredReplication
 			lastSeenDelay := time.Duration(delaySecs) * time.Second
 			if lastSeenDelay < 0 {
 				return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)

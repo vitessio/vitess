@@ -50,6 +50,19 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.Task
 	}
 	newTasks = append(newTasks, splitCloneTasks)
 
+	// TODO(mberlin): When the framework supports nesting tasks, these wait tasks should be run before each SplitDiff.
+	waitTasks := NewTaskContainer()
+	for _, destShard := range destShards {
+		AddTask(waitTasks, "WaitForFilteredReplicationTask", map[string]string{
+			"keyspace":        keyspace,
+			"shard":           destShard,
+			"max_delay":       "30s",
+			"vtctld_endpoint": vtctldEndpoint,
+		})
+	}
+	newTasks = append(newTasks, waitTasks)
+
+	// TODO(mberlin): Run all SplitDiffTasks in parallel which do not use overlapping source shards for the comparison.
 	for _, destShard := range destShards {
 		splitDiffTask := NewTaskContainer()
 		AddTask(splitDiffTask, "SplitDiffTask", map[string]string{
