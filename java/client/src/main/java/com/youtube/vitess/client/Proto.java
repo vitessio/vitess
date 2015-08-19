@@ -26,7 +26,6 @@ public class Proto {
    */
   public static void checkError(RPCError error) throws VitessException {
     // TODO(enisoc): Implement checkError.
-    throw new VitessException(error.getMessage());
   }
 
   @SuppressWarnings("unchecked")
