@@ -44,13 +44,12 @@ import java.util.Map;
  * <p>Usage:
  *
  * <pre>
- *   RpcClient client = RpcClientFactory.create(
- *     InetAddresses.forUriString("${VTGATE_ADDR}", Duration.millis(500)));
- *   VTGateConn conn = VTGateConn.WithRpcClient(client);
  *   CallerID callerId = CallerID.newBuilder().setPrincipal("username").build();
  *   Context ctx = Context.getDefault()
  *                     .withDeadlineAfter(Duration.millis(500))
  *                     .withCallerId(callerId);
+ *   RpcClient client = rpcClientFactory.create(ctx, new InetSocketAddress("host", port));
+ *   VTGateConn conn = VTGateConn.WithRpcClient(client);
  *
  *   try {
  *     byte ksid[] = computeKeyspaceId(...);
