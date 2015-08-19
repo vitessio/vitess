@@ -22,13 +22,17 @@ import (
 )
 
 const (
-	// ErrFail is returned when a query fails
+	// ErrFail is returned when a query fails, and we think it's because the query
+	// itself is problematic. That means that the query will not  be retried.
 	ErrFail = iota
 
 	// ErrRetry is returned when a query can be retried
 	ErrRetry
 
-	// ErrFatal is returned when a query cannot be retried
+	// ErrFatal is returned when a query fails due to some internal state, but we
+	// don't suspect the query itself to be bad. The query can be retried by VtGate
+	// to a different VtTablet (in case a different tablet is healthier), but
+	// probably shouldn't be retried by clients.
 	ErrFatal
 
 	// ErrTxPoolFull is returned when we can't get a connection
@@ -43,7 +47,11 @@ const (
 )
 
 // ErrConnPoolClosed is returned / panicked when the connection pool is closed.
-var ErrConnPoolClosed = NewTabletError(ErrFatal, "connection pool is closed")
+var ErrConnPoolClosed = NewTabletError(ErrFatal,
+	// connection pool being closed is not the query's fault, it can be retried on a
+	// different VtTablet.
+	vtrpc.ErrorCode_INTERNAL_ERROR,
+	"connection pool is closed")
 
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
@@ -52,6 +60,8 @@ type TabletError struct {
 	ErrorType int
 	Message   string
 	SqlError  int
+	// ErrorCode will be used to transmit the error across RPC boundaries
+	ErrorCode vtrpc.ErrorCode
 }
 
 // This is how go-mysql exports its error number
@@ -60,40 +70,49 @@ type hasNumber interface {
 }
 
 // NewTabletError returns a TabletError of the given type
-func NewTabletError(errorType int, format string, args ...interface{}) *TabletError {
+func NewTabletError(errorType int, errCode vtrpc.ErrorCode, format string, args ...interface{}) *TabletError {
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(fmt.Sprintf(format, args...)),
+		ErrorCode: errCode,
 	}
 }
 
 // NewTabletErrorSql returns a TabletError based on the error
-func NewTabletErrorSql(errorType int, err error) *TabletError {
+func NewTabletErrorSql(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
 		errnum = sqlErr.Number()
-		// Override error type if MySQL is in read-only mode. It's probably because
-		// there was a remaster and there are old clients still connected.
-		if errnum == mysql.ErrOptionPreventsStatement && strings.Contains(errstr, "read-only") {
-			errorType = ErrRetry
+		switch errnum {
+		case mysql.ErrOptionPreventsStatement:
+			// Override error type if MySQL is in read-only mode. It's probably because
+			// there was a remaster and there are old clients still connected.
+			if strings.Contains(errstr, "read-only") {
+				errorType = ErrRetry
+				errCode = vtrpc.ErrorCode_QUERY_NOT_SERVED
+			}
+		case mysql.ErrDupEntry:
+			errCode = vtrpc.ErrorCode_INTEGRITY_ERROR
+		default:
 		}
 	}
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(errstr),
 		SqlError:  errnum,
+		ErrorCode: errCode,
 	}
 }
 
 // PrefixTabletError attempts to add a string prefix to a TabletError, while preserving its
 // ErrorType. If the given error is not a TabletError, a new TabletError is returned
 // with the desired ErrorType.
-func PrefixTabletError(errorType int, err error, prefix string) error {
+func PrefixTabletError(errorType int, errCode vtrpc.ErrorCode, err error, prefix string) error {
 	if terr, ok := err.(*TabletError); ok {
-		return NewTabletError(terr.ErrorType, "%s%s", prefix, terr.Message)
+		return NewTabletError(terr.ErrorType, terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
-	return NewTabletError(errorType, "%s%s", prefix, err)
+	return NewTabletError(errorType, errCode, "%s%s", prefix, err)
 }
 
 func printable(in string) string {
@@ -187,7 +206,7 @@ func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QuerySe
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			*err = NewTabletError(ErrFail, "%v: uncaught panic", x)
+			*err = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic", x)
 			queryServiceStats.InternalErrors.Add("Panic", 1)
 			return
 		}

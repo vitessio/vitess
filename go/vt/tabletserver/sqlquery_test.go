@@ -13,6 +13,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -1004,7 +1005,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	defer sqlQuery.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, "tablet error"))
+	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
@@ -1026,7 +1027,7 @@ func TestTerseErrors1(t *testing.T) {
 	sqlQuery := NewSqlQuery(config)
 	sqlQuery.config.TerseErrors = true
 	defer sqlQuery.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, "tablet error"))
+	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -102,7 +103,10 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	if err == ErrConnPoolClosed {
 		panic(ErrConnPoolClosed)
 	}
-	panic(NewTabletErrorSql(ErrFatal, err))
+	// If there's a problem with getting a connection out of the pool, that is
+	// probably not due to the query itself. The query might succeed on a different
+	// tablet.
+	panic(NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -224,7 +228,7 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 		strictMode = true
 	}
 	if !strictMode && dbconfigs.App.EnableRowcache {
-		panic(NewTabletError(ErrFatal, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache cannot be enabled when queryserver-config-strict-mode is false"))
 	}
 	if dbconfigs.App.EnableRowcache {
 		qe.cachePool.Open()
