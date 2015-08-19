@@ -1388,16 +1388,6 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 			if !ok {
 				return fmt.Errorf("stream ended early: %v", errFunc())
 			}
-			gotTarget := shr.Target
-			if gotTarget == nil {
-				return fmt.Errorf("stream health record did not include Target: %v", shr)
-			}
-			if gotTarget.Keyspace != keyspace || gotTarget.Shard != shard {
-				return fmt.Errorf("received health record for wrong tablet. Expected tablet: %v/%v received health record: %v", keyspace, shard, shr)
-			}
-			if gotTarget.TabletType != pb.TabletType_MASTER {
-				return fmt.Errorf("tablet: %v should be master, but is not. type: %v", alias, gotTarget.TabletType.String())
-			}
 
 			delaySecs := shr.RealtimeStats.SecondsBehindMasterFilteredReplication
 			lastSeenDelay := time.Duration(delaySecs) * time.Second

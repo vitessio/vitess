@@ -119,11 +119,6 @@ func NewSqlQuery(config Config) *SqlQuery {
 	return sq
 }
 
-// SetTargetForTest allows to modify the target without calling allowQueries.
-func (sq *SqlQuery) SetTargetForTest(target *pb.Target) {
-	sq.target = target
-}
-
 // GetState returns the name of the current SqlQuery state.
 func (sq *SqlQuery) GetState() string {
 	sq.mu.Lock()
