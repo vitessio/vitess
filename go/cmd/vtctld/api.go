@@ -248,12 +248,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 	// VSchema
 	http.HandleFunc(apiPrefix+"vschema/", func(w http.ResponseWriter, r *http.Request) {
-		schemafier, ok := ts.(topo.Schemafier)
-		if !ok {
-			httpErrorf(w, r, "%T doesn't support schemafier API", ts)
-			return
-		}
-
 		// Save VSchema
 		if r.Method == "POST" {
 			vschema, err := ioutil.ReadAll(r.Body)
@@ -261,14 +255,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 				httpErrorf(w, r, "can't read request body: %v", err)
 				return
 			}
-			if err := schemafier.SaveVSchema(ctx, string(vschema)); err != nil {
+			if err := ts.SaveVSchema(ctx, string(vschema)); err != nil {
 				httpErrorf(w, r, "can't save vschema: %v", err)
 			}
 			return
 		}
 
 		// Get VSchema
-		vschema, err := schemafier.GetVSchema(ctx)
+		vschema, err := ts.GetVSchema(ctx)
 		if err != nil {
 			httpErrorf(w, r, "can't get vschema: %v", err)
 			return

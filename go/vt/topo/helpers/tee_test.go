@@ -25,7 +25,7 @@ func TestTee(t *testing.T) {
 
 	// create a tee and check it implements the interface
 	tee := NewTee(fromTS, toTS, true)
-	var _ topo.Server = tee
+	var _ topo.Impl = tee
 
 	// create a keyspace, make sure it is on both sides
 	if err := tee.CreateKeyspace(ctx, "keyspace2", &pb.Keyspace{}); err != nil {

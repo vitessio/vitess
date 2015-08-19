@@ -26,14 +26,14 @@ import (
 // - we lock primary/secondary if reverseLockOrder is False,
 // or secondary/primary if reverseLockOrder is True.
 type Tee struct {
-	primary   topo.Server
-	secondary topo.Server
+	primary   topo.Impl
+	secondary topo.Impl
 
-	readFrom       topo.Server
-	readFromSecond topo.Server
+	readFrom       topo.Impl
+	readFromSecond topo.Impl
 
-	lockFirst  topo.Server
-	lockSecond topo.Server
+	lockFirst  topo.Impl
+	lockSecond topo.Impl
 
 	// protects the variables below this point
 	mu sync.Mutex
@@ -55,8 +55,8 @@ type versionMapping struct {
 	readFromSecondVersion int64
 }
 
-// NewTee returns a new topo.Server object
-func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
+// NewTee returns a new topo.Impl object
+func NewTee(primary, secondary topo.Impl, reverseLockOrder bool) *Tee {
 	lockFirst := primary
 	lockSecond := secondary
 	if reverseLockOrder {
@@ -798,4 +798,23 @@ func (tee *Tee) UnlockShardForAction(ctx context.Context, keyspace, shard, lockP
 		return serr
 	}
 	return perr
+}
+
+// SaveVSchema is part of the topo.Server interface
+func (tee *Tee) SaveVSchema(ctx context.Context, contents string) error {
+	err := tee.primary.SaveVSchema(ctx, contents)
+	if err != nil {
+		return err
+	}
+
+	if err := tee.secondary.SaveVSchema(ctx, contents); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.SaveVSchema() failed: %v", err)
+	}
+	return err
+}
+
+// GetVSchema is part of the topo.Server interface
+func (tee *Tee) GetVSchema(ctx context.Context) (string, error) {
+	return tee.readFrom.GetVSchema(ctx)
 }

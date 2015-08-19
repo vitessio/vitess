@@ -33,14 +33,14 @@ func (zkts *Server) GetZConn() zk.Conn {
 // NewServer can be used to create a custom Server
 // (for tests for instance) but it cannot change the globally
 // registered one.
-func NewServer(zconn zk.Conn) *Server {
-	return &Server{zconn: zconn}
+func NewServer(zconn zk.Conn) topo.Server {
+	return topo.Server{Impl: &Server{zconn: zconn}}
 }
 
 func init() {
 	zconn := zk.NewMetaConn()
 	stats.PublishJSONFunc("ZkMetaConn", zconn.String)
-	topo.RegisterServer("zookeeper", NewServer(zconn))
+	topo.RegisterServer("zookeeper", &Server{zconn: zconn})
 }
 
 //

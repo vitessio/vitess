@@ -56,7 +56,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	tablet := agent.Tablet()
 
 	// Check the global shard record.
-	si, err := topo.GetShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
+	si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err

@@ -57,11 +57,11 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	if _, err := topo.GetShard(ctx, ts, "test_keyspace", "666"); err != topo.ErrNoNode {
+	if _, err := ts.GetShard(ctx, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetShard(666): %v", err)
 	}
 
-	shardInfo, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
+	shardInfo, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
@@ -115,7 +115,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Fatalf("UpdateShardFields error: %v", err)
 	}
-	si, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
+	si, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
@@ -130,7 +130,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("UpdateShardFields error: %v", err)
 	}
 
-	updatedShardInfo, err := topo.GetShard(ctx, ts, "test_keyspace", "b0-c0")
+	updatedShardInfo, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}

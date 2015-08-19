@@ -29,7 +29,7 @@ import (
 func init() {
 	// Wait until flags are parsed, so we can check which topo server is in use.
 	servenv.OnRun(func() {
-		if zkServer, ok := topo.GetServer().(*zktopo.Server); ok {
+		if zkServer, ok := topo.GetServer().Impl.(*zktopo.Server); ok {
 			HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(zkServer.GetZConn()))
 		}
 	})

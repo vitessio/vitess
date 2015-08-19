@@ -228,3 +228,13 @@ func (ft FakeTopo) LockShardForAction(ctx context.Context, keyspace, shard, cont
 func (ft FakeTopo) UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error {
 	return errNotImplemented
 }
+
+// SaveVSchema implements topo.Server.
+func (ft FakeTopo) SaveVSchema(context.Context, string) error {
+	return errNotImplemented
+}
+
+// GetVSchema implements topo.Server.
+func (ft FakeTopo) GetVSchema(ctx context.Context) (string, error) {
+	return "", errNotImplemented
+}

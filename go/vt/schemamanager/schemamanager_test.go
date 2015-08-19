@@ -271,8 +271,10 @@ type fakeTopo struct {
 	faketopo.FakeTopo
 }
 
-func newFakeTopo() *fakeTopo {
-	return &fakeTopo{}
+func newFakeTopo() topo.Server {
+	return topo.Server{
+		Impl: &fakeTopo{},
+	}
 }
 
 func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {

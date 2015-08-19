@@ -34,7 +34,7 @@ import (
 func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (*topo.TabletInfo, error) {
 	var ti *topo.TabletInfo
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	si, err := topo.GetShard(shortCtx, wr.TopoServer(), keyspace, shard)
+	si, err := wr.TopoServer().GetShard(shortCtx, keyspace, shard)
 	cancel()
 	if err != nil {
 		return ti, fmt.Errorf("unable to resolve destination shard %v/%v", keyspace, shard)

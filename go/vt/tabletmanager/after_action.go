@@ -161,7 +161,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
-		shardInfo, err = topo.GetShard(ctx, agent.TopoServer, newTablet.Keyspace, newTablet.Shard)
+		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {

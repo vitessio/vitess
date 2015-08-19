@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"golang.org/x/net/context"
 )
 
-func newTestServer(t *testing.T, cells []string) *Server {
+func newTestServer(t *testing.T, cells []string) topo.Server {
 	s := &Server{
 		_cells:    make(map[string]*cellClient),
 		newClient: newTestClient,
@@ -27,7 +28,9 @@ func newTestServer(t *testing.T, cells []string) *Server {
 		c.Set("/vt/cells/"+cell, cell, 0)
 	}
 
-	return s
+	return topo.Server{
+		Impl: s,
+	}
 }
 
 func TestKeyspace(t *testing.T) {

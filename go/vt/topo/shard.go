@@ -191,14 +191,14 @@ func (si *ShardInfo) HasCell(cell string) bool {
 
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
-func GetShard(ctx context.Context, ts Server, keyspace, shard string) (*ShardInfo, error) {
+func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.GetShard(ctx, keyspace, shard)
+	return ts.Impl.GetShard(ctx, keyspace, shard)
 }
 
 // UpdateShard updates the shard data, with the right version
@@ -227,7 +227,7 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 // If the update succeeds, it returns the updated ShardInfo.
 func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
 	for {
-		si, err := GetShard(ctx, ts, keyspace, shard)
+		si, err := ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, err
 		}
@@ -528,7 +528,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	ctx = trace.NewContext(ctx, span)
 
 	// read the shard information to find the cells
-	si, err := GetShard(ctx, ts, keyspace, shard)
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}

@@ -2027,12 +2027,7 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if subFlags.NArg() != 0 {
 		return fmt.Errorf("The GetVSchema command does not support any arguments.")
 	}
-	ts := wr.TopoServer()
-	schemafier, ok := ts.(topo.Schemafier)
-	if !ok {
-		return fmt.Errorf("%T does not support the vschema operations", ts)
-	}
-	schema, err := schemafier.GetVSchema(ctx)
+	schema, err := wr.TopoServer().GetVSchema(ctx)
 	if err != nil {
 		return err
 	}
@@ -2049,11 +2044,6 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if (*vschema == "") == (*vschemaFile == "") {
 		return fmt.Errorf("Either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command.")
 	}
-	ts := wr.TopoServer()
-	schemafier, ok := ts.(topo.Schemafier)
-	if !ok {
-		return fmt.Errorf("%T does not support vschema operations", ts)
-	}
 	s := *vschema
 	if *vschemaFile != "" {
 		schema, err := ioutil.ReadFile(*vschemaFile)
@@ -2062,7 +2052,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		}
 		s = string(schema)
 	}
-	return schemafier.SaveVSchema(ctx, s)
+	return wr.TopoServer().SaveVSchema(ctx, s)
 }
 
 func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

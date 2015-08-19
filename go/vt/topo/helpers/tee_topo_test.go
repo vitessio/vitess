@@ -45,7 +45,7 @@ func newFakeTeeServer(t *testing.T) topo.Server {
 	s1 := fakeServer{Server: zktopo.NewServer(zconn1), localCells: cells[:len(cells)-1]}
 	s2 := fakeServer{Server: zktopo.NewServer(zconn2), localCells: cells[:len(cells)-1]}
 
-	return NewTee(s1, s2, false)
+	return topo.Server{Impl: NewTee(s1, s2, false)}
 }
 
 func TestKeyspace(t *testing.T) {

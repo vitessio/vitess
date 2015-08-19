@@ -45,14 +45,14 @@ var (
 	ErrPartialResult = errors.New("partial result")
 )
 
-// Server is the interface used to talk to a persistent
+// Impl is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
 // Zookeeper is a good example of this, and zktopo contains the
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.
-type Server interface {
+type Impl interface {
 	// topo.Server management interface.
 	Close()
 
@@ -305,17 +305,35 @@ type Server interface {
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
+
+	//
+	// V3 Schema management, global
+	//
+
+	// SaveVSchema saves the provided schema in the topo server.
+	SaveVSchema(context.Context, string) error
+
+	// GetVSchema retrieves the schema from the topo server.
+	//
+	// If no schema has been previously saved, it should return "{}"
+	GetVSchema(ctx context.Context) (string, error)
+}
+
+// Server is a wrapper type that can have extra methods.
+// Outside modules should just use the Server object.
+type Server struct {
+	Impl
 }
 
 // Schemafier is a temporary interface for supporting vschema
 // reads and writes. It will eventually be merged into Server.
-type Schemafier interface {
-	SaveVSchema(context.Context, string) error
-	GetVSchema(ctx context.Context) (string, error)
-}
+//type Schemafier interface {
+//	SaveVSchema(context.Context, string) error
+//	GetVSchema(ctx context.Context) (string, error)
+//}
 
 // Registry for Server implementations.
-var serverImpls = make(map[string]Server)
+var serverImpls = make(map[string]Impl)
 
 // Which implementation to use
 var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
@@ -323,7 +341,7 @@ var topoImplementation = flag.String("topo_implementation", "zookeeper", "the to
 // RegisterServer adds an implementation for a Server.
 // If an implementation with that name already exists, panics.
 // Call this in the 'init' function in your module.
-func RegisterServer(name string, ts Server) {
+func RegisterServer(name string, ts Impl) {
 	if serverImpls[name] != nil {
 		panic(fmt.Errorf("Duplicate topo.Server registration for %v", name))
 	}
@@ -332,7 +350,7 @@ func RegisterServer(name string, ts Server) {
 
 // GetServerByName returns a specific Server by name, or nil.
 func GetServerByName(name string) Server {
-	return serverImpls[name]
+	return Server{Impl: serverImpls[name]}
 }
 
 // GetServer returns 'our' Server, going down this list:
@@ -344,7 +362,7 @@ func GetServer() Server {
 	if len(serverImpls) == 1 {
 		for name, ts := range serverImpls {
 			log.V(6).Infof("Using only topo.Server: %v", name)
-			return ts
+			return Server{Impl: ts}
 		}
 	}
 
@@ -353,7 +371,7 @@ func GetServer() Server {
 		panic(fmt.Errorf("No topo.Server named %v", *topoImplementation))
 	}
 	log.V(6).Infof("Using topo.Server: %v", *topoImplementation)
-	return result
+	return Server{Impl: result}
 }
 
 // CloseServers closes all registered Server.

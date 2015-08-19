@@ -102,7 +102,7 @@ func TestPurgeActions(t *testing.T) {
 	}
 
 	actionPath := path.Join(globalKeyspacesPath, "test_keyspace", "action")
-	zkts := ts.Server.(*Server)
+	zkts := ts.Impl.(*TestServer).Impl.(*Server)
 
 	if _, err := zk.CreateRecursive(zkts.zconn, actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(topurge): %v", err)
@@ -134,7 +134,7 @@ func TestPruneActionLogs(t *testing.T) {
 	}
 
 	actionLogPath := path.Join(globalKeyspacesPath, "test_keyspace", "actionlog")
-	zkts := ts.Server.(*Server)
+	zkts := ts.Impl.(*TestServer).Impl.(*Server)
 
 	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(stale): %v", err)

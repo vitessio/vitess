@@ -253,7 +253,7 @@ func (ft *fakeTopoRemoteMaster) GetEndPoints(ctx context.Context, cell, keyspace
 // TestRemoteMaster will test getting endpoints for remote master.
 func TestRemoteMaster(t *testing.T) {
 	ft := &fakeTopoRemoteMaster{cell: "cell1", remoteCell: "cell2"}
-	rsts := NewResilientSrvTopoServer(ft, "TestRemoteMaster")
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestRemoteMaster")
 	rsts.enableRemoteMaster = true
 
 	// remote cell for master
@@ -295,7 +295,7 @@ func TestRemoteMaster(t *testing.T) {
 // TestCacheWithErrors will test we properly return cached errors.
 func TestCacheWithErrors(t *testing.T) {
 	ft := &fakeTopo{keyspace: "test_ks"}
-	rsts := NewResilientSrvTopoServer(ft, "TestCacheWithErrors")
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestCacheWithErrors")
 
 	// ask for the known keyspace, that populates the cache
 	_, err := rsts.GetSrvKeyspace(context.Background(), "", "test_ks")
@@ -322,7 +322,7 @@ func TestCacheWithErrors(t *testing.T) {
 // TestCachedErrors will test we properly return cached errors.
 func TestCachedErrors(t *testing.T) {
 	ft := &fakeTopo{keyspace: "test_ks"}
-	rsts := NewResilientSrvTopoServer(ft, "TestCachedErrors")
+	rsts := NewResilientSrvTopoServer(topo.Server{Impl: ft}, "TestCachedErrors")
 
 	// ask for an unknown keyspace, should get an error
 	_, err := rsts.GetSrvKeyspace(context.Background(), "", "unknown_ks")
