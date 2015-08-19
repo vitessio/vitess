@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/events"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -171,7 +172,7 @@ func (s *Server) GetTabletsByCell(ctx context.Context, cellName string) ([]*pb.T
 
 	tablets := make([]*pb.TabletAlias, 0, len(nodes))
 	for _, node := range nodes {
-		tabletAlias, err := topo.ParseTabletAliasString(node)
+		tabletAlias, err := topoproto.ParseTabletAlias(node)
 		if err != nil {
 			return nil, err
 		}

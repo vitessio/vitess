@@ -7,9 +7,6 @@ package topo
 import (
 	"fmt"
 	"reflect"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -19,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/trace"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -28,9 +26,6 @@ const (
 	// http://dev.mysql.com/doc/refman/5.1/en/replication-options.html
 	NO_TABLET = 0
 
-	// Default name for databases is the prefix plus keyspace
-	vtDbPrefix = "vt_"
-
 	// ReplicationLag is the key in the health map to indicate high
 	// replication lag
 	ReplicationLag = "replication_lag"
@@ -39,92 +34,6 @@ const (
 	// replication lag
 	ReplicationLagHigh = "high"
 )
-
-// TabletAliasIsZero returns true iff cell and uid are empty
-func TabletAliasIsZero(ta *pb.TabletAlias) bool {
-	return ta == nil || (ta.Cell == "" && ta.Uid == 0)
-}
-
-// TabletAliasEqual returns true if two TabletAlias match
-func TabletAliasEqual(left, right *pb.TabletAlias) bool {
-	if left == nil {
-		return right == nil
-	}
-	if right == nil {
-		return false
-	}
-	return *left == *right
-}
-
-// TabletAliasString formats a TabletAlias
-func TabletAliasString(tabletAlias *pb.TabletAlias) string {
-	if tabletAlias == nil {
-		return "<nil>"
-	}
-	return fmtAlias(tabletAlias.Cell, tabletAlias.Uid)
-}
-
-// TabletAliasUIDStr returns a string version of the uid
-func TabletAliasUIDStr(ta *pb.TabletAlias) string {
-	return tabletUIDStr(ta.Uid)
-}
-
-// ParseTabletAliasString returns a TabletAlias for the input string,
-// of the form <cell>-<uid>
-func ParseTabletAliasString(aliasStr string) (*pb.TabletAlias, error) {
-	nameParts := strings.Split(aliasStr, "-")
-	if len(nameParts) != 2 {
-		return nil, fmt.Errorf("invalid tablet alias: %v", aliasStr)
-	}
-	uid, err := ParseUID(nameParts[1])
-	if err != nil {
-		return nil, fmt.Errorf("invalid tablet uid %v: %v", aliasStr, err)
-	}
-	return &pb.TabletAlias{
-		Cell: nameParts[0],
-		Uid:  uid,
-	}, nil
-}
-
-func tabletUIDStr(uid uint32) string {
-	return fmt.Sprintf("%010d", uid)
-}
-
-// ParseUID parses just the uid (a number)
-func ParseUID(value string) (uint32, error) {
-	uid, err := strconv.ParseUint(value, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("bad tablet uid %v", err)
-	}
-	return uint32(uid), nil
-}
-
-func fmtAlias(cell string, uid uint32) string {
-	return fmt.Sprintf("%v-%v", cell, tabletUIDStr(uid))
-}
-
-// TabletAliasList is used mainly for sorting
-type TabletAliasList []*pb.TabletAlias
-
-// Len is part of sort.Interface
-func (tal TabletAliasList) Len() int {
-	return len(tal)
-}
-
-// Less is part of sort.Interface
-func (tal TabletAliasList) Less(i, j int) bool {
-	if tal[i].Cell < tal[j].Cell {
-		return true
-	} else if tal[i].Cell > tal[j].Cell {
-		return false
-	}
-	return tal[i].Uid < tal[j].Uid
-}
-
-// Swap is part of sort.Interface
-func (tal TabletAliasList) Swap(i, j int) {
-	tal[i], tal[j] = tal[j], tal[i]
-}
 
 // TabletType is the main type for a tablet. It has an implication on:
 // - the replication graph
@@ -180,66 +89,6 @@ const (
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
 )
-
-// AllTabletTypes lists all the possible tablet types
-var AllTabletTypes = []pb.TabletType{
-	pb.TabletType_IDLE,
-	pb.TabletType_MASTER,
-	pb.TabletType_REPLICA,
-	pb.TabletType_RDONLY,
-	pb.TabletType_BATCH,
-	pb.TabletType_SPARE,
-	pb.TabletType_EXPERIMENTAL,
-	pb.TabletType_SCHEMA_UPGRADE,
-	pb.TabletType_BACKUP,
-	pb.TabletType_RESTORE,
-	pb.TabletType_WORKER,
-	pb.TabletType_SCRAP,
-}
-
-// SlaveTabletTypes contains all the tablet type that can have replication
-// enabled.
-var SlaveTabletTypes = []pb.TabletType{
-	pb.TabletType_REPLICA,
-	pb.TabletType_RDONLY,
-	pb.TabletType_BATCH,
-	pb.TabletType_SPARE,
-	pb.TabletType_EXPERIMENTAL,
-	pb.TabletType_SCHEMA_UPGRADE,
-	pb.TabletType_BACKUP,
-	pb.TabletType_RESTORE,
-	pb.TabletType_WORKER,
-}
-
-// ParseTabletType parses the tablet type into the enum
-func ParseTabletType(param string) (pb.TabletType, error) {
-	value, ok := pb.TabletType_value[strings.ToUpper(param)]
-	if !ok {
-		return pb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
-	}
-	return pb.TabletType(value), nil
-}
-
-// IsTypeInList returns true if the given type is in the list.
-// Use it with AllTabletType and SlaveTabletType for instance.
-func IsTypeInList(tabletType pb.TabletType, types []pb.TabletType) bool {
-	for _, t := range types {
-		if tabletType == t {
-			return true
-		}
-	}
-	return false
-}
-
-// MakeStringTypeList returns a list of strings that match the input list.
-func MakeStringTypeList(types []pb.TabletType) []string {
-	strs := make([]string, len(types))
-	for i, t := range types {
-		strs[i] = strings.ToLower(t.String())
-	}
-	sort.Strings(strs)
-	return strs
-}
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned
 // without changes to the replication graph
@@ -346,23 +195,6 @@ func TabletEndPoint(tablet *pb.Tablet) (*pb.EndPoint, error) {
 	return entry, nil
 }
 
-// TabletAddr returns hostname:vt port associated with a tablet
-func TabletAddr(tablet *pb.Tablet) string {
-	return netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["vt"])
-}
-
-// TabletDbName is usually implied by keyspace. Having the shard information in the
-// database name complicates mysql replication.
-func TabletDbName(tablet *pb.Tablet) string {
-	if tablet.DbNameOverride != "" {
-		return tablet.DbNameOverride
-	}
-	if tablet.Keyspace == "" {
-		return ""
-	}
-	return vtDbPrefix + tablet.Keyspace
-}
-
 // TabletComplete validates and normalizes the tablet. If the shard name
 // contains a '-' it is going to try to infer the keyrange from it.
 func TabletComplete(tablet *pb.Tablet) error {
@@ -383,12 +215,12 @@ type TabletInfo struct {
 
 // String returns a string describing the tablet.
 func (ti *TabletInfo) String() string {
-	return fmt.Sprintf("Tablet{%v}", TabletAliasString(ti.Alias))
+	return fmt.Sprintf("Tablet{%v}", topoproto.TabletAliasString(ti.Alias))
 }
 
 // AliasString returns the string representation of the tablet alias
 func (ti *TabletInfo) AliasString() string {
-	return TabletAliasString(ti.Alias)
+	return topoproto.TabletAliasString(ti.Alias)
 }
 
 // Addr returns hostname:vt port.
@@ -411,7 +243,7 @@ func (ti *TabletInfo) IsAssigned() bool {
 // DbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
 func (ti *TabletInfo) DbName() string {
-	return TabletDbName(ti.Tablet)
+	return topoproto.TabletDbName(ti.Tablet)
 }
 
 // Version returns the version of this tablet from last time it was read or
@@ -457,7 +289,7 @@ func NewTabletInfo(tablet *pb.Tablet, version int64) *TabletInfo {
 func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
-	span.Annotate("tablet", TabletAliasString(alias))
+	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
 	return ts.GetTablet(ctx, alias)
@@ -467,7 +299,7 @@ func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletIn
 func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
-	span.Annotate("tablet", TabletAliasString(tablet.Alias))
+	span.Annotate("tablet", topoproto.TabletAliasString(tablet.Alias))
 	defer span.Finish()
 
 	var version int64 = -1
@@ -487,7 +319,7 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 func UpdateTabletFields(ctx context.Context, ts Server, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
-	span.Annotate("tablet", TabletAliasString(alias))
+	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
 	return ts.UpdateTabletFields(ctx, alias, update)
@@ -500,8 +332,8 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 	if err != nil {
 		return err
 	}
-	if !TabletAliasEqual(tablet.Alias, tabletAlias) {
-		return fmt.Errorf("bad tablet alias data for tablet %v: %#v", TabletAliasString(tabletAlias), tablet.Alias)
+	if !topoproto.TabletAliasEqual(tablet.Alias, tabletAlias) {
+		return fmt.Errorf("bad tablet alias data for tablet %v: %#v", topoproto.TabletAliasString(tabletAlias), tablet.Alias)
 	}
 
 	// Some tablets have no information to generate valid replication paths.

@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
@@ -55,7 +56,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 		// use the type specified on the command line
 		var err error
-		tabletType, err = topo.ParseTabletType(*initTabletType)
+		tabletType, err = topoproto.ParseTabletType(*initTabletType)
 		if err != nil {
 			log.Fatalf("Invalid init tablet type %v: %v", *initTabletType, err)
 		}
@@ -102,7 +103,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		if err != nil {
 			return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 		}
-		if si.MasterAlias != nil && topo.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
+		if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
 			// we are the current master for this shard (probably
 			// means the master tablet process was just restarted),
 			// so InitTablet as master.

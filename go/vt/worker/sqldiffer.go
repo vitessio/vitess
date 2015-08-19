@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -171,7 +171,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	worker.SetState(WorkerStateSyncReplication)
 
 	// stop replication on subset slave
-	worker.wr.Logger().Infof("Stopping replication on subset slave %v", topo.TabletAliasString(worker.subset.alias))
+	worker.wr.Logger().Infof("Stopping replication on subset slave %v", topoproto.TabletAliasString(worker.subset.alias))
 	subsetTablet, err := worker.wr.TopoServer().GetTablet(ctx, worker.subset.alias)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, subsetTablet)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("Cannot stop slave %v: %v", topo.TabletAliasString(worker.subset.alias), err)
+		return fmt.Errorf("Cannot stop slave %v: %v", topoproto.TabletAliasString(worker.subset.alias), err)
 	}
 	if err := checkDone(ctx); err != nil {
 		return err
@@ -191,7 +191,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	wrangler.RecordStartSlaveAction(worker.cleaner, subsetTablet)
 	action, err := wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.subset.alias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(worker.subset.alias), err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(worker.subset.alias), err)
 	}
 	action.TabletType = pb.TabletType_SPARE
 
@@ -202,7 +202,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	}
 
 	// stop replication on superset slave
-	worker.wr.Logger().Infof("Stopping replication on superset slave %v", topo.TabletAliasString(worker.superset.alias))
+	worker.wr.Logger().Infof("Stopping replication on superset slave %v", topoproto.TabletAliasString(worker.superset.alias))
 	supersetTablet, err := worker.wr.TopoServer().GetTablet(ctx, worker.superset.alias)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	err = worker.wr.TabletManagerClient().StopSlave(shortCtx, supersetTablet)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("Cannot stop slave %v: %v", topo.TabletAliasString(worker.superset.alias), err)
+		return fmt.Errorf("Cannot stop slave %v: %v", topoproto.TabletAliasString(worker.superset.alias), err)
 	}
 
 	// change the cleaner actions from ChangeSlaveType(rdonly)
@@ -219,7 +219,7 @@ func (worker *SQLDiffWorker) synchronizeReplication(ctx context.Context) error {
 	wrangler.RecordStartSlaveAction(worker.cleaner, supersetTablet)
 	action, err = wrangler.FindChangeSlaveTypeActionByTarget(worker.cleaner, worker.superset.alias)
 	if err != nil {
-		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(worker.superset.alias), err)
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(worker.superset.alias), err)
 	}
 	action.TabletType = pb.TabletType_SPARE
 

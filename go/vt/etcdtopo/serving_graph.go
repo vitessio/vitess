@@ -13,6 +13,7 @@ import (
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -41,7 +42,7 @@ func (s *Server) GetSrvTabletTypesPerShard(ctx context.Context, cellName, keyspa
 	tabletTypes := make([]pb.TabletType, 0, len(resp.Node.Nodes))
 	for _, n := range resp.Node.Nodes {
 		strType := path.Base(n.Key)
-		if tt, err := topo.ParseTabletType(strType); err == nil {
+		if tt, err := topoproto.ParseTabletType(strType); err == nil {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}

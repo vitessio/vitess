@@ -44,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -472,7 +473,7 @@ func (agent *ActionAgent) Stop() {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (agent *ActionAgent) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topo.TabletAliasString(agent.TabletAlias)}
+	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(agent.TabletAlias)}
 }
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,

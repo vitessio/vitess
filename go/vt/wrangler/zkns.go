@@ -9,6 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
@@ -154,7 +155,7 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 	if tabletTypeStr == "action" || tabletTypeStr == "actionlog" {
 		return nil, nil
 	}
-	tabletType, err := topo.ParseTabletType(tabletTypeStr)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 
@@ -41,7 +41,7 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.tabletType, err = topo.ParseTabletType(c.TabletType)
+	c.tabletType, err = topoproto.ParseTabletType(c.TabletType)
 	if err != nil {
 		return nil, err
 	}

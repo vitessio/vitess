@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -156,7 +156,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	db.AddQuery(createTable, &mproto.QueryResult{})
 	db.AddQuery(createTableView, &mproto.QueryResult{})
 
-	source := topo.TabletAliasString(sourceRdonly.Tablet.Alias)
+	source := topoproto.TabletAliasString(sourceRdonly.Tablet.Alias)
 	if useShardAsSource {
 		source = "ks/-80"
 	}

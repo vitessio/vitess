@@ -29,6 +29,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -39,7 +40,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
-	hk.ExtraEnv["TABLET_ALIAS"] = topo.TabletAliasString(tabletAlias)
+	hk.ExtraEnv["TABLET_ALIAS"] = topoproto.TabletAliasString(tabletAlias)
 }
 
 // Scrap will update the tablet type to 'Scrap', and remove it from

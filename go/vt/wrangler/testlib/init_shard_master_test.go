@@ -13,6 +13,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -93,7 +94,7 @@ func TestInitMasterShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run InitShardMaster
-	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, topo.TabletAliasString(master.Tablet.Alias)}); err != nil {
+	if err := vp.Run([]string{"InitShardMaster", "-wait_slave_timeout", "10s", master.Tablet.Keyspace + "/" + master.Tablet.Shard, topoproto.TabletAliasString(master.Tablet.Alias)}); err != nil {
 		t.Fatalf("InitShardMaster failed: %v", err)
 	}
 
@@ -105,7 +106,7 @@ func TestInitMasterShard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if !topo.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+	if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 	if err := master.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
@@ -242,7 +243,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShard failed: %v", err)
 	}
-	if !topo.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+	if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 		t.Errorf("unexpected shard master alias, got %v expected %v", si.MasterAlias, master.Tablet.Alias)
 	}
 }

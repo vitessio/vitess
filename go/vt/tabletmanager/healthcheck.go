@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -103,7 +104,7 @@ func (agent *ActionAgent) initHealthCheck() {
 		return
 	}
 
-	tt, err := topo.ParseTabletType(*targetTabletType)
+	tt, err := topoproto.ParseTabletType(*targetTabletType)
 	if err != nil {
 		log.Fatalf("Invalid target tablet type %v: %v", *targetTabletType, err)
 	}
