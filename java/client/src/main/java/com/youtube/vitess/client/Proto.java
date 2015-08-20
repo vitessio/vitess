@@ -159,9 +159,11 @@ public class Proto {
   public static BoundQuery bindQuery(String query, Map<String, ?> vars) {
     BoundQuery.Builder boundQueryBuilder =
         BoundQuery.newBuilder().setSql(ByteString.copyFromUtf8(query));
-    Map<String, BindVariable> bindVars = boundQueryBuilder.getMutableBindVariables();
-    for (Map.Entry<String, ?> entry : vars.entrySet()) {
-      bindVars.put(entry.getKey(), buildBindVariable(entry.getValue()));
+    if (vars != null) {
+      Map<String, BindVariable> bindVars = boundQueryBuilder.getMutableBindVariables();
+      for (Map.Entry<String, ?> entry : vars.entrySet()) {
+        bindVars.put(entry.getKey(), buildBindVariable(entry.getValue()));
+      }
     }
     return boundQueryBuilder.build();
   }
