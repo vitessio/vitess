@@ -2629,4 +2629,4 @@
 
 # syntax error
 "syntax error"
-"syntax error at position 7 near syntax"
+"syntax error at position 7 near 'syntax'"
