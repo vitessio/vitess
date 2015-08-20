@@ -266,14 +266,14 @@ func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *
 				log.Warningf("secondary.CreateShard(%v,%v) failed (after UpdateShard returned ErrNoNode): %v", keyspace, shard, serr)
 			} else {
 				log.Infof("secondary.UpdateShard(%v, %v) failed with ErrNoNode, CreateShard then worked.", keyspace, shard)
-				s, gerr := tee.secondary.GetShard(ctx, keyspace, shard)
+				_, v, gerr := tee.secondary.GetShard(ctx, keyspace, shard)
 				if gerr != nil {
 					log.Warningf("Failed to re-read shard(%v, %v) after creating it on secondary: %v", keyspace, shard, gerr)
 				} else {
 					tee.mu.Lock()
 					tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
 						readFromVersion:       newVersion,
-						readFromSecondVersion: s.Version(),
+						readFromSecondVersion: v,
 					}
 					tee.mu.Unlock()
 				}
@@ -307,25 +307,25 @@ func (tee *Tee) ValidateShard(ctx context.Context, keyspace, shard string) error
 }
 
 // GetShard is part of the topo.Server interface
-func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
-	si, err := tee.readFrom.GetShard(ctx, keyspace, shard)
+func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
+	s, v, err := tee.readFrom.GetShard(ctx, keyspace, shard)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	si2, err := tee.readFromSecond.GetShard(ctx, keyspace, shard)
+	_, v2, err := tee.readFromSecond.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		// can't read from secondary, so we can's keep version map
-		return si, nil
+		return s, v, nil
 	}
 
 	tee.mu.Lock()
 	tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
-		readFromVersion:       si.Version(),
-		readFromSecondVersion: si2.Version(),
+		readFromVersion:       v,
+		readFromSecondVersion: v2,
 	}
 	tee.mu.Unlock()
-	return si, nil
+	return s, v, nil
 }
 
 // GetShardNames is part of the topo.Server interface

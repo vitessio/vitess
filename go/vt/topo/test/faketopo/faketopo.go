@@ -85,8 +85,8 @@ func (ft FakeTopo) ValidateShard(ctx context.Context, keyspace, shard string) er
 }
 
 // GetShard implements topo.Server.
-func (ft FakeTopo) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
-	return nil, errNotImplemented
+func (ft FakeTopo) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
+	return nil, 0, errNotImplemented
 }
 
 // GetShardNames implements topo.Server.

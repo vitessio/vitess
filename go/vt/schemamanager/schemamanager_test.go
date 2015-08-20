@@ -286,7 +286,7 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 	return []string{"0", "1", "2"}, nil
 }
 
-func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, error) {
+func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*pb.Shard, int64, error) {
 	var masterAlias *pb.TabletAlias
 	if !topoServer.WithEmptyMasterAlias {
 		masterAlias = &pb.TabletAlias{
@@ -297,7 +297,7 @@ func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard
 	value := &pb.Shard{
 		MasterAlias: masterAlias,
 	}
-	return topo.NewShardInfo(keyspace, shard, value, 0), nil
+	return value, 0, nil
 }
 
 func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*topo.TabletInfo, error) {

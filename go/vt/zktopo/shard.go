@@ -100,22 +100,22 @@ func (zkts *Server) ValidateShard(ctx context.Context, keyspace, shard string) e
 }
 
 // GetShard is part of the topo.Server interface
-func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, stat, err := zkts.zconn.Get(shardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
 	s := &pb.Shard{}
 	if err = json.Unmarshal([]byte(data), s); err != nil {
-		return nil, fmt.Errorf("bad shard data %v", err)
+		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}
 
-	return topo.NewShardInfo(keyspace, shard, s, int64(stat.Version())), nil
+	return s, int64(stat.Version()), nil
 }
 
 // GetShardNames is part of the topo.Server interface

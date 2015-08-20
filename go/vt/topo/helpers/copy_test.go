@@ -117,12 +117,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
 	CopyShards(ctx, fromTS, toTS, false)
-	si, err := toTS.GetShard(ctx, "test_keyspace", "0")
+	s, _, err := toTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)
 	}
-	if len(si.Cells) != 1 || si.Cells[0] != "test_cell" {
-		t.Fatalf("bad shard data: %v", *si)
+	if len(s.Cells) != 1 || s.Cells[0] != "test_cell" {
+		t.Fatalf("bad shard data: %v", *s)
 	}
 
 	// check ShardReplication copy

@@ -92,19 +92,19 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShard
 						}
 					}
 
-					si, err := fromTS.GetShard(ctx, keyspace, shard)
+					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					toSi, err := toTS.GetShard(ctx, keyspace, shard)
+					_, toV, err := toTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("toTS.GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					if _, err := toTS.UpdateShard(ctx, keyspace, shard, si.Shard, toSi.Version()); err != nil {
+					if _, err := toTS.UpdateShard(ctx, keyspace, shard, s, toV); err != nil {
 						rec.RecordError(fmt.Errorf("UpdateShard(%v, %v): %v", keyspace, shard, err))
 					}
 				}(keyspace, shard)
@@ -197,13 +197,13 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 					defer wg.Done()
 
 					// read the source shard to get the cells
-					si, err := fromTS.GetShard(ctx, keyspace, shard)
+					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					for _, cell := range si.Cells {
+					for _, cell := range s.Cells {
 						sri, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))

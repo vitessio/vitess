@@ -200,7 +200,16 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.Impl.GetShard(ctx, keyspace, shard)
+	value, version, err := ts.Impl.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	return &ShardInfo{
+		keyspace:  keyspace,
+		shardName: shard,
+		version:   version,
+		Shard:     value,
+	}, nil
 }
 
 // UpdateShard updates the shard data, with the right version.

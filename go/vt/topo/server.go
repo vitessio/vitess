@@ -120,9 +120,9 @@ type Impl interface {
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(ctx context.Context, keyspace, shard string) error
 
-	// GetShard reads a shard and returns it.
+	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
-	GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,

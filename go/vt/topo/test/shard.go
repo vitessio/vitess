@@ -59,21 +59,21 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	if _, err := ts.GetShard(ctx, "test_keyspace", "666"); err != topo.ErrNoNode {
+	if _, _, err := ts.GetShard(ctx, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetShard(666): %v", err)
 	}
 
-	shardInfo, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
+	shard, version, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if want := newKeyRange3("b0-c0"); !key.KeyRangeEqual(shardInfo.KeyRange, want) {
-		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
+	if want := newKeyRange3("b0-c0"); !key.KeyRangeEqual(shard.KeyRange, want) {
+		t.Errorf("shard.KeyRange: want %v, got %v", want, shard.KeyRange)
 	}
 	master := &pb.TabletAlias{Cell: "ny", Uid: 1}
-	shardInfo.MasterAlias = master
-	shardInfo.KeyRange = newKeyRange3("b0-c0")
-	shardInfo.ServedTypes = []*pb.Shard_ServedType{
+	shard.MasterAlias = master
+	shard.KeyRange = newKeyRange3("b0-c0")
+	shard.ServedTypes = []*pb.Shard_ServedType{
 		&pb.Shard_ServedType{
 			TabletType: pb.TabletType_MASTER,
 		},
@@ -85,7 +85,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			TabletType: pb.TabletType_RDONLY,
 		},
 	}
-	shardInfo.SourceShards = []*pb.Shard_SourceShard{
+	shard.SourceShards = []*pb.Shard_SourceShard{
 		&pb.Shard_SourceShard{
 			Uid:      1,
 			Keyspace: "source_ks",
@@ -94,7 +94,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			Tables:   []string{"table1", "table2"},
 		},
 	}
-	shardInfo.TabletControls = []*pb.Shard_TabletControl{
+	shard.TabletControls = []*pb.Shard_TabletControl{
 		&pb.Shard_TabletControl{
 			TabletType:        pb.TabletType_MASTER,
 			Cells:             []string{"c1", "c2"},
@@ -105,7 +105,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			DisableQueryService: true,
 		},
 	}
-	if err := tts.UpdateShard(ctx, shardInfo); err != nil {
+	if _, err := ts.UpdateShard(ctx, "test_keyspace", "b0-c0", shard, version); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
@@ -117,12 +117,12 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("UpdateShardFields error: %v", err)
 	}
-	si, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
+	s, _, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
-	if *si.MasterAlias != *other {
-		t.Fatalf("shard.MasterAlias = %v, want %v", si.MasterAlias, other)
+	if *s.MasterAlias != *other {
+		t.Fatalf("shard.MasterAlias = %v, want %v", s.MasterAlias, other)
 	}
 	_, err = topo.UpdateShardFields(ctx, tts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
 		shard.MasterAlias = master
@@ -132,15 +132,15 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Fatalf("UpdateShardFields error: %v", err)
 	}
 
-	updatedShardInfo, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
+	updatedShard, _, err := ts.GetShard(ctx, "test_keyspace", "b0-c0")
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
 
-	if eq, err := shardEqual(shardInfo.Shard, updatedShardInfo.Shard); err != nil {
+	if eq, err := shardEqual(shard, updatedShard); err != nil {
 		t.Errorf("cannot compare shards: %v", err)
 	} else if !eq {
-		t.Errorf("put and got shards are not identical:\n%#v\n%#v", shardInfo.Shard, updatedShardInfo.Shard)
+		t.Errorf("put and got shards are not identical:\n%#v\n%#v", shard, updatedShard)
 	}
 
 	// test GetShardNames
