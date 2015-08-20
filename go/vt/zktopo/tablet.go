@@ -9,9 +9,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
@@ -50,11 +48,6 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 		}
 		return err
 	}
-
-	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet,
-		Status: "created",
-	})
 	return nil
 }
 
@@ -116,31 +109,12 @@ func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.Tabl
 
 // DeleteTablet is part of the topo.Server interface
 func (zkts *Server) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
-	// We need to find out the keyspace and shard names because
-	// those are required in the TabletChange event.
-	tablet, _, tiErr := zkts.GetTablet(ctx, alias)
-
 	zkTabletPath := TabletPathForAlias(alias)
-	err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
-	if err != nil {
+	if err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
 		return err
-	}
-
-	// Only try to log if we have the required information.
-	if tiErr == nil {
-		// We only want to copy the identity info for the tablet (alias, etc.).
-		// The rest has just been deleted, so it should be blank.
-		event.Dispatch(&events.TabletChange{
-			Tablet: pb.Tablet{
-				Alias:    tablet.Alias,
-				Keyspace: tablet.Keyspace,
-				Shard:    tablet.Shard,
-			},
-			Status: "deleted",
-		})
 	}
 	return nil
 }

@@ -418,7 +418,40 @@ func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 		return nil
 	}
 
-	return UpdateTabletReplicationData(ctx, ts, tablet)
+	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet,
+		Status: "created",
+	})
+	return nil
+}
+
+// DeleteTablet wraps the underlying Impl.DeleteTablet
+// and dispatches the event.
+func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+	// get the current tablet record, if any, to log the deletion
+	tablet, _, tErr := ts.Impl.GetTablet(ctx, tabletAlias)
+
+	if err := ts.Impl.DeleteTablet(ctx, tabletAlias); err != nil {
+		return err
+	}
+
+	// Only try to log if we have the required info.
+	if tErr == nil {
+		// Only copy the identity info for the tablet. The rest has been deleted.
+		event.Dispatch(&events.TabletChange{
+			Tablet: pb.Tablet{
+				Alias:    tabletAlias,
+				Keyspace: tablet.Keyspace,
+				Shard:    tablet.Shard,
+			},
+			Status: "deleted",
+		})
+	}
+	return nil
 }
 
 // UpdateTabletReplicationData creates or updates the replication

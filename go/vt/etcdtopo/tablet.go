@@ -8,9 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
@@ -87,25 +85,8 @@ func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 		return err
 	}
 
-	// Get the keyspace and shard names for the TabletChange event.
-	tablet, _, tErr := s.GetTablet(ctx, tabletAlias)
-
-	_, err = cell.Delete(tabletDirPath(tabletAlias), true /* recursive */)
-	if err != nil {
+	if _, err = cell.Delete(tabletDirPath(tabletAlias), true /* recursive */); err != nil {
 		return convertError(err)
-	}
-
-	// Only try to log if we have the required info.
-	if tErr == nil {
-		// Only copy the identity info for the tablet. The rest has been deleted.
-		event.Dispatch(&events.TabletChange{
-			Tablet: pb.Tablet{
-				Alias:    tablet.Alias,
-				Keyspace: tablet.Keyspace,
-				Shard:    tablet.Shard,
-			},
-			Status: "deleted",
-		})
 	}
 	return nil
 }
