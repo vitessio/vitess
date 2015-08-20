@@ -39,7 +39,7 @@ func addTablet(ctx context.Context, t *testing.T, ts topo.Server, uid int, cell 
 		Type:     tabletType,
 		Shard:    testShard,
 	}
-	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestRebuildShard(t *testing.T) {
 
 	// Make a change.
 	masterInfo.Type = pb.TabletType_SPARE
-	if err := topo.UpdateTablet(ctx, ts, masterInfo); err != nil {
+	if err := ts.UpdateTablet(ctx, masterInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {
@@ -101,7 +101,7 @@ func TestRebuildShard(t *testing.T) {
 
 	// Make another change.
 	replicaInfo.Type = pb.TabletType_SPARE
-	if err := topo.UpdateTablet(ctx, ts, replicaInfo); err != nil {
+	if err := ts.UpdateTablet(ctx, replicaInfo); err != nil {
 		t.Fatalf("UpdateTablet: %v", err)
 	}
 	if _, err := RebuildShard(ctx, logger, ts, testKeyspace, testShard, cells, time.Minute); err != nil {

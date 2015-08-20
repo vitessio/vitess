@@ -58,31 +58,26 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVe
 }
 
 // UpdateTabletFields implements topo.Server.
-func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, updateFunc func(*pb.Tablet) error) error {
+func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, updateFunc func(*pb.Tablet) error) (*pb.Tablet, error) {
 	var tablet *pb.Tablet
 	var err error
 
 	for {
 		var version int64
 		if tablet, version, err = s.GetTablet(ctx, tabletAlias); err != nil {
-			return err
+			return nil, err
 		}
 		if err = updateFunc(tablet); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err = s.UpdateTablet(ctx, tablet, version); err != topo.ErrBadVersion {
 			break
 		}
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet,
-		Status: "updated",
-	})
-	return nil
+	return tablet, nil
 }
 
 // DeleteTablet implements topo.Server.

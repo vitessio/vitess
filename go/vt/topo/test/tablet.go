@@ -90,7 +90,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if err := topo.UpdateTabletFields(ctx, topo.Server{Impl: ts}, tablet.Alias, func(t *pb.Tablet) error {
+	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {

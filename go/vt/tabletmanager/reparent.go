@@ -153,7 +153,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		// Update our own record to master.
 		var updatedTablet *pb.Tablet
-		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
+		err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *pb.Tablet) error {
 				tablet.Type = pb.TabletType_MASTER
 				tablet.HealthMap = nil
@@ -177,7 +177,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		go func() {
 			// Force the old master to spare.
 			var oldMasterTablet *pb.Tablet
-			err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
+			err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *pb.Tablet) error {
 					tablet.Type = pb.TabletType_SPARE
 					oldMasterTablet = tablet

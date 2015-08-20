@@ -64,7 +64,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 		}
 	}
 
-	err := topo.CreateTablet(ctx, wr.ts, tablet)
+	err := wr.ts.CreateTablet(ctx, tablet)
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update || force {
@@ -74,7 +74,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					if err := topo.UpdateTablet(ctx, wr.ts, oldTablet); err != nil {
+					if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {
 						wr.Logger().Warningf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 						// now fall through the Scrap case
 					} else {
@@ -101,7 +101,7 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *pb.Tablet, force, cr
 				// we ignore this
 				wr.Logger().Errorf("failed deleting tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 			}
-			return topo.CreateTablet(ctx, wr.ts, tablet)
+			return wr.ts.CreateTablet(ctx, tablet)
 		}
 	}
 	return err

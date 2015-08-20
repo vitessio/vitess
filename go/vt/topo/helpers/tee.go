@@ -418,17 +418,18 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVer
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error {
-	if err := tee.primary.UpdateTabletFields(ctx, tabletAlias, update); err != nil {
+func (tee *Tee) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error) {
+	tablet, err := tee.primary.UpdateTabletFields(ctx, tabletAlias, update)
+	if err != nil {
 		// failed on primary, not updating secondary
-		return err
+		return nil, err
 	}
 
-	if err := tee.secondary.UpdateTabletFields(ctx, tabletAlias, update); err != nil {
+	if _, err := tee.secondary.UpdateTabletFields(ctx, tabletAlias, update); err != nil {
 		// not critical enough to fail
 		log.Warningf("secondary.UpdateTabletFields(%v) failed: %v", tabletAlias, err)
 	}
-	return nil
+	return tablet, nil
 }
 
 // DeleteTablet is part of the topo.Server interface

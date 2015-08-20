@@ -153,7 +153,7 @@ type Impl interface {
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
 	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error
+	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error)
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.

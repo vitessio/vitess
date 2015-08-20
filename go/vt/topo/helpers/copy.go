@@ -151,7 +151,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							err = toTS.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+							_, err = toTS.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
 								*t = *tablet
 								return nil
 							})

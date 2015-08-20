@@ -306,7 +306,7 @@ func (ts Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletI
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
 // It also uses a span, and sends the event.
-func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
+func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(tablet.Alias))
@@ -317,7 +317,7 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(ctx, tablet.Tablet, version)
+	newVersion, err := ts.Impl.UpdateTablet(ctx, tablet.Tablet, version)
 	if err != nil {
 		return err
 	}
@@ -332,13 +332,23 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 
 // UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
 // that generates trace spans.
-func UpdateTabletFields(ctx context.Context, ts Server, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
+func (ts Server) UpdateTabletFields(ctx context.Context, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	return ts.UpdateTabletFields(ctx, alias, update)
+	tablet, err := ts.Impl.UpdateTabletFields(ctx, alias, update)
+	if err != nil {
+		return err
+	}
+	if tablet != nil {
+		event.Dispatch(&events.TabletChange{
+			Tablet: *tablet,
+			Status: "updated",
+		})
+	}
+	return nil
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
@@ -396,9 +406,9 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func CreateTablet(ctx context.Context, ts Server, tablet *pb.Tablet) error {
+func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 	// Have the Server create the tablet
-	err := ts.CreateTablet(ctx, tablet)
+	err := ts.Impl.CreateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}

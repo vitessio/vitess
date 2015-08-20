@@ -80,7 +80,7 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existin
 }
 
 // UpdateTabletFields is part of the topo.Server interface
-func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error {
+func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error) {
 	// Store the last tablet value so we can log it if the change succeeds.
 	var lastTablet *pb.Tablet
 
@@ -109,16 +109,9 @@ func (zkts *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.Tabl
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return err
+		return nil, err
 	}
-
-	if lastTablet != nil {
-		event.Dispatch(&events.TabletChange{
-			Tablet: *lastTablet,
-			Status: "updated",
-		})
-	}
-	return nil
+	return lastTablet, nil
 }
 
 // DeleteTablet is part of the topo.Server interface

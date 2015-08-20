@@ -11,7 +11,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -136,7 +135,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 		Shard:    shard,
 		Type:     pb.TabletType_SPARE,
 	}
-	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 

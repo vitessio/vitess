@@ -40,7 +40,8 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, topo.Server{Impl: fromTS}, &pb.Tablet{
+	tts := topo.Server{Impl: fromTS}
+	if err := tts.CreateTablet(ctx, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
@@ -60,7 +61,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, topo.Server{Impl: fromTS}, &pb.Tablet{
+	if err := tts.CreateTablet(ctx, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,

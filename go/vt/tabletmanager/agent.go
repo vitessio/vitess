@@ -491,7 +491,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
 	tablet.PortMap["mysql"] = mport
-	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+	if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}
