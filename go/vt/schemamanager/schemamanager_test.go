@@ -269,6 +269,7 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 
 type fakeTopo struct {
 	faketopo.FakeTopo
+	WithEmptyMasterAlias bool
 }
 
 func newFakeTopo() *fakeTopo {
@@ -284,11 +285,15 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 }
 
 func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, error) {
-	value := &pb.Shard{
-		MasterAlias: &pb.TabletAlias{
+	var masterAlias *pb.TabletAlias
+	if !topoServer.WithEmptyMasterAlias {
+		masterAlias = &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
-		},
+		}
+	}
+	value := &pb.Shard{
+		MasterAlias: masterAlias,
 	}
 	return topo.NewShardInfo(keyspace, shard, value, 0), nil
 }
