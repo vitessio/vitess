@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -220,7 +219,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.MasterAlias.Uid++
-	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

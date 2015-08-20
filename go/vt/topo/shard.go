@@ -17,9 +17,11 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -201,12 +203,13 @@ func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardIn
 	return ts.Impl.GetShard(ctx, keyspace, shard)
 }
 
-// UpdateShard updates the shard data, with the right version
-func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
+// UpdateShard updates the shard data, with the right version.
+// It also creates a span, and dispatches the event.
+func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShard")
-	span.Annotate("keyspace", si.Keyspace())
-	span.Annotate("shard", si.ShardName())
+	span.Annotate("keyspace", si.keyspace)
+	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
 	var version int64 = -1
@@ -214,11 +217,19 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 		version = si.version
 	}
 
-	newVersion, err := ts.UpdateShard(ctx, si, version)
-	if err == nil {
-		si.version = newVersion
+	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, version)
+	if err != nil {
+		return err
 	}
-	return err
+	si.version = newVersion
+
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: si.Keyspace(),
+		ShardName:    si.ShardName(),
+		Shard:        si.Shard,
+		Status:       "updated",
+	})
+	return nil
 }
 
 // UpdateShardFields is a high level helper to read a shard record, call an
@@ -234,7 +245,7 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 		if err = update(si.Shard); err != nil {
 			return nil, err
 		}
-		if err = UpdateShard(ctx, ts, si); err != ErrBadVersion {
+		if err = ts.UpdateShard(ctx, si); err != ErrBadVersion {
 			return si, err
 		}
 	}

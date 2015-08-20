@@ -67,9 +67,9 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 }
 
 // UpdateShard is part of the topo.Server interface
-func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	data, err := json.MarshalIndent(si.Shard, "", "  ")
+func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
@@ -80,13 +80,6 @@ func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existin
 		}
 		return -1, err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: si.Keyspace(),
-		ShardName:    si.ShardName(),
-		Shard:        si.Shard,
-		Status:       "updated",
-	})
 	return int64(stat.Version()), nil
 }
 

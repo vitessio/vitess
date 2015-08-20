@@ -51,7 +51,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	}
 
 	// and write the shard
-	if err = topo.UpdateShard(ctx, wr.ts, shardInfo); err != nil {
+	if err = wr.ts.UpdateShard(ctx, shardInfo); err != nil {
 		return err
 	}
 

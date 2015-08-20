@@ -130,7 +130,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 
 				// write it back
-				if err := topo.UpdateShard(ctx, agent.TopoServer, si); err != nil {
+				if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
 					return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
 				}
 			}

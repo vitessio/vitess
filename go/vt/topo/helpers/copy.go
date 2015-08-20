@@ -104,7 +104,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShard
 						return
 					}
 
-					if _, err := toTS.UpdateShard(ctx, si, toSi.Version()); err != nil {
+					if _, err := toTS.UpdateShard(ctx, keyspace, shard, si.Shard, toSi.Version()); err != nil {
 						rec.RecordError(fmt.Errorf("UpdateShard(%v, %v): %v", keyspace, shard, err))
 					}
 				}(keyspace, shard)

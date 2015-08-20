@@ -301,7 +301,7 @@ func TestTabletControl(t *testing.T) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(ctx, agent.TopoServer, si); err != nil {
+	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

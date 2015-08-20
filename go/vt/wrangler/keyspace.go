@@ -334,7 +334,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 			if err := si.UpdateDisableQueryService(pb.TabletType_MASTER, nil, true); err != nil {
 				return err
 			}
-			if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+			if err := wr.ts.UpdateShard(ctx, si); err != nil {
 				return err
 			}
 		}
@@ -413,7 +413,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	// All is good, we can save the shards now
 	event.DispatchUpdate(ev, "updating source shards")
 	for _, si := range sourceShards {
-		if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+		if err := wr.ts.UpdateShard(ctx, si); err != nil {
 			return err
 		}
 	}
@@ -425,7 +425,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	}
 	event.DispatchUpdate(ev, "updating destination shards")
 	for _, si := range destinationShards {
-		if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+		if err := wr.ts.UpdateShard(ctx, si); err != nil {
 			return err
 		}
 	}
@@ -585,7 +585,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	if err := sourceShard.UpdateSourceBlacklistedTables(servedType, cells, reverse, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(ctx, wr.ts, sourceShard); err != nil {
+	if err := wr.ts.UpdateShard(ctx, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
@@ -625,7 +625,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	if err := sourceShard.UpdateSourceBlacklistedTables(pb.TabletType_MASTER, nil, false, tables); err != nil {
 		return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
-	if err := topo.UpdateShard(ctx, wr.ts, sourceShard); err != nil {
+	if err := wr.ts.UpdateShard(ctx, sourceShard); err != nil {
 		return fmt.Errorf("UpdateShard(%v/%v) failed: %v", sourceShard.Keyspace(), sourceShard.ShardName(), err)
 	}
 
@@ -660,7 +660,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// Update the destination shard (no more source shard)
 	event.DispatchUpdate(ev, "updating destination shard")
 	destinationShard.SourceShards = nil
-	if err := topo.UpdateShard(ctx, wr.ts, destinationShard); err != nil {
+	if err := wr.ts.UpdateShard(ctx, destinationShard); err != nil {
 		return err
 	}
 

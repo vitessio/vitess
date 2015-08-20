@@ -62,7 +62,7 @@ func TestRebuildShard(t *testing.T) {
 		t.Fatalf("GetOrCreateShard: %v", err)
 	}
 	si.Cells = append(si.Cells, cells[0])
-	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestUpdateTabletEndpoints(t *testing.T) {
 		t.Fatalf("GetOrCreateShard: %v", err)
 	}
 	si.Cells = append(si.Cells, cell)
-	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard: %v", err)
 	}
 

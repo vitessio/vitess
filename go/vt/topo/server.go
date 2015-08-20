@@ -115,7 +115,7 @@ type Impl interface {
 	// or ErrBadVersion if the version has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateShard.
-	UpdateShard(ctx context.Context, si *ShardInfo, existingVersion int64) (newVersion int64, err error)
+	UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(ctx context.Context, keyspace, shard string) error

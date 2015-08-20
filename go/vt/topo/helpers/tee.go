@@ -241,8 +241,8 @@ func (tee *Tee) CreateShard(ctx context.Context, keyspace, shard string, value *
 }
 
 // UpdateShard is part of the topo.Server interface
-func (tee *Tee) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateShard(ctx, si, existingVersion); err != nil {
+func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (newVersion int64, err error) {
+	if newVersion, err = tee.primary.UpdateShard(ctx, keyspace, shard, value, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
 	}
@@ -251,39 +251,39 @@ func (tee *Tee) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVer
 	// and shard version in second topo, replace the version number.
 	// if not, this will probably fail and log.
 	tee.mu.Lock()
-	svm, ok := tee.shardVersionMapping[si.Keyspace()+"/"+si.ShardName()]
+	svm, ok := tee.shardVersionMapping[keyspace+"/"+shard]
 	if ok && svm.readFromVersion == existingVersion {
 		existingVersion = svm.readFromSecondVersion
-		delete(tee.shardVersionMapping, si.Keyspace()+"/"+si.ShardName())
+		delete(tee.shardVersionMapping, keyspace+"/"+shard)
 	}
 	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateShard(ctx, si, existingVersion); serr != nil {
+	if newVersion2, serr := tee.secondary.UpdateShard(ctx, keyspace, shard, value, existingVersion); serr != nil {
 		// not critical enough to fail
 		if serr == topo.ErrNoNode {
 			// the shard doesn't exist on the secondary, let's
 			// just create it
-			if serr = tee.secondary.CreateShard(ctx, si.Keyspace(), si.ShardName(), si.Shard); serr != nil {
-				log.Warningf("secondary.CreateShard(%v,%v) failed (after UpdateShard returned ErrNoNode): %v", si.Keyspace(), si.ShardName(), serr)
+			if serr = tee.secondary.CreateShard(ctx, keyspace, shard, value); serr != nil {
+				log.Warningf("secondary.CreateShard(%v,%v) failed (after UpdateShard returned ErrNoNode): %v", keyspace, shard, serr)
 			} else {
-				log.Infof("secondary.UpdateShard(%v, %v) failed with ErrNoNode, CreateShard then worked.", si.Keyspace(), si.ShardName())
-				si, gerr := tee.secondary.GetShard(ctx, si.Keyspace(), si.ShardName())
+				log.Infof("secondary.UpdateShard(%v, %v) failed with ErrNoNode, CreateShard then worked.", keyspace, shard)
+				s, gerr := tee.secondary.GetShard(ctx, keyspace, shard)
 				if gerr != nil {
-					log.Warningf("Failed to re-read shard(%v, %v) after creating it on secondary: %v", si.Keyspace(), si.ShardName(), gerr)
+					log.Warningf("Failed to re-read shard(%v, %v) after creating it on secondary: %v", keyspace, shard, gerr)
 				} else {
 					tee.mu.Lock()
-					tee.shardVersionMapping[si.Keyspace()+"/"+si.ShardName()] = versionMapping{
+					tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
 						readFromVersion:       newVersion,
-						readFromSecondVersion: si.Version(),
+						readFromSecondVersion: s.Version(),
 					}
 					tee.mu.Unlock()
 				}
 			}
 		} else {
-			log.Warningf("secondary.UpdateShard(%v, %v) failed: %v", si.Keyspace(), si.ShardName(), serr)
+			log.Warningf("secondary.UpdateShard(%v, %v) failed: %v", keyspace, shard, serr)
 		}
 	} else {
 		tee.mu.Lock()
-		tee.shardVersionMapping[si.Keyspace()+"/"+si.ShardName()] = versionMapping{
+		tee.shardVersionMapping[keyspace+"/"+shard] = versionMapping{
 			readFromVersion:       newVersion,
 			readFromSecondVersion: newVersion2,
 		}

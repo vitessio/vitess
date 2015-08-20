@@ -75,7 +75,7 @@ func (ft FakeTopo) CreateShard(ctx context.Context, keyspace, shard string, valu
 }
 
 // UpdateShard implements topo.Server.
-func (ft FakeTopo) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
+func (ft FakeTopo) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
 	return 0, errNotImplemented
 }
 

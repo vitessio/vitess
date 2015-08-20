@@ -105,7 +105,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(ctx, tts, shardInfo); err != nil {
+	if err := tts.UpdateShard(ctx, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 

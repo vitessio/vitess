@@ -74,7 +74,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 
 	if wasUpdated {
 		// write it back
-		if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+		if err := wr.ts.UpdateShard(ctx, si); err != nil {
 			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 		}
 	}
@@ -106,7 +106,7 @@ func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard str
 	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
 		return err
 	}
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }
 
 // SetShardTabletControl changes the TabletControl records
@@ -148,7 +148,7 @@ func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard s
 			return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
 	}
-	return topo.UpdateShard(ctx, wr.ts, shardInfo)
+	return wr.ts.UpdateShard(ctx, shardInfo)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -296,7 +296,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	shardInfo.Cells = newCells
 
-	return topo.UpdateShard(ctx, wr.ts, shardInfo)
+	return wr.ts.UpdateShard(ctx, shardInfo)
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
@@ -329,7 +329,7 @@ func (wr *Wrangler) sourceShardDelete(ctx context.Context, keyspace, shard strin
 		newSourceShards = nil
 	}
 	si.SourceShards = newSourceShards
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard
@@ -364,5 +364,5 @@ func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, 
 		KeyRange: keyRange,
 		Tables:   tables,
 	})
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }

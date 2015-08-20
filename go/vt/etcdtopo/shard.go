@@ -41,13 +41,13 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 }
 
 // UpdateShard implements topo.Server.
-func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	data, err := json.MarshalIndent(si.Shard, "", "  ")
+func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(si.Keyspace(), si.ShardName()),
+	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(keyspace, shard),
 		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
@@ -55,13 +55,6 @@ func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVe
 	if resp.Node == nil {
 		return -1, ErrBadResponse
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: si.Keyspace(),
-		ShardName:    si.ShardName(),
-		Shard:        si.Shard,
-		Status:       "updated",
-	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
