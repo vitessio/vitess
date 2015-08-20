@@ -93,43 +93,42 @@ site_integration_test_files = \
 # - small: under 30 secs
 # - medium: 30 secs - 1 min
 # - large: over 1 min
-small_integration_targets = \
-	tablet_test \
-	sql_builder_test \
-	vertical_split \
-	schema \
-	keyspace_test \
-	keyrange_test \
-	mysqlctl \
-	python_client_test \
-	sharded \
-	secure \
-	binlog \
-	backup \
-	update_stream \
-	custom_sharding \
-	initial_sharding_bytes \
-	initial_sharding \
-	zkocc_test
+small_integration_test_files = \
+	tablet_test.py \
+	sql_builder_test.py \
+	vertical_split.py \
+	schema.py \
+	keyspace_test.py \
+	keyrange_test.py \
+	mysqlctl.py \
+	python_client_test.py \
+	sharded.py \
+	secure.py \
+	binlog.py \
+	backup.py \
+	update_stream.py \
+	custom_sharding.py \
+	initial_sharding_bytes.py \
+	initial_sharding.py
 
-medium_integration_targets = \
-	tabletmanager \
-	reparent \
-	vtdb_test \
-	client_test \
-	vtgate_utils_test \
-	rowcache_invalidator \
-	automation_horizontal_resharding \
-	worker
+medium_integration_test_files = \
+	tabletmanager.py \
+	reparent.py \
+	vtdb_test.py \
+	client_test.py \
+	vtgate_utils_test.py \
+	rowcache_invalidator.py \
+	worker.py \
+	automation_horizontal_resharding.py
 
-large_integration_targets = \
-	vtgatev2_test
+large_integration_test_files = \
+	vtgatev2_test.py
 
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
-ci_skip_integration_targets = \
-	resharding_bytes \
-	resharding
+ci_skip_integration_test_files = \
+	resharding_bytes.py \
+	resharding.py
 
 # Run the following tests after making worker changes.
 worker_integration_test_files = \
@@ -159,22 +158,17 @@ define run_integration_tests
 	done
 endef
 
-$(small_integration_targets) \
-	$(medium_integration_targets) \
-	$(large_integration_targets) \
-	$(ci_skip_integration_targets):
-	$(call run_integration_tests, $@.py)
+small_integration_test:
+	$(call run_integration_tests, $(small_integration_test_files))
 
-$(worker_target):
-	$(call run_integration_tests, "$@.py -v")
+medium_integration_test:
+	$(call run_integration_tests, $(medium_integration_test_files))
 
-small_integration_test: $(small_integration_targets)
+large_integration_test:
+	$(call run_integration_tests, $(large_integration_test_files))
 
-medium_integration_test: $(medium_integration_targets) $(verbose_medium_integration_targets)
-
-large_integration_test: $(large_integration_targets)
-
-ci_skip_integration_test: $(ci_skip_integration_targets)
+ci_skip_integration_test:
+	$(call run_integration_tests, $(ci_skip_integration_test_files))
 
 worker_test:
 	godep go test ./go/vt/worker/
