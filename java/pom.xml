@@ -13,7 +13,7 @@
     <modules>
         <module>client</module>
         <module>gorpc</module>
-        <module>grpc</module>
+        <module>grpc-client</module>
         <module>vtgate-client</module>
     </modules>
 
@@ -62,7 +62,7 @@
 
     <properties>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-      <grpc.version>0.7.1</grpc.version>
+      <grpc.version>0.8.0</grpc.version>
       <guava.version>18.0</guava.version>
       <junit.version>4.12</junit.version>
       <log4j.version>1.2.17</log4j.version>

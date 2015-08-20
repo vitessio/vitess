@@ -1,7 +1,7 @@
 package com.youtube.vitess.client;
 
 /**
- * VitessRpcException indicates a rpc error between client and VTGate.
+ * VitessRpcException indicates an RPC error while trying to communicate with VTGate.
  */
 public class VitessRpcException extends Exception {
 
