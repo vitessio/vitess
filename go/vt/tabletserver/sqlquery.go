@@ -370,14 +370,27 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 		myError = terr
 	}
 	terr.RecordStats(sq.qe.queryServiceStats)
-	// suppress these errors in logs
-	if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
+
+	logMethod := log.Warningf
+	// Suppress or demote some errors in logs
+	switch terr.ErrorType {
+	case ErrRetry, ErrTxPoolFull:
 		return myError
+	case ErrFatal:
+		logMethod = log.Errorf
 	}
-	if terr.ErrorType == ErrFatal {
-		log.Errorf("%v: %v", terr, query)
+	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
+	switch terr.SqlError {
+	case mysql.ErrDupEntry:
+		return myError
+	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong:
+		logMethod = log.Infof
+	case 0:
+		if strings.Contains(terr.Error(), "Row count exceeded") {
+			logMethod = log.Infof
+		}
 	}
-	log.Warningf("%v: %v", terr, query)
+	logMethod("%v: %v", terr, query)
 	return myError
 }
 
