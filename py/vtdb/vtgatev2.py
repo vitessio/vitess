@@ -152,28 +152,46 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def begin(self, effective_caller_id=None):
     try:
-      response = self.client.call('VTGate.Begin', None)
+      #response = self.client.call('VTGate.Begin', None)   # xxx
+      #self.session = response.reply  # xxxx
+      #self.effective_caller_id = effective_caller_id
+      #return  # xxx
+      req = {}
+      self._add_caller_id(req, effective_caller_id)
+      response = self.client.call('VTGate.Begin2', req)
+      self.effective_caller_id = effective_caller_id
       self.session = response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
     try:
-      session = self.session
-      self.client.call('VTGate.Commit', session)
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      print 'xxxxx: req[Session] = %s.' % (req['Session'])
+      self.client.call('VTGate.Commit2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
       self.session = None
+      self.effective_caller_id = None
 
   def rollback(self):
     try:
-      session = self.session
-      self.client.call('VTGate.Rollback', session)
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      self.client.call('VTGate.Rollback2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
       self.session = None
+      self.effective_caller_id = None
+
+  def _add_caller_id(self, req, caller_id):
+    if caller_id:
+      req['CallerID'] = caller_id
 
   def _add_session(self, req):
     if self.session:
@@ -198,6 +216,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     else:
       raise dbexceptions.ProgrammingError('_execute called without specifying keyspace_ids or keyranges')
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     fields = []
@@ -209,10 +228,10 @@ class VTGateConnection(vtgate_client.VTGateClient):
       response = self.client.call(exec_method, req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply and response.reply['Error']:
+      if response.reply.get('Error'):
         raise gorpc.AppError(response.reply['Error'], exec_method)
 
-      if 'Result' in reply:
+      if reply.get('Result'):
         res = reply['Result']
         for field in res['Fields']:
           fields.append((field['Name'], field['Type']))
@@ -251,19 +270,22 @@ class VTGateConnection(vtgate_client.VTGateClient):
         'NotInTransaction': not_in_transaction,
         }
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     fields = []
     conversions = []
     results = []
+    rowcount = 0
+    lastrowid = 0
     try:
       response = self.client.call('VTGate.ExecuteEntityIds', req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply and response.reply['Error']:
+      if response.reply.get('Error'):
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteEntityIds')
 
-      if 'Result' in reply:
+      if reply.get('Result'):
         res = reply['Result']
         for field in res['Fields']:
           fields.append((field['Name'], field['Type']))
@@ -306,6 +328,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
           'TabletType': tablet_type,
           'AsTransaction': as_transaction,
       }
+      self._add_caller_id(req, effective_caller_id)
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
       self._update_session(response)
@@ -354,6 +377,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     else:
       raise dbexceptions.ProgrammingError('_stream_execute called without specifying keyspace_ids or keyranges')
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     self._stream_fields = []
