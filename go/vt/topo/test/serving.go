@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -16,7 +16,7 @@ import (
 )
 
 // CheckServingGraph makes sure the serving graph functions work properly.
-func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 
 	// test individual cell/keyspace/shard/type entries
@@ -57,7 +57,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	// Make a change.
 	tmp := endPoints.Entries[0].Uid
 	endPoints.Entries[0].Uid = tmp + 1
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	endPoints.Entries[0].Uid = tmp
@@ -74,7 +74,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Fatalf("DeleteEndPoints: %v", err)
 	}
 	// Recreate it with an unconditional update.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -96,7 +96,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	// Re-add endpoints.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -112,15 +112,15 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	// Update with the wrong version.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, version+1); err != topo.ErrBadVersion {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, version+1); err != topo.ErrBadVersion {
 		t.Fatalf("UpdateEndPoints(master): err = %v, want topo.ErrBadVersion", err)
 	}
 	// Update with the right version.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, version); err != nil {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, version); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 	// Update existing EndPoints unconditionally.
-	if err := topo.UpdateEndPoints(ctx, ts, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
+	if err := ts.UpdateEndPoints(ctx, cell, "test_keyspace", "-10", pb.TabletType_MASTER, endPoints, -1); err != nil {
 		t.Fatalf("UpdateEndPoints(master): %v", err)
 	}
 
@@ -213,7 +213,7 @@ func CheckServingGraph(ctx context.Context, t *testing.T, ts topo.Server) {
 }
 
 // CheckWatchSrvKeyspace makes sure WatchSrvKeyspace works as expected
-func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckWatchSrvKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 	keyspace := "test_keyspace"
 

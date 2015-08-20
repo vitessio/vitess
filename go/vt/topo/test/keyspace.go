@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call all the check methods in your test methods. For an
 // example, look at the tests in
@@ -16,7 +16,7 @@ import (
 )
 
 // CheckKeyspace tests the keyspace part of the API
-func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	keyspaces, err := ts.GetKeyspaces(ctx)
 	if err != nil {
 		t.Errorf("GetKeyspaces(empty): %v", err)
@@ -103,7 +103,7 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Server) {
 		newServedFroms = append(newServedFroms, ksf)
 	}
 	ki.ServedFroms = newServedFroms
-	err = topo.UpdateKeyspace(ctx, ts, ki)
+	err = topo.UpdateKeyspace(ctx, topo.Server{Impl: ts}, ki)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}

@@ -13,7 +13,7 @@ import (
 )
 
 // CheckVSchema runs the tests on the VSchema part of the API
-func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
 	got, err := ts.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)

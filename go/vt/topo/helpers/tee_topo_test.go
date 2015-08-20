@@ -28,7 +28,7 @@ func (s fakeServer) GetKnownCells(ctx context.Context) ([]string, error) {
 	return s.localCells, nil
 }
 
-func newFakeTeeServer(t *testing.T) topo.Server {
+func newFakeTeeServer(t *testing.T) topo.Impl {
 	cells := []string{"test", "global"} // global has to be last
 
 	zconn1 := fakezk.NewConn()
@@ -45,7 +45,7 @@ func newFakeTeeServer(t *testing.T) topo.Server {
 	s1 := fakeServer{Server: zktopo.NewServer(zconn1), localCells: cells[:len(cells)-1]}
 	s2 := fakeServer{Server: zktopo.NewServer(zconn2), localCells: cells[:len(cells)-1]}
 
-	return topo.Server{Impl: NewTee(s1, s2, false)}
+	return NewTee(s1, s2, false)
 }
 
 func TestKeyspace(t *testing.T) {

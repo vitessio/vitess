@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -28,7 +28,7 @@ func tabletEqual(left, right *pb.Tablet) (bool, error) {
 }
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
-func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 	tablet := &pb.Tablet{
 		Alias:    &pb.TabletAlias{Cell: cell, Uid: 1},
@@ -78,7 +78,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 
 	ti.Hostname = "remotehost"
-	if err := topo.UpdateTablet(ctx, ts, ti); err != nil {
+	if err := topo.UpdateTablet(ctx, topo.Server{Impl: ts}, ti); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
 	}
 
-	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *pb.Tablet) error {
+	if err := topo.UpdateTabletFields(ctx, topo.Server{Impl: ts}, tablet.Alias, func(t *pb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {

@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -29,15 +29,17 @@ func shardEqual(left, right *pb.Shard) (bool, error) {
 }
 
 // CheckShard verifies the Shard operations work correctly
-func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
+	tts := topo.Server{Impl: ts}
+
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
+	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
@@ -45,7 +47,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err := ts.DeleteShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("DeleteShard: %v", err)
 	}
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -53,7 +55,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteKeyspaceShards: %v", err)
 	}
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "b0-c0"); err != nil {
+	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -103,12 +105,12 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(ctx, ts, shardInfo); err != nil {
+	if err := topo.UpdateShard(ctx, tts, shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
 	other := &pb.TabletAlias{Cell: "ny", Uid: 82873}
-	_, err = topo.UpdateShardFields(ctx, ts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	_, err = topo.UpdateShardFields(ctx, tts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
 		shard.MasterAlias = other
 		return nil
 	})
@@ -122,7 +124,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Server) {
 	if *si.MasterAlias != *other {
 		t.Fatalf("shard.MasterAlias = %v, want %v", si.MasterAlias, other)
 	}
-	_, err = topo.UpdateShardFields(ctx, ts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	_, err = topo.UpdateShardFields(ctx, tts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
 		shard.MasterAlias = master
 		return nil
 	})

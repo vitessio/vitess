@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -20,7 +20,7 @@ import (
 var timeUntilLockIsTaken = 10 * time.Millisecond
 
 // CheckKeyspaceLock checks we can take a keyspace lock as expected.
-func CheckKeyspaceLock(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckKeyspaceLock(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
@@ -30,7 +30,7 @@ func CheckKeyspaceLock(ctx context.Context, t *testing.T, ts topo.Server) {
 	checkKeyspaceLockUnblocks(ctx, t, ts)
 }
 
-func checkKeyspaceLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkKeyspaceLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
 	lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
 	if err != nil {
 		t.Fatalf("LockKeyspaceForAction: %v", err)
@@ -64,7 +64,7 @@ func checkKeyspaceLockTimeout(ctx context.Context, t *testing.T, ts topo.Server)
 }
 
 // checkKeyspaceLockMissing makes sure we can't lock a non-existing keyspace
-func checkKeyspaceLockMissing(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkKeyspaceLockMissing(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if _, err := ts.LockKeyspaceForAction(ctx, "test_keyspace_666", "fake-content"); err == nil {
 		t.Fatalf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
 	}
@@ -72,7 +72,7 @@ func checkKeyspaceLockMissing(ctx context.Context, t *testing.T, ts topo.Server)
 
 // checkKeyspaceLockUnblocks makes sure that a routine waiting on a lock
 // is unblocked when another routine frees the lock
-func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	unblock := make(chan struct{})
 	finished := make(chan struct{})
 
@@ -114,11 +114,11 @@ func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server
 }
 
 // CheckShardLock checks we can take a shard lock
-func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "10-20"); err != nil {
+	if err := topo.CreateShard(ctx, topo.Server{Impl: ts}, "test_keyspace", "10-20"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func CheckShardLock(ctx context.Context, t *testing.T, ts topo.Server) {
 	checkShardLockUnblocks(ctx, t, ts)
 }
 
-func checkShardLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkShardLockTimeout(ctx context.Context, t *testing.T, ts topo.Impl) {
 	lockPath, err := ts.LockShardForAction(ctx, "test_keyspace", "10-20", "fake-content")
 	if err != nil {
 		t.Fatalf("LockShardForAction: %v", err)
@@ -160,7 +160,7 @@ func checkShardLockTimeout(ctx context.Context, t *testing.T, ts topo.Server) {
 	}
 }
 
-func checkShardLockMissing(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkShardLockMissing(ctx context.Context, t *testing.T, ts topo.Impl) {
 	// test we can't lock a non-existing shard
 	if _, err := ts.LockShardForAction(ctx, "test_keyspace", "20-30", "fake-content"); err == nil {
 		t.Fatalf("LockShardForAction(test_keyspace/20-30) worked for non-existing shard")
@@ -169,7 +169,7 @@ func checkShardLockMissing(ctx context.Context, t *testing.T, ts topo.Server) {
 
 // checkShardLockUnblocks makes sure that a routine waiting on a lock
 // is unblocked when another routine frees the lock
-func checkShardLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkShardLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	unblock := make(chan struct{})
 	finished := make(chan struct{})
 
@@ -211,12 +211,12 @@ func checkShardLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server) {
 }
 
 // CheckSrvShardLock tests we can take a SrvShard lock
-func CheckSrvShardLock(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckSrvShardLock(ctx context.Context, t *testing.T, ts topo.Impl) {
 	checkSrvShardLockGeneral(ctx, t, ts)
 	checkSrvShardLockUnblocks(ctx, t, ts)
 }
 
-func checkSrvShardLockGeneral(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkSrvShardLockGeneral(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 
 	// make sure we can create the lock even if no directory exists
@@ -266,7 +266,7 @@ func checkSrvShardLockGeneral(ctx context.Context, t *testing.T, ts topo.Server)
 
 // checkSrvShardLockUnblocks makes sure that a routine waiting on a lock
 // is unblocked when another routine frees the lock
-func checkSrvShardLockUnblocks(ctx context.Context, t *testing.T, ts topo.Server) {
+func checkSrvShardLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 	unblock := make(chan struct{})
 	finished := make(chan struct{})

@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func newTestServer(t *testing.T, cells []string) topo.Server {
+func newTestServer(t *testing.T, cells []string) topo.Impl {
 	s := &Server{
 		_cells:    make(map[string]*cellClient),
 		newClient: newTestClient,
@@ -28,9 +28,7 @@ func newTestServer(t *testing.T, cells []string) topo.Server {
 		c.Set("/vt/cells/"+cell, cell, 0)
 	}
 
-	return topo.Server{
-		Impl: s,
-	}
+	return s
 }
 
 func TestKeyspace(t *testing.T) {
