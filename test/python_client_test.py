@@ -30,6 +30,7 @@ def setUpModule():
   global vtgateclienttest_grpc_port
 
   vtgateclienttest_port = environment.reserve_ports(1)
+  print 'log_dir=%s' % (environment.vtlogroot,)
   args = environment.binary_args('vtgateclienttest') + [
       '-log_dir', environment.vtlogroot,
       '-port', str(vtgateclienttest_port),
@@ -121,7 +122,16 @@ class TestPythonClient(unittest.TestCase):
       cursor.execute('return integrity error', {})
     cursor.close()
 
-    # FIXME(alainjobart) add test for ExecuteEntityIds once factory supports it
+    # ExecuteEntityIds test
+    cursor = self.conn.cursor('keyspace', 'master')
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.execute_entity_ids(
+          'return integrity error', {},
+          entity_keyspace_id_map={
+              1: struct.Struct('!Q').pack(1761124146422844620)},
+          entity_column_name='user_id')
+    cursor.close()
+
 
     # FIXME(alainjobart) add test for ExecuteBatchShard
 
@@ -134,6 +144,27 @@ class TestPythonClient(unittest.TestCase):
     # GetSrvKeyspace test
     with self.assertRaises(dbexceptions.DatabaseError):
       self.conn.get_srv_keyspace('error')
+
+  def test_effective_caller_id(self):
+    effective_caller_id = 'abcde'
+    cursor = self.conn.cursor('keyspace', 'master',
+                              keyspace_ids=[struct.Struct('!Q').pack(0x80)])
+    effective_caller_id = {
+        'Principal': 'pr', 'Component': 'co', 'Subcomponent': 'su'}
+    cursor.execute(
+        'callerid {"principal":"pr", "component":"co", "subcomponent":"su"}',
+        {},
+        effective_caller_id=effective_caller_id)
+    cursor.close()
+    cursor = self.conn.cursor('keyspace', 'master')
+    cursor.execute_entity_ids(
+        'callerid {"principal":"pr", "component":"co", "subcomponent":"su"}',
+        {},
+        entity_keyspace_id_map={
+            1: struct.Struct('!Q').pack(1761124146422844620)},
+        entity_column_name='user_id',
+        effective_caller_id=effective_caller_id)
+    cursor.close()
 
 if __name__ == '__main__':
   utils.main()
