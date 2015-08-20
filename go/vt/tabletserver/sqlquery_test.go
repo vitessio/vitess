@@ -1034,11 +1034,37 @@ func TestTerseErrors2(t *testing.T) {
 	logStats := newSqlQueryStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
-		BindVariables: nil,
+		BindVariables: map[string]interface{}{"a": 1},
 	}
 	var err error
 	defer func() {
 		want := "error: (errno 10) during query: select * from test_table"
+		if err == nil || err.Error() != want {
+			t.Errorf("Error: %v, want '%s'", err, want)
+		}
+	}()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	sqlQuery.config.TerseErrors = true
+	defer sqlQuery.handleExecError(&query, &err, logStats)
+	panic(&TabletError{
+		ErrorType: ErrFail,
+		Message:   "msg",
+		SqlError:  10,
+	})
+}
+
+func TestTerseErrors3(t *testing.T) {
+	ctx := context.Background()
+	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	query := proto.Query{
+		Sql:           "select * from test_table",
+		BindVariables: nil,
+	}
+	var err error
+	defer func() {
+		want := "error: msg"
 		if err == nil || err.Error() != want {
 			t.Errorf("Error: %v, want '%s'", err, want)
 		}
