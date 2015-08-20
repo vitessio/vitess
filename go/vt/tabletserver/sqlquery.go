@@ -364,7 +364,7 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 		return NewTabletError(ErrFail, "%v: uncaught panic for %v", err, query)
 	}
 	var myError error
-	if sq.config.TerseErrors && terr.SqlError != 0 {
+	if sq.config.TerseErrors && terr.SqlError != 0 && len(query.BindVariables) != 0 {
 		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
 	} else {
 		myError = terr
