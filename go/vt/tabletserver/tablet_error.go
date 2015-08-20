@@ -193,13 +193,20 @@ func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QuerySe
 		}
 		*err = terr
 		terr.RecordStats(queryServiceStats)
-		if terr.ErrorType == ErrRetry { // Retry errors are too spammy
+		switch terr.ErrorType {
+		case ErrRetry: // Retry errors are too spammy
 			return
-		}
-		if terr.ErrorType == ErrTxPoolFull {
+		case ErrTxPoolFull:
 			logTxPoolFull.Errorf("%v", terr)
-		} else {
-			log.Errorf("%v", terr)
+		default:
+			switch terr.SqlError {
+			// MySQL deadlock errors are (usually) due to client behavior, not server
+			// behavior, and therefore logged at the INFO level.
+			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
+				log.Infof("%v", terr)
+			default:
+				log.Errorf("%v", terr)
+			}
 		}
 	}
 	if logStats != nil {
