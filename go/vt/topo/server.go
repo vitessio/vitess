@@ -325,13 +325,6 @@ type Server struct {
 	Impl
 }
 
-// Schemafier is a temporary interface for supporting vschema
-// reads and writes. It will eventually be merged into Server.
-//type Schemafier interface {
-//	SaveVSchema(context.Context, string) error
-//	GetVSchema(ctx context.Context) (string, error)
-//}
-
 // Registry for Server implementations.
 var serverImpls = make(map[string]Impl)
 

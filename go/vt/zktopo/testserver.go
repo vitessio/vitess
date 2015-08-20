@@ -20,8 +20,8 @@ type TestServer struct {
 	HookLockSrvShardForAction func()
 }
 
-// NewTestServer returns a new TestServer (with the required paths created)
-func NewTestServer(t *testing.T, cells []string) topo.Server {
+// newTestServer returns a new TestServer (with the required paths created)
+func newTestServer(t *testing.T, cells []string) topo.Impl {
 	zconn := fakezk.NewConn()
 
 	// create the toplevel zk paths
@@ -33,7 +33,12 @@ func NewTestServer(t *testing.T, cells []string) topo.Server {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	return topo.Server{Impl: &TestServer{Impl: &Server{zconn}, localCells: cells}}
+	return &TestServer{Impl: &Server{zconn}, localCells: cells}
+}
+
+// NewTestServer returns a new TestServer (with the required paths created)
+func NewTestServer(t *testing.T, cells []string) topo.Server {
+	return topo.Server{Impl: newTestServer(t, cells)}
 }
 
 // GetKnownCells is part of topo.Server interface
