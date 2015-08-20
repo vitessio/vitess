@@ -56,7 +56,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 	tablet := agent.Tablet()
 
 	// Check the global shard record.
-	si, err := topo.GetShard(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard)
+	si, err := agent.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		log.Warningf("fastTabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 		return err
@@ -153,7 +153,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		// Update our own record to master.
 		var updatedTablet *pb.Tablet
-		err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias,
+		err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *pb.Tablet) error {
 				tablet.Type = pb.TabletType_MASTER
 				tablet.HealthMap = nil
@@ -177,7 +177,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		go func() {
 			// Force the old master to spare.
 			var oldMasterTablet *pb.Tablet
-			err := topo.UpdateTabletFields(ctx, agent.TopoServer, oldMasterAlias,
+			err := agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *pb.Tablet) error {
 					tablet.Type = pb.TabletType_SPARE
 					oldMasterTablet = tablet
@@ -221,7 +221,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
+	si, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
 		shard.MasterAlias = tablet.Alias
 		return nil
 	})

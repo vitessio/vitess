@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -20,7 +19,7 @@ import (
 // ExportZkns exports addresses from the VT serving graph to a legacy zkns server.
 // Note these functions only work with a zktopo.
 func (wr *Wrangler) ExportZkns(ctx context.Context, cell string) error {
-	zkTopo, ok := wr.ts.(*zktopo.Server)
+	zkTopo, ok := wr.ts.Impl.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZkns only works with zktopo")
 	}
@@ -55,7 +54,7 @@ func (wr *Wrangler) ExportZkns(ctx context.Context, cell string) error {
 
 // ExportZknsForKeyspace exports addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) error {
-	zkTopo, ok := wr.ts.(*zktopo.Server)
+	zkTopo, ok := wr.ts.Impl.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZknsForKeyspace only works with zktopo")
 	}
@@ -67,7 +66,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shardNames[0])
+	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}

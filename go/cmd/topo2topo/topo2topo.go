@@ -47,15 +47,15 @@ func main() {
 	toTS := topo.GetServerByName(*toTopo)
 
 	if *doKeyspaces {
-		helpers.CopyKeyspaces(ctx, fromTS, toTS)
+		helpers.CopyKeyspaces(ctx, fromTS.Impl, toTS.Impl)
 	}
 	if *doShards {
-		helpers.CopyShards(ctx, fromTS, toTS, *deleteKeyspaceShards)
+		helpers.CopyShards(ctx, fromTS.Impl, toTS.Impl, *deleteKeyspaceShards)
 	}
 	if *doShardReplications {
-		helpers.CopyShardReplications(ctx, fromTS, toTS)
+		helpers.CopyShardReplications(ctx, fromTS.Impl, toTS.Impl)
 	}
 	if *doTablets {
-		helpers.CopyTablets(ctx, fromTS, toTS)
+		helpers.CopyTablets(ctx, fromTS.Impl, toTS.Impl)
 	}
 }

@@ -130,7 +130,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
 
 				// write it back
-				if err := topo.UpdateShard(ctx, agent.TopoServer, si); err != nil {
+				if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
 					return actionNode.UnlockShard(ctx, agent.TopoServer, *initKeyspace, shard, lockPath, err)
 				}
 			}
@@ -175,7 +175,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	}
 
 	// now try to create the record
-	err := topo.CreateTablet(ctx, agent.TopoServer, tablet)
+	err := agent.TopoServer.CreateTablet(ctx, tablet)
 	switch err {
 	case nil:
 		// it worked, we're good, can update the replication graph
@@ -200,7 +200,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 		// And overwrite the rest
 		*(oldTablet.Tablet) = *tablet
-		if err := topo.UpdateTablet(ctx, agent.TopoServer, oldTablet); err != nil {
+		if err := agent.TopoServer.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("UpdateTablet failed: %v", err)
 		}
 

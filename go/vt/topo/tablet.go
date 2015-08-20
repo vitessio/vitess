@@ -12,10 +12,12 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
@@ -286,17 +288,25 @@ func NewTabletInfo(tablet *pb.Tablet, version int64) *TabletInfo {
 
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
-func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletInfo, error) {
+func (ts Server) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	return ts.GetTablet(ctx, alias)
+	value, version, err := ts.Impl.GetTablet(ctx, alias)
+	if err != nil {
+		return nil, err
+	}
+	return &TabletInfo{
+		version: version,
+		Tablet:  value,
+	}, nil
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
-func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
+// It also uses a span, and sends the event.
+func (ts Server) UpdateTablet(ctx context.Context, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(tablet.Alias))
@@ -307,22 +317,38 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(ctx, tablet, version)
-	if err == nil {
-		tablet.version = newVersion
+	newVersion, err := ts.Impl.UpdateTablet(ctx, tablet.Tablet, version)
+	if err != nil {
+		return err
 	}
-	return err
+	tablet.version = newVersion
+
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet.Tablet,
+		Status: "updated",
+	})
+	return nil
 }
 
 // UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields
 // that generates trace spans.
-func UpdateTabletFields(ctx context.Context, ts Server, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
+func (ts Server) UpdateTabletFields(ctx context.Context, alias *pb.TabletAlias, update func(*pb.Tablet) error) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTabletFields")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	return ts.UpdateTabletFields(ctx, alias, update)
+	tablet, err := ts.Impl.UpdateTabletFields(ctx, alias, update)
+	if err != nil {
+		return err
+	}
+	if tablet != nil {
+		event.Dispatch(&events.TabletChange{
+			Tablet: *tablet,
+			Status: "updated",
+		})
+	}
+	return nil
 }
 
 // Validate makes sure a tablet is represented correctly in the topology server.
@@ -380,9 +406,9 @@ func Validate(ctx context.Context, ts Server, tabletAlias *pb.TabletAlias) error
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func CreateTablet(ctx context.Context, ts Server, tablet *pb.Tablet) error {
+func (ts Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 	// Have the Server create the tablet
-	err := ts.CreateTablet(ctx, tablet)
+	err := ts.Impl.CreateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -392,7 +418,40 @@ func CreateTablet(ctx context.Context, ts Server, tablet *pb.Tablet) error {
 		return nil
 	}
 
-	return UpdateTabletReplicationData(ctx, ts, tablet)
+	if err := UpdateTabletReplicationData(ctx, ts, tablet); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet,
+		Status: "created",
+	})
+	return nil
+}
+
+// DeleteTablet wraps the underlying Impl.DeleteTablet
+// and dispatches the event.
+func (ts Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
+	// get the current tablet record, if any, to log the deletion
+	tablet, _, tErr := ts.Impl.GetTablet(ctx, tabletAlias)
+
+	if err := ts.Impl.DeleteTablet(ctx, tabletAlias); err != nil {
+		return err
+	}
+
+	// Only try to log if we have the required info.
+	if tErr == nil {
+		// Only copy the identity info for the tablet. The rest has been deleted.
+		event.Dispatch(&events.TabletChange{
+			Tablet: pb.Tablet{
+				Alias:    tabletAlias,
+				Keyspace: tablet.Keyspace,
+				Shard:    tablet.Shard,
+			},
+			Status: "deleted",
+		})
+	}
+	return nil
 }
 
 // UpdateTabletReplicationData creates or updates the replication
@@ -410,7 +469,7 @@ func DeleteTabletReplicationData(ctx context.Context, ts Server, tablet *pb.Tabl
 // and returns them all in a map.
 // If error is ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
-func GetTabletMap(ctx context.Context, ts Server, tabletAliases []*pb.TabletAlias) (map[pb.TabletAlias]*TabletInfo, error) {
+func (ts Server) GetTabletMap(ctx context.Context, tabletAliases []*pb.TabletAlias) (map[pb.TabletAlias]*TabletInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.GetTabletMap")
 	span.Annotate("num_tablets", len(tabletAliases))

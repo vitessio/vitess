@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -28,15 +27,15 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// destinationSqlQuery is a local QueryService implementation to
+// destinationSQLQuery is a local QueryService implementation to
 // support the tests
-type destinationSqlQuery struct {
+type destinationSQLQuery struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *destinationSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *destinationSQLQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -45,7 +44,7 @@ func (sq *destinationSqlQuery) StreamExecute(ctx context.Context, target *pb.Tar
 		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
 	}
 
-	sq.t.Logf("destinationSqlQuery: got query: %v", *query)
+	sq.t.Logf("destinationSQLQuery: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -85,14 +84,14 @@ func (sq *destinationSqlQuery) StreamExecute(ctx context.Context, target *pb.Tar
 	return nil
 }
 
-// sourceSqlQuery is a local QueryService implementation to support the tests
-type sourceSqlQuery struct {
+// sourceSQLQuery is a local QueryService implementation to support the tests
+type sourceSQLQuery struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *sourceSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *sourceSQLQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -104,7 +103,7 @@ func (sq *sourceSqlQuery) StreamExecute(ctx context.Context, target *pb.Target, 
 		}
 	}
 
-	sq.t.Logf("sourceSqlQuery: got query: %v", *query)
+	sq.t.Logf("sourceSQLQuery: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -173,7 +172,7 @@ func TestSplitDiff(t *testing.T) {
 	}
 
 	// add the topo and schema data we'll need
-	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
+	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	wr.SetSourceShards(ctx, "ks", "-40", []*pbt.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
@@ -216,10 +215,10 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationSqlQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationSqlQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceSqlQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceSqlQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationSQLQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationSQLQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceSQLQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceSQLQuery{t: t, excludedTable: excludedTable})
 
 	err := wrk.Run(ctx)
 	status := wrk.StatusAsText()

@@ -412,7 +412,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	}
 
 	// Change our type to master if not already
-	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *pb.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *pb.Tablet) error {
 		tablet.Type = pb.TabletType_MASTER
 		tablet.HealthMap = nil
 		return nil
@@ -571,7 +571,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias,
 	if tablet.Type == pb.TabletType_MASTER {
 		tablet.Type = pb.TabletType_SPARE
 		tablet.HealthMap = nil
-		if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+		if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
 			return err
 		}
 	}
@@ -596,7 +596,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	if tablet.Type == pb.TabletType_MASTER {
 		tablet.Type = pb.TabletType_SPARE
 	}
-	err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	err = agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -660,7 +660,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 	// Update tablet regardless - trend towards consistency.
 	tablet.Type = pb.TabletType_MASTER
 	tablet.HealthMap = nil
-	err := topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	err := agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}

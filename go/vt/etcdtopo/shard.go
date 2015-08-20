@@ -8,9 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -30,24 +27,17 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 	if err = initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
 		return err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        value,
-		Status:       "created",
-	})
 	return nil
 }
 
 // UpdateShard implements topo.Server.
-func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	data, err := json.MarshalIndent(si.Shard, "", "  ")
+func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(si.Keyspace(), si.ShardName()),
+	resp, err := s.getGlobal().CompareAndSwap(shardFilePath(keyspace, shard),
 		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
@@ -55,38 +45,31 @@ func (s *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVe
 	if resp.Node == nil {
 		return -1, ErrBadResponse
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: si.Keyspace(),
-		ShardName:    si.ShardName(),
-		Shard:        si.Shard,
-		Status:       "updated",
-	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
 // ValidateShard implements topo.Server.
 func (s *Server) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	_, err := s.GetShard(ctx, keyspace, shard)
+	_, _, err := s.GetShard(ctx, keyspace, shard)
 	return err
 }
 
 // GetShard implements topo.Server.
-func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
 	resp, err := s.getGlobal().Get(shardFilePath(keyspace, shard), false /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, 0, convertError(err)
 	}
 	if resp.Node == nil {
-		return nil, ErrBadResponse
+		return nil, 0, ErrBadResponse
 	}
 
 	value := &pb.Shard{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
-		return nil, fmt.Errorf("bad shard data (%v): %q", err, resp.Node.Value)
+		return nil, 0, fmt.Errorf("bad shard data (%v): %q", err, resp.Node.Value)
 	}
 
-	return topo.NewShardInfo(keyspace, shard, value, int64(resp.Node.ModifiedIndex)), nil
+	return value, int64(resp.Node.ModifiedIndex), nil
 }
 
 // GetShardNames implements topo.Server.
@@ -104,12 +87,5 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string) error 
 	if err != nil {
 		return convertError(err)
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        nil,
-		Status:       "deleted",
-	})
 	return nil
 }

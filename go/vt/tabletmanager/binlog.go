@@ -94,7 +94,7 @@ func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysql
 }
 
 func (bpc *BinlogPlayerController) String() string {
-	return "BinlogPlayerController(" + topo.SourceShardString(bpc.sourceShard) + ")"
+	return "BinlogPlayerController(" + topoproto.SourceShardString(bpc.sourceShard) + ")"
 }
 
 // Start will start the player in the background and run forever.
@@ -599,7 +599,7 @@ type BinlogPlayerControllerStatus struct {
 
 // SourceShardAsHTML returns the SourceShard as HTML
 func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
-	return topo.SourceShardAsHTML(bpcs.SourceShard)
+	return topoproto.SourceShardAsHTML(bpcs.SourceShard)
 }
 
 // SourceTabletAlias returns the string version of the SourceTablet alias, if set

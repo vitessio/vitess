@@ -14,14 +14,14 @@ import (
 // TestServer is a proxy for a real implementation of topo.Server that
 // provides hooks for testing.
 type TestServer struct {
-	topo.Server
+	topo.Impl
 	localCells []string
 
 	HookLockSrvShardForAction func()
 }
 
-// NewTestServer returns a new TestServer (with the required paths created)
-func NewTestServer(t *testing.T, cells []string) *TestServer {
+// newTestServer returns a new TestServer (with the required paths created)
+func newTestServer(t *testing.T, cells []string) topo.Impl {
 	zconn := fakezk.NewConn()
 
 	// create the toplevel zk paths
@@ -33,7 +33,12 @@ func NewTestServer(t *testing.T, cells []string) *TestServer {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	return &TestServer{Server: NewServer(zconn), localCells: cells}
+	return &TestServer{Impl: &Server{zconn}, localCells: cells}
+}
+
+// NewTestServer returns a new TestServer (with the required paths created)
+func NewTestServer(t *testing.T, cells []string) topo.Server {
+	return topo.Server{Impl: newTestServer(t, cells)}
 }
 
 // GetKnownCells is part of topo.Server interface
@@ -47,19 +52,5 @@ func (s *TestServer) LockSrvShardForAction(ctx context.Context, cell, keyspace, 
 	if s.HookLockSrvShardForAction != nil {
 		s.HookLockSrvShardForAction()
 	}
-	return s.Server.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
-}
-
-// SaveVSchema has to be redefined here.
-// Otherwise the test type assertion fails.
-// TODO(sougou): Remove these two functions after they're
-// migrated into topo.Server.
-func (s *TestServer) SaveVSchema(ctx context.Context, vschema string) error {
-	return s.Server.(topo.Schemafier).SaveVSchema(ctx, vschema)
-}
-
-// GetVSchema has to be redefined here.
-// Otherwise the test type assertion fails.
-func (s *TestServer) GetVSchema(ctx context.Context) (string, error) {
-	return s.Server.(topo.Schemafier).GetVSchema(ctx)
+	return s.Impl.LockSrvShardForAction(ctx, cell, keyspace, shard, contents)
 }

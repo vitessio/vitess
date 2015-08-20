@@ -13,7 +13,7 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -65,7 +65,7 @@ func commandVerticalSplitDiff(wi *Instance, wr *wrangler.Wrangler, subFlags *fla
 		subFlags.Usage()
 		return nil, fmt.Errorf("command VerticalSplitDiff requires <keyspace/shard>")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return nil, err
 	}

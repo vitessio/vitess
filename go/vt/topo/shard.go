@@ -7,7 +7,6 @@ package topo
 import (
 	"encoding/hex"
 	"fmt"
-	"html/template"
 	"reflect"
 	"sort"
 	"strings"
@@ -17,9 +16,11 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -72,40 +73,6 @@ func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
 	}
 
 	return leftoverCells, false
-}
-
-// ParseKeyspaceShardString parse a "keyspace/shard" string and extract
-// both keyspace and shard. It also returns empty keyspace and shard if
-// input param looks like a old zk path
-func ParseKeyspaceShardString(param string) (string, string, error) {
-	if param[0] == '/' {
-		return "", "", fmt.Errorf("Invalid keyspace/shard: %v, Note: old style zk path is no longer supported, please use a keyspace/shard instead", param)
-	}
-	keySpaceShard := strings.Split(param, "/")
-	if len(keySpaceShard) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
-	}
-	return keySpaceShard[0], keySpaceShard[1], nil
-}
-
-// SourceShardString returns a printable view of a SourceShard.
-func SourceShardString(source *pb.Shard_SourceShard) string {
-	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
-}
-
-// SourceShardAsHTML returns a HTML version of the object.
-func SourceShardAsHTML(source *pb.Shard_SourceShard) template.HTML {
-	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
-	if key.KeyRangeIsPartial(source.KeyRange) {
-		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
-			hex.EncodeToString(source.KeyRange.Start),
-			hex.EncodeToString(source.KeyRange.End))
-	}
-	if len(source.Tables) > 0 {
-		result += fmt.Sprintf("<b>Tables</b>: %v</br>\n",
-			strings.Join(source.Tables, " "))
-	}
-	return template.HTML(result)
 }
 
 // IsShardUsingRangeBasedSharding returns true if the shard name
@@ -191,22 +158,32 @@ func (si *ShardInfo) HasCell(cell string) bool {
 
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
-func GetShard(ctx context.Context, ts Server, keyspace, shard string) (*ShardInfo, error) {
+func (ts Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.GetShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return ts.GetShard(ctx, keyspace, shard)
+	value, version, err := ts.Impl.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	return &ShardInfo{
+		keyspace:  keyspace,
+		shardName: shard,
+		version:   version,
+		Shard:     value,
+	}, nil
 }
 
-// UpdateShard updates the shard data, with the right version
-func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
+// UpdateShard updates the shard data, with the right version.
+// It also creates a span, and dispatches the event.
+func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateShard")
-	span.Annotate("keyspace", si.Keyspace())
-	span.Annotate("shard", si.ShardName())
+	span.Annotate("keyspace", si.keyspace)
+	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
 	var version int64 = -1
@@ -214,27 +191,35 @@ func UpdateShard(ctx context.Context, ts Server, si *ShardInfo) error {
 		version = si.version
 	}
 
-	newVersion, err := ts.UpdateShard(ctx, si, version)
-	if err == nil {
-		si.version = newVersion
+	newVersion, err := ts.Impl.UpdateShard(ctx, si.keyspace, si.shardName, si.Shard, version)
+	if err != nil {
+		return err
 	}
-	return err
+	si.version = newVersion
+
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: si.Keyspace(),
+		ShardName:    si.ShardName(),
+		Shard:        si.Shard,
+		Status:       "updated",
+	})
+	return nil
 }
 
 // UpdateShardFields is a high level helper to read a shard record, call an
 // update function on it, and then write it back. If the write fails due to
 // a version mismatch, it will re-read the record and retry the update.
 // If the update succeeds, it returns the updated ShardInfo.
-func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
+func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
 	for {
-		si, err := GetShard(ctx, ts, keyspace, shard)
+		si, err := ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, err
 		}
 		if err = update(si.Shard); err != nil {
 			return nil, err
 		}
-		if err = UpdateShard(ctx, ts, si); err != ErrBadVersion {
+		if err = ts.UpdateShard(ctx, si); err != ErrBadVersion {
 			return si, err
 		}
 	}
@@ -244,7 +229,7 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 // This should be called while holding the keyspace lock for the shard.
 // (call topotools.CreateShard to do that for you).
 // In unit tests (that are not parallel), this function can be called directly.
-func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
+func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error {
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
@@ -257,14 +242,14 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 		pb.TabletType_REPLICA: true,
 		pb.TabletType_RDONLY:  true,
 	}
-	s := &pb.Shard{
+	value := &pb.Shard{
 		KeyRange: keyRange,
 	}
 
 	if IsShardUsingRangeBasedSharding(name) {
 		// if we are using range-based sharding, we don't want
 		// overlapping shards to all serve and confuse the clients.
-		sis, err := FindAllShardsInKeyspace(ctx, ts, keyspace)
+		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 		if err != nil && err != ErrNoNode {
 			return err
 		}
@@ -278,12 +263,37 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 	}
 
 	for st := range servedTypes {
-		s.ServedTypes = append(s.ServedTypes, &pb.Shard_ServedType{
+		value.ServedTypes = append(value.ServedTypes, &pb.Shard_ServedType{
 			TabletType: st,
 		})
 	}
 
-	return ts.CreateShard(ctx, keyspace, name, s)
+	if err := ts.Impl.CreateShard(ctx, keyspace, name, value); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        value,
+		Status:       "created",
+	})
+	return nil
+}
+
+// DeleteShard wraps the underlying Impl.DeleteShard
+// and dispatches the event.
+func (ts Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
+	if err := ts.Impl.DeleteShard(ctx, keyspace, shard); err != nil {
+		return err
+	}
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        nil,
+		Status:       "deleted",
+	})
+	return nil
 }
 
 // GetTabletControl returns the Shard_TabletControl for the given tablet type,
@@ -507,8 +517,8 @@ func InCellList(cell string, cells []string) bool {
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]*pb.TabletAlias, error) {
-	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
+func (ts Server) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*pb.TabletAlias, error) {
+	return ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, nil)
 }
 
 // FindAllTabletAliasesInShardByCell uses the replication graph to find all the
@@ -518,7 +528,7 @@ func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]*pb.TabletAlias, error) {
+func (ts Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*pb.TabletAlias, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.FindAllTabletAliasesInShardbyCell")
 	span.Annotate("keyspace", keyspace)
@@ -528,7 +538,7 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 	ctx = trace.NewContext(ctx, span)
 
 	// read the shard information to find the cells
-	si, err := GetShard(ctx, ts, keyspace, shard)
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -583,24 +593,24 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 // GetTabletMapForShard returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShard(ctx context.Context, ts Server, keyspace, shard string) (map[pb.TabletAlias]*TabletInfo, error) {
-	return GetTabletMapForShardByCell(ctx, ts, keyspace, shard, nil)
+func (ts Server) GetTabletMapForShard(ctx context.Context, keyspace, shard string) (map[pb.TabletAlias]*TabletInfo, error) {
+	return ts.GetTabletMapForShardByCell(ctx, keyspace, shard, nil)
 }
 
 // GetTabletMapForShardByCell returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) (map[pb.TabletAlias]*TabletInfo, error) {
+func (ts Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shard string, cells []string) (map[pb.TabletAlias]*TabletInfo, error) {
 	// if we get a partial result, we keep going. It most likely means
 	// a cell is out of commission.
-	aliases, err := FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, cells)
+	aliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells)
 	if err != nil && err != ErrPartialResult {
 		return nil, err
 	}
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
-	result, gerr := GetTabletMap(ctx, ts, aliases)
+	result, gerr := ts.GetTabletMap(ctx, aliases)
 	if gerr == nil && err != nil {
 		gerr = err
 	}

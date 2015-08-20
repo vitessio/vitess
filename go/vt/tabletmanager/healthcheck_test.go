@@ -11,7 +11,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -120,7 +119,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	if err := topo.CreateShard(ctx, ts, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 
@@ -136,7 +135,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 		Shard:    shard,
 		Type:     pb.TabletType_SPARE,
 	}
-	if err := topo.CreateTablet(ctx, ts, tablet); err != nil {
+	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 
@@ -301,7 +300,7 @@ func TestTabletControl(t *testing.T) {
 			DisableQueryService: true,
 		},
 	}
-	if err := topo.UpdateShard(ctx, agent.TopoServer, si); err != nil {
+	if err := agent.TopoServer.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

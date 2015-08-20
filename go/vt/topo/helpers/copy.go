@@ -19,7 +19,7 @@ import (
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo
-func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("GetKeyspaces: %v", err)
@@ -32,13 +32,13 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 		go func(keyspace string) {
 			defer wg.Done()
 
-			k, err := fromTS.GetKeyspace(ctx, keyspace)
+			k, _, err := fromTS.GetKeyspace(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
 				return
 			}
 
-			if err := toTS.CreateKeyspace(ctx, keyspace, k.Keyspace); err != nil {
+			if err := toTS.CreateKeyspace(ctx, keyspace, k); err != nil {
 				if err == topo.ErrNodeExists {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
@@ -54,7 +54,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 }
 
 // CopyShards will create the shards in the destination topo
-func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
+func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShards bool) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
@@ -83,7 +83,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceSha
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					if err := topo.CreateShard(ctx, toTS, keyspace, shard); err != nil {
+					if err := toTS.CreateShard(ctx, keyspace, shard, &pb.Shard{}); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
@@ -92,19 +92,19 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceSha
 						}
 					}
 
-					si, err := fromTS.GetShard(ctx, keyspace, shard)
+					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					toSi, err := toTS.GetShard(ctx, keyspace, shard)
+					_, toV, err := toTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("toTS.GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					if _, err := toTS.UpdateShard(ctx, si, toSi.Version()); err != nil {
+					if _, err := toTS.UpdateShard(ctx, keyspace, shard, s, toV); err != nil {
 						rec.RecordError(fmt.Errorf("UpdateShard(%v, %v): %v", keyspace, shard, err))
 					}
 				}(keyspace, shard)
@@ -118,7 +118,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceSha
 }
 
 // CopyTablets will create the tablets in the destination topo
-func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKnownCells: %v", err)
@@ -140,19 +140,19 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 						defer wg.Done()
 
 						// read the source tablet
-						ti, err := fromTS.GetTablet(ctx, tabletAlias)
+						tablet, _, err := fromTS.GetTablet(ctx, tabletAlias)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
 							return
 						}
 
 						// try to create the destination
-						err = toTS.CreateTablet(ctx, ti.Tablet)
+						err = toTS.CreateTablet(ctx, tablet)
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							err = toTS.UpdateTabletFields(ctx, ti.Alias, func(t *pb.Tablet) error {
-								*t = *ti.Tablet
+							_, err = toTS.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+								*t = *tablet
 								return nil
 							})
 						}
@@ -173,7 +173,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 
 // CopyShardReplications will create the ShardReplication objects in
 // the destination topo
-func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
@@ -197,13 +197,13 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Server) {
 					defer wg.Done()
 
 					// read the source shard to get the cells
-					si, err := fromTS.GetShard(ctx, keyspace, shard)
+					s, _, err := fromTS.GetShard(ctx, keyspace, shard)
 					if err != nil {
 						rec.RecordError(fmt.Errorf("GetShard(%v, %v): %v", keyspace, shard, err))
 						return
 					}
 
-					for _, cell := range si.Cells {
+					for _, cell := range s.Cells {
 						sri, err := fromTS.GetShardReplication(ctx, cell, keyspace, shard)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v): %v", cell, keyspace, shard, err))

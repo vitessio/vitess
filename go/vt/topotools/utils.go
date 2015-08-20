@@ -36,7 +36,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	}
 	sort.Sort(topoproto.TabletAliasList(aliases))
 
-	tabletMap, err := topo.GetTabletMap(ctx, ts, aliases)
+	tabletMap, err := ts.GetTabletMap(ctx, aliases)
 	if err != nil {
 		// we got another error than topo.ErrNoNode
 		return nil, err

@@ -61,7 +61,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, for
 	wasAssigned := tablet.IsAssigned()
 	tablet.Type = pb.TabletType_SCRAP
 	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(ctx, ts, tablet)
+	err = ts.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -125,5 +125,5 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias
 			tablet.HealthMap = health
 		}
 	}
-	return topo.UpdateTablet(ctx, ts, tablet)
+	return ts.UpdateTablet(ctx, tablet)
 }
