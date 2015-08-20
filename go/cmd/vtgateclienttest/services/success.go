@@ -7,6 +7,7 @@ package services
 import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 	"golang.org/x/net/context"
 )
@@ -22,6 +23,25 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	return &successClient{
 		fallbackClient: newFallbackClient(fallback),
 	}
+}
+
+func (c *successClient) Begin(ctx context.Context, outSession *proto.Session) error {
+	outSession.InTransaction = true
+	return nil
+}
+
+func (c *successClient) Commit(ctx context.Context, inSession *proto.Session) error {
+	if inSession != nil && inSession.InTransaction {
+		return nil
+	}
+	return c.fallback.Commit(ctx, inSession)
+}
+
+func (c *successClient) Rollback(ctx context.Context, inSession *proto.Session) error {
+	if inSession != nil && inSession.InTransaction {
+		return nil
+	}
+	return c.fallback.Rollback(ctx, inSession)
 }
 
 func (c *successClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {

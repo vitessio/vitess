@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -79,12 +80,14 @@ func echoQueryResult(vals map[string]interface{}) *mproto.QueryResult {
 func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
+			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"tabletType":       tabletType,
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		})
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.Execute(ctx, sql, bindVariables, tabletType, session, notInTransaction, reply)
@@ -93,6 +96,7 @@ func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[
 func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
+			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"keyspace":         keyspace,
@@ -101,6 +105,7 @@ func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariable
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		})
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, session, notInTransaction, reply)
@@ -109,6 +114,7 @@ func (c *echoClient) ExecuteShards(ctx context.Context, sql string, bindVariable
 func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
+			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"keyspace":         keyspace,
@@ -117,6 +123,7 @@ func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		})
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, session, notInTransaction, reply)
@@ -125,6 +132,7 @@ func (c *echoClient) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
+			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"keyspace":         keyspace,
@@ -133,6 +141,7 @@ func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		})
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
@@ -141,6 +150,7 @@ func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
+			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
 			"keyspace":         keyspace,
@@ -150,6 +160,7 @@ func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVaria
 			"session":          session,
 			"notInTransaction": notInTransaction,
 		})
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, reply)
@@ -159,6 +170,7 @@ func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bou
 	if len(queries) > 0 && strings.HasPrefix(queries[0].Sql, EchoPrefix) {
 		for _, query := range queries {
 			reply.List = append(reply.List, *echoQueryResult(map[string]interface{}{
+				"callerId":      callerid.EffectiveCallerIDFromContext(ctx),
 				"query":         query.Sql,
 				"bindVars":      query.BindVariables,
 				"keyspace":      query.Keyspace,
@@ -168,6 +180,7 @@ func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []proto.Bou
 				"asTransaction": asTransaction,
 			}))
 		}
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, reply)
@@ -177,6 +190,7 @@ func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []prot
 	if len(queries) > 0 && strings.HasPrefix(queries[0].Sql, EchoPrefix) {
 		for _, query := range queries {
 			reply.List = append(reply.List, *echoQueryResult(map[string]interface{}{
+				"callerId":      callerid.EffectiveCallerIDFromContext(ctx),
 				"query":         query.Sql,
 				"bindVars":      query.BindVariables,
 				"keyspace":      query.Keyspace,
@@ -186,6 +200,7 @@ func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []prot
 				"asTransaction": asTransaction,
 			}))
 		}
+		reply.Session = session
 		return nil
 	}
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, reply)
@@ -195,6 +210,7 @@ func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariable
 	if strings.HasPrefix(sql, EchoPrefix) {
 		sendReply(&proto.QueryResult{
 			Result: echoQueryResult(map[string]interface{}{
+				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 				"query":      sql,
 				"bindVars":   bindVariables,
 				"tabletType": tabletType,
@@ -208,6 +224,7 @@ func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVa
 	if strings.HasPrefix(sql, EchoPrefix) {
 		sendReply(&proto.QueryResult{
 			Result: echoQueryResult(map[string]interface{}{
+				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 				"query":      sql,
 				"bindVars":   bindVariables,
 				"keyspace":   keyspace,
@@ -223,6 +240,7 @@ func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 	if strings.HasPrefix(sql, EchoPrefix) {
 		sendReply(&proto.QueryResult{
 			Result: echoQueryResult(map[string]interface{}{
+				"callerId":    callerid.EffectiveCallerIDFromContext(ctx),
 				"query":       sql,
 				"bindVars":    bindVariables,
 				"keyspace":    keyspace,
@@ -238,6 +256,7 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	if strings.HasPrefix(sql, EchoPrefix) {
 		sendReply(&proto.QueryResult{
 			Result: echoQueryResult(map[string]interface{}{
+				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 				"query":      sql,
 				"bindVars":   bindVariables,
 				"keyspace":   keyspace,

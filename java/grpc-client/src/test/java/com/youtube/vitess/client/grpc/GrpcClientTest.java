@@ -7,9 +7,11 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.VTGateConn;
+import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.TabletType;
+import com.youtube.vitess.proto.Vtrpc.CallerID;
 
 import org.joda.time.Duration;
 import org.junit.AfterClass;
@@ -69,7 +71,7 @@ public class GrpcClientTest {
 
   @Before
   public void setUp() {
-    ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000));
+    ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000)).withCallerId(CALLER_ID);
     conn = new VTGateConn(client);
   }
 
@@ -112,6 +114,17 @@ public class GrpcClientTest {
           .build();
   private static final String BIND_VARS_ECHO = "map[bytes:[1 2 3] float:2 int:123]";
 
+  private static final String SESSION_ECHO = "InTransaction: true, ShardSession: []";
+
+  private static final CallerID CALLER_ID =
+      CallerID.newBuilder()
+          .setPrincipal("test_principal")
+          .setComponent("test_component")
+          .setSubcomponent("test_subcomponent")
+          .build();
+  private static final String CALLER_ID_ECHO =
+      "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" ";
+
   private static Map<String, String> getEcho(QueryResult result) {
     Map<String, String> fields = new HashMap<String, String>();
     for (int i = 0; i < result.getFieldsCount(); i++) {
@@ -125,12 +138,14 @@ public class GrpcClientTest {
     Map<String, String> echo;
 
     echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(
         conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
@@ -139,6 +154,7 @@ public class GrpcClientTest {
 
     echo = getEcho(conn.executeKeyspaceIds(
         ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
@@ -147,6 +163,7 @@ public class GrpcClientTest {
 
     echo = getEcho(conn.executeKeyRanges(
         ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
@@ -155,21 +172,18 @@ public class GrpcClientTest {
 
     echo = getEcho(conn.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
         ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals("column1", echo.get("entityColumnName"));
     Assert.assertEquals(ENTITY_KEYSPACE_IDS_ECHO, echo.get("entityIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-  }
-
-  @Test
-  public void testEchoExecuteBatch() throws Exception {
-    Map<String, String> echo;
 
     echo = getEcho(conn.executeBatchShards(ctx, Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS,
                                                     ECHO_PREFIX + QUERY, BIND_VARS)),
                            TABLET_TYPE, true).get(0));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
@@ -180,6 +194,7 @@ public class GrpcClientTest {
         conn.executeBatchKeyspaceIds(ctx, Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE,
                                               KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
                 TABLET_TYPE, true).get(0));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
@@ -192,6 +207,7 @@ public class GrpcClientTest {
     Map<String, String> echo;
 
     echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE).next());
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
@@ -199,6 +215,7 @@ public class GrpcClientTest {
     echo = getEcho(
         conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE)
             .next());
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
@@ -207,6 +224,7 @@ public class GrpcClientTest {
 
     echo = getEcho(conn.streamExecuteKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
                            BIND_VARS, TABLET_TYPE).next());
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
@@ -215,10 +233,94 @@ public class GrpcClientTest {
 
     echo = getEcho(conn.streamExecuteKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES,
                            BIND_VARS, TABLET_TYPE).next());
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+  }
+
+  @Test
+  public void testEchoTransactionExecute() throws Exception {
+    Map<String, String> echo;
+
+    VTGateTx tx = conn.begin(ctx);
+
+    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    echo = getEcho(
+        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    echo = getEcho(tx.executeKeyspaceIds(
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    echo = getEcho(tx.executeKeyRanges(
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    echo = getEcho(tx.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
+        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals("column1", echo.get("entityColumnName"));
+    Assert.assertEquals(ENTITY_KEYSPACE_IDS_ECHO, echo.get("entityIds"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    tx.rollback(ctx);
+    tx = conn.begin(ctx);
+
+    echo = getEcho(tx.executeBatchShards(ctx, Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS,
+                                                  ECHO_PREFIX + QUERY, BIND_VARS)),
+                         TABLET_TYPE, true).get(0));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    echo =
+        getEcho(tx.executeBatchKeyspaceIds(ctx, Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE,
+                                                    KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
+                      TABLET_TYPE, true).get(0));
+    Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
+    Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
+    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
+    Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
+    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+
+    tx.commit(ctx);
   }
 }
