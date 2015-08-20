@@ -10,9 +10,7 @@ import (
 	"path"
 	"sort"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -136,12 +134,5 @@ func (zkts *Server) DeleteShard(ctx context.Context, keyspace, shard string) err
 		}
 		return err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        nil,
-		Status:       "deleted",
-	})
 	return nil
 }

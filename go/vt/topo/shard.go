@@ -316,6 +316,21 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 	return nil
 }
 
+// DeleteShard wraps the underlying Impl.DeleteShard
+// and dispatches the event.
+func (ts Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
+	if err := ts.Impl.DeleteShard(ctx, keyspace, shard); err != nil {
+		return err
+	}
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        nil,
+		Status:       "deleted",
+	})
+	return nil
+}
+
 // GetTabletControl returns the Shard_TabletControl for the given tablet type,
 // or nil if it is not in the map.
 func (si *ShardInfo) GetTabletControl(tabletType pb.TabletType) *pb.Shard_TabletControl {

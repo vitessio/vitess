@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -89,12 +87,5 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string) error 
 	if err != nil {
 		return convertError(err)
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        nil,
-		Status:       "deleted",
-	})
 	return nil
 }
