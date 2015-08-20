@@ -74,7 +74,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	ki.SplitShardCount = splitShardCount
-	return topo.UpdateKeyspace(ctx, wr.ts, ki)
+	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
 // MigrateServedTypes is used during horizontal splits to migrate a
@@ -576,7 +576,7 @@ func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo
 func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo, sourceShard *topo.ShardInfo, destinationShard *topo.ShardInfo, servedType pb.TabletType, cells []string, reverse bool, tables []string, ev *events.MigrateServedFrom) error {
 	// Save the destination keyspace (its ServedFrom has been changed)
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err := topo.UpdateKeyspace(ctx, wr.ts, ki); err != nil {
+	if err := wr.ts.UpdateKeyspace(ctx, ki); err != nil {
 		return err
 	}
 
@@ -653,7 +653,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// Update the destination keyspace (its ServedFrom has changed)
 	event.DispatchUpdate(ev, "updating keyspace")
-	if err = topo.UpdateKeyspace(ctx, wr.ts, ki); err != nil {
+	if err = wr.ts.UpdateKeyspace(ctx, ki); err != nil {
 		return err
 	}
 
@@ -695,7 +695,7 @@ func (wr *Wrangler) setKeyspaceServedFrom(ctx context.Context, keyspace string, 
 	if err := ki.UpdateServedFromMap(servedType, cells, sourceKeyspace, remove, nil); err != nil {
 		return err
 	}
-	return topo.UpdateKeyspace(ctx, wr.ts, ki)
+	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
 // RefreshTablesByShard calls RefreshState on all the tables of a

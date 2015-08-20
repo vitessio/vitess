@@ -45,7 +45,7 @@ func (ft FakeTopo) CreateKeyspace(ctx context.Context, keyspace string, value *p
 }
 
 // UpdateKeyspace implements topo.Server.
-func (ft FakeTopo) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
+func (ft FakeTopo) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
 	return 0, errNotImplemented
 }
 

@@ -42,13 +42,13 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 }
 
 // UpdateKeyspace implements topo.Server.
-func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	data, err := json.MarshalIndent(ki.Keyspace, "", "  ")
+func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(ki.KeyspaceName()),
+	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
 		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
@@ -56,12 +56,6 @@ func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exis
 	if resp.Node == nil {
 		return -1, ErrBadResponse
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: ki.KeyspaceName(),
-		Keyspace:     ki.Keyspace,
-		Status:       "updated",
-	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
@@ -119,12 +113,6 @@ func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) erro
 	if err = rec.Error(); err != nil {
 		return err
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: keyspace,
-		Keyspace:     nil,
-		Status:       "deleted all shards",
-	})
 	return nil
 }
 

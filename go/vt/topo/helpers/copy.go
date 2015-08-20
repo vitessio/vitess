@@ -19,7 +19,7 @@ import (
 )
 
 // CopyKeyspaces will create the keyspaces in the destination topo
-func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("GetKeyspaces: %v", err)
@@ -54,7 +54,7 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Server) {
 }
 
 // CopyShards will create the shards in the destination topo
-func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
+func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShards bool) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)
@@ -83,7 +83,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceSha
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					if err := topo.CreateShard(ctx, toTS, keyspace, shard); err != nil {
+					if err := topo.CreateShard(ctx, topo.Server{Impl: toTS}, keyspace, shard); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
@@ -118,7 +118,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Server, deleteKeyspaceSha
 }
 
 // CopyTablets will create the tablets in the destination topo
-func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 	cells, err := fromTS.GetKnownCells(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKnownCells: %v", err)
@@ -173,7 +173,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Server) {
 
 // CopyShardReplications will create the ShardReplication objects in
 // the destination topo
-func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Server) {
+func CopyShardReplications(ctx context.Context, fromTS, toTS topo.Impl) {
 	keyspaces, err := fromTS.GetKeyspaces(ctx)
 	if err != nil {
 		log.Fatalf("fromTS.GetKeyspaces: %v", err)

@@ -18,6 +18,6 @@ var fakezkConfig = flag.String("fakezk-config", "", "If set, will read the json 
 
 func init() {
 	if *fakezkConfig != "" {
-		topo.RegisterServer("fakezk", zktopo.NewServer(fakezk.NewConnFromFile(*fakezkConfig)))
+		topo.RegisterServer("fakezk", zktopo.NewServer(fakezk.NewConnFromFile(*fakezkConfig)).Impl)
 	}
 }

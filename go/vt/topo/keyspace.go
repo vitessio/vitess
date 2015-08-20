@@ -11,7 +11,9 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/topo/events"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -152,22 +154,30 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) map[TabletType]string
 }
 
 // UpdateKeyspace updates the keyspace data, with the right version
-func UpdateKeyspace(ctx context.Context, ts Server, ki *KeyspaceInfo) error {
+func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	var version int64 = -1
 	if ki.version != 0 {
 		version = ki.version
 	}
 
-	newVersion, err := ts.UpdateKeyspace(ctx, ki, version)
-	if err == nil {
-		ki.version = newVersion
+	newVersion, err := ts.Impl.UpdateKeyspace(ctx, ki.keyspace, ki.Keyspace, version)
+	if err != nil {
+		return err
 	}
-	return err
+	ki.version = newVersion
+
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceName: ki.keyspace,
+		Keyspace:     ki.Keyspace,
+		Status:       "updated",
+	})
+
+	return nil
 }
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in
 // a keyspace. It doesn't take any lock.
-func FindAllShardsInKeyspace(ctx context.Context, ts Server, keyspace string) (map[string]*ShardInfo, error) {
+func (ts Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) (map[string]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return nil, err
@@ -196,4 +206,18 @@ func FindAllShardsInKeyspace(ctx context.Context, ts Server, keyspace string) (m
 		return nil, rec.Error()
 	}
 	return result, nil
+}
+
+// DeleteKeyspaceShards wraps the underlying Impl.DeleteKeyspaceShards
+// and dispatches the event.
+func (ts Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) error {
+	if err := ts.Impl.DeleteKeyspaceShards(ctx, keyspace); err != nil {
+		return err
+	}
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
+		Status:       "deleted all shards",
+	})
+	return nil
 }

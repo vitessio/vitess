@@ -103,7 +103,7 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 		newServedFroms = append(newServedFroms, ksf)
 	}
 	ki.ServedFroms = newServedFroms
-	err = topo.UpdateKeyspace(ctx, topo.Server{Impl: ts}, ki)
+	_, err = ts.UpdateKeyspace(ctx, ki.KeyspaceName(), ki.Keyspace, ki.Version())
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}

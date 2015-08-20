@@ -20,12 +20,12 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
+func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromConn := fakezk.NewConn()
-	fromTS := zktopo.NewServer(fromConn)
+	fromTS := zktopo.NewServer(fromConn).Impl
 
 	toConn := fakezk.NewConn()
-	toTS := zktopo.NewServer(toConn)
+	toTS := zktopo.NewServer(toConn).Impl
 
 	for _, zkPath := range []string{"/zk/test_cell/vt", "/zk/global/vt"} {
 		if _, err := zk.CreateRecursive(fromConn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
@@ -40,7 +40,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+	if err := topo.CreateTablet(ctx, topo.Server{Impl: fromTS}, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
@@ -60,7 +60,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+	if err := topo.CreateTablet(ctx, topo.Server{Impl: fromTS}, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,

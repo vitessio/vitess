@@ -264,7 +264,7 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 	if IsShardUsingRangeBasedSharding(name) {
 		// if we are using range-based sharding, we don't want
 		// overlapping shards to all serve and confuse the clients.
-		sis, err := FindAllShardsInKeyspace(ctx, ts, keyspace)
+		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
 		if err != nil && err != ErrNoNode {
 			return err
 		}

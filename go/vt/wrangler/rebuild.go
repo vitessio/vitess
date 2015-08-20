@@ -101,7 +101,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 		}
 
 	} else {
-		shardCache, err = topo.FindAllShardsInKeyspace(ctx, wr.ts, keyspace)
+		shardCache, err = wr.ts.FindAllShardsInKeyspace(ctx, keyspace)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
 	for _, ksf := range ki.ServedFroms {
-		servedFromShards, err := topo.FindAllShardsInKeyspace(ctx, wr.ts, ksf.Keyspace)
+		servedFromShards, err := wr.ts.FindAllShardsInKeyspace(ctx, ksf.Keyspace)
 		if err != nil {
 			return err
 		}

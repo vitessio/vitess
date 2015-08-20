@@ -1716,7 +1716,7 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 	}
 
 	keyspace := subFlags.Arg(0)
-	result, err := topo.FindAllShardsInKeyspace(ctx, wr.TopoServer(), keyspace)
+	result, err := wr.TopoServer().FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}

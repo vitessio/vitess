@@ -71,9 +71,9 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 }
 
 // UpdateKeyspace is part of the topo.Server interface
-func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
-	data, err := json.MarshalIndent(ki.Keyspace, "", "  ")
+func (zkts *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
@@ -85,11 +85,6 @@ func (zkts *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, e
 		return -1, err
 	}
 
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: ki.KeyspaceName(),
-		Keyspace:     ki.Keyspace,
-		Status:       "updated",
-	})
 	return int64(stat.Version()), nil
 }
 
@@ -151,11 +146,5 @@ func (zkts *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) e
 	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: keyspace,
-		Keyspace:     nil,
-		Status:       "deleted all shards",
-	})
 	return nil
 }

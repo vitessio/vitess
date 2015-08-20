@@ -116,8 +116,8 @@ func (tee *Tee) CreateKeyspace(ctx context.Context, keyspace string, value *pb.K
 }
 
 // UpdateKeyspace is part of the topo.Server interface
-func (tee *Tee) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (newVersion int64, err error) {
-	if newVersion, err = tee.primary.UpdateKeyspace(ctx, ki, existingVersion); err != nil {
+func (tee *Tee) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (newVersion int64, err error) {
+	if newVersion, err = tee.primary.UpdateKeyspace(ctx, keyspace, value, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
 	}
@@ -126,27 +126,27 @@ func (tee *Tee) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exist
 	// and keyspace version in second topo, replace the version number.
 	// if not, this will probably fail and log.
 	tee.mu.Lock()
-	kvm, ok := tee.keyspaceVersionMapping[ki.KeyspaceName()]
+	kvm, ok := tee.keyspaceVersionMapping[keyspace]
 	if ok && kvm.readFromVersion == existingVersion {
 		existingVersion = kvm.readFromSecondVersion
-		delete(tee.keyspaceVersionMapping, ki.KeyspaceName())
+		delete(tee.keyspaceVersionMapping, keyspace)
 	}
 	tee.mu.Unlock()
-	if newVersion2, serr := tee.secondary.UpdateKeyspace(ctx, ki, existingVersion); serr != nil {
+	if newVersion2, serr := tee.secondary.UpdateKeyspace(ctx, keyspace, value, existingVersion); serr != nil {
 		// not critical enough to fail
 		if serr == topo.ErrNoNode {
 			// the keyspace doesn't exist on the secondary, let's
 			// just create it
-			if serr = tee.secondary.CreateKeyspace(ctx, ki.KeyspaceName(), ki.Keyspace); serr != nil {
-				log.Warningf("secondary.CreateKeyspace(%v) failed (after UpdateKeyspace returned ErrNoNode): %v", ki.KeyspaceName(), serr)
+			if serr = tee.secondary.CreateKeyspace(ctx, keyspace, value); serr != nil {
+				log.Warningf("secondary.CreateKeyspace(%v) failed (after UpdateKeyspace returned ErrNoNode): %v", keyspace, serr)
 			} else {
-				log.Infof("secondary.UpdateKeyspace(%v) failed with ErrNoNode, CreateKeyspace then worked.", ki.KeyspaceName())
-				ki, gerr := tee.secondary.GetKeyspace(ctx, ki.KeyspaceName())
+				log.Infof("secondary.UpdateKeyspace(%v) failed with ErrNoNode, CreateKeyspace then worked.", keyspace)
+				ki, gerr := tee.secondary.GetKeyspace(ctx, keyspace)
 				if gerr != nil {
-					log.Warningf("Failed to re-read keyspace(%v) after creating it on secondary: %v", ki.KeyspaceName(), gerr)
+					log.Warningf("Failed to re-read keyspace(%v) after creating it on secondary: %v", keyspace, gerr)
 				} else {
 					tee.mu.Lock()
-					tee.keyspaceVersionMapping[ki.KeyspaceName()] = versionMapping{
+					tee.keyspaceVersionMapping[keyspace] = versionMapping{
 						readFromVersion:       newVersion,
 						readFromSecondVersion: ki.Version(),
 					}
@@ -154,11 +154,11 @@ func (tee *Tee) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exist
 				}
 			}
 		} else {
-			log.Warningf("secondary.UpdateKeyspace(%v) failed: %v", ki.KeyspaceName(), serr)
+			log.Warningf("secondary.UpdateKeyspace(%v) failed: %v", keyspace, serr)
 		}
 	} else {
 		tee.mu.Lock()
-		tee.keyspaceVersionMapping[ki.KeyspaceName()] = versionMapping{
+		tee.keyspaceVersionMapping[keyspace] = versionMapping{
 			readFromVersion:       newVersion,
 			readFromSecondVersion: newVersion2,
 		}
