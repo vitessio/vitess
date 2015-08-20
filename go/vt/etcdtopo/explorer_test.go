@@ -73,7 +73,7 @@ func TestHandlePathRoot(t *testing.T) {
 	want := []string{"global", "cell1", "cell2", "cell3"}
 
 	ts := newTestServer(t, cells)
-	ex := NewExplorer(ts.(*Server))
+	ex := NewExplorer(ts)
 	result := ex.HandlePath(nil, input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Children; !reflect.DeepEqual(got, want) {
@@ -101,7 +101,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 	}
 
 	m := &mockActionRepo{}
-	ex := NewExplorer(ts.(*Server))
+	ex := NewExplorer(ts)
 	result := ex.HandlePath(m, input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {
@@ -135,7 +135,7 @@ func TestHandlePathShard(t *testing.T) {
 	}
 
 	m := &mockActionRepo{}
-	ex := NewExplorer(ts.(*Server))
+	ex := NewExplorer(ts)
 	result := ex.HandlePath(m, input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {
@@ -169,7 +169,7 @@ func TestHandlePathTablet(t *testing.T) {
 	}
 
 	m := &mockActionRepo{}
-	ex := NewExplorer(ts.(*Server))
+	ex := NewExplorer(ts)
 	result := ex.HandlePath(m, input, nil)
 	exResult := result.(*explorerResult)
 	if got := exResult.Data; got != want {

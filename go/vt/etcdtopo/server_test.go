@@ -8,12 +8,11 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"golang.org/x/net/context"
 )
 
-func newTestServer(t *testing.T, cells []string) topo.Impl {
+func newTestServer(t *testing.T, cells []string) *Server {
 	s := &Server{
 		_cells:    make(map[string]*cellClient),
 		newClient: newTestClient,
