@@ -22,10 +22,10 @@ import (
 
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromConn := fakezk.NewConn()
-	fromTS := zktopo.NewServer(fromConn).Impl
+	fromTS := zktopo.NewServer(fromConn)
 
 	toConn := fakezk.NewConn()
-	toTS := zktopo.NewServer(toConn).Impl
+	toTS := zktopo.NewServer(toConn)
 
 	for _, zkPath := range []string{"/zk/test_cell/vt", "/zk/global/vt"} {
 		if _, err := zk.CreateRecursive(fromConn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {

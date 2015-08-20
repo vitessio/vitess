@@ -42,8 +42,8 @@ func newFakeTeeServer(t *testing.T) topo.Impl {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	s1 := fakeServer{Impl: zktopo.NewServer(zconn1).Impl, localCells: cells[:len(cells)-1]}
-	s2 := fakeServer{Impl: zktopo.NewServer(zconn2).Impl, localCells: cells[:len(cells)-1]}
+	s1 := fakeServer{Impl: zktopo.NewServer(zconn1), localCells: cells[:len(cells)-1]}
+	s2 := fakeServer{Impl: zktopo.NewServer(zconn2), localCells: cells[:len(cells)-1]}
 
 	return NewTee(s1, s2, false)
 }
