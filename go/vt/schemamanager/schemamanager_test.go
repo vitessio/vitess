@@ -300,13 +300,11 @@ func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard
 	return value, 0, nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*topo.TabletInfo, error) {
-	return &topo.TabletInfo{
-		Tablet: &pb.Tablet{
-			Alias:    tabletAlias,
-			Keyspace: "test_keyspace",
-		},
-	}, nil
+func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+	return &pb.Tablet{
+		Alias:    tabletAlias,
+		Keyspace: "test_keyspace",
+	}, 0, nil
 }
 
 type fakeController struct {

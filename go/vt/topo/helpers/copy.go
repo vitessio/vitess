@@ -140,19 +140,19 @@ func CopyTablets(ctx context.Context, fromTS, toTS topo.Impl) {
 						defer wg.Done()
 
 						// read the source tablet
-						ti, err := fromTS.GetTablet(ctx, tabletAlias)
+						tablet, _, err := fromTS.GetTablet(ctx, tabletAlias)
 						if err != nil {
 							rec.RecordError(fmt.Errorf("GetTablet(%v): %v", tabletAlias, err))
 							return
 						}
 
 						// try to create the destination
-						err = toTS.CreateTablet(ctx, ti.Tablet)
+						err = toTS.CreateTablet(ctx, tablet)
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
 							log.Warningf("tablet %v already exists, updating it", tabletAlias)
-							err = toTS.UpdateTabletFields(ctx, ti.Alias, func(t *pb.Tablet) error {
-								*t = *ti.Tablet
+							err = toTS.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
+								*t = *tablet
 								return nil
 							})
 						}

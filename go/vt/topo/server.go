@@ -163,7 +163,7 @@ type Impl interface {
 
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletInfo, error)
+	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
 	// Can return ErrNoNode if no tablet was ever created in that cell.

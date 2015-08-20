@@ -120,8 +120,8 @@ func (ft FakeTopo) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) erro
 }
 
 // GetTablet implements topo.Server.
-func (ft FakeTopo) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*topo.TabletInfo, error) {
-	return nil, errNotImplemented
+func (ft FakeTopo) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+	return nil, 0, errNotImplemented
 }
 
 // GetTabletsByCell implements topo.Server.

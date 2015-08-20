@@ -259,7 +259,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet,
 }
 
 func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
-	tablet, err := topo.GetTablet(ctx, agent.TopoServer, agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return nil, err
 	}

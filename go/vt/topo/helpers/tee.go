@@ -391,14 +391,14 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVer
 				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias, serr)
 			} else {
 				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias)
-				ti, gerr := tee.secondary.GetTablet(ctx, tablet.Alias)
+				_, v, gerr := tee.secondary.GetTablet(ctx, tablet.Alias)
 				if gerr != nil {
 					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias, gerr)
 				} else {
 					tee.mu.Lock()
 					tee.tabletVersionMapping[*tablet.Alias] = versionMapping{
 						readFromVersion:       newVersion,
-						readFromSecondVersion: ti.Version(),
+						readFromSecondVersion: v,
 					}
 					tee.mu.Unlock()
 				}
@@ -445,25 +445,25 @@ func (tee *Tee) DeleteTablet(ctx context.Context, alias *pb.TabletAlias) error {
 }
 
 // GetTablet is part of the topo.Server interface
-func (tee *Tee) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*topo.TabletInfo, error) {
-	ti, err := tee.readFrom.GetTablet(ctx, alias)
+func (tee *Tee) GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+	t, v, err := tee.readFrom.GetTablet(ctx, alias)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	ti2, err := tee.readFromSecond.GetTablet(ctx, alias)
+	_, v2, err := tee.readFromSecond.GetTablet(ctx, alias)
 	if err != nil {
 		// can't read from secondary, so we can's keep version map
-		return ti, nil
+		return t, v, nil
 	}
 
 	tee.mu.Lock()
 	tee.tabletVersionMapping[*alias] = versionMapping{
-		readFromVersion:       ti.Version(),
-		readFromSecondVersion: ti2.Version(),
+		readFromVersion:       v,
+		readFromSecondVersion: v2,
 	}
 	tee.mu.Unlock()
-	return ti, nil
+	return t, v, nil
 }
 
 // GetTabletsByCell is part of the topo.Server interface

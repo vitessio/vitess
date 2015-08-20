@@ -59,17 +59,18 @@ func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVe
 
 // UpdateTabletFields implements topo.Server.
 func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, updateFunc func(*pb.Tablet) error) error {
-	var ti *topo.TabletInfo
+	var tablet *pb.Tablet
 	var err error
 
 	for {
-		if ti, err = s.GetTablet(ctx, tabletAlias); err != nil {
+		var version int64
+		if tablet, version, err = s.GetTablet(ctx, tabletAlias); err != nil {
 			return err
 		}
-		if err = updateFunc(ti.Tablet); err != nil {
+		if err = updateFunc(tablet); err != nil {
 			return err
 		}
-		if _, err = s.UpdateTablet(ctx, ti.Tablet, ti.Version()); err != topo.ErrBadVersion {
+		if _, err = s.UpdateTablet(ctx, tablet, version); err != topo.ErrBadVersion {
 			break
 		}
 	}
@@ -78,7 +79,7 @@ func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletA
 	}
 
 	event.Dispatch(&events.TabletChange{
-		Tablet: *ti.Tablet,
+		Tablet: *tablet,
 		Status: "updated",
 	})
 	return nil
@@ -92,7 +93,7 @@ func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 	}
 
 	// Get the keyspace and shard names for the TabletChange event.
-	ti, tiErr := s.GetTablet(ctx, tabletAlias)
+	tablet, _, tErr := s.GetTablet(ctx, tabletAlias)
 
 	_, err = cell.Delete(tabletDirPath(tabletAlias), true /* recursive */)
 	if err != nil {
@@ -100,13 +101,13 @@ func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 	}
 
 	// Only try to log if we have the required info.
-	if tiErr == nil {
+	if tErr == nil {
 		// Only copy the identity info for the tablet. The rest has been deleted.
 		event.Dispatch(&events.TabletChange{
 			Tablet: pb.Tablet{
-				Alias:    ti.Tablet.Alias,
-				Keyspace: ti.Tablet.Keyspace,
-				Shard:    ti.Tablet.Shard,
+				Alias:    tablet.Alias,
+				Keyspace: tablet.Keyspace,
+				Shard:    tablet.Shard,
 			},
 			Status: "deleted",
 		})
@@ -116,31 +117,31 @@ func (s *Server) DeleteTablet(ctx context.Context, tabletAlias *pb.TabletAlias) 
 
 // ValidateTablet implements topo.Server.
 func (s *Server) ValidateTablet(ctx context.Context, tabletAlias *pb.TabletAlias) error {
-	_, err := s.GetTablet(ctx, tabletAlias)
+	_, _, err := s.GetTablet(ctx, tabletAlias)
 	return err
 }
 
 // GetTablet implements topo.Server.
-func (s *Server) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*topo.TabletInfo, error) {
+func (s *Server) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
 	cell, err := s.getCell(tabletAlias.Cell)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	resp, err := cell.Get(tabletFilePath(tabletAlias), false /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, 0, convertError(err)
 	}
 	if resp.Node == nil {
-		return nil, ErrBadResponse
+		return nil, 0, ErrBadResponse
 	}
 
 	value := &pb.Tablet{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
-		return nil, fmt.Errorf("bad tablet data (%v): %q", err, resp.Node.Value)
+		return nil, 0, fmt.Errorf("bad tablet data (%v): %q", err, resp.Node.Value)
 	}
 
-	return topo.NewTabletInfo(value, int64(resp.Node.ModifiedIndex)), nil
+	return value, int64(resp.Node.ModifiedIndex), nil
 }
 
 // GetTabletsByCell implements topo.Server.
