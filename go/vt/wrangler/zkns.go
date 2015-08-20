@@ -1,14 +1,14 @@
 package wrangler
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
@@ -19,7 +19,7 @@ import (
 // ExportZkns exports addresses from the VT serving graph to a legacy zkns server.
 // Note these functions only work with a zktopo.
 func (wr *Wrangler) ExportZkns(ctx context.Context, cell string) error {
-	zkTopo, ok := wr.ts.(*zktopo.Server)
+	zkTopo, ok := wr.ts.Impl.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZkns only works with zktopo")
 	}
@@ -54,7 +54,7 @@ func (wr *Wrangler) ExportZkns(ctx context.Context, cell string) error {
 
 // ExportZknsForKeyspace exports addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) error {
-	zkTopo, ok := wr.ts.(*zktopo.Server)
+	zkTopo, ok := wr.ts.Impl.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZknsForKeyspace only works with zktopo")
 	}
@@ -66,7 +66,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shardNames[0])
+	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (wr *Wrangler) exportVtnsToZkns(ctx context.Context, zconn zk.Conn, vtnsAdd
 	if tabletTypeStr == "action" || tabletTypeStr == "actionlog" {
 		return nil, nil
 	}
-	tabletType, err := topo.ParseTabletType(tabletTypeStr)
+	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
 	if err != nil {
 		return nil, err
 	}
@@ -220,13 +220,19 @@ type LegacyZknsAddrs struct {
 }
 
 func writeAddr(zconn zk.Conn, zkPath string, addr *zkns.ZknsAddr) error {
-	data := jscfg.ToJSON(addr)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addr, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }
 
 func writeAddrs(zconn zk.Conn, zkPath string, addrs *LegacyZknsAddrs) error {
-	data := jscfg.ToJSON(addrs)
-	_, err := zk.CreateOrUpdate(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
+	data, err := json.MarshalIndent(addrs, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateOrUpdate(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), true)
 	return err
 }

@@ -1,11 +1,12 @@
 package events
 
 import (
-	"github.com/youtube/vitess/go/vt/topo"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // KeyspaceChange is an event that describes changes to a keyspace.
 type KeyspaceChange struct {
-	KeyspaceInfo topo.KeyspaceInfo
+	KeyspaceName string
+	Keyspace     *pb.Keyspace
 	Status       string
 }

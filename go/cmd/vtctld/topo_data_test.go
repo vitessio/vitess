@@ -225,12 +225,12 @@ func TestShardNamesCache(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s1", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &pb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s2", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &pb.Shard{
 		MasterAlias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,
@@ -256,12 +256,12 @@ func TestShardCache(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s1", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s1", &pb.Shard{
 		Cells: []string{"cell1", "cell2"},
 	}); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "ks1", "s2", &pb.Shard{
+	if err := ts.Impl.CreateShard(ctx, "ks1", "s2", &pb.Shard{
 		MasterAlias: &pb.TabletAlias{
 			Cell: "cell1",
 			Uid:  12,

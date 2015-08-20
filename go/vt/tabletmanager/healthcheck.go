@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -103,7 +104,7 @@ func (agent *ActionAgent) initHealthCheck() {
 		return
 	}
 
-	tt, err := topo.ParseTabletType(*targetTabletType)
+	tt, err := topoproto.ParseTabletType(*targetTabletType)
 	if err != nil {
 		log.Fatalf("Invalid target tablet type %v: %v", *targetTabletType, err)
 	}
@@ -147,7 +148,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	// figure out if we should be running the query service
 	shouldQueryServiceBeRunning := false
 	var blacklistedTables []string
-	if topo.IsRunningQueryService(targetTabletType) && agent.BinlogPlayerMap.size() == 0 {
+	if topo.IsRunningQueryService(targetTabletType) && !agent.BinlogPlayerMap.isRunningFilteredReplication() {
 		shouldQueryServiceBeRunning = true
 		if tabletControl != nil {
 			blacklistedTables = tabletControl.BlacklistedTables
@@ -259,6 +260,7 @@ func (agent *ActionAgent) runHealthCheck(targetTabletType pbt.TabletType) {
 	stats := &pb.RealtimeStats{
 		SecondsBehindMaster: uint32(replicationDelay.Seconds()),
 	}
+	stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
 	if err != nil {
 		stats.HealthError = err.Error()
 	}

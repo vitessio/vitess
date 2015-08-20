@@ -9,15 +9,15 @@ import (
 	"log/syslog"
 
 	"github.com/youtube/vitess/go/event/syslogger"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 // Syslog writes a Reparent event to syslog.
 func (r *Reparent) Syslog() (syslog.Priority, string) {
 	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [reparent %v -> %v] %s (%s)",
 		r.ShardInfo.Keyspace(), r.ShardInfo.ShardName(),
-		topo.TabletAliasString(r.OldMaster.Alias),
-		topo.TabletAliasString(r.NewMaster.Alias),
+		topoproto.TabletAliasString(r.OldMaster.Alias),
+		topoproto.TabletAliasString(r.NewMaster.Alias),
 		r.Status, r.ExternalID)
 }
 

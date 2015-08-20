@@ -5,24 +5,17 @@
 # be found in the LICENSE file.
 
 import logging
-import threading
-import struct
 import time
 import unittest
 
-from zk import zkocc
-from vtdb import dbexceptions
-from vtdb import topology
-from vtdb import vtclient
+from vtdb import keyrange
+from vtdb import keyrange_constants
+from vtdb import vtgate_client
 
 import environment
 import utils
 import tablet
-
-TABLET = 'tablet'
-VTGATE = 'vtgate'
-VTGATE_PROTOCOL_TABLET = 'v0'
-client_type = TABLET
+from protocols_flavor import protocols_flavor
 
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
@@ -51,6 +44,7 @@ def setUpModule():
         destination_rdonly2.init_mysql(),
         ]
     utils.Vtctld().start()
+    utils.VtGate().start(cache_ttl='0s')
     utils.wait_procs(setup_procs)
   except:
     tearDownModule()
@@ -61,6 +55,7 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
+  utils.vtgate.kill()
   teardown_procs = [
         source_master.teardown_mysql(),
         source_replica.teardown_mysql(),
@@ -88,21 +83,7 @@ def tearDownModule():
 
 class TestVerticalSplit(unittest.TestCase):
   def setUp(self):
-    utils.VtGate().start(cache_ttl='0s')
-    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                               'test_nj', 30.0)
-    self.vtgate_addrs = None
-    if client_type == VTGATE:
-      self.vtgate_addrs = {'vt': [utils.vtgate.addr(),]}
-
     self.insert_index = 0
-    # Lowering the keyspace refresh throttle so things are testable.
-    self.throttle_sleep_interval = 0.1
-    topology.set_keyspace_fetch_throttle(0.01)
-
-  def tearDown(self):
-    self.vtgate_client.close()
-    utils.vtgate.kill()
 
   def _create_source_schema(self):
     create_table_template = '''create table %s(
@@ -123,31 +104,23 @@ index by_msg (msg)
                      'source_keyspace'],
                     auto_log=True)
 
-  def _vtdb_conn(self, db_type='master', keyspace='source_keyspace'):
-    global client_type
-    vtgate_protocol = None
-    if self.vtgate_addrs is None:
-      self.vtgate_addrs = {}
-    if client_type == TABLET:
-      vtgate_protocol = VTGATE_PROTOCOL_TABLET
-    conn = vtclient.VtOCCConnection(self.vtgate_client, keyspace, '0',
-                                    db_type, 30,
-                                    vtgate_protocol=vtgate_protocol,
-                                    vtgate_addrs=self.vtgate_addrs)
-    conn.connect()
-    return conn
+  def _vtdb_conn(self):
+    addr = utils.vtgate.rpc_endpoint()
+    protocol = protocols_flavor().vtgate_python_protocol()
+    return vtgate_client.connect(protocol, addr, 30.0)
 
   # insert some values in the source master db, return the first id used
   def _insert_values(self, table, count):
     result = self.insert_index
+    conn = self._vtdb_conn()
+    cursor = conn.cursor('source_keyspace', 'master', keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)], writable=True)
     for i in xrange(count):
-      source_master.execute('insert into %s (id, msg) values(:id, :msg)' %
-                            table,
-                            bindvars={
-                                'id': self.insert_index,
-                                'msg': 'value %d' % self.insert_index,
-                                })
+      conn.begin()
+      cursor.execute("insert into %s (id, msg) values(%d, 'value %d')" % (
+          table, self.insert_index, self.insert_index), {})
+      conn.commit()
       self.insert_index += 1
+    conn.close()
     return result
 
   def _check_values(self, tablet, dbname, table, first, count):
@@ -222,31 +195,31 @@ index by_msg (msg)
         logging.debug('Got %s rows from table %s on tablet %s',
                       qr['Rows'][0][0], t, tablet.tablet_alias)
 
-  def _populate_topo_cache(self):
-    topology.read_topology(self.vtgate_client)
-
-  def refresh_keyspace(self, keyspace_name):
-    # This is so that keyspace can be refreshed.
-    time.sleep(self.throttle_sleep_interval)
-    topology.refresh_keyspace(self.vtgate_client, keyspace_name)
-
-  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types,
-                                     servedfrom_db_types, moved_tables=None):
-    # In normal operations, it takes the first error for keyspace to be re-read.
-    # For testing purposes, refreshing the topology manually.
-    self.refresh_keyspace(destination_ks)
-
+  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
+    # check that the ServedFrom indirection worked correctly.
+    if moved_tables is None:
+      moved_tables = []
+    conn = self._vtdb_conn()
     for db_type in servedfrom_db_types:
-      conn = self._vtdb_conn(db_type, keyspace=destination_ks)
-      self.assertEqual(conn.db_params['keyspace'], source_ks)
-
-    # check that the connection to db_type for destination keyspace works too.
-    for db_type in db_types:
-      dest_conn = self._vtdb_conn(db_type, keyspace=destination_ks)
-      self.assertEqual(dest_conn.db_params['keyspace'], destination_ks)
+      for tbl in moved_tables:
+        try:
+          rows = conn._execute("select * from %s" % tbl, {}, destination_ks, db_type, keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)])
+          logging.debug("Select on %s.%s returned %d rows" % (db_type, tbl, len(rows)))
+        except Exception, e:
+          self.fail("Execute failed w/ exception %s" % str(e))
 
   def _check_stats(self):
-    pass
+    v = utils.vtgate.get_vars()
+    self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, "unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s" % str(v))
+    self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, "unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s" % str(v))
+    self.assertEqual(len(v['VtgateApiErrorCounts']), 0, "unexpected errors for VtgateApiErrorCounts inside %s" % str(v))
+    self.assertEqual(
+            v['ResilientSrvTopoServerEndPointsReturnedCount']['test_nj.source_keyspace.0.master'] /
+              v['ResilientSrvTopoServerEndPointQueryCount']['test_nj.source_keyspace.0.master'],
+            1, "unexpected EndPointsReturnedCount inside %s" % str(v))
+    self.assertNotIn(
+            'test_nj.source_keyspace.0.master', v['ResilientSrvTopoServerEndPointDegradedResultCount'],
+            "unexpected EndPointDegradedResultCount inside %s" % str(v))
 
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
@@ -301,9 +274,6 @@ index by_msg (msg)
     utils.run_vtctl(['InitShardMaster', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
 
-    # read all the keyspaces, this will populate the topology cache.
-    self._populate_topo_cache()
-
     # create the schema on the source keyspace, add some values
     self._create_source_schema()
     moving1_first = self._insert_values('moving1', 100)
@@ -342,8 +312,6 @@ index by_msg (msg)
                      'rdonly'], auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', source_rdonly2.tablet_alias,
                      'rdonly'], auto_log=True)
-
-    topology.refresh_keyspace(self.vtgate_client, 'destination_keyspace')
 
     # check values are present
     self._check_values(destination_master, 'vt_destination_keyspace', 'moving1',
@@ -522,7 +490,7 @@ index by_msg (msg)
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
 
-    # optional method to check the stats are correct
+    # check the stats are correct
     self._check_stats()
 
     # kill everything

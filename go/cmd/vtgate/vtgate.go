@@ -55,13 +55,8 @@ func main() {
 		}
 		log.Infof("v3 is enabled: loaded schema from file: %v", *schemaFile)
 	} else {
-		schemafier, ok := ts.(topo.Schemafier)
-		if !ok {
-			log.Infof("Skipping v3 initialization: topo does not suppurt schemafier interface")
-			goto startServer
-		}
 		ctx := context.Background()
-		schemaJSON, err := schemafier.GetVSchema(ctx)
+		schemaJSON, err := ts.GetVSchema(ctx)
 		if err != nil {
 			log.Warningf("Skipping v3 initialization: GetVSchema failed: %v", err)
 			goto startServer

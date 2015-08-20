@@ -7,7 +7,6 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -29,7 +28,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	}
 
 	// read the source tablets
-	sourceTablets, err := topo.GetTabletMap(ctx, wr.TopoServer(), sources)
+	sourceTablets, err := wr.ts.GetTabletMap(ctx, sources)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	}
 
 	// and write the shard
-	if err = topo.UpdateShard(ctx, wr.ts, shardInfo); err != nil {
+	if err = wr.ts.UpdateShard(ctx, shardInfo); err != nil {
 		return err
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schemamanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 
@@ -158,14 +159,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 			if shardRef != "" {
 				// Look up by keyspace/shard, and optionally cell.
-				keyspace, shard, err := topo.ParseKeyspaceShardString(shardRef)
+				keyspace, shard, err := topoproto.ParseKeyspaceShard(shardRef)
 				if err != nil {
 					return nil, err
 				}
 				if cell != "" {
-					return topo.FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, []string{cell})
+					return ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, []string{cell})
 				}
-				return topo.FindAllTabletAliasesInShard(ctx, ts, keyspace, shard)
+				return ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 			}
 
 			// Get all tablets in a cell.
@@ -177,14 +178,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 		// Get tablet health.
 		if parts := strings.Split(tabletPath, "/"); len(parts) == 2 && parts[1] == "health" {
-			tabletAlias, err := topo.ParseTabletAliasString(parts[0])
+			tabletAlias, err := topoproto.ParseTabletAlias(parts[0])
 			if err != nil {
 				return nil, err
 			}
 			return tabletHealthCache.Get(ctx, tabletAlias)
 		}
 
-		tabletAlias, err := topo.ParseTabletAliasString(tabletPath)
+		tabletAlias, err := topoproto.ParseTabletAlias(tabletPath)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +220,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 			return ts.GetSrvTabletTypesPerShard(ctx, parts[0], parts[1], parts[2])
 		}
 
-		tabletType, err := topo.ParseTabletType(parts[3])
+		tabletType, err := topoproto.ParseTabletType(parts[3])
 		if err != nil {
 			return nil, fmt.Errorf("invalid tablet type %v: %v", parts[3], err)
 		}
@@ -247,12 +248,6 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 	// VSchema
 	http.HandleFunc(apiPrefix+"vschema/", func(w http.ResponseWriter, r *http.Request) {
-		schemafier, ok := ts.(topo.Schemafier)
-		if !ok {
-			httpErrorf(w, r, "%T doesn't support schemafier API", ts)
-			return
-		}
-
 		// Save VSchema
 		if r.Method == "POST" {
 			vschema, err := ioutil.ReadAll(r.Body)
@@ -260,14 +255,14 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 				httpErrorf(w, r, "can't read request body: %v", err)
 				return
 			}
-			if err := schemafier.SaveVSchema(ctx, string(vschema)); err != nil {
+			if err := ts.SaveVSchema(ctx, string(vschema)); err != nil {
 				httpErrorf(w, r, "can't save vschema: %v", err)
 			}
 			return
 		}
 
 		// Get VSchema
-		vschema, err := schemafier.GetVSchema(ctx)
+		vschema, err := ts.GetVSchema(ctx)
 		if err != nil {
 			httpErrorf(w, r, "can't get vschema: %v", err)
 			return

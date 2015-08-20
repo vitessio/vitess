@@ -4,14 +4,17 @@ import (
 	"log/syslog"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyspaceChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status"
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: sharding_column_name:\"sharded_by_me\" "
 	kc := &KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo("keyspace-123", nil, -1),
-		Status:       "status",
+		KeyspaceName: "keyspace-123",
+		Keyspace: &pb.Keyspace{
+			ShardingColumnName: "sharded_by_me",
+		},
+		Status: "status",
 	}
 	gotSev, gotMsg := kc.Syslog()
 

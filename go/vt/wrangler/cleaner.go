@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -142,7 +143,7 @@ const ChangeSlaveTypeActionName = "ChangeSlaveTypeAction"
 // RecordChangeSlaveTypeAction records a new ChangeSlaveTypeAction
 // into the specified Cleaner
 func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *pb.TabletAlias, tabletType pb.TabletType) {
-	cleaner.Record(ChangeSlaveTypeActionName, topo.TabletAliasString(tabletAlias), &ChangeSlaveTypeAction{
+	cleaner.Record(ChangeSlaveTypeActionName, topoproto.TabletAliasString(tabletAlias), &ChangeSlaveTypeAction{
 		TabletAlias: tabletAlias,
 		TabletType:  tabletType,
 	})
@@ -150,7 +151,7 @@ func RecordChangeSlaveTypeAction(cleaner *Cleaner, tabletAlias *pb.TabletAlias, 
 
 // FindChangeSlaveTypeActionByTarget finds the first action for the target
 func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias *pb.TabletAlias) (*ChangeSlaveTypeAction, error) {
-	action, err := cleaner.GetActionByName(ChangeSlaveTypeActionName, topo.TabletAliasString(tabletAlias))
+	action, err := cleaner.GetActionByName(ChangeSlaveTypeActionName, topoproto.TabletAliasString(tabletAlias))
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ const TabletTagActionName = "TabletTagAction"
 // RecordTabletTagAction records a new TabletTagAction
 // into the specified Cleaner
 func RecordTabletTagAction(cleaner *Cleaner, tabletAlias *pb.TabletAlias, name, value string) {
-	cleaner.Record(TabletTagActionName, topo.TabletAliasString(tabletAlias), &TabletTagAction{
+	cleaner.Record(TabletTagActionName, topoproto.TabletAliasString(tabletAlias), &TabletTagAction{
 		TabletAlias: tabletAlias,
 		Name:        name,
 		Value:       value,
@@ -221,7 +222,7 @@ const StartSlaveActionName = "StartSlaveAction"
 // RecordStartSlaveAction records a new StartSlaveAction
 // into the specified Cleaner
 func RecordStartSlaveAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
-	cleaner.Record(StartSlaveActionName, topo.TabletAliasString(tabletInfo.Alias), &StartSlaveAction{
+	cleaner.Record(StartSlaveActionName, topoproto.TabletAliasString(tabletInfo.Alias), &StartSlaveAction{
 		TabletInfo: tabletInfo,
 	})
 }
@@ -246,7 +247,7 @@ const StartBlpActionName = "StartBlpAction"
 // RecordStartBlpAction records a new StartBlpAction
 // into the specified Cleaner
 func RecordStartBlpAction(cleaner *Cleaner, tabletInfo *topo.TabletInfo) {
-	cleaner.Record(StartBlpActionName, topo.TabletAliasString(tabletInfo.Alias), &StartBlpAction{
+	cleaner.Record(StartBlpActionName, topoproto.TabletAliasString(tabletInfo.Alias), &StartBlpAction{
 		TabletInfo: tabletInfo,
 	})
 }

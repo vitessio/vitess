@@ -29,6 +29,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -39,7 +40,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
-	hk.ExtraEnv["TABLET_ALIAS"] = topo.TabletAliasString(tabletAlias)
+	hk.ExtraEnv["TABLET_ALIAS"] = topoproto.TabletAliasString(tabletAlias)
 }
 
 // Scrap will update the tablet type to 'Scrap', and remove it from
@@ -60,7 +61,7 @@ func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, for
 	wasAssigned := tablet.IsAssigned()
 	tablet.Type = pb.TabletType_SCRAP
 	// Update the tablet first, since that is canonical.
-	err = topo.UpdateTablet(ctx, ts, tablet)
+	err = ts.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -124,5 +125,5 @@ func ChangeType(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias
 			tablet.HealthMap = health
 		}
 	}
-	return topo.UpdateTablet(ctx, ts, tablet)
+	return ts.UpdateTablet(ctx, tablet)
 }

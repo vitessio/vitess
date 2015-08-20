@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -36,7 +37,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 	if !si.HasCell(tabletAlias.Cell) {
 		shardUpdateRequired = true
 	}
-	if tabletType == pb.TabletType_MASTER && !topo.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+	if tabletType == pb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 		shardUpdateRequired = true
 	}
 	if !shardUpdateRequired {
@@ -63,9 +64,9 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 		si.Cells = append(si.Cells, tabletAlias.Cell)
 		wasUpdated = true
 	}
-	if tabletType == pb.TabletType_MASTER && !topo.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-		if !topo.TabletAliasIsZero(si.MasterAlias) && !force {
-			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topo.TabletAliasString(si.MasterAlias), keyspace, shard))
+	if tabletType == pb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
+		if si.HasMaster() && !force {
+			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(si.MasterAlias), keyspace, shard))
 		}
 		si.MasterAlias = tabletAlias
 		wasUpdated = true
@@ -73,7 +74,7 @@ func (wr *Wrangler) updateShardCellsAndMaster(ctx context.Context, si *topo.Shar
 
 	if wasUpdated {
 		// write it back
-		if err := topo.UpdateShard(ctx, wr.ts, si); err != nil {
+		if err := wr.ts.UpdateShard(ctx, si); err != nil {
 			return wr.unlockShard(ctx, keyspace, shard, actionNode, lockPath, err)
 		}
 	}
@@ -105,7 +106,7 @@ func (wr *Wrangler) setShardServedTypes(ctx context.Context, keyspace, shard str
 	if err := si.UpdateServedTypesMap(servedType, cells, remove); err != nil {
 		return err
 	}
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }
 
 // SetShardTabletControl changes the TabletControl records
@@ -147,7 +148,7 @@ func (wr *Wrangler) setShardTabletControl(ctx context.Context, keyspace, shard s
 			return fmt.Errorf("UpdateSourceBlacklistedTables(%v/%v) failed: %v", shardInfo.Keyspace(), shardInfo.ShardName(), err)
 		}
 	}
-	return topo.UpdateShard(ctx, wr.ts, shardInfo)
+	return wr.ts.UpdateShard(ctx, shardInfo)
 }
 
 // DeleteShard will do all the necessary changes in the topology server
@@ -158,7 +159,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		return err
 	}
 
-	tabletMap, err := topo.GetTabletMapForShard(ctx, wr.ts, keyspace, shard)
+	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -167,7 +168,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		for tabletAlias := range tabletMap {
 			// We don't care about scrapping or updating the replication graph,
 			// because we're about to delete the entire replication graph.
-			wr.Logger().Infof("Deleting tablet %v", topo.TabletAliasString(&tabletAlias))
+			wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(&tabletAlias))
 			if err := wr.TopoServer().DeleteTablet(ctx, &tabletAlias); err != nil && err != topo.ErrNoNode {
 				// Unlike the errors below in non-recursive steps, we don't want to
 				// continue if a DeleteTablet fails. If we continue and delete the
@@ -176,7 +177,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 				//
 				// If the problem is temporary, or resolved externally, re-running
 				// DeleteShard will skip over tablets that were already deleted.
-				return fmt.Errorf("can't delete tablet %v: %v", topo.TabletAliasString(&tabletAlias), err)
+				return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(&tabletAlias), err)
 			}
 		}
 	} else if len(tabletMap) > 0 {
@@ -189,7 +190,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
 		}
 
-		for _, t := range topo.AllTabletTypes {
+		for _, t := range topoproto.AllTabletTypes {
 			if !topo.IsInServingGraph(t) {
 				continue
 			}
@@ -240,7 +241,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 
 	// check the master alias is not in the cell
 	if shardInfo.MasterAlias != nil && shardInfo.MasterAlias.Cell == cell {
-		return fmt.Errorf("master %v is in the cell '%v' we want to remove", topo.TabletAliasString(shardInfo.MasterAlias), cell)
+		return fmt.Errorf("master %v is in the cell '%v' we want to remove", topoproto.TabletAliasString(shardInfo.MasterAlias), cell)
 	}
 
 	// get the ShardReplication object in the cell
@@ -252,9 +253,9 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 			for _, node := range sri.Nodes {
 				// We don't care about scrapping or updating the replication graph,
 				// because we're about to delete the entire replication graph.
-				wr.Logger().Infof("Deleting tablet %v", topo.TabletAliasString(node.TabletAlias))
+				wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))
 				if err := wr.TopoServer().DeleteTablet(ctx, node.TabletAlias); err != nil && err != topo.ErrNoNode {
-					return fmt.Errorf("can't delete tablet %v: %v", topo.TabletAliasString(node.TabletAlias), err)
+					return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(node.TabletAlias), err)
 				}
 			}
 		} else if len(sri.Nodes) > 0 {
@@ -295,7 +296,7 @@ func (wr *Wrangler) removeShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	shardInfo.Cells = newCells
 
-	return topo.UpdateShard(ctx, wr.ts, shardInfo)
+	return wr.ts.UpdateShard(ctx, shardInfo)
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
@@ -328,7 +329,7 @@ func (wr *Wrangler) sourceShardDelete(ctx context.Context, keyspace, shard strin
 		newSourceShards = nil
 	}
 	si.SourceShards = newSourceShards
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard
@@ -363,5 +364,5 @@ func (wr *Wrangler) sourceShardAdd(ctx context.Context, keyspace, shard string, 
 		KeyRange: keyRange,
 		Tables:   tables,
 	})
-	return topo.UpdateShard(ctx, wr.ts, si)
+	return wr.ts.UpdateShard(ctx, si)
 }

@@ -14,7 +14,6 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
 
@@ -129,6 +128,30 @@ func (hook *Hook) ExecuteOptional() error {
 	return nil
 }
 
+// String returns a printable version of the HookResult
 func (hr *HookResult) String() string {
-	return jscfg.ToJSON(hr)
+	result := "result: "
+	switch hr.ExitStatus {
+	case HOOK_SUCCESS:
+		result += "HOOK_SUCCESS"
+	case HOOK_DOES_NOT_EXIST:
+		result += "HOOK_DOES_NOT_EXIST"
+	case HOOK_STAT_FAILED:
+		result += "HOOK_STAT_FAILED"
+	case HOOK_CANNOT_GET_EXIT_STATUS:
+		result += "HOOK_CANNOT_GET_EXIT_STATUS"
+	case HOOK_INVALID_NAME:
+		result += "HOOK_INVALID_NAME"
+	case HOOK_VTROOT_ERROR:
+		result += "HOOK_VTROOT_ERROR"
+	default:
+		result += fmt.Sprintf("exit(%v)", hr.ExitStatus)
+	}
+	if hr.Stdout != "" {
+		result += "\nstdout:\n" + hr.Stdout
+	}
+	if hr.Stderr != "" {
+		result += "\nstderr:\n" + hr.Stderr
+	}
+	return result
 }

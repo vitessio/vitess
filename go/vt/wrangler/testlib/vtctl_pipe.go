@@ -5,6 +5,7 @@
 package testlib
 
 import (
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func (vp *VtctlPipe) Run(args []string) error {
 
 	c, errFunc, err := vp.client.ExecuteVtctlCommand(ctx, args, actionTimeout, lockTimeout)
 	if err != nil {
-		return err
+		return fmt.Errorf("VtctlPipe.Run() failed: %v", err)
 	}
 	for le := range c {
 		vp.t.Logf(le.String())

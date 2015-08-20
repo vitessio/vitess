@@ -6,22 +6,15 @@ import warnings
 warnings.simplefilter('ignore')
 
 import logging
-import os
-import time
 import traceback
 import threading
 import unittest
-
-import MySQLdb
 
 import environment
 import tablet
 import utils
 from vtdb import dbexceptions
-from vtdb import topology
 from vtdb import update_stream
-from vtdb import vtclient
-from zk import zkocc
 from mysql_flavor import mysql_flavor
 
 master_tablet = tablet.Tablet()
@@ -68,6 +61,9 @@ def setUpModule():
     setup_procs = [master_tablet.init_mysql(),
                    replica_tablet.init_mysql()]
     utils.wait_procs(setup_procs)
+
+    # start a vtctld so the vtctl insert commands are just RPCs, not forks
+    utils.Vtctld().start()
 
     # Start up a master mysql and vttablet
     logging.debug('Setting up tablets')
@@ -142,14 +138,6 @@ class TestUpdateStream(unittest.TestCase):
         "insert into vt_b (eid, name, foo) values (%d, 'name %s', 'foo %s')" %
         (x, x, x) for x in xrange(count)]
 
-  def setUp(self):
-    self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                               'test_nj', 30.0)
-    topology.read_topology(self.vtgate_client)
-
-  def tearDown(self):
-    self.vtgate_client.close()
-
   def _get_master_stream_conn(self):
     protocol, endpoint = master_tablet.update_stream_python_endpoint()
     return update_stream.connect(protocol, endpoint, 30)
@@ -210,8 +198,8 @@ class TestUpdateStream(unittest.TestCase):
     if v['UpdateStreamState'] != 'Enabled':
       self.fail("Update stream service should be 'Enabled' but is '%s'" %
                 v['UpdateStreamState'])
-    self.assertTrue('DML' in v['UpdateStreamEvents'])
-    self.assertTrue('POS' in v['UpdateStreamEvents'])
+    self.assertIn('DML', v['UpdateStreamEvents'])
+    self.assertIn('POS', v['UpdateStreamEvents'])
 
     logging.debug('Testing enable -> disable switch starting @ %s',
                   start_position)
@@ -240,17 +228,12 @@ class TestUpdateStream(unittest.TestCase):
       self.fail("Update stream returned error '%s'" % str(e))
     logging.debug('Streamed %d transactions before exiting', txn_count)
 
-  def _exec_vt_txn(self, query_list=None):
-    if not query_list:
-      return
-    vtdb_conn = vtclient.VtOCCConnection(self.vtgate_client,
-                                         'test_keyspace', '0', 'master', 30)
-    vtdb_conn.connect()
-    vtdb_cursor = vtdb_conn.cursor()
-    vtdb_conn.begin()
-    for q in query_list:
-      vtdb_cursor.execute(q, {})
-    vtdb_conn.commit()
+  def _exec_vt_txn(self, query_list):
+    tid = master_tablet.begin(auto_log=False)
+    for query in query_list:
+      master_tablet.execute(query, transaction_id=tid, auto_log=False)
+    master_tablet.commit(tid, auto_log=False)
+    return
 
   def test_stream_parity(self):
     """test_stream_parity checks the parity of streams received

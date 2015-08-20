@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -70,7 +70,7 @@ func shardFilePath(keyspace, shard string) string {
 }
 
 func tabletDirPath(tabletAlias *pb.TabletAlias) string {
-	return path.Join(tabletsDirPath, topo.TabletAliasString(tabletAlias))
+	return path.Join(tabletsDirPath, topoproto.TabletAliasString(tabletAlias))
 }
 
 func tabletFilePath(tabletAlias *pb.TabletAlias) string {

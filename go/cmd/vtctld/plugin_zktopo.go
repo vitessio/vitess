@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 
@@ -28,7 +29,7 @@ import (
 func init() {
 	// Wait until flags are parsed, so we can check which topo server is in use.
 	servenv.OnRun(func() {
-		if zkServer, ok := topo.GetServer().(*zktopo.Server); ok {
+		if zkServer, ok := topo.GetServer().Impl.(*zktopo.Server); ok {
 			HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(zkServer.GetZConn()))
 		}
 	})
@@ -71,7 +72,7 @@ func (ex ZkExplorer) GetSrvTypePath(cell, keyspace, shard string, tabletType pb.
 
 // GetTabletPath is part of the Explorer interface
 func (ex ZkExplorer) GetTabletPath(alias *pb.TabletAlias) string {
-	return path.Join("/zk", alias.Cell, "vt/tablets", topo.TabletAliasUIDStr(alias))
+	return path.Join("/zk", alias.Cell, "vt/tablets", topoproto.TabletAliasUIDStr(alias))
 }
 
 // GetReplicationSlaves is part of the Explorer interface

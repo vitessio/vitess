@@ -8,6 +8,7 @@
   "FullQuery": "select * from a union select * from b",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -28,6 +29,7 @@
   "FullQuery": "select distinct * from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -48,6 +50,7 @@
   "FullQuery": "select * from a group by b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -68,6 +71,7 @@
   "FullQuery": "select * from a having b = 1 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -88,6 +92,7 @@
   "FullQuery": "select * from a limit 5",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -113,6 +118,7 @@
   "FullQuery": "select * from a.b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -133,6 +139,7 @@
   "FullQuery": "select * from a, b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -153,6 +160,7 @@
   "FullQuery": "select * from a join b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -173,6 +181,7 @@
   "FullQuery": "select * from a right join b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -193,6 +202,7 @@
   "FullQuery": "select * from b limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -213,6 +223,7 @@
   "FullQuery": "select * from (b) limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -233,6 +244,7 @@
   "FullQuery": "select :bv from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -253,6 +265,7 @@
   "FullQuery": "select eid + 1 from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -273,6 +286,7 @@
   "FullQuery": "select case when eid = 1 then 1 end from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -293,6 +307,7 @@
   "FullQuery": "select eid from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0
@@ -315,6 +330,7 @@
   "FullQuery": "select eid as foo from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0
@@ -337,6 +353,7 @@
   "FullQuery": "select * from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -362,6 +379,7 @@
   "FullQuery": "select c.eid from a as c limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0
@@ -384,6 +402,7 @@
   "FullQuery": "select (eid) from a limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -404,6 +423,7 @@
   "FullQuery": "select eid from a limit :#maxLimit for update",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -424,6 +444,7 @@
   "FullQuery": "select eid from a limit :#maxLimit lock in share mode",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -444,6 +465,7 @@
   "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -469,6 +491,7 @@
   "FullQuery": "select * from a where eid = :v1 and id in (:v2, :v3) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -494,6 +517,7 @@
   "FullQuery": "select * from a where name = 'foo' limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": "select eid, id from a use index (b_name) where name = 'foo' limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "b_name",
   "ColumnNumbers": [
     0,
@@ -519,6 +543,7 @@
   "FullQuery": "select eid, name, id from a where name = 'foo' limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "b_name",
   "ColumnNumbers": [
     0,
@@ -543,6 +568,7 @@
   "FullQuery": "select * from d where id = 1 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
@@ -568,6 +594,7 @@
   "FullQuery": "select * from d where id = 1 limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id = 1 limit 1",
+  "UpsertQuery": null,
   "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
@@ -593,6 +620,7 @@
   "FullQuery": "select * from a where eid + 1 = 1 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -618,6 +646,7 @@
   "FullQuery": "select * from a where eid = id limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -643,6 +672,7 @@
   "FullQuery": "select * from d where name between 'foo' and 'bar' limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -668,6 +698,7 @@
   "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -696,6 +727,7 @@
   "FullQuery": "select * from a where eid = 1 and id = 1 limit :#maxLimit",
   "OuterQuery": "select eid, id, name, foo from a where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -724,6 +756,7 @@
   "FullQuery": "select * from d where bar = 'foo' and id = 1 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -749,6 +782,7 @@
   "FullQuery": "select * from d where name = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -776,6 +810,7 @@
   "FullQuery": "select * from d where name = 'foo' limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -803,6 +838,7 @@
   "FullQuery": "select * from d where name = 'foo' limit 0",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -830,6 +866,7 @@
   "FullQuery": "select * from d where name = 'foo' limit :a",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -857,6 +894,7 @@
   "FullQuery": "select * from d where name = 'foo' limit 1, 1",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -894,6 +932,7 @@
   "FullQuery": "select * from d where 'foo' = name and eid = 1 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -919,6 +958,7 @@
   "FullQuery": "select * from d where name in ('foo', 'bar') limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -947,6 +987,7 @@
   "FullQuery": "select * from d where name in (:a, :b) limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -975,6 +1016,7 @@
   "FullQuery": "select * from d where name in ('foo') limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -1002,6 +1044,7 @@
   "FullQuery": "select * from d where name in (:a) limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -1029,6 +1072,7 @@
   "FullQuery": "select * from d where name in (:a) limit 1",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -1054,6 +1098,7 @@
   "FullQuery": "select * from a where eid in (1) and id in (1, 2) limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1079,6 +1124,7 @@
   "FullQuery": "select * from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1104,6 +1150,7 @@
   "FullQuery": "select * from a where (eid, id) in ((1, 1), (2, 2)) limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1129,6 +1176,7 @@
   "FullQuery":"select * from d where foo = 'bar' limit :#maxLimit",
   "OuterQuery": null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers": [
     0,
@@ -1154,6 +1202,7 @@
   "FullQuery": "select * from d as c where c.name = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d as c where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
@@ -1181,6 +1230,7 @@
   "FullQuery": "select * from d where id \u003c 0 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id \u003c 0 limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
@@ -1206,6 +1256,7 @@
   "FullQuery": "select * from d where name in ('foo', id) limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1231,6 +1282,7 @@
   "FullQuery": "select * from d where id between 1 and 2 limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_id) where id between 1 and 2 limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
@@ -1256,6 +1308,7 @@
   "FullQuery": "select * from d where id not between 1 and 2 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1281,6 +1334,7 @@
   "FullQuery": "select * from d where 1 between 1 and 2 limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1306,6 +1360,7 @@
   "FullQuery": "select * from d where name is not null limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1331,6 +1386,7 @@
   "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1356,6 +1412,7 @@
   "FullQuery": "select * from d where bar = 'foo' limit :#maxLimit",
   "OuterQuery": "select name, id, foo, bar from d where :#pk",
   "Subquery": "select name from d use index (d_bar) where bar = 'foo' limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "d_bar",
   "ColumnNumbers": [
     0,
@@ -1381,6 +1438,7 @@
   "FullQuery": "select * from d use index (d_bar_never) where bar = 'foo' limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1406,6 +1464,7 @@
   "FullQuery": "select * from d force index (d_bar_never) where bar = 'foo' limit :#maxLimit",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1435,6 +1494,7 @@
   "FullQuery": "insert into b.a(eid, id) values (1, :a)",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1455,6 +1515,7 @@
   "FullQuery": "insert into a(a.eid, id) values (1, 2)",
   "OuterQuery": "insert into a(a.eid, id) values (1, 2)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1482,6 +1543,7 @@
   "FullQuery": "insert into a(eid, id) values (1, :a)",
   "OuterQuery": "insert into a(eid, id) values (1, :a)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1505,6 +1567,7 @@
   "FullQuery": "insert into a(id) values (1)",
   "OuterQuery": "insert into a(id) values (1)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1528,6 +1591,7 @@
   "FullQuery": "insert into d(id) values (1)",
   "OuterQuery": "insert into d(id) values (1)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1554,6 +1618,7 @@
   "FullQuery": "insert into a(eid, id) values (-1, 2)",
   "OuterQuery": "insert into a(eid, id) values (-1, 2)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1577,6 +1642,7 @@
   "FullQuery": "insert into a(eid, id) values (1, 2)",
   "OuterQuery": "insert into a(eid, id) values (1, 2)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1594,12 +1660,13 @@
 "insert into a (eid, id) values (~1, 2)"
 {
   "PlanId": "PASS_DML",
-  "Reason": "DEFAULT",
+  "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FieldQuery": null,
   "FullQuery": "insert into a(eid, id) values (~1, 2)",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1614,12 +1681,13 @@
 "insert into a (eid, id) values (1+1, 2)"
 {
   "PlanId": "PASS_DML",
-  "Reason": "DEFAULT",
+  "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FieldQuery": null,
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1640,6 +1708,7 @@
   "FullQuery": "insert into c(eid, id) values (1, 2)",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1660,6 +1729,7 @@
   "FullQuery": "insert into a values (1, 2)",
   "OuterQuery": "insert into a values (1, 2)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1674,18 +1744,19 @@
 }
 
 # on dup
-"insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)"
+"insert into b (eid, id) values (1, 2) on duplicate key update name = func(a)"
 {
-  "PlanId": "PASS_DML",
-  "Reason": "UPSERT",
+  "PlanId": "UPSERT_PK",
+  "Reason": "DEFAULT",
   "TableName": "b",
   "FieldQuery": null,
-  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = values(a)",
-  "OuterQuery": null,
+  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update name = func(a)",
+  "OuterQuery": "insert into b(eid, id) values (1, 2)",
   "Subquery": null,
+  "UpsertQuery": "update b set name = func(a) where :#pk",
   "IndexUsed": "",
   "ColumnNumbers": null,
-  "PKValues": null,
+  "PKValues": [1, 2],
   "Limit": null,
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
@@ -1696,16 +1767,38 @@
 # on dup pk change
 "insert into b (eid, id) values (1, 2) on duplicate key update eid = 2"
 {
-  "PlanId": "PASS_DML",
-  "Reason": "UPSERT",
+  "PlanId": "UPSERT_PK",
+  "Reason": "DEFAULT",
   "TableName": "b",
   "FieldQuery": null,
   "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = 2",
-  "OuterQuery": null,
+  "OuterQuery": "insert into b(eid, id) values (1, 2)",
   "Subquery": null,
+  "UpsertQuery": "update b set eid = 2 where :#pk",
   "IndexUsed": "",
   "ColumnNumbers": null,
-  "PKValues": null,
+  "PKValues": [1, 2],
+  "Limit": null,
+  "SecondaryPKValues": [2, null],
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# on dup complex pk change
+"insert into b (id, eid) values (1, 2) on duplicate key update eid = func(a)"
+{
+  "PlanId": "PASS_DML",
+  "Reason": "PK_CHANGE",
+  "TableName": "b",
+  "FieldQuery": null,
+  "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = func(a)",
+  "OuterQuery": null,
+  "Subquery": null,
+  "UpsertQuery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": [2, 1],
   "Limit": null,
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
@@ -1713,16 +1806,38 @@
   "SetValue": null
 }
 
-# on dup complex pk change
-"insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)"
+# on dup multi-row
+"insert into b (id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)"
 {
   "PlanId": "PASS_DML",
   "Reason": "UPSERT",
   "TableName": "b",
   "FieldQuery": null,
-  "FullQuery": "insert into b(id, eid) values (1, 2) on duplicate key update eid = values(a)",
+  "FullQuery": "insert into b(id, eid) values (1, 2), (2, 3) on duplicate key update name = func(a)",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": [[2,3],[1,2]],
+  "Limit": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# on dup subquery
+"insert into b (id, eid) select * from a on duplicate key update name = func(a)"
+{
+  "PlanId": "PASS_DML",
+  "Reason": "UPSERT",
+  "TableName": "b",
+  "FieldQuery": null,
+  "FullQuery": "insert into b(id, eid) select * from a on duplicate key update name = func(a)",
+  "OuterQuery": null,
+  "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1743,6 +1858,7 @@
   "FullQuery": "insert into b(eid, id) select * from a",
   "OuterQuery": "insert into b(eid, id) values :#values",
   "Subquery": "select * from a limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1769,6 +1885,7 @@
   "FullQuery": "insert into b select * from a",
   "OuterQuery": "insert into b values :#values",
   "Subquery": "select * from a limit :#maxLimit",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
@@ -1795,6 +1912,7 @@
   "FullQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "OuterQuery": "insert into b(eid, id) values (1, 2), (3, 4)",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1824,6 +1942,7 @@
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1844,6 +1963,7 @@
   "FullQuery": "update b set eid = 1",
   "OuterQuery": "update b set eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1871,6 +1991,7 @@
   "FullQuery": "update b set a.eid = 1",
   "OuterQuery": "update b set a.eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1894,6 +2015,7 @@
   "FullQuery": "update b set eid = foo()",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1914,6 +2036,7 @@
   "FullQuery": "update a set name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1934,6 +2057,7 @@
   "FullQuery": "update a set name = 'foo' where eid + 1 = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -1954,6 +2078,7 @@
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -1977,6 +2102,7 @@
   "FullQuery": "update a set a.name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set a.name = 'foo' where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -2000,6 +2126,7 @@
   "FullQuery": "update a set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2020,6 +2147,7 @@
   "FullQuery": "update a set name = 'foo' where eid = 1 limit 10",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit 10 for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2040,6 +2168,7 @@
   "FullQuery": "update a set name = 'foo' where eid = 1 and name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
   "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2060,6 +2189,7 @@
   "FullQuery": "update c set eid = 1",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2080,6 +2210,7 @@
   "FullQuery": "delete from b.a where eid = 1 and id = 1",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2100,6 +2231,7 @@
   "FullQuery": "delete from a",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2120,6 +2252,7 @@
   "FullQuery": "delete from a where eid + 1 = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2140,6 +2273,7 @@
   "FullQuery": "delete from a where eid = 1 and id = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
@@ -2163,6 +2297,7 @@
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2183,6 +2318,7 @@
   "FullQuery": "delete from a where eid = 1 and name = 'foo'",
   "OuterQuery": "delete from a where :#pk",
   "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2203,6 +2339,7 @@
   "FullQuery": "delete from c",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2223,6 +2360,7 @@
   "FullQuery": "set a = 1",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2243,6 +2381,7 @@
   "FullQuery": "set a = 1.2",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2263,6 +2402,7 @@
   "FullQuery": "set a = 'b'",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2283,6 +2423,7 @@
   "FullQuery": "set a = 1, b = 2",
   "OuterQuery": null,
   "Subquery": null,
+  "UpsertQuery": null,
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": null,
@@ -2303,6 +2444,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2323,6 +2465,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2343,6 +2486,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2363,6 +2507,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2383,6 +2528,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2403,6 +2549,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2423,6 +2570,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2443,6 +2591,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2463,6 +2612,7 @@
   "FullQuery":null,
   "OuterQuery":null,
   "Subquery":null,
+  "UpsertQuery": null,
   "IndexUsed":"",
   "ColumnNumbers":null,
   "PKValues":null,
@@ -2479,4 +2629,4 @@
 
 # syntax error
 "syntax error"
-"syntax error at position 7 near syntax"
+"syntax error at position 7 near 'syntax'"

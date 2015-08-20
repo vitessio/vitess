@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -18,7 +19,7 @@ import (
 
 // TabletTypeToProto turns a TabletType into a proto
 func TabletTypeToProto(t TabletType) pb.TabletType {
-	if result, err := ParseTabletType(string(t)); err != nil {
+	if result, err := topoproto.ParseTabletType(string(t)); err != nil {
 		panic(fmt.Errorf("unknown tablet type: %v", t))
 	} else {
 		return result

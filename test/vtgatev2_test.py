@@ -28,7 +28,6 @@ from vtdb import dbexceptions
 from vtdb import vtdb_logger
 from vtdb import vtgatev2
 from vtdb import vtgate_cursor
-from zk import zkocc
 
 conn_class = vtgatev2
 
@@ -291,7 +290,7 @@ class TestVTGateFunctions(unittest.TestCase):
         # Verify keyspace id
         for result in cursor.results:
           kid = result[2]
-          self.assertTrue(kid in shard_kid_map[shard_names[shard_index]])
+          self.assertIn(kid, shard_kid_map[shard_names[shard_index]])
       # Do a cross shard range query and assert all rows are fetched
       cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
                                   keyranges=[get_keyrange('75-95')])

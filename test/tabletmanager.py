@@ -7,10 +7,6 @@ warnings.simplefilter("ignore")
 
 import json
 import logging
-import os
-import signal
-from subprocess import PIPE
-import threading
 import time
 import unittest
 import urllib
@@ -21,7 +17,6 @@ import utils
 import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
-from vtdb import dbexceptions
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -242,22 +237,23 @@ class TestTabletManager(unittest.TestCase):
     # TODO(szopa): Test that non-authenticated queries do not pass
     # through (when we get to that point).
 
-  def _check_string_in_hook_result(self, text, expected):
-    if isinstance(expected, basestring):
-      expected = [expected]
-    for exp in expected:
-      if exp in text:
-        return
-    logging.warning("ExecuteHook output:\n%s", text)
-    self.fail("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
-
-  def _run_hook(self, params, expectedStrings):
-    out, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook',
-                                tablet_62344.tablet_alias] + params,
-                               mode=utils.VTCTL_VTCTL, trap_output=True,
-                               raise_on_error=False)
-    for expected in expectedStrings:
-      self._check_string_in_hook_result(err, expected)
+  def _run_hook(self, params, expectedStatus, expectedStdout, expectedStderr):
+    hr = utils.run_vtctl_json(['ExecuteHook', tablet_62344.tablet_alias] +
+                              params)
+    self.assertEqual(hr['ExitStatus'], expectedStatus)
+    if isinstance(expectedStdout, basestring):
+      if expectedStdout[-1:] == '%':
+        self.assertEqual(hr['Stdout'][:len(expectedStdout)-1], expectedStdout[:len(expectedStdout)-1])
+      else:
+        self.assertEqual(hr['Stdout'], expectedStdout)
+    else:
+      found = False
+      for exp in expectedStdout:
+        if hr['Stdout'] == exp:
+          found = True
+          break
+      if not found:
+        self.assertFail('cannot find expected %s in %s' % (str(expectedStdout), hr['Stdout']))
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -268,39 +264,40 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # test a regular program works
-    self._run_hook(['test.sh', '--flag1', '--param1=hello'], [
-        '"ExitStatus": 0',
-        ['"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
-         '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
-         ],
-        '"Stderr": ""',
-        ])
+    self._run_hook(['test.sh', '--flag1', '--param1=hello'], 0,
+                   ['TABLET_ALIAS: test_nj-0000062344\n' +
+                    'PARAM: --flag1\n' +
+                    'PARAM: --param1=hello\n',
+                    'TABLET_ALIAS: test_nj-0000062344\n' +
+                    'PARAM: --param1=hello\n' +
+                    'PARAM: --flag1\n'],
+                   '')
 
     # test stderr output
-    self._run_hook(['test.sh', '--to-stderr'], [
-        '"ExitStatus": 0',
-        '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --to-stderr\\n"',
-        '"Stderr": "ERR: --to-stderr\\n"',
-        ])
+    self._run_hook(['test.sh', '--to-stderr'], 0,
+                   'TABLET_ALIAS: test_nj-0000062344\n' +
+                   'PARAM: --to-stderr\n',
+                   'ERR: --to-stderr\n')
 
     # test commands that fail
-    self._run_hook(['test.sh', '--exit-error'], [
-        '"ExitStatus": 1',
-        '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --exit-error\\n"',
-        '"Stderr": "ERROR: exit status 1\\n"',
-        ])
+    self._run_hook(['test.sh', '--exit-error'], 1,
+                   'TABLET_ALIAS: test_nj-0000062344\n' +
+                   'PARAM: --exit-error\n',
+                   'ERROR: exit status 1\n')
 
     # test hook that is not present
-    self._run_hook(['not_here.sh'], [
-        '"ExitStatus": -1',
-        '"Stdout": "Skipping missing hook: /', # cannot go further, local path
-        '"Stderr": ""',
-        ])
+    self._run_hook(['not_here.sh'], -1,
+                   'Skipping missing hook: /%',  # cannot go further, local path
+                   '')
 
     # test hook with invalid name
-    self._run_hook(['/bin/ls'], [
-        "action failed: ExecuteHook hook name cannot have a '/' in it",
-        ])
+    _, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook',
+                              tablet_62344.tablet_alias,
+                              '/bin/ls'],
+                             mode=utils.VTCTL_VTCTL, trap_output=True,
+                             raise_on_error=False)
+    expected = "action failed: ExecuteHook hook name cannot have a '/' in it"
+    self.assertIn(expected, err)
 
     tablet_62344.kill_vttablet()
 

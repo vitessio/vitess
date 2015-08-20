@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -241,7 +242,7 @@ func main() {
 			http.Error(w, "no alias provided", http.StatusBadRequest)
 			return
 		}
-		tabletAlias, err := topo.ParseTabletAliasString(alias)
+		tabletAlias, err := topoproto.ParseTabletAlias(alias)
 		if err != nil {
 			http.Error(w, "bad alias provided", http.StatusBadRequest)
 			return
@@ -327,10 +328,6 @@ func main() {
 			httpErrorf(w, r, "cannot parse form: %s", err)
 			return
 		}
-		schemafier, ok := ts.(topo.Schemafier)
-		if !ok {
-			httpErrorf(w, r, "%s", fmt.Errorf("%T doesn't support schemafier API", ts))
-		}
 		var data struct {
 			Error         error
 			Input, Output string
@@ -339,9 +336,9 @@ func main() {
 		switch r.Method {
 		case "POST":
 			data.Input = r.FormValue("vschema")
-			data.Error = schemafier.SaveVSchema(ctx, data.Input)
+			data.Error = ts.SaveVSchema(ctx, data.Input)
 		}
-		vschema, err := schemafier.GetVSchema(ctx)
+		vschema, err := ts.GetVSchema(ctx)
 		if err != nil {
 			if data.Error == nil {
 				data.Error = fmt.Errorf("Error fetching schema: %s", err)

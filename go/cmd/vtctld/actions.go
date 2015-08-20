@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -143,7 +144,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName string, tabletAlias *pb.TabletAlias, r *http.Request) *ActionResult {
 	result := &ActionResult{
 		Name:       actionName,
-		Parameters: topo.TabletAliasString(tabletAlias),
+		Parameters: topoproto.TabletAliasString(tabletAlias),
 	}
 
 	action, ok := ar.tabletActions[actionName]

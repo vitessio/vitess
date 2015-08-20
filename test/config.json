@@ -17,9 +17,6 @@
     "vertical_split": {
       "File": "vertical_split.py"
     },
-    "vertical_split_vtgate": {
-      "File": "vertical_split_vtgate.py"
-    },
     "schema": {
       "File": "schema.py"
     },
@@ -70,9 +67,6 @@
     },
     "vtgatev2": {
       "File": "vtgatev2_test.py"
-    },
-    "zkocc": {
-      "File": "zkocc_test.py"
     },
     "initial_sharding_bytes": {
       "File": "initial_sharding_bytes.py"

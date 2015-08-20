@@ -264,7 +264,7 @@ func (m *Target) String() string { return proto.CompactTextString(m) }
 func (*Target) ProtoMessage()    {}
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
-// caller. If possible, this enformation is secure. For instance,
+// caller. If possible, this information is secure. For instance,
 // if using unique certificates that guarantee that VTGate->VTTablet
 // traffic cannot be spoofed, then VTTablet can trust this information,
 // and VTTablet will use it for tablet ACLs, for instance.
@@ -799,12 +799,25 @@ type RealtimeStats struct {
 	// we do not send queries to servers that are not healthy.
 	HealthError string `protobuf:"bytes,1,opt,name=health_error" json:"health_error,omitempty"`
 	// seconds_behind_master is populated for slaves only. It indicates
-	// how far nehind on replication a slave currently is.  It is used
+	// how far behind on (MySQL) replication a slave currently is.  It is used
 	// by clients for subset selection (so we don't try to send traffic
 	// to tablets that are too far behind).
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	// TODO(mberlin): Let's switch it to int64 instead?
 	SecondsBehindMaster uint32 `protobuf:"varint,2,opt,name=seconds_behind_master" json:"seconds_behind_master,omitempty"`
+	// bin_log_players_count is the number of currently running binlog players.
+	// if the value is 0, it means that filtered replication is currently not
+	// running on the tablet. If >0, filtered replication is running.
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	BinlogPlayersCount int32 `protobuf:"varint,3,opt,name=binlog_players_count" json:"binlog_players_count,omitempty"`
+	// seconds_behind_master_filtered_replication is populated for the receiving
+	// master of an ongoing filtered replication only.
+	// It specifies how far the receiving master lags behind the sending master.
+	// NOTE: This field must not be evaluated if "health_error" is not empty.
+	// NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
+	SecondsBehindMasterFilteredReplication int64 `protobuf:"varint,4,opt,name=seconds_behind_master_filtered_replication" json:"seconds_behind_master_filtered_replication,omitempty"`
 	// cpu_usage is used for load-based balancing
-	CpuUsage float64 `protobuf:"fixed64,3,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
+	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage" json:"cpu_usage,omitempty"`
 }
 
 func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }

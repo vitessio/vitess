@@ -50,6 +50,9 @@ const (
 	// ErrOptionPreventsStatement is C.ER_OPTION_PREVENTS_STATEMENT
 	ErrOptionPreventsStatement = C.ER_OPTION_PREVENTS_STATEMENT
 
+	// ErrDataTooLong is C.ER_DATA_TOO_LONG
+	ErrDataTooLong = C.ER_DATA_TOO_LONG
+
 	// ErrServerLost is C.CR_SERVER_LOST.
 	// It's hard-coded for now because it causes problems on import.
 	ErrServerLost = 2013

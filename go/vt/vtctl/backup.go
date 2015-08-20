@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
@@ -35,7 +35,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("action ListBackups requires <keyspace/shard>")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("action RemoveBackup requires <keyspace/shard> <backup name>")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}

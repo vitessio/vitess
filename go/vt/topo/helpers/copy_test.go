@@ -20,7 +20,7 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
+func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	fromConn := fakezk.NewConn()
 	fromTS := zktopo.NewServer(fromConn)
 
@@ -40,7 +40,8 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0", &pb.Shard{Cells: []string{"test_cell"}}); err != nil {
 		t.Fatalf("cannot create shard: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+	tts := topo.Server{Impl: fromTS}
+	if err := tts.CreateTablet(ctx, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
@@ -60,7 +61,7 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Server, topo.Server) {
 	}); err != nil {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
-	if err := topo.CreateTablet(ctx, fromTS, &pb.Tablet{
+	if err := tts.CreateTablet(ctx, &pb.Tablet{
 		Alias: &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  234,
@@ -117,12 +118,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
 	CopyShards(ctx, fromTS, toTS, false)
-	si, err := toTS.GetShard(ctx, "test_keyspace", "0")
+	s, _, err := toTS.GetShard(ctx, "test_keyspace", "0")
 	if err != nil {
 		t.Fatalf("cannot read shard: %v", err)
 	}
-	if len(si.Cells) != 1 || si.Cells[0] != "test_cell" {
-		t.Fatalf("bad shard data: %v", *si)
+	if len(s.Cells) != 1 || s.Cells[0] != "test_cell" {
+		t.Fatalf("bad shard data: %v", *s)
 	}
 
 	// check ShardReplication copy

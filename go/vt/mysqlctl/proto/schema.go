@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/concurrency"
 )
 
@@ -57,10 +56,6 @@ type SchemaDefinition struct {
 
 	// the md5 of the concatenation of TableDefinition.Schema
 	Version string
-}
-
-func (sd *SchemaDefinition) String() string {
-	return jscfg.ToJSON(sd)
 }
 
 // FilterTables returns a copy which includes only
@@ -160,13 +155,13 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 // All SQL statements will have {{.DatabaseName}} in place of the actual db name.
 func (sd *SchemaDefinition) ToSQLStrings() []string {
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
-	createViewSql := make([]string, 0, len(sd.TableDefinitions))
+	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
 	sqlStrings = append(sqlStrings, sd.DatabaseSchema)
 
 	for _, td := range sd.TableDefinitions {
 		if td.Type == TableView {
-			createViewSql = append(createViewSql, td.Schema)
+			createViewSQL = append(createViewSQL, td.Schema)
 		} else {
 			lines := strings.Split(td.Schema, "\n")
 			for i, line := range lines {
@@ -178,7 +173,7 @@ func (sd *SchemaDefinition) ToSQLStrings() []string {
 		}
 	}
 
-	return append(sqlStrings, createViewSql...)
+	return append(sqlStrings, createViewSQL...)
 }
 
 // DiffSchema generates a report on what's different between two SchemaDefinitions
@@ -269,8 +264,4 @@ type SchemaChange struct {
 type SchemaChangeResult struct {
 	BeforeSchema *SchemaDefinition
 	AfterSchema  *SchemaDefinition
-}
-
-func (scr *SchemaChangeResult) String() string {
-	return jscfg.ToJSON(scr)
 }

@@ -14,13 +14,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/worker/events"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -117,7 +117,7 @@ func (scw *SplitCloneWorker) setErrorState(err error) {
 func (scw *SplitCloneWorker) formatSources() string {
 	result := ""
 	for _, alias := range scw.sourceAliases {
-		result += " " + topo.TabletAliasString(alias)
+		result += " " + topoproto.TabletAliasString(alias)
 	}
 	return result
 }
@@ -235,7 +235,7 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	if os == nil {
 		return fmt.Errorf("the specified shard %v/%v is not in any overlapping shard", scw.keyspace, scw.shard)
 	}
-	scw.wr.Logger().Infof("Found overlapping shards: %v\n", jscfg.ToJSON(os))
+	scw.wr.Logger().Infof("Found overlapping shards: %+v\n", os)
 
 	// one side should have served types, the other one none,
 	// figure out wich is which, then double check them all
@@ -280,7 +280,7 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("FindWorkerTablet() failed for %v/%v/%v: %v", scw.cell, si.Keyspace(), si.ShardName(), err)
 		}
-		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topo.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
+		scw.wr.Logger().Infof("Using tablet %v as source for %v/%v", topoproto.TabletAliasString(scw.sourceAliases[i]), si.Keyspace(), si.ShardName())
 	}
 
 	// get the tablet info for them, and stop their replication
@@ -288,20 +288,20 @@ func (scw *SplitCloneWorker) findTargets(ctx context.Context) error {
 	for i, alias := range scw.sourceAliases {
 		scw.sourceTablets[i], err = scw.wr.TopoServer().GetTablet(ctx, alias)
 		if err != nil {
-			return fmt.Errorf("cannot read tablet %v: %v", topo.TabletAliasString(alias), err)
+			return fmt.Errorf("cannot read tablet %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		err := scw.wr.TabletManagerClient().StopSlave(shortCtx, scw.sourceTablets[i])
 		cancel()
 		if err != nil {
-			return fmt.Errorf("cannot stop replication on tablet %v", topo.TabletAliasString(alias))
+			return fmt.Errorf("cannot stop replication on tablet %v", topoproto.TabletAliasString(alias))
 		}
 
 		wrangler.RecordStartSlaveAction(scw.cleaner, scw.sourceTablets[i])
 		action, err := wrangler.FindChangeSlaveTypeActionByTarget(scw.cleaner, alias)
 		if err != nil {
-			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topo.TabletAliasString(alias), err)
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 		action.TabletType = pb.TabletType_SPARE
 	}
@@ -384,10 +384,10 @@ func (scw *SplitCloneWorker) copy(ctx context.Context) error {
 	sourceSchemaDefinition, err := scw.wr.GetSchema(shortCtx, scw.sourceAliases[0], nil, scw.excludeTables, true)
 	cancel()
 	if err != nil {
-		return fmt.Errorf("cannot get schema from source %v: %v", topo.TabletAliasString(scw.sourceAliases[0]), err)
+		return fmt.Errorf("cannot get schema from source %v: %v", topoproto.TabletAliasString(scw.sourceAliases[0]), err)
 	}
 	if len(sourceSchemaDefinition.TableDefinitions) == 0 {
-		return fmt.Errorf("no tables matching the table filter in tablet %v", topo.TabletAliasString(scw.sourceAliases[0]))
+		return fmt.Errorf("no tables matching the table filter in tablet %v", topoproto.TabletAliasString(scw.sourceAliases[0]))
 	}
 	scw.wr.Logger().Infof("Source tablet 0 has %v tables to copy", len(sourceSchemaDefinition.TableDefinitions))
 	scw.Mu.Lock()

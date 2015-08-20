@@ -13,13 +13,8 @@ import (
 )
 
 // CheckVSchema runs the tests on the VSchema part of the API
-func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
-	schemafier, ok := ts.(topo.Schemafier)
-	if !ok {
-		t.Errorf("%T is not a Schemafier", ts)
-		return
-	}
-	got, err := schemafier.GetVSchema(ctx)
+func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Impl) {
+	got, err := ts.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -28,12 +23,12 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema(ctx, `{ "Keyspaces": {}}`)
+	err = ts.SaveVSchema(ctx, `{ "Keyspaces": {}}`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = schemafier.GetVSchema(ctx)
+	got, err = ts.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -42,12 +37,12 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema(ctx, `{ "Keyspaces": { "aa": { "Sharded": false}}}`)
+	err = ts.SaveVSchema(ctx, `{ "Keyspaces": { "aa": { "Sharded": false}}}`)
 	if err != nil {
 		t.Error(err)
 	}
 
-	got, err = schemafier.GetVSchema(ctx)
+	got, err = ts.GetVSchema(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +51,7 @@ func CheckVSchema(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetVSchema: %s, want %s", got, want)
 	}
 
-	err = schemafier.SaveVSchema(ctx, "invalid")
+	err = ts.SaveVSchema(ctx, "invalid")
 	want = "Unmarshal failed:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("SaveVSchema: %v, must start with %s", err, want)

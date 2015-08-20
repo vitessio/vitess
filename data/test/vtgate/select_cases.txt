@@ -2,7 +2,7 @@
 "the quick brown fox"
 {
   "ID":"NoPlan",
-  "Reason":"syntax error at position 4 near the",
+  "Reason":"syntax error at position 4 near 'the'",
   "Table": "",
   "Original":"the quick brown fox",
   "Rewritten":"",

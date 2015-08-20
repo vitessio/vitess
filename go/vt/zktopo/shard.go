@@ -10,9 +10,7 @@ import (
 	"path"
 	"sort"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -56,18 +54,13 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
-
-	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, value, -1),
-		Status:    "created",
-	})
 	return nil
 }
 
 // UpdateShard is part of the topo.Server interface
-func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existingVersion int64) (int64, error) {
-	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	data, err := json.MarshalIndent(si.Shard, "", "  ")
+func (zkts *Server) UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (int64, error) {
+	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
@@ -78,11 +71,6 @@ func (zkts *Server) UpdateShard(ctx context.Context, si *topo.ShardInfo, existin
 		}
 		return -1, err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		ShardInfo: *si,
-		Status:    "updated",
-	})
 	return int64(stat.Version()), nil
 }
 
@@ -103,22 +91,22 @@ func (zkts *Server) ValidateShard(ctx context.Context, keyspace, shard string) e
 }
 
 // GetShard is part of the topo.Server interface
-func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+func (zkts *Server) GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, stat, err := zkts.zconn.Get(shardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
 	s := &pb.Shard{}
 	if err = json.Unmarshal([]byte(data), s); err != nil {
-		return nil, fmt.Errorf("bad shard data %v", err)
+		return nil, 0, fmt.Errorf("bad shard data %v", err)
 	}
 
-	return topo.NewShardInfo(keyspace, shard, s, int64(stat.Version())), nil
+	return s, int64(stat.Version()), nil
 }
 
 // GetShardNames is part of the topo.Server interface
@@ -146,10 +134,5 @@ func (zkts *Server) DeleteShard(ctx context.Context, keyspace, shard string) err
 		}
 		return err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		ShardInfo: *topo.NewShardInfo(keyspace, shard, nil, -1),
-		Status:    "deleted",
-	})
 	return nil
 }

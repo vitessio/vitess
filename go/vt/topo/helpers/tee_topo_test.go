@@ -20,7 +20,7 @@ import (
 )
 
 type fakeServer struct {
-	topo.Server
+	topo.Impl
 	localCells []string
 }
 
@@ -28,7 +28,7 @@ func (s fakeServer) GetKnownCells(ctx context.Context) ([]string, error) {
 	return s.localCells, nil
 }
 
-func newFakeTeeServer(t *testing.T) topo.Server {
+func newFakeTeeServer(t *testing.T) topo.Impl {
 	cells := []string{"test", "global"} // global has to be last
 
 	zconn1 := fakezk.NewConn()
@@ -42,8 +42,8 @@ func newFakeTeeServer(t *testing.T) topo.Server {
 			t.Fatalf("cannot init ZooKeeper: %v", err)
 		}
 	}
-	s1 := fakeServer{Server: zktopo.NewServer(zconn1), localCells: cells[:len(cells)-1]}
-	s2 := fakeServer{Server: zktopo.NewServer(zconn2), localCells: cells[:len(cells)-1]}
+	s1 := fakeServer{Impl: zktopo.NewServer(zconn1), localCells: cells[:len(cells)-1]}
+	s2 := fakeServer{Impl: zktopo.NewServer(zconn2), localCells: cells[:len(cells)-1]}
 
 	return NewTee(s1, s2, false)
 }
@@ -72,10 +72,10 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(ctx, t, ts)
 }
 
-func TestWatchEndPoints(t *testing.T) {
+func TestWatchSrvKeyspace(t *testing.T) {
 	zktopo.WatchSleepDuration = 2 * time.Millisecond
 	ts := newFakeTeeServer(t)
-	test.CheckWatchEndPoints(context.Background(), t, ts)
+	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
 }
 
 func TestShardReplication(t *testing.T) {

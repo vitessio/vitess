@@ -78,12 +78,12 @@ func GenerateSelectOuterQuery(sel *sqlparser.Select, tableInfo *schema.Table) *s
 // GenerateInsertOuterQuery generates the outer query for inserts.
 func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("insert %vinto %v%v values %a%v",
+	buf.Myprintf("insert %v%sinto %v%v values %a",
 		ins.Comments,
+		ins.Ignore,
 		ins.Table,
 		ins.Columns,
 		":#values",
-		ins.OnDup,
 	)
 	return buf.ParsedQuery()
 }
