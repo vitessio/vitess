@@ -249,7 +249,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 			keyspacesToRebuild[ti.Keyspace] = true
 			shardPath := ti.Keyspace + "/" + ti.Shard
 			if !shardsCreated[shardPath] {
-				if err := topo.CreateShard(ctx, wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
+				if err := wr.ts.CreateShard(ctx, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
 					wr.logger.Warningf("failed re-creating shard %v: %v", shardPath, err)
 					hasErr = true
 				} else {

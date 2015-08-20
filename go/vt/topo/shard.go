@@ -264,7 +264,7 @@ func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, u
 // This should be called while holding the keyspace lock for the shard.
 // (call topotools.CreateShard to do that for you).
 // In unit tests (that are not parallel), this function can be called directly.
-func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
+func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error {
 	name, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
@@ -277,7 +277,7 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 		pb.TabletType_REPLICA: true,
 		pb.TabletType_RDONLY:  true,
 	}
-	s := &pb.Shard{
+	value := &pb.Shard{
 		KeyRange: keyRange,
 	}
 
@@ -298,12 +298,22 @@ func CreateShard(ctx context.Context, ts Server, keyspace, shard string) error {
 	}
 
 	for st := range servedTypes {
-		s.ServedTypes = append(s.ServedTypes, &pb.Shard_ServedType{
+		value.ServedTypes = append(value.ServedTypes, &pb.Shard_ServedType{
 			TabletType: st,
 		})
 	}
 
-	return ts.CreateShard(ctx, keyspace, name, s)
+	if err := ts.Impl.CreateShard(ctx, keyspace, name, value); err != nil {
+		return err
+	}
+
+	event.Dispatch(&events.ShardChange{
+		KeyspaceName: keyspace,
+		ShardName:    shard,
+		Shard:        value,
+		Status:       "created",
+	})
+	return nil
 }
 
 // GetTabletControl returns the Shard_TabletControl for the given tablet type,

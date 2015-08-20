@@ -29,13 +29,6 @@ func (s *Server) CreateShard(ctx context.Context, keyspace, shard string, value 
 	if err = initLockFile(global, shardDirPath(keyspace, shard)); err != nil {
 		return err
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        value,
-		Status:       "created",
-	})
 	return nil
 }
 

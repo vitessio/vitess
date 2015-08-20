@@ -36,10 +36,13 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
+	shard := &pb.Shard{
+		KeyRange: newKeyRange3("b0-c0"),
+	}
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
-	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != topo.ErrNodeExists {
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != topo.ErrNodeExists {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
@@ -47,7 +50,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err := ts.DeleteShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("DeleteShard: %v", err)
 	}
-	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
@@ -55,7 +58,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace"); err != nil {
 		t.Fatalf("DeleteKeyspaceShards: %v", err)
 	}
-	if err := topo.CreateShard(ctx, tts, "test_keyspace", "b0-c0"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 

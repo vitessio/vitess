@@ -83,7 +83,7 @@ func CopyShards(ctx context.Context, fromTS, toTS topo.Impl, deleteKeyspaceShard
 				wg.Add(1)
 				go func(keyspace, shard string) {
 					defer wg.Done()
-					if err := topo.CreateShard(ctx, topo.Server{Impl: toTS}, keyspace, shard); err != nil {
+					if err := toTS.CreateShard(ctx, keyspace, shard, &pb.Shard{}); err != nil {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {

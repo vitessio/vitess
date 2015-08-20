@@ -56,13 +56,6 @@ func (zkts *Server) CreateShard(ctx context.Context, keyspace, shard string, val
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
-
-	event.Dispatch(&events.ShardChange{
-		KeyspaceName: keyspace,
-		ShardName:    shard,
-		Shard:        value,
-		Status:       "created",
-	})
 	return nil
 }
 

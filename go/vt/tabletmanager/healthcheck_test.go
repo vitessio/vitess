@@ -120,7 +120,7 @@ func createTestAgent(ctx context.Context, t *testing.T) *ActionAgent {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	if err := topo.CreateShard(ctx, ts, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 

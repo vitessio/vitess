@@ -42,11 +42,11 @@ func TestAPI(t *testing.T) {
 
 	// Populate topo.
 	ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{ShardingColumnName: "shardcol"})
-	ts.CreateShard(ctx, "ks1", "-80", &pb.Shard{
+	ts.Impl.CreateShard(ctx, "ks1", "-80", &pb.Shard{
 		Cells:    cells,
 		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
 	})
-	ts.CreateShard(ctx, "ks1", "80-", &pb.Shard{
+	ts.Impl.CreateShard(ctx, "ks1", "80-", &pb.Shard{
 		Cells:    cells,
 		KeyRange: &pb.KeyRange{Start: []byte{0x80}, End: nil},
 	})

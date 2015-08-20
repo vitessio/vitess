@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -27,7 +26,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER)
@@ -95,7 +94,7 @@ func TestReparentTablet(t *testing.T) {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient(), time.Second)
 
 	// create shard and tablets
-	if err := topo.CreateShard(ctx, ts, "test_keyspace", "0"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 	master := NewFakeTablet(t, wr, "cell1", 1, pb.TabletType_MASTER)
