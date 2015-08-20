@@ -435,7 +435,7 @@ func fmtAction(action *actionnode.ActionNode) string {
 }
 
 func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletAliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.TopoServer(), keyspace, shard)
+	tabletAliases, err := wr.TopoServer().FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -454,7 +454,7 @@ func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string)
 }
 
 func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*pb.TabletAlias) error {
-	tabletMap, err := topo.GetTabletMap(ctx, wr.TopoServer(), tabletAliases)
+	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
 	if err != nil {
 		return err
 	}

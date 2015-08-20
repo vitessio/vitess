@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -67,7 +66,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(ctx context.Context, keyspace string) 
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shardNames[0])
+	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}

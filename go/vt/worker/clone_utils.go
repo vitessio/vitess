@@ -62,7 +62,7 @@ func resolveDestinationShardMaster(ctx context.Context, keyspace, shard string, 
 func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, wr *wrangler.Wrangler) (reloadAliases []*pb.TabletAlias, reloadTablets map[pb.TabletAlias]*topo.TabletInfo, err error) {
 	// Keep a long timeout, because we really don't want the copying to succeed, and then the worker to fail at the end.
 	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	reloadAliases, err = topo.FindAllTabletAliasesInShard(shortCtx, wr.TopoServer(), keyspace, shard)
+	reloadAliases, err = wr.TopoServer().FindAllTabletAliasesInShard(shortCtx, keyspace, shard)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot find all reload target tablets in %v/%v: %v", keyspace, shard, err)
@@ -70,7 +70,7 @@ func resolveReloadTabletsForShard(ctx context.Context, keyspace, shard string, w
 	wr.Logger().Infof("Found %v reload target aliases in shard %v/%v", len(reloadAliases), keyspace, shard)
 
 	shortCtx, cancel = context.WithTimeout(ctx, 5*time.Minute)
-	reloadTablets, err = topo.GetTabletMap(shortCtx, wr.TopoServer(), reloadAliases)
+	reloadTablets, err = wr.TopoServer().GetTabletMap(shortCtx, reloadAliases)
 	cancel()
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read all reload target tablets in %v/%v: %v",

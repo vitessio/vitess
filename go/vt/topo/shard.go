@@ -77,12 +77,8 @@ func removeCells(cells, toRemove, fullList []string) ([]string, bool) {
 }
 
 // ParseKeyspaceShardString parse a "keyspace/shard" string and extract
-// both keyspace and shard. It also returns empty keyspace and shard if
-// input param looks like a old zk path
+// both keyspace and shard
 func ParseKeyspaceShardString(param string) (string, string, error) {
-	if param[0] == '/' {
-		return "", "", fmt.Errorf("Invalid keyspace/shard: %v, Note: old style zk path is no longer supported, please use a keyspace/shard instead", param)
-	}
 	keySpaceShard := strings.Split(param, "/")
 	if len(keySpaceShard) != 2 {
 		return "", "", fmt.Errorf("Invalid shard path: %v", param)
@@ -245,7 +241,7 @@ func (ts Server) UpdateShard(ctx context.Context, si *ShardInfo) error {
 // update function on it, and then write it back. If the write fails due to
 // a version mismatch, it will re-read the record and retry the update.
 // If the update succeeds, it returns the updated ShardInfo.
-func UpdateShardFields(ctx context.Context, ts Server, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
+func (ts Server) UpdateShardFields(ctx context.Context, keyspace, shard string, update func(*pb.Shard) error) (*ShardInfo, error) {
 	for {
 		si, err := ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
@@ -552,8 +548,8 @@ func InCellList(cell string, cells []string) bool {
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard string) ([]*pb.TabletAlias, error) {
-	return FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, nil)
+func (ts Server) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*pb.TabletAlias, error) {
+	return ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, nil)
 }
 
 // FindAllTabletAliasesInShardByCell uses the replication graph to find all the
@@ -563,7 +559,7 @@ func FindAllTabletAliasesInShard(ctx context.Context, ts Server, keyspace, shard
 // in which case the result only contains the cells that were fetched.
 //
 // The tablet aliases are sorted by cell, then by UID.
-func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) ([]*pb.TabletAlias, error) {
+func (ts Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*pb.TabletAlias, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("topo.FindAllTabletAliasesInShardbyCell")
 	span.Annotate("keyspace", keyspace)
@@ -628,24 +624,24 @@ func FindAllTabletAliasesInShardByCell(ctx context.Context, ts Server, keyspace,
 // GetTabletMapForShard returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShard(ctx context.Context, ts Server, keyspace, shard string) (map[pb.TabletAlias]*TabletInfo, error) {
-	return GetTabletMapForShardByCell(ctx, ts, keyspace, shard, nil)
+func (ts Server) GetTabletMapForShard(ctx context.Context, keyspace, shard string) (map[pb.TabletAlias]*TabletInfo, error) {
+	return ts.GetTabletMapForShardByCell(ctx, keyspace, shard, nil)
 }
 
 // GetTabletMapForShardByCell returns the tablets for a shard. It can return
 // ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
-func GetTabletMapForShardByCell(ctx context.Context, ts Server, keyspace, shard string, cells []string) (map[pb.TabletAlias]*TabletInfo, error) {
+func (ts Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shard string, cells []string) (map[pb.TabletAlias]*TabletInfo, error) {
 	// if we get a partial result, we keep going. It most likely means
 	// a cell is out of commission.
-	aliases, err := FindAllTabletAliasesInShardByCell(ctx, ts, keyspace, shard, cells)
+	aliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells)
 	if err != nil && err != ErrPartialResult {
 		return nil, err
 	}
 
 	// get the tablets for the cells we were able to reach, forward
 	// ErrPartialResult from FindAllTabletAliasesInShard
-	result, gerr := GetTabletMap(ctx, ts, aliases)
+	result, gerr := ts.GetTabletMap(ctx, aliases)
 	if gerr == nil && err != nil {
 		gerr = err
 	}

@@ -60,7 +60,7 @@ func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, 
 		}
 
 		for _, shard := range shards {
-			aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
+			aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 			if err != nil {
 				results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
 				return
@@ -117,13 +117,13 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 		return
 	}
 
-	aliases, err := topo.FindAllTabletAliasesInShard(ctx, wr.ts, keyspace, shard)
+	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 	if err != nil {
 		results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
 		return
 	}
 
-	tabletMap, _ := topo.GetTabletMap(ctx, wr.ts, aliases)
+	tabletMap, _ := wr.ts.GetTabletMap(ctx, aliases)
 
 	var masterAlias *pb.TabletAlias
 	for _, alias := range aliases {

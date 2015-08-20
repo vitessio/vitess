@@ -221,7 +221,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record")
-	si, err = topo.UpdateShardFields(ctx, agent.TopoServer, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
+	si, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(shard *pb.Shard) error {
 		shard.MasterAlias = tablet.Alias
 		return nil
 	})

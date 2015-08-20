@@ -703,7 +703,7 @@ func (wr *Wrangler) setKeyspaceServedFrom(ctx context.Context, keyspace string, 
 // discovery wouldn't be very efficient.
 func (wr *Wrangler) RefreshTablesByShard(ctx context.Context, si *topo.ShardInfo, tabletType pb.TabletType, cells []string) error {
 	wr.Logger().Infof("RefreshTablesByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
-	tabletMap, err := topo.GetTabletMapForShardByCell(ctx, wr.ts, si.Keyspace(), si.ShardName(), cells)
+	tabletMap, err := wr.ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch err {
 	case nil:
 		// keep going

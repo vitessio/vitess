@@ -113,7 +113,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	}
 
 	other := &pb.TabletAlias{Cell: "ny", Uid: 82873}
-	_, err = topo.UpdateShardFields(ctx, tts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
 		shard.MasterAlias = other
 		return nil
 	})
@@ -127,7 +127,7 @@ func CheckShard(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if *s.MasterAlias != *other {
 		t.Fatalf("shard.MasterAlias = %v, want %v", s.MasterAlias, other)
 	}
-	_, err = topo.UpdateShardFields(ctx, tts, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
+	_, err = tts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(shard *pb.Shard) error {
 		shard.MasterAlias = master
 		return nil
 	})
