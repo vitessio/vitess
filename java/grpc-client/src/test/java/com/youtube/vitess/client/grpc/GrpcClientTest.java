@@ -10,7 +10,12 @@ import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Query.QueryResult;
 import com.youtube.vitess.proto.Topodata.KeyRange;
+import com.youtube.vitess.proto.Topodata.KeyspaceIdType;
+import com.youtube.vitess.proto.Topodata.ShardReference;
+import com.youtube.vitess.proto.Topodata.SrvKeyspace;
+import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import com.youtube.vitess.proto.Topodata.TabletType;
+import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 import com.youtube.vitess.proto.Vtrpc.CallerID;
 
 import org.joda.time.Duration;
@@ -322,5 +327,50 @@ public class GrpcClientTest {
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
 
     tx.commit(ctx);
+  }
+
+  @Test
+  public void testEchoSplitQuery() throws Exception {
+    SplitQueryResponse.Part expected =
+        SplitQueryResponse.Part.newBuilder()
+            .setQuery(Proto.bindQuery(ECHO_PREFIX + QUERY + ":split_column:123", BIND_VARS))
+            .setKeyRangePart(
+                SplitQueryResponse.KeyRangePart.newBuilder().setKeyspace(KEYSPACE).build())
+            .build();
+    SplitQueryResponse.Part actual =
+        conn.splitQuery(ctx, KEYSPACE, ECHO_PREFIX + QUERY, BIND_VARS, "split_column", 123).get(0);
+    Assert.assertEquals(expected, actual);
+  }
+
+  @Test
+  public void testGetSrvKeyspace() throws Exception {
+    SrvKeyspace expected =
+        SrvKeyspace.newBuilder()
+            .addPartitions(
+                KeyspacePartition.newBuilder()
+                    .setServedType(TabletType.REPLICA)
+                    .addShardReferences(
+                        ShardReference.newBuilder()
+                            .setName("shard0")
+                            .setKeyRange(
+                                KeyRange.newBuilder()
+                                    .setStart(
+                                        ByteString.copyFrom(new byte[] {0x40, 0, 0, 0, 0, 0, 0, 0}))
+                                    .setEnd(ByteString.copyFrom(
+                                        new byte[] {(byte) 0x80, 0, 0, 0, 0, 0, 0, 0}))
+                                    .build())
+                            .build())
+                    .build())
+            .setShardingColumnName("sharding_column_name")
+            .setShardingColumnType(KeyspaceIdType.UINT64)
+            .addServedFrom(
+                SrvKeyspace.ServedFrom.newBuilder()
+                    .setTabletType(TabletType.MASTER)
+                    .setKeyspace("other_keyspace")
+                    .build())
+            .setSplitShardCount(128)
+            .build();
+    SrvKeyspace actual = conn.getSrvKeyspace(ctx, "big");
+    Assert.assertEquals(expected, actual);
   }
 }

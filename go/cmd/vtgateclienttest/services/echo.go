@@ -267,3 +267,17 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	}
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, sendReply)
 }
+
+func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
+	if strings.HasPrefix(sql, EchoPrefix) {
+		reply.Splits = append(reply.Splits, proto.SplitQueryPart{
+			Query: &proto.KeyRangeQuery{
+				Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
+				BindVariables: bindVariables,
+				Keyspace:      keyspace,
+			},
+		})
+		return nil
+	}
+	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount, reply)
+}
