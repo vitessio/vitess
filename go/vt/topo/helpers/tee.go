@@ -141,14 +141,14 @@ func (tee *Tee) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.K
 				log.Warningf("secondary.CreateKeyspace(%v) failed (after UpdateKeyspace returned ErrNoNode): %v", keyspace, serr)
 			} else {
 				log.Infof("secondary.UpdateKeyspace(%v) failed with ErrNoNode, CreateKeyspace then worked.", keyspace)
-				ki, gerr := tee.secondary.GetKeyspace(ctx, keyspace)
+				_, secondaryVersion, gerr := tee.secondary.GetKeyspace(ctx, keyspace)
 				if gerr != nil {
 					log.Warningf("Failed to re-read keyspace(%v) after creating it on secondary: %v", keyspace, gerr)
 				} else {
 					tee.mu.Lock()
 					tee.keyspaceVersionMapping[keyspace] = versionMapping{
 						readFromVersion:       newVersion,
-						readFromSecondVersion: ki.Version(),
+						readFromSecondVersion: secondaryVersion,
 					}
 					tee.mu.Unlock()
 				}
@@ -182,25 +182,25 @@ func (tee *Tee) DeleteKeyspace(ctx context.Context, keyspace string) error {
 }
 
 // GetKeyspace is part of the topo.Server interface
-func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
-	ki, err := tee.readFrom.GetKeyspace(ctx, keyspace)
+func (tee *Tee) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+	k, version, err := tee.readFrom.GetKeyspace(ctx, keyspace)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	ki2, err := tee.readFromSecond.GetKeyspace(ctx, keyspace)
+	_, version2, err := tee.readFromSecond.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		// can't read from secondary, so we can's keep version map
-		return ki, nil
+		return k, version, nil
 	}
 
 	tee.mu.Lock()
 	tee.keyspaceVersionMapping[keyspace] = versionMapping{
-		readFromVersion:       ki.Version(),
-		readFromSecondVersion: ki2.Version(),
+		readFromVersion:       version,
+		readFromSecondVersion: version2,
 	}
 	tee.mu.Unlock()
-	return ki, nil
+	return k, version, nil
 }
 
 // GetKeyspaces is part of the topo.Server interface

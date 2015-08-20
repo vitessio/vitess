@@ -10,9 +10,7 @@ import (
 	"path"
 	"sort"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -61,12 +59,6 @@ func (zkts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *
 	if alreadyExists {
 		return topo.ErrNodeExists
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: keyspace,
-		Keyspace:     value,
-		Status:       "created",
-	})
 	return nil
 }
 
@@ -98,32 +90,26 @@ func (zkts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 		}
 		return err
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceName: keyspace,
-		Keyspace:     nil,
-		Status:       "deleted",
-	})
 	return nil
 }
 
 // GetKeyspace is part of the topo.Server interface
-func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
+func (zkts *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	data, stat, err := zkts.zconn.Get(keyspacePath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
 	k := &pb.Keyspace{}
 	if err = json.Unmarshal([]byte(data), k); err != nil {
-		return nil, fmt.Errorf("bad keyspace data %v", err)
+		return nil, 0, fmt.Errorf("bad keyspace data %v", err)
 	}
 
-	return topo.NewKeyspaceInfo(keyspace, k, int64(stat.Version())), nil
+	return k, int64(stat.Version()), nil
 }
 
 // GetKeyspaces is part of the topo.Server interface

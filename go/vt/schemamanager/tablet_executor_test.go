@@ -27,11 +27,11 @@ func TestTabletExecutorOpen(t *testing.T) {
 }
 
 func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
-	fakeTopo := newFakeTopo()
-	fakeTopo.WithEmptyMasterAlias = true
+	ft := newFakeTopo()
+	ft.Impl.(*fakeTopo).WithEmptyMasterAlias = true
 	executor := NewTabletExecutor(
 		newFakeTabletManagerClient(),
-		fakeTopo)
+		ft)
 	ctx := context.Background()
 
 	if err := executor.Open(ctx, "test_keyspace"); err == nil {

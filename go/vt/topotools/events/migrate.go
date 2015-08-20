@@ -17,7 +17,7 @@ import (
 type MigrateServedFrom struct {
 	base.StatusUpdater
 
-	Keyspace         topo.KeyspaceInfo
+	KeyspaceName     string
 	SourceShard      topo.ShardInfo
 	DestinationShard topo.ShardInfo
 	ServedType       pb.TabletType
@@ -29,7 +29,7 @@ type MigrateServedFrom struct {
 type MigrateServedTypes struct {
 	base.StatusUpdater
 
-	Keyspace          topo.KeyspaceInfo
+	KeyspaceName      string
 	SourceShards      []*topo.ShardInfo
 	DestinationShards []*topo.ShardInfo
 	ServedType        pb.TabletType

@@ -310,7 +310,7 @@ func (wr *Wrangler) migrateServedTypes(ctx context.Context, keyspace string, sou
 	}
 
 	ev := &events.MigrateServedTypes{
-		Keyspace:          *topo.NewKeyspaceInfo(keyspace, nil, -1),
+		KeyspaceName:      keyspace,
 		SourceShards:      sourceShards,
 		DestinationShards: destinationShards,
 		ServedType:        servedType,
@@ -550,7 +550,7 @@ func (wr *Wrangler) migrateServedFrom(ctx context.Context, ki *topo.KeyspaceInfo
 	}
 
 	ev := &events.MigrateServedFrom{
-		Keyspace:         *ki,
+		KeyspaceName:     ki.KeyspaceName(),
 		SourceShard:      *sourceShard,
 		DestinationShard: *destinationShard,
 		ServedType:       servedType,

@@ -55,8 +55,8 @@ func (ft FakeTopo) DeleteKeyspace(ctx context.Context, keyspace string) error {
 }
 
 // GetKeyspace implements topo.Server.
-func (ft FakeTopo) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
-	return nil, errNotImplemented
+func (ft FakeTopo) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
+	return nil, 0, errNotImplemented
 }
 
 // GetKeyspaces implements topo.Server.

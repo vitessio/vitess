@@ -87,9 +87,9 @@ type Impl interface {
 	// Can return ErrNoNode if the keyspace doesn't exist.
 	DeleteKeyspace(ctx context.Context, keyspace string) error
 
-	// GetKeyspace reads a keyspace and returns it.
+	// GetKeyspace reads a keyspace and returns it, along with its version.
 	// Can return ErrNoNode
-	GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error)
+	GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error)
 
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces(ctx context.Context) ([]string, error)

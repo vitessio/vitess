@@ -82,18 +82,18 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 	if err := ts.DeleteKeyspaceShards(ctx, "test_keyspace2"); err != nil {
 		t.Errorf("DeleteKeyspaceShards: %v", err)
 	}
-	ki, err := ts.GetKeyspace(ctx, "test_keyspace2")
+	storedK, storedVersion, err := ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if !reflect.DeepEqual(ki.Keyspace, k) {
-		t.Fatalf("returned keyspace doesn't match: got %v expected %v", ki.Keyspace, k)
+	if !reflect.DeepEqual(storedK, k) {
+		t.Fatalf("returned keyspace doesn't match: got %v expected %v", storedK, k)
 	}
 
-	ki.ShardingColumnName = "other_id"
-	ki.ShardingColumnType = pb.KeyspaceIdType_BYTES
+	storedK.ShardingColumnName = "other_id"
+	storedK.ShardingColumnType = pb.KeyspaceIdType_BYTES
 	var newServedFroms []*pb.Keyspace_ServedFrom
-	for _, ksf := range ki.ServedFroms {
+	for _, ksf := range storedK.ServedFroms {
 		if ksf.TabletType == pb.TabletType_MASTER {
 			continue
 		}
@@ -102,18 +102,20 @@ func CheckKeyspace(ctx context.Context, t *testing.T, ts topo.Impl) {
 		}
 		newServedFroms = append(newServedFroms, ksf)
 	}
-	ki.ServedFroms = newServedFroms
-	_, err = ts.UpdateKeyspace(ctx, ki.KeyspaceName(), ki.Keyspace, ki.Version())
+	storedK.ServedFroms = newServedFroms
+	_, err = ts.UpdateKeyspace(ctx, "test_keyspace2", storedK, storedVersion)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
 	}
-	ki, err = ts.GetKeyspace(ctx, "test_keyspace2")
+	storedK, storedVersion, err = ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if ki.ShardingColumnName != "other_id" ||
-		ki.ShardingColumnType != pb.KeyspaceIdType_BYTES ||
-		ki.GetServedFrom(pb.TabletType_REPLICA).Keyspace != "test_keyspace4" {
-		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
+	if storedK.ShardingColumnName != "other_id" ||
+		storedK.ShardingColumnType != pb.KeyspaceIdType_BYTES ||
+		len(storedK.ServedFroms) != 1 ||
+		storedK.ServedFroms[0].TabletType != pb.TabletType_REPLICA ||
+		storedK.ServedFroms[0].Keyspace != "test_keyspace4" {
+		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *storedK)
 	}
 }

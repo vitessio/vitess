@@ -34,22 +34,6 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
 }
 
-// Version returns the keyspace version from last time it was read or updated.
-func (ki *KeyspaceInfo) Version() int64 {
-	return ki.version
-}
-
-// NewKeyspaceInfo returns a KeyspaceInfo basing on keyspace with the
-// keyspace. This function should be only used by Server
-// implementations.
-func NewKeyspaceInfo(keyspace string, value *pb.Keyspace, version int64) *KeyspaceInfo {
-	return &KeyspaceInfo{
-		keyspace: keyspace,
-		version:  version,
-		Keyspace: value,
-	}
-}
-
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
 func (ki *KeyspaceInfo) GetServedFrom(tabletType pb.TabletType) *pb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {
@@ -153,6 +137,34 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) map[TabletType]string
 	return result
 }
 
+// CreateKeyspace wraps the underlying Impl.DeleteKeyspaceShards
+// and dispatches the event.
+func (ts Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace) error {
+	if err := ts.Impl.CreateKeyspace(ctx, keyspace, value); err != nil {
+		return err
+	}
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceName: keyspace,
+		Keyspace:     value,
+		Status:       "created",
+	})
+	return nil
+}
+
+// GetKeyspace reads the given keyspace and returns it
+func (ts Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+	value, version, err := ts.Impl.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyspaceInfo{
+		keyspace: keyspace,
+		version:  version,
+		Keyspace: value,
+	}, nil
+}
+
 // UpdateKeyspace updates the keyspace data, with the right version
 func (ts Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	var version int64 = -1
@@ -218,6 +230,20 @@ func (ts Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) erro
 		KeyspaceName: keyspace,
 		Keyspace:     nil,
 		Status:       "deleted all shards",
+	})
+	return nil
+}
+
+// DeleteKeyspace wraps the underlying Impl.DeleteKeyspace
+// and dispatches the event.
+func (ts Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
+	if err := ts.Impl.DeleteKeyspace(ctx, keyspace); err != nil {
+		return err
+	}
+	event.Dispatch(&events.KeyspaceChange{
+		KeyspaceName: keyspace,
+		Keyspace:     nil,
+		Status:       "deleted",
 	})
 	return nil
 }

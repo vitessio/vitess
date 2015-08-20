@@ -32,13 +32,13 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS topo.Impl) {
 		go func(keyspace string) {
 			defer wg.Done()
 
-			k, err := fromTS.GetKeyspace(ctx, keyspace)
+			k, _, err := fromTS.GetKeyspace(ctx, keyspace)
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
 				return
 			}
 
-			if err := toTS.CreateKeyspace(ctx, keyspace, k.Keyspace); err != nil {
+			if err := toTS.CreateKeyspace(ctx, keyspace, k); err != nil {
 				if err == topo.ErrNodeExists {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
