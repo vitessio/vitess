@@ -526,7 +526,7 @@ func shardParamsToKeyspaceShards(ctx context.Context, wr *wrangler.Wrangler, par
 		if param[0] == '/' {
 			// this is a topology-specific path
 			for _, path := range params {
-				keyspace, shard, err := topo.ParseKeyspaceShardString(path)
+				keyspace, shard, err := topoproto.ParseKeyspaceShard(path)
 				if err != nil {
 					return nil, err
 				}
@@ -1027,7 +1027,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("The <keyspace/shard> argument is required for the CreateShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1053,7 +1053,7 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return fmt.Errorf("The <keyspace/shard> argument is required for the GetShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1118,7 +1118,7 @@ func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1132,7 +1132,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <keyspace/shard> argument is required for the ShardReplicationPositions command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1164,7 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <keyspace/shard> argument is required for the ListShardTablets command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1180,7 +1180,7 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("The <keyspace/shard> and <served tablet type> arguments are both required for the SetShardServedTypes command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1208,7 +1208,7 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the SetShardTabletControl command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1236,7 +1236,7 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("The <keyspace/shard> and <uid> arguments are both required for the SourceShardDelete command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1256,7 +1256,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if subFlags.NArg() != 3 {
 		return fmt.Errorf("The <keyspace/shard>, <uid>, and <source keyspace/shard> arguments are all required for the SourceShardAdd command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1264,7 +1264,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	skeyspace, sshard, err := topo.ParseKeyspaceShardString(subFlags.Arg(2))
+	skeyspace, sshard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(2))
 	if err != nil {
 		return err
 	}
@@ -1289,7 +1289,7 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationAdd command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1308,7 +1308,7 @@ func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, s
 		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationRemove command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1328,7 +1328,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 	}
 
 	cell := subFlags.Arg(0)
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1352,7 +1352,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <keyspace/shard> argument is required for the WaitForFilteredReplication command.")
 	}
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1442,7 +1442,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return fmt.Errorf("The <keyspace/shard> and <cell> arguments are required for the RemoveShardCell command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1663,7 +1663,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("The <source keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedTypes command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1692,7 +1692,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("The <destination keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedFrom command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1878,7 +1878,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateSchemaShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -1950,12 +1950,12 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	destKeyspace, destShard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	destKeyspace, destShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
 
-	sourceKeyspace, sourceShard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err == nil {
 		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard)
 	}
@@ -1974,7 +1974,7 @@ func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("The <keyspace/shard> argument is requird for the ValidateVersionShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -2019,7 +2019,7 @@ func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler,
 		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidatePermissionsShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(0))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -2114,7 +2114,7 @@ func commandGetSrvShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetSrvShard command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -2133,7 +2133,7 @@ func commandGetEndPoints(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return fmt.Errorf("The <cell>, <keyspace/shard>, and <tablet type> arguments are required for the GetEndPoints command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -2156,7 +2156,7 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetShardReplication command.")
 	}
 
-	keyspace, shard, err := topo.ParseKeyspaceShardString(subFlags.Arg(1))
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}

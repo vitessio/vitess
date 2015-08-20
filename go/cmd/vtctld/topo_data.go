@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -306,7 +307,7 @@ func newShardCache(ts topo.Server) *VersionedObjectCacheMap {
 	return NewVersionedObjectCacheMap(func(key string) *VersionedObjectCache {
 		return NewVersionedObjectCache(func(ctx context.Context) (VersionedObject, error) {
 
-			keyspace, shard, err := topo.ParseKeyspaceShardString(key)
+			keyspace, shard, err := topoproto.ParseKeyspaceShard(key)
 			if err != nil {
 				return nil, err
 			}

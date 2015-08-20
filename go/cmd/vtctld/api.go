@@ -159,7 +159,7 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository) {
 
 			if shardRef != "" {
 				// Look up by keyspace/shard, and optionally cell.
-				keyspace, shard, err := topo.ParseKeyspaceShardString(shardRef)
+				keyspace, shard, err := topoproto.ParseKeyspaceShard(shardRef)
 				if err != nil {
 					return nil, err
 				}
