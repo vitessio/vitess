@@ -156,13 +156,13 @@ class TestPythonClient(unittest.TestCase):
     effective_caller_id = {
         'Principal': 'pr', 'Component': 'co', 'Subcomponent': 'su'}
     cursor.execute(
-        'callerid {"principal":"pr", "component":"co", "subcomponent":"su"}',
+        'callerid://{"principal":"pr", "component":"co", "subcomponent":"su"}',
         {},
         effective_caller_id=effective_caller_id)
     cursor.close()
     cursor = self.conn.cursor('keyspace', 'master')
     cursor.execute_entity_ids(
-        'callerid {"principal":"pr", "component":"co", "subcomponent":"su"}',
+        'callerid://{"principal":"pr", "component":"co", "subcomponent":"su"}',
         {},
         entity_keyspace_id_map={
             1: struct.Struct('!Q').pack(1761124146422844620)},

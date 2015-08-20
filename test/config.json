@@ -44,7 +44,7 @@
     "custom_sharding": {
       "File": "custom_sharding.py"
     },
-    "python_client_test": {
+    "python_client": {
       "File": "python_client_test.py"
     },
     "update_stream": {
