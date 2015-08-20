@@ -50,14 +50,15 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("execute: not in transaction");
     }
-    ExecuteRequest request =
+    ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
-            .setSession(session)
-            .build();
-    ExecuteResponse response = client.execute(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteResponse response = client.execute(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResult();
@@ -69,16 +70,17 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeShards: not in transaction");
     }
-    ExecuteShardsRequest request =
+    ExecuteShardsRequest.Builder requestBuilder =
         ExecuteShardsRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllShards(shards)
             .setTabletType(tabletType)
-            .setSession(session)
-            .build();
-    ExecuteShardsResponse response = client.executeShards(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteShardsResponse response = client.executeShards(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResult();
@@ -90,16 +92,17 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeKeyspaceIds: not in transaction");
     }
-    ExecuteKeyspaceIdsRequest request =
+    ExecuteKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteKeyspaceIdsRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
             .setTabletType(tabletType)
-            .setSession(session)
-            .build();
-    ExecuteKeyspaceIdsResponse response = client.executeKeyspaceIds(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteKeyspaceIdsResponse response = client.executeKeyspaceIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResult();
@@ -111,16 +114,17 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeKeyRanges: not in transaction");
     }
-    ExecuteKeyRangesRequest request =
+    ExecuteKeyRangesRequest.Builder requestBuilder =
         ExecuteKeyRangesRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
             .setTabletType(tabletType)
-            .setSession(session)
-            .build();
-    ExecuteKeyRangesResponse response = client.executeKeyRanges(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteKeyRangesResponse response = client.executeKeyRanges(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResult();
@@ -133,17 +137,18 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeEntityIds: not in transaction");
     }
-    ExecuteEntityIdsRequest request =
+    ExecuteEntityIdsRequest.Builder requestBuilder =
         ExecuteEntityIdsRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .setEntityColumnName(entityColumnName)
             .addAllEntityKeyspaceIds(Iterables.transform(entityIds, Proto.OBJECT_TO_ENTITY_ID))
             .setTabletType(tabletType)
-            .setSession(session)
-            .build();
-    ExecuteEntityIdsResponse response = client.executeEntityIds(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteEntityIdsResponse response = client.executeEntityIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResult();
@@ -155,15 +160,16 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeBatchShards: not in transaction");
     }
-    ExecuteBatchShardsRequest request =
+    ExecuteBatchShardsRequest.Builder requestBuilder =
         ExecuteBatchShardsRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
-            .setSession(session)
-            .build();
-    ExecuteBatchShardsResponse response = client.executeBatchShards(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteBatchShardsResponse response = client.executeBatchShards(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResultsList();
@@ -176,15 +182,17 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("executeBatchKeyspaceIds: not in transaction");
     }
-    ExecuteBatchKeyspaceIdsRequest request =
+    ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
         ExecuteBatchKeyspaceIdsRequest.newBuilder()
-            .setCallerId(ctx.getCallerId())
             .addAllQueries(queries)
             .setTabletType(tabletType)
             .setAsTransaction(asTransaction)
-            .setSession(session)
-            .build();
-    ExecuteBatchKeyspaceIdsResponse response = client.executeBatchKeyspaceIds(ctx, request);
+            .setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    ExecuteBatchKeyspaceIdsResponse response =
+        client.executeBatchKeyspaceIds(ctx, requestBuilder.build());
     session = response.getSession();
     Proto.checkError(response.getError());
     return response.getResultsList();
@@ -195,9 +203,11 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("commit: not in transaction");
     }
-    CommitRequest request =
-        CommitRequest.newBuilder().setCallerId(ctx.getCallerId()).setSession(session).build();
-    client.commit(ctx, request);
+    CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    client.commit(ctx, requestBuilder.build());
     session = null;
   }
 
@@ -206,9 +216,11 @@ public class VTGateTx {
     if (session == null) {
       throw new VitessNotInTransactionException("rollback: not in transaction");
     }
-    RollbackRequest request =
-        RollbackRequest.newBuilder().setCallerId(ctx.getCallerId()).setSession(session).build();
-    client.rollback(ctx, request);
+    RollbackRequest.Builder requestBuilder = RollbackRequest.newBuilder().setSession(session);
+    if (ctx.getCallerId() != null) {
+      requestBuilder.setCallerId(ctx.getCallerId());
+    }
+    client.rollback(ctx, requestBuilder.build());
     session = null;
   }
 }
