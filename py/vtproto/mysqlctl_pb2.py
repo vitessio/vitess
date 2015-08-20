@@ -18,6 +18,7 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='mysqlctl.proto',
   package='mysqlctl',
+  syntax='proto3',
   serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"\x0e\n\x0cStartRequest\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse2\xe5\x01\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x62\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -40,6 +41,7 @@ _STARTREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -63,6 +65,7 @@ _STARTRESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -93,6 +96,7 @@ _SHUTDOWNREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -116,6 +120,7 @@ _SHUTDOWNRESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -139,6 +144,7 @@ _RUNMYSQLUPGRADEREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -162,6 +168,7 @@ _RUNMYSQLUPGRADERESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -258,7 +265,7 @@ class EarlyAdopterMysqlCtlStub(object):
   def RunMysqlUpgrade(self, request):
     raise NotImplementedError()
   RunMysqlUpgrade.async = None
-def early_adopter_create_MysqlCtl_server(servicer, port, root_certificates, key_chain_pairs):
+def early_adopter_create_MysqlCtl_server(servicer, port, private_key=None, certificate_chain=None):
   import mysqlctl_pb2
   import mysqlctl_pb2
   import mysqlctl_pb2
@@ -282,8 +289,8 @@ def early_adopter_create_MysqlCtl_server(servicer, port, root_certificates, key_
       mysqlctl_pb2.StartResponse.SerializeToString,
     ),
   }
-  return implementations.secure_server("mysqlctl.MysqlCtl", method_service_descriptions, port, root_certificates, key_chain_pairs)
-def early_adopter_create_MysqlCtl_stub(host, port):
+  return implementations.server("mysqlctl.MysqlCtl", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
+def early_adopter_create_MysqlCtl_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
   import mysqlctl_pb2
   import mysqlctl_pb2
   import mysqlctl_pb2
@@ -304,5 +311,5 @@ def early_adopter_create_MysqlCtl_stub(host, port):
       mysqlctl_pb2.StartResponse.FromString,
     ),
   }
-  return implementations.insecure_stub("mysqlctl.MysqlCtl", method_invocation_descriptions, host, port)
+  return implementations.stub("mysqlctl.MysqlCtl", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)

@@ -4,14 +4,21 @@ import (
 	"log/syslog"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestShardChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status"
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status value: master_alias:<cell:\"test\" uid:123 > "
 	sc := &ShardChange{
-		ShardInfo: *topo.NewShardInfo("keyspace-123", "shard-123", nil, -1),
-		Status:    "status",
+		KeyspaceName: "keyspace-123",
+		ShardName:    "shard-123",
+		Shard: &pb.Shard{
+			MasterAlias: &pb.TabletAlias{
+				Cell: "test",
+				Uid:  123,
+			},
+		},
+		Status: "status",
 	}
 	gotSev, gotMsg := sc.Syslog()
 

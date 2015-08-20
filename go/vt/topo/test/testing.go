@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -30,13 +30,13 @@ func newKeyRange3(value string) *pb.KeyRange {
 	return result
 }
 
-func getLocalCell(ctx context.Context, t *testing.T, ts topo.Server) string {
+func getLocalCell(ctx context.Context, t *testing.T, ts topo.Impl) string {
 	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		t.Fatalf("GetKnownCells: %v", err)
 	}
 	if len(cells) < 1 {
-		t.Fatalf("provided topo.Server doesn't have enough cells (need at least 1): %v", cells)
+		t.Fatalf("provided topo.Impl doesn't have enough cells (need at least 1): %v", cells)
 	}
 	return cells[0]
 }

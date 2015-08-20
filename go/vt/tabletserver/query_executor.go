@@ -6,10 +6,12 @@ package tabletserver
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
@@ -88,6 +90,8 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 			reply, err = qre.execDMLSubquery(conn, invalidator)
 		case planbuilder.PLAN_OTHER:
 			reply, err = qre.execSQL(conn, qre.query, true)
+		case planbuilder.PLAN_UPSERT_PK:
+			reply, err = qre.execUpsertPK(conn, invalidator)
 		default: // select or set in a transaction, just count as select
 			reply, err = qre.execDirect(conn)
 		}
@@ -180,6 +184,8 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 		reply, err = qre.execDMLPK(conn, invalidator)
 	case planbuilder.PLAN_DML_SUBQUERY:
 		reply, err = qre.execDMLSubquery(conn, invalidator)
+	case planbuilder.PLAN_UPSERT_PK:
+		reply, err = qre.execUpsertPK(conn, invalidator)
 	default:
 		return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
 	}
@@ -466,12 +472,42 @@ func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (*mproto.QueryResult
 }
 
 func (qre *QueryExecutor) execInsertPKRows(conn poolConn, pkRows [][]sqltypes.Value) (*mproto.QueryResult, error) {
-	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, nil)
+	return qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+}
+
+func (qre *QueryExecutor) execUpsertPK(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
+	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
-	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
-	return qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, nil)
+	result, err := qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+	if err == nil {
+		return result, nil
+	}
+	terr, ok := err.(*TabletError)
+	if !ok {
+		return result, err
+	}
+	if terr.SqlError != mysql.ErrDupEntry {
+		return nil, err
+	}
+	// If the error didn't match pk, just return the error without updating.
+	if !strings.Contains(terr.Message, "'PRIMARY'") {
+		return nil, err
+	}
+	// At this point, we know the insert failed due to a duplicate pk row.
+	// So, we just update the row.
+	result, err = qre.execDMLPKRows(conn, qre.plan.UpsertQuery, pkRows, invalidator)
+	if err != nil {
+		return nil, err
+	}
+	// Follow MySQL convention. RowsAffected must be 2 if a row was updated.
+	if result.RowsAffected == 1 {
+		result.RowsAffected = 2
+	}
+	return result, err
 }
 
 func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
@@ -479,7 +515,7 @@ func (qre *QueryExecutor) execDMLPK(conn poolConn, invalidator CacheInvalidator)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execDMLPKRows(conn, pkRows, invalidator)
+	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, pkRows, invalidator)
 }
 
 func (qre *QueryExecutor) execDMLSubquery(conn poolConn, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
@@ -487,10 +523,10 @@ func (qre *QueryExecutor) execDMLSubquery(conn poolConn, invalidator CacheInvali
 	if err != nil {
 		return nil, err
 	}
-	return qre.execDMLPKRows(conn, innerResult.Rows, invalidator)
+	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, innerResult.Rows, invalidator)
 }
 
-func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
+func (qre *QueryExecutor) execDMLPKRows(conn poolConn, query *sqlparser.ParsedQuery, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (*mproto.QueryResult, error) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}, nil
 	}
@@ -516,7 +552,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn poolConn, pkRows [][]sqltypes.Value
 			Columns: qre.plan.TableInfo.Indexes[0].Columns,
 			Rows:    pkRows,
 		}
-		r, err := qre.directFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc)
+		r, err := qre.directFetch(conn, query, qre.bindVars, bsc)
 		if err != nil {
 			return nil, err
 		}

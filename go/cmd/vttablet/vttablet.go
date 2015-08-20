@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
@@ -66,7 +67,7 @@ func main() {
 		log.Errorf("tabletPath required")
 		exit.Return(1)
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(*tabletPath)
+	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 
 	if err != nil {
 		log.Error(err)

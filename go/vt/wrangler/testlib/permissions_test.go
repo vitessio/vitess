@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
@@ -38,7 +37,7 @@ func TestPermissions(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.MasterAlias = master.Tablet.Alias
-	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 

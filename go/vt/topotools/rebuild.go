@@ -76,7 +76,7 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		versions, err := getEndPointsVersions(ctx, ts, cell, si.Keyspace(), si.ShardName())
 
 		// Get all tablets in this cell/shard.
-		tablets, err := topo.GetTabletMapForShardByCell(ctx, ts, si.Keyspace(), si.ShardName(), []string{cell})
+		tablets, err := ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), []string{cell})
 		if err != nil {
 			if err != topo.ErrPartialResult {
 				return err

@@ -21,7 +21,7 @@ func (ev *MigrateServedFrom) Syslog() (syslog.Priority, string) {
 		format = "%s [migrate served-from %s/%s -> %s/%s] %s"
 	}
 	return syslog.LOG_INFO, fmt.Sprintf(format,
-		ev.Keyspace.KeyspaceName(),
+		ev.KeyspaceName,
 		ev.SourceShard.Keyspace(), ev.SourceShard.ShardName(),
 		ev.DestinationShard.Keyspace(), ev.DestinationShard.ShardName(),
 		ev.Status)
@@ -48,7 +48,7 @@ func (ev *MigrateServedTypes) Syslog() (syslog.Priority, string) {
 	}
 
 	return syslog.LOG_INFO, fmt.Sprintf(format,
-		ev.Keyspace.KeyspaceName(), strings.Join(sourceShards, ", "),
+		ev.KeyspaceName, strings.Join(sourceShards, ", "),
 		strings.Join(destShards, ", "), ev.Status)
 }
 

@@ -16,48 +16,48 @@ import (
 
 func TestKeyspace(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckKeyspace(ctx, t, ts)
 }
 
 func TestShard(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckShard(ctx, t, ts)
 }
 
 func TestTablet(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckTablet(ctx, t, ts)
 }
 
 func TestShardReplication(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckShardReplication(ctx, t, ts)
 }
 
 func TestServingGraph(t *testing.T) {
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckServingGraph(context.Background(), t, ts)
 }
 
-func TestWatchEndPoints(t *testing.T) {
+func TestWatchSrvKeyspace(t *testing.T) {
 	WatchSleepDuration = 2 * time.Millisecond
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckWatchEndPoints(context.Background(), t, ts)
+	test.CheckWatchSrvKeyspace(context.Background(), t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckKeyspaceLock(ctx, t, ts)
 }
@@ -68,7 +68,7 @@ func TestShardLock(t *testing.T) {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckShardLock(ctx, t, ts)
 }
@@ -79,14 +79,14 @@ func TestSrvShardLock(t *testing.T) {
 		t.Skip("skipping wait-based test in short mode.")
 	}
 
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckSrvShardLock(ctx, t, ts)
 }
 
 func TestVSchema(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 	test.CheckVSchema(ctx, t, ts)
 }
@@ -94,7 +94,7 @@ func TestVSchema(t *testing.T) {
 // TestPurgeActions is a ZK specific unit test
 func TestPurgeActions(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
@@ -102,7 +102,7 @@ func TestPurgeActions(t *testing.T) {
 	}
 
 	actionPath := path.Join(globalKeyspacesPath, "test_keyspace", "action")
-	zkts := ts.Server.(*Server)
+	zkts := ts.(*TestServer).Impl.(*Server)
 
 	if _, err := zk.CreateRecursive(zkts.zconn, actionPath+"/topurge", "purgeme", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(topurge): %v", err)
@@ -126,7 +126,7 @@ func TestPurgeActions(t *testing.T) {
 // TestPruneActionLogs is a ZK specific unit test
 func TestPruneActionLogs(t *testing.T) {
 	ctx := context.Background()
-	ts := NewTestServer(t, []string{"test"})
+	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &pb.Keyspace{}); err != nil {
@@ -134,7 +134,7 @@ func TestPruneActionLogs(t *testing.T) {
 	}
 
 	actionLogPath := path.Join(globalKeyspacesPath, "test_keyspace", "actionlog")
-	zkts := ts.Server.(*Server)
+	zkts := ts.(*TestServer).Impl.(*Server)
 
 	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath+"/0", "first", 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		t.Fatalf("CreateRecursive(stale): %v", err)

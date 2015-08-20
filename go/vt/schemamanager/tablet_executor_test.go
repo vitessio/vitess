@@ -26,6 +26,20 @@ func TestTabletExecutorOpen(t *testing.T) {
 	}
 }
 
+func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
+	ft := newFakeTopo()
+	ft.Impl.(*fakeTopo).WithEmptyMasterAlias = true
+	executor := NewTabletExecutor(
+		newFakeTabletManagerClient(),
+		ft)
+	ctx := context.Background()
+
+	if err := executor.Open(ctx, "test_keyspace"); err == nil {
+		t.Fatalf("executor.Open() = nil, want error")
+	}
+	executor.Close()
+}
+
 func TestTabletExecutorValidate(t *testing.T) {
 	fakeTmc := newFakeTabletManagerClient()
 

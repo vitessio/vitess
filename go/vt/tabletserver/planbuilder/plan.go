@@ -54,6 +54,8 @@ const (
 	PLAN_SELECT_STREAM
 	// PLAN_OTHER is for SHOW, DESCRIBE & EXPLAIN statements
 	PLAN_OTHER
+	// PLAN_UPSERT_PK is for insert ... on duplicate key constructs
+	PLAN_UPSERT_PK
 	// NumPlans stores the total number of plans
 	NumPlans
 )
@@ -73,6 +75,7 @@ var planName = []string{
 	"DDL",
 	"SELECT_STREAM",
 	"OTHER",
+	"UPSERT_PK",
 }
 
 func (pt PlanType) String() string {
@@ -120,6 +123,7 @@ var tableAclRoles = map[PlanType]tableacl.Role{
 	PLAN_DDL:             tableacl.ADMIN,
 	PLAN_SELECT_STREAM:   tableacl.READER,
 	PLAN_OTHER:           tableacl.ADMIN,
+	PLAN_UPSERT_PK:       tableacl.WRITER,
 }
 
 // ReasonType indicates why a query plan fails to build
@@ -141,6 +145,7 @@ const (
 	REASON_TABLE_NOINDEX
 	REASON_PK_CHANGE
 	REASON_HAS_HINTS
+	REASON_COMPLEX_EXPR
 	REASON_UPSERT
 )
 
@@ -161,6 +166,7 @@ var reasonName = []string{
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
 	"HAS_HINTS",
+	"COMPLEX_EXPR",
 	"UPSERT",
 }
 
@@ -193,9 +199,10 @@ type ExecPlan struct {
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
 	// IndexUsed is set only for PLAN_SELECT_SUBQUERY
-	OuterQuery *sqlparser.ParsedQuery
-	Subquery   *sqlparser.ParsedQuery
-	IndexUsed  string
+	OuterQuery  *sqlparser.ParsedQuery
+	Subquery    *sqlparser.ParsedQuery
+	UpsertQuery *sqlparser.ParsedQuery
+	IndexUsed   string
 
 	// For selects, columns to be returned
 	// For PLAN_INSERT_SUBQUERY, columns to be inserted

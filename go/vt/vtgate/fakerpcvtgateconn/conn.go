@@ -18,7 +18,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
@@ -27,15 +26,44 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+// queryExecute contains all the fields we use to test Execute
+type queryExecute struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
+// queryExecuteShards contains all the fields we use to test ExecuteShards
+type queryExecuteShards struct {
+	SQL              string
+	BindVariables    map[string]interface{}
+	Keyspace         string
+	Shards           []string
+	TabletType       pb.TabletType
+	Session          *proto.Session
+	NotInTransaction bool
+}
+
 type queryResponse struct {
-	execQuery  *proto.Query
-	shardQuery *proto.QueryShard
+	execQuery  *queryExecute
+	shardQuery *queryExecuteShards
 	reply      *mproto.QueryResult
 	err        error
 }
 
+// querySplitQuery contains all the fields we use to test SplitQuery
+type querySplitQuery struct {
+	Keyspace      string
+	SQL           string
+	BindVariables map[string]interface{}
+	SplitColumn   string
+	SplitCount    int
+}
+
 type splitQueryResponse struct {
-	splitQuery *proto.SplitQueryRequest
+	splitQuery *querySplitQuery
 	reply      []proto.SplitQueryPart
 	err        error
 }
@@ -62,34 +90,70 @@ func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 }
 
 // AddQuery adds a query and expected result.
-func (conn *FakeVTGateConn) AddQuery(request *proto.Query,
+func (conn *FakeVTGateConn) AddQuery(
+	sql string,
+	bindVariables map[string]interface{},
+	tabletType pb.TabletType,
+	session *proto.Session,
+	notInTransaction bool,
 	expectedResult *mproto.QueryResult) {
-	conn.execMap[request.Sql] = &queryResponse{
-		execQuery: request,
-		reply:     expectedResult,
+	conn.execMap[sql] = &queryResponse{
+		execQuery: &queryExecute{
+			SQL:              sql,
+			BindVariables:    bindVariables,
+			TabletType:       tabletType,
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		},
+		reply: expectedResult,
 	}
 }
 
 // AddShardQuery adds a shard query and expected result.
 func (conn *FakeVTGateConn) AddShardQuery(
-	request *proto.QueryShard, expectedResult *mproto.QueryResult) {
-	conn.execMap[getShardQueryKey(request)] = &queryResponse{
-		shardQuery: request,
-		reply:      expectedResult,
+	sql string,
+	bindVariables map[string]interface{},
+	keyspace string,
+	shards []string,
+	tabletType pb.TabletType,
+	session *proto.Session,
+	notInTransaction bool,
+	expectedResult *mproto.QueryResult) {
+	conn.execMap[getShardQueryKey(sql, shards)] = &queryResponse{
+		shardQuery: &queryExecuteShards{
+			SQL:              sql,
+			BindVariables:    bindVariables,
+			Keyspace:         keyspace,
+			Shards:           shards,
+			TabletType:       tabletType,
+			Session:          session,
+			NotInTransaction: notInTransaction,
+		},
+		reply: expectedResult,
 	}
 }
 
 // AddSplitQuery adds a split query and expected result.
 func (conn *FakeVTGateConn) AddSplitQuery(
-	request *proto.SplitQueryRequest, expectedResult []proto.SplitQueryPart) {
-	splits := request.SplitCount
-	reply := make([]proto.SplitQueryPart, splits, splits)
+	keyspace string,
+	sql string,
+	bindVariables map[string]interface{},
+	splitColumn string,
+	splitCount int,
+	expectedResult []proto.SplitQueryPart) {
+	reply := make([]proto.SplitQueryPart, splitCount)
 	copy(reply, expectedResult)
-	key := getSplitQueryKey(request.Keyspace, &request.Query, request.SplitColumn, request.SplitCount)
+	key := getSplitQueryKey(keyspace, sql, splitColumn, splitCount)
 	conn.splitQueryMap[key] = &splitQueryResponse{
-		splitQuery: request,
-		reply:      expectedResult,
-		err:        nil,
+		splitQuery: &querySplitQuery{
+			Keyspace:      keyspace,
+			SQL:           sql,
+			BindVariables: bindVariables,
+			SplitColumn:   splitColumn,
+			SplitCount:    splitCount,
+		},
+		reply: expectedResult,
+		err:   nil,
 	}
 }
 
@@ -99,16 +163,16 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	if session != nil {
 		s = session.(*proto.Session)
 	}
-	query := &proto.Query{
-		Sql:              sql,
+	response, ok := conn.execMap[sql]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:              sql,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Session:          s,
 		NotInTransaction: notInTransaction,
-	}
-	response, ok := conn.execMap[query.Sql]
-	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, nil, fmt.Errorf(
@@ -122,28 +186,28 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	return &reply, s, nil
 }
 
-// ExecuteShard please see vtgateconn.Impl.ExecuteShard
-func (conn *FakeVTGateConn) ExecuteShard(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+// ExecuteShards please see vtgateconn.Impl.ExecuteShard
+func (conn *FakeVTGateConn) ExecuteShards(ctx context.Context, sql string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *proto.Session
 	if session != nil {
 		s = session.(*proto.Session)
 	}
-	query := &proto.QueryShard{
-		Sql:              sql,
+	response, ok := conn.execMap[getShardQueryKey(sql, shards)]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecuteShards{
+		SQL:              sql,
 		BindVariables:    bindVars,
-		TabletType:       topo.ProtoToTabletType(tabletType),
+		TabletType:       tabletType,
 		Keyspace:         keyspace,
 		Shards:           shards,
 		Session:          s,
 		NotInTransaction: notInTransaction,
 	}
-	response, ok := conn.execMap[getShardQueryKey(query)]
-	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", query.Sql)
-	}
 	if !reflect.DeepEqual(query, response.shardQuery) {
 		return nil, nil, fmt.Errorf(
-			"ExecuteShard: %+v, want %+v", query, response.shardQuery)
+			"ExecuteShards: %+v, want %+v", query, response.shardQuery)
 	}
 	var reply mproto.QueryResult
 	reply = *response.reply
@@ -168,8 +232,8 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 	panic("not implemented")
 }
 
-// ExecuteBatchShard please see vtgateconn.Impl.ExecuteBatchShard
-func (conn *FakeVTGateConn) ExecuteBatchShard(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
+// ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
+func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []proto.BoundShardQuery, tabletType pb.TabletType, asTransaction bool, session interface{}) ([]mproto.QueryResult, interface{}, error) {
 	panic("not implemented")
 }
 
@@ -221,13 +285,13 @@ func (conn *FakeVTGateConn) StreamExecute2(ctx context.Context, query string, bi
 	panic("not implemented")
 }
 
-// StreamExecuteShard please see vtgateconn.Impl.StreamExecuteShard
-func (conn *FakeVTGateConn) StreamExecuteShard(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+// StreamExecuteShards please see vtgateconn.Impl.StreamExecuteShards
+func (conn *FakeVTGateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
-// StreamExecuteShard2 please see vtgateconn.Impl.StreamExecuteShard2
-func (conn *FakeVTGateConn) StreamExecuteShard2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
+// StreamExecuteShards2 please see vtgateconn.Impl.StreamExecuteShards2
+func (conn *FakeVTGateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType pb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
 	panic("not implemented")
 }
 
@@ -287,8 +351,8 @@ func (conn *FakeVTGateConn) Rollback2(ctx context.Context, session interface{}) 
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query tproto.BoundQuery, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
-	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, &query, splitColumn, splitCount)]
+func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error) {
+	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
 	if !ok {
 		return nil, fmt.Errorf(
 			"no match for keyspace: %s, query: %v, split column: %v, split count: %d",
@@ -308,12 +372,12 @@ func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string)
 func (conn *FakeVTGateConn) Close() {
 }
 
-func getShardQueryKey(request *proto.QueryShard) string {
-	sort.Strings(request.Shards)
-	return fmt.Sprintf("%s-%s", request.Sql, strings.Join(request.Shards, ":"))
+func getShardQueryKey(sql string, shards []string) string {
+	sort.Strings(shards)
+	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
-func getSplitQueryKey(keyspace string, query *tproto.BoundQuery, splitColumn string, splitCount int) string {
+func getSplitQueryKey(keyspace string, query string, splitColumn string, splitCount int) string {
 	return fmt.Sprintf("%s:%v:%v:%d", keyspace, query, splitColumn, splitCount)
 }
 

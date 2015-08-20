@@ -388,14 +388,13 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
 
-	if ins.OnDup != nil {
-		// Upserts are not safe for statement based replication:
-		// http://bugs.mysql.com/bug.php?id=58637
-		plan.Reason = REASON_UPSERT
-		return plan, nil
-	}
-
 	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
+		if ins.OnDup != nil {
+			// Upserts not allowed for subqueries.
+			// http://bugs.mysql.com/bug.php?id=58637
+			plan.Reason = REASON_UPSERT
+			return plan, nil
+		}
 		plan.PlanId = PLAN_INSERT_SUBQUERY
 		plan.OuterQuery = GenerateInsertOuterQuery(ins)
 		plan.Subquery = GenerateSelectLimitQuery(sel)
@@ -422,11 +421,40 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	if err != nil {
 		return nil, err
 	}
-	if pkValues != nil {
-		plan.PlanId = PLAN_INSERT_PK
-		plan.OuterQuery = plan.FullQuery
-		plan.PKValues = pkValues
+	if pkValues == nil {
+		plan.Reason = REASON_COMPLEX_EXPR
+		return plan, nil
 	}
+	plan.PKValues = pkValues
+	if ins.OnDup == nil {
+		plan.PlanId = PLAN_INSERT_PK
+		plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
+		return plan, nil
+	}
+	if len(rowList) > 1 {
+		// Upsert supported only for single row inserts.
+		plan.Reason = REASON_UPSERT
+		return plan, nil
+	}
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(sqlparser.UpdateExprs(ins.OnDup), tableInfo.Indexes[0])
+	if err != nil {
+		if err == ErrTooComplex {
+			plan.Reason = REASON_PK_CHANGE
+			return plan, nil
+		}
+		return nil, err
+	}
+	plan.PlanId = PLAN_UPSERT_PK
+	newins := *ins
+	newins.Ignore = ""
+	newins.OnDup = nil
+	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
+	upd := &sqlparser.Update{
+		Comments: ins.Comments,
+		Table:    ins.Table,
+		Exprs:    sqlparser.UpdateExprs(ins.OnDup),
+	}
+	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
 	return plan, nil
 }
 
@@ -467,7 +495,6 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 			}
 			node := row[columnNumber]
 			if !sqlparser.IsValue(node) {
-				log.Warningf("insert is too complex %v", node)
 				return nil, nil
 			}
 			var err error

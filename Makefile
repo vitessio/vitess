@@ -59,15 +59,15 @@ unit_test_race:
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
-	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {}
+	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {} | tee unit_test_goveralls.txt
 	gover ./go/
-	# Travis doesn't set the token for forked pull requests, so skip
-	# upload if COVERALLS_TOKEN is unset.
-	if ! [ -z "$$COVERALLS_TOKEN" ]; then \
-		# -shallow ensures that goveralls does not return with a failure \
-		# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
-		goveralls -shallow -coverprofile=gover.coverprofile -repotoken $$COVERALLS_TOKEN; \
-	fi
+	# -shallow ensures that goveralls does not return with a failure \
+	# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
+	goveralls -shallow -coverprofile=gover.coverprofile -service=travis-ci
+	echo
+	echo "Top 10 of Go packages with worst coverage:"
+	sort -n -k 5 unit_test_goveralls.txt | head -n10
+	[ -f unit_test_goveralls.txt ] && rm unit_test_goveralls.txt
 
 ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
 queryservice_test_files = \
@@ -86,8 +86,7 @@ site_integration_test_files = \
 	tabletmanager.py \
 	update_stream.py \
 	vtdb_test.py \
-	vtgatev2_test.py \
-	zkocc_test.py
+	vtgatev2_test.py
 
 # These tests should be run by developers after making code changes.
 # Integration tests are grouped into 3 suites.
@@ -98,7 +97,6 @@ small_integration_test_files = \
 	tablet_test.py \
 	sql_builder_test.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	schema.py \
 	keyspace_test.py \
 	keyrange_test.py \
@@ -111,10 +109,8 @@ small_integration_test_files = \
 	update_stream.py \
 	custom_sharding.py \
 	initial_sharding_bytes.py \
-	initial_sharding.py \
-	zkocc_test.py
+	initial_sharding.py
 
-# TODO(mberlin): Remove -v option to worker.py when we found out what causes 10 minute Travis timeouts.
 medium_integration_test_files = \
 	tabletmanager.py \
 	reparent.py \
@@ -122,7 +118,7 @@ medium_integration_test_files = \
 	client_test.py \
 	vtgate_utils_test.py \
 	rowcache_invalidator.py \
-	"worker.py -v" \
+	worker.py \
 	automation_horizontal_resharding.py
 
 large_integration_test_files = \
@@ -140,7 +136,6 @@ worker_integration_test_files = \
 	resharding.py \
 	resharding_bytes.py \
 	vertical_split.py \
-	vertical_split_vtgate.py \
 	initial_sharding.py \
 	initial_sharding_bytes.py \
 	worker.py
@@ -150,19 +145,12 @@ SHELL = /bin/bash
 
 # function to execute a list of integration test files
 # exits on first failure
-# TODO(mberlin): Remove special handling for worker.py when we found out what causes 10 minute Travis timeouts.
 define run_integration_tests
 	cd test ; \
 	for t in $1 ; do \
 		echo $$(date): Running test/$$t... ; \
-		if [[ $$t == *worker.py* ]]; then \
-			time ./$$t $$VT_TEST_FLAGS 2>&1 ; \
-			rc=$$? ; \
-		else \
-			output=$$(time ./$$t $$VT_TEST_FLAGS 2>&1) ; \
-			rc=$$? ; \
-		fi ; \
-		if [[ $$rc != 0 ]]; then \
+		output=$$(time timeout 5m ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
 			echo "$$output" >&2 ; \
 			exit 1 ; \
 		fi ; \

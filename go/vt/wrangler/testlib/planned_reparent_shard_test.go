@@ -13,7 +13,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
 
@@ -96,7 +96,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	defer goodSlave2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, topo.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
+	if err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, topoproto.TabletAliasString(newMaster.Tablet.Alias)}); err != nil {
 		t.Fatalf("PlannedReparentShard failed: %v", err)
 	}
 

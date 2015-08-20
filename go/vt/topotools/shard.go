@@ -24,7 +24,7 @@ func CreateShard(ctx context.Context, ts topo.Server, keyspace, shard string) er
 	}
 
 	// now try to create within the lock, may already exist
-	err = topo.CreateShard(ctx, ts, keyspace, shard)
+	err = ts.CreateShard(ctx, keyspace, shard)
 
 	// and unlock and return
 	return node.UnlockKeyspace(ctx, ts, keyspace, lockPath, err)
@@ -48,7 +48,7 @@ func GetOrCreateShard(ctx context.Context, ts topo.Server, keyspace, shard strin
 		}
 
 		// now try to create within the lock, may already exist
-		if err := topo.CreateShard(ctx, ts, keyspace, shard); err != nil && err != topo.ErrNodeExists {
+		if err := ts.CreateShard(ctx, keyspace, shard); err != nil && err != topo.ErrNodeExists {
 			return nil, node.UnlockKeyspace(ctx, ts, keyspace, lockPath, fmt.Errorf("CreateShard(%v/%v) failed: %v", keyspace, shard, err))
 		}
 

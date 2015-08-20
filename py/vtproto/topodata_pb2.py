@@ -19,6 +19,7 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='topodata.proto',
   package='topodata',
+  syntax='proto3',
   serialized_pb=_b('\n\x0etopodata.proto\x12\x08topodata\"&\n\x08KeyRange\x12\r\n\x05start\x18\x01 \x01(\x0c\x12\x0b\n\x03\x65nd\x18\x02 \x01(\x0c\"(\n\x0bTabletAlias\x12\x0c\n\x04\x63\x65ll\x18\x01 \x01(\t\x12\x0b\n\x03uid\x18\x02 \x01(\r\"\xf1\x03\n\x06Tablet\x12$\n\x05\x61lias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12\x10\n\x08hostname\x18\x02 \x01(\t\x12\n\n\x02ip\x18\x03 \x01(\t\x12/\n\x08port_map\x18\x04 \x03(\x0b\x32\x1d.topodata.Tablet.PortMapEntry\x12\x10\n\x08keyspace\x18\x05 \x01(\t\x12\r\n\x05shard\x18\x06 \x01(\t\x12%\n\tkey_range\x18\x07 \x01(\x0b\x32\x12.topodata.KeyRange\x12\"\n\x04type\x18\x08 \x01(\x0e\x32\x14.topodata.TabletType\x12\x18\n\x10\x64\x62_name_override\x18\t \x01(\t\x12(\n\x04tags\x18\n \x03(\x0b\x32\x1a.topodata.Tablet.TagsEntry\x12\x33\n\nhealth_map\x18\x0b \x03(\x0b\x32\x1f.topodata.Tablet.HealthMapEntry\x1a.\n\x0cPortMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x1a+\n\tTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\x30\n\x0eHealthMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xcb\x04\n\x05Shard\x12+\n\x0cmaster_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x30\n\x0cserved_types\x18\x03 \x03(\x0b\x32\x1a.topodata.Shard.ServedType\x12\x32\n\rsource_shards\x18\x04 \x03(\x0b\x32\x1b.topodata.Shard.SourceShard\x12\r\n\x05\x63\x65lls\x18\x05 \x03(\t\x12\x36\n\x0ftablet_controls\x18\x06 \x03(\x0b\x32\x1d.topodata.Shard.TabletControl\x1a\x46\n\nServedType\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x1ar\n\x0bSourceShard\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x10\n\x08keyspace\x18\x02 \x01(\t\x12\r\n\x05shard\x18\x03 \x01(\t\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x1a\x84\x01\n\rTabletControl\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x1d\n\x15\x64isable_query_service\x18\x03 \x01(\x08\x12\x1a\n\x12\x62lacklisted_tables\x18\x04 \x03(\t\"\x8a\x02\n\x08Keyspace\x12\x1c\n\x14sharding_column_name\x18\x01 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x02 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x19\n\x11split_shard_count\x18\x03 \x01(\x05\x12\x33\n\x0cserved_froms\x18\x04 \x03(\x0b\x32\x1d.topodata.Keyspace.ServedFrom\x1aX\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\r\n\x05\x63\x65lls\x18\x02 \x03(\t\x12\x10\n\x08keyspace\x18\x03 \x01(\t\"w\n\x10ShardReplication\x12.\n\x05nodes\x18\x01 \x03(\x0b\x32\x1f.topodata.ShardReplication.Node\x1a\x33\n\x04Node\x12+\n\x0ctablet_alias\x18\x01 \x01(\x0b\x32\x15.topodata.TabletAlias\"\xf1\x01\n\x08\x45ndPoint\x12\x0b\n\x03uid\x18\x01 \x01(\r\x12\x0c\n\x04host\x18\x02 \x01(\t\x12\x31\n\x08port_map\x18\x03 \x03(\x0b\x32\x1f.topodata.EndPoint.PortMapEntry\x12\x35\n\nhealth_map\x18\x04 \x03(\x0b\x32!.topodata.EndPoint.HealthMapEntry\x1a.\n\x0cPortMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x05:\x02\x38\x01\x1a\x30\n\x0eHealthMapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"0\n\tEndPoints\x12#\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x12.topodata.EndPoint\"T\n\x08SrvShard\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x13\n\x0bmaster_cell\x18\x03 \x01(\t\"E\n\x0eShardReference\x12\x0c\n\x04name\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\"\xb1\x03\n\x0bSrvKeyspace\x12;\n\npartitions\x18\x01 \x03(\x0b\x32\'.topodata.SrvKeyspace.KeyspacePartition\x12\x1c\n\x14sharding_column_name\x18\x02 \x01(\t\x12\x36\n\x14sharding_column_type\x18\x03 \x01(\x0e\x32\x18.topodata.KeyspaceIdType\x12\x35\n\x0bserved_from\x18\x04 \x03(\x0b\x32 .topodata.SrvKeyspace.ServedFrom\x12\x19\n\x11split_shard_count\x18\x05 \x01(\x05\x1ar\n\x11KeyspacePartition\x12)\n\x0bserved_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x32\n\x10shard_references\x18\x02 \x03(\x0b\x32\x18.topodata.ShardReference\x1aI\n\nServedFrom\x12)\n\x0btablet_type\x18\x01 \x01(\x0e\x32\x14.topodata.TabletType\x12\x10\n\x08keyspace\x18\x02 \x01(\t*2\n\x0eKeyspaceIdType\x12\t\n\x05UNSET\x10\x00\x12\n\n\x06UINT64\x10\x01\x12\t\n\x05\x42YTES\x10\x02*\xb8\x01\n\nTabletType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x08\n\x04IDLE\x10\x01\x12\n\n\x06MASTER\x10\x02\x12\x0b\n\x07REPLICA\x10\x03\x12\n\n\x06RDONLY\x10\x04\x12\t\n\x05\x42\x41TCH\x10\x04\x12\t\n\x05SPARE\x10\x05\x12\x10\n\x0c\x45XPERIMENTAL\x10\x06\x12\x12\n\x0eSCHEMA_UPGRADE\x10\x07\x12\n\n\x06\x42\x41\x43KUP\x10\x08\x12\x0b\n\x07RESTORE\x10\t\x12\n\n\x06WORKER\x10\n\x12\t\n\x05SCRAP\x10\x0b\x1a\x02\x10\x01\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -165,6 +166,7 @@ _KEYRANGE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -202,6 +204,7 @@ _TABLETALIAS = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -239,6 +242,7 @@ _TABLET_PORTMAPENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -275,6 +279,7 @@ _TABLET_TAGSENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -311,6 +316,7 @@ _TABLET_HEALTHMAPENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -410,6 +416,7 @@ _TABLET = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -447,6 +454,7 @@ _SHARD_SERVEDTYPE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -504,6 +512,7 @@ _SHARD_SOURCESHARD = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -554,6 +563,7 @@ _SHARD_TABLETCONTROL = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -618,6 +628,7 @@ _SHARD = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -662,6 +673,7 @@ _KEYSPACE_SERVEDFROM = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -712,6 +724,7 @@ _KEYSPACE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -742,6 +755,7 @@ _SHARDREPLICATION_NODE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -771,6 +785,7 @@ _SHARDREPLICATION = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -808,6 +823,7 @@ _ENDPOINT_PORTMAPENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -844,6 +860,7 @@ _ENDPOINT_HEALTHMAPENTRY = _descriptor.Descriptor(
   ],
   options=_descriptor._ParseOptions(descriptor_pb2.MessageOptions(), _b('8\001')),
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -894,6 +911,7 @@ _ENDPOINT = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -924,6 +942,7 @@ _ENDPOINTS = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -968,6 +987,7 @@ _SRVSHARD = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -1005,6 +1025,7 @@ _SHARDREFERENCE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -1042,6 +1063,7 @@ _SRVKEYSPACE_KEYSPACEPARTITION = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -1078,6 +1100,7 @@ _SRVKEYSPACE_SERVEDFROM = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -1135,6 +1158,7 @@ _SRVKEYSPACE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],

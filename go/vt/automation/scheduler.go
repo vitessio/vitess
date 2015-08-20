@@ -207,6 +207,8 @@ func defaultTaskCreator(taskName string) Task {
 		return &HorizontalReshardingTask{}
 	case "CopySchemaShardTask":
 		return &CopySchemaShardTask{}
+	case "WaitForFilteredReplicationTask":
+		return &WaitForFilteredReplicationTask{}
 	case "SplitCloneTask":
 		return &SplitCloneTask{}
 	case "SplitDiffTask":

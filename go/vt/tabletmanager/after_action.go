@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -56,7 +57,7 @@ func (agent *ActionAgent) allowQueries(tablet *pbt.Tablet, blacklistedTables []s
 	if agent.DBConfigs != nil {
 		// Update our DB config to match the info we have in the tablet
 		if agent.DBConfigs.App.DbName == "" {
-			agent.DBConfigs.App.DbName = topo.TabletDbName(tablet)
+			agent.DBConfigs.App.DbName = topoproto.TabletDbName(tablet)
 		}
 		agent.DBConfigs.App.Keyspace = tablet.Keyspace
 		agent.DBConfigs.App.Shard = tablet.Shard
@@ -116,7 +117,7 @@ func (agent *ActionAgent) loadKeyspaceAndBlacklistRules(tablet *pbt.Tablet, blac
 	blacklistRules := tabletserver.NewQueryRules()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
-		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, topo.TabletDbName(tablet), blacklistedTables)
+		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
 		if err != nil {
 			return err
 		}
@@ -160,7 +161,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	var blacklistedTables []string
 	var err error
 	if allowQuery {
-		shardInfo, err = topo.GetShard(ctx, agent.TopoServer, newTablet.Keyspace, newTablet.Shard)
+		shardInfo, err = agent.TopoServer.GetShard(ctx, newTablet.Keyspace, newTablet.Shard)
 		if err != nil {
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 		} else {

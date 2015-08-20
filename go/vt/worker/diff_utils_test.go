@@ -37,8 +37,8 @@ func TestUint64FromKeyspaceId(t *testing.T) {
 			t.Errorf("hex.DecodeString error: %v", err)
 			continue
 		}
-		if got := uint64FromKeyspaceId(keyspaceID); got != want {
-			t.Errorf("uint64FromKeyspaceId(%v) = %q, want %q", input, got, want)
+		if got := uint64FromKeyspaceID(keyspaceID); got != want {
+			t.Errorf("uint64FromKeyspaceID(%v) = %q, want %q", input, got, want)
 		}
 	}
 }

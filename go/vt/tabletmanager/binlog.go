@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -93,7 +94,7 @@ func newBinlogPlayerController(ts topo.Server, dbConfig *sqldb.ConnParams, mysql
 }
 
 func (bpc *BinlogPlayerController) String() string {
-	return "BinlogPlayerController(" + topo.SourceShardString(bpc.sourceShard) + ")"
+	return "BinlogPlayerController(" + topoproto.SourceShardString(bpc.sourceShard) + ")"
 }
 
 // Start will start the player in the background and run forever.
@@ -332,18 +333,15 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *sqldb.ConnParams, mysqld mysql
 
 // RegisterBinlogPlayerMap registers the varz for the players.
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
-	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
-		sbm := int64(0)
+	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(stats.IntFunc(func() int64 {
 		blm.mu.Lock()
-		for _, bpc := range blm.players {
-			psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
-			if psbm > sbm {
-				sbm = psbm
-			}
-		}
-		blm.mu.Unlock()
-		return sbm
+		defer blm.mu.Unlock()
+		return int64(len(blm.players))
+	})))
+	stats.Publish("BinlogPlayerSecondsBehindMaster", stats.IntFunc(func() int64 {
+		blm.mu.Lock()
+		defer blm.mu.Unlock()
+		return blm.maxSecondsBehindMasterUNGUARDED()
 	}))
 	stats.Publish("BinlogPlayerSecondsBehindMasterMap", stats.CountersFunc(func() map[string]int64 {
 		blm.mu.Lock()
@@ -378,11 +376,24 @@ func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
 	}))
 }
 
-func (blm *BinlogPlayerMap) size() int64 {
+func (blm *BinlogPlayerMap) isRunningFilteredReplication() bool {
 	blm.mu.Lock()
-	result := len(blm.players)
-	blm.mu.Unlock()
-	return int64(result)
+	defer blm.mu.Unlock()
+	return len(blm.players) != 0
+}
+
+// maxSecondsBehindMasterUNGUARDED returns the maximum of the secondsBehindMaster
+// value of all binlog players i.e. the highest seen filtered replication lag.
+// NOTE: Caller must own a lock on blm.mu.
+func (blm *BinlogPlayerMap) maxSecondsBehindMasterUNGUARDED() int64 {
+	sbm := int64(0)
+	for _, bpc := range blm.players {
+		psbm := bpc.binlogPlayerStats.SecondsBehindMaster.Get()
+		if psbm > sbm {
+			sbm = psbm
+		}
+	}
+	return sbm
 }
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
@@ -435,7 +446,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, k
 
 	blm.mu.Lock()
 	if blm.dbConfig.DbName == "" {
-		blm.dbConfig.DbName = topo.TabletDbName(tablet)
+		blm.dbConfig.DbName = topoproto.TabletDbName(tablet)
 	}
 
 	// get the existing sources and build a map of sources to remove
@@ -448,7 +459,7 @@ func (blm *BinlogPlayerMap) RefreshMap(ctx context.Context, tablet *pb.Tablet, k
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topo.TabletDbName(tablet))
+		blm.addPlayer(ctx, tablet.Alias.Cell, keyspaceInfo.ShardingColumnType, tablet.KeyRange, sourceShard, topoproto.TabletDbName(tablet))
 		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
@@ -588,13 +599,13 @@ type BinlogPlayerControllerStatus struct {
 
 // SourceShardAsHTML returns the SourceShard as HTML
 func (bpcs *BinlogPlayerControllerStatus) SourceShardAsHTML() template.HTML {
-	return topo.SourceShardAsHTML(bpcs.SourceShard)
+	return topoproto.SourceShardAsHTML(bpcs.SourceShard)
 }
 
 // SourceTabletAlias returns the string version of the SourceTablet alias, if set
 func (bpcs *BinlogPlayerControllerStatus) SourceTabletAlias() string {
 	if bpcs.SourceTablet != nil {
-		return topo.TabletAliasString(bpcs.SourceTablet)
+		return topoproto.TabletAliasString(bpcs.SourceTablet)
 	}
 	return ""
 }
@@ -624,6 +635,7 @@ type BinlogPlayerMapStatus struct {
 }
 
 // Status returns the BinlogPlayerMapStatus for the BinlogPlayerMap.
+// It is used to display the complete status in the webinterface.
 func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	// Create the result, take care of the stopped state.
 	result := &BinlogPlayerMapStatus{}
@@ -666,4 +678,15 @@ func (blm *BinlogPlayerMap) Status() *BinlogPlayerMapStatus {
 	sort.Sort(result.Controllers)
 
 	return result
+}
+
+// StatusSummary returns aggregated health information e.g.
+// the maximum replication delay across all binlog players.
+// It is used by the QueryService.StreamHealth RPC.
+func (blm *BinlogPlayerMap) StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int32) {
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	maxSecondsBehindMaster = blm.maxSecondsBehindMasterUNGUARDED()
+	binlogPlayersCount = int32(len(blm.players))
+	return
 }

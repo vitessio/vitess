@@ -2,11 +2,9 @@ package actionnode
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/jscfg"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -32,12 +30,13 @@ func TestMissingFieldsJson(t *testing.T) {
 		ExpectedMasterIPAddr: "i1",
 		ScrapStragglers:      true,
 	}
-	data := jscfg.ToJSON(swra)
+	data, err := json.MarshalIndent(swra, "", "  ")
+	if err != nil {
+		t.Fatalf("cannot marshal: %v", err)
+	}
 
 	output := &SlaveWasRestartedArgs{}
-	decoder := json.NewDecoder(strings.NewReader(data))
-	err := decoder.Decode(output)
-	if err != nil {
+	if err = json.Unmarshal(data, output); err != nil {
 		t.Errorf("Cannot re-decode struct without field: %v", err)
 	}
 }
@@ -49,12 +48,13 @@ func TestExtraFieldsJson(t *testing.T) {
 			Cell: "aa",
 		},
 	}
-	data := jscfg.ToJSON(swra)
+	data, err := json.MarshalIndent(swra, "", "  ")
+	if err != nil {
+		t.Fatalf("cannot marshal: %v", err)
+	}
 
 	output := &slaveWasRestartedTestArgs{}
-	decoder := json.NewDecoder(strings.NewReader(data))
-	err := decoder.Decode(output)
-	if err != nil {
+	if err = json.Unmarshal(data, output); err != nil {
 		t.Errorf("Cannot re-decode struct without field: %v", err)
 	}
 }

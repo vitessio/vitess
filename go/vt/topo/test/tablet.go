@@ -1,4 +1,4 @@
-// Package test contains utilities to test topo.Server
+// Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call CheckAll in your test method. For an example, look at
 // the tests in github.com/youtube/vitess/go/vt/zktopo.
@@ -28,7 +28,7 @@ func tabletEqual(left, right *pb.Tablet) (bool, error) {
 }
 
 // CheckTablet verifies the topo server API is correct for managing tablets.
-func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
+func CheckTablet(ctx context.Context, t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 	tablet := &pb.Tablet{
 		Alias:    &pb.TabletAlias{Cell: cell, Uid: 1},
@@ -51,18 +51,18 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(ctx, &pb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
+	if _, _, err := ts.GetTablet(ctx, &pb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
-	ti, err := ts.GetTablet(ctx, tablet.Alias)
+	nt, nv, err := ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if eq, err := tabletEqual(ti.Tablet, tablet); err != nil {
+	if eq, err := tabletEqual(nt, tablet); err != nil {
 		t.Errorf("cannot compare tablets: %v", err)
 	} else if !eq {
-		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, ti.Tablet)
+		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
 	if _, err := ts.GetTabletsByCell(ctx, "666"); err != topo.ErrNoNode {
@@ -77,32 +77,32 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
-	ti.Hostname = "remotehost"
-	if err := topo.UpdateTablet(ctx, ts, ti); err != nil {
+	nt.Hostname = "remotehost"
+	if _, err := ts.UpdateTablet(ctx, nt, nv); err != nil {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
-	ti, err = ts.GetTablet(ctx, tablet.Alias)
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if want := "remotehost"; ti.Hostname != want {
-		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
+	if want := "remotehost"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
-	if err := topo.UpdateTabletFields(ctx, ts, tablet.Alias, func(t *pb.Tablet) error {
+	if _, err := ts.UpdateTabletFields(ctx, tablet.Alias, func(t *pb.Tablet) error {
 		t.Hostname = "anotherhost"
 		return nil
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
-	ti, err = ts.GetTablet(ctx, tablet.Alias)
+	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
 
-	if want := "anotherhost"; ti.Hostname != want {
-		t.Errorf("ti.Hostname: want %v, got %v", want, ti.Hostname)
+	if want := "anotherhost"; nt.Hostname != want {
+		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
 	}
 
 	if err := ts.DeleteTablet(ctx, tablet.Alias); err != nil {
@@ -112,7 +112,7 @@ func CheckTablet(ctx context.Context, t *testing.T, ts topo.Server) {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
+	if _, _, err := ts.GetTablet(ctx, tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 

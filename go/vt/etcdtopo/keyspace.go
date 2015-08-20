@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/events"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -26,36 +24,23 @@ func (s *Server) CreateKeyspace(ctx context.Context, keyspace string, value *pb.
 	}
 	global := s.getGlobal()
 
-	resp, err := global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */)
-	if err != nil {
+	if _, err = global.Create(keyspaceFilePath(keyspace), string(data), 0 /* ttl */); err != nil {
 		return convertError(err)
 	}
-	if err := initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
+	if err = initLockFile(global, keyspaceDirPath(keyspace)); err != nil {
 		return err
 	}
-
-	// We don't return ErrBadResponse in this case because the Create() suceeeded
-	// and we don't really need the version to satisfy our contract - we're only
-	// logging it.
-	version := int64(-1)
-	if resp.Node != nil {
-		version = int64(resp.Node.ModifiedIndex)
-	}
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, value, version),
-		Status:       "created",
-	})
 	return nil
 }
 
 // UpdateKeyspace implements topo.Server.
-func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, existingVersion int64) (int64, error) {
-	data, err := json.MarshalIndent(ki.Keyspace, "", "  ")
+func (s *Server) UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (int64, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return -1, err
 	}
 
-	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(ki.KeyspaceName()),
+	resp, err := s.getGlobal().CompareAndSwap(keyspaceFilePath(keyspace),
 		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
@@ -63,30 +48,25 @@ func (s *Server) UpdateKeyspace(ctx context.Context, ki *topo.KeyspaceInfo, exis
 	if resp.Node == nil {
 		return -1, ErrBadResponse
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *ki,
-		Status:       "updated",
-	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
 // GetKeyspace implements topo.Server.
-func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*topo.KeyspaceInfo, error) {
+func (s *Server) GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error) {
 	resp, err := s.getGlobal().Get(keyspaceFilePath(keyspace), false /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, 0, convertError(err)
 	}
 	if resp.Node == nil {
-		return nil, ErrBadResponse
+		return nil, 0, ErrBadResponse
 	}
 
 	value := &pb.Keyspace{}
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
-		return nil, fmt.Errorf("bad keyspace data (%v): %q", err, resp.Node.Value)
+		return nil, 0, fmt.Errorf("bad keyspace data (%v): %q", err, resp.Node.Value)
 	}
 
-	return topo.NewKeyspaceInfo(keyspace, value, int64(resp.Node.ModifiedIndex)), nil
+	return value, int64(resp.Node.ModifiedIndex), nil
 }
 
 // GetKeyspaces implements topo.Server.
@@ -125,11 +105,6 @@ func (s *Server) DeleteKeyspaceShards(ctx context.Context, keyspace string) erro
 	if err = rec.Error(); err != nil {
 		return err
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
-		Status:       "deleted all shards",
-	})
 	return nil
 }
 
@@ -139,10 +114,5 @@ func (s *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	if err != nil {
 		return convertError(err)
 	}
-
-	event.Dispatch(&events.KeyspaceChange{
-		KeyspaceInfo: *topo.NewKeyspaceInfo(keyspace, nil, -1),
-		Status:       "deleted",
-	})
 	return nil
 }

@@ -364,20 +364,33 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 		return NewTabletError(ErrFail, "%v: uncaught panic for %v", err, query)
 	}
 	var myError error
-	if sq.config.TerseErrors && terr.SqlError != 0 {
+	if sq.config.TerseErrors && terr.SqlError != 0 && len(query.BindVariables) != 0 {
 		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
 	} else {
 		myError = terr
 	}
 	terr.RecordStats(sq.qe.queryServiceStats)
-	// suppress these errors in logs
-	if terr.ErrorType == ErrRetry || terr.ErrorType == ErrTxPoolFull || terr.SqlError == mysql.ErrDupEntry {
+
+	logMethod := log.Warningf
+	// Suppress or demote some errors in logs
+	switch terr.ErrorType {
+	case ErrRetry, ErrTxPoolFull:
 		return myError
+	case ErrFatal:
+		logMethod = log.Errorf
 	}
-	if terr.ErrorType == ErrFatal {
-		log.Errorf("%v: %v", terr, query)
+	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
+	switch terr.SqlError {
+	case mysql.ErrDupEntry:
+		return myError
+	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong:
+		logMethod = log.Infof
+	case 0:
+		if strings.Contains(terr.Error(), "Row count exceeded") {
+			logMethod = log.Infof
+		}
 	}
-	log.Warningf("%v: %v", terr, query)
+	logMethod("%v: %v", terr, query)
 	return myError
 }
 
@@ -539,20 +552,19 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, target *pb.Target, req *prot
 		logStats: logStats,
 		qe:       sq.qe,
 	}
-	conn, err := qre.getConn(sq.qe.connPool)
+	columnType, err := getColumnType(qre, splitter.splitColumn, splitter.tableName)
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
-	// TODO: For fetching MinMax, include where clauses on the
-	// primary key, if any, in the original query which might give a narrower
-	// range of split column to work with.
-	minMaxSQL := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", splitter.splitColumn, splitter.splitColumn, splitter.tableName)
-	splitColumnMinMax, err := qre.execSQL(conn, minMaxSQL, true)
-	if err != nil {
-		return err
+	var pkMinMax *mproto.QueryResult
+	switch columnType {
+	case mproto.VT_TINY, mproto.VT_SHORT, mproto.VT_LONG, mproto.VT_LONGLONG, mproto.VT_INT24, mproto.VT_FLOAT, mproto.VT_DOUBLE:
+		pkMinMax, err = getColumnMinMax(qre, splitter.splitColumn, splitter.tableName)
+		if err != nil {
+			return err
+		}
 	}
-	reply.Queries, err = splitter.split(splitColumnMinMax)
+	reply.Queries, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
 		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
 	}
@@ -672,4 +684,37 @@ func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, c
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, timeout)
+}
+
+func getColumnType(qre *QueryExecutor, columnName, tableName string) (int64, error) {
+	conn, err := qre.getConn(qre.qe.connPool)
+	if err != nil {
+		return mproto.VT_NULL, err
+	}
+	defer conn.Recycle()
+	// TODO(shengzhe): use AST to represent the query to avoid sql injection.
+	// current code is safe because QuerySplitter.validateQuery is called before
+	// calling this.
+	query := fmt.Sprintf("SELECT %v FROM %v LIMIT 0", columnName, tableName)
+	result, err := qre.execSQL(conn, query, true)
+	if err != nil {
+		return mproto.VT_NULL, err
+	}
+	if result == nil || len(result.Fields) != 1 {
+		return mproto.VT_NULL, NewTabletError(ErrFail, "failed to get column type for column: %v, invalid result: %v", columnName, result)
+	}
+	return result.Fields[0].Type, nil
+}
+
+func getColumnMinMax(qre *QueryExecutor, columnName, tableName string) (*mproto.QueryResult, error) {
+	conn, err := qre.getConn(qre.qe.connPool)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	// TODO(shengzhe): use AST to represent the query to avoid sql injection.
+	// current code is safe because QuerySplitter.validateQuery is called before
+	// calling this.
+	minMaxSQL := fmt.Sprintf("SELECT MIN(%v), MAX(%v) FROM %v", columnName, columnName, tableName)
+	return qre.execSQL(conn, minMaxSQL, true)
 }
