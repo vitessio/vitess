@@ -174,7 +174,7 @@ func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 
 func TestTxPoolBeginWithExecError(t *testing.T) {
 	db := fakesqldb.Register()
-	db.AddRejectedQuery("begin")
+	db.AddRejectedQuery("begin", errRejected)
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -190,7 +190,7 @@ func TestTxPoolSafeCommitFail(t *testing.T) {
 	sql := fmt.Sprintf("alter table test_table add test_column int")
 	db.AddQuery("begin", &proto.QueryResult{})
 	db.AddQuery(sql, &proto.QueryResult{})
-	db.AddRejectedQuery("commit")
+	db.AddRejectedQuery("commit", errRejected)
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
@@ -215,7 +215,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	db := fakesqldb.Register()
 	db.AddQuery(sql, &proto.QueryResult{})
 	db.AddQuery("begin", &proto.QueryResult{})
-	db.AddRejectedQuery("rollback")
+	db.AddRejectedQuery("rollback", errRejected)
 
 	txPool := newTxPool(false)
 	appParams := sqldb.ConnParams{}

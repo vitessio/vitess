@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -17,6 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
+
+var errRejected = errors.New("rejected")
 
 func TestTableInfoNew(t *testing.T) {
 	fakecacheservice.Register()
@@ -46,7 +49,7 @@ func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery("show index from `test_table`")
+	db.AddRejectedQuery("show index from `test_table`", errRejected)
 	cachePool := newTestTableInfoCachePool()
 	cachePool.Open()
 	defer cachePool.Close()

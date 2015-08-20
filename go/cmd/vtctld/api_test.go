@@ -16,7 +16,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -42,16 +41,16 @@ func TestAPI(t *testing.T) {
 
 	// Populate topo.
 	ts.CreateKeyspace(ctx, "ks1", &pb.Keyspace{ShardingColumnName: "shardcol"})
-	ts.CreateShard(ctx, "ks1", "-80", &pb.Shard{
+	ts.Impl.CreateShard(ctx, "ks1", "-80", &pb.Shard{
 		Cells:    cells,
 		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
 	})
-	ts.CreateShard(ctx, "ks1", "80-", &pb.Shard{
+	ts.Impl.CreateShard(ctx, "ks1", "80-", &pb.Shard{
 		Cells:    cells,
 		KeyRange: &pb.KeyRange{Start: []byte{0x80}, End: nil},
 	})
 
-	topo.CreateTablet(ctx, ts, &pb.Tablet{
+	ts.CreateTablet(ctx, &pb.Tablet{
 		Alias:    &pb.TabletAlias{Cell: "cell1", Uid: 100},
 		Keyspace: "ks1",
 		Shard:    "-80",
@@ -59,7 +58,7 @@ func TestAPI(t *testing.T) {
 		KeyRange: &pb.KeyRange{Start: nil, End: []byte{0x80}},
 		PortMap:  map[string]int32{"vt": 100},
 	})
-	topo.CreateTablet(ctx, ts, &pb.Tablet{
+	ts.CreateTablet(ctx, &pb.Tablet{
 		Alias:    &pb.TabletAlias{Cell: "cell2", Uid: 200},
 		Keyspace: "ks1",
 		Shard:    "-80",

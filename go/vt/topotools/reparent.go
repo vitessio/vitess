@@ -56,7 +56,7 @@ func RestartSlavesExternal(ts topo.Server, log logutil.Logger, slaveTabletMap, m
 				log.Warningf("Old master %v is not restarting in time, forcing it to spare: %v", ti.Alias, err)
 
 				ti.Type = pb.TabletType_SPARE
-				if err := topo.UpdateTablet(context.TODO(), ts, ti); err != nil {
+				if err := ts.UpdateTablet(context.TODO(), ti); err != nil {
 					log.Warningf("Failed to change old master %v to spare: %v", ti.Alias, err)
 				}
 			}

@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -271,7 +270,7 @@ func testSplitClone(t *testing.T, strategy string) {
 
 	// add the topo and schema data we'll need
 	ctx := context.Background()
-	if err := topo.CreateShard(ctx, ts, "ks", "80-"); err != nil {
+	if err := ts.CreateShard(ctx, "ks", "80-"); err != nil {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	if err := wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", pbt.KeyspaceIdType_UINT64, 4, false); err != nil {

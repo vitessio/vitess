@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -166,7 +167,7 @@ func (sdw *SplitDiffWorker) init(ctx context.Context) error {
 	if len(sdw.shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", sdw.keyspace, sdw.shard)
 	}
-	if topo.TabletAliasIsZero(sdw.shardInfo.MasterAlias) {
+	if !sdw.shardInfo.HasMaster() {
 		return fmt.Errorf("shard %v/%v has no master", sdw.keyspace, sdw.shard)
 	}
 
@@ -308,8 +309,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	sdw.wr.Logger().Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
 	err = sdw.wr.TabletManagerClient().StartBlp(shortCtx, masterInfo)
-	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias)); err != nil {
-		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topo.TabletAliasString(sdw.shardInfo.MasterAlias), err)
+	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, topoproto.TabletAliasString(sdw.shardInfo.MasterAlias)); err != nil {
+		sdw.wr.Logger().Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, topoproto.TabletAliasString(sdw.shardInfo.MasterAlias), err)
 	}
 	cancel()
 	if err != nil {

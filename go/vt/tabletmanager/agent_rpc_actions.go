@@ -16,6 +16,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 	"golang.org/x/net/context"
 
@@ -411,7 +412,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 	}
 
 	// Change our type to master if not already
-	if err := topo.UpdateTabletFields(ctx, agent.TopoServer, agent.TabletAlias, func(tablet *pb.Tablet) error {
+	if err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *pb.Tablet) error {
 		tablet.Type = pb.TabletType_MASTER
 		tablet.HealthMap = nil
 		return nil
@@ -426,7 +427,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (myproto.ReplicationPo
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *pb.TabletAlias, pos myproto.ReplicationPosition) error {
 	cmds := mysqlctl.CreateReparentJournal()
-	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topo.TabletAliasString(masterAlias), pos))
+	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
 
 	return agent.MysqlDaemon.ExecuteSuperQueryList(cmds)
 }
@@ -570,7 +571,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parent *pb.TabletAlias,
 	if tablet.Type == pb.TabletType_MASTER {
 		tablet.Type = pb.TabletType_SPARE
 		tablet.HealthMap = nil
-		if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+		if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
 			return err
 		}
 	}
@@ -595,7 +596,7 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, swrd *actionnod
 	if tablet.Type == pb.TabletType_MASTER {
 		tablet.Type = pb.TabletType_SPARE
 	}
-	err = topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	err = agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -659,7 +660,7 @@ func (agent *ActionAgent) updateReplicationGraphForPromotedSlave(ctx context.Con
 	// Update tablet regardless - trend towards consistency.
 	tablet.Type = pb.TabletType_MASTER
 	tablet.HealthMap = nil
-	err := topo.UpdateTablet(ctx, agent.TopoServer, tablet)
+	err := agent.TopoServer.UpdateTablet(ctx, tablet)
 	if err != nil {
 		return err
 	}
@@ -708,7 +709,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// now we can run the backup
 	bucket := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", topo.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
+	name := fmt.Sprintf("%v.%v", topoproto.TabletAliasString(tablet.Alias), time.Now().UTC().Format("2006-01-02.150405"))
 	returnErr := mysqlctl.Backup(ctx, agent.MysqlDaemon, l, bucket, name, concurrency, agent.hookExtraEnv())
 
 	// and change our type back to the appropriate value:

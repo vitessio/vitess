@@ -101,7 +101,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 		}
 
 	} else {
-		shardCache, err = topo.FindAllShardsInKeyspace(ctx, wr.ts, keyspace)
+		shardCache, err = wr.ts.FindAllShardsInKeyspace(ctx, keyspace)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (wr *Wrangler) rebuildKeyspace(ctx context.Context, keyspace string, cells 
 
 	// Then we add the cells from the keyspaces we might be 'ServedFrom'.
 	for _, ksf := range ki.ServedFroms {
-		servedFromShards, err := topo.FindAllShardsInKeyspace(ctx, wr.ts, ksf.Keyspace)
+		servedFromShards, err := wr.ts.FindAllShardsInKeyspace(ctx, ksf.Keyspace)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func (wr *Wrangler) RebuildReplicationGraph(ctx context.Context, cells []string,
 			keyspacesToRebuild[ti.Keyspace] = true
 			shardPath := ti.Keyspace + "/" + ti.Shard
 			if !shardsCreated[shardPath] {
-				if err := topo.CreateShard(ctx, wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
+				if err := wr.ts.CreateShard(ctx, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
 					wr.logger.Warningf("failed re-creating shard %v: %v", shardPath, err)
 					hasErr = true
 				} else {

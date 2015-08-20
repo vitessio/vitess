@@ -20,7 +20,7 @@ func TestHookLockSrvShardForAction(t *testing.T) {
 	ts := NewTestServer(t, cells)
 
 	triggered := false
-	ts.HookLockSrvShardForAction = func() {
+	ts.Impl.(*TestServer).HookLockSrvShardForAction = func() {
 		triggered = true
 	}
 

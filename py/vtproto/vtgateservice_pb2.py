@@ -19,6 +19,7 @@ import vtgate_pb2 as vtgate__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgateservice.proto',
   package='vtgateservice',
+  syntax='proto3',
   serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\xd8\n\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
   ,
   dependencies=[vtgate__pb2.DESCRIPTOR,])
@@ -160,7 +161,7 @@ class EarlyAdopterVitessStub(object):
   def GetSrvKeyspace(self, request):
     raise NotImplementedError()
   GetSrvKeyspace.async = None
-def early_adopter_create_Vitess_server(servicer, port, root_certificates, key_chain_pairs):
+def early_adopter_create_Vitess_server(servicer, port, private_key=None, certificate_chain=None):
   import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
@@ -275,8 +276,8 @@ def early_adopter_create_Vitess_server(servicer, port, root_certificates, key_ch
       vtgate_pb2.StreamExecuteShardsResponse.SerializeToString,
     ),
   }
-  return implementations.secure_server("vtgateservice.Vitess", method_service_descriptions, port, root_certificates, key_chain_pairs)
-def early_adopter_create_Vitess_stub(host, port):
+  return implementations.server("vtgateservice.Vitess", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
+def early_adopter_create_Vitess_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
   import vtgate_pb2
   import vtgate_pb2
   import vtgate_pb2
@@ -375,5 +376,5 @@ def early_adopter_create_Vitess_stub(host, port):
       vtgate_pb2.StreamExecuteShardsResponse.FromString,
     ),
   }
-  return implementations.insecure_stub("vtgateservice.Vitess", method_invocation_descriptions, host, port)
+  return implementations.stub("vtgateservice.Vitess", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)

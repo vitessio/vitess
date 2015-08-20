@@ -14,6 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
 	"launchpad.net/gozk/zookeeper"
@@ -62,7 +63,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(ctx context.Context, cell, keyspac
 		if tt == "action" || tt == "actionlog" {
 			continue
 		}
-		if ptt, err := topo.ParseTabletType(tt); err == nil {
+		if ptt, err := topoproto.ParseTabletType(tt); err == nil {
 			result = append(result, ptt)
 		}
 	}
@@ -312,11 +313,11 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 	return string(data), nil
 }
 
-// WatchEndPoints is part of the topo.Server interface
-func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (<-chan *pb.EndPoints, chan<- struct{}, error) {
-	filePath := zkPathForVtName(cell, keyspace, shard, tabletType)
+// WatchSrvKeyspace is part of the topo.Server interface
+func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+	filePath := zkPathForVtKeyspace(cell, keyspace)
 
-	notifications := make(chan *pb.EndPoints, 10)
+	notifications := make(chan *topo.SrvKeyspace, 10)
 	stopWatching := make(chan struct{})
 
 	// waitOrInterrupted will return true if stopWatching is triggered
@@ -350,17 +351,19 @@ func (zkts *Server) WatchEndPoints(ctx context.Context, cell, keyspace, shard st
 
 			// get the initial value, send it, or send nil if no
 			// data
-			var ep *pb.EndPoints
+			var srvKeyspace *topo.SrvKeyspace
 			sendIt := true
 			if len(data) > 0 {
-				ep = &pb.EndPoints{}
-				if err := json.Unmarshal([]byte(data), ep); err != nil {
-					log.Errorf("EndPoints unmarshal failed: %v %v", data, err)
+				sk := &pb.SrvKeyspace{}
+				if err := json.Unmarshal([]byte(data), sk); err != nil {
+					log.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 					sendIt = false
+				} else {
+					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
 				}
 			}
 			if sendIt {
-				notifications <- ep
+				notifications <- srvKeyspace
 			}
 
 			// now act on the watch

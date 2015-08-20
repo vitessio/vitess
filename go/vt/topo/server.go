@@ -45,14 +45,14 @@ var (
 	ErrPartialResult = errors.New("partial result")
 )
 
-// Server is the interface used to talk to a persistent
+// Impl is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
 // Zookeeper is a good example of this, and zktopo contains the
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.
-type Server interface {
+type Impl interface {
 	// topo.Server management interface.
 	Close()
 
@@ -81,15 +81,15 @@ type Server interface {
 	// or ErrBadVersion if the version has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateKeyspace.
-	UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo, existingVersion int64) (newVersion int64, err error)
+	UpdateKeyspace(ctx context.Context, keyspace string, value *pb.Keyspace, existingVersion int64) (newVersion int64, err error)
 
 	// DeleteKeyspace deletes the specified keyspace.
 	// Can return ErrNoNode if the keyspace doesn't exist.
 	DeleteKeyspace(ctx context.Context, keyspace string) error
 
-	// GetKeyspace reads a keyspace and returns it.
+	// GetKeyspace reads a keyspace and returns it, along with its version.
 	// Can return ErrNoNode
-	GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error)
+	GetKeyspace(ctx context.Context, keyspace string) (*pb.Keyspace, int64, error)
 
 	// GetKeyspaces returns the known keyspace names. They shall be sorted.
 	GetKeyspaces(ctx context.Context) ([]string, error)
@@ -115,14 +115,14 @@ type Server interface {
 	// or ErrBadVersion if the version has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateShard.
-	UpdateShard(ctx context.Context, si *ShardInfo, existingVersion int64) (newVersion int64, err error)
+	UpdateShard(ctx context.Context, keyspace, shard string, value *pb.Shard, existingVersion int64) (newVersion int64, err error)
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(ctx context.Context, keyspace, shard string) error
 
-	// GetShard reads a shard and returns it.
+	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
-	GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error)
+	GetShard(ctx context.Context, keyspace, shard string) (*pb.Shard, int64, error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,
@@ -148,12 +148,12 @@ type Server interface {
 	// has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateTablet.
-	UpdateTablet(ctx context.Context, tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
+	UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
 	// Can return ErrNoNode if the tablet doesn't exist.
-	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) error
+	UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletAlias, update func(*pb.Tablet) error) (*pb.Tablet, error)
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
@@ -163,7 +163,7 @@ type Server interface {
 
 	// GetTablet returns the tablet data (includes the current version).
 	// Can return ErrNoNode if the tablet doesn't exist.
-	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*TabletInfo, error)
+	GetTablet(ctx context.Context, alias *pb.TabletAlias) (*pb.Tablet, int64, error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
 	// Can return ErrNoNode if no tablet was ever created in that cell.
@@ -238,12 +238,12 @@ type Server interface {
 	// Can return ErrNoNode or ErrBadVersion.
 	DeleteEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType, existingVersion int64) error
 
-	// WatchEndPoints returns a channel that receives notifications
-	// every time EndPoints for the given type changes.
+	// WatchSrvKeyspace returns a channel that receives notifications
+	// every time the SrvKeyspace for the given keyspace / cell changes.
 	// It should receive a notification with the initial value fairly
-	// quickly after this is set. A value of nil means the Endpoints
+	// quickly after this is set. A value of nil means the SrvKeyspace
 	// object doesn't exist or is empty. To stop watching this
-	// EndPoints object, close the stopWatching channel.
+	// SrvKeyspace object, close the stopWatching channel.
 	// If the underlying topo.Server encounters an error watching the node,
 	// it should retry on a regular basis until it can succeed.
 	// The initial error returned by this method is meant to catch
@@ -251,7 +251,7 @@ type Server interface {
 	// that are never going to work. Mutiple notifications with the
 	// same contents may be sent (for instance when the serving graph
 	// is rebuilt, but the content hasn't changed).
-	WatchEndPoints(ctx context.Context, cell, keyspace, shard string, tabletType pb.TabletType) (notifications <-chan *pb.EndPoints, stopWatching chan<- struct{}, err error)
+	WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (notifications <-chan *SrvKeyspace, stopWatching chan<- struct{}, err error)
 
 	// UpdateSrvShard updates the serving records for a cell,
 	// keyspace, shard.
@@ -305,17 +305,28 @@ type Server interface {
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(ctx context.Context, keyspace, shard, lockPath, results string) error
-}
 
-// Schemafier is a temporary interface for supporting vschema
-// reads and writes. It will eventually be merged into Server.
-type Schemafier interface {
+	//
+	// V3 Schema management, global
+	//
+
+	// SaveVSchema saves the provided schema in the topo server.
 	SaveVSchema(context.Context, string) error
+
+	// GetVSchema retrieves the schema from the topo server.
+	//
+	// If no schema has been previously saved, it should return "{}"
 	GetVSchema(ctx context.Context) (string, error)
 }
 
+// Server is a wrapper type that can have extra methods.
+// Outside modules should just use the Server object.
+type Server struct {
+	Impl
+}
+
 // Registry for Server implementations.
-var serverImpls = make(map[string]Server)
+var serverImpls = make(map[string]Impl)
 
 // Which implementation to use
 var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
@@ -323,7 +334,7 @@ var topoImplementation = flag.String("topo_implementation", "zookeeper", "the to
 // RegisterServer adds an implementation for a Server.
 // If an implementation with that name already exists, panics.
 // Call this in the 'init' function in your module.
-func RegisterServer(name string, ts Server) {
+func RegisterServer(name string, ts Impl) {
 	if serverImpls[name] != nil {
 		panic(fmt.Errorf("Duplicate topo.Server registration for %v", name))
 	}
@@ -332,7 +343,7 @@ func RegisterServer(name string, ts Server) {
 
 // GetServerByName returns a specific Server by name, or nil.
 func GetServerByName(name string) Server {
-	return serverImpls[name]
+	return Server{Impl: serverImpls[name]}
 }
 
 // GetServer returns 'our' Server, going down this list:
@@ -344,7 +355,7 @@ func GetServer() Server {
 	if len(serverImpls) == 1 {
 		for name, ts := range serverImpls {
 			log.V(6).Infof("Using only topo.Server: %v", name)
-			return ts
+			return Server{Impl: ts}
 		}
 	}
 
@@ -353,7 +364,7 @@ func GetServer() Server {
 		panic(fmt.Errorf("No topo.Server named %v", *topoImplementation))
 	}
 	log.V(6).Infof("Using topo.Server: %v", *topoImplementation)
-	return result
+	return Server{Impl: result}
 }
 
 // CloseServers closes all registered Server.

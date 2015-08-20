@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"golang.org/x/net/context"
 
@@ -140,7 +139,7 @@ func TestInitTablet(t *testing.T) {
 		t.Fatalf("GetShard failed: %v", err)
 	}
 	si.MasterAlias = tabletAlias
-	if err := topo.UpdateShard(ctx, ts, si); err != nil {
+	if err := ts.UpdateShard(ctx, si); err != nil {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 	if err := agent.InitTablet(port, gRPCPort); err != nil {

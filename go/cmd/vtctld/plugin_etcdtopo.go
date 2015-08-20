@@ -15,7 +15,7 @@ import (
 func init() {
 	// Wait until flags are parsed, so we can check which topo server is in use.
 	servenv.OnRun(func() {
-		if etcdServer, ok := topo.GetServer().(*etcdtopo.Server); ok {
+		if etcdServer, ok := topo.GetServer().Impl.(*etcdtopo.Server); ok {
 			HandleExplorer("etcd", "/etcd/", "etcd.html", etcdtopo.NewExplorer(etcdServer))
 		}
 	})

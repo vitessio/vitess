@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -49,7 +50,7 @@ func TestJanitorInfo(t *testing.T) {
 }
 
 func TestRunJanitor(t *testing.T) {
-	scheduler, _ := New("a", "a", nil, nil, 0)
+	scheduler, _ := New("a", "a", topo.Server{}, nil, 0)
 	jan := newTestJanitor()
 	ji := newJanitorInfo(jan)
 	scheduler.janitors["test"] = ji

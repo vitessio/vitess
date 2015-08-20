@@ -14,20 +14,24 @@ import (
 // This file tests the keyspace related object functionnalities.
 
 func TestUpdateServedFromMap(t *testing.T) {
-	ki := NewKeyspaceInfo("ks", &pb.Keyspace{
-		ServedFroms: []*pb.Keyspace_ServedFrom{
-			&pb.Keyspace_ServedFrom{
-				TabletType: pb.TabletType_RDONLY,
-				Cells:      nil,
-				Keyspace:   "source",
-			},
-			&pb.Keyspace_ServedFrom{
-				TabletType: pb.TabletType_MASTER,
-				Cells:      nil,
-				Keyspace:   "source",
+	ki := &KeyspaceInfo{
+		keyspace: "ks",
+		version:  1,
+		Keyspace: &pb.Keyspace{
+			ServedFroms: []*pb.Keyspace_ServedFrom{
+				&pb.Keyspace_ServedFrom{
+					TabletType: pb.TabletType_RDONLY,
+					Cells:      nil,
+					Keyspace:   "source",
+				},
+				&pb.Keyspace_ServedFrom{
+					TabletType: pb.TabletType_MASTER,
+					Cells:      nil,
+					Keyspace:   "source",
+				},
 			},
 		},
-	}, 1)
+	}
 	allCells := []string{"first", "second", "third"}
 
 	// migrate one cell
@@ -115,20 +119,24 @@ func TestUpdateServedFromMap(t *testing.T) {
 }
 
 func TestComputeCellServedFrom(t *testing.T) {
-	ki := NewKeyspaceInfo("ks", &pb.Keyspace{
-		ServedFroms: []*pb.Keyspace_ServedFrom{
-			&pb.Keyspace_ServedFrom{
-				TabletType: pb.TabletType_MASTER,
-				Cells:      nil,
-				Keyspace:   "source",
-			},
-			&pb.Keyspace_ServedFrom{
-				TabletType: pb.TabletType_REPLICA,
-				Cells:      []string{"c1", "c2"},
-				Keyspace:   "source",
+	ki := &KeyspaceInfo{
+		keyspace: "ks",
+		version:  1,
+		Keyspace: &pb.Keyspace{
+			ServedFroms: []*pb.Keyspace_ServedFrom{
+				&pb.Keyspace_ServedFrom{
+					TabletType: pb.TabletType_MASTER,
+					Cells:      nil,
+					Keyspace:   "source",
+				},
+				&pb.Keyspace_ServedFrom{
+					TabletType: pb.TabletType_REPLICA,
+					Cells:      []string{"c1", "c2"},
+					Keyspace:   "source",
+				},
 			},
 		},
-	}, 1)
+	}
 
 	m := ki.ComputeCellServedFrom("c3")
 	if !reflect.DeepEqual(m, map[TabletType]string{

@@ -19,6 +19,7 @@ import vtworkerdata_pb2 as vtworkerdata__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtworkerservice.proto',
   package='vtworkerservice',
+  syntax='proto3',
   serialized_pb=_b('\n\x15vtworkerservice.proto\x12\x0fvtworkerservice\x1a\x12vtworkerdata.proto2\x83\x01\n\x08Vtworker\x12w\n\x16\x45xecuteVtworkerCommand\x12+.vtworkerdata.ExecuteVtworkerCommandRequest\x1a,.vtworkerdata.ExecuteVtworkerCommandResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[vtworkerdata__pb2.DESCRIPTOR,])
@@ -53,7 +54,7 @@ class EarlyAdopterVtworkerStub(object):
   def ExecuteVtworkerCommand(self, request):
     raise NotImplementedError()
   ExecuteVtworkerCommand.async = None
-def early_adopter_create_Vtworker_server(servicer, port, root_certificates, key_chain_pairs):
+def early_adopter_create_Vtworker_server(servicer, port, private_key=None, certificate_chain=None):
   import vtworkerdata_pb2
   import vtworkerdata_pb2
   method_service_descriptions = {
@@ -63,8 +64,8 @@ def early_adopter_create_Vtworker_server(servicer, port, root_certificates, key_
       vtworkerdata_pb2.ExecuteVtworkerCommandResponse.SerializeToString,
     ),
   }
-  return implementations.secure_server("vtworkerservice.Vtworker", method_service_descriptions, port, root_certificates, key_chain_pairs)
-def early_adopter_create_Vtworker_stub(host, port):
+  return implementations.server("vtworkerservice.Vtworker", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
+def early_adopter_create_Vtworker_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
   import vtworkerdata_pb2
   import vtworkerdata_pb2
   method_invocation_descriptions = {
@@ -73,5 +74,5 @@ def early_adopter_create_Vtworker_stub(host, port):
       vtworkerdata_pb2.ExecuteVtworkerCommandResponse.FromString,
     ),
   }
-  return implementations.insecure_stub("vtworkerservice.Vtworker", method_invocation_descriptions, host, port)
+  return implementations.stub("vtworkerservice.Vtworker", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)

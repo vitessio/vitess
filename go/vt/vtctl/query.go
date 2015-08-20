@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
@@ -51,6 +52,21 @@ func init() {
 		commandVtTabletExecute,
 		"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
 		"Executes the given query on the given tablet."})
+	addCommand(queriesGroupName, command{
+		"VtTabletBegin",
+		commandVtTabletBegin,
+		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias>",
+		"Starts a transaction on the provided server."})
+	addCommand(queriesGroupName, command{
+		"VtTabletCommit",
+		commandVtTabletCommit,
+		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
+		"Commits a transaction on the provided server."})
+	addCommand(queriesGroupName, command{
+		"VtTabletRollback",
+		commandVtTabletRollback,
+		"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
+		"Rollbacks a transaction on the provided server."})
 	addCommand(queriesGroupName, command{
 		"VtTabletStreamHealth",
 		commandVtTabletStreamHealth,
@@ -123,8 +139,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
 }
 
 func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -158,8 +173,7 @@ func commandVtGateExecuteShard(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
 }
 
 func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -185,8 +199,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(r))
-	return nil
+	return printJSON(wr, r)
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -200,13 +213,13 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <tablet_alis> and <sql> arguments are required for the VtTabletExecute command")
+		return fmt.Errorf("the <tablet_alias> and <sql> arguments are required for the VtTabletExecute command")
 	}
-	tt, err := topo.ParseTabletType(*tabletType)
+	tt, err := topoproto.ParseTabletType(*tabletType)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -229,8 +242,133 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
-	wr.Logger().Printf("%v\n", jscfg.ToJSON(qr))
-	return nil
+	return printJSON(wr, qr)
+}
+
+func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
+	shard := subFlags.String("shard", "", "shard the tablet belongs to")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <tablet_alias> argument is required for the VtTabletBegin command")
+	}
+	tt, err := topoproto.ParseTabletType(*tabletType)
+	if err != nil {
+		return err
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
+	}
+
+	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
+	}
+	defer conn.Close()
+
+	transactionID, err := conn.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("Begin failed: %v", err)
+	}
+	result := map[string]int64{
+		"transaction_id": transactionID,
+	}
+	return printJSON(wr, result)
+}
+
+func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
+	shard := subFlags.String("shard", "", "shard the tablet belongs to")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <tablet_alias> and <transaction_id> arguments are required for the VtTabletCommit command")
+	}
+	transactionID, err := strconv.ParseInt(subFlags.Arg(1), 10, 64)
+	if err != nil {
+		return err
+	}
+	tt, err := topoproto.ParseTabletType(*tabletType)
+	if err != nil {
+		return err
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
+	}
+
+	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
+	}
+	defer conn.Close()
+
+	return conn.Commit(ctx, transactionID)
+}
+
+func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	keyspace := subFlags.String("keyspace", "", "keyspace the tablet belongs to")
+	shard := subFlags.String("shard", "", "shard the tablet belongs to")
+	tabletType := subFlags.String("tablet_type", "unknown", "tablet type we expect from the tablet (use unknown to use sessionId)")
+	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <tablet_alias> and <transaction_id> arguments are required for the VtTabletRollback command")
+	}
+	transactionID, err := strconv.ParseInt(subFlags.Arg(1), 10, 64)
+	if err != nil {
+		return err
+	}
+	tt, err := topoproto.ParseTabletType(*tabletType)
+	if err != nil {
+		return err
+	}
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return err
+	}
+	ep, err := topo.TabletEndPoint(tabletInfo.Tablet)
+	if err != nil {
+		return fmt.Errorf("cannot get EndPoint from tablet record: %v", err)
+	}
+
+	conn, err := tabletconn.GetDialer()(ctx, ep, *keyspace, *shard, tt, *connectTimeout)
+	if err != nil {
+		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
+	}
+	defer conn.Close()
+
+	return conn.Rollback(ctx, transactionID)
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -242,7 +380,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletStreamHealth command.")
 	}
-	tabletAlias, err := topo.ParseTabletAliasString(subFlags.Arg(0))
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
 	}

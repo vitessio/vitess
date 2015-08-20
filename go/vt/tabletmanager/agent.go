@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"sync"
 	"time"
@@ -34,7 +35,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/trace"
@@ -44,6 +44,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -112,12 +113,17 @@ func loadSchemaOverrides(overridesFile string) []tabletserver.SchemaOverride {
 	if overridesFile == "" {
 		return schemaOverrides
 	}
-	if err := jscfg.ReadJSON(overridesFile, &schemaOverrides); err != nil {
+	data, err := ioutil.ReadFile(overridesFile)
+	if err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
-	} else {
-		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
-		log.Infof("schemaOverrides: %s\n", data)
+		return schemaOverrides
 	}
+	if err = json.Unmarshal(data, &schemaOverrides); err != nil {
+		log.Warningf("can't parse overridesFile %v: %v", overridesFile, err)
+		return schemaOverrides
+	}
+	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
+	log.Infof("schemaOverrides: %s\n", data)
 	return schemaOverrides
 }
 
@@ -253,7 +259,7 @@ func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet,
 }
 
 func (agent *ActionAgent) readTablet(ctx context.Context) (*topo.TabletInfo, error) {
-	tablet, err := topo.GetTablet(ctx, agent.TopoServer, agent.TabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -467,7 +473,7 @@ func (agent *ActionAgent) Stop() {
 
 // hookExtraEnv returns the map to pass to local hooks
 func (agent *ActionAgent) hookExtraEnv() map[string]string {
-	return map[string]string{"TABLET_ALIAS": topo.TabletAliasString(agent.TabletAlias)}
+	return map[string]string{"TABLET_ALIAS": topoproto.TabletAliasString(agent.TabletAlias)}
 }
 
 // checkTabletMysqlPort will check the mysql port for the tablet is good,
@@ -485,7 +491,7 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 
 	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.PortMap["mysql"], mport)
 	tablet.PortMap["mysql"] = mport
-	if err := topo.UpdateTablet(ctx, agent.TopoServer, tablet); err != nil {
+	if err := agent.TopoServer.UpdateTablet(ctx, tablet); err != nil {
 		log.Warningf("Failed to update tablet record, may use old mysql port")
 		return nil
 	}

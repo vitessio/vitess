@@ -43,7 +43,7 @@ func init() {
 }
 
 func zkResolveWildcards(wr *wrangler.Wrangler, args []string) ([]string, error) {
-	zkts, ok := wr.TopoServer().(*zktopo.Server)
+	zkts, ok := wr.TopoServer().Impl.(*zktopo.Server)
 	if !ok {
 		return args, nil
 	}
@@ -65,7 +65,7 @@ func commandPruneActionLogs(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 
-	zkts, ok := wr.TopoServer().(*zktopo.Server)
+	zkts, ok := wr.TopoServer().Impl.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("PruneActionLogs requires a zktopo.Server")
 	}

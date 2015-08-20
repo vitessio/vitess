@@ -269,10 +269,13 @@ func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, ta
 
 type fakeTopo struct {
 	faketopo.FakeTopo
+	WithEmptyMasterAlias bool
 }
 
-func newFakeTopo() *fakeTopo {
-	return &fakeTopo{}
+func newFakeTopo() topo.Server {
+	return topo.Server{
+		Impl: &fakeTopo{},
+	}
 }
 
 func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) ([]string, error) {
@@ -283,23 +286,25 @@ func (topoServer *fakeTopo) GetShardNames(ctx context.Context, keyspace string) 
 	return []string{"0", "1", "2"}, nil
 }
 
-func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topo.ShardInfo, error) {
-	value := &pb.Shard{
-		MasterAlias: &pb.TabletAlias{
+func (topoServer *fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*pb.Shard, int64, error) {
+	var masterAlias *pb.TabletAlias
+	if !topoServer.WithEmptyMasterAlias {
+		masterAlias = &pb.TabletAlias{
 			Cell: "test_cell",
 			Uid:  0,
-		},
+		}
 	}
-	return topo.NewShardInfo(keyspace, shard, value, 0), nil
+	value := &pb.Shard{
+		MasterAlias: masterAlias,
+	}
+	return value, 0, nil
 }
 
-func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*topo.TabletInfo, error) {
-	return &topo.TabletInfo{
-		Tablet: &pb.Tablet{
-			Alias:    tabletAlias,
-			Keyspace: "test_keyspace",
-		},
-	}, nil
+func (topoServer *fakeTopo) GetTablet(ctx context.Context, tabletAlias *pb.TabletAlias) (*pb.Tablet, int64, error) {
+	return &pb.Tablet{
+		Alias:    tabletAlias,
+		Keyspace: "test_keyspace",
+	}, 0, nil
 }
 
 type fakeController struct {

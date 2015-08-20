@@ -65,11 +65,11 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(ctx, t, ts)
 }
 
-func TestWatchEndPoints(t *testing.T) {
+func TestWatchSrvKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := newTestServer(t, []string{"test"})
 	defer ts.Close()
-	test.CheckWatchEndPoints(ctx, t, ts)
+	test.CheckWatchSrvKeyspace(ctx, t, ts)
 }
 
 func TestKeyspaceLock(t *testing.T) {

@@ -19,6 +19,7 @@ import automation_pb2 as automation__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='automationservice.proto',
   package='automationservice',
+  syntax='proto3',
   serialized_pb=_b('\n\x17\x61utomationservice.proto\x12\x11\x61utomationservice\x1a\x10\x61utomation.proto2\x81\x02\n\nAutomation\x12t\n\x17\x45nqueueClusterOperation\x12*.automation.EnqueueClusterOperationRequest\x1a+.automation.EnqueueClusterOperationResponse\"\x00\x12}\n\x1aGetClusterOperationDetails\x12-.automation.GetClusterOperationDetailsRequest\x1a..automation.GetClusterOperationDetailsResponse\"\x00\x62\x06proto3')
   ,
   dependencies=[automation__pb2.DESCRIPTOR,])
@@ -60,7 +61,7 @@ class EarlyAdopterAutomationStub(object):
   def GetClusterOperationDetails(self, request):
     raise NotImplementedError()
   GetClusterOperationDetails.async = None
-def early_adopter_create_Automation_server(servicer, port, root_certificates, key_chain_pairs):
+def early_adopter_create_Automation_server(servicer, port, private_key=None, certificate_chain=None):
   import automation_pb2
   import automation_pb2
   import automation_pb2
@@ -77,8 +78,8 @@ def early_adopter_create_Automation_server(servicer, port, root_certificates, ke
       automation_pb2.GetClusterOperationDetailsResponse.SerializeToString,
     ),
   }
-  return implementations.secure_server("automationservice.Automation", method_service_descriptions, port, root_certificates, key_chain_pairs)
-def early_adopter_create_Automation_stub(host, port):
+  return implementations.server("automationservice.Automation", method_service_descriptions, port, private_key=private_key, certificate_chain=certificate_chain)
+def early_adopter_create_Automation_stub(host, port, metadata_transformer=None, secure=False, root_certificates=None, private_key=None, certificate_chain=None, server_host_override=None):
   import automation_pb2
   import automation_pb2
   import automation_pb2
@@ -93,5 +94,5 @@ def early_adopter_create_Automation_stub(host, port):
       automation_pb2.GetClusterOperationDetailsResponse.FromString,
     ),
   }
-  return implementations.insecure_stub("automationservice.Automation", method_invocation_descriptions, host, port)
+  return implementations.stub("automationservice.Automation", method_invocation_descriptions, host, port, metadata_transformer=metadata_transformer, secure=secure, root_certificates=root_certificates, private_key=private_key, certificate_chain=certificate_chain, server_host_override=server_host_override)
 # @@protoc_insertion_point(module_scope)

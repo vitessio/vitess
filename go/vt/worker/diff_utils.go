@@ -20,6 +20,7 @@ import (
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -103,7 +104,7 @@ func uint64FromKeyspaceID(keyspaceID []byte) string {
 // with the Primary Key columns in front.
 func TableScan(ctx context.Context, log logutil.Logger, ts topo.Server, tabletAlias *pb.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", topo.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
+	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 
@@ -151,7 +152,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts topo.Server
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY %v", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v/%v: %v", topo.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
+	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
 }
 

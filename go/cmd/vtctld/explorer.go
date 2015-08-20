@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cmd/vtctld/proto"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -134,7 +134,7 @@ func handleExplorerRedirect(r *http.Request) (string, error) {
 		if keyspace == "" || shard == "" || cell == "" || tabletType == "" {
 			return "", errors.New("keyspace, shard, cell, and tablet_type are required for this redirect")
 		}
-		tt, err := topo.ParseTabletType(tabletType)
+		tt, err := topoproto.ParseTabletType(tabletType)
 		if err != nil {
 			return "", fmt.Errorf("cannot parse tablet type %v: %v", tabletType, err)
 		}
@@ -144,7 +144,7 @@ func handleExplorerRedirect(r *http.Request) (string, error) {
 		if alias == "" {
 			return "", errors.New("alias is required for this redirect")
 		}
-		tabletAlias, err := topo.ParseTabletAliasString(alias)
+		tabletAlias, err := topoproto.ParseTabletAlias(alias)
 		if err != nil {
 			return "", fmt.Errorf("bad tablet alias %q: %v", alias, err)
 		}
