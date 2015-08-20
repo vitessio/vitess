@@ -132,9 +132,9 @@ large_integration_targets = \
 
 # The following tests are considered too flaky to be included
 # in the continous integration test suites
-ci_skip_integration_test_files = \
-	resharding_bytes.py \
-	resharding.py
+ci_skip_integration_targets = \
+	resharding_bytes \
+	resharding
 
 # Run the following tests after making worker changes.
 worker_integration_test_files = \
@@ -172,16 +172,10 @@ define run_integration_tests
 	done
 endef
 
-$(small_integration_targets):
-	$(call run_integration_tests, $@.py)
-
-$(medium_integration_targets):
-	$(call run_integration_tests, $@.py)
-
-$(large_integration_targets):
-	$(call run_integration_tests, $@.py)
-
-$(ci_skip_integration_targets):
+$(small_integration_targets) \
+	$(medium_integration_targets) \
+	$(large_integration_targets) \
+	$(ci_skip_integration_targets):
 	$(call run_integration_tests, $@.py)
 
 $(worker_target):
