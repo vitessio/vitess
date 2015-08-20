@@ -131,7 +131,7 @@ public class VTGateTx {
   }
 
   public QueryResult executeEntityIds(Context ctx, String query, String keyspace,
-      String entityColumnName, Iterable<?> entityIds, Map<String, ?> bindVars,
+      String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
       TabletType tabletType)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
@@ -142,7 +142,8 @@ public class VTGateTx {
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .setEntityColumnName(entityColumnName)
-            .addAllEntityKeyspaceIds(Iterables.transform(entityIds, Proto.OBJECT_TO_ENTITY_ID))
+            .addAllEntityKeyspaceIds(Iterables.transform(
+                entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
             .setTabletType(tabletType)
             .setSession(session);
     if (ctx.getCallerId() != null) {

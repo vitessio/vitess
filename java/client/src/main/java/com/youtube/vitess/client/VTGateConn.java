@@ -147,14 +147,15 @@ public class VTGateConn implements Closeable {
   }
 
   public QueryResult executeEntityIds(Context ctx, String query, String keyspace,
-      String entityColumnName, Iterable<?> entityIds, Map<String, ?> bindVars,
+      String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
       TabletType tabletType) throws VitessException, VitessRpcException {
     ExecuteEntityIdsRequest.Builder requestBuilder =
         ExecuteEntityIdsRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
             .setKeyspace(keyspace)
             .setEntityColumnName(entityColumnName)
-            .addAllEntityKeyspaceIds(Iterables.transform(entityIds, Proto.OBJECT_TO_ENTITY_ID))
+            .addAllEntityKeyspaceIds(Iterables.transform(
+                entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
             .setTabletType(tabletType);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());

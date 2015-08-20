@@ -119,8 +119,8 @@ public class Proto {
     return builder.build();
   }
 
-  public static EntityId buildEntityId(Object value) {
-    EntityId.Builder builder = EntityId.newBuilder();
+  public static EntityId buildEntityId(byte[] keyspaceId, Object value) {
+    EntityId.Builder builder = EntityId.newBuilder().setKeyspaceId(ByteString.copyFrom(keyspaceId));
 
     if (value instanceof byte[]) {
       // Bytes
@@ -216,11 +216,11 @@ public class Proto {
         }
       };
 
-  public static final Function<Object, EntityId> OBJECT_TO_ENTITY_ID =
-      new Function<Object, EntityId>() {
+  public static final Function<Map.Entry<byte[], ?>, EntityId> MAP_ENTRY_TO_ENTITY_KEYSPACE_ID =
+      new Function<Map.Entry<byte[], ?>, EntityId>() {
         @Override
-        public EntityId apply(Object from) {
-          return buildEntityId(from);
+        public EntityId apply(Map.Entry<byte[], ?> entry) {
+          return buildEntityId(entry.getKey(), entry.getValue());
         }
       };
 }

@@ -20,28 +20,42 @@ public class EntityIdTest {
   private Object input;
   private EntityId expected;
 
+  private static final ByteString KEYSPACE_ID = ByteString.copyFrom(new byte[] {1, 2, 3});
+
   @Parameters
   public static Collection<Object[]> testParams() {
     Object[][] params = {
         // Bytes
         {new byte[] {1, 2, 3}, EntityId.newBuilder()
+                                   .setKeyspaceId(KEYSPACE_ID)
                                    .setXidType(EntityId.Type.TYPE_BYTES)
                                    .setXidBytes(ByteString.copyFrom(new byte[] {1, 2, 3}))
                                    .build()},
         // Int
-        {123, EntityId.newBuilder().setXidType(EntityId.Type.TYPE_INT).setXidInt(123).build()},
-        {123L, EntityId.newBuilder().setXidType(EntityId.Type.TYPE_INT).setXidInt(123).build()},
+        {123, EntityId.newBuilder()
+                  .setKeyspaceId(KEYSPACE_ID)
+                  .setXidType(EntityId.Type.TYPE_INT)
+                  .setXidInt(123)
+                  .build()},
+        {123L, EntityId.newBuilder()
+                   .setKeyspaceId(KEYSPACE_ID)
+                   .setXidType(EntityId.Type.TYPE_INT)
+                   .setXidInt(123)
+                   .build()},
         // Uint
         {UnsignedLong.fromLongBits(-1), EntityId.newBuilder()
+                                            .setKeyspaceId(KEYSPACE_ID)
                                             .setXidType(EntityId.Type.TYPE_UINT)
                                             .setXidUint(-1)
                                             .build()},
         // Float
         {1.23f, EntityId.newBuilder()
+                    .setKeyspaceId(KEYSPACE_ID)
                     .setXidType(EntityId.Type.TYPE_FLOAT)
                     .setXidFloat(1.23f)
                     .build()},
         {1.23, EntityId.newBuilder()
+                   .setKeyspaceId(KEYSPACE_ID)
                    .setXidType(EntityId.Type.TYPE_FLOAT)
                    .setXidFloat(1.23)
                    .build()},
@@ -56,6 +70,6 @@ public class EntityIdTest {
 
   @Test
   public void testBuildEntityId() {
-    assertEquals(expected, Proto.buildEntityId(input));
+    assertEquals(expected, Proto.buildEntityId(KEYSPACE_ID.toByteArray(), input));
   }
 }
