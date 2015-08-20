@@ -12,10 +12,12 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/trace"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo/events"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 )
 
@@ -296,6 +298,7 @@ func GetTablet(ctx context.Context, ts Server, alias *pb.TabletAlias) (*TabletIn
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
+// It also uses a span, and sends the event.
 func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("TopoServer.UpdateTablet")
@@ -307,11 +310,17 @@ func UpdateTablet(ctx context.Context, ts Server, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(ctx, tablet, version)
-	if err == nil {
-		tablet.version = newVersion
+	newVersion, err := ts.UpdateTablet(ctx, tablet.Tablet, version)
+	if err != nil {
+		return err
 	}
-	return err
+	tablet.version = newVersion
+
+	event.Dispatch(&events.TabletChange{
+		Tablet: *tablet.Tablet,
+		Status: "updated",
+	})
+	return nil
 }
 
 // UpdateTabletFields is a high level wrapper for TopoServer.UpdateTabletFields

@@ -32,26 +32,21 @@ func (s *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 	if err != nil {
 		return convertError(err)
 	}
-
-	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet,
-		Status: "created",
-	})
 	return nil
 }
 
 // UpdateTablet implements topo.Server.
-func (s *Server) UpdateTablet(ctx context.Context, ti *topo.TabletInfo, existingVersion int64) (int64, error) {
-	cell, err := s.getCell(ti.Alias.Cell)
+func (s *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (int64, error) {
+	cell, err := s.getCell(tablet.Alias.Cell)
 	if err != nil {
 		return -1, err
 	}
 
-	data, err := json.MarshalIndent(ti.Tablet, "", "  ")
+	data, err := json.MarshalIndent(tablet, "", "  ")
 	if err != nil {
 		return -1, err
 	}
-	resp, err := cell.CompareAndSwap(tabletFilePath(ti.Alias),
+	resp, err := cell.CompareAndSwap(tabletFilePath(tablet.Alias),
 		string(data), 0 /* ttl */, "" /* prevValue */, uint64(existingVersion))
 	if err != nil {
 		return -1, convertError(err)
@@ -59,11 +54,6 @@ func (s *Server) UpdateTablet(ctx context.Context, ti *topo.TabletInfo, existing
 	if resp.Node == nil {
 		return -1, ErrBadResponse
 	}
-
-	event.Dispatch(&events.TabletChange{
-		Tablet: *ti.Tablet,
-		Status: "updated",
-	})
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
@@ -79,7 +69,7 @@ func (s *Server) UpdateTabletFields(ctx context.Context, tabletAlias *pb.TabletA
 		if err = updateFunc(ti.Tablet); err != nil {
 			return err
 		}
-		if _, err = s.UpdateTablet(ctx, ti, ti.Version()); err != topo.ErrBadVersion {
+		if _, err = s.UpdateTablet(ctx, ti.Tablet, ti.Version()); err != topo.ErrBadVersion {
 			break
 		}
 	}

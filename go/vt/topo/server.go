@@ -148,7 +148,7 @@ type Impl interface {
 	// has changed.
 	//
 	// Do not use directly, but instead use topo.UpdateTablet.
-	UpdateTablet(ctx context.Context, tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
+	UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version

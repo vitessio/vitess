@@ -366,7 +366,7 @@ func (tee *Tee) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet is part of the topo.Server interface
-func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
+func (tee *Tee) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateTablet(ctx, tablet, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -387,7 +387,7 @@ func (tee *Tee) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, exist
 		if serr == topo.ErrNoNode {
 			// the tablet doesn't exist on the secondary, let's
 			// just create it
-			if serr = tee.secondary.CreateTablet(ctx, tablet.Tablet); serr != nil {
+			if serr = tee.secondary.CreateTablet(ctx, tablet); serr != nil {
 				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias, serr)
 			} else {
 				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias)

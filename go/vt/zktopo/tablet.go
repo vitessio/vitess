@@ -76,9 +76,9 @@ func (zkts *Server) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet is part of the topo.Server interface
-func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
+func (zkts *Server) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias)
-	data, err := json.MarshalIndent(tablet.Tablet, "  ", "  ")
+	data, err := json.MarshalIndent(tablet, "  ", "  ")
 	if err != nil {
 		return 0, err
 	}
@@ -93,11 +93,6 @@ func (zkts *Server) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, e
 
 		return 0, err
 	}
-
-	event.Dispatch(&events.TabletChange{
-		Tablet: *tablet.Tablet,
-		Status: "updated",
-	})
 	return int64(stat.Version()), nil
 }
 

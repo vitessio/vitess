@@ -105,7 +105,7 @@ func (ft FakeTopo) CreateTablet(ctx context.Context, tablet *pb.Tablet) error {
 }
 
 // UpdateTablet implements topo.Server.
-func (ft FakeTopo) UpdateTablet(ctx context.Context, tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
+func (ft FakeTopo) UpdateTablet(ctx context.Context, tablet *pb.Tablet, existingVersion int64) (newVersion int64, err error) {
 	return 0, errNotImplemented
 }
 
