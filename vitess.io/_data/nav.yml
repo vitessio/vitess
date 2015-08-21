@@ -17,6 +17,6 @@
 
 - path: /
 - path: overview/
-  title: Overview
-- path: getting-started/
-  title: Getting Started
+  title: Guides
+- path: reference/vtctl.html
+  title: Reference

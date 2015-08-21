@@ -10,6 +10,8 @@ image:
   teaser:
   thumb:
 toc: true
+nav: reference
+apimenu: false
 share: false
 ---
 
