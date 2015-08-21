@@ -104,11 +104,12 @@ class TestPythonClient(unittest.TestCase):
     with self.assertRaises(ValueError):
       small.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica')
 
-  KEYSPACE_ID_80 = struct.Struct('!Q').pack(0x80)
+  # An packed keyspace_id from the middle of the full keyrange.
+  KEYSPACE_ID_0X80 = struct.Struct('!Q').pack(1 << 63)
 
   def _open_keyspace_ids_cursor(self):
     return self.conn.cursor('keyspace', 'master',
-                            keyspace_ids=[self.KEYSPACE_ID_80])
+                            keyspace_ids=[self.KEYSPACE_ID_0X80])
 
   def _open_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
@@ -146,7 +147,7 @@ class TestPythonClient(unittest.TestCase):
     with self.assertRaises(dbexceptions.IntegrityError):
       cursor.execute_entity_ids(
           integrity_error_test_query, {},
-          entity_keyspace_id_map={1: self.KEYSPACE_ID_80},
+          entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
           entity_column_name='user_id')
     cursor.close()
 
@@ -155,7 +156,7 @@ class TestPythonClient(unittest.TestCase):
     cursor.execute(
         sql=integrity_error_test_query, bind_variables={},
         keyspace='keyspace',
-        keyspace_ids=[self.KEYSPACE_ID_80])
+        keyspace_ids=[self.KEYSPACE_ID_0X80])
     with self.assertRaises(dbexceptions.IntegrityError):
       cursor.flush()
     cursor.close()
@@ -194,7 +195,7 @@ class TestPythonClient(unittest.TestCase):
     cursor = self.conn.cursor('keyspace', 'master')
     cursor.execute_entity_ids(
         effective_caller_id_test_query, {},
-        entity_keyspace_id_map={1: self.KEYSPACE_ID_80},
+        entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
         entity_column_name='user_id',
         effective_caller_id=effective_caller_id)
     cursor.close()
@@ -204,7 +205,7 @@ class TestPythonClient(unittest.TestCase):
     cursor.execute(
         sql=effective_caller_id_test_query, bind_variables={},
         keyspace='keyspace',
-        keyspace_ids=[self.KEYSPACE_ID_80])
+        keyspace_ids=[self.KEYSPACE_ID_0X80])
     cursor.flush(effective_caller_id=effective_caller_id)
 
 
