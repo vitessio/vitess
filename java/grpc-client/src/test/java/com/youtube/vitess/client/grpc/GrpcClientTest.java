@@ -37,7 +37,7 @@ import java.util.Map;
  */
 public class GrpcClientTest {
   private static Process vtgateclienttest;
-  private static int grpc_port;
+  private static int port;
   private static RpcClient client;
 
   @BeforeClass
@@ -48,17 +48,17 @@ public class GrpcClientTest {
     }
 
     ServerSocket socket = new ServerSocket(0);
-    grpc_port = socket.getLocalPort();
+    port = socket.getLocalPort();
     socket.close();
 
     vtgateclienttest =
         new ProcessBuilder(
             Arrays.asList(vtRoot + "/bin/vtgateclienttest", "-logtostderr", "-grpc_port",
-                Integer.toString(grpc_port), "-service_map", "grpc-vtgateservice")).start();
+                Integer.toString(port), "-service_map", "grpc-vtgateservice")).start();
 
     client = new GrpcClientFactory().create(
         Context.getDefault().withDeadlineAfter(Duration.millis(5000)),
-        new InetSocketAddress("localhost", grpc_port));
+        new InetSocketAddress("localhost", port));
   }
 
   @AfterClass
