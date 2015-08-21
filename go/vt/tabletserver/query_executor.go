@@ -119,8 +119,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 			reply, err = qre.execSQL(conn, qre.query, true)
 		default:
 			if !qre.qe.enableAutoCommit {
-				// TODO(aaijazi): convert this to ErrFail instead of ErrFatal
-				return nil, NewTabletError(ErrFatal, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 			}
 			reply, err = qre.execDmlAutoCommit()
 		}
@@ -190,8 +189,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	case planbuilder.PLAN_UPSERT_PK:
 		reply, err = qre.execUpsertPK(conn, invalidator)
 	default:
-		// TODO(aaijazi): convert this to ErrFail instead of ErrFatal
-		return nil, NewTabletError(ErrFatal, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 	}
 	return reply, err
 }
