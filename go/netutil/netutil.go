@@ -110,11 +110,7 @@ func FullyQualifiedHostname() (string, error) {
 		return "", err
 	}
 
-	cname, err := net.LookupCNAME(hostname)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(cname, "."), nil
+	return strings.TrimRight(hostname, "."), nil
 }
 
 // FullyQualifiedHostnameOrPanic is the same as FullyQualifiedHostname
