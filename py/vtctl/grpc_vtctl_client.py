@@ -7,9 +7,9 @@
 import datetime
 from urlparse import urlparse
 
+import vtctl_client
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2
-import vtctl_client
 
 
 class GRPCVtctlClient(vtctl_client.VtctlClient):

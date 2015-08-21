@@ -1,10 +1,11 @@
-# zkns - naming service.
-#
-# This uses zookeeper to resolve a list of servers to answer a
-# particular query type.
-#
-# Additionally, config information can be embedded nearby for future updates
-# to the python client.
+"""zkns - naming service.
+
+This uses zookeeper to resolve a list of servers to answer a
+particular query type.
+
+Additionally, config information can be embedded nearby for future updates
+to the python client.
+"""
 
 import collections
 import json
@@ -15,6 +16,7 @@ from zk import zkjson
 
 SrvEntry = collections.namedtuple('SrvEntry',
                                   ('host', 'port', 'priority', 'weight'))
+
 
 class ZknsError(Exception):
   pass
@@ -28,12 +30,13 @@ class ZknsAddr(zkjson.ZkJsonObject):
 class ZknsAddrs(zkjson.ZkJsonObject):
   # NOTE: attributes match Go implementation, hence capitalization
   _serializable_attributes = ('entries',)
+
   def __init__(self):
     self.entries = []
 
 
 def _sorted_by_srv_priority(entries):
-  # Priority is ascending, weight is descending.
+  """Priority is ascending, weight is descending."""
   entries.sort(key=lambda x: (x.priority, -x.weight))
 
   priority_map = collections.defaultdict(list)
@@ -41,7 +44,7 @@ def _sorted_by_srv_priority(entries):
     priority_map[entry.priority].append(entry)
 
   shuffled_entries = []
-  for priority, priority_entries in sorted(priority_map.iteritems()):
+  for unused_priority, priority_entries in sorted(priority_map.iteritems()):
     if len(priority_entries) <= 1:
       shuffled_entries.extend(priority_entries)
       continue
@@ -62,6 +65,7 @@ def _sorted_by_srv_priority(entries):
 
   return shuffled_entries
 
+
 def _get_addrs(zconn, zk_path):
   data = zconn.get_data(zk_path)
   addrs = ZknsAddrs()
@@ -71,6 +75,7 @@ def _get_addrs(zconn, zk_path):
     addr.__dict__.update(entry)
     addrs.entries.append(addr)
   return addrs
+
 
 # zkns_name: /zk/cell/vt/ns/path:_port - port is optional
 def lookup_name(zconn, zkns_name):

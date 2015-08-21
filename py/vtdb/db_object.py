@@ -1,26 +1,24 @@
-"""Module containing the base class for database classes and decorator for db method.
+"""Tthe base class for database classes and decorator for db method.
 
-The base class DBObjectBase is the base class for all other database base classes.
-It has methods for common database operations like select, insert, update and delete.
-This module also contains the definition for ShardRouting which is used for determining
-the routing of a query during cursor creation.
-The module also has the db_class_method decorator and db_wrapper method which are
-used for cursor creation and calling the database method.
+The base class DBObjectBase is the base class for all other database
+base classes.  It has methods for common database operations like
+select, insert, update and delete.  This module also contains the
+definition for ShardRouting which is used for determining the routing
+of a query during cursor creation.  The module also has the
+db_class_method decorator and db_wrapper method which are used for
+cursor creation and calling the database method.
 """
 import functools
-import struct
 
-from vtdb import database_context
-from vtdb import dbexceptions
 from vtdb import db_validator
-from vtdb import keyrange
-from vtdb import keyrange_constants
-from vtdb import shard_constants
+from vtdb import dbexceptions
 from vtdb import sql_builder
 from vtdb import vtgate_cursor
 
+
 class __EmptyBindVariables(frozenset):
-    pass
+  pass
+
 EmptyBindVariables = __EmptyBindVariables()
 
 
@@ -35,6 +33,7 @@ class ShardRouting(object):
   entity_id_sharding_key_map: this map is used for in clause queries.
   shard_name: this is used to route queries for custom sharded keyspaces.
   """
+
   def __init__(self, keyspace):
     # keyspace of the table.
     self.keyspace = keyspace
@@ -51,9 +50,9 @@ def _is_iterable_container(x):
   return hasattr(x, '__iter__')
 
 
-INSERT_KW = "insert"
-UPDATE_KW = "update"
-DELETE_KW = "delete"
+INSERT_KW = 'insert'
+UPDATE_KW = 'update'
+DELETE_KW = 'delete'
 
 
 def is_dml(sql):
@@ -103,8 +102,7 @@ def create_cursor_from_old_cursor(old_cursor, table_class):
 
 
 def create_stream_cursor_from_cursor(original_cursor):
-  """
-  This method creates streaming cursor from a regular cursor.
+  """Creates streaming cursor from a regular cursor.
 
   Args:
     original_cursor: Cursor of VTGateCursor type
@@ -114,7 +112,7 @@ def create_stream_cursor_from_cursor(original_cursor):
   """
   if not isinstance(original_cursor, vtgate_cursor.VTGateCursor):
     raise dbexceptions.ProgrammingError(
-        "Original cursor should be of VTGateCursor type.")
+        'Original cursor should be of VTGateCursor type.')
   stream_cursor = vtgate_cursor.StreamVTGateCursor(
       original_cursor._conn, original_cursor.keyspace,
       original_cursor.tablet_type,
@@ -130,13 +128,14 @@ def create_batch_cursor_from_cursor(original_cursor, writable=False):
 
   Args:
     original_cursor: Cursor of VTGateCursor type
+    writable: Bool flag.
 
   Returns:
     Returns BatchVTGateCursor that has same attributes as original_cursor.
   """
   if not isinstance(original_cursor, vtgate_cursor.VTGateCursor):
     raise dbexceptions.ProgrammingError(
-        "Original cursor should be of VTGateCursor type.")
+        'Original cursor should be of VTGateCursor type.')
   batch_cursor = vtgate_cursor.BatchVTGateCursor(
       original_cursor._conn,
       original_cursor.tablet_type,
@@ -145,8 +144,7 @@ def create_batch_cursor_from_cursor(original_cursor, writable=False):
 
 
 def db_wrapper(method, **decorator_kwargs):
-  """Decorator that is used to create the appropriate cursor
-  for the table and call the database method with it.
+  """Decorator to call the database method with the appropriate cursor.
 
   Args:
     method: Method to decorate.
@@ -158,7 +156,7 @@ def db_wrapper(method, **decorator_kwargs):
   @functools.wraps(method)
   def _db_wrapper(*pargs, **kwargs):
     table_class = pargs[0]
-    write_method = kwargs.get("write_method", False)
+    write_method = kwargs.get('write_method', False)
     if not issubclass(table_class, DBObjectBase):
       raise dbexceptions.ProgrammingError(
           "table class '%s' is not inherited from DBObjectBase" % table_class)
@@ -171,10 +169,10 @@ def db_wrapper(method, **decorator_kwargs):
     if write_method:
       if not cursor.is_writable():
         raise dbexceptions.ProgrammingError(
-            "Executing dmls on a non-writable cursor is not allowed.")
+            'Executing dmls on a non-writable cursor is not allowed.')
       if table_class.is_mysql_view:
-          raise dbexceptions.ProgrammingError(
-              "writes disabled on view", table_class)
+        raise dbexceptions.ProgrammingError(
+            'writes disabled on view', table_class)
 
     if pargs[2:]:
       return method(table_class, cursor, *pargs[2:], **kwargs)
@@ -185,7 +183,7 @@ def db_wrapper(method, **decorator_kwargs):
 
 def write_db_class_method(*pargs, **kwargs):
   """Used for DML methods. Calls db_class_method."""
-  kwargs["write_method"] = True
+  kwargs['write_method'] = True
   return db_class_method(*pargs, **kwargs)
 
 
@@ -220,11 +218,9 @@ class DBObjectBase(object):
   is_mysql_view = False
   utf8_columns = None
 
-
   @classmethod
   def create_shard_routing(class_, *pargs, **kwargs):
-    """This method is used to create ShardRouting object which is
-    used for determining routing attributes for the vtgate cursor.
+    """Create ShardRouting that determines vtgate cursor routing attributes.
 
     Returns:
     ShardRouting object.
@@ -232,24 +228,25 @@ class DBObjectBase(object):
     raise NotImplementedError
 
   @classmethod
-  def create_vtgate_cursor(class_, vtgate_conn, tablet_type, is_dml, **cursor_kwargs):
-    """This creates the VTGateCursor object which is used to make
-    all the rpc calls to VTGate.
+  def create_vtgate_cursor(
+      class_, vtgate_conn, tablet_type, is_dml, **cursor_kwargs):
+    """Creates the VTGateCursor which is used to make RPCs to VTGate.
 
     Args:
-    vtgate_conn: connection to vtgate.
-    tablet_type: tablet type to connect to.
-    is_dml: Makes the cursor writable, enforces appropriate constraints.
+      vtgate_conn: connection to vtgate.
+      tablet_type: tablet type to connect to.
+      is_dml: Makes the cursor writable, enforces appropriate constraints.
+      **cursor_kwargs: More args.
 
     Returns:
-    VTGateCursor for the query.
+      VTGateCursor for the query.
     """
     raise NotImplementedError
 
   @classmethod
   def _validate_column_value_pairs_for_write(class_, **column_values):
-    invalid_columns = db_validator.invalid_utf8_columns(class_.utf8_columns or [],
-                                                        column_values)
+    invalid_columns = db_validator.invalid_utf8_columns(
+        class_.utf8_columns or [], column_values)
     if invalid_columns:
       exc = InvalidUtf8DbWrite(class_.table_name, invalid_columns)
       raise exc
@@ -296,23 +293,24 @@ class DBObjectBase(object):
   def create_select_query(class_, where_column_value_pairs, columns_list=None,
                           order_by=None, group_by=None, limit=None):
     if class_.columns_list is None:
-      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+      raise dbexceptions.ProgrammingError('DB class should define columns_list')
 
     if columns_list is None:
       columns_list = class_.columns_list
 
-    query, bind_vars = sql_builder.select_by_columns_query(columns_list,
-                                                           class_.table_name,
-                                                           where_column_value_pairs,
-                                                           order_by=order_by,
-                                                           group_by=group_by,
-                                                           limit=limit)
+    query, bind_vars = sql_builder.select_by_columns_query(
+        columns_list,
+        class_.table_name,
+        where_column_value_pairs,
+        order_by=order_by,
+        group_by=group_by,
+        limit=limit)
     return query, bind_vars
 
   @write_db_class_method
   def insert(class_, cursor, **bind_vars):
     if class_.columns_list is None:
-      raise dbexceptions.ProgrammingError("DB class should define columns_list")
+      raise dbexceptions.ProgrammingError('DB class should define columns_list')
 
     query, bind_vars = class_.create_insert_query(**bind_vars)
     cursor.execute(query, bind_vars)
@@ -330,19 +328,21 @@ class DBObjectBase(object):
   @write_db_class_method
   def delete_by_columns(class_, cursor, where_column_value_pairs, limit=None):
     if not where_column_value_pairs:
-      raise dbexceptions.ProgrammingError("deleting the whole table is not allowed")
+      raise dbexceptions.ProgrammingError(
+          'deleting the whole table is not allowed')
 
     query, bind_vars = class_.create_delete_query(where_column_value_pairs,
                                                   limit=limit)
     cursor.execute(query, bind_vars)
     if cursor.rowcount == 0:
-      raise dbexceptions.DatabaseError("DB Row not found")
+      raise dbexceptions.DatabaseError('DB Row not found')
     return cursor.rowcount
 
   @db_class_method
-  def select_by_columns_streaming(class_, cursor, where_column_value_pairs,
-                        columns_list=None, order_by=None, group_by=None,
-                        limit=None, fetch_size=100):
+  def select_by_columns_streaming(
+      class_, cursor, where_column_value_pairs,
+      columns_list=None, order_by=None, group_by=None,
+      limit=None, fetch_size=100):
     query, bind_vars = class_.create_select_query(where_column_value_pairs,
                                                   columns_list=columns_list,
                                                   order_by=order_by,
@@ -382,7 +382,7 @@ class DBObjectBase(object):
   @db_class_method
   def get_min(class_, cursor):
     if class_.id_column_name is None:
-      raise dbexceptions.ProgrammingError("id_column_name not set.")
+      raise dbexceptions.ProgrammingError('id_column_name not set.')
 
     query, bind_vars = sql_builder.build_aggregate_query(
         class_.table_name, class_.id_column_name, is_asc=True)
@@ -392,7 +392,7 @@ class DBObjectBase(object):
   @db_class_method
   def get_max(class_, cursor):
     if class_.id_column_name is None:
-      raise dbexceptions.ProgrammingError("id_column_name not set.")
+      raise dbexceptions.ProgrammingError('id_column_name not set.')
 
     query, bind_vars = sql_builder.build_aggregate_query(
         class_.table_name, class_.id_column_name, is_asc=False)

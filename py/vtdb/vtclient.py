@@ -5,7 +5,6 @@
 import logging
 import time
 
-from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import tablet
@@ -38,16 +37,17 @@ def reconnect(method):
 
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
-          vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
+          vtdb_logger.get_logger().vtclient_exception(
+              self.keyspace, self.shard, self.db_type, e)
           raise dbexceptions.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)
         else:
           time.sleep(RECONNECT_DELAY)
-        logging.info("Attempting to reconnect, %d", attempt)
+        logging.info('Attempting to reconnect, %d', attempt)
         self.close()
         self.connect()
-        logging.info("Successfully reconnected to %s", str(self.conn))
+        logging.info('Successfully reconnected to %s', str(self.conn))
   return _run_with_reconnect
 
 
@@ -89,11 +89,12 @@ class VtOCCConnection(object):
     try:
       return self._connect()
     except dbexceptions.OperationalError as e:
-      vtdb_logger.get_logger().vtclient_exception(self.keyspace, self.shard, self.db_type, e)
+      vtdb_logger.get_logger().vtclient_exception(
+          self.keyspace, self.shard, self.db_type, e)
       raise
 
   def _connect(self):
-    db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
+    db_key = '%s.%s.%s' % (self.keyspace, self.shard, self.db_type)
     db_params_list = get_vt_connection_params_list(self.topo_client,
                                                    self.keyspace,
                                                    self.shard,
@@ -104,7 +105,8 @@ class VtOCCConnection(object):
     if not db_params_list:
       # no valid end-points were found, re-read the keyspace
       self.resolve_topology()
-      raise dbexceptions.OperationalError("empty db params list - no db instance available for key %s" % db_key)
+      raise dbexceptions.OperationalError(
+          'empty db params list - no db instance available for key %s' % db_key)
     db_exception = None
     host_addr = None
     # no retries here, since there is a higher level retry with reconnect.
@@ -124,7 +126,7 @@ class VtOCCConnection(object):
           self.resolve_topology()
 
     raise dbexceptions.OperationalError(
-      'unable to create vt connection', db_key, host_addr, db_exception)
+        'unable to create vt connection', db_key, host_addr, db_exception)
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)
@@ -160,12 +162,14 @@ class VtOCCConnection(object):
     sane_sql_list = []
     sane_bind_vars_list = []
     for sql, bind_variables in zip(sql_list, bind_variables_list):
-      sane_sql, sane_bind_vars = dbapi.prepare_query_bind_vars(sql, bind_variables)
+      sane_sql, sane_bind_vars = dbapi.prepare_query_bind_vars(
+          sql, bind_variables)
       sane_sql_list.append(sane_sql)
       sane_bind_vars_list.append(sane_bind_vars)
 
     try:
-      result = self.conn._execute_batch(sane_sql_list, sane_bind_vars_list, as_transaction)
+      result = self.conn._execute_batch(
+          sane_sql_list, sane_bind_vars_list, as_transaction)
     except dbexceptions.IntegrityError as e:
       vtdb_logger.get_logger().integrity_error(e)
       raise

@@ -49,10 +49,9 @@ class Cursor(object):
       self.rollback()
       return
 
-    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(
-        sql,
-        bind_variables,
-        self.tablet_type)
+    self.results, self.rowcount, self.lastrowid, self.description = (
+        self._conn._execute(
+            sql, bind_variables, self.tablet_type))
     self.index = 0
     return self.rowcount
 
@@ -121,7 +120,7 @@ class StreamCursor(Cursor):
 
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
-    x, y, z, self.description = self._conn._stream_execute(
+    _, _, _, self.description = self._conn._stream_execute(
         sql,
         bind_variables,
         self.tablet_type)
@@ -145,7 +144,7 @@ class StreamCursor(Cursor):
     if self.fetchmany_done:
       self.fetchmany_done = False
       return result
-    for i in xrange(size):
+    for _ in xrange(size):
       row = self.fetchone()
       if row is None:
         self.fetchmany_done = True
