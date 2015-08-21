@@ -29,7 +29,7 @@ type Router struct {
 	serv        SrvTopoServer
 	cell        string
 	planner     *Planner
-	scatterConn *ScatterConn
+	scatterConn ScatterConnService
 }
 
 type scatterParams struct {
@@ -50,7 +50,7 @@ func newScatterParams(query, ks string, bv map[string]interface{}, shards []stri
 }
 
 // NewRouter creates a new Router.
-func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(serv SrvTopoServer, cell string, schema *planbuilder.Schema, statsName string, scatterConn ScatterConnService) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
