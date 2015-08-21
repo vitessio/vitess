@@ -5,6 +5,7 @@
 import logging
 import time
 
+from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import tablet

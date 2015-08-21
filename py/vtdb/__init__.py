@@ -11,7 +11,6 @@ paramstyle = 'named'
 
 from vtdb.cursorv3 import *
 from vtdb.dbexceptions import *
-from vtdb.field_types import Binary
 from vtdb.field_types import STRING, BINARY, NUMBER, DATETIME, ROWID
 from vtdb.times import Date, Time, Timestamp, DateFromTicks, TimeFromTicks, TimestampFromTicks
 from vtdb.vtgatev2 import *
