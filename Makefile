@@ -170,13 +170,6 @@ large_integration_test:
 ci_skip_integration_test:
 	$(call run_integration_tests, $(ci_skip_integration_test_files))
 
-# This rule makes every test file basename a target.
-$(small_integration_test_files:%.py=%) \
-$(medium_integration_test_files:%.py=%) \
-$(large_integration_test_files:%.py=%) \
-$(ci_skip_integration_test_files:%.py=%):
-	$(call run_integration_tests, $@.py)
-
 worker_test:
 	godep go test ./go/vt/worker/
 	$(call run_integration_tests, $(worker_integration_test_files))
