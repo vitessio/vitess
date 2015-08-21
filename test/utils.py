@@ -38,21 +38,21 @@ environment.setup()
 
 class LoggingStream(object):
   def __init__(self):
-    self.line = ""
+    self.line = ''
 
   def write(self, value):
-    if value == "\n":
+    if value == '\n':
       # we already printed it
-      self.line = ""
+      self.line = ''
       return
     self.line += value
-    logging.info("===== " + self.line)
-    if value.endswith("\n"):
-      self.line = ""
+    logging.info('===== ' + self.line)
+    if value.endswith('\n'):
+      self.line = ''
 
   def writeln(self, value):
     self.write(value)
-    self.line = ""
+    self.line = ''
 
   def flush(self):
     pass
@@ -62,13 +62,16 @@ def add_options(parser):
   parser.add_option('-d', '--debug', action='store_true',
                     help='utils.pause() statements will wait for user input')
   parser.add_option('-k', '--keep-logs', action='store_true',
-                    help="Don't delete log files on teardown.")
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option("--mysql-flavor")
-  parser.add_option("--protocols-flavor")
-  parser.add_option("--topo-server-flavor", default="zookeeper")
+                    help='Do not delete log files on teardown.')
+  parser.add_option('-q', '--quiet', action='store_const', const=0, dest='verbose', default=1)
+  parser.add_option('-v', '--verbose', action='store_const', const=2, dest='verbose', default=1)
+  parser.add_option('--skip-build', action='store_true',
+                    help='Do not build the go binaries when running the test.')
+  parser.add_option('--skip-teardown', action='store_true',
+                    help='Leave the global processes running after the test is done.')
+  parser.add_option('--mysql-flavor')
+  parser.add_option('--protocols-flavor')
+  parser.add_option('--topo-server-flavor', default='zookeeper')
 
 def set_options(opts):
   global options
@@ -77,6 +80,7 @@ def set_options(opts):
   set_mysql_flavor(options.mysql_flavor)
   set_protocols_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
+  environment.skip_build = options.skip_build
 
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
@@ -92,7 +96,7 @@ def main(mod=None, test_options=None):
 
   global options
 
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
+  parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
   add_options(parser)
   if test_options:
     test_options(parser)
@@ -135,14 +139,14 @@ def run_tests(mod, args):
       if not result.wasSuccessful():
         sys.exit(-1)
   except KeyboardInterrupt:
-    logging.warning("======== Tests interrupted, cleaning up ========")
+    logging.warning('======== Tests interrupted, cleaning up ========')
     mod.tearDownModule()
     # If you interrupt a test, you probably want to stop evaluating the rest.
     sys.exit(1)
   finally:
     if options.keep_logs:
-      logging.warning("Leaving temporary files behind (--keep-logs), please "
-                      "clean up before next run: " + os.environ["VTDATAROOT"])
+      logging.warning('Leaving temporary files behind (--keep-logs), please '
+                      'clean up before next run: ' + os.environ['VTDATAROOT'])
 
 def remove_tmp_files():
   if options.keep_logs:
@@ -150,7 +154,7 @@ def remove_tmp_files():
   try:
     shutil.rmtree(environment.tmproot)
   except OSError as e:
-    logging.debug("remove_tmp_files: %s", str(e))
+    logging.debug('remove_tmp_files: %s', str(e))
 
 def pause(prompt):
   if options.debug:
@@ -180,7 +184,7 @@ def kill_sub_processes():
           if pid not in already_killed:
             os.kill(pid, signal.SIGTERM)
       except OSError as e:
-        logging.debug("kill_sub_processes: %s", str(e))
+        logging.debug('kill_sub_processes: %s', str(e))
 
 def kill_sub_process(proc, soft=False):
   if proc is None:
@@ -203,13 +207,13 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   if trap_output:
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
-  logging.debug("run: %s %s", str(cmd), ', '.join('%s=%s' % x for x in kargs.iteritems()))
+  logging.debug('run: %s %s', str(cmd), ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode:
     if raise_on_error:
-      pause("cmd fail: %s, pausing..." % (args))
+      pause('cmd fail: %s, pausing...' % (args))
       raise TestError('cmd fail:', args, proc.returncode, stdout, stderr)
     else:
       logging.debug('cmd fail: %s %d %s %s',
@@ -225,19 +229,19 @@ def run_fail(cmd, **kargs):
   kargs['stdout'] = PIPE
   kargs['stderr'] = PIPE
   if options.verbose == 2:
-    logging.debug("run: (expect fail) %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+    logging.debug('run: (expect fail) %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode == 0:
-    logging.info("stdout:\n%sstderr:\n%s", stdout, stderr)
+    logging.info('stdout:\n%sstderr:\n%s', stdout, stderr)
     raise TestError('expected fail:', args, stdout, stderr)
   return stdout, stderr
 
 # run a daemon - kill when this script exits
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
-    logging.debug("run: %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+    logging.debug('run: %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
   if 'extra_env' in kargs:
     kargs['env'] = os.environ.copy()
     if kargs['extra_env']:
@@ -262,7 +266,7 @@ def wait_procs(proc_list, raise_on_error=True):
   for proc in proc_list:
     if proc.returncode:
       if options.verbose >= 1 and proc.returncode not in (-9,):
-        sys.stderr.write("proc failed: %s %s\n" % (proc.returncode, proc.args))
+        sys.stderr.write('proc failed: %s %s\n' % (proc.returncode, proc.args))
       if raise_on_error:
         raise CalledProcessError(proc.returncode, ' '.join(proc.args))
 
@@ -294,8 +298,8 @@ def zk_cat_json(path):
 def wait_step(msg, timeout, sleep_time=1.0):
   timeout -= sleep_time
   if timeout <= 0:
-    raise TestError("timeout waiting for condition '%s'" % msg)
-  logging.debug("Sleeping for %f seconds waiting for condition '%s'" %
+    raise TestError('timeout waiting for condition "%s"' % msg)
+  logging.debug('Sleeping for %f seconds waiting for condition "%s"' %
                (sleep_time, msg))
   time.sleep(sleep_time)
   return timeout
@@ -371,10 +375,10 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, re
       return _vars
 
 def apply_vschema(vschema):
-  fname = os.path.join(environment.tmproot, "vschema.json")
-  with open(fname, "w") as f:
+  fname = os.path.join(environment.tmproot, 'vschema.json')
+  with open(fname, 'w') as f:
     f.write(vschema)
-  run_vtctl(['ApplyVSchema', "-vschema_file", fname])
+  run_vtctl(['ApplyVSchema', '-vschema_file', fname])
 
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   """Waits for a given tablet's SlaveType to become the expected value.
@@ -426,7 +430,7 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            auth=False, timeout_total="4s", timeout_per_conn="2s",
+            auth=False, timeout_total='4s', timeout_per_conn='2s',
             extra_args=None):
     """Starts the process for thie vtgate instance. If no other instance has
        been started, saves it into the global vtgate variable.
@@ -446,7 +450,7 @@ class VtGate(object):
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
-      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if topo_impl:
       args.extend(['-topo_implementation', topo_impl])
     else:
@@ -460,9 +464,9 @@ class VtGate(object):
 
     self.proc = run_bg(args)
     if self.secure_port:
-      wait_for_vars("vtgate", self.port, "SecureConnections")
+      wait_for_vars('vtgate', self.port, 'SecureConnections')
     else:
-      wait_for_vars("vtgate", self.port)
+      wait_for_vars('vtgate', self.port)
 
     global vtgate
     if not vtgate:
@@ -594,14 +598,14 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
                            expect_fail=expect_fail, **kwargs)
   elif mode == VTCTL_VTCTLCLIENT:
     result = vtctld.vtctl_client(clargs)
-    return result, ""
+    return result, ''
   elif mode == VTCTL_RPC:
     if auto_log:
-      logging.debug("vtctl: %s", " ".join(clargs))
+      logging.debug('vtctl: %s', ' '.join(clargs))
     result = vtctl_client.execute_vtctl_command(vtctld_connection, clargs,
                                                 info_to_debug=True,
                                                 action_timeout=120)
-    return result, ""
+    return result, ''
 
   raise Exception('Unknown mode: %s', mode)
 
@@ -618,7 +622,7 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
     args.append('--stderrthreshold=%s' % get_log_level())
 
   if isinstance(clargs, str):
-    cmd = " ".join(args) + ' ' + clargs
+    cmd = ' '.join(args) + ' ' + clargs
   else:
     cmd = args + clargs
 
@@ -681,7 +685,7 @@ def _get_vtworker_cmd(clargs, auto_log=False):
                protocols_flavor().tablet_manager_protocol()])
   if protocols_flavor().service_map():
     args.extend(['-service_map',
-                 ",".join(protocols_flavor().service_map())])
+                 ','.join(protocols_flavor().service_map())])
   if protocols_flavor().vtworker_client_protocol() == 'grpc':
     rpc_port = environment.reserve_ports(1)
     args.extend(['-grpc_port', str(rpc_port)])
@@ -773,29 +777,29 @@ def wait_db_read_only(uid):
       check_db_read_only(uid)
       return
     except TestError as e:
-      logging.warning("wait_db_read_only: %s", str(e))
+      logging.warning('wait_db_read_only: %s', str(e))
       time.sleep(1.0)
   raise e
 
 def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
-  result = ""
+  result = ''
   for tablet_type in sorted(ks['Partitions'].keys()):
-    result += "Partitions(%s):" % tablet_type
+    result += 'Partitions(%s):' % tablet_type
     partition = ks['Partitions'][tablet_type]
     for shard in partition['ShardReferences']:
-      result = result + " %s-%s" % (shard['KeyRange']['Start'],
+      result = result + ' %s-%s' % (shard['KeyRange']['Start'],
                                     shard['KeyRange']['End'])
-    result += "\n"
-  logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
+    result += '\n'
+  logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
   if expected != result:
-    raise Exception("Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
+    raise Exception('Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s' % (
                    cell, keyspace, expected, result))
   if 'keyspace_id' != ks.get('ShardingColumnName'):
-    raise Exception("Got wrong ShardingColumnName in SrvKeyspace: %s" %
+    raise Exception('Got wrong ShardingColumnName in SrvKeyspace: %s' %
                    str(ks))
   if keyspace_id_type != ks.get('ShardingColumnType'):
-    raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
+    raise Exception('Got wrong ShardingColumnType in SrvKeyspace: %s' %
                    str(ks))
 
 def check_shard_query_service(testcase, shard_name, tablet_type, expected_state):
@@ -836,9 +840,9 @@ def check_tablet_query_service(testcase, tablet, serving, tablet_control_disable
 
   status = tablet.get_status()
   if tablet_control_disabled:
-    testcase.assertIn("Query Service disabled by TabletControl", status)
+    testcase.assertIn('Query Service disabled by TabletControl', status)
   else:
-    testcase.assertNotIn("Query Service disabled by TabletControl", status)
+    testcase.assertNotIn('Query Service disabled by TabletControl', status)
 
   if tablet.tablet_type == 'rdonly':
     run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
@@ -888,21 +892,21 @@ class Vtctld(object):
   def __init__(self):
     self.port = environment.reserve_ports(1)
     self.schema_change_dir = os.path.join(environment.tmproot, 'schema_change_test')
-    if protocols_flavor().vtctl_client_protocol() == "grpc":
+    if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
   def dbtopo(self):
     data = json.load(urllib2.urlopen('http://localhost:%d/dbtopo?format=json' %
                                      self.port))
-    if data["Error"]:
+    if data['Error']:
       raise VtctldError(data)
-    return data["Topology"]
+    return data['Topology']
 
   def serving_graph(self):
     data = json.load(urllib2.urlopen('http://localhost:%d/serving_graph/test_nj?format=json' % self.port))
     if data['Errors']:
       raise VtctldError(data['Errors'])
-    return data["Keyspaces"]
+    return data['Keyspaces']
 
   def start(self):
     args = environment.binary_args('vtctld') + [
@@ -920,7 +924,7 @@ class Vtctld(object):
             ] + \
             environment.topo_server().flags()
     if protocols_flavor().service_map():
-      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     stdout_fd = open(os.path.join(environment.tmproot, 'vtctld.stdout'), 'w')
@@ -960,7 +964,7 @@ class Vtctld(object):
     else:
       protocol = protocols_flavor().vtctl_client_protocol()
     rpc_port = self.port
-    if protocol == "grpc":
+    if protocol == 'grpc':
       # import the grpc vtctl client implementation, change the port
       if python:
         from vtctl import grpc_vtctl_client

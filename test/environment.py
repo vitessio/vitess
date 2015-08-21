@@ -53,6 +53,9 @@ status_url = '/debug/status'
 # location of the curl binary, used for some tests.
 curl_bin = '/usr/bin/curl'
 
+# if set, we will not build the binaries
+skip_build = False
+
 def memcached_bin():
   in_vt = os.path.join(vtroot, 'bin', 'memcached')
   if os.path.exists(in_vt):
@@ -100,7 +103,7 @@ def run(args, raise_on_error=True, **kargs):
 # compile command line programs, only once
 compiled_progs = []
 def prog_compile(name):
-  if name in compiled_progs:
+  if skip_build or name in compiled_progs:
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
