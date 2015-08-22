@@ -8,7 +8,6 @@ import re
 
 from vtdb import dbexceptions
 
-
 write_sql_pattern = re.compile(r'\s*(insert|update|delete)', re.IGNORECASE)
 
 
@@ -54,7 +53,7 @@ class VTGateCursor(object):
   def commit(self):
     return self._conn.commit()
 
-  def begin(self):
+  def begin(self, effective_caller_id=None):
     return self._conn.begin()
 
   def rollback(self):
@@ -94,11 +93,13 @@ class VTGateCursor(object):
             self.tablet_type,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
-            not_in_transaction=(not self.is_writable()))
+            not_in_transaction=(not self.is_writable())))
     self.index = 0
     return self.rowcount
 
-  def execute_entity_ids(self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
+  def execute_entity_ids(
+      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
+      effective_caller_id=None):
     self.rowcount = 0
     self.results = None
     self.description = None
@@ -226,13 +227,14 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_list.append(keyspace)
     self.keyspace_ids_list.append(keyspace_ids)
 
-  def flush(self, as_transaction=False):
-    self.rowsets = self._conn._execute_batch(self.query_list,
-                                              self.bind_vars_list,
-                                              self.keyspace_list,
-                                              self.keyspace_ids_list,
-                                              self.tablet_type,
-                                              as_transaction)
+  def flush(self, as_transaction=False, effective_caller_id=None):
+    self.rowsets = self._conn._execute_batch(
+        self.query_list,
+        self.bind_vars_list,
+        self.keyspace_list,
+        self.keyspace_ids_list,
+        self.tablet_type,
+        as_transaction)
     self.query_list = []
     self.bind_vars_list = []
     self.keyspace_list = []
