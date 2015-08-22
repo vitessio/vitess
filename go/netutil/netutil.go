@@ -155,35 +155,6 @@ func FullyQualifiedHostnameOrPanic() string {
 	return hostname
 }
 
-// ResolveAddr can resolve an address where the host has been left
-// blank, like ":3306".
-func ResolveAddr(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	if host == "" {
-		host, err = FullyQualifiedHostname()
-		if err != nil {
-			return "", err
-		}
-	}
-	return net.JoinHostPort(host, port), nil
-}
-
-// ResolveIpAddr resolves the address:port part into an IP address:port pair
-func ResolveIpAddr(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	ipAddrs, err := net.LookupHost(host)
-	if err != nil {
-		return "", err
-	}
-	return net.JoinHostPort(ipAddrs[0], port), nil
-}
-
 // ResolveIPv4Addr resolves the address:port part into an IP address:port pair
 func ResolveIPv4Addr(addr string) (string, error) {
 	host, port, err := net.SplitHostPort(addr)
