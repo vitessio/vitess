@@ -17,6 +17,8 @@ import (
 	"strings"
 	"text/template"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/env"
 )
@@ -162,6 +164,7 @@ func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
+	log.Infof("Fully qualified machine hostname was detected as: %v", hostname)
 	for _, zkServer := range zkConfig.Servers {
 		if (myId > 0 && myId == zkServer.ServerId) || (myId == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId
