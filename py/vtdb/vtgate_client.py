@@ -111,15 +111,12 @@ class VTGateClient(object):
       cursorclass = vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self):
     """Starts a transaction.
 
     FIXME(alainjobart): instead of storing the Session as member variable,
     should return it and let the cursor store it.
 
-    Args:
-      effective_caller_id: Identifies who made this call.
-
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
       dbexceptions.RequestBacklog: the server is overloaded, and this query
@@ -130,18 +127,14 @@ class VTGateClient(object):
       dbexceptions.ProgrammingError: the supplied statements are invalid,
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
-
     """
     pass
 
-  def commit(self, effective_caller_id=None):
+  def commit(self):
     """Commits the current transaction.
 
     FIXME(alainjobart): should take the session in.
 
-    Args:
-      effective_caller_id: Identifies who made this call.
-
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
       dbexceptions.RequestBacklog: the server is overloaded, and this query
@@ -155,13 +148,10 @@ class VTGateClient(object):
     """
     pass
 
-  def rollback(self, effective_caller_id=None):
+  def rollback(self):
     """Rolls the current transaction back.
 
     FIXME(alainjobart): should take the session in.
-
-    Args:
-      effective_caller_id: Identifies who made this call.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -182,8 +172,7 @@ class VTGateClient(object):
                keyspace_ids=None,
                keyranges=None,
                entity_keyspace_id_map=None, entity_column_name=None,
-               not_in_transaction=False,
-               effective_caller_id=None):
+               not_in_transaction=False):
     """Executes the given sql.
 
     FIXME(alainjobart): should take the session in.
@@ -215,7 +204,6 @@ class VTGateClient(object):
         Requires keyspace, entity_keyspace_id_map.
       not_in_transaction: force this execute to be outside the current
         transaction, if any.
-      effective_caller_id: Identifies who made this call.
 
     Returns:
       results: list of rows.
@@ -240,8 +228,7 @@ class VTGateClient(object):
                      keyspace_list=None,
                      shards_list=None,
                      keyspace_ids_list=None,
-                     as_transaction=False,
-                     effective_caller_id=None):
+                     as_transaction=False):
     """Executes a list of sql queries.
 
     These follow the same routing rules as _execute.
@@ -264,7 +251,6 @@ class VTGateClient(object):
         Incompatible with shards_list.
         Requires keyspace_list.
       as_transaction: starts and commits a transaction around the statements.
-      effective_caller_id: Identifies who made this call.
 
     Returns:
       results: an array of (results, rowcount, lastrowid, fields) tuples,
@@ -287,8 +273,7 @@ class VTGateClient(object):
                       keyspace=None,
                       shards=None,
                       keyspace_ids=None,
-                      keyranges=None,
-                      effective_caller_id=None):
+                      keyranges=None):
     """Executes the given sql, in streaming mode.
 
     FIXME(alainjobart): the return values are weird (historical reasons)
@@ -311,7 +296,6 @@ class VTGateClient(object):
       keyranges: if specified, use this list to route the query.
         Incompatible with shards, keyspace_ids.
         Requires keyspace.
-      effective_caller_id: Identifies who made this call.
 
     Returns:
       None

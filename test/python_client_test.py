@@ -29,6 +29,8 @@ def setUpModule():
   global vtgateclienttest_port
   global vtgateclienttest_grpc_port
 
+  environment.topo_server().setup()
+
   vtgateclienttest_port = environment.reserve_ports(1)
   args = environment.binary_args('vtgateclienttest') + [
       '-log_dir', environment.vtlogroot,
@@ -48,6 +50,8 @@ def setUpModule():
 def tearDownModule():
   utils.kill_sub_process(vtgateclienttest_process, soft=True)
   vtgateclienttest_process.wait()
+
+  environment.topo_server().teardown()
 
 
 class TestPythonClient(unittest.TestCase):
