@@ -122,7 +122,7 @@ func FullyQualifiedHostname() (string, error) {
 		return "", fmt.Errorf("FullyQualifiedHostname: Failed to lookup the IP of this machine's hostname (%v): %v", hostname, err)
 	}
 	if len(ips) == 0 {
-		return "", fmt.Errorf("FullyQualifiedHostname: Lookup of the IP of this machine's hostname (%v) did not return any IP address.")
+		return "", fmt.Errorf("FullyQualifiedHostname: Lookup of the IP of this machine's hostname (%v) did not return any IP address.", hostname)
 	}
 	// If multiple IPs are returned, we only look at the first one.
 	localIP := ips[0]
@@ -133,7 +133,7 @@ func FullyQualifiedHostname() (string, error) {
 		return "", fmt.Errorf("FullyQualifiedHostname: Failed to reverse lookup this machine's local IP (%v): %v", localIP, err)
 	}
 	if len(resolvedHostnames) == 0 {
-		return "", fmt.Errorf("FullyQualifiedHostname: Reverse lookup of this machine's local IP (%v) did not return any hostnames.")
+		return "", fmt.Errorf("FullyQualifiedHostname: Reverse lookup of this machine's local IP (%v) did not return any hostnames.", localIP)
 	}
 	// If multiple hostnames are found, we return only the first one.
 	// If multiple hostnames are listed e.g. in an entry in the /etc/hosts file,
