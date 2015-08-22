@@ -150,7 +150,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       cursorclass = vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self):
     try:
       response = self.client.call('VTGate.Begin', None)
       self.session = response.reply
@@ -184,9 +184,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.session = response.reply['Session']
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute(
-      self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None):
+  def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
     exec_method = None
     req = None
     if keyspace_ids is not None:
@@ -233,10 +231,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     return results, rowcount, lastrowid, fields
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_entity_ids(
-      self, sql, bind_variables, keyspace, tablet_type,
-      entity_keyspace_id_map, entity_column_name, not_in_transaction=False,
-      effective_caller_id=None):
+  def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name, not_in_transaction=False):
     sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
     new_binds = field_types.convert_bind_vars(new_binds)
     req = {
@@ -285,9 +280,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_batch(
-      self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
-      tablet_type, as_transaction, effective_caller_id=None):
+  def _execute_batch(self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list, tablet_type, as_transaction):
     query_list = []
     for sql, bind_vars, keyspace, keyspace_ids in zip(sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
       sql, bind_vars = dbapi.prepare_query_bind_vars(sql, bind_vars)
@@ -340,9 +333,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _stream_execute(
-      self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
-      keyranges=None, not_in_transaction=False, effective_caller_id=None):
+  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
     exec_method = None
     req = None
     if keyspace_ids is not None:
