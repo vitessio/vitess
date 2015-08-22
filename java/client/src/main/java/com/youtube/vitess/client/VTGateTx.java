@@ -44,8 +44,8 @@ public class VTGateTx {
     return new VTGateTx(client, session);
   }
 
-  public QueryResult execute(
-      Context ctx, String query, Map<String, ?> bindVars, TabletType tabletType)
+  public QueryResult execute(Context ctx, String query, Map<String, ?> bindVars,
+      TabletType tabletType, boolean notInTransaction)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
       throw new VitessNotInTransactionException("execute: not in transaction");
@@ -54,6 +54,7 @@ public class VTGateTx {
         ExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
             .setTabletType(tabletType)
+            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -65,7 +66,8 @@ public class VTGateTx {
   }
 
   public QueryResult executeShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType,
+      boolean notInTransaction)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
       throw new VitessNotInTransactionException("executeShards: not in transaction");
@@ -76,6 +78,7 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllShards(shards)
             .setTabletType(tabletType)
+            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -87,7 +90,8 @@ public class VTGateTx {
   }
 
   public QueryResult executeKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
+      boolean notInTransaction)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
       throw new VitessNotInTransactionException("executeKeyspaceIds: not in transaction");
@@ -98,6 +102,7 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
             .setTabletType(tabletType)
+            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -109,7 +114,8 @@ public class VTGateTx {
   }
 
   public QueryResult executeKeyRanges(Context ctx, String query, String keyspace,
-      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
+      boolean notInTransaction)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
       throw new VitessNotInTransactionException("executeKeyRanges: not in transaction");
@@ -120,6 +126,7 @@ public class VTGateTx {
             .setKeyspace(keyspace)
             .addAllKeyRanges(keyRanges)
             .setTabletType(tabletType)
+            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
@@ -132,7 +139,7 @@ public class VTGateTx {
 
   public QueryResult executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType)
+      TabletType tabletType, boolean notInTransaction)
       throws VitessException, VitessRpcException, VitessNotInTransactionException {
     if (session == null) {
       throw new VitessNotInTransactionException("executeEntityIds: not in transaction");
@@ -145,6 +152,7 @@ public class VTGateTx {
             .addAllEntityKeyspaceIds(Iterables.transform(
                 entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
             .setTabletType(tabletType)
+            .setNotInTransaction(notInTransaction)
             .setSession(session);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
