@@ -113,16 +113,16 @@ func FullyQualifiedHostname() (string, error) {
 	// 1. Get the machine hostname. Example: localhost
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", fmt.Errorf("FullyQualifiedHostname: Failed to retrieve the hostname of this machine: %v", err)
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to retrieve the hostname of this machine: %v", err)
 	}
 
 	// 2. Look up the IP address for that hostname. Example: 127.0.0.1
 	ips, err := net.LookupHost(hostname)
 	if err != nil {
-		return "", fmt.Errorf("FullyQualifiedHostname: Failed to lookup the IP of this machine's hostname (%v): %v", hostname, err)
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to lookup the IP of this machine's hostname (%v): %v", hostname, err)
 	}
 	if len(ips) == 0 {
-		return "", fmt.Errorf("FullyQualifiedHostname: Lookup of the IP of this machine's hostname (%v) did not return any IP address.")
+		return "", fmt.Errorf("FullyQualifiedHostname: lookup of the IP of this machine's hostname (%v) did not return any IP address", hostname)
 	}
 	// If multiple IPs are returned, we only look at the first one.
 	localIP := ips[0]
@@ -130,10 +130,10 @@ func FullyQualifiedHostname() (string, error) {
 	// 3. Reverse lookup the IP. Example: localhost.localdomain
 	resolvedHostnames, err := net.LookupAddr(localIP)
 	if err != nil {
-		return "", fmt.Errorf("FullyQualifiedHostname: Failed to reverse lookup this machine's local IP (%v): %v", localIP, err)
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to reverse lookup this machine's local IP (%v): %v", localIP, err)
 	}
 	if len(resolvedHostnames) == 0 {
-		return "", fmt.Errorf("FullyQualifiedHostname: Reverse lookup of this machine's local IP (%v) did not return any hostnames.")
+		return "", fmt.Errorf("FullyQualifiedHostname: reverse lookup of this machine's local IP (%v) did not return any hostnames", localIP)
 	}
 	// If multiple hostnames are found, we return only the first one.
 	// If multiple hostnames are listed e.g. in an entry in the /etc/hosts file,
