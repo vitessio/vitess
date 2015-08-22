@@ -525,6 +525,39 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	}
 }
 
+func TestResolverExecBatchReresolve(t *testing.T) {
+	s := createSandbox("TestResolverExecBatchReresolve")
+	sbc := &sandboxConn{mustFailRetry: 20}
+	s.MapTestConn("0", sbc)
+
+	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
+
+	callcount := 0
+	buildBatchRequest := func() (*scatterBatchRequest, error) {
+		callcount++
+		queries := []proto.BoundShardQuery{{
+			Sql:           "query",
+			BindVariables: nil,
+			Keyspace:      "TestResolverExecBatchReresolve",
+			Shards:        []string{"0"},
+		}}
+		return boundShardQueriesToScatterBatchRequest(queries), nil
+	}
+
+	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, false, nil, buildBatchRequest)
+	want := "shard, host: TestResolverExecBatchReresolve.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
+	}
+	// Ensure scatter tried a re-resolve
+	if callcount != 2 {
+		t.Errorf("want 2, got %v", callcount)
+	}
+	if count := sbc.AsTransactionCount.Get(); count != 0 {
+		t.Errorf("want 0, got %v", count)
+	}
+}
+
 func TestResolverExecBatchAsTransaction(t *testing.T) {
 	s := createSandbox("TestResolverExecBatchAsTransaction")
 	sbc := &sandboxConn{mustFailRetry: 20}
@@ -544,29 +577,20 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries), nil
 	}
 
-	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, false, nil, buildBatchRequest)
-	if err == nil {
-		t.Errorf("want got, got none")
-	}
-	// Ensure scatter tried a re-resolve
-	if callcount != 2 {
-		t.Errorf("want 2, got %v", callcount)
-	}
-	if count := sbc.AsTransactionCount.Get(); count != 0 {
-		t.Errorf("want 0, got %v", count)
-	}
-
+	res = NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
 	callcount = 0
-	_, err = res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, true, nil, buildBatchRequest)
-	if err == nil {
+	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, true, nil, buildBatchRequest)
+	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
+	if err == nil || err.Error() != want {
 		t.Errorf("want got, got none")
 	}
 	// Ensure scatter did not re-resolve
 	if callcount != 1 {
 		t.Errorf("want 1, got %v", callcount)
 	}
-	if count := sbc.AsTransactionCount.Get(); count != 1 {
-		t.Errorf("want 1, got %v", count)
+	if count := sbc.AsTransactionCount.Get(); count != 2 {
+		t.Errorf("want 1, got %v, err; %v", count, err)
+		return
 	}
 }
 
