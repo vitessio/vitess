@@ -1,4 +1,4 @@
-"""zkns - naming service.
+"""Zkns naming service.
 
 This uses zookeeper to resolve a list of servers to answer a
 particular query type.
@@ -44,7 +44,7 @@ def _sorted_by_srv_priority(entries):
     priority_map[entry.priority].append(entry)
 
   shuffled_entries = []
-  for unused_priority, priority_entries in sorted(priority_map.iteritems()):
+  for _, priority_entries in sorted(priority_map.iteritems()):
     if len(priority_entries) <= 1:
       shuffled_entries.extend(priority_entries)
       continue

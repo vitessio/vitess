@@ -117,7 +117,7 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
     entity_id_col = entity_id_map.keys()[0]
     entity_id = entity_id_map[entity_id_col]
 
-    #TODO: the current api means that if a table doesn't have the
+    # TODO: the current api means that if a table doesn't have the
     # sharding key column name then it cannot pass in sharding key for
     # routing purposes. Will this cause extra load on lookup db/cache
     # ? This is cleaner from a design perspective.
@@ -179,6 +179,7 @@ class DBObjectRangeSharded(db_object.DBObjectBase):
   @classmethod
   def get_lookup_column_name(class_, column_name):
     """Return the lookup column name for a column name from this table.
+
     If the entry doesn't exist it is assumed that the column_name is same.
     """
     if class_.column_lookup_name_map is None:
@@ -432,13 +433,15 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
   def insert(class_, cursor_method, **bind_vars):
     """Creates the lookup relationship and inserts in the primary table.
 
-     The creation of the lookup entry also creates the primary key for
+    The creation of the lookup entry also creates the primary key for
     the row in the primary table.
 
     The lookup relationship is determined by class_.column_lookup_name_map
-    and the bind variables passed in. There are two types of entities -
+    and the bind variables passed in. There are two types of entities:
+
     1. Table for which the entity that is also the primary sharding key for
     this keyspace.
+
     2. Entity table that creates a new entity and needs to create a lookup
     between that entity and sharding key.
     """

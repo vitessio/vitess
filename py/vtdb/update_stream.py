@@ -61,7 +61,7 @@ class StreamEvent(object):
 
 
 class UpdateStreamConnection(object):
-  """Te interface for the update stream client implementations.
+  """The interface for the update stream client implementations.
 
   All implementations must implement all these methods.  If something
   goes wrong with the connection, this object will be thrown out.

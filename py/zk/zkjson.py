@@ -1,4 +1,4 @@
-"""Implement a sensible wrapper that treats python objects as dictionaries.
+"""A sensible wrapper that treats python objects as dictionaries.
 
 Has sensible restrictions on serialization.
 """

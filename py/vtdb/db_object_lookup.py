@@ -10,7 +10,7 @@ from vtdb import db_object_unsharded
 
 
 class LookupDBObject(db_object_unsharded.DBObjectUnsharded):
-  """A example implementation of a lookup class stored in an unsharded db."""
+  """An implementation of a lookup class stored in an unsharded db."""
 
   @classmethod
   def get(class_, cursor, entity_id_column, entity_id):

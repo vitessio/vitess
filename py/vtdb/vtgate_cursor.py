@@ -79,7 +79,7 @@ class VTGateCursor(object):
       return
 
     write_query = bool(write_sql_pattern.match(sql))
-    # NOTE: This check may also be done at high-layers but adding it
+    # NOTE: This check may also be done at higher layers but adding it
     # here for completion.
     if write_query:
       if not self.is_writable():
