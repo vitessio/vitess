@@ -206,7 +206,7 @@ var customUnmarshalFailureCases = []struct {
 	{"string", stringDecoder, []byte{String, Binary, Null}},
 	{"[]byte", binaryDecoder, []byte{String, Binary, Null}},
 	{"int64", int64Decoder, []byte{Int, Long, Ulong, Null}},
-	{"int32", int32Decoder, []byte{Int, Null}},
+	{"int32", int32Decoder, []byte{Int, Long, Null}},
 	{"int", intDecoder, []byte{Int, Long, Ulong, Null}},
 	{"uint64", uint64Decoder, []byte{Int, Long, Ulong, Null}},
 	{"uint32", uint32Decoder, []byte{Int, Long, Ulong, Null}},

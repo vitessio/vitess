@@ -76,11 +76,13 @@ func DecodeInt64(buf *bytes.Buffer, kind byte) int64 {
 }
 
 // DecodeInt32 decodes a int32 from buf.
-// Allowed types: Int, Null.
+// Allowed types: Int, Long, Null.
 func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
 	switch kind {
 	case Int:
 		return int32(Pack.Uint32(Next(buf, 4)))
+	case Long:
+		return int32(Pack.Uint64(Next(buf, 8)))
 	case Null:
 		return 0
 	}
