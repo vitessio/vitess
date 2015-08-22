@@ -47,7 +47,7 @@ class DatabaseContext(object):
     tolerance for replication lag.
     vtgate_addrs: vtgate server endpoints
     master_access_disabled: Disallow master access for application running
-    in non-master` capable cells.
+    in non-master capable cells.
     event_logger: Logs events and errors of note. Defaults to vtdb_logger.
     transaction_stack_depth: This allows nesting of transactions and makes
     commit rpc to VTGate when the outer-most commits.

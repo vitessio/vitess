@@ -1,4 +1,4 @@
-"""Tthe base class for database classes and decorator for db method.
+"""Base class for database classes and decorator for db method.
 
 The base class DBObjectBase is the base class for all other database
 base classes.  It has methods for common database operations like
