@@ -156,7 +156,7 @@ class StreamCursor(object):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
-    x, y, z, self.description = self.connection._stream_execute(
+    _, _, _, self.description = self.connection._stream_execute(
         sql, bind_variables, **kargs)
     self.index = 0
     return 0

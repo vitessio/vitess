@@ -1,14 +1,17 @@
 """Module containing base classes for range-sharded database objects.
 
-There are two base classes for tables that live in range-sharded keyspace -
-1. DBObjectRangeSharded -  This should be used for tables that only reference
-lookup entities but don't create or manage them. Please see examples in
-test/clientlib_tests/db_class_sharded.py.
-2. DBObjectEntityRangeSharded - This inherits from DBObjectRangeSharded and
-is used for tables and also create new lookup relationships.
-This module also contains helper methods for cursor creation for
-accessing lookup tables and methods for dml and select for the above
-mentioned base classes.
+There are two base classes for tables that live in range-sharded keyspace:
+
+1. DBObjectRangeSharded - This should be used for tables that only
+reference lookup entities but don't create or manage them. Please see
+examples in test/clientlib_tests/db_class_sharded.py.
+
+2. DBObjectEntityRangeSharded - This inherits from
+DBObjectRangeSharded and is used for tables and also create new lookup
+relationships.  This module also contains helper methods for cursor
+creation for accessing lookup tables and methods for dml and select
+for the above mentioned base classes.
+
 """
 import functools
 import struct
