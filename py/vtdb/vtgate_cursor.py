@@ -54,8 +54,8 @@ class VTGateCursor(object):
   def commit(self):
     return self._conn.commit()
 
-  def begin(self, effective_caller_id=None):
-    return self._conn.begin(effective_caller_id)
+  def begin(self):
+    return self._conn.begin()
 
   def rollback(self):
     return self._conn.rollback()
@@ -67,10 +67,10 @@ class VTGateCursor(object):
     self.results = None
     self.description = None
     self.lastrowid = None
-    effective_caller_id = kargs.get('effective_caller_id')
+
     sql_check = sql.strip().lower()
     if sql_check == 'begin':
-      self.begin(effective_caller_id)
+      self.begin()
       return
     elif sql_check == 'commit':
       self.commit()
@@ -94,14 +94,11 @@ class VTGateCursor(object):
             self.tablet_type,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
-            not_in_transaction=(not self.is_writable()),
-            effective_caller_id=effective_caller_id))
+            not_in_transaction=(not self.is_writable()))
     self.index = 0
     return self.rowcount
 
-  def execute_entity_ids(
-      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
-      effective_caller_id=None):
+  def execute_entity_ids(self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
     self.rowcount = 0
     self.results = None
     self.description = None
@@ -121,8 +118,7 @@ class VTGateCursor(object):
             self.tablet_type,
             entity_keyspace_id_map,
             entity_column_name,
-            not_in_transaction=(not self.is_writable()),
-            effective_caller_id=effective_caller_id))
+            not_in_transaction=(not self.is_writable())))
     self.index = 0
     return self.rowcount
 
@@ -230,14 +226,13 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_list.append(keyspace)
     self.keyspace_ids_list.append(keyspace_ids)
 
-  def flush(self, as_transaction=False, effective_caller_id=None):
+  def flush(self, as_transaction=False):
     self.rowsets = self._conn._execute_batch(self.query_list,
-                                             self.bind_vars_list,
-                                             self.keyspace_list,
-                                             self.keyspace_ids_list,
-                                             self.tablet_type,
-                                             as_transaction,
-                                             effective_caller_id)
+                                              self.bind_vars_list,
+                                              self.keyspace_list,
+                                              self.keyspace_ids_list,
+                                              self.tablet_type,
+                                              as_transaction)
     self.query_list = []
     self.bind_vars_list = []
     self.keyspace_list = []
@@ -273,8 +268,7 @@ class StreamVTGateCursor(VTGateCursor):
         self.tablet_type,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
-        not_in_transaction=(not self.is_writable()),
-        effective_caller_id=kargs.get('effective_caller_id'))
+        not_in_transaction=(not self.is_writable()))
     self.index = 0
     return 0
 
