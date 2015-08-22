@@ -27,6 +27,7 @@ ifdef VT_MYSQL_ROOT
 endif
 
 build:
+	echo $$(date): Building source tree
 	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
@@ -74,7 +75,7 @@ queryservice_test_files = \
 	"queryservice_test.py $(ENABLE_MEMCACHED) -e vtocc" \
 	"queryservice_test.py $(ENABLE_MEMCACHED) -e vttablet"
 
-queryservice_test:
+queryservice_test: build
 	$(call run_integration_tests, $(queryservice_test_files))
 
 # These tests should be run by users to check that Vitess works in their environment.
@@ -148,8 +149,8 @@ SHELL = /bin/bash
 define run_integration_tests
 	cd test ; \
 	for t in $1 ; do \
-		echo $$(date): Running test/$$t... ; \
-		output=$$(time timeout 5m ./$$t $$VT_TEST_FLAGS 2>&1) ; \
+		echo $$(date): Running test/$$t --skip-build ; \
+		output=$$(time timeout 5m ./$$t $$VT_TEST_FLAGS --skip-build 2>&1) ; \
 		if [[ $$? != 0 ]]; then \
 			echo "$$output" >&2 ; \
 			exit 1 ; \
@@ -158,25 +159,25 @@ define run_integration_tests
 	done
 endef
 
-small_integration_test:
+small_integration_test: build
 	$(call run_integration_tests, $(small_integration_test_files))
 
-medium_integration_test:
+medium_integration_test: build
 	$(call run_integration_tests, $(medium_integration_test_files))
 
-large_integration_test:
+large_integration_test: build
 	$(call run_integration_tests, $(large_integration_test_files))
 
-ci_skip_integration_test:
+ci_skip_integration_test: build
 	$(call run_integration_tests, $(ci_skip_integration_test_files))
 
-worker_test:
+worker_test: build
 	godep go test ./go/vt/worker/
 	$(call run_integration_tests, $(worker_integration_test_files))
 
 integration_test: small_integration_test medium_integration_test large_integration_test ci_skip_integration_test
 
-site_integration_test:
+site_integration_test: build
 	$(call run_integration_tests, $(site_integration_test_files))
 
 java_vtgate_client_test:

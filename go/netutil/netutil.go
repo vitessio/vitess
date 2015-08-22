@@ -103,57 +103,56 @@ func JoinHostPort(host string, port int32) string {
 	return net.JoinHostPort(host, strconv.FormatInt(int64(port), 10))
 }
 
-// FullyQualifiedHostname returns the full hostname with domain
+// FullyQualifiedHostname returns the FQDN of the machine.
 func FullyQualifiedHostname() (string, error) {
+	// The machine hostname (which is also returned by os.Hostname()) may not be
+	// set to the FQDN, but only the first part of it e.g. "localhost" instead of
+	// "localhost.localdomain".
+	// To get the full FQDN, we do the following:
+
+	// 1. Get the machine hostname. Example: localhost
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to retrieve the hostname of this machine: %v", err)
 	}
 
-	cname, err := net.LookupCNAME(hostname)
+	// 2. Look up the IP address for that hostname. Example: 127.0.0.1
+	ips, err := net.LookupHost(hostname)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to lookup the IP of this machine's hostname (%v): %v", hostname, err)
 	}
-	return strings.TrimRight(cname, "."), nil
+	if len(ips) == 0 {
+		return "", fmt.Errorf("FullyQualifiedHostname: lookup of the IP of this machine's hostname (%v) did not return any IP address", hostname)
+	}
+	// If multiple IPs are returned, we only look at the first one.
+	localIP := ips[0]
+
+	// 3. Reverse lookup the IP. Example: localhost.localdomain
+	resolvedHostnames, err := net.LookupAddr(localIP)
+	if err != nil {
+		return "", fmt.Errorf("FullyQualifiedHostname: failed to reverse lookup this machine's local IP (%v): %v", localIP, err)
+	}
+	if len(resolvedHostnames) == 0 {
+		return "", fmt.Errorf("FullyQualifiedHostname: reverse lookup of this machine's local IP (%v) did not return any hostnames", localIP)
+	}
+	// If multiple hostnames are found, we return only the first one.
+	// If multiple hostnames are listed e.g. in an entry in the /etc/hosts file,
+	// the current Go implementation returns them in that order.
+	// Example for an /etc/hosts entry:
+	//   127.0.0.1	localhost.localdomain localhost
+	// If the FQDN isn't returned by this function, check the order in the entry
+	// in your /etc/hosts file.
+	return strings.TrimRight(resolvedHostnames[0], "."), nil
 }
 
 // FullyQualifiedHostnameOrPanic is the same as FullyQualifiedHostname
-// but panics in case of error
+// but panics in case of an error.
 func FullyQualifiedHostnameOrPanic() string {
 	hostname, err := FullyQualifiedHostname()
 	if err != nil {
 		panic(err)
 	}
 	return hostname
-}
-
-// ResolveAddr can resolve an address where the host has been left
-// blank, like ":3306".
-func ResolveAddr(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	if host == "" {
-		host, err = FullyQualifiedHostname()
-		if err != nil {
-			return "", err
-		}
-	}
-	return net.JoinHostPort(host, port), nil
-}
-
-// ResolveIpAddr resolves the address:port part into an IP address:port pair
-func ResolveIpAddr(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	ipAddrs, err := net.LookupHost(host)
-	if err != nil {
-		return "", err
-	}
-	return net.JoinHostPort(ipAddrs[0], port), nil
 }
 
 // ResolveIPv4Addr resolves the address:port part into an IP address:port pair

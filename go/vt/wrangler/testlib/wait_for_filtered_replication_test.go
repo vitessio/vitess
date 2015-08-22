@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
@@ -63,7 +64,7 @@ func TestWaitForFilteredReplication_noFilteredReplication(t *testing.T) {
 }
 
 // TestWaitForFilteredReplication_unhealthy checks that
-// vtctl WaitForFilteredReplication fails eventually when a tablet is not healthy.
+// vtctl WaitForFilteredReplication fails when a tablet is not healthy.
 func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
 	unhealthy := &pbq.RealtimeStats{
 		HealthError: "WaitForFilteredReplication: unhealthy test",
@@ -93,6 +94,14 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	// Build topology state as we would expect it when filtered replication is enabled.
 	ctx := context.Background()
 	wr.SetSourceShards(ctx, keyspace, destShard, []*pbt.TabletAlias{source.Tablet.GetAlias()}, nil)
+
+	// Set a BinlogPlayerMap to avoid a nil panic when the explicit RunHealthCheck
+	// is called by WaitForFilteredReplication.
+	// Note that for this test we don't mock the BinlogPlayerMap i.e. although
+	// its state says no filtered replication is running, the code under test will
+	// observe otherwise because we call SqlQuery.BroadcastHealth() directly and
+	// skip going through the tabletmanager's agent.
+	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
 	// Use real, but trimmed down QueryService.
 	testConfig := tabletserver.DefaultQsConfig

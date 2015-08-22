@@ -3,14 +3,17 @@
 # be found in the LICENSE file.
 
 import itertools
+import operator
 import re
 
-from vtdb import cursor
 from vtdb import dbexceptions
-from vtdb import keyrange_constants
+
+write_sql_pattern = re.compile(r'\s*(insert|update|delete)', re.IGNORECASE)
 
 
-write_sql_pattern = re.compile('\s*(insert|update|delete)', re.IGNORECASE)
+def ascii_lower(string):
+    """Lower-case, but only in the ASCII range."""
+    return string.encode('utf8').lower().decode('utf8')
 
 
 class VTGateCursor(object):
@@ -28,7 +31,9 @@ class VTGateCursor(object):
   _writable = None
   routing = None
 
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
+  def __init__(
+      self, connection, keyspace, tablet_type, keyspace_ids=None,
+      keyranges=None, writable=False):
     self._conn = connection
     self.keyspace = keyspace
     self.tablet_type = tablet_type
@@ -49,7 +54,7 @@ class VTGateCursor(object):
     return self._conn.commit()
 
   def begin(self, effective_caller_id=None):
-    return self._conn.begin(effective_caller_id)
+    return self._conn.begin()
 
   def rollback(self):
     return self._conn.rollback()
@@ -61,10 +66,10 @@ class VTGateCursor(object):
     self.results = None
     self.description = None
     self.lastrowid = None
-    effective_caller_id = kargs.get('effective_caller_id')
+
     sql_check = sql.strip().lower()
     if sql_check == 'begin':
-      self.begin(effective_caller_id)
+      self.begin()
       return
     elif sql_check == 'commit':
       self.commit()
@@ -74,20 +79,21 @@ class VTGateCursor(object):
       return
 
     write_query = bool(write_sql_pattern.match(sql))
-    # NOTE: This check may also be done at high-layers but adding it here for completion.
+    # NOTE: This check may also be done at higher layers but adding it
+    # here for completion.
     if write_query:
       if not self.is_writable():
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
 
-    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute(
-        sql,
-        bind_variables,
-        self.keyspace,
-        self.tablet_type,
-        keyspace_ids=self.keyspace_ids,
-        keyranges=self.keyranges,
-        not_in_transaction=(not self.is_writable()),
-        effective_caller_id=effective_caller_id)
+    self.results, self.rowcount, self.lastrowid, self.description = (
+        self._conn._execute(
+            sql,
+            bind_variables,
+            self.keyspace,
+            self.tablet_type,
+            keyspace_ids=self.keyspace_ids,
+            keyranges=self.keyranges,
+            not_in_transaction=(not self.is_writable())))
     self.index = 0
     return self.rowcount
 
@@ -102,20 +108,20 @@ class VTGateCursor(object):
     # This is by definition a scatter query, so raise exception.
     write_query = bool(write_sql_pattern.match(sql))
     if write_query:
-      raise dbexceptions.DatabaseError('execute_entity_ids is not allowed for write queries')
+      raise dbexceptions.DatabaseError(
+          'execute_entity_ids is not allowed for write queries')
 
-    self.results, self.rowcount, self.lastrowid, self.description = self._conn._execute_entity_ids(
-        sql,
-        bind_variables,
-        self.keyspace,
-        self.tablet_type,
-        entity_keyspace_id_map,
-        entity_column_name,
-        not_in_transaction=(not self.is_writable()),
-        effective_caller_id=effective_caller_id)
+    self.results, self.rowcount, self.lastrowid, self.description = (
+        self._conn._execute_entity_ids(
+            sql,
+            bind_variables,
+            self.keyspace,
+            self.tablet_type,
+            entity_keyspace_id_map,
+            entity_column_name,
+            not_in_transaction=(not self.is_writable())))
     self.index = 0
     return self.rowcount
-
 
   def fetchone(self):
     if self.results is None:
@@ -159,7 +165,8 @@ class VTGateCursor(object):
     # sort the rows and then trim off the prepended sort columns
 
     if sort_columns:
-      sorted_rows = list(sort_row_list_by_columns(self.fetchall(), sort_columns, desc_columns))[:limit]
+      sorted_rows = list(sort_row_list_by_columns(
+          self.fetchall(), sort_columns, desc_columns))[:limit]
     else:
       sorted_rows = itertools.islice(self.fetchall(), limit)
     neutered_rows = [row[len(order_by_columns):] for row in sorted_rows]
@@ -169,6 +176,7 @@ class VTGateCursor(object):
     raise dbexceptions.NotSupportedError
 
   def executemany(self, *pargs):
+    _ = pargs
     raise dbexceptions.NotSupportedError
 
   def nextset(self):
@@ -203,6 +211,7 @@ class BatchVTGateCursor(VTGateCursor):
   This only supports keyspace_ids right now since that is what
   the underlying vtgate server supports.
   """
+
   def __init__(self, connection, tablet_type, writable=False):
     # rowset is [(results, rowcount, lastrowid, fields),]
     self.rowsets = None
@@ -210,7 +219,7 @@ class BatchVTGateCursor(VTGateCursor):
     self.bind_vars_list = []
     self.keyspace_list = []
     self.keyspace_ids_list = []
-    VTGateCursor.__init__(self, connection, "", tablet_type, writable=writable)
+    VTGateCursor.__init__(self, connection, '', tablet_type, writable=writable)
 
   def execute(self, sql, bind_variables, keyspace, keyspace_ids):
     self.query_list.append(sql)
@@ -219,13 +228,13 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_ids_list.append(keyspace_ids)
 
   def flush(self, as_transaction=False, effective_caller_id=None):
-    self.rowsets = self._conn._execute_batch(self.query_list,
-                                             self.bind_vars_list,
-                                             self.keyspace_list,
-                                             self.keyspace_ids_list,
-                                             self.tablet_type,
-                                             as_transaction,
-                                             effective_caller_id)
+    self.rowsets = self._conn._execute_batch(
+        self.query_list,
+        self.bind_vars_list,
+        self.keyspace_list,
+        self.keyspace_ids_list,
+        self.tablet_type,
+        as_transaction)
     self.query_list = []
     self.bind_vars_list = []
     self.keyspace_list = []
@@ -240,8 +249,12 @@ class StreamVTGateCursor(VTGateCursor):
   index = None
   fetchmany_done = False
 
-  def __init__(self, connection, keyspace, tablet_type, keyspace_ids=None, keyranges=None, writable=False):
-    VTGateCursor.__init__(self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids, keyranges=keyranges)
+  def __init__(
+      self, connection, keyspace, tablet_type, keyspace_ids=None,
+      keyranges=None, writable=False):
+    VTGateCursor.__init__(
+        self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids,
+        keyranges=keyranges)
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
@@ -250,15 +263,14 @@ class StreamVTGateCursor(VTGateCursor):
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
 
     self.description = None
-    x, y, z, self.description = self._conn._stream_execute(
+    _, _, _, self.description = self._conn._stream_execute(
         sql,
         bind_variables,
         self.keyspace,
         self.tablet_type,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
-        not_in_transaction=(not self.is_writable()),
-        effective_caller_id=kargs.get('effective_caller_id'))
+        not_in_transaction=(not self.is_writable()))
     self.index = 0
     return 0
 
@@ -279,7 +291,7 @@ class StreamVTGateCursor(VTGateCursor):
     if self.fetchmany_done:
       self.fetchmany_done = False
       return result
-    for i in xrange(size):
+    for _ in xrange(size):
       row = self.fetchone()
       if row is None:
         self.fetchmany_done = True
@@ -327,7 +339,8 @@ class StreamVTGateCursor(VTGateCursor):
 
 # assumes the leading columns are used for sorting
 def sort_row_list_by_columns(row_list, sort_columns=(), desc_columns=()):
-  for column_index, column_name in reversed([x for x in enumerate(sort_columns)]):
+  for column_index, column_name in reversed(
+      [x for x in enumerate(sort_columns)]):
     og = operator.itemgetter(column_index)
     if type(row_list) != list:
       row_list = sorted(

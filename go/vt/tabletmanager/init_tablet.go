@@ -145,12 +145,14 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// figure out the hostname
 	hostname := *tabletHostname
-	if hostname == "" {
-		var err error
-		hostname, err = netutil.FullyQualifiedHostname()
+	if hostname != "" {
+		log.Infof("Using hostname: %v from -tablet_hostname flag.", hostname)
+	} else {
+		hostname, err := netutil.FullyQualifiedHostname()
 		if err != nil {
 			return err
 		}
+		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
 	}
 
 	// create and populate tablet record

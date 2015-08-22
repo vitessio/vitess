@@ -4,7 +4,9 @@
 
 from vtctl import vtctl_client, gorpc_vtctl_client
 
+
 def init():
-  vtctl_client.register_conn_class('gorpc', gorpc_vtctl_client.GoRpcVtctlClient)
+  vtctl_client.register_conn_class(
+      'gorpc', gorpc_vtctl_client.GoRpcVtctlClient)
 
 init()

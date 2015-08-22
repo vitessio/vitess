@@ -18,19 +18,21 @@ def register_conn_class(protocol, c):
 
 
 def connect(protocol, *pargs, **kargs):
-  """connect will return a dialed UpdateStreamConnection connection to
-  an update stream server.
+  """Return a dialed UpdateStreamConnection to an update stream server.
 
   Args:
-    protocol: the registered protocol to use.
-    args: passed to the registered protocol __init__ method.
+    protocol: The registered protocol to use.
+    *pargs: Passed to the registered protocol __init__ method.
+    **kargs: Passed to the registered protocol __init__ method.
 
   Returns:
     A dialed UpdateStreamConnection.
 
+  Raises:
+    ValueError: On bad protocol.
   """
-  if not protocol in update_stream_conn_classes:
-    raise Exception('Unknown update stream protocol', protocol)
+  if protocol not in update_stream_conn_classes:
+    raise ValueError('Unknown update stream protocol', protocol)
   conn = update_stream_conn_classes[protocol](*pargs, **kargs)
   conn.dial()
   return conn
@@ -59,11 +61,10 @@ class StreamEvent(object):
 
 
 class UpdateStreamConnection(object):
-  """UpdateStreamConnection is the interface for the update stream
-  client implementations.
-  All implementations must implement all these methods.
-  If something goes wrong with the connection, this object will be thrown out.
+  """The interface for the update stream client implementations.
 
+  All implementations must implement all these methods.  If something
+  goes wrong with the connection, this object will be thrown out.
   """
 
   def __init__(self, addr, timeout):

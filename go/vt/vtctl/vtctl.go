@@ -1340,11 +1340,6 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		"Specifies the maximum delay, in seconds, the filtered replication of the"+
 			" given destination shard should lag behind the source shard. When"+
 			" higher, the command will block and wait for the delay to decrease.")
-	// In case of automated reshardings, a tablet may still report itself as
-	// unhealthy e.g. because CopySchemaShard wasn't run yet and the db doesn't
-	// exist yet.
-	allowedHealthErrorsInARow := subFlags.Int("allowed_health_errors_in_a_row", 3,
-		"Limit of observed health errors in a row after which the command will fail and no longer wait for the tablet to become healthy.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1376,6 +1371,13 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("cannot get EndPoint for master tablet record: %v record: %v", err, tabletInfo)
 	}
 
+	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
+	// This is especially true for tests and automation where there is no pause of multiple seconds
+	// between commands and the periodic healthcheck did not run again yet.
+	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo, pb.TabletType_REPLICA); err != nil {
+		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
+	}
+
 	// pass in a non-UNKNOWN tablet type to not use sessionId
 	conn, err := tabletconn.GetDialer()(ctx, ep, "", "", pb.TabletType_MASTER, 30*time.Second)
 	if err != nil {
@@ -1387,7 +1389,6 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
 	}
 	var lastSeenDelay int
-	healthErrorsInARow := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -1401,19 +1402,8 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 				return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
 			}
 			if stats.HealthError != "" {
-				healthErrorsInARow++
-				if healthErrorsInARow >= *allowedHealthErrorsInARow {
-					return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
-				}
-				wr.Logger().Printf("Tablet is not healthy. Waiting for %v more health"+
-					" record(s) before the command will fail."+
-					" tablet: %v health record: %v\n",
-					(*allowedHealthErrorsInARow - healthErrorsInARow), alias, shr)
-				continue
-			} else {
-				healthErrorsInARow = 0
+				return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
 			}
-
 			if stats.BinlogPlayersCount == 0 {
 				return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
 			}

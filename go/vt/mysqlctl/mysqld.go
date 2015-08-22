@@ -26,7 +26,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -542,21 +541,6 @@ func deleteTopDir(dir string) (removalErr error) {
 		removalErr = err
 	}
 	return
-}
-
-// Addr returns the fully qualified host name + port for this instance.
-func (mysqld *Mysqld) Addr() string {
-	hostname := netutil.FullyQualifiedHostnameOrPanic()
-	return netutil.JoinHostPort(hostname, int32(mysqld.config.MysqlPort))
-}
-
-// IPAddr returns the IP address for this instance
-func (mysqld *Mysqld) IPAddr() string {
-	addr, err := netutil.ResolveIpAddr(mysqld.Addr())
-	if err != nil {
-		panic(err) // should never happen
-	}
-	return addr
 }
 
 // ExecuteMysqlCommand executes some SQL commands using a mysql command line interface process

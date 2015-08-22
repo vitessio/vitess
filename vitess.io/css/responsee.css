@@ -39,16 +39,24 @@ img {
 table {
 	background:none repeat scroll 0 0 #fff;
 	border:1px solid #D0D0D0;
+	border-bottom:1px solid #D0D0D0;
 	border-collapse:collapse;
 	border-spacing:0;
 	text-align:left;
 	width:100%;
 	}
 table tr td, table tr th {padding:0.625em;}
-table tfoot, table thead {background:none repeat scroll 0 0 #e0e0e0;}
-table tr:nth-of-type(2n) {background:none repeat scroll 0 0 #e0e0e0;}
-th {border-right:1px solid #fff;}
+table tfoot, table thead {background:none repeat scroll 0 0 #f6f6f6;}
+table tbody {background:none repeat scroll 0 0 #fff;}
+table tr:nth-of-type(2n) {background:none repeat scroll 0 0 #f6f6f6;}
+th {border-right:1px solid #e0e0e0;}
 td {border-right:1px solid #e0e0e0;}
+.api-styles table th {
+  font-size: 16px;
+}
+.api-styles table td:first-child {
+  color: #4E5A92;
+}
 .size-960 .line {
   margin:0 auto;
   max-width:60em;
@@ -233,6 +241,7 @@ a.categories-toggle:before {
   background:#fff;
 }
 .aside-nav ul ul a {padding:0.625em 1.25em;}
+.aside-nav ul ul.aside-nav-method-list a {padding:0.15em 0.75em 0.15em 1em;}
 .aside-nav li a:link, .aside-nav li a:visited {color:#333;text-decoration: none;}
 .aside-nav li li a:hover, .aside-nav li li.active-item > a, .aside-nav li li.aside-sub-submenu li a:hover {
   color:#999;

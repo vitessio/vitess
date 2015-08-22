@@ -43,6 +43,41 @@
                <!-- ASIDE NAV 2 -->
                <nav class="scrolling-nav" style="margin:0">
                <aside class="s-12">
+                  {% if page.nav == "reference" %}
+                  <div class="aside-nav">
+                     <div class="aside-nav-header">vtctl</div>
+                     <ul>
+                       <li><a href="/reference/vtctl.html">vtctl Reference</a></li>
+                     </ul>
+                     {% if 1 > 2 %}
+                     <div class="aside-nav-header">API services</div>
+                     <ul>
+                       <li><a href="/reference/vitess-api.html">Vitess API</a>
+                          {% if page.apimenu %}
+                          <ul class="aside-nav-method-list">
+                            <li><a href="/reference/vitess-api.html#begin">Begin</a></li>
+                            <li><a href="/reference/vitess-api.html#commit">Commit</a></li>
+                            <li><a href="/reference/vitess-api.html#execute">Execute</a></li>
+                            <li><a href="/reference/vitess-api.html#executebatchkeyspaceids">ExecuteBatchKeyspaceIds</a></li>
+                            <li><a href="/reference/vitess-api.html#executebatchshards">ExecuteBatchShards</a></li>
+                            <li><a href="/reference/vitess-api.html#executeentityids">ExecuteEntityIds</a></li>
+                            <li><a href="/reference/vitess-api.html#executekeyranges">ExecuteKeyRanges</a></li>
+                            <li><a href="/reference/vitess-api.html#executekeyspaceids">ExecuteKeyspaceIds</a></li>
+                            <li><a href="/reference/vitess-api.html#executeshards">ExecuteShards</a></li>
+                            <li><a href="/reference/vitess-api.html#getsrvkeyspace">GetSrvKeyspace</a></li>
+                            <li><a href="/reference/vitess-api.html#rollback">Rollback</a></li>
+                            <li><a href="/reference/vitess-api.html#splitquery">SplitQuery</a></li>
+                            <li><a href="/reference/vitess-api.html#streamexecute">StreamExecute</a></li>
+                            <li><a href="/reference/vitess-api.html#streamexecutekeyranges">StreamExecuteKeyRanges</a></li>
+                            <li><a href="/reference/vitess-api.html#streamexecutekeyspaceids">StreamExecuteKeyspaceIds</a></li>
+                            <li><a href="/reference/vitess-api.html#streamexecuteshards">StreamExecuteShards</a></li>
+                          </ul>
+                          {% endif %}
+                        </li>
+                     <!--li><a href="/reference/client-libraries/">Client Libraries</a></li>-->
+                     </ul>
+                     {% endif %}
+                  {% else %}
                   <div class="aside-nav">
                      <div class="aside-nav-header">Overview</div>
                      <ul>
@@ -83,20 +118,13 @@
                         <li><a href="/maintenance/testing.html">Testing</a></li>
                      </ul>
 -->
-                     <div class="aside-nav-header">Reference</div>
-                     <ul>
-                        <li><a href="/reference/vtctl.html">vtctl Reference</a></li>
-<!--
-                        <li><a href="/reference/api.html">API Reference</a></li>
-                        <li><a href="/reference/client-libraries/">Client Libraries</a></li>
--->
-                     </ul>
                      <div class="aside-nav-header">Other Resources</div>
                      <ul>
                         <li><a href="/resources/presentations.html">Presentations</a></li>
                         <!--<li class="last"><a href="/resources/roadmap.html">Roadmap</a></li>-->
                      </ul>
                   </div>
+                  {% endif %}
                </aside>
                </nav>
                <!-- CONTENT -->
