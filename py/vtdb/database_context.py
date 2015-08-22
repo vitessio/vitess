@@ -15,7 +15,6 @@ management.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import contextlib
 import functools
 
 from vtdb import dbexceptions
@@ -24,13 +23,13 @@ from vtdb import vtdb_logger
 from vtdb import vtgatev2
 
 
-#TODO: verify that these values make sense.
+# TODO: verify that these values make sense.
 DEFAULT_CONNECTION_TIMEOUT = 5.0
 
-__app_read_only_mode_method = lambda:False
+__app_read_only_mode_method = lambda: False
 __vtgate_connect_method = vtgatev2.connect
-#TODO: perhaps make vtgate addrs also a registeration mechanism ?
-#TODO: add mechansim to refresh vtgate addrs.
+# TODO: perhaps make vtgate addrs also a registeration mechanism ?
+# TODO: add mechansim to refresh vtgate addrs.
 
 
 class DatabaseContext(object):
@@ -44,18 +43,20 @@ class DatabaseContext(object):
 
   Attributes:
     lag_tolerant_mode: This directs all replica traffic to batch replicas.
-    This is done for applications that have a OLAP workload and also higher tolerance
-    for replication lag.
+    This is done for applications that have a OLAP workload and also higher
+    tolerance for replication lag.
     vtgate_addrs: vtgate server endpoints
-    master_access_disabled: Disallow master access for application running in non-master
-    capable cells.
+    master_access_disabled: Disallow master access for application running
+    in non-master` capable cells.
     event_logger: Logs events and errors of note. Defaults to vtdb_logger.
     transaction_stack_depth: This allows nesting of transactions and makes
     commit rpc to VTGate when the outer-most commits.
     vtgate_connection: Connection to VTGate.
   """
 
-  def __init__(self, vtgate_addrs=None, lag_tolerant_mode=False, master_access_disabled=False):
+  def __init__(
+      self, vtgate_addrs=None, lag_tolerant_mode=False,
+      master_access_disabled=False):
     self.vtgate_addrs = vtgate_addrs
     self.lag_tolerant_mode = lag_tolerant_mode
     self.master_access_disabled = master_access_disabled
@@ -83,14 +84,20 @@ class DatabaseContext(object):
 
     Transactions and some of the consistency guarantees rely on vtgate
     connections being sticky hence this class caches the connection.
+
+    Returns:
+      A vtgate_connection.
     """
-    if self.vtgate_connection is not None and not self.vtgate_connection.is_closed():
+    if (self.vtgate_connection is not None and
+        not self.vtgate_connection.is_closed()):
       return self.vtgate_connection
 
-    #TODO: the connect method needs to be extended to include query n txn timeouts as well
-    #FIXME: what is the best way of passing other params ?
+    # TODO: the connect method needs to be extended to include query
+    # n txn timeouts as well
+    # FIXME: what is the best way of passing other params ?
     connect_method = get_vtgate_connect_method()
-    self.vtgate_connection = connect_method(self.vtgate_addrs, self.connection_timeout)
+    self.vtgate_connection = connect_method(
+        self.vtgate_addrs, self.connection_timeout)
     return self.vtgate_connection
 
   def degrade_master_read_to_replica(self):
@@ -174,19 +181,31 @@ class DBOperationBase(object):
    dc: database context object.
    writable: Indicates whether this is part of write transaction.
   """
+
   def __init__(self, db_context):
     self.dc = db_context
     self.writable = False
 
   def get_cursor(self, **cursor_kargs):
-    """This returns the create_cursor method of DatabaseContext with
-    the writable attribute from the instance of DBOperationBase's
-    derived classes."""
-    return functools.partial(self.dc.create_cursor, self.writable, **cursor_kargs)
+    """This returns the create_cursor method of DatabaseContext.
+
+    DatabaseContext has the writable attribute from the instance of
+    DBOperationBase's derived classes.
+
+    Args:
+      **cursor_kargs: Arguments to be passed to create_cursor.
+
+    Returns:
+      The create_cursor method with self.writable as first argument and
+        **cursor_kargs passed through.
+    """
+    return functools.partial(
+        self.dc.create_cursor, self.writable, **cursor_kargs)
 
 
 class ReadFromMaster(DBOperationBase):
   """Context Manager for reading from master."""
+
   def __enter__(self):
     self.dc.read_from_master_setup()
     return self
@@ -203,6 +222,7 @@ class ReadFromMaster(DBOperationBase):
 
 class ReadFromReplica(DBOperationBase):
   """Context Manager for reading from lag-sensitive or lag-tolerant replica."""
+
   def __enter__(self):
     self.dc.read_from_replica_setup()
     return self
@@ -219,6 +239,7 @@ class ReadFromReplica(DBOperationBase):
 
 class WriteTransaction(DBOperationBase):
   """Context Manager for write transactions."""
+
   def __enter__(self):
     self.writable = True
     self.dc.write_transaction_setup()
@@ -293,6 +314,7 @@ def register_create_vtgate_connection_method(connect_method):
   global __vtgate_connect_method
   __vtgate_connect_method = connect_method
 
+
 def get_vtgate_connect_method():
   """Returns the vtgate connection creation method."""
   global __vtgate_connect_method
@@ -300,6 +322,7 @@ def get_vtgate_connect_method():
 
 # The global object is for legacy application.
 __database_context = None
+
 
 def open_context(*pargs, **kargs):
   """Returns the existing global database context or creates a new one."""

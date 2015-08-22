@@ -34,17 +34,20 @@ class KeyRange(codec.BSONCoding):
       else:
         kr = kr.split('-')
     if not isinstance(kr, tuple) and not isinstance(kr, list) or len(kr) != 2:
-      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % kr)
+      raise dbexceptions.ProgrammingError(
+          'keyrange must be a list or tuple or a '-' separated str %s' % kr)
     self.Start = kr[0].strip().decode('hex')
     self.End = kr[1].strip().decode('hex')
 
   def __str__(self):
-    if self.Start == keyrange_constants.MIN_KEY and self.End == keyrange_constants.MAX_KEY:
+    if (self.Start == keyrange_constants.MIN_KEY and
+        self.End == keyrange_constants.MAX_KEY):
       return keyrange_constants.NON_PARTIAL_KEYRANGE
     return '%s-%s' % (self.Start.encode('hex'), self.End.encode('hex'))
 
   def __repr__(self):
-    if self.Start == keyrange_constants.MIN_KEY and self.End == keyrange_constants.MAX_KEY:
+    if (self.Start == keyrange_constants.MIN_KEY and
+        self.End == keyrange_constants.MAX_KEY):
       return 'KeyRange(%r)' % keyrange_constants.NON_PARTIAL_KEYRANGE
     return 'KeyRange(%r-%r)' % (self.Start, self.End)
 
@@ -56,7 +59,7 @@ class KeyRange(codec.BSONCoding):
       {"Start": start, "End": end}
     """
 
-    return {"Start": self.Start, "End": self.End}
+    return {'Start': self.Start, 'End': self.End}
 
   def bson_init(self, raw_values):
     """Bson initialize the object with start and end dict.
@@ -64,5 +67,5 @@ class KeyRange(codec.BSONCoding):
     Args:
       raw_values: Dictionary of start and end values for keyrange.
     """
-    self.Start = raw_values["Start"]
-    self.End = raw_values["End"]
+    self.Start = raw_values['Start']
+    self.End = raw_values['End']

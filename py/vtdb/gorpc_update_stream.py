@@ -1,12 +1,12 @@
+
 # Copyright 2015, Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
 from itertools import izip
-import logging
 
-from net import gorpc
 from net import bsonrpc
+from net import gorpc
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import update_stream
@@ -26,8 +26,8 @@ def _make_row(row, conversions):
 
 
 class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
-  """GoRpcUpdateStreamConnection is the go rpc implementation of
-  UpdateStreamConnection.
+  """The go rpc implementation of UpdateStreamConnection.
+
   It is registered as 'gorpc' protocol.
   """
 
@@ -61,7 +61,7 @@ class GoRpcUpdateStreamConnection(update_stream.UpdateStreamConnection):
     """Note this implementation doesn't honor the timeout."""
     try:
       self.client.stream_call('UpdateStream.ServeUpdateStream',
-                              {"Position": position})
+                              {'Position': position})
       while True:
         response = self.client.stream_next()
         if response is None:

@@ -4,14 +4,14 @@
 
 # This is the shard name for when the keyrange covers the entire space
 # for unsharded database.
-SHARD_ZERO = "0"
+SHARD_ZERO = '0'
 
 # Keyrange that spans the entire space, used
 # for unsharded database.
-NON_PARTIAL_KEYRANGE = ""
+NON_PARTIAL_KEYRANGE = ''
 MIN_KEY = ''
 MAX_KEY = ''
 
-KIT_UNSET = ""
-KIT_UINT64 = "uint64"
-KIT_BYTES = "bytes"
+KIT_UNSET = ''
+KIT_UINT64 = 'uint64'
+KIT_BYTES = 'bytes'

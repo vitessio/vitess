@@ -25,7 +25,9 @@ from zk import zkocc
 
 
 # keeps a global version of the topology
-# This is a map of keyspace_name: (keyspace object, time when keyspace was last fetched)
+# This is a map of keyspace_name: (keyspace object, time when keyspace
+# was last fetched)
+#
 # eg - {'keyspace_name': (keyspace_object, time_of_last_fetch)}
 # keyspace object is defined at py/vtdb/keyspace.py:Keyspace
 __keyspace_map = {}
@@ -100,7 +102,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   db_keys = []
   keyspace_list = zkocc_client.get_srv_keyspace_names('local')
   # validate step
-  if len(keyspace_list) == 0:
+  if not keyspace_list:
     vtdb_logger.get_logger().topo_empty_keyspace_list()
     raise Exception('zkocc returned empty keyspace list')
   for keyspace_name in keyspace_list:
@@ -140,10 +142,12 @@ def get_host_port_by_name(topo_client, db_key):
     vtdb_logger.get_logger().topo_zkocc_error('do data', db_key, e)
     return []
   except Exception as e:
-    vtdb_logger.get_logger().topo_exception('failed to get or parse topo data', db_key, e)
+    vtdb_logger.get_logger().topo_exception(
+        'failed to get or parse topo data', db_key, e)
     return []
   if 'Entries' not in data:
-    vtdb_logger.get_logger().topo_exception('topo server returned: ' + str(data), db_key, e)
+    vtdb_logger.get_logger().topo_exception(
+        'topo server returned: ' + str(data), db_key, e)
     raise Exception('zkocc returned: %s' % str(data))
 
   host_port_list = []

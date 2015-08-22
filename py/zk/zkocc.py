@@ -7,6 +7,7 @@ import threading
 from net import bsonrpc
 from net import gorpc
 
+
 class ZkOccError(Exception):
   pass
 
@@ -35,9 +36,12 @@ class ZkOccError(Exception):
 # pzxid          long
 #
 
-# A simple, direct connection to a single zkocc server. Doesn't retry.
-# You probably want to use ZkOccConnection instead.
+
 class SimpleZkOccConnection(object):
+  """A simple, direct connection to a single zkocc server.
+
+  Doesn't retry. You probably want to use ZkOccConnection instead.
+  """
 
   def __init__(self, addr, timeout, user=None, password=None):
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
@@ -75,13 +79,18 @@ class SimpleZkOccConnection(object):
     return self._call('TopoReader.GetSrvKeyspace', cell=cell, keyspace=keyspace)
 
   def get_end_points(self, cell, keyspace, shard, tablet_type):
-    return self._call('TopoReader.GetEndPoints', cell=cell, keyspace=keyspace, shard=shard, tablet_type=tablet_type)
+    return self._call(
+        'TopoReader.GetEndPoints', cell=cell, keyspace=keyspace, shard=shard,
+        tablet_type=tablet_type)
 
 
-# A meta-connection that can connect to multiple alternate servers, and will
-# retry a couple times. Calling dial before get/getv/children is optional,
-# and will only do anything at all if authentication is enabled.
 class ZkOccConnection(object):
+  """A meta-connection that can connect to multiple alternate servers.
+
+  This will retry a couple times. Calling dial before
+  get/getv/children is optional, and will only do anything at all if
+  authentication is enabled.
+  """
   max_attempts = 2
   max_dial_attempts = 10
 
@@ -92,7 +101,8 @@ class ZkOccConnection(object):
     self.local_cell = local_cell
 
     if bool(user) != bool(password):
-      raise ValueError("You must provide either both or none of user and password.")
+      raise ValueError(
+          'You must provide either both or none of user and password.')
     self.user = user
     self.password = password
 
@@ -100,7 +110,7 @@ class ZkOccConnection(object):
     self.lock = threading.Lock()
 
   def _resolve_path(self, zk_path):
-    # Maps a 'meta-path' to a cell specific path.
+    """Maps a 'meta-path' to a cell specific path."""
     # '/zk/local/blah' -> '/zk/vb/blah'
     parts = zk_path.split('/')
 
@@ -123,9 +133,11 @@ class ZkOccConnection(object):
     if self.simple_conn:
       self.simple_conn.close()
 
-    addrs = random.sample(self.addrs, min(self.max_dial_attempts, len(self.addrs)))
+    addrs = random.sample(
+        self.addrs, min(self.max_dial_attempts, len(self.addrs)))
     for a in addrs:
-      self.simple_conn = SimpleZkOccConnection(a, self.timeout, self.user, self.password)
+      self.simple_conn = SimpleZkOccConnection(
+          a, self.timeout, self.user, self.password)
       try:
         self.simple_conn.dial()
         return
@@ -133,7 +145,7 @@ class ZkOccConnection(object):
         pass
 
     self.simple_conn = None
-    raise ZkOccError("Cannot dial to any server, tried: %s" % addrs)
+    raise ZkOccError('Cannot dial to any server, tried: %s' % addrs)
 
   def close(self):
     if self.simple_conn:
@@ -151,9 +163,13 @@ class ZkOccConnection(object):
           return getattr(self.simple_conn, client_method)(*args, **kwargs)
         except Exception as e:
           attempt += 1
-          logging.warning('zkocc: %s command failed %d times: %s', client_method, attempt, e)
+          logging.warning(
+              'zkocc: %s command failed %d times: %s',
+              client_method, attempt, e)
           if attempt >= self.max_attempts:
-            raise ZkOccError('zkocc %s command failed %d times: %s' % (client_method, attempt, e))
+            raise ZkOccError(
+                'zkocc %s command failed %d times: %s' %
+                (client_method, attempt, e))
 
           # try the next server if there is one, or retry our only server
           self.dial()
@@ -190,10 +206,15 @@ class ZkOccConnection(object):
   def children(self, path):
     return self._call('children', self._resolve_path(path))
 
-# use this class for faking out a zkocc client. The startup config values
-# can be loaded from a json file. After that, they can be mass-altered
-# to replace default values with test-specific values, for instance.
+
 class FakeZkOccConnection(object):
+  """Use this class for faking out a zkocc client.
+
+  The startup config values can be loaded from a json file. After
+  that, they can be mass-altered to replace default values with
+  test-specific values, for instance.
+  """
+
   def __init__(self, local_cell):
     self.data = {}
     self.local_cell = local_cell
@@ -215,7 +236,7 @@ class FakeZkOccConnection(object):
       self.data[key] = data.replace(before, after)
 
   def _resolve_path(self, zk_path):
-    # Maps a 'meta-path' to a cell specific path.
+    """Maps a 'meta-path' to a cell specific path."""
     # '/zk/local/blah' -> '/zk/vb/blah'
     parts = zk_path.split('/')
 
@@ -238,25 +259,25 @@ class FakeZkOccConnection(object):
 
   def get(self, path):
     path = self._resolve_path(path)
-    if not path in self.data:
-      raise ZkOccError("FakeZkOccConnection: not found: " + path)
+    if path not in self.data:
+      raise ZkOccError('FakeZkOccConnection: not found: ' + path)
     return {
-        'Data':self.data[path],
-        'Children':[]
+        'Data': self.data[path],
+        'Children': []
         }
 
   def getv(self, paths):
-    raise ZkOccError("FakeZkOccConnection: not found: " + " ".join(paths))
+    raise ZkOccError('FakeZkOccConnection: not found: ' + ' '.join(paths))
 
   def children(self, path):
     path = self._resolve_path(path)
     children = [os.path.basename(node) for node in self.data
                 if os.path.dirname(node) == path]
-    if len(children) == 0:
-      raise ZkOccError("FakeZkOccConnection: not found: " + path)
+    if not children:
+      raise ZkOccError('FakeZkOccConnection: not found: ' + path)
     return {
-        'Data':'',
-        'Children':children
+        'Data': '',
+        'Children': children
         }
 
   # New API. For this fake object, it is based on the old API.
@@ -271,7 +292,7 @@ class FakeZkOccConnection(object):
     try:
       data = self.get(keyspace_path)['Data']
       if not data:
-        raise ZkOccError("FakeZkOccConnection: empty keyspace: " + keyspace)
+        raise ZkOccError('FakeZkOccConnection: empty keyspace: ' + keyspace)
       result = json.loads(data)
       # for convenience, we store the KeyRange as hex, but we need to
       # decode it here, as BSON RPC sends it as binary.
@@ -289,7 +310,7 @@ class FakeZkOccConnection(object):
     try:
       data = self.get(zk_path)['Data']
       if not data:
-        raise ZkOccError("FakeZkOccConnection: empty end point: " + zk_path)
+        raise ZkOccError('FakeZkOccConnection: empty end point: ' + zk_path)
       return json.loads(data)
     except Exception as e:
       raise ZkOccError('FakeZkOccConnection: invalid end point', zk_path, e)

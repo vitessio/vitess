@@ -9,15 +9,17 @@
 
 import errno
 import select
-import ssl
 import socket
+import ssl
 import time
 import urlparse
 
 _lastStreamResponseError = 'EOS'
 
+
 class GoRpcError(Exception):
   pass
+
 
 class TimeoutError(GoRpcError):
   pass
@@ -40,8 +42,8 @@ def make_header(method, sequence_id):
 
 
 class GoRpcRequest(object):
-  header = None # standard fields that route the request on the server side
-  body = None # the actual request object - usually a dictionary
+  header = None  # standard fields that route the request on the server side
+  body = None  # the actual request object - usually a dictionary
 
   def __init__(self, header, args):
     self.header = header
@@ -58,7 +60,7 @@ class GoRpcResponse(object):
   #  'Seq': sequence_id,
   #  'Error': error_string}
   header = None
-  reply = None # the decoded object - usually a dictionary
+  reply = None  # the decoded object - usually a dictionary
 
   @property
   def error(self):
@@ -70,9 +72,11 @@ class GoRpcResponse(object):
 
 default_read_buffer_size = 8192
 
+
 # A single socket wrapper to handle request/response conversation for this
 # protocol. Internal, use GoRpcClient instead.
 class _GoRpcConn(object):
+
   def __init__(self, timeout):
     self.conn = None
     # NOTE(msolomon) since the deadlines are approximate in the code, set
@@ -88,7 +92,8 @@ class _GoRpcConn(object):
       conip = socket.gethostbyname(conhost)
     except NameError:
       conip = socket.getaddrinfo(conhost, None)[0][4][0]
-    self.conn = socket.create_connection((conip, int(conport)), self.socket_timeout)
+    self.conn = socket.create_connection(
+        (conip, int(conport)), self.socket_timeout)
     if parts.scheme == 'https':
       self.conn = ssl.wrap_socket(self.conn, keyfile=keyfile, certfile=certfile)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
@@ -101,7 +106,9 @@ class _GoRpcConn(object):
           continue
         raise
       if not d:
-        raise GoRpcError('Unexpected EOF in handshake to %s:%s %s' % (str(conip), str(conport), parts.path))
+        raise GoRpcError(
+            'Unexpected EOF in handshake to %s:%s %s' %
+            (str(conip), str(conport), parts.path))
       data += d
       if '\n\n' in data:
         return
@@ -159,6 +166,7 @@ class _GoRpcConn(object):
 
 
 class GoRpcClient(object):
+
   def __init__(self, uri, timeout, certfile=None, keyfile=None):
     self.uri = uri
     self.timeout = timeout

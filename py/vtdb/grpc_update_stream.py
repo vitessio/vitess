@@ -3,16 +3,14 @@
 # be found in the LICENSE file.
 
 from itertools import izip
-import logging
 from urlparse import urlparse
-
-from vtdb import dbexceptions
-from vtdb import field_types
-from vtdb import update_stream
 
 from vtproto import binlogdata_pb2
 from vtproto import binlogservice_pb2
-from vtproto import replicationdata_pb2
+
+from vtdb import field_types
+from vtdb import update_stream
+
 
 def _make_row(row, conversions):
   converted_row = []
@@ -28,8 +26,8 @@ def _make_row(row, conversions):
 
 
 class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
-  """GRPCUpdateStreamConnection is the gRPC implementation of
-  UpdateStreamConnection.
+  """The gRPC implementation of UpdateStreamConnection.
+
   It is registered as 'grpc' protocol.
   """
 
@@ -50,7 +48,7 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
     self.stub = None
 
   def is_closed(self):
-    return self.stub == None
+    return self.stub is None
 
   def stream_update(self, position, timeout=3600.0):
     req = binlogdata_pb2.StreamUpdateRequest(position=position)
@@ -72,13 +70,14 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
             rows.append(row)
 
         try:
-          yield update_stream.StreamEvent(category=int(stream_event.category),
-                                          table_name=stream_event.table_name,
-                                          fields=fields,
-                                          rows=rows,
-                                          sql=stream_event.sql,
-                                          timestamp=stream_event.timestamp,
-                                          transaction_id=stream_event.transaction_id)
+          yield update_stream.StreamEvent(
+              category=int(stream_event.category),
+              table_name=stream_event.table_name,
+              fields=fields,
+              rows=rows,
+              sql=stream_event.sql,
+              timestamp=stream_event.timestamp,
+              transaction_id=stream_event.transaction_id)
         except GeneratorExit:
           # if the loop is interrupted for any reason, we need to
           # cancel the iterator, so we close the RPC connection,

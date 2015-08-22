@@ -21,7 +21,8 @@ class VtdbLogger(object):
 
   # topo_keyspace_fetch is called when we successfully get a SrvKeyspace object.
   def topo_keyspace_fetch(self, keyspace_name, topo_rtt):
-    logging.info("Fetched keyspace %s from topo_client in %f secs", keyspace_name, topo_rtt)
+    logging.info('Fetched keyspace %s from topo_client in %f secs',
+                 keyspace_name, topo_rtt)
 
   # topo_empty_keyspace_list is called when we get an empty list of
   # keyspaces from topo server.
@@ -32,7 +33,7 @@ class VtdbLogger(object):
   # when reading a keyspace. This is within an exception handler.
   def topo_bad_keyspace_data(self, keyspace_name):
     logging.exception('error getting or parsing keyspace data for %s',
-                        keyspace_name)
+                      keyspace_name)
 
   # topo_zkocc_error is called whenever we get a zkocc.ZkOccError
   # when trying to resolve an endpoint.
@@ -72,7 +73,7 @@ class VtdbLogger(object):
     logging.warning('vtgatev2_exception: %s', e)
 
   def log_private_data(self, private_data):
-    logging.info("Additional exception data %s", private_data)
+    logging.info('Additional exception data %s', private_data)
 
 
 # registration mechanism for VtdbLogger
