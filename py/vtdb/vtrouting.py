@@ -229,7 +229,7 @@ def _create_where_clause_for_str_keyspace(key_range, keyspace_col_name):
     i += 1
     bind_vars[bind_name] = kr_min
   if kr_max != keyrange_constants.MAX_KEY:
-    if where_clause != '':
+    if where_clause:
       where_clause += ' AND '
     bind_name = '%s%d' % (keyspace_col_name, i)
     where_clause += 'hex(%s) < ' % keyspace_col_name + '%(' + bind_name + ')s'
@@ -262,7 +262,7 @@ def _create_where_clause_for_int_keyspace(key_range, keyspace_col_name):
     i += 1
     bind_vars[bind_name] = kr_min
   if kr_max is not None:
-    if where_clause != '':
+    if where_clause:
       where_clause += ' AND '
     bind_name = '%s%d' % (keyspace_col_name, i)
     where_clause += '%s < ' % keyspace_col_name + '%(' + bind_name + ')s'

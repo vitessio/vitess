@@ -4,6 +4,7 @@
 
 from vtdb import dbexceptions
 
+
 class BaseCursor(object):
   arraysize = 1
   lastrowid = None
@@ -39,7 +40,8 @@ class BaseCursor(object):
       self.connection.rollback()
       return
 
-    self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute(sql, bind_variables, **kargs)
+    self.results, self.rowcount, self.lastrowid, self.description = (
+        self.connection._execute(sql, bind_variables, **kargs))
     self.index = 0
     return self.rowcount
 
@@ -97,13 +99,16 @@ class BaseCursor(object):
       raise StopIteration
     return val
 
+
 # A simple cursor intended for attaching to a single tablet server.
 class TabletCursor(BaseCursor):
+
   def execute(self, sql, bind_variables=None):
     return self._execute(sql, bind_variables)
 
 
 class BatchCursor(BaseCursor):
+
   def __init__(self, connection):
     # rowset is [(results, rowcount, lastrowid, fields),]
     self.rowsets = None
@@ -125,11 +130,13 @@ class BatchCursor(BaseCursor):
 
 # just used for batch items
 class BatchQueryItem(object):
+
   def __init__(self, sql, bind_variables, key, keys):
     self.sql = sql
     self.bind_variables = bind_variables
     self.key = key
     self.keys = keys
+
 
 class StreamCursor(object):
   arraysize = 1
@@ -149,7 +156,8 @@ class StreamCursor(object):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
-    x, y, z, self.description = self.connection._stream_execute(sql, bind_variables, **kargs)
+    _, _, _, self.description = self.connection._stream_execute(
+        sql, bind_variables, **kargs)
     self.index = 0
     return 0
 
