@@ -530,7 +530,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 20}
 	s.MapTestConn("0", sbc)
 
-	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
+	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -563,7 +563,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	sbc := &sandboxConn{mustFailRetry: 20}
 	s.MapTestConn("0", sbc)
 
-	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
+	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -577,8 +577,6 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 		return boundShardQueriesToScatterBatchRequest(queries), nil
 	}
 
-	res = NewResolver(new(sandboxTopo), "", "aa", retryDelay, 2, connTimeoutTotal, connTimeoutPerConn, connLife)
-	callcount = 0
 	_, err := res.ExecuteBatch(context.Background(), pb.TabletType_MASTER, true, nil, buildBatchRequest)
 	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, host:\"0\" port_map:<key:\"vt\" value:1 > , retry: err"
 	if err == nil || err.Error() != want {
@@ -588,8 +586,8 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	if callcount != 1 {
 		t.Errorf("want 1, got %v", callcount)
 	}
-	if count := sbc.AsTransactionCount.Get(); count != 2 {
-		t.Errorf("want 1, got %v, err; %v", count, err)
+	if count := sbc.AsTransactionCount.Get(); count != 1 {
+		t.Errorf("want 1, got %v", count)
 		return
 	}
 }
