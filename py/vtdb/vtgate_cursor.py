@@ -98,7 +98,9 @@ class VTGateCursor(object):
     self.index = 0
     return self.rowcount
 
-  def execute_entity_ids(self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
+  def execute_entity_ids(
+      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
+      effective_caller_id=None):
     self.rowcount = 0
     self.results = None
     self.description = None
