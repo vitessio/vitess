@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_vtgate_client_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test
 
 all: build test
 
@@ -32,7 +32,7 @@ build:
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
-test: unit_test queryservice_test integration_test java_vtgate_client_test
+test: unit_test queryservice_test integration_test java_test
 site_test: unit_test site_integration_test
 
 clean:
@@ -180,8 +180,13 @@ integration_test: small_integration_test medium_integration_test large_integrati
 site_integration_test: build
 	$(call run_integration_tests, $(site_integration_test_files))
 
-java_vtgate_client_test:
+java_test:
+	godep go install ./go/cmd/vtgateclienttest
 	mvn -f java/pom.xml clean verify
+
+php_test:
+	godep go install ./go/cmd/vtgateclienttest
+	phpunit php/tests
 
 v3_test:
 	cd test && ./vtgatev3_test.py

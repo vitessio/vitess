@@ -70,7 +70,7 @@ env:
     #       All our tests should be spread out as evenly as possible across these 5 slots.
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
-   - MAKE_TARGET="unit_test build java_vtgate_client_test queryservice_test"
+   - MAKE_TARGET="unit_test build java_test queryservice_test"
    - MAKE_TARGET="unit_test_race unit_test_goveralls"
    # Run large tests first because they take longer than medium. This way, it evens out better when tests get queued.
    - MAKE_TARGET="build large_integration_test ci_skip_integration_test"
