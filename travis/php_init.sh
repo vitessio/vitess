@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 mkdir -p $HOME/php
 
 if [ -f $HOME/php/phpunit ]; then

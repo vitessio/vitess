@@ -36,6 +36,7 @@ import (
 	"os/signal"
 	"path"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -56,9 +57,12 @@ var (
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
 	pull     = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
+	docker   = flag.Bool("docker", true, "run tests with Docker")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
+
+var vtDataRoot = os.Getenv("VTDATAROOT")
 
 // Config is the overall object serialized in test/config.json.
 type Config struct {
@@ -75,19 +79,32 @@ type Test struct {
 
 // run executes a single try.
 // dir is the location of the vitess repo to use.
+// dataDir is the VTDATAROOT to use for this run.
 // returns the combined stdout+stderr and error.
-func (t *Test) run(dir string) ([]byte, error) {
+func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	testCmd := t.Command
 	if testCmd == "" {
-		// Teardown is unnecessary since Docker kills everything.
-		testCmd = fmt.Sprintf("make build && test/%s -v --skip-teardown %s", t.File, t.Args)
+		testCmd = fmt.Sprintf("make build && test/%s -v --skip-build --keep-logs %s", t.File, t.Args)
+		if *docker {
+			// Teardown is unnecessary since Docker kills everything.
+			testCmd += " --skip-teardown"
+		}
 		if *extraArgs != "" {
 			testCmd += " " + *extraArgs
 		}
 	}
-	dockerCmd := exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
-	dockerCmd.Dir = dir
-	t.cmd = dockerCmd
+
+	if *docker {
+		t.cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
+	} else {
+		t.cmd = exec.Command("bash", "-c", testCmd)
+	}
+	t.cmd.Dir = dir
+
+	// Put everything in a unique dir, so we can copy and/or safely delete it.
+	t.cmd.Env = updateEnv(os.Environ(), map[string]string{
+		"VTDATAROOT": dataDir,
+	})
 
 	// Stop the test if it takes too long.
 	done := make(chan struct{})
@@ -98,15 +115,15 @@ func (t *Test) run(dir string) ([]byte, error) {
 		case <-done:
 		case <-timer.C:
 			t.logf("timeout exceeded")
-			if dockerCmd.Process != nil {
-				dockerCmd.Process.Signal(syscall.SIGTERM)
+			if t.cmd.Process != nil {
+				t.cmd.Process.Signal(syscall.SIGTERM)
 			}
 		}
 	}()
 
 	// Run the test.
 	defer close(done)
-	return dockerCmd.CombinedOutput()
+	return t.cmd.CombinedOutput()
 }
 
 // stop will terminate the test if it's running.
@@ -158,18 +175,25 @@ func main() {
 	if err := json.Unmarshal(configData, &config); err != nil {
 		log.Fatalf("Can't parse config file: %v", err)
 	}
-	log.Printf("Bootstrap flavor: %v", *flavor)
 
-	// Re-pull image.
-	if *pull {
-		image := "vitess/bootstrap:" + *flavor
-		pullTime := time.Now()
-		log.Printf("Pulling %v...", image)
-		cmd := exec.Command("docker", "pull", image)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Fatalf("Can't pull image: %v\n%s", err, out)
+	if *docker {
+		log.Printf("Bootstrap flavor: %v", *flavor)
+
+		// Re-pull image.
+		if *docker && *pull {
+			image := "vitess/bootstrap:" + *flavor
+			pullTime := time.Now()
+			log.Printf("Pulling %v...", image)
+			cmd := exec.Command("docker", "pull", image)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				log.Fatalf("Can't pull image: %v\n%s", err, out)
+			}
+			log.Printf("Image pulled in %v", time.Since(pullTime))
 		}
-		log.Printf("Image pulled in %v", time.Since(pullTime))
+	} else {
+		if vtDataRoot == "" {
+			log.Fatalf("VTDATAROOT env var must be set in -docker=false mode. Make sure to source dev.env.")
+		}
 	}
 
 	// Positional args specify which tests to run.
@@ -211,18 +235,24 @@ func main() {
 		tests = dup
 	}
 
-	// Copy working repo to tmpDir.
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "vt_")
-	if err != nil {
-		log.Fatalf("Can't create temp dir in %v", os.TempDir())
-	}
-	log.Printf("Copying working repo to temp dir %v", tmpDir)
-	if out, err := exec.Command("cp", "-R", ".", tmpDir).CombinedOutput(); err != nil {
-		log.Fatalf("Can't copy working repo to temp dir %v: %v: %s", tmpDir, err, out)
-	}
-	// The temp copy needs permissive access so the Docker user can read it.
-	if out, err := exec.Command("chmod", "-R", "go=u", tmpDir).CombinedOutput(); err != nil {
-		log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
+	vtTop := "."
+	tmpDir := ""
+	if *docker {
+		// Copy working repo to tmpDir.
+		// This doesn't work outside Docker since it messes up GOROOT.
+		tmpDir, err = ioutil.TempDir(os.TempDir(), "vt_")
+		if err != nil {
+			log.Fatalf("Can't create temp dir in %v", os.TempDir())
+		}
+		log.Printf("Copying working repo to temp dir %v", tmpDir)
+		if out, err := exec.Command("cp", "-R", ".", tmpDir).CombinedOutput(); err != nil {
+			log.Fatalf("Can't copy working repo to temp dir %v: %v: %s", tmpDir, err, out)
+		}
+		// The temp copy needs permissive access so the Docker user can read it.
+		if out, err := exec.Command("chmod", "-R", "go=u", tmpDir).CombinedOutput(); err != nil {
+			log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
+		}
+		vtTop = tmpDir
 	}
 
 	// Keep stats.
@@ -260,8 +290,18 @@ func main() {
 				}
 
 				test.logf("running (try %v/%v)...", try, *retryMax)
+
+				// Make a unique VTDATAROOT.
+				dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
+				if err != nil {
+					test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
+					failed++
+					break
+				}
+
+				// Run the test.
 				start := time.Now()
-				output, err := test.run(tmpDir)
+				output, err := test.run(vtTop, dataDir)
 
 				// Save test output.
 				if err != nil || *logPass {
@@ -270,6 +310,11 @@ func main() {
 					if fileErr := ioutil.WriteFile(path.Join(outDir, outFile), output, os.FileMode(0644)); fileErr != nil {
 						test.logf("WriteFile error: %v", fileErr)
 					}
+				}
+
+				// Clean up the unique VTDATAROOT.
+				if err := os.RemoveAll(dataDir); err != nil {
+					test.logf("WARNING: can't remove temporary VTDATAROOT: ", err)
 				}
 
 				if err != nil {
@@ -307,9 +352,11 @@ func main() {
 	}
 
 	// Clean up temp dir.
-	log.Printf("Removing temp dir %v", tmpDir)
-	if err := os.RemoveAll(tmpDir); err != nil {
-		log.Printf("Failed to remove temp dir: %v", err)
+	if tmpDir != "" {
+		log.Printf("Removing temp dir %v", tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			log.Printf("Failed to remove temp dir: %v", err)
+		}
 	}
 
 	// Print stats.
@@ -320,4 +367,18 @@ func main() {
 	if failed > 0 || skipped > 0 {
 		os.Exit(1)
 	}
+}
+
+func updateEnv(orig []string, updates map[string]string) []string {
+	var env []string
+	for _, v := range orig {
+		parts := strings.SplitN(v, "=", 2)
+		if _, ok := updates[parts[0]]; !ok {
+			env = append(env, v)
+		}
+	}
+	for k, v := range updates {
+		env = append(env, k+"="+v)
+	}
+	return env
 }
