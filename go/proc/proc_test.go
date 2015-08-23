@@ -87,14 +87,14 @@ func launchServer(t *testing.T, port string, num int) *exec.Cmd {
 func testPid(t *testing.T, port string, want int) {
 	var resp *http.Response
 	var err error
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 20 * 1000 / 50; i++ {
 		resp, err = http.Get(fmt.Sprintf("http://localhost:%s%s", port, pidURL))
 		if err != nil {
 			if i == 19 {
 				t.Fatal(err)
 			}
 			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "EOF") {
-				time.Sleep(1000 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 			t.Fatalf("unexpected error on port %v: %v", port, err)
