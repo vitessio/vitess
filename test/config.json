@@ -9,6 +9,10 @@
 		"php": {
 			"Command": "godep go install ./go/cmd/vtgateclienttest && phpunit php/tests"
 		},
+		"goveralls": {
+			"Command": "travis/goveralls.sh",
+			"Manual": true
+		},
     "queryservice_vtocc": {
       "File": "queryservice_test.py",
       "Args": "-m -e vtocc"

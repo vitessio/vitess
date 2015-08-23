@@ -73,6 +73,9 @@ type Config struct {
 type Test struct {
 	Name, File, Args, Command string
 
+	// Manual means it won't be run unless explicitly specified.
+	Manual bool
+
 	cmd      *exec.Cmd
 	runIndex int
 }
@@ -211,7 +214,9 @@ func main() {
 	} else {
 		var names []string
 		for name := range config.Tests {
-			names = append(names, name)
+			if !config.Tests[name].Manual {
+				names = append(names, name)
+			}
 		}
 		sort.Strings(names)
 		for _, name := range names {
