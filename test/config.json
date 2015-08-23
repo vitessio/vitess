@@ -3,8 +3,11 @@
 		"unit": {
 			"Command": "godep go test ./go/..."
 		},
-		"java_vtgate_client": {
-			"Command": "make build java_vtgate_client_test"
+		"java": {
+			"Command": "godep go install ./go/cmd/vtgateclienttest && mvn -f java/pom.xml clean verify"
+		},
+		"php": {
+			"Command": "godep go install ./go/cmd/vtgateclienttest && phpunit php/tests"
 		},
     "queryservice_vtocc": {
       "File": "queryservice_test.py",

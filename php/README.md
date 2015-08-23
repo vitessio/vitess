@@ -49,7 +49,7 @@ Loaded Configuration File:         /etc/php5/cli/php.ini
 Scan for additional .ini files in: /etc/php5/cli/conf.d
 
 # Make an ini file for xdebug.
-$ sudo sh -c "echo 'zend_extension=xdebug.so' > /etc/php5/cli/conf.d/20-xdebug.ini"
+$ sudo sh -c "echo \"zend_extension=$(pecl config-get ext_dir default)/xdebug.so\" > /etc/php5/cli/conf.d/20-xdebug.ini"
 
 # Check that xdebug is being loaded.
 $ php -m | grep xdebug
