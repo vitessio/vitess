@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""VTGateCursor, BatchVTGateCursor, and StreamVTGateCursor."""
+
 import itertools
 import operator
 import re
@@ -208,8 +210,9 @@ class BatchVTGateCursor(VTGateCursor):
   """Batch Cursor for VTGate.
 
   This cursor allows 'n' queries to be executed against
-  'm' keyspace_ids. For writes though, it maybe prefereable
+  'm' keyspace_ids. For writes though, it maybe preferable
   to only execute against one keyspace_id.
+
   This only supports keyspace_ids right now since that is what
   the underlying vtgate server supports.
   """

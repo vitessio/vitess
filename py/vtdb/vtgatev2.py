@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""A simple, direct connection to the vttablet query server."""
+
+
 from itertools import izip
 import logging
 import random
@@ -400,12 +403,12 @@ class VTGateConnection(vtgate_client.VTGateClient):
     try:
       self.client.stream_call(exec_method, req)
       first_response = self.client.stream_next()
-      reply = first_response.reply['Result']
-
-      for field in reply['Fields']:
-        self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(
-            field_types.conversions.get(field['Type']))
+      if first_response:
+        reply = first_response.reply['Result']
+        for field in reply['Fields']:
+          self._stream_fields.append((field['Name'], field['Type']))
+          self._stream_conversions.append(
+              field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
