@@ -47,6 +47,7 @@ cache:
   # Maven repository for Java dependencies.
   - $HOME/.m2
   - $HOME/php
+  - $HOME/gopath/src/github.com/youtube/vitess/test/stats.json
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh

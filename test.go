@@ -26,6 +26,7 @@ package main
 // library, since that would require the user to bootstrap before running it.
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -58,11 +59,18 @@ var (
 	timeout  = flag.Duration("timeout", 10*time.Minute, "timeout for each test")
 	pull     = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
 	docker   = flag.Bool("docker", true, "run tests with Docker")
+	shard    = flag.Int("shard", -1, "if >=0, run the tests whose Shard matches")
+	reshard  = flag.Int("reshard", 0, "if >0, check the stats and group tests into similarly-sized bins by average run time")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
 
 var vtDataRoot = os.Getenv("VTDATAROOT")
+
+const (
+	statsFileName  = "test/stats.json"
+	configFileName = "test/config.json"
+)
 
 // Config is the overall object serialized in test/config.json.
 type Config struct {
@@ -75,6 +83,9 @@ type Test struct {
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
+
+	// Shard is used to split tests among workers.
+	Shard int
 
 	cmd      *exec.Cmd
 	runIndex int
@@ -170,13 +181,21 @@ func main() {
 	log.Printf("Output directory: %v", outDir)
 
 	// Get test configs.
-	configData, err := ioutil.ReadFile("test/config.json")
+	configData, err := ioutil.ReadFile(configFileName)
 	if err != nil {
 		log.Fatalf("Can't read config file: %v", err)
 	}
 	var config Config
 	if err := json.Unmarshal(configData, &config); err != nil {
 		log.Fatalf("Can't parse config file: %v", err)
+	}
+
+	// Resharding.
+	if *reshard > 0 {
+		if err := reshardTests(&config, *reshard); err != nil {
+			log.Printf("resharding error: %v", err)
+		}
+		return
 	}
 
 	if *docker {
@@ -199,32 +218,8 @@ func main() {
 		}
 	}
 
-	// Positional args specify which tests to run.
-	// If none specified, run all tests in alphabetical order.
-	var tests []*Test
-	if flag.NArg() > 0 {
-		for _, name := range flag.Args() {
-			t, ok := config.Tests[name]
-			if !ok {
-				log.Fatalf("Unknown test: %v", name)
-			}
-			t.Name = name
-			tests = append(tests, t)
-		}
-	} else {
-		var names []string
-		for name := range config.Tests {
-			if !config.Tests[name].Manual {
-				names = append(names, name)
-			}
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			t := config.Tests[name]
-			t.Name = name
-			tests = append(tests, t)
-		}
-	}
+	// Pick the tests to run.
+	tests := selectedTests(&config)
 
 	// Duplicate tests.
 	if *runCount > 1 {
@@ -307,6 +302,7 @@ func main() {
 				// Run the test.
 				start := time.Now()
 				output, err := test.run(vtTop, dataDir)
+				duration := time.Since(start)
 
 				// Save test output.
 				if err != nil || *logPass {
@@ -324,18 +320,22 @@ func main() {
 
 				if err != nil {
 					// This try failed.
-					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, time.Since(start), err)
+					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, duration, err)
+					testFailed(test.Name)
 					continue
 				}
 
+				testPassed(test.Name, duration)
+
 				if try == 1 {
 					// Passed on the first try.
-					test.logf("PASSED in %v", time.Since(start))
+					test.logf("PASSED in %v", duration)
 					passed++
 				} else {
 					// Passed, but not on the first try.
-					test.logf("FLAKY (1/%v passed in %v)", try, time.Since(start))
+					test.logf("FLAKY (1/%v passed in %v)", try, duration)
 					flaky++
+					testFlaked(test.Name, try)
 				}
 				break
 			}
@@ -386,4 +386,155 @@ func updateEnv(orig []string, updates map[string]string) []string {
 		env = append(env, k+"="+v)
 	}
 	return env
+}
+
+type Stats struct {
+	TestStats map[string]TestStats
+}
+
+type TestStats struct {
+	Pass, Fail, Flake int
+	PassTime          time.Duration
+
+	name string
+}
+
+func testPassed(name string, passTime time.Duration) {
+	updateTestStats(name, func(ts *TestStats) {
+		totalTime := int64(ts.PassTime)*int64(ts.Pass) + int64(passTime)
+		ts.Pass++
+		ts.PassTime = time.Duration(totalTime / int64(ts.Pass))
+	})
+}
+
+func testFailed(name string) {
+	updateTestStats(name, func(ts *TestStats) {
+		ts.Fail++
+	})
+}
+
+func testFlaked(name string, try int) {
+	updateTestStats(name, func(ts *TestStats) {
+		ts.Flake += try - 1
+	})
+}
+
+func updateTestStats(name string, update func(*TestStats)) {
+	var stats Stats
+
+	data, err := ioutil.ReadFile(statsFileName)
+	if err != nil {
+		log.Print("Can't read stats file, starting new one.")
+	} else {
+		if err := json.Unmarshal(data, &stats); err != nil {
+			log.Printf("Can't parse stats file: %v", err)
+			return
+		}
+	}
+
+	if stats.TestStats == nil {
+		stats.TestStats = make(map[string]TestStats)
+	}
+	ts := stats.TestStats[name]
+	update(&ts)
+	stats.TestStats[name] = ts
+
+	data, err = json.MarshalIndent(stats, "", "\t")
+	if err != nil {
+		log.Printf("Can't encode stats file: %v", err)
+		return
+	}
+	ioutil.WriteFile(statsFileName, data, 0644)
+}
+
+func reshardTests(config *Config, numShards int) error {
+	var stats Stats
+
+	data, err := ioutil.ReadFile(statsFileName)
+	if err != nil {
+		return errors.New("can't read stats file")
+	}
+	if err := json.Unmarshal(data, &stats); err != nil {
+		return fmt.Errorf("can't parse stats file: %v", err)
+	}
+
+	// Sort tests by PassTime.
+	var tests []TestStats
+	var totalTime int64
+	for name, test := range stats.TestStats {
+		test.name = name
+		tests = append(tests, test)
+		totalTime += int64(test.PassTime)
+	}
+	sort.Sort(ByPassTime(tests))
+
+	// Group into shards.
+	max := totalTime / int64(numShards)
+	shards := make([][]TestStats, numShards)
+	sums := make([]int64, numShards)
+	for i := 0; len(tests) > 0; i++ {
+		n := i % numShards
+		v := int64(tests[0].PassTime)
+		if sums[n] < max {
+			shards[n] = append(shards[n], tests[0])
+			sums[n] += v
+			tests = tests[1:]
+		}
+	}
+
+	// Print results.
+	for i, tests := range shards {
+		for _, t := range tests {
+			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
+		}
+		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
+	}
+
+	return nil
+}
+
+type ByPassTime []TestStats
+
+func (a ByPassTime) Len() int           { return len(a) }
+func (a ByPassTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime > a[j].PassTime }
+
+func selectedTests(config *Config) []*Test {
+	var tests []*Test
+	if *shard >= 0 {
+		// Run the tests in a given shard.
+		// This can be combined with positional args.
+		for _, t := range config.Tests {
+			if t.Shard == *shard {
+				tests = append(tests, t)
+			}
+		}
+	}
+	if flag.NArg() > 0 {
+		// Positional args for manual selection.
+		for _, name := range flag.Args() {
+			t, ok := config.Tests[name]
+			if !ok {
+				log.Fatalf("Unknown test: %v", name)
+			}
+			t.Name = name
+			tests = append(tests, t)
+		}
+	}
+	if flag.NArg() == 0 && *shard < 0 {
+		// Run all tests.
+		var names []string
+		for name := range config.Tests {
+			if !config.Tests[name].Manual {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			t := config.Tests[name]
+			t.Name = name
+			tests = append(tests, t)
+		}
+	}
+	return tests
 }
