@@ -6,7 +6,7 @@ See `demo.php` for a simple example of using the API.
 
 ## Prerequisites
 
-PHP 5.5+ is recommended.
+PHP 5.3+ is required.
 
 This library uses the BSON codec library contained within the MongoDB plugin.
 For example, you can install this on Debian/Ubuntu like this:

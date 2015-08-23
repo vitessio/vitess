@@ -76,24 +76,24 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		);
 		self::$CALLER_ID = new VTCallerId('test_principal', 'test_component', 'test_subcomponent');
 		self::$KEYSPACE_IDS = array(
-				hex2bin('8000000000000000'),
-				hex2bin('ff000000000000ef') 
+				VTKeyspaceID::fromHex('8000000000000000'),
+				VTKeyspaceID::fromHex('ff000000000000ef') 
 		);
 		self::$KEY_RANGES = array(
 				array(
 						'',
-						hex2bin('8000000000000000') 
+						VTKeyspaceID::fromHex('8000000000000000') 
 				),
 				array(
-						hex2bin('8000000000000000'),
+						VTKeyspaceID::fromHex('8000000000000000'),
 						'' 
 				) 
 		);
 		self::$ENTITY_KEYSPACE_IDS = array(
-				hex2bin('1234567800000002') => 'hello',
-				hex2bin('1234567800000000') => 123,
-				hex2bin('1234567800000001') => new VTUnsignedInt('456'),
-				hex2bin('1234567800000002') => 1.5 
+				VTKeyspaceID::fromHex('1234567800000002') => 'hello',
+				VTKeyspaceID::fromHex('1234567800000000') => 123,
+				VTKeyspaceID::fromHex('1234567800000001') => new VTUnsignedInt('456'),
+				VTKeyspaceID::fromHex('1234567800000002') => 1.5 
 		);
 	}
 
@@ -164,9 +164,10 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		
-		$echo = self::getEcho($conn->executeBatchShards($ctx, array(
+		$results = $conn->executeBatchShards($ctx, array(
 				new VTBoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
-		), self::$TABLET_TYPE, TRUE)[0]);
+			), self::$TABLET_TYPE, TRUE);
+		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -175,9 +176,10 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
 		$this->assertEquals('true', $echo['asTransaction']);
 		
-		$echo = self::getEcho($conn->executeBatchKeyspaceIds($ctx, array(
+		$results = $conn->executeBatchKeyspaceIds($ctx, array(
 				new VTBoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
-		), self::$TABLET_TYPE, TRUE)[0]);
+		), self::$TABLET_TYPE, TRUE);
+		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -245,9 +247,10 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$tx->rollback($ctx);
 		$tx = $conn->begin($ctx);
 		
-		$echo = self::getEcho($tx->executeBatchShards($ctx, array(
+		$results = $tx->executeBatchShards($ctx, array(
 				new VTBoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
-		), self::$TABLET_TYPE, TRUE)[0]);
+		), self::$TABLET_TYPE, TRUE);
+		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
@@ -257,9 +260,10 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals(self::$SESSION_ECHO, $echo['session']);
 		$this->assertEquals('true', $echo['asTransaction']);
 		
-		$echo = self::getEcho($tx->executeBatchKeyspaceIds($ctx, array(
+		$results = $tx->executeBatchKeyspaceIds($ctx, array(
 				new VTBoundKeyspaceIdQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$KEYSPACE_IDS) 
-		), self::$TABLET_TYPE, TRUE)[0]);
+		), self::$TABLET_TYPE, TRUE);
+		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
 		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);

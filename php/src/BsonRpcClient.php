@@ -30,12 +30,14 @@ class BsonRpcClient extends GoRpcClient {
 	protected function readResponse(VTContext $ctx) {
 		// Read the header.
 		$data = $this->readN($ctx, self::LEN_PACK_SIZE);
-		$len = unpack(self::LEN_PACK_FORMAT, $data)[1];
+		$unpack = unpack(self::LEN_PACK_FORMAT, $data);
+		$len = $unpack[1];
 		$header = $data . $this->readN($ctx, $len - self::LEN_PACK_SIZE);
 		
 		// Read the body.
 		$data = $this->readN($ctx, self::LEN_PACK_SIZE);
-		$len = unpack(self::LEN_PACK_FORMAT, $data)[1];
+		$unpack = unpack(self::LEN_PACK_FORMAT, $data);
+		$len = $unpack[1];
 		$body = $data . $this->readN($ctx, $len - self::LEN_PACK_SIZE);
 		
 		// Decode and return.

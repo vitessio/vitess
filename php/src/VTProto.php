@@ -300,6 +300,10 @@ class VTKeyRange {
 
 class VTKeyspaceId {
 
+	public static function fromHex($hex) {
+		return pack('H*', $hex);
+	}
+
 	public static function buildBsonP3Array($keyspace_ids) {
 		$result = array();
 		foreach ($keyspace_ids as $kid) {
