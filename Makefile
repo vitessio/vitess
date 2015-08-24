@@ -75,9 +75,6 @@ worker_test:
 	godep go test ./go/vt/worker/
 	go run test.go -docker=false binlog resharding resharding_bytes vertical_split initial_sharding initial_sharding_bytes worker
 
-# These tests should be run by users to check that Vitess works in their environment.
-integration_test: small_integration_test medium_integration_test large_integration_test ci_skip_integration_test
-
 site_integration_test:
 	go run test.go -docker=false keyrange keyspace mysqlctl tabletmanager vtdb vtgatev2
 
