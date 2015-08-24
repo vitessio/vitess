@@ -349,8 +349,9 @@ func main() {
 						test.logf("%s\n", output)
 					}
 					outFile := fmt.Sprintf("%v-%v.%v.log", test.name, test.runIndex+1, try)
-					test.logf("saving test output to %v", outFile)
-					if fileErr := ioutil.WriteFile(path.Join(outDir, outFile), output, os.FileMode(0644)); fileErr != nil {
+					outFilePath := path.Join(outDir, outFile)
+					test.logf("saving test output to %v", outFilePath)
+					if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
 						test.logf("WriteFile error: %v", fileErr)
 					}
 				}
