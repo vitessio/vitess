@@ -113,7 +113,7 @@ class VTGateTx {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Commit', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Commit2', $req)->reply;
 		$this->session = NULL;
 	}
 
@@ -128,7 +128,7 @@ class VTGateTx {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Rollback', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Rollback2', $req)->reply;
 		$this->session = NULL;
 	}
 }
@@ -218,7 +218,7 @@ class VTGateConn {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Begin', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Begin2', $req)->reply;
 		
 		return new VTGateTx($this->client, $resp['Session']);
 	}
