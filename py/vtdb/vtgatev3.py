@@ -4,18 +4,17 @@
 
 from itertools import izip
 import logging
-import random
 import re
 
 from net import bsonrpc
 from net import gorpc
+from vtdb import cursorv3
 from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import vtdb_logger
-from vtdb import cursorv3
 
 
-_errno_pattern = re.compile('\(errno (\d+)\)')
+_errno_pattern = re.compile(r'\(errno (\d+)\)')
 
 
 def log_exception(method):
@@ -26,8 +25,8 @@ def log_exception(method):
   method based on the exception raised.
 
   Args:
-    exc: exception raised by calling code
-    args: additional args for the exception.
+    method: Method that takes exc, *args, where exc is an exception raised
+      by calling code, args are additional args for the exception.
 
   Returns:
     Decorated method.
@@ -79,16 +78,16 @@ def convert_exception(exc, *args):
 def _create_req(sql, new_binds, tablet_type, not_in_transaction):
   new_binds = field_types.convert_bind_vars(new_binds)
   req = {
-        'Sql': sql,
-        'BindVariables': new_binds,
-        'TabletType': tablet_type,
-        'NotInTransaction': not_in_transaction,
-        }
+      'Sql': sql,
+      'BindVariables': new_binds,
+      'TabletType': tablet_type,
+      'NotInTransaction': not_in_transaction,
+  }
   return req
 
 
-# This utilizes the V3 API of VTGate.
 class VTGateConnection(object):
+  """This utilizes the V3 API of VTGate."""
   session = None
   _stream_fields = None
   _stream_conversions = None
@@ -163,7 +162,8 @@ class VTGateConnection(object):
     if 'Session' in response.reply and response.reply['Session']:
       self.session = response.reply['Session']
 
-  def _execute(self, sql, bind_variables, tablet_type, not_in_transaction=False):
+  def _execute(
+      self, sql, bind_variables, tablet_type, not_in_transaction=False):
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
@@ -198,8 +198,8 @@ class VTGateConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
-
-  def _execute_batch(self, sql_list, bind_variables_list, tablet_type, as_transaction):
+  def _execute_batch(
+      self, sql_list, bind_variables_list, tablet_type, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -247,7 +247,8 @@ class VTGateConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute(self, sql, bind_variables, tablet_type, not_in_transaction=False):
+  def _stream_execute(
+      self, sql, bind_variables, tablet_type, not_in_transaction=False):
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
@@ -262,7 +263,8 @@ class VTGateConnection(object):
 
       for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(field_types.conversions.get(field['Type']))
+        self._stream_conversions.append(
+            field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
@@ -284,7 +286,8 @@ class VTGateConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
+        if ('Session' in self._stream_result.reply and
+            self._stream_result.reply['Session']):
           self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
@@ -298,11 +301,14 @@ class VTGateConnection(object):
         logging.exception('gorpc low-level error')
         raise
 
-    row = tuple(_make_row(self._stream_result.reply['Result']['Rows'][self._stream_result_index], self._stream_conversions))
+    row = tuple(_make_row(
+        self._stream_result.reply['Result']['Rows'][self._stream_result_index],
+        self._stream_conversions))
 
     # If we are reading the last row, set us up to read more data.
     self._stream_result_index += 1
-    if self._stream_result_index == len(self._stream_result.reply['Result']['Rows']):
+    if (self._stream_result_index ==
+        len(self._stream_result.reply['Result']['Rows'])):
       self._stream_result = None
       self._stream_result_index = 0
 

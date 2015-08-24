@@ -13,7 +13,7 @@ from vtdb import field_types
 from vtdb import vtdb_logger
 
 
-_errno_pattern = re.compile('\(errno (\d+)\)')
+_errno_pattern = re.compile(r'\(errno (\d+)\)')
 
 
 def handle_app_error(exc_args):
@@ -60,10 +60,13 @@ def convert_exception(exc, *args):
   return exc
 
 
-# A simple, direct connection to the vttablet query server.
-# This is shard-unaware and only handles the most basic communication.
-# If something goes wrong, this object should be thrown away and a new one instantiated.
 class TabletConnection(object):
+  """A simple, direct connection to the vttablet query server.
+
+  This is shard-unaware and only handles the most basic communication.
+  If something goes wrong, this object should be thrown away and a new
+  one instantiated.
+  """
   transaction_id = 0
   session_id = 0
   _stream_fields = None
@@ -71,7 +74,9 @@ class TabletConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, tablet_type, keyspace, shard, timeout, user=None, password=None, keyfile=None, certfile=None):
+  def __init__(
+      self, addr, tablet_type, keyspace, shard, timeout, user=None,
+      password=None, keyfile=None, certfile=None):
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace
@@ -82,7 +87,8 @@ class TabletConnection(object):
     self.logger_object = vtdb_logger.get_logger()
 
   def __str__(self):
-    return '<TabletConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
+    return '<TabletConnection %s %s %s/%s>' % (
+        self.addr, self.tablet_type, self.keyspace, self.shard)
 
   def dial(self):
     try:
@@ -92,11 +98,13 @@ class TabletConnection(object):
         # redial will succeed. This is more a hint that you are doing
         # it wrong and misunderstanding the life cycle of a
         # TabletConnection.
-        #raise dbexceptions.ProgrammingError('attempting to reuse TabletConnection')
+        # raise dbexceptions.ProgrammingError(
+        #     'attempting to reuse TabletConnection')
 
       self.client.dial()
       params = {'Keyspace': self.keyspace, 'Shard': self.shard}
-      response = self.rpc_call_and_extract_error('SqlQuery.GetSessionId', params)
+      response = self.rpc_call_and_extract_error(
+          'SqlQuery.GetSessionId', params)
       self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -163,11 +171,14 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def rpc_call_and_extract_error(self, method_name, request):
-    """Makes an RPC call, and extracts any app error that's embedded in the reply.
+    """Makes an RPC, extracts any app error that's embedded in the reply.
 
     Args:
-      method_name - RPC method name, as a string, to call
-      request - request to send to the RPC method call
+      method_name: RPC method name, as a string, to call.
+      request: Request to send to the RPC method call.
+
+    Returns:
+      Response from RPC.
 
     Raises:
       gorpc.AppError if there is an app error embedded in the reply
@@ -272,11 +283,13 @@ class TabletConnection(object):
       reply = first_response.reply
       if reply.get('Err'):
         self.__drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get('Message', 'Missing error message'))
+        raise gorpc.AppError(reply['Err'].get(
+            'Message', 'Missing error message'))
 
       for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(field_types.conversions.get(field['Type']))
+        self._stream_conversions.append(
+            field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
@@ -305,11 +318,13 @@ class TabletConnection(object):
       reply = first_response.reply
       if reply.get('Err'):
         self.__drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get('Message', 'Missing error message'))
+        raise gorpc.AppError(reply['Err'].get(
+            'Message', 'Missing error message'))
 
       for field in reply['Fields']:
         self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(field_types.conversions.get(field['Type']))
+        self._stream_conversions.append(
+            field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
@@ -324,7 +339,7 @@ class TabletConnection(object):
       return None
 
     # See if we need to read more or whether we just pop the next row.
-    if self._stream_result is None :
+    if self._stream_result is None:
       try:
         self._stream_result = self.client.stream_next()
         if self._stream_result is None:
@@ -332,14 +347,17 @@ class TabletConnection(object):
           return None
         if self._stream_result.reply.get('Err'):
           self.__drain_conn_after_streaming_app_error()
-          raise gorpc.AppError(self._stream_result.reply['Err'].get('Message', 'Missing error message'))
+          raise gorpc.AppError(self._stream_result.reply['Err'].get(
+              'Message', 'Missing error message'))
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
       except:
         logging.exception('gorpc low-level error')
         raise
 
-    row = tuple(_make_row(self._stream_result.reply['Rows'][self._stream_result_index], self._stream_conversions))
+    row = tuple(
+        _make_row(self._stream_result.reply['Rows'][self._stream_result_index],
+                  self._stream_conversions))
     # If we are reading the last row, set us up to read more data.
     self._stream_result_index += 1
     if self._stream_result_index == len(self._stream_result.reply['Rows']):
@@ -351,21 +369,25 @@ class TabletConnection(object):
   def __drain_conn_after_streaming_app_error(self):
     """Drains the connection of all incoming streaming packets (ignoring them).
 
-    This is necessary for streaming calls which return application errors inside
-    the RPC response (instead of through the usual GoRPC error return).
-    This is because GoRPC always expects the last packet to be an error; either
-    the usual GoRPC application error return, or a special "end-of-stream" error.
+    This is necessary for streaming calls which return application
+    errors inside the RPC response (instead of through the usual GoRPC
+    error return).  This is because GoRPC always expects the last
+    packet to be an error; either the usual GoRPC application error
+    return, or a special "end-of-stream" error.
 
-    If an application error is returned with the RPC response, there will still be
-    at least one more packet coming, as GoRPC has not seen anything that it
-    considers to be an error. If the connection is not drained of this last
-    packet, future reads from the wire will be off by one and will return errors.
+    If an application error is returned with the RPC response, there
+    will still be at least one more packet coming, as GoRPC has not
+    seen anything that it considers to be an error. If the connection
+    is not drained of this last packet, future reads from the wire
+    will be off by one and will return errors.
     """
     next_result = self.client.stream_next()
     if next_result is not None:
       self.client.close()
-      raise gorpc.GoRpcError("Connection should only have one packet remaining"
-        " after streaming app error in RPC response.")
+      raise gorpc.GoRpcError(
+          'Connection should only have one packet remaining'
+          ' after streaming app error in RPC response.')
+
 
 def _make_row(row, conversions):
   converted_row = []

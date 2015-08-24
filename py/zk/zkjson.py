@@ -1,7 +1,10 @@
-# Implement a sensible wrapper that treats python objects as dictionaries
-# with sensible restrictions on serialization.
+"""A sensible wrapper that treats python objects as dictionaries.
+
+Has sensible restrictions on serialization.
+"""
 
 import json
+
 
 def _default(o):
   if hasattr(o, '_serializable_attributes'):
@@ -13,12 +16,14 @@ def _default(o):
 _default_kargs = {'default': _default,
                   'sort_keys': True,
                   'indent': 2,
-                  }
+                 }
+
 
 def dump(*pargs, **kargs):
   _kargs = _default_kargs.copy()
   _kargs.update(kargs)
   return json.dump(*pargs, **_kargs)
+
 
 def dumps(*pargs, **kargs):
   _kargs = _default_kargs.copy()

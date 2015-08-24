@@ -10,9 +10,12 @@ from vtdb import keyrange_constants
 
 pack_keyspace_id = struct.Struct('!Q').pack
 
-# Represent the SrvKeyspace object from the toposerver, and provide functions
-# to extract sharding information from the same.
+
 class Keyspace(object):
+  """Represent the SrvKeyspace object from the toposerver.
+
+  Provide functions to extract sharding information from the same.
+  """
   name = None
   partitions = None
   sharding_col_name = None
@@ -23,8 +26,9 @@ class Keyspace(object):
   def __init__(self, name, data):
     self.name = name
     self.partitions = data.get('Partitions', {})
-    self.sharding_col_name = data.get('ShardingColumnName', "")
-    self.sharding_col_type = data.get('ShardingColumnType', keyrange_constants.KIT_UNSET)
+    self.sharding_col_name = data.get('ShardingColumnName', '')
+    self.sharding_col_type = data.get(
+        'ShardingColumnType', keyrange_constants.KIT_UNSET)
     self.served_from = data.get('ServedFrom', None)
 
   def get_shards(self, db_type):
@@ -51,6 +55,12 @@ class Keyspace(object):
     """Finds the shard for a keyspace_id.
 
     WARNING: this only works for KIT_UINT64 keyspace ids.
+
+    Returns:
+      Shard name.
+
+    Raises:
+      ValueError on invalid keyspace_id.
     """
     if not keyspace_id:
       raise ValueError('keyspace_id is not set')
@@ -64,11 +74,12 @@ class Keyspace(object):
                             shard['KeyRange']['Start'],
                             shard['KeyRange']['End']):
         return shard['Name']
-    raise ValueError('cannot find shard for keyspace_id %s in %s' % (keyspace_id, shards))
+    raise ValueError(
+        'cannot find shard for keyspace_id %s in %s' % (keyspace_id, shards))
 
 
 def _shard_contain_kid(pkid, start, end):
-    return start <= pkid and (end == keyrange_constants.MAX_KEY or pkid < end)
+  return start <= pkid and (end == keyrange_constants.MAX_KEY or pkid < end)
 
 
 def read_keyspace(topo_client, keyspace_name):
