@@ -30,8 +30,9 @@ build:
 	echo $$(date): Building source tree
 	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
-# Set VT_TEST_FLAGS to pass flags to python tests.
-# For example, verbose output: export VT_TEST_FLAGS=-v
+# To pass extra flags, run test.go manually.
+# For example: go run test.go -docker=false -- --extra-flag
+# For more info see: go run test.go -help
 test:
 	go run test.go -docker=false
 
