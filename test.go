@@ -42,6 +42,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -128,8 +129,11 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	t.cmd.Dir = dir
 
 	// Put everything in a unique dir, so we can copy and/or safely delete it.
+	// Also try to make them use different port ranges
+	// to mitigate failures due to zombie processes.
 	t.cmd.Env = updateEnv(os.Environ(), map[string]string{
-		"VTDATAROOT": dataDir,
+		"VTDATAROOT":  dataDir,
+		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
 	})
 
 	// Stop the test if it takes too long.
@@ -663,4 +667,18 @@ func selectedTests(config *Config) []*Test {
 		tests = getTestsSorted(names, config.Tests)
 	}
 	return tests
+}
+
+var (
+	port      = 16000
+	portMutex sync.Mutex
+)
+
+func getPortStart(size int) int {
+	portMutex.Lock()
+	defer portMutex.Unlock()
+
+	start := port
+	port += size
+	return start
 }
