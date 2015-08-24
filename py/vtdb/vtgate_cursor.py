@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""VTGateCursor, BatchVTGateCursor, and StreamVTGateCursor."""
+
 import itertools
 import operator
 import re
@@ -54,7 +56,7 @@ class VTGateCursor(object):
     return self._conn.commit()
 
   def begin(self, effective_caller_id=None):
-    return self._conn.begin()
+    return self._conn.begin(effective_caller_id)
 
   def rollback(self):
     return self._conn.rollback()
@@ -66,10 +68,10 @@ class VTGateCursor(object):
     self.results = None
     self.description = None
     self.lastrowid = None
-
+    effective_caller_id = kargs.get('effective_caller_id')
     sql_check = sql.strip().lower()
     if sql_check == 'begin':
-      self.begin()
+      self.begin(effective_caller_id)
       return
     elif sql_check == 'commit':
       self.commit()
@@ -93,11 +95,14 @@ class VTGateCursor(object):
             self.tablet_type,
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
-            not_in_transaction=(not self.is_writable())))
+            not_in_transaction=not self.is_writable(),
+            effective_caller_id=effective_caller_id))
     self.index = 0
     return self.rowcount
 
-  def execute_entity_ids(self, sql, bind_variables, entity_keyspace_id_map, entity_column_name):
+  def execute_entity_ids(
+      self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
+      effective_caller_id=None):
     self.rowcount = 0
     self.results = None
     self.description = None
@@ -117,7 +122,8 @@ class VTGateCursor(object):
             self.tablet_type,
             entity_keyspace_id_map,
             entity_column_name,
-            not_in_transaction=(not self.is_writable())))
+            not_in_transaction=not self.is_writable(),
+            effective_caller_id=effective_caller_id))
     self.index = 0
     return self.rowcount
 
@@ -204,8 +210,9 @@ class BatchVTGateCursor(VTGateCursor):
   """Batch Cursor for VTGate.
 
   This cursor allows 'n' queries to be executed against
-  'm' keyspace_ids. For writes though, it maybe prefereable
+  'm' keyspace_ids. For writes though, it maybe preferable
   to only execute against one keyspace_id.
+
   This only supports keyspace_ids right now since that is what
   the underlying vtgate server supports.
   """
@@ -232,7 +239,8 @@ class BatchVTGateCursor(VTGateCursor):
         self.keyspace_list,
         self.keyspace_ids_list,
         self.tablet_type,
-        as_transaction)
+        as_transaction,
+        effective_caller_id)
     self.query_list = []
     self.bind_vars_list = []
     self.keyspace_list = []
@@ -268,7 +276,9 @@ class StreamVTGateCursor(VTGateCursor):
         self.tablet_type,
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
-        not_in_transaction=(not self.is_writable()))
+        not_in_transaction=not self.is_writable(),
+        effective_caller_id=kargs.get('effective_caller_id'))
+
     self.index = 0
     return 0
 

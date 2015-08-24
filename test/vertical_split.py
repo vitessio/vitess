@@ -55,7 +55,8 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  utils.vtgate.kill()
+  if utils.vtgate:
+    utils.vtgate.kill()
   teardown_procs = [
         source_master.teardown_mysql(),
         source_replica.teardown_mysql(),
@@ -65,7 +66,7 @@ def tearDownModule():
         destination_replica.teardown_mysql(),
         destination_rdonly1.teardown_mysql(),
         destination_rdonly2.teardown_mysql(),
-      ]
+  ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()

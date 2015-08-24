@@ -17,6 +17,7 @@ from vtdb import dbexceptions
 from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
+from vtdb import vtgate_cursor
 
 
 vtgateclienttest_process = None
@@ -102,34 +103,76 @@ class TestPythonClient(unittest.TestCase):
     with self.assertRaises(ValueError):
       small.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica')
 
+  # A packed keyspace_id from the middle of the full keyrange.
+  KEYSPACE_ID_0X80 = struct.Struct('!Q').pack(0x80 << 56)
+
+  def _open_keyspace_ids_cursor(self):
+    return self.conn.cursor(
+        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80])
+
+  def _open_keyranges_cursor(self):
+    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+    return self.conn.cursor('keyspace', 'master', keyranges=[kr])
+
+  def _open_batch_cursor(self):
+    return self.conn.cursor(
+        tablet_type='master', cursorclass=vtgate_cursor.BatchVTGateCursor)
+
+  def _open_stream_keyranges_cursor(self):
+    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
+    return self.conn.cursor(
+        'keyspace', 'master',  keyranges=[kr],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+
+  def _open_stream_keyspace_ids_cursor(self):
+    return self.conn.cursor(
+        'keyspace', 'master', keyspace_ids=[self.KEYSPACE_ID_0X80],
+        cursorclass=vtgate_cursor.StreamVTGateCursor)
+
   def test_integrity_error(self):
     """Test we correctly raise dbexceptions.IntegrityError.
     """
+
+    # Special query that makes vtgateclienttest raise an IntegrityError.
+    integrity_error_test_query = 'return integrity error'
 
     # FIXME(alainjobart) add test for Execute once factory supports it
 
     # FIXME(alainjobart) add test for ExecuteShards once factory supports it
 
     # ExecuteKeyspaceIds test
-    cursor = self.conn.cursor('keyspace', 'master',
-                              keyspace_ids=[struct.Struct('!Q').pack(0x80)])
+    cursor = self._open_keyspace_ids_cursor()
     with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute('return integrity error', {})
+      cursor.execute(integrity_error_test_query, {})
     cursor.close()
 
     # ExecuteKeyRanges test
-    kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
-    cursor = self.conn.cursor('keyspace', 'master',
-                              keyranges=[kr])
+    cursor = self._open_keyranges_cursor()
     with self.assertRaises(dbexceptions.IntegrityError):
-      cursor.execute('return integrity error', {})
+      cursor.execute(integrity_error_test_query, {})
     cursor.close()
 
-    # FIXME(alainjobart) add test for ExecuteEntityIds once factory supports it
+    # ExecuteEntityIds test
+    cursor = self.conn.cursor('keyspace', 'master')
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.execute_entity_ids(
+          integrity_error_test_query, {},
+          entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
+          entity_column_name='user_id')
+    cursor.close()
 
-    # FIXME(alainjobart) add test for ExecuteBatchShard
+    # ExecuteBatchKeyspaceIds test
+    cursor = self._open_batch_cursor()
+    cursor.execute(
+        sql=integrity_error_test_query, bind_variables={},
+        keyspace='keyspace',
+        keyspace_ids=[self.KEYSPACE_ID_0X80])
+    with self.assertRaises(dbexceptions.IntegrityError):
+      cursor.flush()
+    cursor.close()
 
-    # FIXME(alainjobart) add test for ExecuteBatchKeyspaceIds
+    # VTGate.StreamExecuteKeyspaceIds, VTGate.StreamExecuteKeyRanges:
+    # not handled in vtgateclienttest/services/errors.go.
 
   def test_error(self):
     """Test a regular server error raises the right exception.
@@ -138,6 +181,89 @@ class TestPythonClient(unittest.TestCase):
     # GetSrvKeyspace test
     with self.assertRaises(dbexceptions.DatabaseError):
       self.conn.get_srv_keyspace('error')
+
+  def test_effective_caller_id(self):
+    """Test that the passed in effective_caller_id is parsed correctly.
+
+    Pass a special sql query that sends the expected
+    effective_caller_id through different vtgate interfaces. Make sure
+    the good_effective_caller_id works, and the
+    bad_effective_caller_id raises a DatabaseError.
+
+    """
+
+    # Special query that makes vtgateclienttest match effective_caller_id.
+    effective_caller_id_test_query = (
+        'callerid://{"principal":"pr", "component":"co", "subcomponent":"su"}')
+    good_effective_caller_id = {
+        'Principal': 'pr', 'Component': 'co', 'Subcomponent': 'su'}
+    bad_effective_caller_id = {
+        'Principal': 'pr_wrong',
+        'Component': 'co_wrong', 'Subcomponent': 'su_wrong'}
+
+    def check_good_and_bad_effective_caller_ids(cursor, cursor_execute_method):
+      cursor_execute_method(cursor, good_effective_caller_id)
+      with self.assertRaises(dbexceptions.DatabaseError):
+        cursor_execute_method(cursor, bad_effective_caller_id)
+      cursor.close()
+
+    def cursor_execute_keyspace_ids_method(cursor, effective_caller_id):
+      cursor.execute(
+          effective_caller_id_test_query, {},
+          effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_keyspace_ids_cursor(), cursor_execute_keyspace_ids_method)
+
+    def cursor_execute_key_ranges_method(cursor, effective_caller_id):
+      cursor.execute(
+          effective_caller_id_test_query, {},
+          effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_keyranges_cursor(), cursor_execute_key_ranges_method)
+
+    def cursor_execute_entity_ids_method(cursor, effective_caller_id):
+      cursor.execute_entity_ids(
+          effective_caller_id_test_query, {},
+          entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
+          entity_column_name='user_id',
+          effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self.conn.cursor('keyspace', 'master'),
+        cursor_execute_entity_ids_method)
+
+    def cursor_execute_batch_keyspace_ids_method(cursor, effective_caller_id):
+      cursor.execute(
+          sql=effective_caller_id_test_query, bind_variables={},
+          keyspace='keyspace',
+          keyspace_ids=[self.KEYSPACE_ID_0X80])
+      cursor.flush(effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_batch_cursor(),
+        cursor_execute_batch_keyspace_ids_method)
+
+    def cursor_stream_execute_keyspace_ids_method(cursor, effective_caller_id):
+      cursor.execute(
+          sql=effective_caller_id_test_query, bind_variables={},
+          effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_stream_keyspace_ids_cursor(),
+        cursor_stream_execute_keyspace_ids_method)
+
+    def cursor_stream_execute_keyranges_method(cursor, effective_caller_id):
+      cursor.execute(
+          sql=effective_caller_id_test_query, bind_variables={},
+          effective_caller_id=effective_caller_id)
+
+    check_good_and_bad_effective_caller_ids(
+        self._open_stream_keyranges_cursor(),
+        cursor_stream_execute_keyranges_method)
+
+
 
 if __name__ == '__main__':
   utils.main()

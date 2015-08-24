@@ -2,6 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+"""A simple, direct connection to the vttablet query server."""
+
+
 from itertools import izip
 import logging
 import random
@@ -156,41 +159,57 @@ class VTGateConnection(vtgate_client.VTGateClient):
       cursorclass = vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self):
+  def begin(self, effective_caller_id=None):
     try:
-      response = self.client.call('VTGate.Begin', None)
-      self.session = response.reply
+      req = {}
+      self._add_caller_id(req, effective_caller_id)
+      response = self.client.call('VTGate.Begin2', req)
+      self.effective_caller_id = effective_caller_id
+      self.session = None
+      self._update_session(response)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
     try:
-      session = self.session
-      self.client.call('VTGate.Commit', session)
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      self.client.call('VTGate.Commit2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
       self.session = None
+      self.effective_caller_id = None
 
   def rollback(self):
     try:
-      session = self.session
-      self.client.call('VTGate.Rollback', session)
+      req = {}
+      self._add_caller_id(req, self.effective_caller_id)
+      self._add_session(req)
+      self.client.call('VTGate.Rollback2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
       self.session = None
+      self.effective_caller_id = None
+
+  def _add_caller_id(self, req, caller_id):
+    if caller_id:
+      req['CallerID'] = caller_id
 
   def _add_session(self, req):
     if self.session:
       req['Session'] = self.session
 
   def _update_session(self, response):
-    if 'Session' in response.reply and response.reply['Session']:
+    if response.reply.get('Session'):
       self.session = response.reply['Session']
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
+  def _execute(
+      self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
+      keyranges=None, not_in_transaction=False, effective_caller_id=None):
     exec_method = None
     req = None
     if keyspace_ids is not None:
@@ -207,6 +226,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise dbexceptions.ProgrammingError(
           '_execute called without specifying keyspace_ids or keyranges')
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     fields = []
@@ -218,10 +238,10 @@ class VTGateConnection(vtgate_client.VTGateClient):
       response = self.client.call(exec_method, req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply and response.reply['Error']:
+      if response.reply.get('Error'):
         raise gorpc.AppError(response.reply['Error'], exec_method)
 
-      if 'Result' in reply:
+      if reply.get('Result'):
         res = reply['Result']
         for field in res['Fields']:
           fields.append((field['Name'], field['Type']))
@@ -242,7 +262,10 @@ class VTGateConnection(vtgate_client.VTGateClient):
     return results, rowcount, lastrowid, fields
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name, not_in_transaction=False):
+  def _execute_entity_ids(
+      self, sql, bind_variables, keyspace, tablet_type,
+      entity_keyspace_id_map, entity_column_name, not_in_transaction=False,
+      effective_caller_id=None):
     sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
     new_binds = field_types.convert_bind_vars(new_binds)
     req = {
@@ -257,19 +280,22 @@ class VTGateConnection(vtgate_client.VTGateClient):
         'NotInTransaction': not_in_transaction,
         }
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     fields = []
     conversions = []
     results = []
+    rowcount = 0
+    lastrowid = 0
     try:
       response = self.client.call('VTGate.ExecuteEntityIds', req)
       self._update_session(response)
       reply = response.reply
-      if 'Error' in response.reply and response.reply['Error']:
+      if response.reply.get('Error'):
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteEntityIds')
 
-      if 'Result' in reply:
+      if reply.get('Result'):
         res = reply['Result']
         for field in res['Fields']:
           fields.append((field['Name'], field['Type']))
@@ -290,7 +316,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
     return results, rowcount, lastrowid, fields
 
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _execute_batch(self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list, tablet_type, as_transaction):
+  def _execute_batch(
+      self, sql_list, bind_variables_list, keyspace_list, keyspace_ids_list,
+      tablet_type, as_transaction, effective_caller_id=None):
     query_list = []
     for sql, bind_vars, keyspace, keyspace_ids in zip(
         sql_list, bind_variables_list, keyspace_list, keyspace_ids_list):
@@ -310,10 +338,11 @@ class VTGateConnection(vtgate_client.VTGateClient):
           'TabletType': tablet_type,
           'AsTransaction': as_transaction,
       }
+      self._add_caller_id(req, effective_caller_id)
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
       self._update_session(response)
-      if 'Error' in response.reply and response.reply['Error']:
+      if response.reply.get('Error'):
         raise gorpc.AppError(
             response.reply['Error'], 'VTGate.ExecuteBatchKeyspaceIds')
       for reply in response.reply['List']:
@@ -345,7 +374,9 @@ class VTGateConnection(vtgate_client.VTGateClient):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
-  def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None, not_in_transaction=False):
+  def _stream_execute(
+      self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
+      keyranges=None, not_in_transaction=False, effective_caller_id=None):
     exec_method = None
     req = None
     if keyspace_ids is not None:
@@ -362,6 +393,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise dbexceptions.ProgrammingError(
           '_stream_execute called without specifying keyspace_ids or keyranges')
 
+    self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
     self._stream_fields = []
@@ -371,12 +403,12 @@ class VTGateConnection(vtgate_client.VTGateClient):
     try:
       self.client.stream_call(exec_method, req)
       first_response = self.client.stream_next()
-      reply = first_response.reply['Result']
-
-      for field in reply['Fields']:
-        self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(
-            field_types.conversions.get(field['Type']))
+      if first_response:
+        reply = first_response.reply['Result']
+        for field in reply['Fields']:
+          self._stream_fields.append((field['Name'], field['Type']))
+          self._stream_conversions.append(
+              field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
@@ -399,8 +431,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if ('Session' in self._stream_result.reply and
-            self._stream_result.reply['Session']):
+        if self._stream_result.reply.get('Session'):
           self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
