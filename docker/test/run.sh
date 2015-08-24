@@ -63,7 +63,8 @@ fi
 # Clean up host dir mounted VTDATAROOT
 if [[ -n "$hostdir" ]]; then
   # Use Docker user to clean up first, to avoid permission errors.
-  docker run --rm -v $hostdir:/vt/vtdataroot vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
+  docker run --name=rm_$testid -v $hostdir:/vt/vtdataroot vitess/bootstrap:$flavor bash -c 'rm -rf /vt/vtdataroot/*'
+  docker rm -f rm_$testid &>/dev/null
   rm -rf $hostdir
 fi
 
