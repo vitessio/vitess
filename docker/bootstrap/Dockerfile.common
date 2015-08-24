@@ -18,6 +18,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     php5-cli \
     php5-dev \
     pkg-config \
+    python-crypto \
     python-dev \
     python-mysqldb \
     python-software-properties \
