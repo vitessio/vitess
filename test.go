@@ -25,6 +25,7 @@ package main
 // This Go script shouldn't rely on any packages that aren't in the standard
 // library, since that would require the user to bootstrap before running it.
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,11 +33,14 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -61,6 +65,11 @@ var (
 	docker   = flag.Bool("docker", true, "run tests with Docker")
 	shard    = flag.Int("shard", -1, "if >=0, run the tests whose Shard matches")
 	reshard  = flag.Int("reshard", 0, "if >0, check the stats and group tests into similarly-sized bins by average run time")
+	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	printLog = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
+	follow   = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
+
+	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 
 	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
@@ -79,7 +88,7 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	Name, File, Args, Command string
+	File, Args, Command string
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
@@ -87,8 +96,11 @@ type Test struct {
 	// Shard is used to split tests among workers.
 	Shard int
 
+	name     string
 	cmd      *exec.Cmd
 	runIndex int
+
+	pass, fail int
 }
 
 // run executes a single try.
@@ -135,9 +147,24 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		}
 	}()
 
-	// Run the test.
 	defer close(done)
-	return t.cmd.CombinedOutput()
+
+	// Capture test output.
+	buf := &bytes.Buffer{}
+	t.cmd.Stdout = buf
+	if *follow {
+		t.cmd.Stdout = io.MultiWriter(t.cmd.Stdout, os.Stdout)
+	}
+	t.cmd.Stderr = t.cmd.Stdout
+
+	// Run the test.
+	err := t.cmd.Run()
+	if err == nil {
+		t.pass++
+	} else {
+		t.fail++
+	}
+	return buf.Bytes(), err
 }
 
 // stop will terminate the test if it's running.
@@ -152,9 +179,9 @@ func (t *Test) stop() {
 
 func (t *Test) logf(format string, v ...interface{}) {
 	if *runCount > 1 {
-		log.Printf("%v[%v/%v]: %v", t.Name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
+		log.Printf("%v[%v/%v]: %v", t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
 	} else {
-		log.Printf("%v: %v", t.Name, fmt.Sprintf(format, v...))
+		log.Printf("%v: %v", t.name, fmt.Sprintf(format, v...))
 	}
 }
 
@@ -193,7 +220,15 @@ func main() {
 	// Resharding.
 	if *reshard > 0 {
 		if err := reshardTests(&config, *reshard); err != nil {
-			log.Printf("resharding error: %v", err)
+			log.Fatalf("resharding error: %v", err)
+		}
+		log.Printf("Saving updated config...")
+		data, err := json.MarshalIndent(config, "", "\t")
+		if err != nil {
+			log.Fatalf("can't save new config: %v", err)
+		}
+		if err := ioutil.WriteFile(configFileName, data, 0644); err != nil {
+			log.Fatalf("can't write new config: %v", err)
 		}
 		return
 	}
@@ -304,9 +339,12 @@ func main() {
 				output, err := test.run(vtTop, dataDir)
 				duration := time.Since(start)
 
-				// Save test output.
+				// Save/print test output.
 				if err != nil || *logPass {
-					outFile := fmt.Sprintf("%v-%v.%v.log", test.Name, test.runIndex+1, try)
+					if *printLog {
+						test.logf("%s\n", output)
+					}
+					outFile := fmt.Sprintf("%v-%v.%v.log", test.name, test.runIndex+1, try)
 					test.logf("saving test output to %v", outFile)
 					if fileErr := ioutil.WriteFile(path.Join(outDir, outFile), output, os.FileMode(0644)); fileErr != nil {
 						test.logf("WriteFile error: %v", fileErr)
@@ -314,18 +352,20 @@ func main() {
 				}
 
 				// Clean up the unique VTDATAROOT.
-				if err := os.RemoveAll(dataDir); err != nil {
-					test.logf("WARNING: can't remove temporary VTDATAROOT: ", err)
+				if !*keepData {
+					if err := os.RemoveAll(dataDir); err != nil {
+						test.logf("WARNING: can't remove temporary VTDATAROOT: ", err)
+					}
 				}
 
 				if err != nil {
 					// This try failed.
 					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, duration, err)
-					testFailed(test.Name)
+					testFailed(test.name)
 					continue
 				}
 
-				testPassed(test.Name, duration)
+				testPassed(test.name, duration)
 
 				if try == 1 {
 					// Passed on the first try.
@@ -335,7 +375,7 @@ func main() {
 					// Passed, but not on the first try.
 					test.logf("FLAKY (1/%v passed in %v)", try, duration)
 					flaky++
-					testFlaked(test.Name, try)
+					testFlaked(test.name, try)
 				}
 				break
 			}
@@ -364,7 +404,21 @@ func main() {
 		}
 	}
 
-	// Print stats.
+	// Print summary.
+	log.Printf(strings.Repeat("=", 50))
+	for _, t := range tests {
+		switch {
+		case t.pass > 0 && t.fail == 0:
+			log.Printf("%-32s\tPASS", t.name)
+		case t.pass > 0 && t.fail > 0:
+			log.Printf("%-32s\tFLAKY (%v/%v failed)", t.name, t.fail, t.pass+t.fail)
+		case t.pass == 0 && t.fail > 0:
+			log.Printf("%-32s\tFAIL (%v tries)", t.name, t.fail)
+		case t.pass == 0 && t.fail == 0:
+			log.Printf("%-32s\tSKIPPED", t.name)
+		}
+	}
+	log.Printf(strings.Repeat("=", 50))
 	skipped := len(tests) - passed - flaky - failed
 	log.Printf("%v PASSED, %v FLAKY, %v FAILED, %v SKIPPED", passed, flaky, failed, skipped)
 	log.Printf("Total time: %v", time.Since(startTime))
@@ -399,7 +453,21 @@ type TestStats struct {
 	name string
 }
 
+func sendStats(values url.Values) {
+	if *remoteStats != "" {
+		log.Printf("Sending remote stats to %v", *remoteStats)
+		if _, err := http.PostForm(*remoteStats, values); err != nil {
+			log.Printf("Can't send remote stats: %v", err)
+		}
+	}
+}
+
 func testPassed(name string, passTime time.Duration) {
+	sendStats(url.Values{
+		"test":     {name},
+		"result":   {"pass"},
+		"duration": {passTime.String()},
+	})
 	updateTestStats(name, func(ts *TestStats) {
 		totalTime := int64(ts.PassTime)*int64(ts.Pass) + int64(passTime)
 		ts.Pass++
@@ -408,12 +476,21 @@ func testPassed(name string, passTime time.Duration) {
 }
 
 func testFailed(name string) {
+	sendStats(url.Values{
+		"test":   {name},
+		"result": {"fail"},
+	})
 	updateTestStats(name, func(ts *TestStats) {
 		ts.Fail++
 	})
 }
 
 func testFlaked(name string, try int) {
+	sendStats(url.Values{
+		"test":   {name},
+		"result": {"flake"},
+		"try":    {strconv.FormatInt(int64(try), 10)},
+	})
 	updateTestStats(name, func(ts *TestStats) {
 		ts.Flake += try - 1
 	})
@@ -444,16 +521,32 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	ioutil.WriteFile(statsFileName, data, 0644)
+	if err := ioutil.WriteFile(statsFileName, data, 0644); err != nil {
+		log.Printf("Can't write stats file: %v", err)
+	}
 }
 
 func reshardTests(config *Config, numShards int) error {
 	var stats Stats
 
-	data, err := ioutil.ReadFile(statsFileName)
-	if err != nil {
-		return errors.New("can't read stats file")
+	var data []byte
+	if *remoteStats != "" {
+		log.Printf("Using remote stats for resharding: %v", *remoteStats)
+		resp, err := http.Get(*remoteStats)
+		if err != nil {
+			return err
+		}
+		if data, err = ioutil.ReadAll(resp.Body); err != nil {
+			return err
+		}
+	} else {
+		var err error
+		data, err = ioutil.ReadFile(statsFileName)
+		if err != nil {
+			return errors.New("can't read stats file")
+		}
 	}
+
 	if err := json.Unmarshal(data, &stats); err != nil {
 		return fmt.Errorf("can't parse stats file: %v", err)
 	}
@@ -482,9 +575,10 @@ func reshardTests(config *Config, numShards int) error {
 		}
 	}
 
-	// Print results.
+	// Update config and print results.
 	for i, tests := range shards {
 		for _, t := range tests {
+			config.Tests[t.name].Shard = i
 			log.Printf("% 32v:\t%v\n", t.name, t.PassTime)
 		}
 		log.Printf("Shard %v total: %v\n", i, time.Duration(sums[i]))
@@ -499,16 +593,30 @@ func (a ByPassTime) Len() int           { return len(a) }
 func (a ByPassTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByPassTime) Less(i, j int) bool { return a[i].PassTime > a[j].PassTime }
 
+func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
+	sort.Strings(names)
+	var tests []*Test
+	for _, name := range names {
+		t := testMap[name]
+		t.name = name
+		tests = append(tests, t)
+	}
+	return tests
+}
+
 func selectedTests(config *Config) []*Test {
 	var tests []*Test
 	if *shard >= 0 {
 		// Run the tests in a given shard.
 		// This can be combined with positional args.
-		for _, t := range config.Tests {
+		var names []string
+		for name, t := range config.Tests {
 			if t.Shard == *shard {
-				tests = append(tests, t)
+				t.name = name
+				names = append(names, name)
 			}
 		}
+		tests = getTestsSorted(names, config.Tests)
 	}
 	if flag.NArg() > 0 {
 		// Positional args for manual selection.
@@ -517,7 +625,7 @@ func selectedTests(config *Config) []*Test {
 			if !ok {
 				log.Fatalf("Unknown test: %v", name)
 			}
-			t.Name = name
+			t.name = name
 			tests = append(tests, t)
 		}
 	}
@@ -529,12 +637,7 @@ func selectedTests(config *Config) []*Test {
 				names = append(names, name)
 			}
 		}
-		sort.Strings(names)
-		for _, name := range names {
-			t := config.Tests[name]
-			t.Name = name
-			tests = append(tests, t)
-		}
+		tests = getTestsSorted(names, config.Tests)
 	}
 	return tests
 }
