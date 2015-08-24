@@ -49,10 +49,16 @@ import (
 
 var usage = `Usage of test.go:
 
-go run test.go [options] [test_name ...]
+go run test.go [options] [test_name ...] [-- extra-py-test-args]
 
 If one or more test names are provided, run only those tests.
 Otherwise, run all tests in test/config.json.
+
+To pass extra args to Python tests (test/*.py), terminate the
+list of test names with -- and then add them at the end.
+
+For example:
+  go run test.go test1 test2 -- --topo-server-flavor=etcd
 `
 
 // Flags
@@ -71,11 +77,13 @@ var (
 	follow   = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
-
-	extraArgs = flag.String("extra-args", "", "extra args to pass to each test")
 )
 
-var vtDataRoot = os.Getenv("VTDATAROOT")
+var (
+	vtDataRoot = os.Getenv("VTDATAROOT")
+
+	extraArgs []string
+)
 
 const (
 	statsFileName  = "test/stats.json"
@@ -89,7 +97,8 @@ type Config struct {
 
 // Test is an entry from the test/config.json file.
 type Test struct {
-	File, Args, Command string
+	File          string
+	Args, Command []string
 
 	// Manual means it won't be run unless explicitly specified.
 	Manual bool
@@ -98,7 +107,6 @@ type Test struct {
 	Shard int
 
 	name     string
-	cmd      *exec.Cmd
 	runIndex int
 
 	pass, fail int
@@ -110,75 +118,64 @@ type Test struct {
 // returns the combined stdout+stderr and error.
 func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	testCmd := t.Command
-	if testCmd == "" {
-		testCmd = fmt.Sprintf("make build && test/%s -v --skip-build --keep-logs %s", t.File, t.Args)
+	if len(testCmd) == 0 {
+		testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
+		testCmd = append(testCmd, t.Args...)
+		testCmd = append(testCmd, extraArgs...)
 		if *docker {
 			// Teardown is unnecessary since Docker kills everything.
-			testCmd += " --skip-teardown"
-		}
-		if *extraArgs != "" {
-			testCmd += " " + *extraArgs
+			testCmd = append(testCmd, "--skip-teardown")
 		}
 	}
 
+	var cmd *exec.Cmd
 	if *docker {
-		t.cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, testCmd)
+		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), *flavor, "make build && "+strings.Join(testCmd, " "))
 	} else {
-		t.cmd = exec.Command("bash", "-c", testCmd)
+		cmd = exec.Command(testCmd[0], testCmd[1:]...)
 	}
-	t.cmd.Dir = dir
+	cmd.Dir = dir
 
 	// Put everything in a unique dir, so we can copy and/or safely delete it.
 	// Also try to make them use different port ranges
 	// to mitigate failures due to zombie processes.
-	t.cmd.Env = updateEnv(os.Environ(), map[string]string{
+	cmd.Env = updateEnv(os.Environ(), map[string]string{
 		"VTDATAROOT":  dataDir,
 		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
 	})
 
-	// Stop the test if it takes too long.
-	done := make(chan struct{})
-	timer := time.NewTimer(*timeout)
-	defer timer.Stop()
-	go func() {
-		select {
-		case <-done:
-		case <-timer.C:
-			t.logf("timeout exceeded")
-			if t.cmd.Process != nil {
-				t.cmd.Process.Signal(syscall.SIGTERM)
-			}
-		}
-	}()
-
-	defer close(done)
-
 	// Capture test output.
 	buf := &bytes.Buffer{}
-	t.cmd.Stdout = buf
+	cmd.Stdout = buf
 	if *follow {
-		t.cmd.Stdout = io.MultiWriter(t.cmd.Stdout, os.Stdout)
+		cmd.Stdout = io.MultiWriter(cmd.Stdout, os.Stdout)
 	}
-	t.cmd.Stderr = t.cmd.Stdout
+	cmd.Stderr = cmd.Stdout
 
 	// Run the test.
-	err := t.cmd.Run()
-	if err == nil {
-		t.pass++
-	} else {
-		t.fail++
-	}
-	return buf.Bytes(), err
-}
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Run()
+	}()
 
-// stop will terminate the test if it's running.
-// If the test is not running, it's a no-op.
-func (t *Test) stop() {
-	if cmd := t.cmd; cmd != nil {
-		if proc := cmd.Process; proc != nil {
-			proc.Signal(syscall.SIGTERM)
+	// Wait for it to finish.
+	var runErr error
+	timer := time.NewTimer(*timeout)
+	defer timer.Stop()
+	select {
+	case runErr = <-done:
+		if runErr == nil {
+			t.pass++
+		} else {
+			t.fail++
 		}
+	case <-timer.C:
+		t.logf("timeout exceeded")
+		cmd.Process.Signal(syscall.SIGINT)
+		t.fail++
+		runErr = <-done
 	}
+	return buf.Bytes(), runErr
 }
 
 func (t *Test) logf(format string, v ...interface{}) {
@@ -258,7 +255,9 @@ func main() {
 	}
 
 	// Pick the tests to run.
-	tests := selectedTests(&config)
+	var testArgs []string
+	testArgs, extraArgs = splitArgs(flag.Args(), "--")
+	tests := selectedTests(testArgs, &config)
 
 	// Duplicate tests.
 	if *runCount > 1 {
@@ -292,6 +291,12 @@ func main() {
 			log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
 		}
 		vtTop = tmpDir
+	} else {
+		// Since we're sharing the working dir, do the build once for all tests.
+		log.Printf("Running make build...")
+		if out, err := exec.Command("make", "build").CombinedOutput(); err != nil {
+			log.Fatalf("make build failed: %v\n%s", err, out)
+		}
 	}
 
 	// Keep stats.
@@ -301,7 +306,7 @@ func main() {
 
 	// Listen for signals.
 	sigchan := make(chan os.Signal)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigchan, syscall.SIGINT)
 
 	// Run tests.
 	stop := make(chan struct{}) // Close this to tell the loop to stop.
@@ -359,7 +364,7 @@ func main() {
 				// Clean up the unique VTDATAROOT.
 				if !*keepData {
 					if err := os.RemoveAll(dataDir); err != nil {
-						test.logf("WARNING: can't remove temporary VTDATAROOT: ", err)
+						test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
 					}
 				}
 
@@ -390,14 +395,12 @@ func main() {
 	// Stop the loop and kill child processes if we get a signal.
 	select {
 	case <-sigchan:
-		log.Printf("received signal, quitting")
-		// Stop the test loop and wait for it to quit.
+		log.Printf("interrupted: skip remaining tests and wait for current test to tear down")
+		// Stop the test loop and wait for it to exit.
+		// Running tests already get the SIGINT themselves.
+		// We mustn't send it again, or it'll abort the teardown process too early.
 		close(stop)
 		<-done
-		// Terminate all existing tests.
-		for _, t := range tests {
-			t.stop()
-		}
 	case <-done:
 	}
 
@@ -632,7 +635,7 @@ func getTestsSorted(names []string, testMap map[string]*Test) []*Test {
 	return tests
 }
 
-func selectedTests(config *Config) []*Test {
+func selectedTests(args []string, config *Config) []*Test {
 	var tests []*Test
 	if *shard >= 0 {
 		// Run the tests in a given shard.
@@ -646,9 +649,9 @@ func selectedTests(config *Config) []*Test {
 		}
 		tests = getTestsSorted(names, config.Tests)
 	}
-	if flag.NArg() > 0 {
+	if len(args) > 0 {
 		// Positional args for manual selection.
-		for _, name := range flag.Args() {
+		for _, name := range args {
 			t, ok := config.Tests[name]
 			if !ok {
 				log.Fatalf("Unknown test: %v", name)
@@ -657,7 +660,7 @@ func selectedTests(config *Config) []*Test {
 			tests = append(tests, t)
 		}
 	}
-	if flag.NArg() == 0 && *shard < 0 {
+	if len(args) == 0 && *shard < 0 {
 		// Run all tests.
 		var names []string
 		for name := range config.Tests {
@@ -682,4 +685,21 @@ func getPortStart(size int) int {
 	start := port
 	port += size
 	return start
+}
+
+// splitArgs splits a list of args at the first appearance of tok.
+func splitArgs(all []string, tok string) (args, extraArgs []string) {
+	extra := false
+	for _, arg := range all {
+		if extra {
+			extraArgs = append(extraArgs, arg)
+			continue
+		}
+		if arg == tok {
+			extra = true
+			continue
+		}
+		args = append(args, arg)
+	}
+	return
 }
