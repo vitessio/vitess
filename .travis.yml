@@ -47,7 +47,6 @@ cache:
   # Maven repository for Java dependencies.
   - $HOME/.m2
   - $HOME/php
-  - $HOME/gopath/src/github.com/youtube/vitess/test/stats.json
 before_cache:
   # Travis CI caching doesn't work with this symlink. Just delete it.
   - rm $HOME/gopath/bin/zksrv.sh
@@ -62,26 +61,22 @@ env:
     # Enable parallel compilation e.g. for gRPC.
     # (The Travis CI worker is allowed to use up to 2 cores, but as of 07/2015 4 parallel compilations is actually faster.)
     - MAKEFLAGS=-j4
-    # Uncomment the next line to debug Python integration tests.
-    # NOTE: When -k is enabled, subsequent tests will fail because the test directory is not empty.
-    #       I.e. modify the Makefile to make sure that the test to be debugged is run first.
-    #- VT_TEST_FLAGS="-v -k"
     # Run go build and test with -p 4 (i.e. up to 4 packages are compiled/tested in parallel).
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL=4
     - PHP_FLAGS="-d extension=$HOME/php/mongo.so"
     - PATH="$HOME/php:$PATH"
+    - TEST_FLAGS="-docker=false -timeout 9m -follow -remote-stats http://enisoc.com:15123/travis/stats"
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
     #       We should always utilize all 5 slots because the cost of the setup is high (up to one minute).
     # NOTE: Use "" if you specify a space separated list of multiple targets.
-    - MAKE_TARGET="unit_test build java_test php_test queryservice_test"
-    - MAKE_TARGET="unit_test_race unit_test_goveralls"
-    # Run large tests first because they take longer than medium. This way, it evens out better when tests get queued.
-    - MAKE_TARGET="build large_integration_test ci_skip_integration_test"
-    - MAKE_TARGET="build small_integration_test"
-    - MAKE_TARGET="build medium_integration_test"
+    - TEST_MATRIX="-shard 0"
+    - TEST_MATRIX="-shard 1"
+    - TEST_MATRIX="-shard 2"
+    - TEST_MATRIX="-shard 3"
+    - TEST_MATRIX="-shard 4"
 before_install:
   - travis/download_mariadb.sh
   - travis/php_init.sh
@@ -91,10 +86,10 @@ script:
   - source dev.env
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  - travis/run_tests.sh
+  - go run test.go $TEST_FLAGS $TEST_MATRIX
 after_failure:
   # In case of errors, output log files to make it easier to debug the error.
   # List all available files.
   - ls -alR $HOME/gopath/vtdataroot
-  # Output *.log* and *.stderr files. (Uncomment VT_TEST_FLAGS above or tests will delete their logs.)
+  # Output *.log* and *.stderr files. (Add -keep-data to TEST_FLAGS above or tests will delete their logs.)
   - find $HOME/gopath/vtdataroot \( -name "*.log*" -or -name "*.stderr" \) -type f -print0 | xargs -0r --verbose --max-args=1 cat

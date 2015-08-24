@@ -565,14 +565,39 @@ func reshardTests(config *Config, numShards int) error {
 	max := totalTime / int64(numShards)
 	shards := make([][]TestStats, numShards)
 	sums := make([]int64, numShards)
-	for i := 0; len(tests) > 0; i++ {
-		n := i % numShards
+	// First pass: greedy approximation.
+	for len(tests) > 0 {
 		v := int64(tests[0].PassTime)
-		if sums[n] < max {
-			shards[n] = append(shards[n], tests[0])
-			sums[n] += v
-			tests = tests[1:]
+
+		found := false
+		for n := range shards {
+			if sums[n]+v < max {
+				shards[n] = append(shards[n], tests[0])
+				sums[n] += v
+				tests = tests[1:]
+				found = true
+				break
+			}
 		}
+		if !found {
+			break
+		}
+	}
+	// Second pass: distribute the remainder.
+	for len(tests) > 0 {
+		nmin := 0
+		min := sums[0]
+
+		for n := range sums {
+			if sums[n] < min {
+				nmin = n
+				min = sums[n]
+			}
+		}
+
+		shards[nmin] = append(shards[nmin], tests[0])
+		sums[nmin] += int64(tests[0].PassTime)
+		tests = tests[1:]
 	}
 
 	// Update config and print results.
