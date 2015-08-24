@@ -65,7 +65,7 @@ var (
 	pull     = flag.Bool("pull", true, "re-pull the bootstrap image, in case it's been updated")
 	docker   = flag.Bool("docker", true, "run tests with Docker")
 	shard    = flag.Int("shard", -1, "if N>=0, run the tests whose Shard field matches N")
-	reshard  = flag.Int("reshard", 0, "if N>0, check the stats and group tests into N similarly-sized bins by average run time")
+	reshard  = flag.Int("rebalance", 0, "if N>0, check the stats and group tests into N similarly-sized bins by average run time")
 	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	printLog = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
 	follow   = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")

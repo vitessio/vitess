@@ -117,5 +117,8 @@ docker_test:
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
 
-reshard_tests:
-	go run test.go -reshard 5 -remote-stats http://enisoc.com:15123/travis/stats
+# This can be used to rebalance the total average runtime of each group of
+# tests in Travis. The results are saved in test/config.json, which you can
+# then commit and push.
+rebalance_tests:
+	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats
