@@ -345,7 +345,7 @@ func main() {
 
 				// Save/print test output.
 				if err != nil || *logPass {
-					if *printLog {
+					if *printLog && !*follow {
 						test.logf("%s\n", output)
 					}
 					outFile := fmt.Sprintf("%v-%v.%v.log", test.name, test.runIndex+1, try)
