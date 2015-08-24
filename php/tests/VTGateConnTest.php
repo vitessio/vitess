@@ -42,7 +42,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		}
 		socket_close($sock);
 		
-		$cmd = "$VTROOT/bin/vtgateclienttest -logtostderr -port $port -service_map bsonrpc-vt-vtgateservice";
+		$cmd = "$VTROOT/bin/vtgateclienttest -logtostderr -lameduck-period 0 -port $port -service_map bsonrpc-vt-vtgateservice";
 		
 		$proc = proc_open($cmd, array(), $pipes);
 		if (! $proc) {
@@ -99,7 +99,13 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 
 	public static function tearDownAfterClass() {
 		if (self::$client) {
-			self::$client->close();
+			try {
+				$ctx = VTContext::getDefault()->withDeadlineAfter(5.0);
+				$conn = new VTGateconn(self::$client);
+				$conn->execute($ctx, 'quit://', array(), 0);
+				self::$client->close();
+			} catch (Exception $e) {
+			}
 		}
 		if (self::$proc) {
 			proc_terminate(self::$proc, 9);
@@ -166,7 +172,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		
 		$results = $conn->executeBatchShards($ctx, array(
 				new VTBoundShardQuery(self::$ECHO_QUERY, self::$BIND_VARS, self::$KEYSPACE, self::$SHARDS) 
-			), self::$TABLET_TYPE, TRUE);
+		), self::$TABLET_TYPE, TRUE);
 		$echo = self::getEcho($results[0]);
 		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
 		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
