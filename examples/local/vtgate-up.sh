@@ -19,6 +19,7 @@ mkdir -p $VTDATAROOT/tmp
 
 # Start vtgate.
 $VTROOT/bin/vtgate -log_dir $VTDATAROOT/tmp -port $port -cell $cell \
+  -tablet_protocol grpc \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 echo "Access vtgate at http://$hostname:$port/debug/status"
 

@@ -144,8 +144,8 @@ public class Bsonify {
       fields = bsonToFields(result);
     }
     List<Row> rows = bsonToRows(result, fields);
-    long rowsAffected = ((UnsignedLong) result.get("RowsAffected")).longValue();
-    long lastRowId = ((UnsignedLong) result.get("InsertId")).longValue();
+    long rowsAffected = (long) result.get("RowsAffected");
+    long lastRowId = (long) result.get("InsertId");
     return new QueryResult(rows, fields, rowsAffected, lastRowId);
   }
 

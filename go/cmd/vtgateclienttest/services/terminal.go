@@ -30,6 +30,9 @@ func newTerminalClient() *terminalClient {
 }
 
 func (c *terminalClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+	if sql == "quit://" {
+		log.Fatal("Received quit:// query. Going down.")
+	}
 	return errTerminal
 }
 

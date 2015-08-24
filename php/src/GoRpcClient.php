@@ -1,13 +1,10 @@
 <?php
 
 /*
-This is a naive implementation of a Vitess-compatible Go-style RPC layer
-for PHP. It should be considered a proof-of-concept, as it has not been
-tested, since we don't use PHP ourselves. It was loosely modeled after
-the Python implementation in the Vitess tree, but without consideration
-for timeouts, authentication, or SSL.
-*/
+ * This is an implementation of a Vitess-compatible Go-style RPC layer for PHP.
+ */
 
+// TODO(enisoc): Implement timeouts.
 class GoRpcException extends Exception {
 }
 
@@ -19,7 +16,10 @@ class GoRpcRequest {
 	public $body;
 
 	public function __construct($seq, $method, $body) {
-		$this->header = array('ServiceMethod' => $method, 'Seq' => $seq);
+		$this->header = array(
+				'ServiceMethod' => $method,
+				'Seq' => $seq 
+		);
 		$this->body = $body;
 	}
 
@@ -28,13 +28,23 @@ class GoRpcRequest {
 	}
 }
 
+function unwrap_bin_data($value) {
+	if (is_object($value) && get_class($value) == 'MongoBinData')
+		return $value->bin;
+	if (is_array($value)) {
+		foreach ($value as $key => $child)
+			$value[$key] = unwrap_bin_data($child);
+	}
+	return $value;
+}
+
 class GoRpcResponse {
 	public $header;
 	public $reply;
 
 	public function __construct($header, $body) {
-		$this->header = $header;
-		$this->reply = $body;
+		$this->header = unwrap_bin_data($header);
+		$this->reply = unwrap_bin_data($body);
 	}
 
 	public function error() {
@@ -45,10 +55,9 @@ class GoRpcResponse {
 		return $this->header['Seq'];
 	}
 
-	public function is_eos() {
+	public function isEOS() {
 		return $this->error() == self::END_OF_STREAM;
 	}
-
 	const END_OF_STREAM = 'EOS';
 }
 
@@ -56,23 +65,24 @@ abstract class GoRpcClient {
 	protected $seq = 0;
 	protected $stream = NULL;
 
-	abstract protected function send_request(GoRpcRequest $req);
-	abstract protected function read_response();
+	abstract protected function sendRequest(VTContext $ctx, GoRpcRequest $req);
 
-	public function dial($addr, $path) {
+	abstract protected function readResponse(VTContext $ctx);
+
+	public function dial(VTContext $ctx, $addr, $path) {
 		// Connect to $addr.
 		$fp = stream_socket_client($addr, $errno, $errstr);
 		if ($fp === FALSE)
 			throw new GoRpcException("can't connect to $addr: $errstr ($errno)");
 		$this->stream = $fp;
-
+		
 		// Initiate request for $path.
-		$this->write("CONNECT $path HTTP/1.0\n\n");
-
+		$this->write($ctx, "CONNECT $path HTTP/1.0\n\n");
+		
 		// Read until handshake is completed.
 		$data = '';
 		while (strpos($data, "\n\n") === FALSE)
-			$data .= $this->read(1024);
+			$data .= $this->read($ctx, 1024);
 	}
 
 	public function close() {
@@ -82,36 +92,36 @@ abstract class GoRpcClient {
 		}
 	}
 
-	public function call($method, $request) {
-		$req = new GoRpcRequest($this->next_seq(), $method, $request);
-		$this->send_request($req);
-
-		$resp = $this->read_response();
+	public function call(VTContext $ctx, $method, $request) {
+		$req = new GoRpcRequest($this->nextSeq(), $method, $request);
+		$this->sendRequest($ctx, $req);
+		
+		$resp = $this->readResponse($ctx);
 		if ($resp->seq() != $req->seq())
 			throw new GoRpcException("$method: request sequence mismatch");
 		if ($resp->error())
 			throw new GoRpcRemoteError("$method: " . $resp->error());
-
+		
 		return $resp;
 	}
 
-	public function stream_call($method, $request) {
-		$req = new GoRpcRequest($this->next_seq(), $method, $request);
-		$this->send_request($req);
+	public function streamCall(VTContext $ctx, $method, $request) {
+		$req = new GoRpcRequest($this->nextSeq(), $method, $request);
+		$this->sendRequest($ctx, $req);
 	}
 
-	public function stream_next() {
-		$resp = $this->read_response();
+	public function streamNext(VTContext $ctx) {
+		$resp = $this->readResponse($ctx);
 		if ($resp->seq() != $this->seq)
 			throw new GoRpcException("$method: request sequence mismatch");
-		if ($resp->is_eos())
+		if ($resp->isEOS())
 			return FALSE;
 		if ($resp->error())
 			throw new GoRpcRemoteError("$method: " . $resp->error());
 		return $resp;
 	}
 
-	protected function read($max_len) {
+	protected function read(VTContext $ctx, $max_len) {
 		if (feof($this->stream))
 			throw new GoRpcException("unexpected EOF while reading from stream");
 		$packet = fread($this->stream, $max_len);
@@ -120,20 +130,20 @@ abstract class GoRpcClient {
 		return $packet;
 	}
 
-	protected function read_n($target_len) {
+	protected function readN(VTContext $ctx, $target_len) {
 		// Read exactly $target_len bytes or bust.
 		$data = '';
 		while (($len = strlen($data)) < $target_len)
-			$data .= $this->read($target_len - $len);
+			$data .= $this->read($ctx, $target_len - $len);
 		return $data;
 	}
 
-	protected function write($data) {
+	protected function write(VTContext $ctx, $data) {
 		if (fwrite($this->stream, $data) === FALSE)
 			throw new GoRpcException("can't write to stream");
 	}
 
-	protected function next_seq() {
-		return ++$this->seq;
+	protected function nextSeq() {
+		return ++ $this->seq;
 	}
 }

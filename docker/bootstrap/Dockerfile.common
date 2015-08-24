@@ -14,7 +14,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     memcached \
     mercurial \
     openjdk-7-jdk \
+    php-pear \
+    php5-cli \
+    php5-dev \
     pkg-config \
+    python-crypto \
     python-dev \
     python-mysqldb \
     python-software-properties \
@@ -22,6 +26,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     python-virtualenv \
     unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install PHP modules for running tests
+RUN mkdir -p /vt/bin && \
+    curl -sL https://phar.phpunit.de/phpunit.phar > /vt/bin/phpunit && \
+    chmod +x /vt/bin/phpunit && \
+    pecl install mongo && \
+    echo 'extension=mongo.so' > /etc/php5/conf.d/20-mongo.ini && \
+    pecl install xdebug && \
+    echo "zend_extension=$(pecl config-get ext_dir default)/xdebug.so" > /etc/php5/cli/conf.d/20-xdebug.ini
 
 # Install Maven 3.1+
 RUN mkdir -p /vt/dist && \

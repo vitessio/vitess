@@ -252,15 +252,16 @@ public class GrpcClientTest {
 
     VTGateTx tx = conn.begin(ctx);
 
-    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, true));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("notInTransaction"));
 
     echo = getEcho(
-        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
+        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, true));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -268,9 +269,10 @@ public class GrpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeKeyspaceIds(
-        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, true));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -278,9 +280,10 @@ public class GrpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeKeyRanges(
-        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE));
+        ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, true));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -288,9 +291,10 @@ public class GrpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
-        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, true));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -299,6 +303,7 @@ public class GrpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
+    Assert.assertEquals("true", echo.get("notInTransaction"));
 
     tx.rollback(ctx);
     tx = conn.begin(ctx);

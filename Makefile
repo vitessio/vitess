@@ -8,7 +8,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_vtgate_client_test
+.PHONY: all build test clean unit_test unit_test_cover unit_test_race queryservice_test integration_test bson proto site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test php_test reshard_tests
 
 all: build test
 
@@ -32,7 +32,9 @@ build:
 
 # Set VT_TEST_FLAGS to pass flags to python tests.
 # For example, verbose output: export VT_TEST_FLAGS=-v
-test: unit_test queryservice_test integration_test java_vtgate_client_test
+test:
+	go run test.go -docker=false
+
 site_test: unit_test site_integration_test
 
 clean:
@@ -60,128 +62,29 @@ unit_test_race:
 # Run coverage and upload to coveralls.io.
 # Requires the secret COVERALLS_TOKEN env variable to be set.
 unit_test_goveralls:
-	go list -f '{{if len .TestGoFiles}}godep go test $(VT_GO_PARALLEL) -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}{{end}}' ./go/... | xargs -i sh -c {} | tee unit_test_goveralls.txt
-	gover ./go/
-	# -shallow ensures that goveralls does not return with a failure \
-	# if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
-	goveralls -shallow -coverprofile=gover.coverprofile -service=travis-ci
-	echo
-	echo "Top 10 of Go packages with worst coverage:"
-	sort -n -k 5 unit_test_goveralls.txt | head -n10
-	[ -f unit_test_goveralls.txt ] && rm unit_test_goveralls.txt
+	travis/goveralls.sh
 
-ENABLE_MEMCACHED := $(shell test -x /usr/bin/memcached && echo "-m")
-queryservice_test_files = \
-	"queryservice_test.py $(ENABLE_MEMCACHED) -e vtocc" \
-	"queryservice_test.py $(ENABLE_MEMCACHED) -e vttablet"
-
-queryservice_test: build
-	$(call run_integration_tests, $(queryservice_test_files))
-
-# These tests should be run by users to check that Vitess works in their environment.
-site_integration_test_files = \
-	keyrange_test.py \
-	keyspace_test.py \
-	mysqlctl.py \
-	secure.py \
-	tabletmanager.py \
-	update_stream.py \
-	vtdb_test.py \
-	vtgatev2_test.py
-
-# These tests should be run by developers after making code changes.
-# Integration tests are grouped into 3 suites.
-# - small: under 30 secs
-# - medium: 30 secs - 1 min
-# - large: over 1 min
-small_integration_test_files = \
-	tablet_test.py \
-	sql_builder_test.py \
-	vertical_split.py \
-	schema.py \
-	keyspace_test.py \
-	keyrange_test.py \
-	mysqlctl.py \
-	python_client_test.py \
-	sharded.py \
-	secure.py \
-	binlog.py \
-	backup.py \
-	update_stream.py \
-	custom_sharding.py \
-	initial_sharding_bytes.py \
-	initial_sharding.py
-
-medium_integration_test_files = \
-	tabletmanager.py \
-	reparent.py \
-	vtdb_test.py \
-	client_test.py \
-	vtgate_utils_test.py \
-	rowcache_invalidator.py \
-	worker.py \
-	automation_horizontal_resharding.py
-
-large_integration_test_files = \
-	vtgatev2_test.py
-
-# The following tests are considered too flaky to be included
-# in the continous integration test suites
-ci_skip_integration_test_files = \
-	resharding_bytes.py \
-	resharding.py
-
-# Run the following tests after making worker changes.
-worker_integration_test_files = \
-	binlog.py \
-	resharding.py \
-	resharding_bytes.py \
-	vertical_split.py \
-	initial_sharding.py \
-	initial_sharding_bytes.py \
-	worker.py
+queryservice_test:
+	go run test.go -docker=false queryservice_vtocc queryservice_vttablet
 
 .ONESHELL:
 SHELL = /bin/bash
 
-# function to execute a list of integration test files
-# exits on first failure
-define run_integration_tests
-	cd test ; \
-	for t in $1 ; do \
-		echo $$(date): Running test/$$t --skip-build ; \
-		output=$$(time timeout 5m ./$$t $$VT_TEST_FLAGS --skip-build 2>&1) ; \
-		if [[ $$? != 0 ]]; then \
-			echo "$$output" >&2 ; \
-			exit 1 ; \
-		fi ; \
-		echo ; \
-	done
-endef
-
-small_integration_test: build
-	$(call run_integration_tests, $(small_integration_test_files))
-
-medium_integration_test: build
-	$(call run_integration_tests, $(medium_integration_test_files))
-
-large_integration_test: build
-	$(call run_integration_tests, $(large_integration_test_files))
-
-ci_skip_integration_test: build
-	$(call run_integration_tests, $(ci_skip_integration_test_files))
-
-worker_test: build
+# Run the following tests after making worker changes.
+worker_test:
 	godep go test ./go/vt/worker/
-	$(call run_integration_tests, $(worker_integration_test_files))
+	go run test.go -docker=false binlog resharding resharding_bytes vertical_split initial_sharding initial_sharding_bytes worker
 
-integration_test: small_integration_test medium_integration_test large_integration_test ci_skip_integration_test
+site_integration_test:
+	go run test.go -docker=false keyrange keyspace mysqlctl tabletmanager vtdb vtgatev2
 
-site_integration_test: build
-	$(call run_integration_tests, $(site_integration_test_files))
-
-java_vtgate_client_test:
+java_test:
+	godep go install ./go/cmd/vtgateclienttest
 	mvn -f java/pom.xml clean verify
+
+php_test:
+	godep go install ./go/cmd/vtgateclienttest
+	php $$PHP_FLAGS $$(which phpunit) php/tests
 
 v3_test:
 	cd test && ./vtgatev3_test.py
@@ -213,3 +116,9 @@ docker_test:
 
 docker_unit_test:
 	go run test.go -flavor $(flavor) unit
+
+# This can be used to rebalance the total average runtime of each group of
+# tests in Travis. The results are saved in test/config.json, which you can
+# then commit and push.
+rebalance_tests:
+	go run test.go -rebalance 5 -remote-stats http://enisoc.com:15123/travis/stats

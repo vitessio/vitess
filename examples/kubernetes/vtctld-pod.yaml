@@ -27,6 +27,7 @@ spec:
           -alsologtostderr
           -port 15000
           -topo_implementation etcd
+          -tablet_protocol grpc
           -etcd_global_addrs http://$ETCD_GLOBAL_SERVICE_HOST:$ETCD_GLOBAL_SERVICE_PORT" vitess
   volumes:
     - name: syslog
