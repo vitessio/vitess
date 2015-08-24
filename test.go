@@ -237,7 +237,7 @@ func main() {
 		log.Printf("Bootstrap flavor: %v", *flavor)
 
 		// Re-pull image.
-		if *docker && *pull {
+		if *pull {
 			image := "vitess/bootstrap:" + *flavor
 			pullTime := time.Now()
 			log.Printf("Pulling %v...", image)
