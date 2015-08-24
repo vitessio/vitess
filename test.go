@@ -566,22 +566,20 @@ func reshardTests(config *Config, numShards int) error {
 	shards := make([][]TestStats, numShards)
 	sums := make([]int64, numShards)
 	// First pass: greedy approximation.
+firstPass:
 	for len(tests) > 0 {
 		v := int64(tests[0].PassTime)
 
-		found := false
 		for n := range shards {
 			if sums[n]+v < max {
 				shards[n] = append(shards[n], tests[0])
 				sums[n] += v
 				tests = tests[1:]
-				found = true
-				break
+				continue firstPass
 			}
 		}
-		if !found {
-			break
-		}
+		// None of the bins has room. Go to second pass.
+		break
 	}
 	// Second pass: distribute the remainder.
 	for len(tests) > 0 {
