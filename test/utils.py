@@ -921,6 +921,7 @@ class Vtctld(object):
             '-tablet_manager_protocol',
             protocols_flavor().tablet_manager_protocol(),
             '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
+            '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
             ] + \
             environment.topo_server().flags()
     if protocols_flavor().service_map():
