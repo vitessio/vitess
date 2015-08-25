@@ -18,11 +18,47 @@ import subprocess
 import unittest
 import urllib
 
+from vttest import fakezk_config
+
 import utils
 import environment
 
 class TestMysqlctl(unittest.TestCase):
-  def test_basic(self):
+  def test_fakezk_config(self):
+    """This unit test makes sure the fake zk config is correct."""
+
+    c = fakezk_config.FakeZkConfig(mysql_port=3307, cell='test_cell')
+    c.add_shard('video', '0', 6711)
+    c.add_shard('user', '-80', 6712)
+    c.add_shard('user', '80-', 6713)
+    c.add_redirect('ingestion', 'ingested')
+    json_data = c.as_json()
+    parsed_data = json.loads(json_data)
+    self.assertEqual(
+        '-80',
+        parsed_data['/zk/test_cell/vt/ns/user']
+        ['partitions'][0]['shard_references'][0]['name'])
+    self.assertEqual(
+        'gA==',  # base 64 of 0x80
+        parsed_data['/zk/test_cell/vt/ns/user']
+        ['partitions'][0]['shard_references'][1]['key_range']
+        ['start'])
+    self.assertNotIn(
+        'end',
+        parsed_data['/zk/test_cell/vt/ns/user']
+        ['partitions'][0]['shard_references'][1]['key_range'])
+    self.assertEqual(
+        6711,
+        parsed_data['/zk/test_cell/vt/ns/video/0/master']['entries'][0]
+        ['port_map']['vt'])
+    self.assertEqual(
+        'ingested',
+        parsed_data['/zk/test_cell/vt/ns/ingestion']['served_from'][0]
+        ['keyspace'])
+
+  def test_standalone(self):
+    """Sample test for run_local_database.py as a standalone process.
+    """
 
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
