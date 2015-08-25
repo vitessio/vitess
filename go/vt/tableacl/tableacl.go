@@ -20,8 +20,15 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
+// ACLResult embeds an acl.ACL and also tell which table group it belongs to.
+type ACLResult struct {
+	acl.ACL
+	GroupName string
+}
+
 type aclEntry struct {
 	tableNameOrPrefix string
+	groupName         string
 	acl               map[Role]acl.ACL
 }
 
@@ -108,6 +115,7 @@ func load(config *pb.Config) error {
 		for _, tableNameOrPrefix := range group.TableNamesOrPrefixes {
 			entries = append(entries, aclEntry{
 				tableNameOrPrefix: tableNameOrPrefix,
+				groupName:         group.Name,
 				acl: map[Role]acl.ACL{
 					READER: readers,
 					WRITER: writers,
@@ -177,7 +185,7 @@ func validateNameOrPrefix(nameOrPrefix string) error {
 }
 
 // Authorized returns the list of entities who have the specified role on a tablel.
-func Authorized(table string, role Role) acl.ACL {
+func Authorized(table string, role Role) *ACLResult {
 	currentACL.RLock()
 	defer currentACL.RUnlock()
 	start := 0
@@ -188,7 +196,10 @@ func Authorized(table string, role Role) acl.ACL {
 		if table == val || (strings.HasSuffix(val, "%") && strings.HasPrefix(table, val[:len(val)-1])) {
 			acl, ok := currentACL.entries[mid].acl[role]
 			if ok {
-				return acl
+				return &ACLResult{
+					ACL:       acl,
+					GroupName: currentACL.entries[mid].groupName,
+				}
 			}
 			break
 		} else if table < val {
@@ -197,7 +208,10 @@ func Authorized(table string, role Role) acl.ACL {
 			start = mid + 1
 		}
 	}
-	return acl.DenyAllACL{}
+	return &ACLResult{
+		ACL:       acl.DenyAllACL{},
+		GroupName: "",
+	}
 }
 
 // GetCurrentConfig returns a copy of current tableacl configuration.
