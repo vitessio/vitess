@@ -391,6 +391,11 @@ class VTKeyspaceId {
 	}
 }
 
+class VTKeyspaceIdType {
+	const UINT64 = 1;
+	const BYTES = 2;
+}
+
 class VTEntityId {
 	const TYPE_BYTES = 1;
 	const TYPE_INT = 2;
@@ -490,6 +495,103 @@ class VTSplitQueryPart {
 		}
 		if (array_key_exists('Size', $bson)) {
 			$result->size = $bson['Size'];
+		}
+		return $result;
+	}
+}
+
+class VTShardReference {
+	public $name;
+	public $keyRange;
+
+	public function __construct($name = '', $keyRange = array('','')) {
+		$this->name = $name;
+		$this->keyRange = $keyRange;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTShardReference();
+		if (array_key_exists('Name', $bson)) {
+			$result->name = $bson['Name'];
+		}
+		if (array_key_exists('KeyRange', $bson)) {
+			$result->keyRange = VTKeyRange::fromBsonP3($bson['KeyRange']);
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspacePartition {
+	public $servedType;
+	public $shardReferences;
+
+	public function __construct($servedType = 0, $shardReferences = array()) {
+		$this->servedType = $servedType;
+		$this->shardReferences = $shardReferences;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspacePartition();
+		if (array_key_exists('ServedType', $bson)) {
+			$result->servedType = $bson['ServedType'];
+		}
+		if (array_key_exists('ShardReferences', $bson) && $bson['ShardReferences']) {
+			foreach ($bson['ShardReferences'] as $val) {
+				$result->shardReferences[] = VTShardReference::fromBsonP3($val);
+			}
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspaceServedFrom {
+	public $tabletType;
+	public $keyspace;
+
+	public function __construct($tabletType = 0, $keyspace = '') {
+		$this->tabletType = $tabletType;
+		$this->keyspace = $keyspace;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspaceServedFrom();
+		if (array_key_exists('TabletType', $bson)) {
+			$result->tabletType = $bson['TabletType'];
+		}
+		if (array_key_exists('Keyspace', $bson)) {
+			$result->keyspace = $bson['Keyspace'];
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspace {
+	public $partitions = array();
+	public $shardingColumnName = '';
+	public $shardingColumnType = 0;
+	public $servedFrom = array();
+	public $splitShardCount = 0;
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspace();
+		if (array_key_exists('Partitions', $bson) && $bson['Partitions']) {
+			foreach ($bson['Partitions'] as $val) {
+				$result->partitions[] = VTSrvKeyspacePartition::fromBsonP3($val);
+			}
+		}
+		if (array_key_exists('ShardingColumnName', $bson)) {
+			$result->shardingColumnName = $bson['ShardingColumnName'];
+		}
+		if (array_key_exists('ShardingColumnType', $bson)) {
+			$result->shardingColumnType = $bson['ShardingColumnType'];
+		}
+		if (array_key_exists('ServedFrom', $bson)) {
+			foreach ($bson['ServedFrom'] as $val) {
+				$result->servedFrom[] = VTSrvKeyspaceServedFrom::fromBsonP3($val);
+			}
+		}
+		if (array_key_exists('SplitShardCount', $bson)) {
+			$result->splitShardCount = $bson['SplitShardCount'];
 		}
 		return $result;
 	}

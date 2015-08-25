@@ -299,7 +299,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 				'uint_from_int' => new VTUnsignedInt(345),
 				// uint_from_string will come back to us as an int.
 				'uint_from_string' => new VTUnsignedInt(678),
-				'float' => 1.5
+				'float' => 1.5 
 		);
 		
 		$expected = new VTSplitQueryPart();
@@ -309,5 +309,25 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		
 		$actual = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
 		$this->assertEquals($expected, $actual[0]);
+	}
+
+	public function testGetSrvKeyspace() {
+		$ctx = $this->ctx;
+		$conn = $this->conn;
+		
+		$expected = new VTSrvKeyspace();
+		$expected->partitions[] = new VTSrvKeyspacePartition(VTTabletType::REPLICA, array(
+				new VTShardReference("shard0", array(
+						VTKeyspaceID::fromHex('4000000000000000'),
+						VTKeyspaceID::fromHex('8000000000000000') 
+				)) 
+		));
+		$expected->shardingColumnName = 'sharding_column_name';
+		$expected->shardingColumnType = VTKeyspaceIDType::UINT64;
+		$expected->servedFrom[] = new VTSrvKeyspaceServedFrom(VTTabletType::MASTER, 'other_keyspace');
+		$expected->splitShardCount = 128;
+		
+		$actual = $conn->getSrvKeyspace($ctx, "big");
+		$this->assertEquals($expected, $actual);
 	}
 }

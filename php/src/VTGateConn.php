@@ -247,6 +247,18 @@ class VTGateConn {
 		return $results;
 	}
 
+	public function getSrvKeyspace(VTContext $ctx, $keyspace) {
+		$req = array(
+				'Keyspace' => $keyspace 
+		);
+		if ($ctx->getCallerId()) {
+			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
+		}
+		
+		$resp = $this->client->call($ctx, 'VTGateP3.GetSrvKeyspace', $req)->reply;
+		return VTSrvKeyspace::fromBsonP3($resp['SrvKeyspace']);
+	}
+
 	public function close() {
 		$this->client->close();
 	}
