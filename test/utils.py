@@ -836,7 +836,11 @@ def check_tablet_query_service(testcase, tablet, serving, tablet_control_disable
     expected_state = 'SERVING'
   else:
     expected_state = 'NOT_SERVING'
-  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state,
+      'tablet %s (%s/%s, %s) is not in the right serving state: got %s'
+      ' expected %s' % (tablet.tablet_alias, tablet.keyspace, tablet.shard,
+                        tablet.tablet_type,
+                        tablet_vars['TabletStateName'], expected_state))
 
   status = tablet.get_status()
   if tablet_control_disabled:
