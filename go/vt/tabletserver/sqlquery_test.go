@@ -13,6 +13,8 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -1079,6 +1081,38 @@ func TestTerseErrors3(t *testing.T) {
 		Message:   "msg",
 		SqlError:  10,
 	})
+}
+
+func TestNeedInvalidator(t *testing.T) {
+	testUtils := newTestUtils()
+	dbconfigs := testUtils.newDBConfigs()
+
+	// EnableRowCache is false
+	if needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
+
+	// EnableInvalidator is false
+	dbconfigs.App.EnableRowcache = true
+	if needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
+
+	dbconfigs.App.EnableInvalidator = true
+	if !needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got false, want true")
+	}
+
+	target := &pb.Target{}
+	// TabletType is not MASTER
+	if !needInvalidator(target, &dbconfigs) {
+		t.Errorf("got false, want true")
+	}
+
+	target.TabletType = topodata.TabletType_MASTER
+	if needInvalidator(target, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
 }
 
 func setUpSQLQueryTest() *fakesqldb.DB {

@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 // spotCheckMultiplier determines the precision of the
@@ -51,7 +50,6 @@ type QueryEngine struct {
 	// Services
 	txPool       *TxPool
 	consolidator *sync2.Consolidator
-	invalidator  *RowcacheInvalidator
 	streamQList  *QueryList
 	tasks        sync.WaitGroup
 
@@ -163,7 +161,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	)
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
-	qe.invalidator = NewRowcacheInvalidator(config.StatsPrefix, qe, config.EnablePublishStats)
 	qe.streamQList = NewQueryList()
 
 	// Vars
@@ -208,7 +205,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) {
+func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride) {
 	qe.dbconfigs = dbconfigs
 	appParams := dbconfigs.App.ConnParams
 	// Create dba params based on App connection params
@@ -230,8 +227,6 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 		qe.cachePool.Open()
 		log.Infof("rowcache is enabled")
 	} else {
-		// Invalidator should not be enabled if rowcache is not enabled.
-		dbconfigs.App.EnableInvalidator = false
 		log.Infof("rowcache is not enabled")
 	}
 
@@ -241,13 +236,6 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, qe.cachePool, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
-	// Start the invalidator only after schema is loaded.
-	// This will allow qe to find the table info
-	// for the invalidation events that will start coming
-	// immediately.
-	if dbconfigs.App.EnableInvalidator {
-		qe.invalidator.Open(dbconfigs.App.DbName, mysqld)
-	}
 	qe.connPool.Open(&appParams, &dbaParams)
 	qe.streamConnPool.Open(&appParams, &dbaParams)
 	qe.txPool.Open(&appParams, &dbaParams)
@@ -302,7 +290,6 @@ func (qe *QueryEngine) Close() {
 	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
-	qe.invalidator.Close()
 	qe.schemaInfo.Close()
 	qe.cachePool.Close()
 	qe.dbconfigs = nil

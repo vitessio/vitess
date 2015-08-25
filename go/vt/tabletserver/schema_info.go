@@ -195,7 +195,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	si.lastChange = curTime
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
-	si.ticks.Start(func() { si.Reload() })
+	si.ticks.Start(si.Reload)
 }
 
 func (si *SchemaInfo) override() {

@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // Allowed state transitions:
@@ -87,10 +88,11 @@ type SqlQuery struct {
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	qe        *QueryEngine
-	sessionID int64
-	dbconfig  *dbconfigs.DBConfig
-	target    *pb.Target
+	qe          *QueryEngine
+	invalidator *RowcacheInvalidator
+	sessionID   int64
+	dbconfig    *dbconfigs.DBConfig
+	target      *pb.Target
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -107,6 +109,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
 	}
 	sq.qe = NewQueryEngine(config)
+	sq.invalidator = NewRowcacheInvalidator(config.StatsPrefix, sq.qe, config.EnablePublishStats)
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			sq.mu.Lock()
@@ -180,12 +183,27 @@ func (sq *SqlQuery) allowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfi
 		sq.mu.Unlock()
 	}()
 
-	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
+	sq.qe.Open(dbconfigs, schemaOverrides)
+	// Start the invalidator after qe.
+	if needInvalidator(target, dbconfigs) {
+		sq.invalidator.Open(dbconfigs.App.DbName, mysqld)
+	}
 	sq.dbconfig = &dbconfigs.App
 	sq.target = target
 	sq.sessionID = Rand()
 	log.Infof("Session id: %d", sq.sessionID)
 	return nil
+}
+
+// needInvalidator returns true if the rowcache invalidator needs to be enabled.
+func needInvalidator(target *pb.Target, dbconfigs *dbconfigs.DBConfigs) bool {
+	if !dbconfigs.App.EnableRowcache {
+		return false
+	}
+	if target == nil {
+		return dbconfigs.App.EnableInvalidator
+	}
+	return target.TabletType != topodata.TabletType_MASTER
 }
 
 // disallowQueries shuts down the query service if it's StateServing.
@@ -242,6 +260,8 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.mu.Unlock()
 	}()
 	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
+	// Close invalidator before qe.
+	sq.invalidator.Close()
 	sq.qe.Close()
 	sq.sessionID = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
