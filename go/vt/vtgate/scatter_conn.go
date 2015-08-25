@@ -10,24 +10,21 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	kproto "github.com/youtube/vitess/go/vt/key"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
-	"golang.org/x/net/context"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var idGen sync2.AtomicInt64
-
 // ScatterConn is used for executing queries across
-// multiple ShardConn connections.
+// multiple shard level connections.
 type ScatterConn struct {
 	toposerv             SrvTopoServer
 	cell                 string
@@ -44,7 +41,7 @@ type ScatterConn struct {
 type shardActionFunc func(shard string, transactionID int64, sResults chan<- interface{}) error
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
-// for creating the appropriate ShardConn.
+// for creating the appropriate connections.
 func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
@@ -63,7 +60,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 	}
 }
 
-// InitializeConnections pre-initializes all ShardConn which create underlying connections.
+// InitializeConnections pre-initializes connections for all shards.
 // It also populates topology cache by accessing it.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
@@ -591,7 +588,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 }
 
 // multiGo performs the requested 'action' on the specified shards in parallel.
-// For each shard, it obtains a ShardConn connection. If the requested
+// For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
 // and updates the Session with the transaction id. If the session already
 // contains a transaction id for the shard, it reuses it.

@@ -199,5 +199,4 @@ func shuffle(addressNodes []*addressStatus, length int) {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	idGen.Set(rand.Int63())
 }
