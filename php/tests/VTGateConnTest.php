@@ -195,6 +195,49 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		$this->assertEquals('true', $echo['asTransaction']);
 	}
 
+	public function testEchoStreamExecute() {
+		$ctx = $this->ctx;
+		$conn = $this->conn;
+		
+		$sr = $conn->streamExecute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE);
+		$results = $sr->fetchAll();
+		$echo = self::getEcho($results[0]);
+		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
+		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+		
+		$sr = $conn->streamExecuteShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE);
+		$results = $sr->fetchAll();
+		$echo = self::getEcho($results[0]);
+		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
+		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
+		$this->assertEquals(self::$SHARDS_ECHO, $echo['shards']);
+		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+		
+		$sr = $conn->streamExecuteKeyspaceIds($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEYSPACE_IDS, self::$BIND_VARS, self::$TABLET_TYPE);
+		$results = $sr->fetchAll();
+		$echo = self::getEcho($results[0]);
+		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
+		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
+		$this->assertEquals(self::$KEYSPACE_IDS_ECHO, $echo['keyspaceIds']);
+		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+		
+		$sr = $conn->streamExecuteKeyRanges($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$KEY_RANGES, self::$BIND_VARS, self::$TABLET_TYPE);
+		$results = $sr->fetchAll();
+		$echo = self::getEcho($results[0]);
+		$this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
+		$this->assertEquals(self::$ECHO_QUERY, $echo['query']);
+		$this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
+		$this->assertEquals(self::$KEY_RANGES_ECHO, $echo['keyRanges']);
+		$this->assertEquals(self::$BIND_VARS_ECHO, $echo['bindVars']);
+		$this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+	}
+
 	public function testEchoTransactionExecute() {
 		$ctx = $this->ctx;
 		$conn = $this->conn;
