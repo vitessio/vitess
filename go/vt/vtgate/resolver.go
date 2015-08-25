@@ -41,7 +41,9 @@ var (
 // returns retryable error, which may imply horizontal or vertical
 // resharding happened.
 type Resolver struct {
-	scatterConn *ScatterConn
+	scatterConn ScatterConnService
+	toposerv    SrvTopoServer
+	cell        string
 }
 
 // NewResolver creates a new Resolver. All input parameters are passed through
@@ -49,6 +51,8 @@ type Resolver struct {
 func NewResolver(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *Resolver {
 	return &Resolver{
 		scatterConn: NewScatterConn(serv, statsName, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife),
+		toposerv:    serv,
+		cell:        cell,
 	}
 }
 
@@ -83,8 +87,8 @@ func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVar
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
-			res.scatterConn.toposerv,
-			res.scatterConn.cell,
+			res.toposerv,
+			res.cell,
 			k,
 			tabletType,
 			keyspaceIds)
@@ -98,8 +102,8 @@ func (res *Resolver) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
-			res.scatterConn.toposerv,
-			res.scatterConn.cell,
+			res.toposerv,
+			res.cell,
 			k,
 			tabletType,
 			keyRanges)
@@ -176,8 +180,8 @@ func (res *Resolver) ExecuteEntityIds(
 ) (*mproto.QueryResult, error) {
 	newKeyspace, shardIDMap, err := mapEntityIdsToShards(
 		ctx,
-		res.scatterConn.toposerv,
-		res.scatterConn.cell,
+		res.toposerv,
+		res.cell,
 		keyspace,
 		entityKeyspaceIDs,
 		tabletType)
@@ -200,8 +204,8 @@ func (res *Resolver) ExecuteEntityIds(
 			resharding := false
 			newKeyspace, newShardIDMap, err := mapEntityIdsToShards(
 				ctx,
-				res.scatterConn.toposerv,
-				res.scatterConn.cell,
+				res.toposerv,
+				res.cell,
 				keyspace,
 				entityKeyspaceIDs,
 				tabletType)
@@ -237,7 +241,7 @@ func (res *Resolver) ExecuteEntityIds(
 // It retries query if new keyspace/shards are re-resolved after a retryable error.
 func (res *Resolver) ExecuteBatchKeyspaceIds(ctx context.Context, queries []proto.BoundKeyspaceIdQuery, tabletType pb.TabletType, asTransaction bool, session *proto.Session) (*tproto.QueryResultList, error) {
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
-		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.scatterConn.toposerv, res.scatterConn.cell, tabletType, queries)
+		shardQueries, err := boundKeyspaceIDQueriesToBoundShardQueries(ctx, res.toposerv, res.cell, tabletType, queries)
 		if err != nil {
 			return nil, err
 		}
@@ -298,8 +302,8 @@ func (res *Resolver) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(
 			ctx,
-			res.scatterConn.toposerv,
-			res.scatterConn.cell,
+			res.toposerv,
+			res.cell,
 			k,
 			tabletType,
 			keyspaceIds)
@@ -317,8 +321,8 @@ func (res *Resolver) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyRangesToShards(
 			ctx,
-			res.scatterConn.toposerv,
-			res.scatterConn.cell,
+			res.toposerv,
+			res.cell,
 			k,
 			tabletType,
 			keyRanges)
