@@ -89,10 +89,58 @@ class VTBindVariable {
 							'ValueUint' => $value->bsonValue 
 					);
 			}
+		} else if (is_array($value)) {
+			return self::buildBsonP3ForList($value);
 		}
-		// TODO(enisoc): Implement list bind vars.
 		
 		throw new Exception('Unknown bind variable type.');
+	}
+
+	public static function buildBsonP3ForList(array $list) {
+		if (count($list) == 0) {
+			// The list is empty, so it has no type. VTTablet will reject an empty
+			// list anyway, so we'll just pretend it was a list of bytes.
+			return array(
+					'Type' => self::TYPE_BYTES_LIST 
+			);
+		}
+		
+		// Check type of first item to determine type of list.
+		// We only support lists whose elements have uniform types.
+		if (is_string($list[0])) {
+			$value = array();
+			foreach ($list as $val) {
+				$value[] = new MongoBinData($val);
+			}
+			return array(
+					'Type' => self::TYPE_BYTES_LIST,
+					'ValueBytesList' => $value 
+			);
+		} else if (is_int($list[0])) {
+			return array(
+					'Type' => self::TYPE_INT_LIST,
+					'ValueIntList' => $list 
+			);
+		} else if (is_float($list[0])) {
+			return array(
+					'Type' => self::TYPE_FLOAT_LIST,
+					'ValueFloatList' => $list 
+			);
+		} else if (is_object($list[0])) {
+			switch (get_class($list[0])) {
+				case 'VTUnsignedInt':
+					$value = array();
+					foreach ($list as $val) {
+						$value[] = $val->bsonValue;
+					}
+					return array(
+							'Type' => self::TYPE_UINT_LIST,
+							'ValueUintList' => $value 
+					);
+			}
+		}
+		
+		throw new Exception('Unknown list bind variable type.');
 	}
 
 	/**
