@@ -5,7 +5,7 @@ import os
 
 from vttest import environment
 from vttest import mysql_db_mysqlctl
-from vttest import vtocc_processes
+from vttest import vt_processes
 
 
 class LocalDatabase(object):
@@ -26,8 +26,7 @@ class LocalDatabase(object):
     self.create_databases()
     self.load_schema()
 
-    vtocc_processes.start_vt_processes(self.directory, self.shards,
-                                       self.mysql_db)
+    vt_processes.start_vt_processes(self.directory, self.shards, self.mysql_db)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.
@@ -41,20 +40,20 @@ class LocalDatabase(object):
 
   def kill(self):
     """Kill all Vitess processes."""
-    vtocc_processes.kill_vtocc_processes()
+    vt_processes.kill_vt_processes()
 
   def wait(self):
     """Wait for all Vitess processes to end."""
-    vtocc_processes.wait_vtocc_processes()
+    vt_processes.wait_vt_processes()
 
   def vtgate_addr(self):
     """Get the host:port for vtgate."""
-    return vtocc_processes.vtgate_process.addr()
+    return vt_processes.vtgate_process.addr()
 
   def config(self):
     """Returns a dict with enough information to be able to connect."""
     return {
-        'port': vtocc_processes.vtgate_process.port,
+        'port': vt_processes.vtgate_process.port,
         }
 
   def mysql_execute(self, queries, db_name=''):

@@ -248,7 +248,7 @@ def start_vt_processes(directory, shards, mysql_db,
   vtgate_process.wait_start()
 
 
-def kill_vtocc_processes():
+def kill_vt_processes():
   """Call kill() on all processes."""
   if all_vtocc_processes:
     all_vtocc_processes.kill()
@@ -256,7 +256,7 @@ def kill_vtocc_processes():
     vtgate_process.kill()
 
 
-def wait_vtocc_processes():
+def wait_vt_processes():
   """Call wait() on all processes."""
   if all_vtocc_processes:
     all_vtocc_processes.wait()
@@ -264,10 +264,10 @@ def wait_vtocc_processes():
     vtgate_process.wait()
 
 
-def kill_and_wait_vtocc_processes():
+def kill_and_wait_vt_processes():
   """Call kill() and then wait() on all processes."""
-  kill_vtocc_processes()
-  wait_vtocc_processes()
+  kill_vt_processes()
+  wait_vt_processes()
 
 
 # wait_step is a helper for looping until a condition is true.

@@ -25,7 +25,7 @@ import sys
 
 from vttest import environment
 from vttest import local_database
-from vttest import vtocc_processes
+from vttest import vt_processes
 
 shard_exp = re.compile(r'(.+)/(.+):(.+)')
 
@@ -37,8 +37,7 @@ def main(port, topology, schema_dir):
     m = shard_exp.match(shard)
     if m:
       shards.append(
-          vtocc_processes.ShardInfo(
-              m.group(1), m.group(2), m.group(3)))
+          vt_processes.ShardInfo(m.group(1), m.group(2), m.group(3)))
     else:
       sys.stderr.write('invalid --shard flag format: %s\n' % shard)
       sys.exit(1)
