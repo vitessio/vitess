@@ -1,0 +1,36 @@
+# Copyright 2015 Google Inc. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can
+# be found in the LICENSE file.
+
+"""This module defines the interface for the MySQL database.
+"""
+
+class MySqlDB(object):
+  """A MySqlDB contains basic info about a MySQL instance."""
+
+  def __init__(self, directory, port):
+    self._directory = directory
+    self._port = port
+
+  def setup(self, port):
+    """Starts the MySQL database."""
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def teardown(self):
+    """Stops the MySQL database."""
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def username(self):
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def password(self):
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def hostname(self):
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def port(self):
+    raise NotImplemented('MySqlDB is the base class.')
+
+  def unix_socket(self):
+    raise NotImplemented('MySqlDB is the base class.')
