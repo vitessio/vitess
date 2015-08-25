@@ -351,7 +351,7 @@ class Tablet(object):
   def conn(self, user=None, password=None):
     conn = tablet.TabletConnection(
         'localhost:%d' % self.port, self.tablet_type, self.keyspace,
-        self.shard, 30)
+        self.shard, 30, caller_id='dev')
     conn.dial()
     return conn
 

@@ -76,12 +76,13 @@ class TabletConnection(object):
 
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
-      password=None, keyfile=None, certfile=None):
+      password=None, keyfile=None, certfile=None, caller_id=None):
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
+    self.caller_id = caller_id
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,
                                         keyfile=keyfile, certfile=certfile)
     self.logger_object = vtdb_logger.get_logger()
@@ -90,7 +91,7 @@ class TabletConnection(object):
     return '<TabletConnection %s %s %s/%s>' % (
         self.addr, self.tablet_type, self.keyspace, self.shard)
 
-  def dial(self, caller_id='youtube-dev-dedicated'):
+  def dial(self):
     try:
       if self.session_id:
         self.client.close()
@@ -107,7 +108,7 @@ class TabletConnection(object):
               'Keyspace': self.keyspace,
               'Shard': self.shard
           },
-          'ImmediateCallerID': {'Username': caller_id}
+          'ImmediateCallerID': {'Username': self.caller_id}
       }
 
       response = self.rpc_call_and_extract_error(
@@ -128,11 +129,11 @@ class TabletConnection(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def begin(self, caller_id='youtube-dev-dedicated'):
+  def begin(self):
     if self.transaction_id:
       raise dbexceptions.NotSupportedError('Nested transactions not supported')
     req = {
-      'ImmediateCallerID': {'Username': caller_id},
+      'ImmediateCallerID': {'Username': self.caller_id},
       'SessionId': self.session_id
     }
     try:
@@ -141,12 +142,12 @@ class TabletConnection(object):
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
-  def commit(self, caller_id='youtube-dev-dedicated'):
+  def commit(self):
     if not self.transaction_id:
       return
 
     req = {
-      'ImmediateCallerID': {'Username': caller_id},
+      'ImmediateCallerID': {'Username': self.caller_id},
       'TransactionId': self.transaction_id,
       'SessionId': self.session_id
     }
@@ -164,12 +165,12 @@ class TabletConnection(object):
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
-  def rollback(self, caller_id='youtube-dev-dedicated'):
+  def rollback(self):
     if not self.transaction_id:
       return
 
     req = {
-      'ImmediateCallerID': {'Username': caller_id},
+      'ImmediateCallerID': {'Username': self.caller_id},
       'TransactionId': self.transaction_id,
       'SessionId': self.session_id
     }
@@ -211,7 +212,7 @@ class TabletConnection(object):
       raise gorpc.AppError(reply['Err']['Message'], method_name)
     return response
 
-  def _execute(self, sql, bind_variables, caller_id='youtube-dev-dedicated'):
+  def _execute(self, sql, bind_variables):
     req = {
       'QueryRequest': {
         'Sql': sql,
@@ -219,7 +220,7 @@ class TabletConnection(object):
         'SessionId': self.session_id,
         'TransactionId': self.transaction_id
       },
-      'ImmediateCallerID': {'Username': caller_id}
+      'ImmediateCallerID': {'Username': self.caller_id}
     }
 
     fields = []
@@ -246,7 +247,7 @@ class TabletConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
-  def _execute_batch(self, sql_list, bind_variables_list, as_transaction, caller_id='youtube-dev-dedicated'):
+  def _execute_batch(self, sql_list, bind_variables_list, as_transaction):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
       query = {}
@@ -264,7 +265,7 @@ class TabletConnection(object):
           'AsTransaction': as_transaction,
           'TransactionId': self.transaction_id
           },
-        'ImmediateCallerID': {'Username': caller_id}
+        'ImmediateCallerID': {'Username': self.caller_id}
       }
 
       response = self.rpc_call_and_extract_error('SqlQuery.ExecuteBatch2', req)
@@ -295,7 +296,7 @@ class TabletConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute(self, sql, bind_variables, caller_id='youtube-dev-dedicated'):
+  def _stream_execute(self, sql, bind_variables):
     req = {
       'Query': {
         'Sql': sql,
@@ -303,46 +304,7 @@ class TabletConnection(object):
         'SessionId': self.session_id,
         'TransactionId': self.transaction_id
       },
-      'ImmediateCallerID': {'Username': caller_id}
-    }
-
-    self._stream_fields = []
-    self._stream_conversions = []
-    self._stream_result = None
-    self._stream_result_index = 0
-    try:
-      self.client.stream_call('SqlQuery.StreamExecute2', req)
-      first_response = self.client.stream_next()
-      reply = first_response.reply
-      if reply.get('Err'):
-        self.__drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get(
-            'Message', 'Missing error message'))
-
-      for field in reply['Fields']:
-        self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(
-            field_types.conversions.get(field['Type']))
-    except gorpc.GoRpcError as e:
-      self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
-    except:
-      logging.exception('gorpc low-level error')
-      raise
-    return None, 0, 0, self._stream_fields
-
-  # we return the fields for the response, and the column conversions
-  # the conversions will need to be passed back to _stream_next
-  # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute2(self, sql, bind_variables, caller_id='youtube-dev-dedicated'):
-    req = {
-        'Query': {
-          'Sql': sql,
-          'BindVariables': field_types.convert_bind_vars(bind_variables),
-          'SessionId': self.session_id,
-          'TransactionId': self.transaction_id
-        },
-        'ImmediateCallerID': {'Username': caller_id}
+      'ImmediateCallerID': {'Username': self.caller_id}
     }
 
     self._stream_fields = []

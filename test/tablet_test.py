@@ -14,7 +14,7 @@ from vtdb import tablet
 class TestRPCCallAndExtract(unittest.TestCase):
   """Tests rpc_call_and_extract_error is tolerant to various responses."""
 
-  tablet_conn = tablet.TabletConnection('addr', 'type', 'keyspace', 'shard', 30)
+  tablet_conn = tablet.TabletConnection('addr', 'type', 'keyspace', 'shard', 30, caller_id='dev')
 
   def test_reply_is_none(self):
     with mock.patch.object(self.tablet_conn, 'client', autospec=True) as mock_client:
