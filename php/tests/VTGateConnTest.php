@@ -281,4 +281,33 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 		
 		$tx->commit($ctx);
 	}
+
+	public function testEchoSplitQuery() {
+		$ctx = $this->ctx;
+		$conn = $this->conn;
+		
+		$input_bind_vars = array(
+				'bytes' => 'hello',
+				'int' => 123,
+				'uint_from_int' => new VTUnsignedInt(345),
+				'uint_from_string' => new VTUnsignedInt('678'),
+				'float' => 1.5 
+		);
+		$expected_bind_vars = array(
+				'bytes' => 'hello',
+				'int' => 123,
+				'uint_from_int' => new VTUnsignedInt(345),
+				// uint_from_string will come back to us as an int.
+				'uint_from_string' => new VTUnsignedInt(678),
+				'float' => 1.5
+		);
+		
+		$expected = new VTSplitQueryPart();
+		$expected->query = new VTBoundQuery(self::$ECHO_QUERY . ':split_column:123', $expected_bind_vars);
+		$expected->keyRangePart = new VTSplitQueryKeyRangePart();
+		$expected->keyRangePart->keyspace = self::$KEYSPACE;
+		
+		$actual = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
+		$this->assertEquals($expected, $actual[0]);
+	}
 }

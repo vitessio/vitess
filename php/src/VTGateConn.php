@@ -31,7 +31,7 @@ class VTGateTx {
 		}
 		VTProto::checkError($resp);
 		
-		return new VTQueryResult($resp['Result']);
+		return VTQueryResult::fromBsonP3($resp['Result']);
 	}
 
 	private function callExecuteBatch(VTContext $ctx, $queries, $tablet_type, $as_transaction, $method, $req = array()) {
@@ -56,7 +56,7 @@ class VTGateTx {
 		
 		$results = array();
 		foreach ($resp['Results'] as $result) {
-			$results[] = new VTQueryResult($result);
+			$results[] = VTQueryResult::fromBsonP3($result);
 		}
 		return $results;
 	}
@@ -150,7 +150,7 @@ class VTGateConn {
 		$resp = $this->client->call($ctx, $method, $req)->reply;
 		VTProto::checkError($resp);
 		
-		return new VTQueryResult($resp['Result']);
+		return VTQueryResult::fromBsonP3($resp['Result']);
 	}
 
 	private function callExecuteBatch(VTContext $ctx, $queries, $tablet_type, $as_transaction, $method, $req = array()) {
@@ -165,8 +165,10 @@ class VTGateConn {
 		VTProto::checkError($resp);
 		
 		$results = array();
-		foreach ($resp['Results'] as $result) {
-			$results[] = new VTQueryResult($result);
+		if (array_key_exists('Results', $resp)) {
+			foreach ($resp['Results'] as $result) {
+				$results[] = VTQueryResult::fromBsonP3($result);
+			}
 		}
 		return $results;
 	}
@@ -221,6 +223,28 @@ class VTGateConn {
 		$resp = $this->client->call($ctx, 'VTGateP3.Begin2', $req)->reply;
 		
 		return new VTGateTx($this->client, $resp['Session']);
+	}
+
+	public function splitQuery(VTContext $ctx, $keyspace, $query, array $bind_vars, $split_column, $split_count) {
+		$req = array(
+				'Keyspace' => $keyspace,
+				'Query' => VTBoundQuery::buildBsonP3($query, $bind_vars),
+				'SplitColumn' => $split_column,
+				'SplitCount' => $split_count 
+		);
+		if ($ctx->getCallerId()) {
+			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
+		}
+		
+		$resp = $this->client->call($ctx, 'VTGateP3.SplitQuery', $req)->reply;
+		
+		$results = array();
+		if (array_key_exists('Splits', $resp)) {
+			foreach ($resp['Splits'] as $split) {
+				$results[] = VTSplitQueryPart::fromBsonP3($split);
+			}
+		}
+		return $results;
 	}
 
 	public function close() {
