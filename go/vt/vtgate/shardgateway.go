@@ -56,7 +56,7 @@ type shardGateway struct {
 	shardConns map[string]*ShardConn
 }
 
-// Dial creates the connection for the specified keyspace, shard, and tablet type.
+// Dial creates the ShardConn for the specified keyspace, shard, and tablet type.
 func (sg *shardGateway) Dial(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType) error {
 	return sg.getConnection(ctx, keyspace, shard, tabletType).Dial(ctx)
 }
@@ -97,7 +97,7 @@ func (sg *shardGateway) SplitQuery(ctx context.Context, keyspace string, shard s
 	return sg.getConnection(ctx, keyspace, shard, tabletType).SplitQuery(ctx, sql, bindVars, splitColumn, splitCount)
 }
 
-// Close closes the underlying connections.
+// Close shuts down the underlying connections.
 func (sg *shardGateway) Close() error {
 	sg.mu.Lock()
 	defer sg.mu.Unlock()

@@ -19,6 +19,7 @@ import (
 )
 
 var (
+	// GatewayImplementation controls the implementation of Gateway.
 	GatewayImplementation = flag.String("gateway_implementation", "shardconn", "The implementation of gateway")
 )
 
@@ -50,14 +51,16 @@ type Gateway interface {
 	// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 	SplitQuery(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int) ([]tproto.QuerySplit, error)
 
-	// Close closes the underlying connections.
+	// Close shuts down underlying connections.
 	Close() error
 }
 
+// GatewayCreator is the func which can create the actual gateway object.
 type GatewayCreator func(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration, connTimings *stats.MultiTimings) Gateway
 
 var gatewayCreators = make(map[string]GatewayCreator)
 
+// RegisterGatewayCreator registers a GatewayCreator with given name.
 func RegisterGatewayCreator(name string, gc GatewayCreator) {
 	if _, ok := gatewayCreators[name]; ok {
 		log.Fatalf("Gateway %s already exists", name)
@@ -65,6 +68,7 @@ func RegisterGatewayCreator(name string, gc GatewayCreator) {
 	gatewayCreators[name] = gc
 }
 
+// GetGatewayCreator returns the GatewayCreator specified by GatewayImplementation flag.
 func GetGatewayCreator() GatewayCreator {
 	gc, ok := gatewayCreators[*GatewayImplementation]
 	if !ok {
