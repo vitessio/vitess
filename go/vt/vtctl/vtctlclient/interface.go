@@ -37,12 +37,20 @@ type Factory func(addr string, connectTimeout time.Duration) (VtctlClient, error
 
 var factories = make(map[string]Factory)
 
-// RegisterFactory allows a client implementation to register itself
+// RegisterFactory allows a client implementation to register itself.
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Fatalf("RegisterFactory %s already exists", name)
+		log.Fatalf("RegisterFactory: %s already exists", name)
 	}
 	factories[name] = factory
+}
+
+// UnregisterFactoryForTest allows to unregister a client implementation from the static map.
+func UnregisterFactoryForTest(name string) {
+	if _, ok := factories[name]; !ok {
+		log.Fatalf("UnregisterFactoryForTest: %s is not registered", name)
+	}
+	delete(factories, name)
 }
 
 // New allows a user of the client library to get its implementation.

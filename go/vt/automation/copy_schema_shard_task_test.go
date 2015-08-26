@@ -15,6 +15,7 @@ import (
 func TestCopySchemaShardTask(t *testing.T) {
 	fake := fakevtctlclient.NewFakeVtctlClient()
 	vtctlclient.RegisterFactory("fake", fake.FakeVtctlClientFactory)
+	defer vtctlclient.UnregisterFactoryForTest("fake")
 	flag.Set("vtctl_client_protocol", "fake")
 	fake.RegisterResult([]string{"CopySchemaShard", "test_keyspace/0", "test_keyspace/2"},
 		"",  // No output.
