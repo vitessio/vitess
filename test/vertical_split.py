@@ -29,6 +29,7 @@ destination_replica = tablet.Tablet()
 destination_rdonly1 = tablet.Tablet()
 destination_rdonly2 = tablet.Tablet()
 
+
 def setUpModule():
   try:
     environment.topo_server().setup()
@@ -82,7 +83,9 @@ def tearDownModule():
   destination_rdonly1.remove_tree()
   destination_rdonly2.remove_tree()
 
+
 class TestVerticalSplit(unittest.TestCase):
+
   def setUp(self):
     self.insert_index = 0
 
@@ -114,7 +117,10 @@ index by_msg (msg)
   def _insert_values(self, table, count):
     result = self.insert_index
     conn = self._vtdb_conn()
-    cursor = conn.cursor('source_keyspace', 'master', keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)], writable=True)
+    cursor = conn.cursor(
+        'source_keyspace', 'master',
+        keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
+        writable=True)
     for i in xrange(count):
       conn.begin()
       cursor.execute("insert into %s (id, msg) values(%d, 'value %d')" % (
@@ -125,9 +131,12 @@ index by_msg (msg)
     return result
 
   def _check_values(self, tablet, dbname, table, first, count):
-    logging.debug('Checking %d values from %s/%s starting at %d', count, dbname,
-                  table, first)
-    rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%d order by id limit %d' % (table, first, count))
+    logging.debug(
+        'Checking %d values from %s/%s starting at %d', count, dbname,
+        table, first)
+    rows = tablet.mquery(
+        dbname, 'select id, msg from %s where id>=%d order by id limit %d' %
+        (table, first, count))
     self.assertEqual(count, len(rows), 'got wrong number of rows: %d != %d' %
                      (len(rows), count))
     for i in xrange(count):
@@ -161,9 +170,11 @@ index by_msg (msg)
         result += 'ServedFrom(%s): %s\n' % (served_from,
                                             ks['ServedFrom'][served_from])
     logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
-    self.assertEqual(expected, result,
-                     'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s' % (
-                     cell, keyspace, expected, result))
+    self.assertEqual(
+        expected, result,
+        'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n'
+        '%s\ngot:\n%s' % (
+            cell, keyspace, expected, result))
     self.assertEqual('', ks.get('ShardingColumnName'),
                      'Got wrong ShardingColumnName in SrvKeyspace: %s' %
                      str(ks))
@@ -189,14 +200,18 @@ index by_msg (msg)
                                      tablet.tablet_alias,
                                      'select count(1) from %s' % t],
                                     expect_fail=True)
-        self.assertIn('retry: Query disallowed due to rule: enforce blacklisted tables', stderr)
+        self.assertIn(
+            'retry: Query disallowed due to rule: enforce blacklisted tables',
+            stderr)
       else:
         # table is not blacklisted, should just work
         qr = tablet.execute('select count(1) from %s' % t)
         logging.debug('Got %s rows from table %s on tablet %s',
                       qr['Rows'][0][0], t, tablet.tablet_alias)
 
-  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
+  def _check_client_conn_redirection(
+      self, source_ks, destination_ks, db_types, servedfrom_db_types,
+      moved_tables=None):
     # check that the ServedFrom indirection worked correctly.
     if moved_tables is None:
       moved_tables = []
@@ -204,29 +219,38 @@ index by_msg (msg)
     for db_type in servedfrom_db_types:
       for tbl in moved_tables:
         try:
-          rows = conn._execute("select * from %s" % tbl, {}, destination_ks, db_type, keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)])
-          logging.debug("Select on %s.%s returned %d rows" % (db_type, tbl, len(rows)))
+          rows = conn._execute(
+              'select * from %s' % tbl, {}, destination_ks, db_type,
+              keyranges=[keyrange.KeyRange(
+                  keyrange_constants.NON_PARTIAL_KEYRANGE)])
+          logging.debug(
+              'Select on %s.%s returned %d rows' % (db_type, tbl, len(rows)))
         except Exception, e:
-          self.fail("Execute failed w/ exception %s" % str(e))
+          self.fail('Execute failed w/ exception %s' % str(e))
 
   def _check_stats(self):
     v = utils.vtgate.get_vars()
-    self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, "unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s" % str(v))
-    self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, "unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s" % str(v))
-    self.assertEqual(len(v['VtgateApiErrorCounts']), 0, "unexpected errors for VtgateApiErrorCounts inside %s" % str(v))
+    self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, 'unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s' % str(v))
+    self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, 'unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s' % str(v))
     self.assertEqual(
-            v['ResilientSrvTopoServerEndPointsReturnedCount']['test_nj.source_keyspace.0.master'] /
-              v['ResilientSrvTopoServerEndPointQueryCount']['test_nj.source_keyspace.0.master'],
-            1, "unexpected EndPointsReturnedCount inside %s" % str(v))
+        len(v['VtgateApiErrorCounts']), 0,
+        'unexpected errors for VtgateApiErrorCounts inside %s' % str(v))
+    self.assertEqual(
+        v['ResilientSrvTopoServerEndPointsReturnedCount']['test_nj.source_keyspace.0.master'] /
+        v['ResilientSrvTopoServerEndPointQueryCount']['test_nj.source_keyspace.0.master'],
+        1, 'unexpected EndPointsReturnedCount inside %s' % str(v))
     self.assertNotIn(
-            'test_nj.source_keyspace.0.master', v['ResilientSrvTopoServerEndPointDegradedResultCount'],
-            "unexpected EndPointDegradedResultCount inside %s" % str(v))
+            'test_nj.source_keyspace.0.master',
+            v['ResilientSrvTopoServerEndPointDegradedResultCount'],
+            'unexpected EndPointDegradedResultCount inside %s' % str(v))
 
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])
-    utils.run_vtctl(['CreateKeyspace',
-                     '--served_from', 'master:source_keyspace,replica:source_keyspace,rdonly:source_keyspace',
-                     'destination_keyspace'])
+    utils.run_vtctl(
+        ['CreateKeyspace', '--served_from',
+         'master:source_keyspace,replica:source_keyspace,rdonly:'
+         'source_keyspace',
+         'destination_keyspace'])
     source_master.init_tablet('master', 'source_keyspace', '0')
     source_replica.init_tablet('replica', 'source_keyspace', '0')
     source_rdonly1.init_tablet('rdonly', 'source_keyspace', '0')
@@ -353,7 +377,9 @@ index by_msg (msg)
     destination_master_status = destination_master.get_status()
     self.assertIn('Binlog player state: Running', destination_master_status)
     self.assertIn('moving.*', destination_master_status)
-    self.assertIn('<td><b>All</b>: 1000<br><b>Query</b>: 700<br><b>Transaction</b>: 300<br></td>', destination_master_status)
+    self.assertIn(
+        '<td><b>All</b>: 1000<br><b>Query</b>: 700<br>'
+        '<b>Transaction</b>: 300<br></td>', destination_master_status)
     self.assertIn('</html>', destination_master_status)
 
     # check query service is off on destination master, as filtered
@@ -380,7 +406,8 @@ index by_msg (msg)
 
     # migrate test_nj only, using command line manual fix command,
     # and restore it back.
-    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    keyspace_json = utils.run_vtctl_json(
+        ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == 4:
@@ -390,7 +417,8 @@ index by_msg (msg)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
                      '-remove', '-cells=test_nj', 'destination_keyspace',
                      'rdonly'], auto_log=True)
-    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    keyspace_json = utils.run_vtctl_json(
+        ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == 4:
@@ -399,7 +427,8 @@ index by_msg (msg)
     utils.run_vtctl(['SetKeyspaceServedFrom', '-source=source_keyspace',
                      'destination_keyspace', 'rdonly'],
                     auto_log=True)
-    keyspace_json = utils.run_vtctl_json(['GetKeyspace', 'destination_keyspace'])
+    keyspace_json = utils.run_vtctl_json(
+        ['GetKeyspace', 'destination_keyspace'])
     found = False
     for ksf in keyspace_json['served_froms']:
       if ksf['tablet_type'] == 4:
@@ -428,7 +457,9 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
     self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
+    self._check_client_conn_redirection(
+        'source_keyspace', 'destination_keyspace', ['replica', 'rdonly'],
+        ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedFrom', '-reverse',

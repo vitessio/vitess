@@ -93,7 +93,7 @@ def reserve_ports(count):
 def run(args, raise_on_error=True, **kargs):
   try:
     logging.debug(
-        "run: %s %s", str(args),
+        'run: %s %s', str(args),
         ', '.join('%s=%s' % x for x in kargs.iteritems()))
     proc = subprocess.Popen(args,
                             stdout=subprocess.PIPE,
@@ -114,6 +114,8 @@ def run(args, raise_on_error=True, **kargs):
 
 # compile command line programs, only once
 compiled_progs = []
+
+
 def prog_compile(name):
   if skip_build or name in compiled_progs:
     return
@@ -146,7 +148,7 @@ def binary_args(name):
 # returns binary_path + binary_flags as a string
 # this should be used instead of binary_path whenever possible
 def binary_argstr(name):
-      return ' '.join(binary_args(name))
+  return ' '.join(binary_args(name))
 
 
 # binary management for the MySQL distribution.

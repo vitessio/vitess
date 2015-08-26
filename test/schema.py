@@ -165,10 +165,10 @@ class TestSchema(unittest.TestCase):
 
   def _apply_initial_schema(self):
     schema_changes = ';'.join([
-      self._create_test_table_sql('vt_select_test01'),
-      self._create_test_table_sql('vt_select_test02'),
-      self._create_test_table_sql('vt_select_test03'),
-      self._create_test_table_sql('vt_select_test04')])
+        self._create_test_table_sql('vt_select_test01'),
+        self._create_test_table_sql('vt_select_test02'),
+        self._create_test_table_sql('vt_select_test03'),
+        self._create_test_table_sql('vt_select_test04')])
 
     # apply schema changes to the test keyspace
     self._apply_schema(test_keyspace, schema_changes)
@@ -208,9 +208,9 @@ class TestSchema(unittest.TestCase):
     timeout = 10
     # wait until this sql file being consumed by autoschema
     while os.path.isfile(sql_path):
-        timeout = utils.wait_step(
-            'waiting for vtctld to pick up schema changes',
-            timeout, sleep_time=0.2)
+      timeout = utils.wait_step(
+          'waiting for vtctld to pick up schema changes',
+          timeout, sleep_time=0.2)
 
     # check number of tables
     self._check_tables(shard_0_master, 5)

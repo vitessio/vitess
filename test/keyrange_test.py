@@ -51,7 +51,10 @@ int_shard_kid_map = {
 
 # str_shard_kid_map is derived from int_shard_kid_map
 # by generating bin-packed strings from the int keyspace_id values.
-str_shard_kid_map = dict([(shard_name, [pkid_pack(kid) for kid in kid_list]) for shard_name, kid_list in int_shard_kid_map.iteritems()])
+str_shard_kid_map = dict(
+    [(shard_name, [pkid_pack(kid) for kid in kid_list])
+     for shard_name, kid_list in int_shard_kid_map.iteritems()])
+
 
 class TestKeyRange(unittest.TestCase):
 
@@ -119,7 +122,7 @@ class TestKeyRange(unittest.TestCase):
   # the test emulates that by using keyspace_id.encode('hex').
   def test_bind_values_for_str_keyspace(self):
     stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
-    for i, kr in enumerate(stm.keyrange_list):
+    for _, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(
           kr, keyspace_col_type=keyrange_constants.KIT_BYTES)

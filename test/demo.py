@@ -116,6 +116,7 @@ vschema = '''{
 # Verify valid json
 json.loads(vschema)
 
+
 def main():
   parser = optparse.OptionParser(usage='usage: %prog [options]')
   utils.add_options(parser)

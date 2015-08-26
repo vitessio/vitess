@@ -64,7 +64,7 @@ class TestCustomSharding(unittest.TestCase):
     sql = 'insert into %s(id, name) values (:id, :name)' % table
     for x in xrange(count):
       bindvars = {
-          'id':   start+x,
+          'id': start+x,
           'name': 'row %d' % (start+x),
       }
       utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
@@ -74,7 +74,7 @@ class TestCustomSharding(unittest.TestCase):
     sql = 'select name from %s where id=:id' % table
     for x in xrange(count):
       bindvars = {
-          'id':   start+x,
+          'id': start+x,
       }
       qr = utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                       bindvars=bindvars)
@@ -198,7 +198,7 @@ primary key (id)
     for q in s:
       qr = utils.vtgate.execute_shard(
           q['QueryShard']['Sql'],
-          'test_keyspace', ",".join(q['QueryShard']['Shards']),
+          'test_keyspace', ','.join(q['QueryShard']['Shards']),
           tablet_type='master', bindvars=q['QueryShard']['BindVariables'])
       for r in qr['Rows']:
         id = int(r[0])

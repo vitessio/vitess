@@ -29,13 +29,16 @@ devnull = open('/dev/null', 'w')
 hostname = socket.getaddrinfo(
     socket.getfqdn(), None, 0, 0, 0, socket.AI_CANONNAME)[0][3]
 
+
 class TestError(Exception):
   pass
+
 
 class Break(Exception):
   pass
 
 environment.setup()
+
 
 class LoggingStream(object):
   def __init__(self):
@@ -58,6 +61,7 @@ class LoggingStream(object):
   def flush(self):
     pass
 
+
 def add_options(parser):
   environment.add_options(parser)
   parser.add_option('-d', '--debug', action='store_true',
@@ -74,6 +78,7 @@ def add_options(parser):
   parser.add_option('--protocols-flavor')
   parser.add_option('--topo-server-flavor', default='zookeeper')
 
+
 def set_options(opts):
   global options
   options = opts
@@ -82,6 +87,7 @@ def set_options(opts):
   set_protocols_flavor(options.protocols_flavor)
   set_topo_server_flavor(options.topo_server_flavor)
   environment.skip_build = options.skip_build
+
 
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
@@ -116,6 +122,7 @@ def main(mod=None, test_options=None):
 
   run_tests(mod, args)
 
+
 def run_tests(mod, args):
   try:
     suite = unittest.TestSuite()
@@ -149,6 +156,7 @@ def run_tests(mod, args):
       logging.warning('Leaving temporary files behind (--keep-logs), please '
                       'clean up before next run: ' + os.environ['VTDATAROOT'])
 
+
 def remove_tmp_files():
   if options.keep_logs:
     return
@@ -157,9 +165,11 @@ def remove_tmp_files():
   except OSError as e:
     logging.debug('remove_tmp_files: %s', str(e))
 
+
 def pause(prompt):
   if options.debug:
     raw_input(prompt)
+
 
 # sub-process management
 pid_map = {}
@@ -168,6 +178,7 @@ def _add_proc(proc):
   pid_map[proc.pid] = proc
   with open(environment.tmproot+'/test-pids', 'a') as f:
     print >> f, proc.pid, os.path.basename(proc.args[0])
+
 
 def kill_sub_processes():
   for proc in pid_map.values():
@@ -187,6 +198,7 @@ def kill_sub_processes():
       except OSError as e:
         logging.debug('kill_sub_processes: %s', str(e))
 
+
 def kill_sub_process(proc, soft=False):
   if proc is None:
     return
@@ -198,6 +210,7 @@ def kill_sub_process(proc, soft=False):
   if pid and pid in pid_map:
     del pid_map[pid]
     already_killed.append(pid)
+
 
 # run in foreground, possibly capturing output
 def run(cmd, trap_output=False, raise_on_error=True, **kargs):
@@ -221,6 +234,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
                     str(args), proc.returncode, stdout, stderr)
   return stdout, stderr
 
+
 # run sub-process, expects failure
 def run_fail(cmd, **kargs):
   if isinstance(cmd, str):
@@ -238,6 +252,7 @@ def run_fail(cmd, **kargs):
     logging.info('stdout:\n%sstderr:\n%s', stdout, stderr)
     raise TestError('expected fail:', args, stdout, stderr)
   return stdout, stderr
+
 
 # run a daemon - kill when this script exits
 def run_bg(cmd, **kargs):
@@ -257,6 +272,7 @@ def run_bg(cmd, **kargs):
   _add_proc(proc)
   return proc
 
+
 def wait_procs(proc_list, raise_on_error=True):
   for proc in proc_list:
     pid = proc.pid
@@ -271,23 +287,28 @@ def wait_procs(proc_list, raise_on_error=True):
       if raise_on_error:
         raise CalledProcessError(proc.returncode, ' '.join(proc.args))
 
+
 def validate_topology(ping_tablets=False):
   if ping_tablets:
     run_vtctl(['Validate', '-ping-tablets'])
   else:
     run_vtctl(['Validate'])
 
+
 def zk_ls(path):
   out, err = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
   return sorted(out.splitlines())
+
 
 def zk_cat(path):
   out, err = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
   return out
 
+
 def zk_cat_json(path):
   data = zk_cat(path)
   return json.loads(data)
+
 
 # wait_step is a helper for looping until a condition is true.
 # use as follow:
@@ -304,6 +325,7 @@ def wait_step(msg, timeout, sleep_time=1.0):
                (sleep_time, msg))
   time.sleep(sleep_time)
   return timeout
+
 
 # vars helpers
 def get_vars(port):
@@ -323,6 +345,7 @@ def get_vars(port):
   except ValueError:
     print data
     raise
+
 
 # wait_for_vars will wait until we can actually get the vars from a process,
 # and if var is specified, will wait until that var is in vars
@@ -375,11 +398,13 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, re
     elif condition_fn(_vars):
       return _vars
 
+
 def apply_vschema(vschema):
   fname = os.path.join(environment.tmproot, 'vschema.json')
   with open(fname, 'w') as f:
     f.write(vschema)
   run_vtctl(['ApplyVSchema', '-vschema_file', fname])
+
 
 def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
   """Waits for a given tablet's SlaveType to become the expected value.
@@ -394,6 +419,7 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
       "%s's SlaveType to be %s" % (tablet_alias, expected_type),
       timeout
     )
+
 
 def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
   """Waits for tablet B to catch up to the replication position of tablet A.
@@ -586,6 +612,8 @@ VTCTL_AUTO        = 0
 VTCTL_VTCTL       = 1
 VTCTL_VTCTLCLIENT = 2
 VTCTL_RPC         = 3
+
+
 def run_vtctl(clargs, auto_log=False, expect_fail=False,
               mode=VTCTL_AUTO, **kwargs):
   if mode == VTCTL_AUTO:
@@ -610,6 +638,7 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
 
   raise Exception('Unknown mode: %s', mode)
 
+
 def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
                     **kwargs):
   args = environment.binary_args('vtctl') + ['-log_dir', environment.vtlogroot]
@@ -631,11 +660,13 @@ def run_vtctl_vtctl(clargs, auto_log=False, expect_fail=False,
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
+
 # run_vtctl_json runs the provided vtctl command and returns the result
 # parsed as json
 def run_vtctl_json(clargs, auto_log=True):
   stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=auto_log)
   return json.loads(stdout)
+
 
 def get_log_level():
   if options.verbose == 2:
@@ -645,6 +676,7 @@ def get_log_level():
   else:
     return 'ERROR'
 
+
 # vtworker helpers
 def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   """Runs a vtworker process, returning the stdout and stderr"""
@@ -652,6 +684,7 @@ def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
+
 
 def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """Starts a background vtworker process.
@@ -675,15 +708,15 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   port = environment.reserve_ports(1)
   rpc_port = port
   args = environment.binary_args('vtworker') + [
-          '-log_dir', environment.vtlogroot,
-          '-min_healthy_rdonly_endpoints', '1',
-          '-port', str(port),
-          '-resolve_ttl', '2s',
-          '-executefetch_retry_time', '1s',
-          '-tablet_manager_protocol',
-          protocols_flavor().tablet_manager_protocol(),
-          '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-          ]
+      '-log_dir', environment.vtlogroot,
+      '-min_healthy_rdonly_endpoints', '1',
+      '-port', str(port),
+      '-resolve_ttl', '2s',
+      '-executefetch_retry_time', '1s',
+      '-tablet_manager_protocol',
+      protocols_flavor().tablet_manager_protocol(),
+      '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+  ]
   args.extend(environment.topo_server().flags())
   if protocols_flavor().service_map():
     args.extend(['-service_map',
@@ -722,11 +755,12 @@ def run_automation_server(auto_log=False):
   """
   rpc_port = environment.reserve_ports(1)
   args = environment.binary_args('automation_server') + [
-          '-log_dir', environment.vtlogroot,
-          '-port', str(rpc_port),
-          '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
-          '-vtworker_client_protocol', protocols_flavor().vtworker_client_protocol(),
-          ]
+      '-log_dir', environment.vtlogroot,
+      '-port', str(rpc_port),
+      '-vtctl_client_protocol', protocols_flavor().vtctl_client_protocol(),
+      '-vtworker_client_protocol',
+      protocols_flavor().vtworker_client_protocol(),
+  ]
   if auto_log:
     args.append('--stderrthreshold=%s' % get_log_level())
 
@@ -734,9 +768,10 @@ def run_automation_server(auto_log=False):
 
 # mysql helpers
 def mysql_query(uid, dbname, query):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
-                         db=dbname)
+  conn = MySQLdb.Connect(
+      user='vt_dba',
+      unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
+      db=dbname)
   cursor = conn.cursor()
   cursor.execute(query)
   try:
@@ -744,10 +779,12 @@ def mysql_query(uid, dbname, query):
   finally:
     conn.close()
 
+
 def mysql_write_query(uid, dbname, query):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
-                         db=dbname)
+  conn = MySQLdb.Connect(
+      user='vt_dba',
+      unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
+      db=dbname)
   cursor = conn.cursor()
   conn.begin()
   cursor.execute(query)
@@ -757,9 +794,11 @@ def mysql_write_query(uid, dbname, query):
   finally:
     conn.close()
 
+
 def check_db_var(uid, name, value):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid))
+  conn = MySQLdb.Connect(
+      user='vt_dba',
+      unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid))
   cursor = conn.cursor()
   cursor.execute("show variables like '%s'" % name)
   row = cursor.fetchone()
@@ -767,11 +806,14 @@ def check_db_var(uid, name, value):
     raise TestError('variable not set correctly', name, row)
   conn.close()
 
+
 def check_db_read_only(uid):
   return check_db_var(uid, 'read_only', 'ON')
 
+
 def check_db_read_write(uid):
   return check_db_var(uid, 'read_only', 'OFF')
+
 
 def wait_db_read_only(uid):
   for x in xrange(3):
@@ -782,6 +824,7 @@ def wait_db_read_only(uid):
       logging.warning('wait_db_read_only: %s', str(e))
       time.sleep(1.0)
   raise e
+
 
 def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
   ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
@@ -795,8 +838,10 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     result += '\n'
   logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
   if expected != result:
-    raise Exception('Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s' % (
-                   cell, keyspace, expected, result))
+    raise Exception(
+        'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%'
+        's\ngot:\n%s' % (
+            cell, keyspace, expected, result))
   if 'keyspace_id' != ks.get('ShardingColumnName'):
     raise Exception('Got wrong ShardingColumnName in SrvKeyspace: %s' %
                    str(ks))
@@ -804,11 +849,14 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     raise Exception('Got wrong ShardingColumnType in SrvKeyspace: %s' %
                    str(ks))
 
-def check_shard_query_service(testcase, shard_name, tablet_type, expected_state):
+def check_shard_query_service(
+    testcase, shard_name, tablet_type, expected_state):
   """Makes assertions about the state of DisableQueryService in the shard record's TabletControlMap."""
-  # We assume that query service should be enabled unless DisableQueryService is explicitly True
+  # We assume that query service should be enabled unless
+  # DisableQueryService is explicitly True
   query_service_enabled = True
-  tablet_controls = run_vtctl_json(['GetShard', shard_name]).get('tablet_controls')
+  tablet_controls = run_vtctl_json(
+      ['GetShard', shard_name]).get('tablet_controls')
   if tablet_controls:
     for tc in tablet_controls:
       if tc['tablet_type'] == tablet_type:
@@ -816,16 +864,22 @@ def check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
           query_service_enabled = False
 
   testcase.assertEqual(
-    query_service_enabled,
-    expected_state,
-    'shard %s does not have the correct query service state: got %s but expected %s' % (shard_name, query_service_enabled, expected_state)
+      query_service_enabled,
+      expected_state,
+      'shard %s does not have the correct query service state: '
+      'got %s but expected %s' %
+      (shard_name, query_service_enabled, expected_state)
   )
 
-def check_shard_query_services(testcase, shard_names, tablet_type, expected_state):
+
+def check_shard_query_services(
+    testcase, shard_names, tablet_type, expected_state):
   for shard_name in shard_names:
     check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
 
-def check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled):
+
+def check_tablet_query_service(
+    testcase, tablet, serving, tablet_control_disabled):
   """check_tablet_query_service will check that the query service is enabled
   or disabled on the tablet. It will also check if the tablet control
   status is the reason for being enabled / disabled.
@@ -838,7 +892,10 @@ def check_tablet_query_service(testcase, tablet, serving, tablet_control_disable
     expected_state = 'SERVING'
   else:
     expected_state = 'NOT_SERVING'
-  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+  testcase.assertEqual(
+      tablet_vars['TabletStateName'], expected_state,
+      'tablet %s is not in the right serving state: got %s expected %s' %
+      (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
 
   status = tablet.get_status()
   if tablet_control_disabled:
@@ -851,16 +908,26 @@ def check_tablet_query_service(testcase, tablet, serving, tablet_control_disable
                     auto_log=True)
 
     tablet_vars = get_vars(tablet.port)
-    testcase.assertEqual(tablet_vars['TabletStateName'], expected_state, 'tablet %s is not in the right serving state after health check: got %s expected %s' % (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+    testcase.assertEqual(
+        tablet_vars['TabletStateName'], expected_state,
+        'tablet %s is not in the right serving state after health check: '
+        'got %s expected %s' %
+        (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
+
 
 def check_tablet_query_services(testcase, tablets, serving, tablet_control_disabled):
   for tablet in tablets:
-    check_tablet_query_service(testcase, tablet, serving, tablet_control_disabled)
+    check_tablet_query_service(
+        testcase, tablet, serving, tablet_control_disabled)
+
 
 def get_status(port):
-  return urllib2.urlopen('http://localhost:%d%s' % (port, environment.status_url)).read()
+  return urllib2.urlopen(
+      'http://localhost:%d%s' % (port, environment.status_url)).read()
 
-def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwargs):
+
+def curl(url, request=None, data=None, background=False, retry_timeout=0,
+         **kwargs):
   args = [environment.curl_bin, '--silent', '--no-buffer', '--location']
   if not background:
     args.append('--show-error')
@@ -878,9 +945,11 @@ def curl(url, request=None, data=None, background=False, retry_timeout=0, **kwar
       try:
         return run(args, trap_output=True, **kwargs)
       except TestError as e:
-        retry_timeout = wait_step('cmd: %s, error: %s' % (str(args), str(e)), retry_timeout)
+        retry_timeout = wait_step(
+            'cmd: %s, error: %s' % (str(args), str(e)), retry_timeout)
 
   return run(args, trap_output=True, **kwargs)
+
 
 class VtctldError(Exception): pass
 
@@ -888,6 +957,7 @@ class VtctldError(Exception): pass
 # so we can use it to run remote vtctl commands
 vtctld = None
 vtctld_connection = None
+
 
 class Vtctld(object):
 
@@ -898,34 +968,36 @@ class Vtctld(object):
       self.grpc_port = environment.reserve_ports(1)
 
   def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:%d/dbtopo?format=json' %
-                                     self.port))
+    data = json.load(
+        urllib2.urlopen('http://localhost:%d/dbtopo?format=json' % self.port))
     if data['Error']:
       raise VtctldError(data)
     return data['Topology']
 
   def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:%d/serving_graph/test_nj?format=json' % self.port))
+    data = json.load(
+        urllib2.urlopen(
+            'http://localhost:%d/serving_graph/test_nj?format=json' %
+            self.port))
     if data['Errors']:
       raise VtctldError(data['Errors'])
     return data['Keyspaces']
 
   def start(self):
     args = environment.binary_args('vtctld') + [
-            '-debug',
-            '-web_dir', environment.vttop + '/web/vtctld',
-            '--templates', environment.vttop + '/go/cmd/vtctld/templates',
-            '--log_dir', environment.vtlogroot,
-            '--port', str(self.port),
-            '--schema_change_dir', self.schema_change_dir,
-            '--schema_change_controller', 'local',
-            '--schema_change_check_interval', '1',
-            '-tablet_manager_protocol',
-            protocols_flavor().tablet_manager_protocol(),
-            '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
-            '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-            ] + \
-            environment.topo_server().flags()
+        '-debug',
+        '-web_dir', environment.vttop + '/web/vtctld',
+        '--templates', environment.vttop + '/go/cmd/vtctld/templates',
+        '--log_dir', environment.vtlogroot,
+        '--port', str(self.port),
+        '--schema_change_dir', self.schema_change_dir,
+        '--schema_change_controller', 'local',
+        '--schema_change_check_interval', '1',
+        '-tablet_manager_protocol',
+        protocols_flavor().tablet_manager_protocol(),
+        '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
+        '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+    ] + environment.topo_server().flags()
     if protocols_flavor().service_map():
       args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
@@ -979,11 +1051,11 @@ class Vtctld(object):
 
   def vtctl_client(self, args):
     if options.verbose == 2:
-      log_level='INFO'
+      log_level = 'INFO'
     elif options.verbose == 1:
-      log_level='WARNING'
+      log_level = 'WARNING'
     else:
-      log_level='ERROR'
+      log_level = 'ERROR'
 
     protocol, endpoint = self.rpc_endpoint()
     out, err = run(environment.binary_args('vtctlclient') +

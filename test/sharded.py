@@ -2,7 +2,6 @@
 """Tests a sharded setup works and routes queries correctly.
 """
 
-import logging
 import unittest
 
 import environment
@@ -152,7 +151,7 @@ class TestSharded(unittest.TestCase):
                                trap_output=True, raise_on_error=False)
     if ('test_nj-0000062344 and test_nj-0000062346 disagree on schema '
         'for table vt_select_test:\nCREATE TABLE' not in err or
-       'test_nj-0000062344 and test_nj-0000062347 disagree on schema '
+        'test_nj-0000062344 and test_nj-0000062347 disagree on schema '
         'for table vt_select_test:\nCREATE TABLE' not in err):
       self.fail('wrong ValidateSchemaKeyspace output: ' + err)
 

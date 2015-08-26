@@ -106,7 +106,7 @@ def setUpModule():
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
-                        auto_log=True)
+                       auto_log=True)
     dst_master.wait_for_binlog_player_count(1)
 
     # Wait for dst_replica to be ready.

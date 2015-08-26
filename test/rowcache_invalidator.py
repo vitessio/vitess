@@ -198,7 +198,7 @@ class RowCacheInvalidator(unittest.TestCase):
     # Test unrecognized statement
     utils.mysql_query(master_tablet.tablet_uid,
                       'vt_test_keyspace',
-                       'truncate table vt_insert_test')
+                      'truncate table vt_insert_test')
     self._wait_for_replica()
     timeout = 10
     while True:
@@ -307,10 +307,8 @@ class RowCacheInvalidator(unittest.TestCase):
     utils.run_vtctl(
         ['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
 
-
   def _exec_vt_txn(self, query):
     master_tablet.execute(query, auto_log=False)
-
 
   def _exec_replica_query(self, query):
     result = replica_tablet.execute(query, auto_log=False)

@@ -65,7 +65,7 @@ primary key(eid, id)
 
 
 def setUpModule():
-  logging.debug("in setUpModule")
+  logging.debug('in setUpModule')
   try:
     environment.topo_server().setup()
 
@@ -81,11 +81,12 @@ def setUpModule():
     tearDownModule()
     raise
 
+
 def tearDownModule():
-  logging.debug("in tearDownModule")
+  logging.debug('in tearDownModule')
   if utils.options.skip_teardown:
     return
-  logging.debug("Tearing down the servers and setup")
+  logging.debug('Tearing down the servers and setup')
   tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
                        shard_1_replica])
   teardown_procs = [shard_0_master.teardown_mysql(),
@@ -105,9 +106,10 @@ def tearDownModule():
   shard_1_master.remove_tree()
   shard_1_replica.remove_tree()
 
+
 def setup_tablets():
   # Start up a master mysql and vttablet
-  logging.debug("Setting up tablets")
+  logging.debug('Setting up tablets')
   utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
                    'keyspace_id', 'uint64'])
@@ -141,7 +143,7 @@ def setup_tablets():
                            'Partitions(replica): -80 80-\n')
 
   utils.VtGate().start()
-  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj", 30.0)
+  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), 'test_nj', 30.0)
   topology.read_topology(vtgate_client)
 
 
@@ -150,8 +152,8 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  vtgate_addrs = {"vt": [utils.vtgate.addr(),]}
-  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), "test_nj", 30.0)
+  vtgate_addrs = {'vt': [utils.vtgate.addr(),]}
+  vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(), 'test_nj', 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
                                   db_type, timeout,
                                   user=user, password=password,
@@ -160,15 +162,18 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   conn.connect()
   return conn
 
+
 def do_write(count):
   master_conn = get_connection(db_type='master')
   master_conn.begin()
-  master_conn._execute("delete from vt_insert_test", {})
+  master_conn._execute('delete from vt_insert_test', {})
   kid_list = shard_kid_map[master_conn.shard]
   for x in xrange(count):
     keyspace_id = kid_list[count%len(kid_list)]
-    master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
-                         {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+    master_conn._execute(
+        'insert into vt_insert_test (msg, keyspace_id) '
+        'values (%(msg)s, %(keyspace_id)s)',
+        {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
   master_conn.commit()
 
 def direct_batch_write(count, tablet):
@@ -180,10 +185,10 @@ def direct_batch_write(count, tablet):
   """
   master_conn = get_connection(db_type='master')
   master_conn.begin()
-  master_conn._execute("delete from vt_insert_test", {})
+  master_conn._execute('delete from vt_insert_test', {})
   master_conn.commit()
   kid_list = shard_kid_map[master_conn.shard]
-  values_str = ""
+  values_str = ''
   for x in xrange(count):
     if x != 0:
       values_str += ','
@@ -195,7 +200,9 @@ def direct_batch_write(count, tablet):
         'commit'
         ], write=True)
 
+
 class TestTabletFunctions(unittest.TestCase):
+
   def setUp(self):
     self.shard_index = 0
     self.master_tablet = shard_0_master
@@ -203,104 +210,121 @@ class TestTabletFunctions(unittest.TestCase):
 
   def test_connect(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
     self.assertNotEqual(master_conn, None)
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      logging.debug("Connection to %s replica failed with error %s" %
+      logging.debug('Connection to %s replica failed with error %s' %
                     (shard_names[self.shard_index], str(e)))
       raise
     self.assertNotEqual(replica_conn, None)
     self.assertIsInstance(master_conn.conn, conn_class,
-                          "Invalid master connection")
+                          'Invalid master connection')
     self.assertIsInstance(replica_conn.conn, conn_class,
-                          "Invalid replica connection")
+                          'Invalid replica connection')
 
   def test_writes(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       count = 10
       master_conn.begin()
-      master_conn._execute("delete from vt_insert_test", {})
+      master_conn._execute('delete from vt_insert_test', {})
       kid_list = shard_kid_map[master_conn.shard]
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
-        master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
-                             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+        master_conn._execute(
+            'insert into vt_insert_test (msg, keyspace_id) '
+            'values (%(msg)s, %(keyspace_id)s)',
+            {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       master_conn.commit()
-      results, rowcount = master_conn._execute("select * from vt_insert_test",
+      results, rowcount = master_conn._execute('select * from vt_insert_test',
                                                {})[:2]
-      self.assertEqual(rowcount, count, "master fetch works")
+      self.assertEqual(rowcount, count, 'master fetch works')
     except Exception, e:
-      logging.debug("Write failed with error %s" % str(e))
+      logging.debug('Write failed with error %s' % str(e))
       raise
 
   def test_batch_read(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       count = 10
       master_conn.begin()
-      master_conn._execute("delete from vt_insert_test", {})
+      master_conn._execute('delete from vt_insert_test', {})
       kid_list = shard_kid_map[master_conn.shard]
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
-        master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
-                             {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+        master_conn._execute(
+            'insert into vt_insert_test (msg, keyspace_id) '
+            'values (%(msg)s, %(keyspace_id)s)',
+            {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       master_conn.commit()
       master_conn.begin()
-      master_conn._execute("delete from vt_a", {})
+      master_conn._execute('delete from vt_a', {})
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
-        master_conn._execute("insert into vt_a (eid, id, keyspace_id) \
-                              values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        master_conn._execute('insert into vt_a (eid, id, keyspace_id) \
+                              values (%(eid)s, %(id)s, %(keyspace_id)s)',
                               {'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       master_conn.commit()
-      rowsets = master_conn._execute_batch(["select * from vt_insert_test",
-                                            "select * from vt_a"], [{}, {}], False)
+      rowsets = master_conn._execute_batch(
+          ['select * from vt_insert_test',
+           'select * from vt_a'], [{}, {}], False)
       self.assertEqual(rowsets[0][1], count)
       self.assertEqual(rowsets[1][1], count)
     except Exception, e:
-      self.fail("Write failed with error %s %s" % (str(e),
+      self.fail('Write failed with error %s %s' % (str(e),
                                                    traceback.print_exc()))
 
   def test_batch_write(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       count = 10
       query_list = []
       bind_vars_list = []
-      query_list.append("delete from vt_insert_test")
+      query_list.append('delete from vt_insert_test')
       bind_vars_list.append({})
       kid_list = shard_kid_map[master_conn.shard]
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
-        query_list.append("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)")
-        bind_vars_list.append({'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
-      query_list.append("delete from vt_a")
+        query_list.append(
+            'insert into vt_insert_test (msg, keyspace_id) '
+            'values (%(msg)s, %(keyspace_id)s)')
+        bind_vars_list.append(
+            {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+      query_list.append('delete from vt_a')
       bind_vars_list.append({})
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
-        query_list.append("insert into vt_a (eid, id, keyspace_id) values (%(eid)s, %(id)s, %(keyspace_id)s)")
+        query_list.append(
+            'insert into vt_a (eid, id, keyspace_id) '
+            'values (%(eid)s, %(id)s, %(keyspace_id)s)')
         bind_vars_list.append({'eid': x, 'id': x, 'keyspace_id': keyspace_id})
       master_conn._execute_batch(query_list, bind_vars_list, True)
-      results, rowcount, _, _ = master_conn._execute("select * from vt_insert_test", {})
+      results, rowcount, _, _ = master_conn._execute(
+          'select * from vt_insert_test', {})
       self.assertEqual(rowcount, count)
-      results, rowcount, _, _ = master_conn._execute("select * from vt_a", {})
+      results, rowcount, _, _ = master_conn._execute('select * from vt_a', {})
       self.assertEqual(rowcount, count)
     except Exception, e:
-      self.fail("Write failed with error %s" % str(e))
+      self.fail('Write failed with error %s' % str(e))
 
   def test_streaming_fetchsubset(self):
     try:
       count = 100
       do_write(count)
       # Fetch a subset of the total size.
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn)
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
       fetch_size = 10
       rows = stream_cursor.fetchmany(size=fetch_size)
       rowcount = 0
@@ -309,16 +333,17 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertEqual(rowcount, fetch_size)
       stream_cursor.close()
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def test_streaming_fetchall(self):
     try:
       count = 100
       do_write(count)
       # Fetch all.
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn)
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
       rows = stream_cursor.fetchall()
       rowcount = 0
       for r in rows:
@@ -326,38 +351,40 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertEqual(rowcount, count)
       stream_cursor.close()
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def test_streaming_fetchone(self):
     try:
       count = 100
       do_write(count)
       # Fetch one.
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn)
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
       rows = stream_cursor.fetchone()
-      self.assertTrue(type(rows) == tuple, "Received a valid row")
+      self.assertTrue(type(rows) == tuple, 'Received a valid row')
       stream_cursor.close()
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def test_streaming_zero_results(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
       master_conn.begin()
-      master_conn._execute("delete from vt_insert_test", {})
+      master_conn._execute('delete from vt_insert_test', {})
       master_conn.commit()
       # After deletion, should result zero.
       stream_cursor = cursor.StreamCursor(master_conn)
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
       rows = stream_cursor.fetchall()
       rowcount = 0
       for r in rows:
         rowcount +=1
       self.assertEqual(rowcount, 0)
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
 class TestFailures(unittest.TestCase):
   def setUp(self):
@@ -367,67 +394,76 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_read(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Connection to shard %s replica failed with error %s' %
+                (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn._execute("select 1 from vt_insert_test", {})
+      replica_conn._execute('select 1 from vt_insert_test', {})
     proc = self.replica_tablet.start_vttablet()
     try:
-      results = replica_conn._execute("select 1 from vt_insert_test", {})
+      results = replica_conn._execute('select 1 from vt_insert_test', {})
     except Exception, e:
-      self.fail("Communication with shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Communication with shard %s replica failed with error %s' %
+                (shard_names[self.shard_index], str(e)))
 
   def test_tablet_restart_stream_execute(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Connection to %s replica failed with error %s' %
+                (shard_names[self.shard_index], str(e)))
     stream_cursor = cursor.StreamCursor(replica_conn)
     self.replica_tablet.kill_vttablet()
     with self.assertRaises(dbexceptions.OperationalError):
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
     proc = self.replica_tablet.start_vttablet()
     self.replica_tablet.wait_for_vttablet_state('SERVING')
     try:
-      stream_cursor.execute("select * from vt_insert_test", {})
+      stream_cursor.execute('select * from vt_insert_test', {})
     except Exception, e:
-      self.fail("Communication with shard0 replica failed with error %s" %
+      self.fail('Communication with shard0 replica failed with error %s' %
                 str(e))
 
   def test_fail_stream_execute_initial(self):
     """Tests for app errors in the first stream execute response."""
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Connection to %s master failed with error %s' %
+                (shard_names[self.shard_index], str(e)))
     try:
       stream_cursor = cursor.StreamCursor(master_conn)
       with self.assertRaises(dbexceptions.DatabaseError):
-        stream_cursor.execute("invalid sql syntax", {})
+        stream_cursor.execute('invalid sql syntax', {})
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def test_conn_after_stream_execute_failure(self):
     """After a stream execute failure, other operations should work on the same connection."""
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to %s master failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Connection to %s master failed with error %s' %
+                (shard_names[self.shard_index], str(e)))
     try:
       stream_cursor = cursor.StreamCursor(master_conn)
       with self.assertRaises(dbexceptions.DatabaseError):
-        stream_cursor.execute("invalid sql syntax", {})
-      master_conn._execute("select * from vt_insert_test", {})
+        stream_cursor.execute('invalid sql syntax', {})
+      master_conn._execute('select * from vt_insert_test', {})
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def test_tablet_restart_begin(self):
     try:
       master_conn = get_connection(db_type='master')
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
     self.master_tablet.kill_vttablet()
     with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
@@ -438,88 +474,95 @@ class TestFailures(unittest.TestCase):
     try:
       master_conn = get_connection(db_type='master')
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
     with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
       self.master_tablet.kill_vttablet()
-      master_conn._execute("delete from vt_insert_test", {})
+      master_conn._execute('delete from vt_insert_test', {})
       master_conn.commit()
     proc = self.master_tablet.start_vttablet()
     try:
       master_conn = get_connection(db_type='master')
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
     master_conn.begin()
-    master_conn._execute("delete from vt_insert_test", {})
+    master_conn._execute('delete from vt_insert_test', {})
     master_conn.commit()
 
   def test_query_timeout(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+      self.fail('Connection to shard0 replica failed with error %s' % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
-      replica_conn._execute("select sleep(12) from dual", {})
+      replica_conn._execute('select sleep(12) from dual', {})
 
     try:
       master_conn = get_connection(db_type='master')
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
-      master_conn._execute("select sleep(12) from dual", {})
+      master_conn._execute('select sleep(12) from dual', {})
 
   def test_restart_mysql_failure(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+      self.fail('Connection to shard0 replica failed with error %s' % str(e))
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
     with self.assertRaises(dbexceptions.DatabaseError):
-      replica_conn._execute("select 1 from vt_insert_test", {})
+      replica_conn._execute('select 1 from vt_insert_test', {})
     utils.wait_procs([self.replica_tablet.start_mysql(),])
     self.replica_tablet.kill_vttablet()
     self.replica_tablet.start_vttablet()
-    replica_conn._execute("select 1 from vt_insert_test", {})
+    replica_conn._execute('select 1 from vt_insert_test', {})
 
   def test_noretry_txn_pool_full(self):
     master_conn = get_connection(db_type='master')
-    master_conn._execute("set vt_transaction_cap=1", {})
+    master_conn._execute('set vt_transaction_cap=1', {})
     master_conn.begin()
     with self.assertRaises(dbexceptions.TxPoolFull):
       master_conn2 = get_connection(db_type='master')
       master_conn2.begin()
     master_conn.commit()
-    master_conn._execute("set vt_transaction_cap=20", {})
+    master_conn._execute('set vt_transaction_cap=20', {})
     master_conn.begin()
-    master_conn._execute("delete from vt_insert_test", {})
+    master_conn._execute('delete from vt_insert_test', {})
     master_conn.commit()
 
   def test_read_only(self):
     master_conn = get_connection(db_type='master')
     count = 10
     master_conn.begin()
-    master_conn._execute("delete from vt_insert_test", {})
+    master_conn._execute('delete from vt_insert_test', {})
     kid_list = shard_kid_map[master_conn.shard]
     for x in xrange(count):
       keyspace_id = kid_list[count%len(kid_list)]
-      master_conn._execute("insert into vt_insert_test (msg, keyspace_id) values (%(msg)s, %(keyspace_id)s)",
-                           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
+      master_conn._execute(
+          'insert into vt_insert_test (msg, keyspace_id) '
+          'values (%(msg)s, %(keyspace_id)s)',
+          {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
     master_conn.commit()
 
-    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=on")
+    self.master_tablet.mquery(
+        self.master_tablet.dbname, 'set global read_only=on')
     master_conn.begin()
     with self.assertRaises(dbexceptions.FatalError):
-      master_conn._execute("delete from vt_insert_test", {})
+      master_conn._execute('delete from vt_insert_test', {})
     master_conn.rollback()
-    self.master_tablet.mquery(self.master_tablet.dbname, "set global read_only=off")
+    self.master_tablet.mquery(
+        self.master_tablet.dbname, 'set global read_only=off')
     master_conn.begin()
-    master_conn._execute("delete from vt_insert_test", {})
+    master_conn._execute('delete from vt_insert_test', {})
     master_conn.commit()
 
 DML_KEYWORDS = ['insert', 'update', 'delete']
 
 
 class TestExceptionLogging(unittest.TestCase):
+
   def setUp(self):
     self.shard_index = 0
     self.master_tablet = shard_0_master
@@ -529,12 +572,13 @@ class TestExceptionLogging(unittest.TestCase):
 
   def test_integrity_error_logging(self):
     try:
-      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
+      master_conn = get_connection(
+          db_type='master', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
+      self.fail('Connection to shard0 master failed with error %s' % str(e))
 
     master_conn.begin()
-    master_conn._execute("delete from vt_a", {})
+    master_conn._execute('delete from vt_a', {})
     master_conn.commit()
 
     keyspace_id = shard_kid_map[master_conn.shard][0]
@@ -543,12 +587,12 @@ class TestExceptionLogging(unittest.TestCase):
     try:
       master_conn.begin()
       master_conn._execute(
-        "insert into vt_a (eid, id, keyspace_id) \
-         values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        'insert into vt_a (eid, id, keyspace_id) \
+         values (%(eid)s, %(id)s, %(keyspace_id)s)',
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
       master_conn._execute(
-        "insert into vt_a (eid, id, keyspace_id) \
-         values (%(eid)s, %(id)s, %(keyspace_id)s)",
+        'insert into vt_a (eid, id, keyspace_id) \
+         values (%(eid)s, %(id)s, %(keyspace_id)s)',
         {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
       master_conn.commit()
     except dbexceptions.IntegrityError as e:
@@ -558,7 +602,8 @@ class TestExceptionLogging(unittest.TestCase):
         if kw in exc_msg:
           self.fail("IntegrityError shouldn't contain the query %s" % exc_msg)
     except Exception as e:
-      self.fail("Expected IntegrityError to be raised, instead raised %s" % str(e))
+      self.fail('Expected IntegrityError to be raised, instead raised %s' %
+                str(e))
     finally:
       master_conn.rollback()
     # The underlying execute is expected to catch and log the integrity error.
@@ -574,8 +619,8 @@ class TestAuthentication(unittest.TestCase):
     self.replica_tablet.start_vttablet(auth=True)
     utils.vtgate.kill()
     utils.VtGate().start(auth=True)
-    credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
-                                         'authcredentials_test.json')
+    credentials_file_name = os.path.join(
+        environment.vttop, 'test', 'test_data', 'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')
     credentials = json.load(credentials_file)
     self.user = str(credentials.keys()[0])
@@ -584,52 +629,60 @@ class TestAuthentication(unittest.TestCase):
 
   def test_correct_credentials(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                    password=self.password)
+      replica_conn = get_connection(
+          db_type='replica', shard_index = self.shard_index, user=self.user,
+          password=self.password)
       replica_conn.connect()
     finally:
       replica_conn.close()
 
   def test_secondary_credentials(self):
     try:
-      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                    password=self.secondary_password)
+      replica_conn = get_connection(
+          db_type='replica', shard_index = self.shard_index, user=self.user,
+          password=self.secondary_password)
       replica_conn.connect()
     finally:
       replica_conn.close()
 
   def test_incorrect_user(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user="romek", password="ma raka")
+      replica_conn = get_connection(
+          db_type='replica', shard_index = self.shard_index, user='romek',
+          password='ma raka')
       replica_conn.connect()
 
   def test_incorrect_credentials(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user, password="ma raka")
+      replica_conn = get_connection(
+          db_type='replica', shard_index = self.shard_index, user=self.user,
+          password='ma raka')
       replica_conn.connect()
 
   def test_challenge_is_used(self):
-    replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                  password=self.password)
+    replica_conn = get_connection(
+        db_type='replica', shard_index = self.shard_index, user=self.user,
+        password=self.password)
     replica_conn.connect()
-    challenge = ""
-    proof =  "%s %s" %(self.user, hmac.HMAC(self.password,
+    challenge = ''
+    proof =  '%s %s' %(self.user, hmac.HMAC(self.password,
                                             challenge).hexdigest())
     self.assertRaises(gorpc.AppError, replica_conn.conn.client.call,
-                      'AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+                      'AuthenticatorCRAMMD5.Authenticate', {'Proof': proof})
 
   def test_only_few_requests_are_allowed(self):
-    replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
+    replica_conn = get_connection(
+        db_type='replica', shard_index = self.shard_index, user=self.user,
                                   password=self.password)
     replica_conn.connect()
     for i in range(4):
       try:
         replica_conn.conn.client.call('AuthenticatorCRAMMD5.GetNewChallenge',
-                                      "")
+                                      '')
       except gorpc.GoRpcError:
         break
     else:
-      self.fail("Too many requests were allowed (%s)." % (i + 1))
+      self.fail('Too many requests were allowed (%s).' % (i + 1))
 
 
 class LocalLogger(vtdb_logger.VtdbLogger):
@@ -660,14 +713,17 @@ class TestTopoReResolve(unittest.TestCase):
     # Lowering the keyspace refresh throttle so things are testable.
     topology.set_keyspace_fetch_throttle(0.1)
     self.vtgate_client = zkocc.ZkOccConnection(utils.vtgate.addr(),
-                                               "test_nj", 30.0)
+                                               'test_nj', 30.0)
 
   def test_topo_read_threshold(self):
     before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     # Check original state.
     keyspace_obj = topology.get_keyspace('test_keyspace')
-    self.assertNotEqual(keyspace_obj, None, "test_keyspace should be not None")
-    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_UINT64, "ShardingColumnType be %s" % keyrange_constants.KIT_UINT64)
+    self.assertNotEqual(
+        keyspace_obj, None, 'test_keyspace should be not None')
+    self.assertEqual(
+        keyspace_obj.sharding_col_type, keyrange_constants.KIT_UINT64,
+        'ShardingColumnType be %s' % keyrange_constants.KIT_UINT64)
 
     # Change the keyspace object.
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
@@ -680,32 +736,41 @@ class TestTopoReResolve(unittest.TestCase):
     topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
     keyspace_obj = topology.get_keyspace('test_keyspace')
     after_1st_clear = vtdb_logger.get_logger().get_topo_rtt()
-    self.assertEqual(after_1st_clear - before_topo_rtt, 1, "One additional round-trips to topo server")
-    self.assertEqual(keyspace_obj.sharding_col_type, keyrange_constants.KIT_BYTES, "ShardingColumnType be %s" % keyrange_constants.KIT_BYTES)
+    self.assertEqual(
+        after_1st_clear - before_topo_rtt, 1,
+        'One additional round-trips to topo server')
+    self.assertEqual(
+        keyspace_obj.sharding_col_type, keyrange_constants.KIT_BYTES,
+        'ShardingColumnType be %s' % keyrange_constants.KIT_BYTES)
 
-    # Refresh without sleeping for throttle time shouldn't cause additional rtt.
+    # Refresh without sleeping for throttle time shouldn't cause
+    # additional rtt.
     topology.refresh_keyspace(self.vtgate_client, 'test_keyspace')
     keyspace_obj = topology.get_keyspace('test_keyspace')
     after_2nd_clear = vtdb_logger.get_logger().get_topo_rtt()
-    self.assertEqual(after_2nd_clear - after_1st_clear, 0, "No additional round-trips to topo server")
+    self.assertEqual(
+        after_2nd_clear - after_1st_clear, 0,
+        'No additional round-trips to topo server')
 
   def test_keyspace_reresolve_on_execute(self):
     before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     try:
       replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail('Connection to shard %s replica failed with error %s' % (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
     time.sleep(self.keyspace_fetch_throttle)
 
     # this should cause a refresh of the topology.
     try:
-      results = replica_conn._execute("select 1 from vt_insert_test", {})
+      results = replica_conn._execute('select 1 from vt_insert_test', {})
     except Exception, e:
       pass
 
     after_tablet_error = vtdb_logger.get_logger().get_topo_rtt()
-    self.assertEqual(after_tablet_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.assertEqual(
+        after_tablet_error - before_topo_rtt, 1,
+        'One additional round-trips to topo server')
     self.replica_tablet.start_vttablet()
 
   def test_keyspace_reresolve_on_conn_failure(self):
@@ -713,12 +778,15 @@ class TestTopoReResolve(unittest.TestCase):
     self.replica_tablet.kill_vttablet()
     time.sleep(self.keyspace_fetch_throttle)
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       pass
 
     after_tablet_conn_error = vtdb_logger.get_logger().get_topo_rtt()
-    self.assertEqual(after_tablet_conn_error - before_topo_rtt, 1, "One additional round-trips to topo server")
+    self.assertEqual(
+        after_tablet_conn_error - before_topo_rtt, 1,
+        'One additional round-trips to topo server')
     self.replica_tablet.start_vttablet()
 
 

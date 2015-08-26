@@ -24,8 +24,8 @@ source_tablets = [tablet.Tablet(62044),
 tablets = [destination_tablet] + source_tablets
 
 db_configuration = {
-  'sources': [t.mysql_connection_parameters('test_checkers%i' % i)
-              for i, t in enumerate(source_tablets)],
+    'sources': [t0.mysql_connection_parameters('test_checkers%i' % i0)
+                for i0, t0 in enumerate(source_tablets)],
 }
 
 
@@ -52,6 +52,7 @@ class MockChecker(checker.Checker):
   def handle_mismatch(self, mismatch):
     self.mismatches.append(mismatch)
 
+
 class TestCheckersBase(unittest.TestCase):
   keyrange = {'end': 900}
 
@@ -74,6 +75,7 @@ class TestCheckersBase(unittest.TestCase):
 
 
 class TestSortedRowListDifference(unittest.TestCase):
+
   def test_sorted_row_list_difference(self):
 
     expected = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
@@ -83,6 +85,7 @@ class TestSortedRowListDifference(unittest.TestCase):
     self.assertEqual(missing, [(2, 0)])
     self.assertEqual(unexpected, [(10, 0)])
     self.assertEqual(different, [((6, 1), (6, 0))])
+
 
 class TestCheckers(TestCheckersBase):
 
@@ -129,7 +132,6 @@ class TestCheckers(TestCheckersBase):
   def query_all(self, sql, write=False):
     return [t.mquery('test_checkers', sql, write=write) for t in tablets]
 
-
   def test_ok(self):
     self.c._run()
     self.assertFalse(self.c.mismatches)
@@ -167,6 +169,7 @@ class TestCheckers(TestCheckersBase):
 
 
 class TestDifferentEncoding(TestCheckersBase):
+
   @classmethod
   def setUpClass(cls):
     config = dict(db_configuration)
@@ -210,7 +213,9 @@ class TestDifferentEncoding(TestCheckersBase):
     self.c._run()
     self.assertTrue(self.c.mismatches)
 
+
 class TestRlookup(TestCheckersBase):
+
   def setUp(self):
     source_create_table = (
         'create table test (pk1 bigint, k2 bigint, k3 bigint, '

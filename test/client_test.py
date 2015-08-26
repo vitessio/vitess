@@ -9,9 +9,6 @@ library test.
 import hashlib
 import random
 import struct
-import threading
-import time
-import traceback
 import unittest
 
 import environment
@@ -155,8 +152,8 @@ def start_tablets():
                      auto_log=True)
     if ks_type == shard_constants.RANGE_SHARDED:
       utils.check_srv_keyspace('test_nj', ks_name,
-                               'Partitions(master): -80 80-\n' +
-                               'Partitions(rdonly): -80 80-\n' +
+                               'Partitions(master): -80 80-\n'
+                               'Partitions(rdonly): -80 80-\n'
                                'Partitions(replica): -80 80-\n')
 
 
@@ -189,7 +186,9 @@ def _delete_all(keyspace, shard_name, table_name):
   vtgate_conn.commit()
 
 
-def restart_vtgate(extra_args={}):
+def restart_vtgate(extra_args=None):
+  if extra_args is None:
+    extra_args = {}
   port = utils.vtgate.port
   utils.vtgate.kill()
   utils.VtGate(port=port).start(extra_args=extra_args)
@@ -217,7 +216,7 @@ class TestUnshardedTable(unittest.TestCase):
     self.dc = database_context.DatabaseContext(self.vtgate_addrs)
     self.all_ids = []
     with database_context.WriteTransaction(self.dc) as context:
-      for x in xrange(20):
+      for _ in xrange(20):
         ret_id = db_class_unsharded.VtUnsharded.insert(context.get_cursor(),
                                                        msg='test message')
         self.all_ids.append(ret_id)
@@ -257,8 +256,8 @@ class TestUnshardedTable(unittest.TestCase):
     id_val = self.all_ids[-1]
     where_column_value_pairs = [('id', id_val)]
     with database_context.WriteTransaction(self.dc) as context:
-      db_class_unsharded.VtUnsharded.delete_by_columns(context.get_cursor(),
-                                                    where_column_value_pairs)
+      db_class_unsharded.VtUnsharded.delete_by_columns(
+          context.get_cursor(), where_column_value_pairs)
 
     with database_context.ReadFromMaster(self.dc) as context:
       rows = db_class_unsharded.VtUnsharded.select_by_id(
@@ -316,7 +315,7 @@ class TestRangeSharded(unittest.TestCase):
         m = hashlib.md5()
         m.update(email)
         email_hash = m.digest()
-        entity_id_map={'user_id':user_id}
+        entity_id_map = {'user_id': user_id}
         db_class_sharded.VtUserEmail.insert(
             context.get_cursor(entity_id_map=entity_id_map),
             user_id=user_id, email=email,
@@ -332,7 +331,7 @@ class TestRangeSharded(unittest.TestCase):
           self.user_song_map.setdefault(user_id, []).append(song_id)
 
           # vt_song_detail - RangeSharded; references song_id:user_id lookup
-          entity_id_map = {'song_id':song_id}
+          entity_id_map = {'song_id': song_id}
           db_class_sharded.VtSongDetail.insert(
               context.get_cursor(entity_id_map=entity_id_map),
               song_id=song_id, album_name='Test album',
@@ -348,18 +347,18 @@ class TestRangeSharded(unittest.TestCase):
       for uid in self.user_id_list:
         try:
           db_class_sharded.VtUser.delete_by_columns(
-              context.get_cursor(entity_id_map={'id':uid}),
+              context.get_cursor(entity_id_map={'id': uid}),
               [('id', uid),])
           db_class_sharded.VtUserEmail.delete_by_columns(
-              context.get_cursor(entity_id_map={'user_id':uid}),
+              context.get_cursor(entity_id_map={'user_id': uid}),
               [('user_id', uid),])
           db_class_sharded.VtSong.delete_by_columns(
-              context.get_cursor(entity_id_map={'user_id':uid}),
+              context.get_cursor(entity_id_map={'user_id': uid}),
               [('user_id', uid),])
           song_id_list = self.user_song_map[uid]
           for sid in song_id_list:
             db_class_sharded.VtSongDetail.delete_by_columns(
-                context.get_cursor(entity_id_map={'song_id':sid}),
+                context.get_cursor(entity_id_map={'song_id': sid}),
                 [('song_id', sid),])
         except dbexceptions.DatabaseError as e:
           if str(e) == 'DB Row not found':
@@ -481,7 +480,6 @@ class TestRangeSharded(unittest.TestCase):
       self.assertEqual(
           song_id_list, got, 'wrong rows fetched %s got %s' %
           (song_id_list, got))
-
 
   def test_keyrange_read(self):
     where_column_value_pairs = []

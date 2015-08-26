@@ -29,17 +29,18 @@ unsharded_master = tablet.Tablet()
 unsharded_replica = tablet.Tablet()
 
 shard_names = ['-80', '80-']
-shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
-                         345387386794260318, 332484755310826578,
-                         1842642426274125671, 1326307661227634652,
-                         1761124146422844620, 1661669973250483744,
-                         3361397649937244239, 2444880764308344533],
-                 '80-': [9767889778372766922, 9742070682920810358,
-                         10296850775085416642, 9537430901666854108,
-                         10440455099304929791, 11454183276974683945,
-                         11185910247776122031, 10460396697869122981,
-                         13379616110062597001, 12826553979133932576],
-                 }
+shard_kid_map = {
+    '-80': [527875958493693904, 626750931627689502,
+            345387386794260318, 332484755310826578,
+            1842642426274125671, 1326307661227634652,
+            1761124146422844620, 1661669973250483744,
+            3361397649937244239, 2444880764308344533],
+    '80-': [9767889778372766922, 9742070682920810358,
+            10296850775085416642, 9537430901666854108,
+            10440455099304929791, 11454183276974683945,
+            11185910247776122031, 10460396697869122981,
+            13379616110062597001, 12826553979133932576],
+}
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -73,7 +74,7 @@ def tearDownModule():
     return
 
   tablet.kill_tablets([shard_0_master, shard_0_replica,
-                      shard_1_master, shard_1_replica])
+                       shard_1_master, shard_1_replica])
   teardown_procs = [
       shard_0_master.teardown_mysql(),
       shard_0_replica.teardown_mysql(),
@@ -110,7 +111,7 @@ def setup_sharded_keyspace():
       'replica', keyspace=SHARDED_KEYSPACE, shard='-80')
   shard_1_master.init_tablet('master', keyspace=SHARDED_KEYSPACE, shard='80-')
   shard_1_replica.init_tablet(
-      'replica', keyspace=SHARDED_KEYSPACE,  shard='80-')
+      'replica', keyspace=SHARDED_KEYSPACE, shard='80-')
 
   utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE,], auto_log=True)
 
@@ -128,7 +129,7 @@ def setup_sharded_keyspace():
                    shard_1_master.tablet_alias], auto_log=True)
 
   utils.run_vtctl(['RebuildKeyspaceGraph', SHARDED_KEYSPACE],
-                   auto_log=True)
+                  auto_log=True)
 
   utils.check_srv_keyspace('test_nj', SHARDED_KEYSPACE,
                            'Partitions(master): -80 80-\n' +
@@ -159,7 +160,7 @@ def setup_unsharded_keyspace():
                    unsharded_master.tablet_alias], auto_log=True)
 
   utils.run_vtctl(['RebuildKeyspaceGraph', UNSHARDED_KEYSPACE],
-                   auto_log=True)
+                  auto_log=True)
 
   utils.check_srv_keyspace('test_nj', UNSHARDED_KEYSPACE,
                            'Partitions(master): -\n' +
@@ -188,7 +189,9 @@ class TestKeyspace(unittest.TestCase):
   def test_delete_keyspace(self):
     utils.run_vtctl(['CreateKeyspace', 'test_delete_keyspace'])
     utils.run_vtctl(['CreateShard', 'test_delete_keyspace/0'])
-    utils.run_vtctl(['InitTablet', '-keyspace=test_delete_keyspace', '-shard=0', 'test_nj-0000000100', 'master'])
+    utils.run_vtctl(
+        ['InitTablet', '-keyspace=test_delete_keyspace', '-shard=0',
+         'test_nj-0000000100', 'master'])
 
     # Can't delete keyspace if there are shards present.
     utils.run_vtctl(['DeleteKeyspace', 'test_delete_keyspace'], expect_fail=True)

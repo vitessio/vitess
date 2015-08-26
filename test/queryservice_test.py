@@ -36,6 +36,7 @@ def main():
 
   run_tests(options, args)
 
+
 def run_tests(options, args):
   suite = unittest.TestSuite()
   if args:

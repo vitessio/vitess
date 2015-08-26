@@ -288,9 +288,9 @@ index by_msg (msg)
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
                      'keyspace_id', keyspace_id_type])
 
-    shard_master.init_tablet( 'master',  'test_keyspace', '0')
+    shard_master.init_tablet('master', 'test_keyspace', '0')
     shard_replica.init_tablet('replica', 'test_keyspace', '0')
-    shard_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '0')
+    shard_rdonly1.init_tablet('rdonly', 'test_keyspace', '0')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
@@ -318,12 +318,12 @@ index by_msg (msg)
     self._mark_sharding_key_not_null()
 
     # create the split shards
-    shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
+    shard_0_master.init_tablet('master', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_0_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '-80')
-    shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
+    shard_0_rdonly1.init_tablet('rdonly', 'test_keyspace', '-80')
+    shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-    shard_1_rdonly1.init_tablet( 'rdonly',  'test_keyspace', '80-')
+    shard_1_rdonly1.init_tablet('rdonly', 'test_keyspace', '80-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
@@ -358,14 +358,14 @@ index by_msg (msg)
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
-                        '--exclude_tables' ,'unrelated',
+                        '--exclude_tables', 'unrelated',
                         '--strategy=-populate_blp_checkpoint',
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
                        auto_log=True)
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
-                     auto_log=True)
+                    auto_log=True)
 
     # check the startup values are in the right place
     self._check_startup_values()
