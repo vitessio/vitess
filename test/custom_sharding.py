@@ -17,6 +17,7 @@ shard_0_rdonly = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_rdonly = tablet.Tablet()
 
+
 def setUpModule():
   try:
     environment.topo_server().setup()
@@ -33,6 +34,7 @@ def setUpModule():
   except:
     tearDownModule()
     raise
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -55,15 +57,16 @@ def tearDownModule():
   shard_1_master.remove_tree()
   shard_1_rdonly.remove_tree()
 
+
 class TestCustomSharding(unittest.TestCase):
 
   def _insert_data(self, shard, start, count, table='data'):
     sql = 'insert into %s(id, name) values (:id, :name)' % table
     for x in xrange(count):
       bindvars = {
-        'id':   start+x,
-        'name': 'row %d' % (start+x),
-        }
+          'id':   start+x,
+          'name': 'row %d' % (start+x),
+      }
       utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                  bindvars=bindvars)
 
@@ -71,8 +74,8 @@ class TestCustomSharding(unittest.TestCase):
     sql = 'select name from %s where id=:id' % table
     for x in xrange(count):
       bindvars = {
-        'id':   start+x,
-        }
+          'id':   start+x,
+      }
       qr = utils.vtgate.execute_shard(sql, 'test_keyspace', shard,
                                       bindvars=bindvars)
       self.assertEqual(len(qr['Rows']), 1)
@@ -80,17 +83,18 @@ class TestCustomSharding(unittest.TestCase):
       self.assertEqual(v, 'row %d' % (start+x))
 
   def test_custom_end_to_end(self):
-    """This test case runs through the common operations of a custom
-    sharded keyspace: creation with one shard, schema change, reading
-    / writing data, adding one more shard, reading / writing data from
-    both shards, applying schema changes again, and reading / writing data from
-    both shards again.
+    """Runs through the common operations of a custom sharded keyspace.
+
+    Tests creation with one shard, schema change, reading / writing
+    data, adding one more shard, reading / writing data from both
+    shards, applying schema changes again, and reading / writing data
+    from both shards again.
     """
 
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # start the first shard only for now
-    shard_0_master.init_tablet( 'master',  'test_keyspace', '0')
+    shard_0_master.init_tablet('master', 'test_keyspace', '0')
     shard_0_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
     for t in [shard_0_master, shard_0_rdonly]:
       t.create_db('vt_test_keyspace')
@@ -124,7 +128,7 @@ primary key (id)
     self._check_data('0', 100, 10)
 
     # create shard 1
-    shard_1_master.init_tablet( 'master',  'test_keyspace', '1')
+    shard_1_master.init_tablet('master', 'test_keyspace', '1')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '1')
     for t in [shard_1_master, shard_1_rdonly]:
       t.start_vttablet(wait_for_state=None)
@@ -183,26 +187,27 @@ primary key (id)
     shard1count = 0
     for q in s:
       if q['QueryShard']['Shards'][0] == '0':
-        shard0count+=1
+        shard0count += 1
       if q['QueryShard']['Shards'][0] == '1':
-        shard1count+=1
+        shard1count += 1
     self.assertEqual(shard0count, 2)
     self.assertEqual(shard1count, 2)
 
     # run the queries, aggregate the results, make sure we have all rows
     rows = {}
     for q in s:
-      qr = utils.vtgate.execute_shard(q['QueryShard']['Sql'],
-                                      'test_keyspace', ",".join(q['QueryShard']['Shards']),
-                                      tablet_type='master', bindvars=q['QueryShard']['BindVariables'])
+      qr = utils.vtgate.execute_shard(
+          q['QueryShard']['Sql'],
+          'test_keyspace', ",".join(q['QueryShard']['Shards']),
+          tablet_type='master', bindvars=q['QueryShard']['BindVariables'])
       for r in qr['Rows']:
         id = int(r[0])
         rows[id] = r[1]
     self.assertEqual(len(rows), 20)
     expected = {}
     for i in xrange(10):
-     expected[100+i] = 'row %d' % (100+i)
-     expected[200+i] = 'row %d' % (200+i)
+      expected[100 + i] = 'row %d' % (100 + i)
+      expected[200 + i] = 'row %d' % (200 + i)
     self.assertEqual(rows, expected)
 
 if __name__ == '__main__':

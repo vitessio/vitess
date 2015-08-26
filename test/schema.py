@@ -18,8 +18,8 @@ shard_1_replica1 = tablet.Tablet()
 shard_2_master = tablet.Tablet()
 shard_2_replica1 = tablet.Tablet()
 # shard_2 tablets are not used by all tests and not included by default.
-tablets = [shard_0_master, shard_0_replica1, shard_0_replica2, shard_0_rdonly, shard_0_backup,
-           shard_1_master, shard_1_replica1]
+tablets = [shard_0_master, shard_0_replica1, shard_0_replica2, shard_0_rdonly,
+           shard_0_backup, shard_1_master, shard_1_replica1]
 tablets_shard2 = [shard_2_master, shard_2_replica1]
 test_keyspace = 'test_keyspace'
 db_name = 'vt_' + test_keyspace
@@ -32,12 +32,12 @@ def setUpModule():
 
     utils.run_vtctl(['CreateKeyspace', test_keyspace])
 
-    shard_0_master.init_tablet(  'master',  test_keyspace, '0')
+    shard_0_master.init_tablet('master', test_keyspace, '0')
     shard_0_replica1.init_tablet('replica', test_keyspace, '0')
     shard_0_replica2.init_tablet('replica', test_keyspace, '0')
-    shard_0_rdonly.init_tablet(  'rdonly',  test_keyspace, '0')
-    shard_0_backup.init_tablet(  'backup',  test_keyspace, '0')
-    shard_1_master.init_tablet(  'master',  test_keyspace, '1')
+    shard_0_rdonly.init_tablet('rdonly', test_keyspace, '0')
+    shard_0_backup.init_tablet('backup', test_keyspace, '0')
+    shard_1_master.init_tablet('master', test_keyspace, '1')
     shard_1_replica1.init_tablet('replica', test_keyspace, '1')
 
     utils.run_vtctl(['RebuildKeyspaceGraph', test_keyspace], auto_log=True)
@@ -77,7 +77,7 @@ def setUpModule():
     try:
       tearDownModule()
     except Exception as e:
-      logging.exception("Tearing down a failed setUpModule() failed: %s", e)
+      logging.exception('Tearing down a failed setUpModule() failed: %s', e)
     raise setup_exception
 
 def _init_mysql(tablets):
@@ -114,7 +114,8 @@ class TestSchema(unittest.TestCase):
     # databases without restarting the tablets.
     for t in tablets:
       t.clean_dbs()
-    # Tablets from shard 2 are always started during the test. Shut them down now.
+    # Tablets from shard 2 are always started during the test. Shut
+    # them down now.
     if shard_2_master in tablets:
       for t in tablets_shard2:
         t.scrap(force=True, skip_rebuild=True)
@@ -130,9 +131,11 @@ class TestSchema(unittest.TestCase):
                      (tablet.tablet_alias, expectedCount, str(tables)))
 
   def _check_db_not_created(self, tablet):
-    # Broadly catch all exceptions, since the exception being raised is internal to MySQL.
-    # We're strictly checking the error message though, so should be fine.
-    with self.assertRaisesRegexp(Exception, '(1049, "Unknown database \'%s\'")' % db_name):
+    # Broadly catch all exceptions, since the exception being raised
+    # is internal to MySQL.  We're strictly checking the error message
+    # though, so should be fine.
+    with self.assertRaisesRegexp(
+        Exception, '(1049, "Unknown database \'%s\'")' % db_name):
       tablet.mquery(db_name, 'show tables')
 
   def _apply_schema(self, keyspace, sql):
@@ -145,19 +148,20 @@ class TestSchema(unittest.TestCase):
                                  tablet_alias])
 
   def _create_test_table_sql(self, table):
-    return 'CREATE TABLE %s ( \
-            `id` BIGINT(20) not NULL, \
-            `msg` varchar(64), \
-            PRIMARY KEY (`id`) \
-            ) ENGINE=InnoDB' % table
+    return (
+        'CREATE TABLE %s (\n'
+        '`id` BIGINT(20) not NULL,\n'
+        '`msg` varchar(64),\n'
+        'PRIMARY KEY (`id`)\n'
+        ') ENGINE=InnoDB') % table
 
   def _alter_test_table_sql(self, table, index_column_name):
-    return 'ALTER TABLE %s \
-            ADD COLUMN new_id bigint(20) NOT NULL AUTO_INCREMENT FIRST, \
-            DROP PRIMARY KEY, \
-            ADD PRIMARY KEY (new_id), \
-            ADD INDEX idx_column(%s) \
-            ' % (table, index_column_name)
+    return (
+        'ALTER TABLE %s\n'
+        'ADD COLUMN new_id bigint(20) NOT NULL AUTO_INCREMENT FIRST,\n'
+        'DROP PRIMARY KEY,\n'
+        'ADD PRIMARY KEY (new_id),\n'
+        'ADD INDEX idx_column(%s)\n') % (table, index_column_name)
 
   def _apply_initial_schema(self):
     schema_changes = ';'.join([
@@ -183,7 +187,8 @@ class TestSchema(unittest.TestCase):
   def test_schema_changes(self):
     self._apply_initial_schema()
 
-    self._apply_schema(test_keyspace, self._alter_test_table_sql('vt_select_test03', 'msg'))
+    self._apply_schema(
+        test_keyspace, self._alter_test_table_sql('vt_select_test03', 'msg'))
 
     shard_0_schema = self._get_schema(shard_0_master.tablet_alias)
     shard_1_schema = self._get_schema(shard_1_master.tablet_alias)
@@ -193,18 +198,19 @@ class TestSchema(unittest.TestCase):
 
     # test schema changes
     os.makedirs(os.path.join(utils.vtctld.schema_change_dir, test_keyspace))
-    input_path = os.path.join(utils.vtctld.schema_change_dir, test_keyspace, "input")
+    input_path = os.path.join(
+        utils.vtctld.schema_change_dir, test_keyspace, 'input')
     os.makedirs(input_path)
-    sql_path = os.path.join(input_path, "create_test_table_x.sql")
+    sql_path = os.path.join(input_path, 'create_test_table_x.sql')
     with open(sql_path, 'w') as handler:
-      handler.write("create table test_table_x (id int)")
+      handler.write('create table test_table_x (id int)')
 
     timeout = 10
     # wait until this sql file being consumed by autoschema
     while os.path.isfile(sql_path):
-        timeout = utils.wait_step('waiting for vtctld to pick up schema changes',
-                                  timeout,
-                                  sleep_time=0.2)
+        timeout = utils.wait_step(
+            'waiting for vtctld to pick up schema changes',
+            timeout, sleep_time=0.2)
 
     # check number of tables
     self._check_tables(shard_0_master, 5)
@@ -217,7 +223,7 @@ class TestSchema(unittest.TestCase):
       # Include shard2 tablets for tearDown.
       tablets.extend(tablets_shard2)
 
-    shard_2_master.init_tablet(  'master',  'test_keyspace', '2')
+    shard_2_master.init_tablet('master', 'test_keyspace', '2')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '2')
 
     # We intentionally don't want to create a db on these tablets.
@@ -244,8 +250,8 @@ class TestSchema(unittest.TestCase):
 
     self._setUp_tablets_shard_2()
 
-    # CopySchemaShard is responsible for creating the db; one shouldn't exist before
-    # the command is run.
+    # CopySchemaShard is responsible for creating the db; one
+    # shouldn't exist before the command is run.
     self._check_db_not_created(shard_2_master)
     self._check_db_not_created(shard_2_replica1)
 

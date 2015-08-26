@@ -70,7 +70,7 @@ def setUpModule():
                      src_master.tablet_alias], auto_log=True)
 
     # Create schema
-    logging.debug("Creating schema...")
+    logging.debug('Creating schema...')
     create_table = '''create table test_table(
         id bigint auto_increment,
         keyspace_id bigint(20) unsigned,
@@ -99,7 +99,7 @@ def setUpModule():
 
     # run the clone worked (this is a degenerate case, source and destination
     # both have the full keyrange. Happens to work correctly).
-    logging.debug("Running the clone worker to start binlog stream...")
+    logging.debug('Running the clone worker to start binlog stream...')
     utils.run_vtworker(['--cell', 'test_nj',
                         'SplitClone',
                         '--strategy=-populate_blp_checkpoint',
@@ -110,7 +110,7 @@ def setUpModule():
     dst_master.wait_for_binlog_player_count(1)
 
     # Wait for dst_replica to be ready.
-    dst_replica.wait_for_binlog_server_state("Enabled")
+    dst_replica.wait_for_binlog_server_state('Enabled')
   except:
     tearDownModule()
     raise
@@ -162,8 +162,10 @@ class TestBinlog(unittest.TestCase):
     # Vitess tablets default to using utf8, so we insert something crazy and
     # pretend it's latin1. If the binlog player doesn't also pretend it's
     # latin1, it will be inserted as utf8, which will change its value.
-    src_master.mquery("vt_test_keyspace",
-        "INSERT INTO test_table (id, keyspace_id, msg) VALUES (41523, 1, 'Šṛ́rỏé') /* EMD keyspace_id:1 */",
+    src_master.mquery(
+        'vt_test_keyspace',
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (41523, 1, 'Šṛ́rỏé') /* EMD keyspace_id:1 */",
         conn_params={'charset': 'latin1'}, write=True)
 
     # Wait for it to replicate.
@@ -173,11 +175,13 @@ class TestBinlog(unittest.TestCase):
         break
 
     # Check the value.
-    data = dst_master.mquery("vt_test_keyspace",
-        "SELECT id, keyspace_id, msg FROM test_table WHERE id=41523 LIMIT 1")
+    data = dst_master.mquery(
+        'vt_test_keyspace',
+        'SELECT id, keyspace_id, msg FROM test_table WHERE id=41523 LIMIT 1')
     self.assertEqual(len(data), 1, 'No data replicated.')
     self.assertEqual(len(data[0]), 3, 'Wrong number of columns.')
-    self.assertEqual(data[0][2], 'Šṛ́rỏé', 'Data corrupted due to wrong charset.')
+    self.assertEqual(data[0][2], 'Šṛ́rỏé',
+                     'Data corrupted due to wrong charset.')
 
   def test_checksum_enabled(self):
     start_position = mysql_flavor().master_position(dst_replica)
@@ -186,14 +190,15 @@ class TestBinlog(unittest.TestCase):
     # Enable binlog_checksum, which will also force a log rotation that should
     # cause binlog streamer to notice the new checksum setting.
     if not mysql_flavor().enable_binlog_checksum(dst_replica):
-      logging.debug('skipping checksum test on flavor without binlog_checksum setting')
+      logging.debug(
+          'skipping checksum test on flavor without binlog_checksum setting')
       return
 
     # Insert something and make sure it comes through intact.
-    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (19283, 1, 'testing checksum enabled') /* EMD keyspace_id:1 */"
-    src_master.mquery("vt_test_keyspace",
-        sql,
-        write=True)
+    sql = (
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (19283, 1, 'testing checksum enabled') /* EMD keyspace_id:1 */")
+    src_master.mquery('vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum enabled.
@@ -218,10 +223,12 @@ class TestBinlog(unittest.TestCase):
     mysql_flavor().disable_binlog_checksum(dst_replica)
 
     # Insert something and make sure it comes through intact.
-    sql = "INSERT INTO test_table (id, keyspace_id, msg) VALUES (58812, 1, 'testing checksum disabled') /* EMD keyspace_id:1 */"
-    src_master.mquery("vt_test_keyspace",
-        sql,
-        write=True)
+    sql = (
+        "INSERT INTO test_table (id, keyspace_id, msg) "
+        "VALUES (58812, 1, 'testing checksum disabled') "
+        "/* EMD keyspace_id:1 */")
+    src_master.mquery(
+        'vt_test_keyspace', sql, write=True)
 
     # Look for it using update stream to see if binlog streamer can talk to
     # dst_replica, which now has binlog_checksum disabled.

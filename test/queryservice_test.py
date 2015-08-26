@@ -22,11 +22,12 @@ from topo_flavor.server import set_topo_server_flavor
 
 
 def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option("-m", "--memcache", action="store_true", default=False,
-                    help="starts a memcache d, and tests rowcache")
-  parser.add_option("-e", "--env", default='vttablet',
-                    help="Environment that will be used. Valid options: vttablet, vtocc")
+  parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
+  parser.add_option('-m', '--memcache', action='store_true', default=False,
+                    help='starts a memcache d, and tests rowcache')
+  parser.add_option(
+      '-e', '--env', default='vttablet',
+      help='Environment that will be used. Valid options: vttablet, vtocc')
   utils.add_options(parser)
   (options, args) = parser.parse_args()
 
@@ -51,7 +52,7 @@ def run_tests(options, args):
       elif hasattr(cache_tests.TestWillNotBeCached, arg) and options.memcache:
         suite.addTest(cache_tests.TestWillNotBeCached(arg))
       else:
-        raise Exception(arg, "not found in tests")
+        raise Exception(arg, 'not found in tests')
   else:
     modules = [nocache_tests, stream_tests, status_tests]
     if options.memcache:
@@ -63,18 +64,19 @@ def run_tests(options, args):
   try:
     env.memcache = options.memcache
     env.setUp()
-    print "Starting queryservice_test.py: %s" % options.env
+    print 'Starting queryservice_test.py: %s' % options.env
     sys.stdout.flush()
     framework.TestCase.setenv(env)
-    result = unittest.TextTestRunner(verbosity=options.verbose, failfast=True).run(suite)
+    result = unittest.TextTestRunner(
+        verbosity=options.verbose, failfast=True).run(suite)
     if not result.wasSuccessful():
-      raise Exception("test failures")
+      raise Exception('test failures')
   finally:
     if not options.skip_teardown:
       env.tearDown()
     if options.keep_logs:
-      print("Leaving temporary files behind (--keep-logs), please "
-            "clean up before next run: " + os.environ["VTDATAROOT"])
+      print('Leaving temporary files behind (--keep-logs), please '
+            'clean up before next run: ' + os.environ['VTDATAROOT'])
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   main()

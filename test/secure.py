@@ -19,10 +19,12 @@ shard_0_slave = tablet.Tablet()
 
 cert_dir = environment.tmproot + "/certs"
 
+
 def openssl(cmd):
   result = subprocess.call(["openssl"] + cmd, stderr=utils.devnull)
   if result != 0:
     raise utils.TestError("OpenSSL command failed: %s" % " ".join(cmd))
+
 
 def setUpModule():
   try:
@@ -36,7 +38,7 @@ def setUpModule():
     ca_cert = cert_dir + "/ca-cert.pem"
     openssl(["genrsa", "-out", cert_dir + "/ca-key.pem"])
     ca_config = cert_dir + "/ca.config"
-    with open(ca_config, 'w') as fd:
+    with open(ca_config, "w") as fd:
       fd.write("""
 [ req ]
  default_bits           = 1024
@@ -66,7 +68,7 @@ def setUpModule():
     server_cert = cert_dir + "/server-cert.pem"
     server_req = cert_dir + "/server-req.pem"
     server_config = cert_dir + "/server.config"
-    with open(server_config, 'w') as fd:
+    with open(server_config, "w") as fd:
       fd.write("""
 [ req ]
  default_bits           = 1024
@@ -103,7 +105,7 @@ def setUpModule():
     client_cert = cert_dir + "/client-cert.pem"
     client_req = cert_dir + "/client-req.pem"
     client_config = cert_dir + "/client.config"
-    with open(client_config, 'w') as fd:
+    with open(client_config, "w") as fd:
       fd.write("""
 [ req ]
  default_bits           = 1024
@@ -148,19 +150,20 @@ def setUpModule():
         ]
     utils.wait_procs(setup_procs)
 
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl("CreateKeyspace test_keyspace")
 
-    shard_0_master.init_tablet('master',  'test_keyspace', '0')
-    shard_0_slave.init_tablet('replica',  'test_keyspace', '0')
+    shard_0_master.init_tablet("master", "test_keyspace", "0")
+    shard_0_slave.init_tablet("replica", "test_keyspace", "0")
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl("RebuildKeyspaceGraph test_keyspace", auto_log=True)
 
     # create databases so vttablet can start behaving normally
-    shard_0_master.create_db('vt_test_keyspace')
-    shard_0_slave.create_db('vt_test_keyspace')
+    shard_0_master.create_db("vt_test_keyspace")
+    shard_0_slave.create_db("vt_test_keyspace")
   except:
     tearDownModule()
     raise
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -182,6 +185,7 @@ def tearDownModule():
   shard_0_master.remove_tree()
   shard_0_slave.remove_tree()
 
+
 class TestSecure(unittest.TestCase):
   """This test makes sure that we can use SSL replication with Vitess.
   """
@@ -190,17 +194,17 @@ class TestSecure(unittest.TestCase):
     # start the tablets
     shard_0_master.start_vttablet()
     shard_0_slave.start_vttablet(repl_extra_flags={
-        'flags': "2048",
-        'ssl-ca': cert_dir + "/ca-cert.pem",
-        'ssl-cert': cert_dir + "/client-cert.pem",
-        'ssl-key': cert_dir + "/client-key.pem",
+        "flags": "2048",
+        "ssl-ca": cert_dir + "/ca-cert.pem",
+        "ssl-cert": cert_dir + "/client-cert.pem",
+        "ssl-key": cert_dir + "/client-key.pem",
         })
 
     # Reparent using SSL (this will also check replication works)
     for t in [shard_0_master, shard_0_slave]:
       t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(["InitShardMaster", "test_keyspace/0",
                      shard_0_master.tablet_alias], auto_log=True)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   utils.main()

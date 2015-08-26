@@ -3,10 +3,9 @@
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter("ignore")
+warnings.simplefilter('ignore')
 
 import os
-import logging
 import unittest
 
 import environment
@@ -15,6 +14,7 @@ import tablet
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
+
 
 def setUpModule():
   try:
@@ -40,6 +40,7 @@ def setUpModule():
     tearDownModule()
     raise
 
+
 def tearDownModule():
   if utils.options.skip_teardown:
     return
@@ -59,7 +60,9 @@ def tearDownModule():
   master_tablet.remove_tree()
   replica_tablet.remove_tree()
 
+
 class TestMysqlctl(unittest.TestCase):
+
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     for t in [master_tablet, replica_tablet]:

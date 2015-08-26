@@ -3,7 +3,7 @@
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
-warnings.simplefilter("ignore")
+warnings.simplefilter('ignore')
 
 import gzip
 import logging
@@ -86,8 +86,10 @@ class TestBackup(unittest.TestCase):
   ) Engine=InnoDB'''
 
   def _insert_master(self, index):
-    tablet_master.mquery('vt_test_keyspace',
-                         "insert into vt_insert_test (msg) values ('test %s')" % index, write=True)
+    tablet_master.mquery(
+        'vt_test_keyspace',
+        "insert into vt_insert_test (msg) values ('test %s')" %
+        index, write=True)
 
   def test_backup(self):
     """test_backup will:
@@ -115,7 +117,8 @@ class TestBackup(unittest.TestCase):
     self._insert_master(1)
     timeout = 10
     while True:
-      result = tablet_replica1.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
+      result = tablet_replica1.mquery(
+          'vt_test_keyspace', 'select count(*) from vt_insert_test')
       if result[0][0] == 1:
         break
       timeout = utils.wait_step('slave tablet getting data', timeout)
@@ -136,7 +139,8 @@ class TestBackup(unittest.TestCase):
     # check the new slave has the data
     timeout = 10
     while True:
-      result = tablet_replica2.mquery('vt_test_keyspace', 'select count(*) from vt_insert_test')
+      result = tablet_replica2.mquery(
+          'vt_test_keyspace', 'select count(*) from vt_insert_test')
       if result[0][0] == 2:
         break
       timeout = utils.wait_step('new slave tablet getting data', timeout)
@@ -146,7 +150,7 @@ class TestBackup(unittest.TestCase):
                                    ['ListBackups', 'test_keyspace/0'],
                                    mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
-    logging.debug("list of backups: %s", backups)
+    logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
     self.assertTrue(backups[0].startswith(tablet_replica1.tablet_alias))
 
@@ -160,7 +164,7 @@ class TestBackup(unittest.TestCase):
                                    ['ListBackups', 'test_keyspace/0'],
                                    mode=utils.VTCTL_VTCTL, trap_output=True)
     backups = backups.splitlines()
-    logging.debug("list of backups after remove: %s", backups)
+    logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
 
     for t in tablet_master, tablet_replica1, tablet_replica2:

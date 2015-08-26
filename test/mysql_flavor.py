@@ -7,7 +7,7 @@ import subprocess
 
 
 class MysqlFlavor(object):
-  """Base class with default SQL statements"""
+  """Base class with default SQL statements."""
 
   def promote_slave_commands(self):
     """Returns commands to convert a slave to a master."""
@@ -33,15 +33,18 @@ class MysqlFlavor(object):
     return None
 
   def bootstrap_archive(self):
-    """Returns the name of the bootstrap archive for mysqlctl, relative to vitess/data/bootstrap/"""
+    """Returns the name of the bootstrap archive for mysqlctl.
+
+    Name is relative to vitess/data/bootstrap/.
+    """
     return "mysql-db-dir.tbz"
 
   def master_position(self, tablet):
-    """Returns the position from SHOW MASTER STATUS as a string"""
+    """Returns the position from SHOW MASTER STATUS as a string."""
     raise NotImplementedError()
 
   def position_equal(self, a, b):
-    """Returns true if position 'a' is equal to 'b'"""
+    """Returns true if position 'a' is equal to 'b'."""
     raise NotImplementedError()
 
   def position_at_least(self, a, b):
@@ -49,7 +52,7 @@ class MysqlFlavor(object):
     raise NotImplementedError()
 
   def position_after(self, a, b):
-    """Returns true if position 'a' is after 'b'"""
+    """Returns true if position 'a' is after 'b.'"""
     return self.position_at_least(a, b) and not self.position_equal(a, b)
 
   def position_append(self, pos, gtid):
@@ -58,7 +61,9 @@ class MysqlFlavor(object):
 
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
-       Returns False if the flavor doesn't support binlog_checksum."""
+
+    Returns False if the flavor doesn't support binlog_checksum.
+    """
     tablet.mquery("", "SET @@global.binlog_checksum=1")
     return True
 
@@ -68,7 +73,7 @@ class MysqlFlavor(object):
 
 
 class MariaDB(MysqlFlavor):
-  """Overrides specific to MariaDB"""
+  """Overrides specific to MariaDB."""
 
   def reset_replication_commands(self):
     return [

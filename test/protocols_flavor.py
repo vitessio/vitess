@@ -59,8 +59,10 @@ class ProtocolsFlavor(object):
 __knows_protocols_flavor_map = {}
 __protocols_flavor = None
 
+
 def protocols_flavor():
   return __protocols_flavor
+
 
 def set_protocols_flavor(flavor):
   global __protocols_flavor
