@@ -5,11 +5,7 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter('ignore')
 
-import gzip
 import logging
-import os
-import shutil
-from subprocess import call
 import unittest
 
 import environment
@@ -23,6 +19,7 @@ tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
 tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
 
 setup_procs = []
+
 
 def setUpModule():
   try:
@@ -44,6 +41,7 @@ def setUpModule():
   except:
     tearDownModule()
     raise
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -72,6 +70,7 @@ def tearDownModule():
 
 
 class TestBackup(unittest.TestCase):
+
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server().wipe()

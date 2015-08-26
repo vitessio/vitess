@@ -68,12 +68,16 @@ def add_options(parser):
                     help='utils.pause() statements will wait for user input')
   parser.add_option('-k', '--keep-logs', action='store_true',
                     help='Do not delete log files on teardown.')
-  parser.add_option('-q', '--quiet', action='store_const', const=0, dest='verbose', default=1)
-  parser.add_option('-v', '--verbose', action='store_const', const=2, dest='verbose', default=1)
+  parser.add_option(
+      '-q', '--quiet', action='store_const', const=0, dest='verbose', default=1)
+  parser.add_option(
+      '-v', '--verbose', action='store_const', const=2, dest='verbose',
+      default=1)
   parser.add_option('--skip-build', action='store_true',
                     help='Do not build the go binaries when running the test.')
-  parser.add_option('--skip-teardown', action='store_true',
-                    help='Leave the global processes running after the test is done.')
+  parser.add_option(
+      '--skip-teardown', action='store_true',
+      help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor')
   parser.add_option('--topo-server-flavor', default='zookeeper')
@@ -95,7 +99,7 @@ def main(mod=None, test_options=None):
   """The replacement main method, which parses args and runs tests.
 
   Args:
-    test_options - a function which adds OptionParser options that are specific
+    test_options: a function which adds OptionParser options that are specific
       to a test file.
   """
   if mod == None:
@@ -116,7 +120,8 @@ def main(mod=None, test_options=None):
   else:
     level = logging.DEBUG
   logging.getLogger().setLevel(level)
-  logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
+  logging.basicConfig(
+      format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s')
 
   set_options(options)
 
@@ -143,7 +148,8 @@ def run_tests(mod, args):
 
     if suite.countTestCases() > 0:
       logger = LoggingStream()
-      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose, failfast=True).run(suite)
+      result = unittest.TextTestRunner(
+          stream=logger, verbosity=options.verbose, failfast=True).run(suite)
       if not result.wasSuccessful():
         sys.exit(-1)
   except KeyboardInterrupt:
@@ -221,7 +227,9 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   if trap_output:
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
-  logging.debug('run: %s %s', str(cmd), ', '.join('%s=%s' % x for x in kargs.iteritems()))
+  logging.debug(
+      'run: %s %s', str(cmd),
+      ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
@@ -244,7 +252,9 @@ def run_fail(cmd, **kargs):
   kargs['stdout'] = PIPE
   kargs['stderr'] = PIPE
   if options.verbose == 2:
-    logging.debug('run: (expect fail) %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+    logging.debug(
+        'run: (expect fail) %s %s', cmd,
+        ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
@@ -257,7 +267,8 @@ def run_fail(cmd, **kargs):
 # run a daemon - kill when this script exits
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
-    logging.debug('run: %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+    logging.debug(
+        'run: %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
   if 'extra_env' in kargs:
     kargs['env'] = os.environ.copy()
     if kargs['extra_env']:
@@ -321,8 +332,8 @@ def wait_step(msg, timeout, sleep_time=1.0):
   timeout -= sleep_time
   if timeout <= 0:
     raise TestError('timeout waiting for condition "%s"' % msg)
-  logging.debug('Sleeping for %f seconds waiting for condition "%s"' %
-               (sleep_time, msg))
+  logging.debug('Sleeping for %f seconds waiting for condition "%s"',
+                sleep_time, msg)
   time.sleep(sleep_time)
   return timeout
 
@@ -357,7 +368,10 @@ def wait_for_vars(name, port, var=None):
       break
     timeout = wait_step('waiting for /debug/vars of %s' % name, timeout)
 
-def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, require_vars=False):
+
+def poll_for_vars(
+    name, port, condition_msg, timeout=60.0, condition_fn=None,
+    require_vars=False):
   """Polls for debug variables to exist, or match specific conditions, within a timeout.
 
   This function polls in a tight loop, with no sleeps. This is useful for
@@ -365,17 +379,18 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, re
   immediately before a process exits).
 
   Args:
-    name - the name of the process that we're trying to poll vars from.
-    port - the port number that we should poll for variables.
-    condition_msg - string describing the conditions that we're polling for,
+    name: the name of the process that we're trying to poll vars from.
+    port: the port number that we should poll for variables.
+    condition_msg: string describing the conditions that we're polling for,
       used for error messaging.
-    timeout - number of seconds that we should attempt to poll for.
-    condition_fn - a function that takes the debug vars dict as input, and
+    timeout: number of seconds that we should attempt to poll for.
+    condition_fn: a function that takes the debug vars dict as input, and
       returns a truthy value if it matches the success conditions.
-    require_vars - True iff we expect the vars to always exist. If True, and the
-      vars don't exist, we'll raise a TestError. This can be used to differentiate
-      between a timeout waiting for a particular condition vs if the process that
-      you're polling has already exited.
+    require_vars: True iff we expect the vars to always exist. If
+      True, and the vars don't exist, we'll raise a TestError. This
+      can be used to differentiate between a timeout waiting for a
+      particular condition vs if the process that you're polling has
+      already exited.
 
   Raises:
     TestError, if the conditions aren't met within the given timeout
@@ -383,6 +398,7 @@ def poll_for_vars(name, port, condition_msg, timeout=60.0, condition_fn=None, re
 
   Returns:
     dict of debug variables
+
   """
   start_time = time.time()
   while True:
@@ -416,9 +432,8 @@ def wait_for_tablet_type(tablet_alias, expected_type, timeout=10):
     if run_vtctl_json(['GetTablet', tablet_alias])['type'] == expected_type:
       break
     timeout = wait_step(
-      "%s's SlaveType to be %s" % (tablet_alias, expected_type),
-      timeout
-    )
+        "%s's SlaveType to be %s" % (tablet_alias, expected_type),
+        timeout)
 
 
 def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
@@ -433,14 +448,16 @@ def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
     if mysql_flavor().position_at_least(replication_pos_b, replication_pos_a):
       break
     timeout = wait_step(
-      "%s's replication position to catch up %s's; currently at: %s, waiting to catch up to: %s" % (
-        tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b, replication_pos_a),
-      timeout, sleep_time=0.1
-    )
+      "%s's replication position to catch up %s's; "
+      'currently at: %s, waiting to catch up to: %s' % (
+          tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b,
+          replication_pos_a),
+      timeout, sleep_time=0.1)
 
 # Save the first running instance of vtgate. It is saved when 'start'
 # is called, and cleared when kill is called.
 vtgate = None
+
 
 class VtGate(object):
   """VtGate object represents a vtgate process.
@@ -459,21 +476,23 @@ class VtGate(object):
             topo_impl=None, cache_ttl='1s',
             auth=False, timeout_total='4s', timeout_per_conn='2s',
             extra_args=None):
-    """Starts the process for thie vtgate instance. If no other instance has
-       been started, saves it into the global vtgate variable.
+    """Starts the process for thie vtgate instance.
+
+    If no other instance has been started, saves it into the global
+    vtgate variable.
     """
     args = environment.binary_args('vtgate') + [
-          '-port', str(self.port),
-          '-cell', cell,
-          '-retry-delay', '%ss' % (str(retry_delay)),
-          '-retry-count', str(retry_count),
-          '-log_dir', environment.vtlogroot,
-          '-srv_topo_cache_ttl', cache_ttl,
-          '-conn-timeout-total', timeout_total,
-          '-conn-timeout-per-conn', timeout_per_conn,
-          '-bsonrpc_timeout', '5s',
-          '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-          ]
+        '-port', str(self.port),
+        '-cell', cell,
+        '-retry-delay', '%ss' % (str(retry_delay)),
+        '-retry-count', str(retry_count),
+        '-log_dir', environment.vtlogroot,
+        '-srv_topo_cache_ttl', cache_ttl,
+        '-conn-timeout-total', timeout_total,
+        '-conn-timeout-per-conn', timeout_per_conn,
+        '-bsonrpc_timeout', '5s',
+        '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+    ]
     if protocols_flavor().vtgate_protocol() == 'grpc':
       args.extend(['-grpc_port', str(self.grpc_port)])
     if protocols_flavor().service_map():
@@ -550,9 +569,9 @@ class VtGate(object):
     """vtclient uses the vtclient binary to send a query to vtgate.
     """
     args = environment.binary_args('vtclient') + [
-      '-server', self.rpc_endpoint(),
-      '-tablet_type', tablet_type,
-      '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
+        '-server', self.rpc_endpoint(),
+        '-tablet_type', tablet_type,
+        '-vtgate_protocol', protocols_flavor().vtgate_protocol()]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -608,10 +627,10 @@ class VtGate(object):
 # The modes are not all equivalent, and we don't really thrive for it.
 # If a client needs to rely on vtctl's command line behavior, make
 # sure to use mode=utils.VTCTL_VTCTL
-VTCTL_AUTO        = 0
-VTCTL_VTCTL       = 1
+VTCTL_AUTO = 0
+VTCTL_VTCTL = 1
 VTCTL_VTCTLCLIENT = 2
-VTCTL_RPC         = 3
+VTCTL_RPC = 3
 
 
 def run_vtctl(clargs, auto_log=False, expect_fail=False,
@@ -679,7 +698,7 @@ def get_log_level():
 
 # vtworker helpers
 def run_vtworker(clargs, auto_log=False, expect_fail=False, **kwargs):
-  """Runs a vtworker process, returning the stdout and stderr"""
+  """Runs a vtworker process, returning the stdout and stderr."""
   cmd, _, _ = _get_vtworker_cmd(clargs, auto_log)
   if expect_fail:
     return run_fail(cmd, **kwargs)
@@ -696,6 +715,7 @@ def run_vtworker_bg(clargs, auto_log=False, **kwargs):
   """
   cmd, port, rpc_port = _get_vtworker_cmd(clargs, auto_log)
   return run_bg(cmd, **kwargs), port, rpc_port
+
 
 def _get_vtworker_cmd(clargs, auto_log=False):
   """Assembles the command that is needed to run a vtworker.
@@ -731,6 +751,7 @@ def _get_vtworker_cmd(clargs, auto_log=False):
   cmd = args + clargs
   return cmd, port, rpc_port
 
+
 # vtworker client helpers
 def run_vtworker_client(args, rpc_port):
   """Runs vtworkerclient to execute a command on a remote vtworker.
@@ -746,6 +767,7 @@ def run_vtworker_client(args, rpc_port):
                   '-stderrthreshold', get_log_level()] + args,
                  trap_output=True)
   return out, err
+
 
 def run_automation_server(auto_log=False):
   """Starts a background automation_server process.
@@ -765,6 +787,7 @@ def run_automation_server(auto_log=False):
     args.append('--stderrthreshold=%s' % get_log_level())
 
   return run_bg(args), rpc_port
+
 
 # mysql helpers
 def mysql_query(uid, dbname, query):
@@ -833,8 +856,8 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
     result += 'Partitions(%s):' % tablet_type
     partition = ks['Partitions'][tablet_type]
     for shard in partition['ShardReferences']:
-      result = result + ' %s-%s' % (shard['KeyRange']['Start'],
-                                    shard['KeyRange']['End'])
+      result += ' %s-%s' % (shard['KeyRange']['Start'],
+                            shard['KeyRange']['End'])
     result += '\n'
   logging.debug('Cell %s keyspace %s has data:\n%s', cell, keyspace, result)
   if expected != result:
@@ -844,10 +867,11 @@ def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
             cell, keyspace, expected, result))
   if 'keyspace_id' != ks.get('ShardingColumnName'):
     raise Exception('Got wrong ShardingColumnName in SrvKeyspace: %s' %
-                   str(ks))
+                    str(ks))
   if keyspace_id_type != ks.get('ShardingColumnType'):
     raise Exception('Got wrong ShardingColumnType in SrvKeyspace: %s' %
-                   str(ks))
+                    str(ks))
+
 
 def check_shard_query_service(
     testcase, shard_name, tablet_type, expected_state):
@@ -875,14 +899,16 @@ def check_shard_query_service(
 def check_shard_query_services(
     testcase, shard_names, tablet_type, expected_state):
   for shard_name in shard_names:
-    check_shard_query_service(testcase, shard_name, tablet_type, expected_state)
+    check_shard_query_service(
+        testcase, shard_name, tablet_type, expected_state)
 
 
 def check_tablet_query_service(
     testcase, tablet, serving, tablet_control_disabled):
-  """check_tablet_query_service will check that the query service is enabled
-  or disabled on the tablet. It will also check if the tablet control
-  status is the reason for being enabled / disabled.
+  """Check that the query service is enabled or disabled on the tablet.
+
+  It will also check if the tablet control status is the reason for
+  being enabled / disabled.
 
   It will also run a remote RunHealthCheck to be sure it doesn't change
   the serving state.
@@ -905,7 +931,7 @@ def check_tablet_query_service(
 
   if tablet.tablet_type == 'rdonly':
     run_vtctl(['RunHealthCheck', tablet.tablet_alias, 'rdonly'],
-                    auto_log=True)
+              auto_log=True)
 
     tablet_vars = get_vars(tablet.port)
     testcase.assertEqual(
@@ -915,7 +941,8 @@ def check_tablet_query_service(
         (tablet.tablet_alias, tablet_vars['TabletStateName'], expected_state))
 
 
-def check_tablet_query_services(testcase, tablets, serving, tablet_control_disabled):
+def check_tablet_query_services(
+    testcase, tablets, serving, tablet_control_disabled):
   for tablet in tablets:
     check_tablet_query_service(
         testcase, tablet, serving, tablet_control_disabled)
@@ -963,7 +990,8 @@ class Vtctld(object):
 
   def __init__(self):
     self.port = environment.reserve_ports(1)
-    self.schema_change_dir = os.path.join(environment.tmproot, 'schema_change_test')
+    self.schema_change_dir = os.path.join(
+        environment.tmproot, 'schema_change_test')
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 

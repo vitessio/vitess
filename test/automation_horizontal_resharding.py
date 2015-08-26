@@ -32,7 +32,8 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         auto_log=True)
     vtworker_endpoint = 'localhost:' + str(worker_rpc_port)
 
-    automation_server_proc, automation_server_port = utils.run_automation_server()
+    automation_server_proc, automation_server_port = (
+        utils.run_automation_server())
 
     keyspace = 'test_keyspace'
     source_shard_list = '0'

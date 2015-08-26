@@ -134,7 +134,7 @@ class InsertThread(threading.Thread):
         'vt_test_keyspace',
         ['begin',
          'insert into timestamps(name, time_milli, keyspace_id) '
-         'values('%s', %d, 0x%x) /* EMD keyspace_id:%s user_id:%d */' %
+         "values('%s', %d, 0x%x) /* EMD keyspace_id:%s user_id:%d */" %
          (self.object_name, long(time.time() * 1000), self.keyspace_id,
           self.str_keyspace_id, self.user_id),
          'commit'],
@@ -671,7 +671,7 @@ primary key (name)
     utils.run_vtctl(['MigrateServedTypes', '--cells=test_nj',
                      'test_keyspace/80-', 'rdonly'], auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-\n
+                             'Partitions(master): -80 80-\n'
                              'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
@@ -708,8 +708,8 @@ primary key (name)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(master): -80 80-\n'
+                             'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-c0 c0-\n',
                              keyspace_id_type=keyspace_id_type)
     utils.check_tablet_query_service(self, shard_1_slave2, False, True)
@@ -725,8 +725,8 @@ primary key (name)
                                      tablet.Tablet.tablet_type_value['REPLICA'],
                                      False)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
-                             'Partitions(master): -80 80-\n' +
-                             'Partitions(rdonly): -80 80-c0 c0-\n' +
+                             'Partitions(master): -80 80-\n'
+                             'Partitions(rdonly): -80 80-c0 c0-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
 

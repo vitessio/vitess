@@ -67,10 +67,10 @@ class TestVtctld(unittest.TestCase):
          'master:test_keyspace,replica:test_keyspace,rdonly:test_keyspace',
          'redirected_keyspace'])
 
-    shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
-    shard_0_replica.init_tablet('spare',   'test_keyspace', '-80')
-    shard_0_spare.init_tablet(  'spare',   'test_keyspace', '-80')
-    shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
+    shard_0_master.init_tablet 'master', 'test_keyspace', '-80')
+    shard_0_replica.init_tablet('spare', 'test_keyspace', '-80')
+    shard_0_spare.init_tablet('spare', 'test_keyspace', '-80')
+    shard_1_master.init_tablet('master', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
     idle.init_tablet('idle')
     scrap.init_tablet('idle')

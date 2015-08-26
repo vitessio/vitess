@@ -546,7 +546,7 @@ class TestRangeSharded(unittest.TestCase):
       email_hash = m.digest()
       update_cols = [('email', new_email), ('email_hash', email_hash)]
       db_class_sharded.VtUserEmail.update_columns(
-          context.get_cursor(entity_id_map={'user_id':user_id}),
+          context.get_cursor(entity_id_map={'user_id': user_id}),
           where_column_value_pairs,
           update_column_value_pairs=update_cols)
 

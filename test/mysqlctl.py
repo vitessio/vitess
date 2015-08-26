@@ -79,7 +79,7 @@ class TestMysqlctl(unittest.TestCase):
     master_tablet.start_vttablet(wait_for_state=None,
                                  extra_env={'MYSQL_FLAVOR': ''})
     replica_tablet.start_vttablet(wait_for_state=None,
-                                 extra_env={'MYSQL_FLAVOR': ''})
+                                  extra_env={'MYSQL_FLAVOR': ''})
     master_tablet.wait_for_vttablet_state('SERVING')
     replica_tablet.wait_for_vttablet_state('SERVING')
 

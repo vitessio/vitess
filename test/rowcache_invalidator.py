@@ -120,9 +120,9 @@ class RowCacheInvalidator(unittest.TestCase):
     self._wait_for_replica()
     invalidations = self.replica_stats()['Totals']['Invalidations']
     invalidatorStats = self.replica_vars()
-    logging.debug('Invalidations %d InvalidatorStats %s' %
-                  (invalidations,
-                   invalidatorStats['RowcacheInvalidatorPosition']))
+    logging.debug(
+        'Invalidations %d InvalidatorStats %s',
+        invalidations, invalidatorStats['RowcacheInvalidatorPosition'])
     self.assertTrue(
         invalidations > 0, 'Invalidations are not flowing through.')
 
@@ -132,7 +132,7 @@ class RowCacheInvalidator(unittest.TestCase):
                         'Cannot proceed, no rows in vt_insert_test')
     id = int(res[0][0])
     stats_dict = self.replica_stats()['vt_insert_test']
-    logging.debug('vt_insert_test stats %s' % stats_dict)
+    logging.debug('vt_insert_test stats %s', stats_dict)
     misses = stats_dict['Misses']
     hits = stats_dict['Hits']
     replica_tablet.execute('select * from vt_insert_test where id=:id',
@@ -248,7 +248,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
     # check and display some stats
     invalidatorStats = self.replica_vars()
-    logging.debug('invalidatorStats %s' %
+    logging.debug('invalidatorStats %s',
                   invalidatorStats['RowcacheInvalidatorPosition'])
     self.assertEqual(invalidatorStats['RowcacheInvalidatorState'], 'Running',
                      'Row-cache invalidator should be enabled')
@@ -295,9 +295,9 @@ class RowCacheInvalidator(unittest.TestCase):
     invStats_after = self.replica_vars()
     logging.debug(
         'Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats '
-        '%s\n\tAfter: Invalidations: %d InvalidatorStats %s' %
-        (inv_before, invStats_before['RowcacheInvalidatorPosition'],
-         inv_after, invStats_after['RowcacheInvalidatorPosition']))
+        '%s\n\tAfter: Invalidations: %d InvalidatorStats %s',
+        inv_before, invStats_before['RowcacheInvalidatorPosition'],
+        inv_after, invStats_after['RowcacheInvalidatorPosition'])
     self.assertEqual(inv_after, 0,
                      'Row-cache invalid. should be disabled, no invalidations')
     self.assertEqual(invStats_after['RowcacheInvalidatorState'], 'Stopped',

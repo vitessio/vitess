@@ -59,14 +59,14 @@ def tearDownModule():
   if utils.vtgate:
     utils.vtgate.kill()
   teardown_procs = [
-        source_master.teardown_mysql(),
-        source_replica.teardown_mysql(),
-        source_rdonly1.teardown_mysql(),
-        source_rdonly2.teardown_mysql(),
-        destination_master.teardown_mysql(),
-        destination_replica.teardown_mysql(),
-        destination_rdonly1.teardown_mysql(),
-        destination_rdonly2.teardown_mysql(),
+      source_master.teardown_mysql(),
+      source_replica.teardown_mysql(),
+      source_rdonly1.teardown_mysql(),
+      source_rdonly2.teardown_mysql(),
+      destination_master.teardown_mysql(),
+      destination_replica.teardown_mysql(),
+      destination_rdonly1.teardown_mysql(),
+      destination_rdonly2.teardown_mysql(),
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -96,7 +96,7 @@ msg varchar(64),
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
-    create_view_template = '''create view %s(id, msg) as select id, msg from %s'''
+    create_view_template = 'create view %s(id, msg) as select id, msg from %s'
 
     for t in ['moving1', 'moving2', 'staying1', 'staying2']:
       utils.run_vtctl(['ApplySchema',
@@ -224,25 +224,38 @@ index by_msg (msg)
               keyranges=[keyrange.KeyRange(
                   keyrange_constants.NON_PARTIAL_KEYRANGE)])
           logging.debug(
-              'Select on %s.%s returned %d rows' % (db_type, tbl, len(rows)))
+              'Select on %s.%s returned %d rows' db_type, tbl, len(rows))
         except Exception, e:
           self.fail('Execute failed w/ exception %s' % str(e))
 
   def _check_stats(self):
     v = utils.vtgate.get_vars()
-    self.assertEqual(v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica']['Count'], 2, 'unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s' % str(v))
-    self.assertEqual(v['VtgateApi']['Histograms']['ExecuteKeyRanges.destination_keyspace.master']['Count'], 6, 'unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s' % str(v))
+    self.assertEqual(
+        v['VttabletCall']['Histograms']['Execute.source_keyspace.0.replica'][
+            'Count'],
+        2
+        , 'unexpected value for VttabletCall('
+        'Execute.source_keyspace.0.replica) inside %s' % str(v))
+    self.assertEqual(
+        v['VtgateApi']['Histograms'][
+            'ExecuteKeyRanges.destination_keyspace.master']['Count'],
+        6,
+        'unexpected value for VtgateApi('
+        'ExecuteKeyRanges.destination_keyspace.master) inside %s' % str(v))
     self.assertEqual(
         len(v['VtgateApiErrorCounts']), 0,
         'unexpected errors for VtgateApiErrorCounts inside %s' % str(v))
     self.assertEqual(
-        v['ResilientSrvTopoServerEndPointsReturnedCount']['test_nj.source_keyspace.0.master'] /
-        v['ResilientSrvTopoServerEndPointQueryCount']['test_nj.source_keyspace.0.master'],
-        1, 'unexpected EndPointsReturnedCount inside %s' % str(v))
+        v['ResilientSrvTopoServerEndPointsReturnedCount'][
+            'test_nj.source_keyspace.0.master'] /
+        v['ResilientSrvTopoServerEndPointQueryCount'][
+            'test_nj.source_keyspace.0.master'],
+        1,
+        'unexpected EndPointsReturnedCount inside %s' % str(v))
     self.assertNotIn(
-            'test_nj.source_keyspace.0.master',
-            v['ResilientSrvTopoServerEndPointDegradedResultCount'],
-            'unexpected EndPointDegradedResultCount inside %s' % str(v))
+        'test_nj.source_keyspace.0.master',
+        v['ResilientSrvTopoServerEndPointDegradedResultCount'],
+        'unexpected EndPointDegradedResultCount inside %s' % str(v))
 
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace', 'source_keyspace'])

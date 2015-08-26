@@ -254,8 +254,8 @@ class TestUpdateStream(unittest.TestCase):
       if master_start_position == replica_start_position:
         break
       timeout = utils.wait_step(
-        "%s == %s" % (master_start_position, replica_start_position),
-        timeout
+          '%s == %s' % (master_start_position, replica_start_position),
+          timeout
       )
     logging.debug('run_test_stream_parity starting @ %s',
                   master_start_position)
@@ -317,7 +317,7 @@ class TestUpdateStream(unittest.TestCase):
       self.assertEqual(stream_event.rows[0][0], expected_id)
       expected_id += 1
     if expected_id != 1000004:
-      self.fail("did not get my four values!")
+      self.fail('did not get my four values!')
 
   def test_database_filter(self):
     start_position = _get_master_current_position()
@@ -333,7 +333,7 @@ class TestUpdateStream(unittest.TestCase):
           "query using other_database wasn't filted out")
 
   def test_service_switch(self):
-    """tests the service switch from disable -> enable -> disable"""
+    """tests the service switch from disable -> enable -> disable."""
     self._test_service_disabled()
     self._test_service_enabled()
     # The above tests leaves the service in disabled state, hence enabling it.

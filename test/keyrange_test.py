@@ -52,8 +52,8 @@ int_shard_kid_map = {
 # str_shard_kid_map is derived from int_shard_kid_map
 # by generating bin-packed strings from the int keyspace_id values.
 str_shard_kid_map = dict(
-    [(shard_name, [pkid_pack(kid) for kid in kid_list])
-     for shard_name, kid_list in int_shard_kid_map.iteritems()])
+    [(shard_name0, [pkid_pack(kid0) for kid0 in kid_list0])
+     for shard_name0, kid_list0 in int_shard_kid_map.iteritems()])
 
 
 class TestKeyRange(unittest.TestCase):
@@ -69,7 +69,7 @@ class TestKeyRange(unittest.TestCase):
     self.assertEqual(kr.End, keyrange_constants.MAX_KEY)
     self.assertEqual(str(kr), keyrange_constants.NON_PARTIAL_KEYRANGE)
 
-    for kr_str in int_shard_kid_map.keys():
+    for kr_str in int_shard_kid_map:
       Start_raw, End_raw = kr_str.split('-')
       kr = keyrange.KeyRange(kr_str)
       self.assertEqual(kr.Start, Start_raw.strip().decode('hex'))
@@ -92,7 +92,7 @@ class TestKeyRange(unittest.TestCase):
   # against a few sample values where keyspace_id is an int column.
   def test_bind_values_for_int_keyspace(self):
     stm = vtrouting.create_parallel_task_keyrange_map(16, 16)
-    for i, kr in enumerate(stm.keyrange_list):
+    for _, kr in enumerate(stm.keyrange_list):
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr)
       if len(bind_vars.keys()) == 1:

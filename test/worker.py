@@ -77,7 +77,7 @@ shard_1_tablets = ShardTablets(
 def init_keyspace():
   """Creates a `test_keyspace` keyspace with a sharding key."""
   utils.run_vtctl(['CreateKeyspace', '-sharding_column_name', 'keyspace_id',
-    '-sharding_column_type', KEYSPACE_ID_TYPE,'test_keyspace'])
+    '-sharding_column_type', KEYSPACE_ID_TYPE, 'test_keyspace'])
 
 
 def setUpModule():
@@ -173,11 +173,13 @@ class TestBaseSplitClone(unittest.TestCase):
         wait_for_state=None, target_tablet_type='replica',
         init_keyspace='test_keyspace', init_shard=shard_name)
     for tablet in shard_tablets.replicas:
-      tablet.start_vttablet(wait_for_state=None, target_tablet_type='replica',
-                            init_keyspace='test_keyspace', init_shard=shard_name)
+      tablet.start_vttablet(
+          wait_for_state=None, target_tablet_type='replica',
+          init_keyspace='test_keyspace', init_shard=shard_name)
     for tablet in shard_tablets.rdonlys:
-      tablet.start_vttablet(wait_for_state=None, target_tablet_type='rdonly',
-                            init_keyspace='test_keyspace', init_shard=shard_name)
+      tablet.start_vttablet(
+          wait_for_state=None, target_tablet_type='rdonly',
+          init_keyspace='test_keyspace', init_shard=shard_name)
     # Block until tablets are up and we can enable replication.
     # We don't care about the tablets' state which may have been changed by the
     # health check from SERVING to NOT_SERVING anyway.
@@ -311,7 +313,7 @@ class TestBaseSplitClone(unittest.TestCase):
       source_tablets: ShardTablets instance for the source shard
       destination_tablets: ShardTablets instance for the destination shard
     """
-    logging.debug('Running vtworker SplitDiff for %s' % keyspace_shard)
+    logging.debug('Running vtworker SplitDiff for %s', keyspace_shard)
     stdout, stderr = utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
       keyspace_shard], auto_log=True)
 
@@ -347,7 +349,8 @@ class TestBaseSplitClone(unittest.TestCase):
         tablet.kill_vttablet()
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     for shard in ['0', '-80', '80-']:
-      utils.run_vtctl(['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
+      utils.run_vtctl(
+          ['DeleteShard', 'test_keyspace/%s' % shard], auto_log=True)
 
 
 class TestBaseSplitCloneResiliency(TestBaseSplitClone):
@@ -389,9 +392,10 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     if mysql_down:
       # If MySQL is down, we wait until resolving at least twice (to verify that
       # we do reresolve and retry due to MySQL being down).
-      worker_vars = utils.poll_for_vars('vtworker', worker_port,
-        'WorkerDestinationActualResolves >= 2',
-        condition_fn=lambda v: v.get('WorkerDestinationActualResolves') >= 2)
+      worker_vars = utils.poll_for_vars(
+          'vtworker', worker_port,
+          'WorkerDestinationActualResolves >= 2',
+          condition_fn=lambda v: v.get('WorkerDestinationActualResolves') >= 2)
       self.assertNotEqual(
           worker_vars['WorkerRetryCount'], {},
           "expected vtworker to retry, but it didn't")
@@ -423,25 +427,28 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     # There are a couple of race conditions around this, that we need
     # to be careful of:
     #
-    # 1. It's possible for the reparent step to take so long that the worker will
-    #   actually finish before we get to the polling step. To workaround this,
-    #   the test takes a parameter to increase the number of rows that the worker
-    #   has to copy (with the idea being to slow the worker down).
+    # 1. It's possible for the reparent step to take so long that the
+    #   worker will actually finish before we get to the polling
+    #   step. To workaround this, the test takes a parameter to
+    #   increase the number of rows that the worker has to copy (with
+    #   the idea being to slow the worker down).
     #
-    # 2. If the worker has a huge number of rows to copy, it's possible for the
-    #   polling to timeout before the worker has finished copying the data.
+    # 2. If the worker has a huge number of rows to copy, it's
+    #   possible for the polling to timeout before the worker has
+    #   finished copying the data.
     #
     # You should choose a value for num_insert_rows, such that this test passes
     # for your environment (trial-and-error...)
-    worker_vars = utils.poll_for_vars('vtworker', worker_port,
-      'WorkerState == cleaning up',
-      condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
-      # We know that vars should already be ready, since we read them earlier
-      require_vars=True,
-      # We're willing to let the test run for longer to make it less flaky.
-      # This should still fail fast if something goes wrong with vtworker,
-      # because of the require_vars flag above.
-      timeout=5*60)
+    worker_vars = utils.poll_for_vars(
+        'vtworker', worker_port,
+        'WorkerState == cleaning up',
+        condition_fn=lambda v: v.get('WorkerState') == 'cleaning up',
+        # We know that vars should already be ready, since we read them earlier
+        require_vars=True,
+        # We're willing to let the test run for longer to make it less flaky.
+        # This should still fail fast if something goes wrong with vtworker,
+        # because of the require_vars flag above.
+        timeout=5*60)
 
     # Verify that we were forced to reresolve and retry.
     self.assertGreater(worker_vars['WorkerDestinationActualResolves'], 1)
@@ -483,14 +490,14 @@ class TestMysqlDownDuringWorkerCopy(TestBaseSplitCloneResiliency):
 
     Also runs base setup.
     """
-    logging.debug("Starting base setup for MysqlDownDuringWorkerCopy")
+    logging.debug('Starting base setup for MysqlDownDuringWorkerCopy')
     super(TestMysqlDownDuringWorkerCopy, self).setUp()
 
-    logging.debug("Starting MysqlDownDuringWorkerCopy-specific setup")
+    logging.debug('Starting MysqlDownDuringWorkerCopy-specific setup')
     utils.wait_procs(
         [shard_0_master.shutdown_mysql(),
          shard_1_master.shutdown_mysql()])
-    logging.debug("Finished MysqlDownDuringWorkerCopy-specific setup")
+    logging.debug('Finished MysqlDownDuringWorkerCopy-specific setup')
 
   def tearDown(self):
     """Restarts the MySQL processes that were killed during the setup."""
@@ -539,7 +546,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       try:
         urllib2.urlopen(
             worker_base_url + '/Debugging/Ping',
-            data=urllib.urlencode({'message':'pong'})).read()
+            data=urllib.urlencode({'message': 'pong'})).read()
         raise Exception('Should have thrown an HTTPError for the redirect.')
       except urllib2.HTTPError as e:
         self.assertEqual(e.code, 307)
@@ -555,6 +562,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
       self.assertIn(
           'This worker is idle.', status_after_reset,
           '/status does not indicate that the reset was successful')
+
 
 def add_test_options(parser):
   parser.add_option(

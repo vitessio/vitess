@@ -115,7 +115,7 @@ def parse_args():
   global options, args
   parser = optparse.OptionParser(usage='usage: %prog [options]')
   parser.add_option('--shards', action='store', type='string',
-                    help='comma separated list of shard names, e.g: '-80,80-'')
+                    help="comma separated list of shard names, e.g: '-80,80-'")
   parser.add_option(
       '--tablet-config', action='store', type='string',
       help='json config for for non-master tablets. e.g '

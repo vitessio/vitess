@@ -155,7 +155,6 @@ class TestTabletManager(unittest.TestCase):
     utils.validate_topology()
     self._check_srv_shard()
 
-
   _create_vt_select_test = '''create table vt_select_test (
   id bigint auto_increment,
   msg varchar(64),
@@ -165,7 +164,6 @@ class TestTabletManager(unittest.TestCase):
   _populate_vt_select_test = [
       "insert into vt_select_test (msg) values ('test %s')" % x
       for x in xrange(4)]
-
 
   def test_actions_and_timeouts(self):
     # Start up a master mysql and vttablet
@@ -207,7 +205,7 @@ class TestTabletManager(unittest.TestCase):
       # make sure they're accounted for properly
       # first the query engine States
       v = utils.get_vars(tablet_62344.port)
-      logging.debug('vars: %s' % str(v))
+      logging.debug('vars: %s', v)
 
       # then the Zookeeper connections
       if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
@@ -223,7 +221,6 @@ class TestTabletManager(unittest.TestCase):
         self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
-
 
   def test_vttablet_authenticated(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -386,14 +383,14 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['ShardReplicationAdd', 'test_keyspace/0',
                      'test_nj-0000066666'], auto_log=True)
     with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
-                                        'test_keyspace/0'])
+                                       'test_keyspace/0'])
     self.assertEqual(3, len(with_bogus['nodes']),
                      'wrong shard replication nodes with bogus: %s' %
                      str(with_bogus))
     utils.run_vtctl(['ShardReplicationFix', 'test_nj', 'test_keyspace/0'],
                     auto_log=True)
     after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
-                                        'test_keyspace/0'])
+                                      'test_keyspace/0'])
     self.assertEqual(2, len(after_scrap['nodes']),
                      'wrong shard replication nodes after fix: %s' %
                      str(after_fix))
@@ -411,7 +408,7 @@ class TestTabletManager(unittest.TestCase):
     while True:
       ti = utils.run_vtctl_json(['GetTablet', tablet_alias])
       if ti['type'] == t:
-        logging.debug('Slave tablet went to %s, good' % expected_type)
+        logging.debug('Slave tablet went to %s, good', expected_type)
         break
       timeout = utils.wait_step('slave becomes ' + expected_type, timeout)
 
@@ -474,7 +471,9 @@ class TestTabletManager(unittest.TestCase):
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
                                    '-count', '1',
                                    tablet_62044.tablet_alias])
-    self.assertIn('replication_reporter: Replication is not running', health['realtime_stats']['health_error'])
+    self.assertIn(
+        'replication_reporter: Replication is not running',
+        health['realtime_stats']['health_error'])
 
     # then restart replication, and write data, make sure we go back to healthy
     utils.run_vtctl(['StartSlave', tablet_62044.tablet_alias])
@@ -585,7 +584,8 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
     pos = mysql_flavor().master_position(tablet_62344)
-    # Use 'localhost' as hostname because Travis CI worker hostnames are too long for MySQL replication.
+    # Use 'localhost' as hostname because Travis CI worker hostnames
+    # are too long for MySQL replication.
     changeMasterCmds = mysql_flavor().change_master_commands(
         'localhost',
         tablet_62344.mysql_port,

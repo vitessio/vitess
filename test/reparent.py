@@ -78,8 +78,8 @@ class TestReparent(unittest.TestCase):
   ) Engine=InnoDB'''
 
   def _populate_vt_insert_test(self, master_tablet, index):
-    q = "insert into vt_insert_test(id, msg) values (%d, 'test %d')" % \
-        (index, index)
+    q = ("insert into vt_insert_test(id, msg) values (%d, 'test %d')" %
+         (index, index))
     master_tablet.mquery('vt_test_keyspace', q, write=True)
 
   def _check_vt_insert_test(self, tablet, index):

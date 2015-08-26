@@ -24,6 +24,7 @@ tablets_shard2 = [shard_2_master, shard_2_replica1]
 test_keyspace = 'test_keyspace'
 db_name = 'vt_' + test_keyspace
 
+
 def setUpModule():
   try:
     environment.topo_server().setup()
@@ -80,11 +81,13 @@ def setUpModule():
       logging.exception('Tearing down a failed setUpModule() failed: %s', e)
     raise setup_exception
 
+
 def _init_mysql(tablets):
   setup_procs = []
   for t in tablets:
     setup_procs.append(t.init_mysql())
   utils.wait_procs(setup_procs)
+
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -104,7 +107,9 @@ def tearDownModule():
   for t in tablets:
     t.remove_tree()
 
+
 class TestSchema(unittest.TestCase):
+
   def setUp(self):
     for t in tablets:
       t.create_db(db_name)

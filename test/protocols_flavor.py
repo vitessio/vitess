@@ -2,6 +2,7 @@
 
 import logging
 
+
 class ProtocolsFlavor(object):
   """Base class for protocols"""
 

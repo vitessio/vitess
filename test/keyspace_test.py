@@ -96,6 +96,7 @@ def tearDownModule():
   unsharded_master.remove_tree()
   unsharded_replica.remove_tree()
 
+
 def setup_tablets():
   setup_sharded_keyspace()
   setup_unsharded_keyspace()
@@ -132,8 +133,8 @@ def setup_sharded_keyspace():
                   auto_log=True)
 
   utils.check_srv_keyspace('test_nj', SHARDED_KEYSPACE,
-                           'Partitions(master): -80 80-\n' +
-                           'Partitions(rdonly): -80 80-\n' +
+                           'Partitions(master): -80 80-\n'
+                           'Partitions(rdonly): -80 80-\n'
                            'Partitions(replica): -80 80-\n')
 
 
@@ -163,8 +164,8 @@ def setup_unsharded_keyspace():
                   auto_log=True)
 
   utils.check_srv_keyspace('test_nj', UNSHARDED_KEYSPACE,
-                           'Partitions(master): -\n' +
-                           'Partitions(rdonly): -\n' +
+                           'Partitions(master): -\n'
+                           'Partitions(rdonly): -\n'
                            'Partitions(replica): -\n')
 
 
@@ -194,7 +195,8 @@ class TestKeyspace(unittest.TestCase):
          'test_nj-0000000100', 'master'])
 
     # Can't delete keyspace if there are shards present.
-    utils.run_vtctl(['DeleteKeyspace', 'test_delete_keyspace'], expect_fail=True)
+    utils.run_vtctl(
+        ['DeleteKeyspace', 'test_delete_keyspace'], expect_fail=True)
     # Can't delete shard if there are tablets present.
     utils.run_vtctl(['DeleteShard', 'test_delete_keyspace/0'], expect_fail=True)
 

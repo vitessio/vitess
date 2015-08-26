@@ -37,17 +37,20 @@ shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
 shard_names = ['-80', '80-']
-shard_kid_map = {'-80': [527875958493693904, 626750931627689502,
-                         345387386794260318, 332484755310826578,
-                         1842642426274125671, 1326307661227634652,
-                         1761124146422844620, 1661669973250483744,
-                         3361397649937244239, 2444880764308344533],
-                 '80-': [9767889778372766922, 9742070682920810358,
-                         10296850775085416642, 9537430901666854108,
-                         10440455099304929791, 11454183276974683945,
-                         11185910247776122031, 10460396697869122981,
-                         13379616110062597001, 12826553979133932576],
-                 }
+shard_kid_map = {
+    '-80': [
+        527875958493693904, 626750931627689502,
+        345387386794260318, 332484755310826578,
+        1842642426274125671, 1326307661227634652,
+        1761124146422844620, 1661669973250483744,
+        3361397649937244239, 2444880764308344533],
+    '80-': [
+        9767889778372766922, 9742070682920810358,
+        10296850775085416642, 9537430901666854108,
+        10440455099304929791, 11454183276974683945,
+        11185910247776122031, 10460396697869122981,
+        13379616110062597001, 12826553979133932576],
+}
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -219,8 +222,8 @@ class TestTabletFunctions(unittest.TestCase):
       replica_conn = get_connection(
           db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      logging.debug('Connection to %s replica failed with error %s' %
-                    (shard_names[self.shard_index], str(e)))
+      logging.debug('Connection to %s replica failed with error %s',
+                    shard_names[self.shard_index], e)
       raise
     self.assertNotEqual(replica_conn, None)
     self.assertIsInstance(master_conn.conn, conn_class,
@@ -247,7 +250,7 @@ class TestTabletFunctions(unittest.TestCase):
                                                {})[:2]
       self.assertEqual(rowcount, count, 'master fetch works')
     except Exception, e:
-      logging.debug('Write failed with error %s' % str(e))
+      logging.debug('Write failed with error %s', e)
       raise
 
   def test_batch_read(self):
@@ -587,13 +590,13 @@ class TestExceptionLogging(unittest.TestCase):
     try:
       master_conn.begin()
       master_conn._execute(
-        'insert into vt_a (eid, id, keyspace_id) \
-         values (%(eid)s, %(id)s, %(keyspace_id)s)',
-        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
+          'insert into vt_a (eid, id, keyspace_id) '
+          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id})
       master_conn._execute(
-        'insert into vt_a (eid, id, keyspace_id) \
-         values (%(eid)s, %(id)s, %(keyspace_id)s)',
-        {'eid': 1, 'id': 1, 'keyspace_id':keyspace_id})
+          'insert into vt_a (eid, id, keyspace_id) '
+          'values (%(eid)s, %(id)s, %(keyspace_id)s)',
+          {'eid': 1, 'id': 1, 'keyspace_id': keyspace_id})
       master_conn.commit()
     except dbexceptions.IntegrityError as e:
       parts = str(e).split(',')
@@ -630,7 +633,7 @@ class TestAuthentication(unittest.TestCase):
   def test_correct_credentials(self):
     try:
       replica_conn = get_connection(
-          db_type='replica', shard_index = self.shard_index, user=self.user,
+          db_type='replica', shard_index=self.shard_index, user=self.user,
           password=self.password)
       replica_conn.connect()
     finally:
@@ -639,7 +642,7 @@ class TestAuthentication(unittest.TestCase):
   def test_secondary_credentials(self):
     try:
       replica_conn = get_connection(
-          db_type='replica', shard_index = self.shard_index, user=self.user,
+          db_type='replica', shard_index=self.shard_index, user=self.user,
           password=self.secondary_password)
       replica_conn.connect()
     finally:
@@ -648,20 +651,20 @@ class TestAuthentication(unittest.TestCase):
   def test_incorrect_user(self):
     with self.assertRaises(dbexceptions.OperationalError):
       replica_conn = get_connection(
-          db_type='replica', shard_index = self.shard_index, user='romek',
+          db_type='replica', shard_index=self.shard_index, user='romek',
           password='ma raka')
       replica_conn.connect()
 
   def test_incorrect_credentials(self):
     with self.assertRaises(dbexceptions.OperationalError):
       replica_conn = get_connection(
-          db_type='replica', shard_index = self.shard_index, user=self.user,
+          db_type='replica', shard_index=self.shard_index, user=self.user,
           password='ma raka')
       replica_conn.connect()
 
   def test_challenge_is_used(self):
     replica_conn = get_connection(
-        db_type='replica', shard_index = self.shard_index, user=self.user,
+        db_type='replica', shard_index=self.shard_index, user=self.user,
         password=self.password)
     replica_conn.connect()
     challenge = ''
@@ -672,8 +675,8 @@ class TestAuthentication(unittest.TestCase):
 
   def test_only_few_requests_are_allowed(self):
     replica_conn = get_connection(
-        db_type='replica', shard_index = self.shard_index, user=self.user,
-                                  password=self.password)
+        db_type='replica', shard_index=self.shard_index, user=self.user,
+        password=self.password)
     replica_conn.connect()
     for i in range(4):
       try:
@@ -705,6 +708,7 @@ class LocalLogger(vtdb_logger.VtdbLogger):
 
 
 class TestTopoReResolve(unittest.TestCase):
+
   def setUp(self):
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
@@ -755,9 +759,12 @@ class TestTopoReResolve(unittest.TestCase):
   def test_keyspace_reresolve_on_execute(self):
     before_topo_rtt = vtdb_logger.get_logger().get_topo_rtt()
     try:
-      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
+      replica_conn = get_connection(
+          db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail('Connection to shard %s replica failed with error %s' % (shard_names[self.shard_index], str(e)))
+      self.fail(
+          'Connection to shard %s replica failed with error %s' %
+          (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
     time.sleep(self.keyspace_fetch_throttle)
 

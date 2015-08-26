@@ -272,7 +272,6 @@ index by_msg (msg)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
-    found = 0
     for i in xrange(count):
       self._check_value(shard_0_replica, 'resharding1', 10000 + base + i,
                         'msg-range1-%d' % i, 0xA000000000000000 + base + i,
@@ -459,7 +458,6 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-\n'
                              'Partitions(replica): -80 80-\n',
                              keyspace_id_type=keyspace_id_type)
-
 
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],

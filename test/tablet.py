@@ -49,7 +49,8 @@ class Tablet(object):
   To use it for vttablet, you need to use init_tablet and/or
   start_vttablet. For vtocc, you can just call start_vtocc.
   If you use it to start as vtocc, many of the support functions
-  that are meant for vttablet will not work."""
+  that are meant for vttablet will not work.
+  """
   default_uid = 62344
   seq = 0
   tablets_running = 0
@@ -128,7 +129,7 @@ class Tablet(object):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
-      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
+      extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
     args = environment.binary_args('mysqlctl') + [
         '-log_dir', environment.vtlogroot,
         '-tablet_uid', str(self.tablet_uid)]
@@ -148,7 +149,7 @@ class Tablet(object):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
-      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
+      extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
     args = environment.binary_args('mysqlctld') + [
         '-log_dir', environment.vtlogroot,
         '-tablet_uid', str(self.tablet_uid),
@@ -206,7 +207,10 @@ class Tablet(object):
     return conn, MySQLdb.cursors.DictCursor(conn)
 
   # Query the MySQL instance directly
-  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params={}):
+  def mquery(
+      self, dbname, query, write=False, user='vt_dba', conn_params=None):
+    if conn_params is None:
+      conn_params = {}
     conn, cursor = self.connect(dbname, user=user, **conn_params)
     if write:
       conn.begin()
@@ -433,8 +437,11 @@ class Tablet(object):
       Tablet.tablets_running += 1
     self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
 
-    log_message = 'Started vttablet: %s (%s) with pid: %s - Log files: %s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s' % \
-        (self.tablet_uid, self.tablet_alias, self.proc.pid, environment.vtlogroot, self.proc.pid)
+    log_message = (
+        'Started vttablet: %s (%s) with pid: %s - Log files: '
+        '%s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s' %
+        (self.tablet_uid, self.tablet_alias, self.proc.pid,
+         environment.vtlogroot, self.proc.pid))
     # This may race with the stderr output from the process (though
     # that's usually empty).
     stderr_fd.write(log_message + '\n')
@@ -454,7 +461,7 @@ class Tablet(object):
       self, port=None, auth=False, memcache=False,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
-      repl_extra_flags={}, table_acl_config=None,
+      repl_extra_flags=None, table_acl_config=None,
       lameduck_period=None, security_policy=None,
       target_tablet_type=None, full_mycnf_args=False,
       extra_args=None, extra_env=None, include_mysql_port=True,
@@ -465,6 +472,8 @@ class Tablet(object):
 
     The process is also saved in self.proc, so it's easy to kill as well.
     """
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     args = []
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
@@ -585,7 +594,6 @@ class Tablet(object):
                             lameduck_period=lameduck_period, extra_args=args,
                             security_policy=security_policy)
 
-
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
@@ -629,7 +637,9 @@ class Tablet(object):
           'waiting for mysql and mysqlctl socket files: %s %s' %
           (mysql_sock, mysqlctl_sock), timeout)
 
-  def _add_dbconfigs(self, args, repl_extra_flags={}):
+  def _add_dbconfigs(self, args, repl_extra_flags=None):
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
