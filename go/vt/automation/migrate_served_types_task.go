@@ -19,8 +19,12 @@ type MigrateServedTypesTask struct {
 // Run is part of the Task interface.
 func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
-	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"],
-		[]string{"MigrateServedTypes", keyspaceAndShard, parameters["type"]})
+	args := []string{"MigrateServedTypes"}
+	if reverse, ok := parameters["reverse"]; ok {
+		args = append(args, "--reverse="+reverse)
+	}
+	args = append(args, keyspaceAndShard, parameters["type"])
+	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)
 	return nil, output, err
 }
 
@@ -31,5 +35,5 @@ func (t *MigrateServedTypesTask) RequiredParameters() []string {
 
 // OptionalParameters is part of the Task interface.
 func (t *MigrateServedTypesTask) OptionalParameters() []string {
-	return nil
+	return []string{"reverse"}
 }
