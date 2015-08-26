@@ -25,7 +25,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
   cluster operation.
   """
 
-  keyspace = 'test_keyspace'
+  KEYSPACE = 'test_keyspace'
 
   def test_regular_operation(self):
     # Use a dedicated worker to run all vtworker commands.
@@ -42,7 +42,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
     utils.run(environment.binary_argstr('automation_client') +
               ' --server localhost:' + str(automation_server_port) +
               ' --task HorizontalReshardingTask' +
-              ' --param keyspace=' + self.keyspace +
+              ' --param keyspace=' + self.KEYSPACE +
               ' --param source_shard_list=' + source_shard_list +
               ' --param dest_shard_list=' + dest_shard_list +
               ' --param vtctld_endpoint=' + vtctld_endpoint +
@@ -60,7 +60,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
                                  worker.shard_1_tablets.replica)
     
     # Verify effect of MigrateServedTypes. Dest shards are serving now.
-    utils.check_srv_keyspace('test_nj', self.keyspace,
+    utils.check_srv_keyspace('test_nj', self.KEYSPACE,
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n')
