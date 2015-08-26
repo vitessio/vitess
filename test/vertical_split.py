@@ -224,7 +224,7 @@ index by_msg (msg)
               keyranges=[keyrange.KeyRange(
                   keyrange_constants.NON_PARTIAL_KEYRANGE)])
           logging.debug(
-              'Select on %s.%s returned %d rows' db_type, tbl, len(rows))
+              'Select on %s.%s returned %d rows', db_type, tbl, len(rows))
         except Exception, e:
           self.fail('Execute failed w/ exception %s' % str(e))
 
