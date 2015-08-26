@@ -121,7 +121,7 @@ class TestPythonClient(unittest.TestCase):
   def _open_stream_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
     return self.conn.cursor(
-        'keyspace', 'master',  keyranges=[kr],
+        'keyspace', 'master', keyranges=[kr],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_keyspace_ids_cursor(self):
@@ -262,8 +262,6 @@ class TestPythonClient(unittest.TestCase):
     check_good_and_bad_effective_caller_ids(
         self._open_stream_keyranges_cursor(),
         cursor_stream_execute_keyranges_method)
-
-
 
 if __name__ == '__main__':
   utils.main()

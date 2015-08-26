@@ -7,7 +7,7 @@ import time
 import urllib2
 import warnings
 # Dropping a table inexplicably produces a warning despite
-# the "IF EXISTS" clause. Squelch these warnings.
+# the 'IF EXISTS' clause. Squelch these warnings.
 warnings.simplefilter('ignore')
 
 import MySQLdb
@@ -26,13 +26,15 @@ tablet_cell_map = {
     31981: 'ny',
 }
 
+
 def get_backup_storage_flags():
   return ['-backup_storage_implementation', 'file',
           '-file_backup_storage_root',
           os.path.join(environment.tmproot, 'backupstorage')]
 
+
 def get_all_extra_my_cnf(extra_my_cnf):
-  all_extra_my_cnf = [environment.vttop + "/config/mycnf/default-fast.cnf"]
+  all_extra_my_cnf = [environment.vttop + '/config/mycnf/default-fast.cnf']
   flavor_my_cnf = mysql_flavor().extra_my_cnf()
   if flavor_my_cnf:
     all_extra_my_cnf.append(flavor_my_cnf)
@@ -47,7 +49,8 @@ class Tablet(object):
   To use it for vttablet, you need to use init_tablet and/or
   start_vttablet. For vtocc, you can just call start_vtocc.
   If you use it to start as vtocc, many of the support functions
-  that are meant for vttablet will not work."""
+  that are meant for vttablet will not work.
+  """
   default_uid = 62344
   seq = 0
   tablets_running = 0
@@ -72,20 +75,20 @@ class Tablet(object):
 
   # this will eventually be coming from the proto3
   tablet_type_value = {
-      "UNKNOWN":        0,
-      "IDLE":           1,
-      "MASTER":         2,
-      "REPLICA":        3,
-      "RDONLY":         4,
-      "BATCH":          4,
-      "SPARE":          5,
-      "EXPERIMENTAL":   6,
-      "SCHEMA_UPGRADE": 7,
-      "BACKUP":         8,
-      "RESTORE":        9,
-      "WORKER":         10,
-      "SCRAP":          11,
-      }
+      'UNKNOWN': 0,
+      'IDLE': 1,
+      'MASTER': 2,
+      'REPLICA': 3,
+      'RDONLY': 4,
+      'BATCH': 4,
+      'SPARE': 5,
+      'EXPERIMENTAL': 6,
+      'SCHEMA_UPGRADE': 7,
+      'BACKUP': 8,
+      'RESTORE': 9,
+      'WORKER': 10,
+      'SCRAP': 11,
+  }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
                use_mysqlctld=False):
@@ -114,9 +117,9 @@ class Tablet(object):
   def update_stream_python_endpoint(self):
     protocol = protocols_flavor().binlog_player_python_protocol()
     port = self.port
-    if protocol == "gorpc":
+    if protocol == 'gorpc':
       from vtdb import gorpc_update_stream
-    elif protocol == "grpc":
+    elif protocol == 'grpc':
       # import the grpc update stream client implementation, change the port
       from vtdb import grpc_update_stream
       port = self.grpc_port
@@ -126,12 +129,13 @@ class Tablet(object):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
-      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
+      extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
     args = environment.binary_args('mysqlctl') + [
         '-log_dir', environment.vtlogroot,
         '-tablet_uid', str(self.tablet_uid)]
     if self.use_mysqlctld:
-      args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
+      args.extend(
+          ['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
@@ -145,7 +149,7 @@ class Tablet(object):
     extra_env = {}
     all_extra_my_cnf = get_all_extra_my_cnf(extra_my_cnf)
     if all_extra_my_cnf:
-      extra_env['EXTRA_MY_CNF'] =  ':'.join(all_extra_my_cnf)
+      extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
     args = environment.binary_args('mysqlctld') + [
         '-log_dir', environment.vtlogroot,
         '-tablet_uid', str(self.tablet_uid),
@@ -203,7 +207,10 @@ class Tablet(object):
     return conn, MySQLdb.cursors.DictCursor(conn)
 
   # Query the MySQL instance directly
-  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params={}):
+  def mquery(
+      self, dbname, query, write=False, user='vt_dba', conn_params=None):
+    if conn_params is None:
+      conn_params = {}
     conn, cursor = self.connect(dbname, user=user, **conn_params)
     if write:
       conn.begin()
@@ -211,7 +218,7 @@ class Tablet(object):
       query = [query]
 
     for q in query:
-      # logging.debug("mysql(%s,%s): %s", self.tablet_uid, dbname, q)
+      # logging.debug('mysql(%s,%s): %s', self.tablet_uid, dbname, q)
       cursor.execute(q)
 
     if write:
@@ -342,7 +349,8 @@ class Tablet(object):
     if start:
       if not wait_for_start:
         expected_state = None
-      elif tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
+      elif (tablet_type == 'master' or tablet_type == 'replica' or
+            tablet_type == 'rdonly' or tablet_type == 'batch'):
         expected_state = 'SERVING'
       else:
         expected_state = 'NOT_SERVING'
@@ -360,21 +368,23 @@ class Tablet(object):
     return '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
 
   def grpc_enabled(self):
-    return protocols_flavor().tabletconn_protocol() == 'grpc' or \
-      protocols_flavor().tablet_manager_protocol() == 'grpc' or \
-      protocols_flavor().binlog_player_protocol() == 'grpc'
+    return (
+        protocols_flavor().tabletconn_protocol() == 'grpc' or
+        protocols_flavor().tablet_manager_protocol() == 'grpc' or
+        protocols_flavor().binlog_player_protocol() == 'grpc')
 
   def flush(self):
     utils.curl('http://localhost:%s%s' %
                (self.port, environment.flush_logs_url),
                stderr=utils.devnull, stdout=utils.devnull)
 
-  def _start_prog(self, binary, port=None, auth=False, memcache=False,
-                  wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
-                  schema_override=None,
-                  repl_extra_flags={}, table_acl_config=None,
-                  lameduck_period=None, security_policy=None,
-                  extra_args=None, extra_env=None):
+  def _start_prog(
+      self, binary, port=None, auth=False, memcache=False,
+      wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
+      schema_override=None,
+      repl_extra_flags={}, table_acl_config=None,
+      lameduck_period=None, security_policy=None,
+      extra_args=None, extra_env=None):
     environment.prog_compile(binary)
     args = environment.binary_args(binary)
     args.extend(['-port', '%s' % (port or self.port),
@@ -408,7 +418,7 @@ class Tablet(object):
       args.extend(['-queryserver-config-strict-table-acl'])
 
     if protocols_flavor().service_map():
-      args.extend(['-service_map', ",".join(protocols_flavor().service_map())])
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
     if self.grpc_enabled():
       args.extend(['-grpc_port', str(self.grpc_port)])
     if lameduck_period:
@@ -419,15 +429,21 @@ class Tablet(object):
       args.extend(extra_args)
 
     args.extend(['-enable-autocommit'])
-    stderr_fd = open(os.path.join(environment.vtlogroot, '%s-%d.stderr' % (binary, self.tablet_uid)), 'w')
+    stderr_fd = open(
+        os.path.join(environment.vtlogroot, '%s-%d.stderr' %
+                     (binary, self.tablet_uid)), 'w')
     # increment count only the first time
     if not self.proc:
       Tablet.tablets_running += 1
     self.proc = utils.run_bg(args, stderr=stderr_fd, extra_env=extra_env)
 
-    log_message = "Started vttablet: %s (%s) with pid: %s - Log files: %s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s" % \
-        (self.tablet_uid, self.tablet_alias, self.proc.pid, environment.vtlogroot, self.proc.pid)
-    # This may race with the stderr output from the process (though that's usually empty).
+    log_message = (
+        'Started vttablet: %s (%s) with pid: %s - Log files: '
+        '%s/vttablet.*.{INFO,WARNING,ERROR,FATAL}.*.%s' %
+        (self.tablet_uid, self.tablet_alias, self.proc.pid,
+         environment.vtlogroot, self.proc.pid))
+    # This may race with the stderr output from the process (though
+    # that's usually empty).
     stderr_fd.write(log_message + '\n')
     stderr_fd.close()
     logging.debug(log_message)
@@ -441,22 +457,26 @@ class Tablet(object):
 
     return self.proc
 
-  def start_vttablet(self, port=None, auth=False, memcache=False,
-                     wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
-                     schema_override=None,
-                     repl_extra_flags={}, table_acl_config=None,
-                     lameduck_period=None, security_policy=None,
-                     target_tablet_type=None, full_mycnf_args=False,
-                     extra_args=None, extra_env=None, include_mysql_port=True,
-                     init_tablet_type=None, init_keyspace=None,
-                     init_shard=None, init_db_name_override=None,
-                     supports_backups=False):
+  def start_vttablet(
+      self, port=None, auth=False, memcache=False,
+      wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
+      schema_override=None,
+      repl_extra_flags=None, table_acl_config=None,
+      lameduck_period=None, security_policy=None,
+      target_tablet_type=None, full_mycnf_args=False,
+      extra_args=None, extra_env=None, include_mysql_port=True,
+      init_tablet_type=None, init_keyspace=None,
+      init_shard=None, init_db_name_override=None,
+      supports_backups=False):
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
     """
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     args = []
-    # Use "localhost" as hostname because Travis CI worker hostnames are too long for MySQL replication.
+    # Use 'localhost' as hostname because Travis CI worker hostnames
+    # are too long for MySQL replication.
     args.extend(['-tablet_hostname', 'localhost'])
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server().flags())
@@ -466,7 +486,8 @@ class Tablet(object):
                  protocols_flavor().tablet_manager_protocol()])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     if self.use_mysqlctld:
-      args.extend(['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
+      args.extend(
+          ['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
 
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
@@ -489,8 +510,8 @@ class Tablet(object):
           '-mycnf_relay_log_info_path', os.path.join(self.tablet_dir,
                                                      'relay-logs',
                                                      'relay-log.info'),
-          '-mycnf_bin_log_path', os.path.join(self.tablet_dir, 'bin-logs',
-                                              'vt-%010d-bin' % self.tablet_uid),
+          '-mycnf_bin_log_path', os.path.join(
+              self.tablet_dir, 'bin-logs', 'vt-%010d-bin' % self.tablet_uid),
           '-mycnf_master_info_file', os.path.join(self.tablet_dir,
                                                   'master.info'),
           '-mycnf_pid_file', os.path.join(self.tablet_dir, 'mysql.pid'),
@@ -529,15 +550,16 @@ class Tablet(object):
     if extra_args:
       args.extend(extra_args)
 
-    return self._start_prog(binary='vttablet', port=port, auth=auth,
-                            memcache=memcache, wait_for_state=wait_for_state,
-                            filecustomrules=filecustomrules,
-                            zkcustomrules=zkcustomrules,
-                            schema_override=schema_override,
-                            repl_extra_flags=repl_extra_flags,
-                            table_acl_config=table_acl_config,
-                            lameduck_period=lameduck_period, extra_args=args,
-                            security_policy=security_policy, extra_env=extra_env)
+    return self._start_prog(
+        binary='vttablet', port=port, auth=auth,
+        memcache=memcache, wait_for_state=wait_for_state,
+        filecustomrules=filecustomrules,
+        zkcustomrules=zkcustomrules,
+        schema_override=schema_override,
+        repl_extra_flags=repl_extra_flags,
+        table_acl_config=table_acl_config,
+        lameduck_period=lameduck_period, extra_args=args,
+        security_policy=security_policy, extra_env=extra_env)
 
   def start_vtocc(self, port=None, auth=False, memcache=False,
                   wait_for_state='SERVING', filecustomrules=None,
@@ -554,11 +576,11 @@ class Tablet(object):
     self.shard = shard
     self.dbname = 'vt_' + (self.keyspace or 'database')
     args = []
-    args.extend(["-db-config-app-unixsocket", self.tablet_dir + '/mysql.sock'])
-    args.extend(["-db-config-dba-unixsocket", self.tablet_dir + '/mysql.sock'])
-    args.extend(["-db-config-app-keyspace", keyspace])
-    args.extend(["-db-config-app-shard", shard])
-    args.extend(["-binlog-path", "foo"])
+    args.extend(['-db-config-app-unixsocket', self.tablet_dir + '/mysql.sock'])
+    args.extend(['-db-config-dba-unixsocket', self.tablet_dir + '/mysql.sock'])
+    args.extend(['-db-config-app-keyspace', keyspace])
+    args.extend(['-db-config-app-shard', shard])
+    args.extend(['-binlog-path', 'foo'])
 
     if extra_args:
       args.extend(extra_args)
@@ -572,17 +594,17 @@ class Tablet(object):
                             lameduck_period=lameduck_period, extra_args=args,
                             security_policy=security_policy)
 
-
   def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     self.wait_for_vtocc_state(expected, timeout=timeout, port=port)
 
   def wait_for_vtocc_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
-      last_seen_state = "?"
+      last_seen_state = '?'
       if v == None:
         if self.proc.poll() is not None:
-          raise utils.TestError('vttablet died while test waiting for state %s' % expected)
+          raise utils.TestError(
+              'vttablet died while test waiting for state %s' % expected)
         logging.debug(
             '  vttablet %s not answering at /debug/vars, waiting...',
             self.tablet_alias)
@@ -600,9 +622,10 @@ class Tablet(object):
                 expected)
           else:
             break
-      timeout = utils.wait_step('waiting for state %s (last seen state: %s)' % (expected, last_seen_state),
-                                timeout,
-                                sleep_time=0.1)
+      timeout = utils.wait_step(
+          'waiting for state %s (last seen state: %s)' %
+          (expected, last_seen_state),
+          timeout, sleep_time=0.1)
 
   def wait_for_mysqlctl_socket(self, timeout=30.0):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
@@ -610,9 +633,13 @@ class Tablet(object):
     while True:
       if os.path.exists(mysql_sock) and os.path.exists(mysqlctl_sock):
         return
-      timeout = utils.wait_step('waiting for mysql and mysqlctl socket files: %s %s' % (mysql_sock, mysqlctl_sock), timeout)
+      timeout = utils.wait_step(
+          'waiting for mysql and mysqlctl socket files: %s %s' %
+          (mysql_sock, mysqlctl_sock), timeout)
 
-  def _add_dbconfigs(self, args, repl_extra_flags={}):
+  def _add_dbconfigs(self, args, repl_extra_flags=None):
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
@@ -629,7 +656,8 @@ class Tablet(object):
     return urllib2.urlopen('http://localhost:%d/healthz' % self.port).read()
 
   def kill_vttablet(self, wait=True):
-    logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias, str(wait))
+    logging.debug('killing vttablet: %s, wait: %s', self.tablet_alias,
+                  str(wait))
     if self.proc is not None:
       Tablet.tablets_running -= 1
       if self.proc.poll() is None:
@@ -652,7 +680,9 @@ class Tablet(object):
       v = utils.get_vars(self.port)
       if v == None:
         if self.proc.poll() is not None:
-          raise utils.TestError('vttablet died while test waiting for binlog state %s' % expected)
+          raise utils.TestError(
+              'vttablet died while test waiting for binlog state %s' %
+              expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'UpdateStreamState' not in v:
@@ -665,8 +695,9 @@ class Tablet(object):
                           expected)
           else:
             break
-      timeout = utils.wait_step('waiting for binlog server state %s' % expected,
-                                timeout, sleep_time=0.5)
+      timeout = utils.wait_step(
+          'waiting for binlog server state %s' % expected,
+          timeout, sleep_time=0.5)
     logging.debug('tablet %s binlog service is in state %s',
                   self.tablet_alias, expected)
 
@@ -675,7 +706,9 @@ class Tablet(object):
       v = utils.get_vars(self.port)
       if v == None:
         if self.proc.poll() is not None:
-          raise utils.TestError('vttablet died while test waiting for binlog count %s' % expected)
+          raise utils.TestError(
+              'vttablet died while test waiting for binlog count %s' %
+              expected)
         logging.debug('  vttablet not answering at /debug/vars, waiting...')
       else:
         if 'BinlogPlayerMapSize' not in v:
@@ -688,8 +721,9 @@ class Tablet(object):
                           s, expected)
           else:
             break
-      timeout = utils.wait_step('waiting for binlog player count %d' % expected,
-                                timeout, sleep_time=0.5)
+      timeout = utils.wait_step(
+          'waiting for binlog player count %d' % expected,
+          timeout, sleep_time=0.5)
     logging.debug('tablet %s binlog player has %d players',
                   self.tablet_alias, expected)
 
