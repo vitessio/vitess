@@ -49,7 +49,7 @@ class FakeZkConfig(object):
     return base64.b64encode(raw)
 
   def as_json(self):
-    """Return the config as JSON. This is a proto3 version of SrkKeyspace."""
+    """Return the config as JSON. This is a proto3 version of SrvKeyspace."""
 
     result = {}
     tablet_types_str = ['master', 'replica', 'rdonly']
