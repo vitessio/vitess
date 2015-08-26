@@ -22,6 +22,9 @@ mysqlctl_binary = os.path.join(os.environ['VTROOT'], 'bin', 'mysqlctl')
 # this is the base port set by options.
 base_port = None
 
+# this is the class to use for MySqlDB instances
+mysql_db_class = None
+
 
 def get_test_directory():
   """Returns the toplevel directory for the tests. Might create it."""

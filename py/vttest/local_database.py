@@ -4,7 +4,6 @@ import logging
 import os
 
 from vttest import environment
-from vttest import mysql_db_mysqlctl
 from vttest import vt_processes
 
 
@@ -19,8 +18,7 @@ class LocalDatabase(object):
     """Create a MySQL instance and all Vitess processes."""
     mysql_port = environment.get_port('mysql')
     self.directory = environment.get_test_directory()
-    self.mysql_db = mysql_db_mysqlctl.MySqlDBMysqlctl(self.directory,
-                                                      mysql_port)
+    self.mysql_db = environment.mysql_db_class(self.directory, mysql_port)
 
     self.mysql_db.setup()
     self.create_databases()

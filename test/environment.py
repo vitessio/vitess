@@ -61,6 +61,10 @@ curl_bin = '/usr/bin/curl'
 # if set, we will not build the binaries
 skip_build = False
 
+# location of the run_local_database.py file
+run_local_database = os.path.join(vtroot, 'py-vtdb', 'vttest',
+                                  'run_local_database.py')
+
 
 def memcached_bin():
   in_vt = os.path.join(vtroot, 'bin', 'memcached')

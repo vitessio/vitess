@@ -70,8 +70,7 @@ class TestMysqlctl(unittest.TestCase):
 
     # launch a backend database based on the provided topology and schema
     port = environment.reserve_ports(1)
-    args = [os.path.join(environment.vtroot, 'py-vtdb', 'vttest',
-                         'run_local_database.py'),
+    args = [environment.run_local_database,
             '--port', str(port),
             '--topology',
             'test_keyspace/-80:test_keyspace_0,'
