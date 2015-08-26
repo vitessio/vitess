@@ -63,7 +63,7 @@ type SchemaChangeResult struct {
 
 The ApplySchema action applies a schema change to a specified keyspace, the performed steps are:
 
-* It first finds shards belong to this keyspace, including newly added shards in the presence of [resharding event](Resharding.md).
+* It first finds shards belong to this keyspace, including newly added shards in the presence of [resharding event](http://vitess.io/user-guide/sharding.html#resharding).
 * Validate the sql syntax and reject the schema change if the sql 1) Alter more then 100,000 rows, or 2) The targed table has more then 2,000,000 rows. The rational behind this is that ApplySchema simply applies schema changes to the masters; therefore, a big schema change that takes too much time slows down the replication and may reduce the availability of the overall system.
 * Create a temporary database that has the same schema as the targeted table. Apply the sql to it and makes sure it changes table structure. 
 * Apply the Sql command to the database.

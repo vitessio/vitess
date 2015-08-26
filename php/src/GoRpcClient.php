@@ -68,6 +68,7 @@ abstract class GoRpcClient {
 	abstract protected function sendRequest(VTContext $ctx, GoRpcRequest $req);
 
 	abstract protected function readResponse(VTContext $ctx);
+	private $in_stream_call = FALSE;
 
 	public function dial(VTContext $ctx, $addr, $path) {
 		// Connect to $addr.
@@ -93,6 +94,10 @@ abstract class GoRpcClient {
 	}
 
 	public function call(VTContext $ctx, $method, $request) {
+		if ($this->in_stream_call) {
+			throw new Exception("GoRpcClient: can't make another call until results of streaming call are completely fetched.");
+		}
+		
 		$req = new GoRpcRequest($this->nextSeq(), $method, $request);
 		$this->sendRequest($ctx, $req);
 		
@@ -106,18 +111,31 @@ abstract class GoRpcClient {
 	}
 
 	public function streamCall(VTContext $ctx, $method, $request) {
+		if ($this->in_stream_call) {
+			throw new Exception("GoRpcClient: can't make another call until results of streaming call are completely fetched.");
+		}
+		
 		$req = new GoRpcRequest($this->nextSeq(), $method, $request);
 		$this->sendRequest($ctx, $req);
+		$this->in_stream_call = TRUE;
 	}
 
 	public function streamNext(VTContext $ctx) {
+		if (! $this->in_stream_call) {
+			throw new Exception("GoRpcClient: streamNext called when not in streaming call.");
+		}
+		
 		$resp = $this->readResponse($ctx);
-		if ($resp->seq() != $this->seq)
+		if ($resp->seq() != $this->seq) {
 			throw new GoRpcException("$method: request sequence mismatch");
-		if ($resp->isEOS())
+		}
+		if ($resp->isEOS()) {
+			$this->in_stream_call = FALSE;
 			return FALSE;
-		if ($resp->error())
+		}
+		if ($resp->error()) {
 			throw new GoRpcRemoteError("$method: " . $resp->error());
+		}
 		return $resp;
 	}
 

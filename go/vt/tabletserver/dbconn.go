@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -58,17 +59,21 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		case err == nil:
 			return r, nil
 		case !IsConnErr(err):
-			return nil, NewTabletErrorSql(ErrFail, err)
+			// MySQL error that isn't due to a connection issue
+			return nil, NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			// If the MySQL connection is bad, we assume that there is nothing wrong with
+			// the query itself, and retrying it might succeed. The MySQL connection might
+			// fix itself, or the query could succeed on a different VtTablet.
+			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
 			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
-	return nil, NewTabletErrorSql(ErrFatal, errors.New("dbconn.Exec: unreachable code"))
+	return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
@@ -134,14 +139,16 @@ func (dbc *DBConn) Kill() error {
 	killConn, err := dbc.pool.dbaPool.Get(0)
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
-		return NewTabletError(ErrFail, "Failed to get conn from dba pool: %v", err)
+		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
-		return NewTabletError(ErrFail, "Could not kill query %s: %v", dbc.Current(), err)
+		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }

@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	// Refer to tabletserver/tablet_error.go for a more detailed explanation on
+	// what these errors mean from the VtTablet perspective.
 	ERR_NORMAL = iota
 	ERR_RETRY
 	ERR_FATAL

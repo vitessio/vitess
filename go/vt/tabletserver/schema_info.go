@@ -20,9 +20,9 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
-	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
@@ -45,7 +45,7 @@ type ExecPlan struct {
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
-	Authorized tacl.ACL
+	Authorized *tableacl.ACLResult
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -160,13 +160,13 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	defer conn.Recycle()
 
 	if strictMode && !conn.VerifyStrict() {
-		panic(NewTabletError(ErrFatal, "Could not verify strict mode"))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
 	}
 
 	si.cachePool = cachePool
 	tables, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFatal, err, "Could not get table list: "))
+		panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
@@ -184,7 +184,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 			si.cachePool,
 		)
 		if err != nil {
-			panic(PrefixTabletError(ErrFatal, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
+			panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
 		}
 		si.tables[tableName] = tableInfo
 	}
@@ -282,14 +282,14 @@ func (si *SchemaInfo) mysqlTime(ctx context.Context) time.Time {
 	defer conn.Recycle()
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, "Could not get MySQL time: "))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(ErrFail, "Unexpected result for MySQL time: %+v", tm.Rows))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(ErrFail, "Could not parse time %+v: %v", tm, err))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
 	}
 	return time.Unix(t, 0)
 }
@@ -316,7 +316,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	defer conn.Recycle()
 	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
 	}
 	if len(tables.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -392,7 +392,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql 
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, ""))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
@@ -408,7 +408,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql 
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
-				panic(PrefixTabletError(ErrFail, err, "Error fetching fields: "))
+				panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
 			}
 			plan.Fields = r.Fields
 		}
@@ -434,7 +434,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, ""))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
@@ -470,7 +470,7 @@ func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 // SetQueryCacheSize sets the query cache size.
 func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
-		panic(NewTabletError(ErrFail, "cache size %v out of range", size))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
 }

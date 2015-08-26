@@ -46,7 +46,7 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 	}
 }
 
-var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, "generic error")
+var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, pbv.ErrorCode_UNKNOWN_ERROR, "generic error")
 
 const expectedErrMatch string = "error: generic error"
 

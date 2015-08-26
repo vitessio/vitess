@@ -109,6 +109,17 @@ docker_bootstrap:
 	docker/bootstrap/build.sh mariadb
 	docker/bootstrap/build.sh mysql56
 
+docker_base:
+	# Fix permissions before copying files, to avoid AUFS bug.
+	chmod -R o=g *
+	docker build -t vitess/base .
+
+docker_lite:
+	cd docker/lite && ./build.sh
+
+docker_guestbook:
+	cd examples/kubernetes/guestbook && ./build.sh
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
