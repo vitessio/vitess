@@ -18,6 +18,10 @@
 
 blacklist="misc/flaky_unit_tests.txt"
 
+if [ -n "$VT_GO_PARALLEL" ]; then
+  GO_PARALLEL="-p $VT_GO_PARALLEL"
+fi
+
 # Go packages which have flaky tests.
 # (Filters out comments and gets only the package names.)
 flaky_packages=$(grep -oE '^[^#[:space:]]+' $blacklist | sort)
@@ -37,7 +41,7 @@ if [ -n "$nonexisting_flaky_tests" ]; then
 fi
 
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs godep go test $VT_GO_PARALLEL
+echo "$all_except_flaky_tests" | xargs godep go test $GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
@@ -51,7 +55,7 @@ for pkg in $flaky_tests; do
   max_attempts=3
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
-  until godep go test -timeout 30s $VT_GO_PARALLEL $pkg; do
+  until godep go test -timeout 30s $GO_PARALLEL $pkg; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
       echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please fix them."
