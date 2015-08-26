@@ -51,6 +51,8 @@ def connect(protocol, vtgate_addrs, timeout, *pargs, **kargs):
   return conn
 
 
+# Note: Eventually, this object will be replaced by a proto3 CallerID
+# object when all vitess customers have migrated to proto3.
 class CallerID(object):
   """An object with principal, component, and subcomponent fields."""
 
