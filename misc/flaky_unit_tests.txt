@@ -1,0 +1,7 @@
+# Format: <full package path> # <file name> <flaky test name>
+github.com/youtube/vitess/go/pools # resource_pool_test.go TestShrinking + resource_pool_test.go TestOpen + resource_pool_test.go TestClosing
+github.com/youtube/vitess/go/proc # proc_test.go TestRestart reserving a TCP port is prone to races from other applications
+github.com/youtube/vitess/go/streamlog # streamlog_test.go TestHTTP + streamlog_test.go TestChannel + unknown deadlock in line 68
+github.com/youtube/vitess/go/sync2 # semaphore_test.go TestSemaTimeout
+github.com/youtube/vitess/go/timer # randticker_test.go TestTickSkip + timer_test.go TestIndefinite + timer_test.go TestReset + timer_test.go TestWait
+github.com/youtube/vitess/go/vt/vtgate # shard_conn_test.go TestSemaTimeout + router_select_test.go TestStreamSelectScatter + shard_conn_test.go TestReplicaShardConnLife
