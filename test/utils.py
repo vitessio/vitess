@@ -476,7 +476,7 @@ class VtGate(object):
             topo_impl=None, cache_ttl='1s',
             auth=False, timeout_total='4s', timeout_per_conn='2s',
             extra_args=None):
-    """Starts the process for thie vtgate instance.
+    """Starts the process for this vtgate instance.
 
     If no other instance has been started, saves it into the global
     vtgate variable.
