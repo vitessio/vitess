@@ -26,6 +26,10 @@ import (
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 
 type StartRequest struct {
@@ -70,10 +74,6 @@ type RunMysqlUpgradeResponse struct {
 func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse{} }
 func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
 func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
 
 // Client API for MysqlCtl service
 

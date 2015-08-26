@@ -17,6 +17,7 @@ import (
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -81,10 +82,10 @@ func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine, enablePublishSt
 func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon) {
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
-		panic(NewTabletError(ErrFatal, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
 	}
 	if mysqld.Cnf().BinLogPath == "" {
-		panic(NewTabletError(ErrFatal, "Rowcache invalidator aborting: binlog path not specified"))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
 	}
 	rci.dbname = dbname
 	rci.mysqld = mysqld
@@ -174,7 +175,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 	invalidations := int64(0)
 	tableInfo := rci.qe.schemaInfo.GetTable(event.TableName)
 	if tableInfo == nil {
-		panic(NewTabletError(ErrFail, "Table %s not found", event.TableName))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Table %s not found", event.TableName))
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
 		return
@@ -194,7 +195,7 @@ func (rci *RowcacheInvalidator) handleDMLEvent(event *blproto.StreamEvent) {
 func (rci *RowcacheInvalidator) handleDDLEvent(ddl string) {
 	ddlPlan := planbuilder.DDLParse(ddl)
 	if ddlPlan.Action == "" {
-		panic(NewTabletError(ErrFail, "DDL is not understood"))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DDL is not understood"))
 	}
 	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.

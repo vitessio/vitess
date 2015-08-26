@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
 )
 
@@ -146,13 +147,13 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			panic(err)
 		case pools.ErrTimeout:
 			axp.LogActive()
-			panic(NewTabletError(ErrTxPoolFull, "Transaction pool connection limit exceeded"))
+			panic(NewTabletError(ErrTxPoolFull, vtrpc.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSql(ErrFatal, err))
+		panic(NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSql(ErrFail, err))
+		panic(NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp))
@@ -172,7 +173,7 @@ func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalid
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSql(ErrFail, fetchErr)
+		err = NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, fetchErr)
 	}
 	return
 }
@@ -184,7 +185,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(ErrFail, err))
+		panic(NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 }
 
@@ -193,7 +194,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 func (axp *TxPool) Get(transactionID int64) (conn *TxConnection) {
 	v, err := axp.activePool.Get(transactionID, "for query")
 	if err != nil {
-		panic(NewTabletError(ErrNotInTx, "Transaction %d: %v", transactionID, err))
+		panic(NewTabletError(ErrNotInTx, vtrpc.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err))
 	}
 	return v.(*TxConnection)
 }
@@ -280,9 +281,9 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	if err != nil {
 		if IsConnErr(err) {
 			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, err)
+			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSql(ErrFail, err)
+		return nil, NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }

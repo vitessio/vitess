@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
@@ -67,7 +68,7 @@ func (rc *RowCache) Get(ctx context.Context, keys []string) (results map[string]
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(ErrFatal, "%s", err))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err))
 	}
 	results = make(map[string]RCResult, len(mkeys))
 	for _, mcresult := range mcresults {
@@ -80,7 +81,7 @@ func (rc *RowCache) Get(ctx context.Context, keys []string) (results map[string]
 		}
 		row := rc.decodeRow(mcresult.Value)
 		if row == nil {
-			panic(NewTabletError(ErrFatal, "Corrupt data for %s", mcresult.Key))
+			panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Corrupt data for %s", mcresult.Key))
 		}
 		results[mcresult.Key[prefixlen:]] = RCResult{Row: row, Cas: mcresult.Cas}
 	}
@@ -112,7 +113,7 @@ func (rc *RowCache) Set(ctx context.Context, key string, row []sqltypes.Value, c
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(ErrFatal, "%s", err))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err))
 	}
 }
 
@@ -129,7 +130,7 @@ func (rc *RowCache) Delete(ctx context.Context, key string) {
 	if err != nil {
 		conn.Close()
 		conn = nil
-		panic(NewTabletError(ErrFatal, "%s", err))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err))
 	}
 }
 

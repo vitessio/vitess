@@ -19,7 +19,6 @@ import logutil_pb2 as logutil__pb2
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtworkerdata.proto',
   package='vtworkerdata',
-  syntax='proto3',
   serialized_pb=_b('\n\x12vtworkerdata.proto\x12\x0cvtworkerdata\x1a\rlogutil.proto\"-\n\x1d\x45xecuteVtworkerCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\"?\n\x1e\x45xecuteVtworkerCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Eventb\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
@@ -50,7 +49,6 @@ _EXECUTEVTWORKERCOMMANDREQUEST = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
-  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
@@ -81,7 +79,6 @@ _EXECUTEVTWORKERCOMMANDRESPONSE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
-  syntax='proto3',
   extension_ranges=[],
   oneofs=[
   ],
