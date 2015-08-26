@@ -54,7 +54,7 @@ class TestEnv(object):
     return "localhost:%s" % self.port
 
   def connect(self):
-    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2, user='youtube-dev-dedicated', password='vtpass')
+    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2, user='dev', password='vtpass', caller_id='dev')
     c.max_attempts = 1
     return c
 

@@ -2,241 +2,263 @@
 	"Tests": {
 		"automation_horizontal_resharding": {
 			"File": "automation_horizontal_resharding.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 3
 		},
 		"backup": {
 			"File": "backup.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"binlog": {
 			"File": "binlog.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 4
 		},
 		"client": {
 			"File": "client_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"custom_sharding": {
 			"File": "custom_sharding.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"goveralls": {
 			"File": "",
-			"Args": "",
-			"Command": "travis/goveralls.sh",
+			"Args": [],
+			"Command": [
+				"travis/goveralls.sh"
+			],
 			"Manual": true,
-			"Shard": 1
+			"Shard": 0
 		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 1
 		},
 		"initial_sharding_bytes": {
 			"File": "initial_sharding_bytes.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 3
 		},
 		"java": {
 			"File": "",
-			"Args": "",
-			"Command": "make java_test",
+			"Args": [],
+			"Command": [
+				"make",
+				"java_test"
+			],
 			"Manual": false,
 			"Shard": 2
 		},
 		"keyrange": {
 			"File": "keyrange_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 4
 		},
 		"keyspace": {
 			"File": "keyspace_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 4
 		},
 		"php": {
 			"File": "",
-			"Args": "",
-			"Command": "make php_test",
+			"Args": [],
+			"Command": [
+				"make",
+				"php_test"
+			],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 1
 		},
 		"python_client": {
 			"File": "python_client_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"queryservice_vtocc": {
 			"File": "queryservice_test.py",
-			"Args": "-m -e vtocc",
-			"Command": "",
+			"Args": [
+				"-m",
+				"-e",
+				"vtocc"
+			],
+			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 0
 		},
 		"queryservice_vttablet": {
 			"File": "queryservice_test.py",
-			"Args": "-m -e vttablet",
-			"Command": "",
+			"Args": [
+				"-m",
+				"-e",
+				"vttablet"
+			],
+			"Command": [],
 			"Manual": false,
 			"Shard": 3
 		},
 		"reparent": {
 			"File": "reparent.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 2
 		},
 		"resharding": {
 			"File": "resharding.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 1
 		},
 		"resharding_bytes": {
 			"File": "resharding_bytes.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 2
 		},
 		"rowcache_invalidator": {
 			"File": "rowcache_invalidator.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 4
 		},
 		"schema": {
 			"File": "schema.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"secure": {
 			"File": "secure.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"sharded": {
 			"File": "sharded.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 2
 		},
 		"sql_builder_test": {
 			"File": "sql_builder_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 4
+			"Shard": 1
 		},
 		"tablet": {
 			"File": "tablet_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 4
 		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 3
 		},
 		"unit": {
 			"File": "",
-			"Args": "",
-			"Command": "make unit_test",
+			"Args": [],
+			"Command": [
+				"make",
+				"unit_test"
+			],
 			"Manual": false,
-			"Shard": 2
+			"Shard": 0
 		},
 		"unit_race": {
 			"File": "",
-			"Args": "",
-			"Command": "make unit_test_race",
+			"Args": [],
+			"Command": [
+				"make",
+				"unit_test_race"
+			],
 			"Manual": false,
-			"Shard": 1
+			"Shard": 3
 		},
 		"update_stream": {
 			"File": "update_stream.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"vertical_split": {
 			"File": "vertical_split.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"vtdb": {
 			"File": "vtdb_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 3
 		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
 			"Shard": 4
 		},
 		"vtgatev2": {
 			"File": "vtgatev2_test.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 1
 		},
 		"worker": {
 			"File": "worker.py",
-			"Args": "",
-			"Command": "",
+			"Args": [],
+			"Command": [],
 			"Manual": false,
-			"Shard": 3
+			"Shard": 4
 		}
 	}
 }

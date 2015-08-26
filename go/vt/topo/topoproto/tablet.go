@@ -178,3 +178,10 @@ func TabletDbName(tablet *pb.Tablet) string {
 	}
 	return vtDbPrefix + tablet.Keyspace
 }
+
+// TabletIsAssigned returns if this tablet is assigned to a keyspace and shard.
+// A "scrap" node will show up as assigned even though its data cannot be used
+// for serving.
+func TabletIsAssigned(tablet *pb.Tablet) bool {
+	return tablet != nil && tablet.Keyspace != "" && tablet.Shard != ""
+}

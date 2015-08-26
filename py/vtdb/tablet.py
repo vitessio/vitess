@@ -76,12 +76,13 @@ class TabletConnection(object):
 
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
-      password=None, keyfile=None, certfile=None):
+      password=None, keyfile=None, certfile=None, caller_id=None):
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
+    self.caller_id = caller_id
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,
                                         keyfile=keyfile, certfile=certfile)
     self.logger_object = vtdb_logger.get_logger()
@@ -102,9 +103,16 @@ class TabletConnection(object):
         #     'attempting to reuse TabletConnection')
 
       self.client.dial()
-      params = {'Keyspace': self.keyspace, 'Shard': self.shard}
+      req = {
+          'Params': {
+              'Keyspace': self.keyspace,
+              'Shard': self.shard
+          },
+          'ImmediateCallerID': {'Username': self.caller_id}
+      }
+
       response = self.rpc_call_and_extract_error(
-          'SqlQuery.GetSessionId', params)
+          'SqlQuery.GetSessionId2', req)
       self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -121,16 +129,15 @@ class TabletConnection(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def _make_req(self):
-    return {'TransactionId': self.transaction_id,
-            'SessionId': self.session_id}
-
   def begin(self):
     if self.transaction_id:
       raise dbexceptions.NotSupportedError('Nested transactions not supported')
-    req = self._make_req()
+    req = {
+      'ImmediateCallerID': {'Username': self.caller_id},
+      'SessionId': self.session_id
+    }
     try:
-      response = self.rpc_call_and_extract_error('SqlQuery.Begin', req)
+      response = self.rpc_call_and_extract_error('SqlQuery.Begin2', req)
       self.transaction_id = response.reply['TransactionId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -139,7 +146,12 @@ class TabletConnection(object):
     if not self.transaction_id:
       return
 
-    req = self._make_req()
+    req = {
+      'ImmediateCallerID': {'Username': self.caller_id},
+      'TransactionId': self.transaction_id,
+      'SessionId': self.session_id
+    }
+
     # NOTE(msolomon) Unset the transaction_id irrespective of the RPC's
     # response. The intent of commit is that no more statements can be made on
     # this transaction, so we guarantee that. Transient errors between the
@@ -148,7 +160,7 @@ class TabletConnection(object):
     self.transaction_id = 0
 
     try:
-      response = self.rpc_call_and_extract_error('SqlQuery.Commit', req)
+      response = self.rpc_call_and_extract_error('SqlQuery.Commit2', req)
       return response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -157,7 +169,12 @@ class TabletConnection(object):
     if not self.transaction_id:
       return
 
-    req = self._make_req()
+    req = {
+      'ImmediateCallerID': {'Username': self.caller_id},
+      'TransactionId': self.transaction_id,
+      'SessionId': self.session_id
+    }
+
     # NOTE(msolomon) Unset the transaction_id irrespective of the RPC. If the
     # RPC fails, the client will still choose a new transaction_id next time
     # and the tablet server will eventually kill the abandoned transaction on
@@ -165,7 +182,7 @@ class TabletConnection(object):
     self.transaction_id = 0
 
     try:
-      response = self.rpc_call_and_extract_error('SqlQuery.Rollback', req)
+      response = self.rpc_call_and_extract_error('SqlQuery.Rollback2', req)
       return response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -196,16 +213,21 @@ class TabletConnection(object):
     return response
 
   def _execute(self, sql, bind_variables):
-    new_binds = field_types.convert_bind_vars(bind_variables)
-    req = self._make_req()
-    req['Sql'] = sql
-    req['BindVariables'] = new_binds
+    req = {
+      'QueryRequest': {
+        'Sql': sql,
+        'BindVariables': field_types.convert_bind_vars(bind_variables),
+        'SessionId': self.session_id,
+        'TransactionId': self.transaction_id
+      },
+      'ImmediateCallerID': {'Username': self.caller_id}
+    }
 
     fields = []
     conversions = []
     results = []
     try:
-      response = self.rpc_call_and_extract_error('SqlQuery.Execute', req)
+      response = self.rpc_call_and_extract_error('SqlQuery.Execute2', req)
       reply = response.reply
 
       for field in reply['Fields']:
@@ -236,10 +258,17 @@ class TabletConnection(object):
     rowsets = []
 
     try:
-      req = self._make_req()
-      req['Queries'] = query_list
-      req['AsTransaction'] = as_transaction
-      response = self.rpc_call_and_extract_error('SqlQuery.ExecuteBatch', req)
+      req = {
+        'QueryBatch': {
+          'Queries': query_list,
+          'SessionId': self.session_id,
+          'AsTransaction': as_transaction,
+          'TransactionId': self.transaction_id
+          },
+        'ImmediateCallerID': {'Username': self.caller_id}
+      }
+
+      response = self.rpc_call_and_extract_error('SqlQuery.ExecuteBatch2', req)
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -268,45 +297,15 @@ class TabletConnection(object):
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables):
-    new_binds = field_types.convert_bind_vars(bind_variables)
-    req = self._make_req()
-    req['Sql'] = sql
-    req['BindVariables'] = new_binds
-
-    self._stream_fields = []
-    self._stream_conversions = []
-    self._stream_result = None
-    self._stream_result_index = 0
-    try:
-      self.client.stream_call('SqlQuery.StreamExecute', req)
-      first_response = self.client.stream_next()
-      reply = first_response.reply
-      if reply.get('Err'):
-        self.__drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get(
-            'Message', 'Missing error message'))
-
-      for field in reply['Fields']:
-        self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(
-            field_types.conversions.get(field['Type']))
-    except gorpc.GoRpcError as e:
-      self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
-    except:
-      logging.exception('gorpc low-level error')
-      raise
-    return None, 0, 0, self._stream_fields
-
-  # we return the fields for the response, and the column conversions
-  # the conversions will need to be passed back to _stream_next
-  # (that way we avoid using a member variable here for such a corner case)
-  def _stream_execute2(self, sql, bind_variables):
-    new_binds = field_types.convert_bind_vars(bind_variables)
-    query = self._make_req()
-    query['Sql'] = sql
-    query['BindVariables'] = new_binds
-    req = {'Query': query}
+    req = {
+      'Query': {
+        'Sql': sql,
+        'BindVariables': field_types.convert_bind_vars(bind_variables),
+        'SessionId': self.session_id,
+        'TransactionId': self.transaction_id
+      },
+      'ImmediateCallerID': {'Username': self.caller_id}
+    }
 
     self._stream_fields = []
     self._stream_conversions = []
