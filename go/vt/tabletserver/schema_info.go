@@ -27,7 +27,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const baseShowTables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
+const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length FROM information_schema.tables WHERE table_schema = database()"
 
 const maxTableCount = 10000
 
@@ -142,6 +142,9 @@ func NewSchemaInfo(
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"TableRows", []string{"Table"}, si.getTableRows)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"DataLength", []string{"Table"}, si.getDataLength)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"IndexLength", []string{"Table"}, si.getIndexLength)
 	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
@@ -186,6 +189,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 		if err != nil {
 			panic(PrefixTabletError(ErrFatal, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
 		}
+		tableInfo.SetMysqlStats(row[4], row[5], row[6])
 		si.tables[tableName] = tableInfo
 	}
 	if schemaOverrides != nil {
@@ -262,7 +266,7 @@ func (si *SchemaInfo) Reload() {
 	func() {
 		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.Exec(ctx, fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", baseShowTables, si.lastChange.Unix()), maxTableCount, false)
+		tables, err = conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
@@ -271,8 +275,16 @@ func (si *SchemaInfo) Reload() {
 	log.Infof("Reloading schema")
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
-		log.Infof("Reloading: %s", tableName)
-		si.CreateOrUpdateTable(ctx, tableName)
+		createTime, _ := row[2].ParseInt64()
+		// Check if we know about the table or it has been recreated.
+		if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange.Unix() {
+			log.Infof("Reloading: %s", tableName)
+			si.CreateOrUpdateTable(ctx, tableName)
+		} else {
+			// Only update table_rows, data_length, index_length
+			si.tables[tableName].SetMysqlStats(row[4], row[5], row[6])
+		}
+
 	}
 	si.lastChange = curTime
 }
@@ -334,6 +346,8 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		// This can happen if DDLs race with each other.
 		return
 	}
+	// table_rows, data_length, index_length
+	tableInfo.SetMysqlStats(tables.Rows[0][4], tables.Rows[0][5], tables.Rows[0][6])
 	if _, ok := si.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
@@ -516,6 +530,39 @@ func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
 			_, _, _, invalidations := v.Stats()
 			tstats[k] = invalidations
 		}
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getTableRows() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tableRows, _, _ := v.MysqlStats()
+		tstats[k] = tableRows
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getDataLength() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		_, dataLength, _ := v.MysqlStats()
+		tstats[k] = dataLength
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getIndexLength() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		_, _, indexLength := v.MysqlStats()
+		tstats[k] = indexLength
 	}
 	return tstats
 }

@@ -19,8 +19,10 @@ import (
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
-	// stats updated by sqlquery.go
+	// rowcache stats updated by query_executor.go and query_engine.go.
 	hits, absent, misses, invalidations sync2.AtomicInt64
+	// mysql stats updated by schema_info.go.
+	tableRows, dataLength, indexLength sync2.AtomicInt64
 }
 
 func NewTableInfo(conn *DBConn, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
@@ -172,4 +174,17 @@ func (ti *TableInfo) StatsJSON() string {
 
 func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
 	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
+}
+
+func (ti *TableInfo) SetMysqlStats(tableRows, dataLength, indexLength sqltypes.Value) {
+	v, _ := tableRows.ParseInt64()
+	ti.tableRows.Set(v)
+	v, _ = dataLength.ParseInt64()
+	ti.dataLength.Set(v)
+	v, _ = indexLength.ParseInt64()
+	ti.indexLength.Set(v)
+}
+
+func (ti *TableInfo) MysqlStats() (tableRows, dataLength, indexLength int64) {
+	return ti.tableRows.Get(), ti.dataLength.Get(), ti.indexLength.Get()
 }

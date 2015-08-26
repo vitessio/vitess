@@ -219,27 +219,27 @@ func TestSchemaInfoReload(t *testing.T) {
 	newTable := "test_table_04"
 	tableInfo := schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
-		t.Fatalf("table: %s does not exist", newTable)
+		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 	schemaInfo.Reload()
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
-		t.Fatalf("table: %s does not exist", newTable)
+		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	reloadQuery := fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", baseShowTables, schemaInfo.lastChange.Unix())
-
-	db.AddQuery(reloadQuery, &mproto.QueryResult{
-		// make this query fail duing reload
+	db.AddQuery(baseShowTables, &mproto.QueryResult{
+		// make this query fail during reload
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable("test_table_04"),
+			createTestTableBaseShowTable(newTable),
 		},
 	})
 
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, newTable)
 	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable(newTable),
+		},
 	})
 
 	db.AddQuery("describe `test_table_04`", &mproto.QueryResult{
@@ -255,26 +255,25 @@ func TestSchemaInfoReload(t *testing.T) {
 	schemaInfo.Reload()
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
-		t.Fatalf("table: %s does not exist", newTable)
+		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 
 	// test reload with new table: test_table_04
-	db.AddQuery(reloadQuery, &mproto.QueryResult{
+	db.AddQuery(baseShowTables, &mproto.QueryResult{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable("test_table_04"),
+			createTestTableBaseShowTable(newTable),
 		},
 	})
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
-		t.Fatalf("table: %s does not exist", newTable)
+		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 	schemaInfo.Reload()
 	tableInfo = schemaInfo.GetTable(newTable)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", newTable)
 	}
-
 }
 
 func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
@@ -287,7 +286,9 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
 		// make this query fail
 		RowsAffected: math.MaxUint64,
-		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable("test_table"),
+		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
@@ -315,7 +316,9 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
 	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable(existingTable),
+		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
@@ -338,7 +341,9 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
 	db.AddQuery(createOrDropTableQuery, &mproto.QueryResult{
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable(existingTable),
+		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
@@ -417,8 +422,8 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 
-	firstSqlQuery := "select * from test_table_01"
-	secondSqlQuery := "select * from test_table_02"
+	firstSQLQuery := "select * from test_table_01"
+	secondSQLQuery := "select * from test_table_02"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &mproto.QueryResult{})
 
@@ -436,11 +441,11 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := newSqlQueryStats("GetPlanStats", ctx)
 	schemaInfo.SetQueryCacheSize(1)
-	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstSqlQuery)
+	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstSQLQuery)
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondSqlQuery)
+	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondSQLQuery)
 	if secondPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
@@ -467,6 +472,69 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		kv.Value.String()
 	})
+}
+
+func TestUpdatedMysqlStats(t *testing.T) {
+	fakecacheservice.Register()
+	db := fakesqldb.Register()
+	for query, result := range getSchemaInfoTestSupportedQueries() {
+		db.AddQuery(query, result)
+	}
+	idleTimeout := 10 * time.Second
+	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
+	appParams := sqldb.ConnParams{}
+	dbaParams := sqldb.ConnParams{}
+	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
+	cachePool.Open()
+	defer cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, nil, cachePool, true)
+	defer schemaInfo.Close()
+	// Add new table
+	tableName := "mysql_stats_test_table"
+	db.AddQuery(baseShowTables, &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable(tableName),
+		},
+	})
+	// Add queries necessary for CreateOrUpdateTable() and NewTableInfo()
+	q := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName)
+	db.AddQuery(q, &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			createTestTableBaseShowTable(tableName),
+		},
+	})
+	q = fmt.Sprintf("describe `%s`", tableName)
+	db.AddQuery(q, &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
+	})
+	q = fmt.Sprintf("show index from `%s`", tableName)
+	db.AddQuery(q, &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
+	})
+
+	schemaInfo.Reload()
+	tableInfo := schemaInfo.GetTable(tableName)
+	if tableInfo == nil {
+		t.Fatalf("table: %s should exist", tableName)
+	}
+	tr1, dl1, il1 := tableInfo.MysqlStats()
+	// Update existing table with new stats.
+	db.AddQuery(baseShowTables, &mproto.QueryResult{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			createTestTableUpdatedStats(tableName),
+		},
+	})
+	schemaInfo.Reload()
+	tableInfo = schemaInfo.GetTable(tableName)
+	tr2, dl2, il2 := tableInfo.MysqlStats()
+	if tr1 == tr2 || dl1 == dl2 || il1 == il2 {
+		t.Fatalf("MysqlStats() results failed to change between queries. ")
+	}
 }
 
 func TestSchemaInfoStatsURL(t *testing.T) {
@@ -644,8 +712,23 @@ func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
 	return []sqltypes.Value{
 		sqltypes.MakeString([]byte(tableName)),
 		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeString([]byte("1427325875")),
+		sqltypes.MakeNumeric([]byte("1427325875")),
 		sqltypes.MakeString([]byte("")),
+		sqltypes.MakeNumeric([]byte("1")),
+		sqltypes.MakeNumeric([]byte("2")),
+		sqltypes.MakeNumeric([]byte("3")),
+	}
+}
+
+func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
+	return []sqltypes.Value{
+		sqltypes.MakeString([]byte(tableName)),
+		sqltypes.MakeString([]byte("USER TABLE")),
+		sqltypes.MakeNumeric([]byte("0")),
+		sqltypes.MakeString([]byte("")),
+		sqltypes.MakeNumeric([]byte("4")),
+		sqltypes.MakeNumeric([]byte("5")),
+		sqltypes.MakeNumeric([]byte("6")),
 	}
 }
 
@@ -678,7 +761,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 		"select unix_timestamp()": &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": &mproto.QueryResult{
@@ -693,20 +776,29 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_01")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_02")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_03")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
 				},
 			},
 		},
