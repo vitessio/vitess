@@ -111,6 +111,10 @@ enum ErrorCode {
   // 1. Query has been throttled
   // 2. VtGate could have request backlog
   TRANSIENT_ERROR = 11;
+
+  // UNAUTHENTICATED errors are returned when a user requests access to something,
+  // and we're unable to verify the user's authentication.
+  UNAUTHENTICATED = 12;
 }
 
 // ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we

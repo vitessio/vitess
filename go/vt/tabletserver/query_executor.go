@@ -220,7 +220,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.qe.strictTableAcl {
-			return NewTabletError(ErrFail, "missing caller id")
+			return NewTabletError(ErrFail, vtrpc.ErrorCode_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
 	}
@@ -231,7 +231,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return nil
 	}
 	if qre.plan.Authorized == nil {
-		return NewTabletError(ErrFail, "table acl error: nil acl")
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName,

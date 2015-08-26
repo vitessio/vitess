@@ -88,6 +88,9 @@ const (
 	// 1. Query has been throttled
 	// 2. VtGate could have request backlog
 	ErrorCode_TRANSIENT_ERROR ErrorCode = 11
+	// UNAUTHENTICATED errors are returned when a user requests access to something,
+	// and we're unable to verify the user's authentication.
+	ErrorCode_UNAUTHENTICATED ErrorCode = 12
 )
 
 var ErrorCode_name = map[int32]string{
@@ -103,6 +106,7 @@ var ErrorCode_name = map[int32]string{
 	9:  "NOT_IN_TX",
 	10: "INTERNAL_ERROR",
 	11: "TRANSIENT_ERROR",
+	12: "UNAUTHENTICATED",
 }
 var ErrorCode_value = map[string]int32{
 	"SUCCESS":            0,
@@ -117,6 +121,7 @@ var ErrorCode_value = map[string]int32{
 	"NOT_IN_TX":          9,
 	"INTERNAL_ERROR":     10,
 	"TRANSIENT_ERROR":    11,
+	"UNAUTHENTICATED":    12,
 }
 
 func (x ErrorCode) String() string {
