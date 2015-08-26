@@ -679,10 +679,11 @@ def _get_vtworker_cmd(clargs, auto_log=False):
           '-port', str(port),
           '-resolve_ttl', '2s',
           '-executefetch_retry_time', '1s',
+          '-tablet_manager_protocol',
+          protocols_flavor().tablet_manager_protocol(),
+          '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
           ]
   args.extend(environment.topo_server().flags())
-  args.extend(['-tablet_manager_protocol',
-               protocols_flavor().tablet_manager_protocol()])
   if protocols_flavor().service_map():
     args.extend(['-service_map',
                  ','.join(protocols_flavor().service_map())])
@@ -921,6 +922,7 @@ class Vtctld(object):
             '-tablet_manager_protocol',
             protocols_flavor().tablet_manager_protocol(),
             '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
+            '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
             ] + \
             environment.topo_server().flags()
     if protocols_flavor().service_map():
