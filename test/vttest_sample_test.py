@@ -6,10 +6,18 @@
 
 """This sample test demonstrates how to setup and teardown a test
 database with the associated Vitess processes. It is meant to be used
-as a template for unit tests.
+as a template for unit tests, by developers writing applications
+on top of Vitess. The recommended workflow is to have the schema for the
+database checked into a source control system, along with the application
+layer code. Then unit tests can launch a test cluster for unit tests
+(using local_database.py) pointing at that schema, and run all their unit
+tests.
 
 This unit test is written in python, but we don't depend on this at all.
 We just execute py/vttest/local_database.py, as we would in any language.
+Then we wait for the JSON config string, and we know the address of the
+vtgate process. At the end of the test, sending a line to the underlying
+process makes it clean up.
 """
 
 import json
