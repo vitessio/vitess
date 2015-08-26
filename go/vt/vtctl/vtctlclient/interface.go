@@ -46,6 +46,9 @@ func RegisterFactory(name string, factory Factory) {
 }
 
 // UnregisterFactoryForTest allows to unregister a client implementation from the static map.
+// This function is used by unit tests to cleanly unregister any fake implementations.
+// This way, a test package can use the same name for different fakes and no dangling fakes are
+// left behind in the static factories map after the test.
 func UnregisterFactoryForTest(name string) {
 	if _, ok := factories[name]; !ok {
 		log.Fatalf("UnregisterFactoryForTest: %s is not registered", name)
