@@ -32,18 +32,21 @@ class VtProcess(object):
 
   START_RETRIES = 5
 
-  def __init__(self, name, directory, binary, port):
+  def __init__(self, name, directory, binary, port_name, port_instance=0):
     self.name = name
     self.directory = directory
     self.binary = binary
     self.extraparams = []
-    self.port = port
+    self.port_name = port_name
+    self.port_instance = port_instance
     self.process = None
 
   def wait_start(self):
     """Start the process and wait for it to respond on HTTP."""
 
     for _ in xrange(0, self.START_RETRIES):
+      self.port = environment.get_port(self.port_name,
+                                       instance=self.port_instance)
       logs_subdirectory = environment.get_logs_directory(self.directory)
       cmd = [
           self.binary,
@@ -109,11 +112,12 @@ class VtProcess(object):
 class VtoccProcess(VtProcess):
   """Represents a vtocc subprocess."""
 
-  def __init__(self, directory, mysql_db, port, db_name, keyspace, shard,
-               charset='utf8'):
+  def __init__(self, directory, mysql_db, port_instance, db_name,
+               keyspace, shard, charset='utf8'):
     VtProcess.__init__(self, 'vtocc-%s-%s-%s' % (os.environ['USER'], keyspace,
                                                  shard),
-                       directory, environment.vtocc_binary, port=port)
+                       directory, environment.vtocc_binary,
+                       port_name='vtocc', port_instance=port_instance)
     self.extraparams = [
         '-db-config-app-dbname', db_name,
         '-db-config-app-keyspace', keyspace,
@@ -163,9 +167,8 @@ class VtgateProcess(VtProcess):
   """Represents a vtgate subprocess."""
 
   def __init__(self, directory, cell):
-    port = environment.get_port('vtgate')
     VtProcess.__init__(self, 'vtgate-%s' % os.environ['USER'], directory,
-                       environment.vtgate_binary, port=port)
+                       environment.vtgate_binary, port_name='vtgate')
     self.config_file = os.path.join(directory, self.name + '.json')
     self.extraparams = [
         '-fakezk-config', self.config_file,
@@ -181,8 +184,7 @@ class AllVtoccProcesses(object):
     self.vtoccs = []
     instance = 0
     for shard in shards:
-      port = environment.get_port('vtocc', instance)
-      self.vtoccs.append(VtoccProcess(directory, mysql_db, port,
+      self.vtoccs.append(VtoccProcess(directory, mysql_db, instance,
                                       shard.db_name, shard.keyspace,
                                       shard.name, charset))
       instance += 1
