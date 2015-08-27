@@ -48,26 +48,8 @@ clean:
 clean_pkg:
 	rm -rf ../../../../pkg Godeps/_workspace/pkg
 
-# By default, we do not run the flaky unit tests. For these, run "unit_test_only_flaky" as well.
-unit_test: unit_test_except_flaky
-	
-# Go unit tests minus flaky unit tests.
-#
-# Unit tests are filtered based on their suffix "_Flaky".
-# Explanation of the regex below: We allow any test name which
-# - is a string of length between 1 and 5 (i.e. cannot be "_Flaky" because that has 6 characters)
-# - has a suffix with 6 characters which doesn't start with _
-# - has a suffix with 6 characters which doesn't start with _F
-# - has a suffix with 6 characters which doesn't start with _Fl
-# - has a suffix with 6 characters which doesn't start with _Fla
-# - has a suffix with 6 characters which doesn't start with _Flak
-# - has a suffix with 6 characters which doesn't start with _Flaky
-# NOTE: (?i) enables case-insensitive matching.
-unit_test_except_flaky:
-	godep go test $(VT_GO_PARALLEL) -v -run "(?i)(^.{1,5}|[^_].....|_[^F]....|_F[^l]...|_Fl[^a]..|_Fla[^k].|_Flak[^y])$$" ./go/...
-	
-unit_test_only_flaky:
-	godep go test $(VT_GO_PARALLEL) -v -run "_Flaky$$" ./go/...
+unit_test:
+	godep go test $(VT_GO_PARALLEL) ./go/...
 
 # Run the code coverage tools, compute aggregate.
 # If you want to improve in a directory, run:

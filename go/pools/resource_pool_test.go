@@ -187,7 +187,7 @@ func TestOpen(t *testing.T) {
 	}
 }
 
-func TestShrinking_Flaky(t *testing.T) {
+func TestShrinking(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
