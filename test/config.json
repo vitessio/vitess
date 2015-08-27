@@ -202,11 +202,23 @@
 			"File": "",
 			"Args": [],
 			"Command": [
-				"travis/unit_test_runner.sh"
+				"make",
+				"unit_test_except_flaky"
 			],
 			"Manual": false,
 			"Shard": 0,
 			"RetryMax": 1
+		},
+		"unit_only_flaky": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"unit_test_only_flaky"
+			],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 3
 		},
 		"unit_race": {
 			"File": "",

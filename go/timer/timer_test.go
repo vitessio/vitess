@@ -42,7 +42,7 @@ func TestWait(t *testing.T) {
 	}
 }
 
-func TestReset(t *testing.T) {
+func TestReset_Flaky(t *testing.T) {
 	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(half)
 	timer.Start(f)
