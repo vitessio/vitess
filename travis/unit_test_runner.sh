@@ -27,18 +27,10 @@ fi
 flaky_packages=$(grep -oE '^[^#[:space:]]+' $blacklist | sort)
 
 # All Go packages with test files.
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}}{{end}}' ./go/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
 
-all_except_flaky_tests=$(comm -23 <(echo "$packages_with_tests") <(echo "$flaky_packages"))
-flaky_tests=$(comm -12 <(echo "$packages_with_tests") <(echo "$flaky_packages"))
-nonexisting_flaky_tests=$(comm -13 <(echo "$packages_with_tests") <(echo "$flaky_packages"))
-
-if [ -n "$nonexisting_flaky_tests" ]; then
-  echo "ERROR: The following tests are listed in the blacklist file $blacklist but no longer in the source tree:"
-  echo
-  echo "$nonexisting_flaky_tests"
-  exit 1
-fi
+all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1)
+flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
 # Run non-flaky tests.
 echo "$all_except_flaky_tests" | xargs godep go test $GO_PARALLEL
