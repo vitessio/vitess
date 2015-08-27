@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestMemcacheStats(t *testing.T) {
@@ -157,7 +159,7 @@ func TestMemcacheStatsTabletError(t *testing.T) {
 	memcacheStats := NewMemcacheStats(
 		statsPrefix, 100*time.Second, enableMain, queryServiceStats,
 		func(key string) string {
-			panic(NewTabletError(ErrFail, "unknown tablet error"))
+			panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "unknown tablet error"))
 		},
 	)
 	errCountBefore := queryServiceStats.InternalErrors.Counts()["MemcacheStats"]

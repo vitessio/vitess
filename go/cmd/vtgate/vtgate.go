@@ -43,6 +43,7 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 
+	initFakeZK()
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 

@@ -51,23 +51,23 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *pb.TabletAlias) {
 // remote actions.  And if 'force' is false, we also run an optional
 // hook.
 func Scrap(ctx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, force bool) error {
-	tablet, err := ts.GetTablet(ctx, tabletAlias)
+	// Update the tablet first, since that is canonical.
+	var wasAssigned bool
+	var tablet *pb.Tablet
+	err := ts.UpdateTabletFields(ctx, tabletAlias, func(t *pb.Tablet) error {
+		wasAssigned = topoproto.TabletIsAssigned(t)
+		t.Type = pb.TabletType_SCRAP
+		tablet = t
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
 	// If you are already scrap, skip updating replication data. It won't
 	// be there anyway.
-	wasAssigned := tablet.IsAssigned()
-	tablet.Type = pb.TabletType_SCRAP
-	// Update the tablet first, since that is canonical.
-	err = ts.UpdateTablet(ctx, tablet)
-	if err != nil {
-		return err
-	}
-
 	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ctx, ts, tablet.Tablet)
+		err = topo.DeleteTabletReplicationData(ctx, ts, tablet)
 		if err != nil {
 			if err == topo.ErrNoNode {
 				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)

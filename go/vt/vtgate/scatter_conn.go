@@ -10,49 +10,38 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	kproto "github.com/youtube/vitess/go/vt/key"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
-	"golang.org/x/net/context"
-
-	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var idGen sync2.AtomicInt64
-
 // ScatterConn is used for executing queries across
-// multiple ShardConn connections.
+// multiple shard level connections.
 type ScatterConn struct {
 	toposerv             SrvTopoServer
 	cell                 string
-	retryDelay           time.Duration
-	retryCount           int
-	connTimeoutTotal     time.Duration
-	connTimeoutPerConn   time.Duration
-	connLife             time.Duration
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
-	tabletConnectTimings *stats.MultiTimings
-
-	mu         sync.Mutex
-	shardConns map[string]*ShardConn
+	gateway              Gateway
 }
 
 // shardActionFunc defines the contract for a shard action. Every such function
-// executes the necessary action on conn, sends the results to sResults, and
-// return an error if any.
+// executes the necessary action on a shard, sends the results to sResults,
+// and return an error if any.
 // multiGo is capable of executing multiple shardActionFunc actions in parallel
 // and consolidating the results and errors for the caller.
-type shardActionFunc func(conn *ShardConn, transactionId int64, sResults chan<- interface{}) error
+type shardActionFunc func(shard string, transactionID int64, sResults chan<- interface{}) error
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
-// for creating the appropriate ShardConn.
+// for creating the appropriate connections.
 func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.Duration, retryCount int, connTimeoutTotal, connTimeoutPerConn, connLife time.Duration) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	tabletConnectStatsName := ""
@@ -60,22 +49,18 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 		tabletConnectStatsName = statsName + "TabletConnect"
 	}
+	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
+	gateway := GetGatewayCreator()(serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 	return &ScatterConn{
 		toposerv:             serv,
 		cell:                 cell,
-		retryDelay:           retryDelay,
-		retryCount:           retryCount,
-		connTimeoutTotal:     connTimeoutTotal,
-		connTimeoutPerConn:   connTimeoutPerConn,
-		connLife:             connLife,
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
-		tabletConnectTimings: stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"}),
-		shardConns:           make(map[string]*ShardConn),
+		gateway:              gateway,
 	}
 }
 
-// InitializeConnections pre-initializes all ShardConn which create underlying connections.
+// InitializeConnections pre-initializes connections for all shards.
 // It also populates topology cache by accessing it.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
@@ -103,8 +88,7 @@ func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
 					wg.Add(1)
 					go func(shardName string, tabletType pb.TabletType) {
 						defer wg.Done()
-						shardConn := stc.getConnection(ctx, keyspace, shardName, tabletType)
-						err = shardConn.Dial(ctx)
+						err = stc.gateway.Dial(ctx, keyspace, shardName, tabletType)
 						if err != nil {
 							errRecorder.RecordError(err)
 							return
@@ -140,8 +124,8 @@ func (stc *ScatterConn) Execute(
 		tabletType,
 		session,
 		notInTransaction,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqr, err := sdc.Execute(ctx, query, bindVars, transactionId)
+		func(shard string, transactionID int64, sResults chan<- interface{}) error {
+			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
 			if err != nil {
 				return err
 			}
@@ -180,8 +164,8 @@ func (stc *ScatterConn) ExecuteMulti(
 		tabletType,
 		session,
 		notInTransaction,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqr, err := sdc.Execute(ctx, query, shardVars[sdc.shard], transactionId)
+		func(shard string, transactionID int64, sResults chan<- interface{}) error {
+			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
 			if err != nil {
 				return err
 			}
@@ -219,11 +203,10 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		tabletType,
 		session,
 		notInTransaction,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			shard := sdc.shard
+		func(shard string, transactionID int64, sResults chan<- interface{}) error {
 			sql := sqls[shard]
 			bindVar := bindVars[shard]
-			innerqr, err := sdc.Execute(ctx, sql, bindVar, transactionId)
+			innerqr, err := stc.gateway.Execute(ctx, keyspace, shard, tabletType, sql, bindVar, transactionID)
 			if err != nil {
 				return err
 			}
@@ -281,15 +264,14 @@ func (stc *ScatterConn) ExecuteBatch(
 			startTime := time.Now()
 			defer stc.timings.Record(statsKey, startTime)
 
-			sdc := stc.getConnection(ctx, req.Keyspace, req.Shard, tabletType)
-			transactionID, err := stc.updateSession(ctx, sdc, req.Keyspace, req.Shard, tabletType, session, false)
+			transactionID, err := stc.updateSession(ctx, req.Keyspace, req.Shard, tabletType, session, false)
 			if err != nil {
 				allErrors.RecordError(err)
 				stc.tabletCallErrorCount.Add(statsKey, 1)
 				return
 			}
 
-			innerqrs, err := sdc.ExecuteBatch(ctx, req.Queries, asTransaction, transactionID)
+			innerqrs, err := stc.gateway.ExecuteBatch(ctx, req.Keyspace, req.Shard, tabletType, req.Queries, asTransaction, transactionID)
 			if err != nil {
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
@@ -345,8 +327,8 @@ func (stc *ScatterConn) StreamExecute(
 		tabletType,
 		NewSafeSession(nil),
 		false,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			sr, errFunc := sdc.StreamExecute(ctx, query, bindVars, transactionId)
+		func(shard string, transactionID int64, sResults chan<- interface{}) error {
+			sr, errFunc := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, bindVars, transactionID)
 			if sr != nil {
 				for qr := range sr {
 					sResults <- qr
@@ -396,8 +378,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		tabletType,
 		NewSafeSession(nil),
 		false,
-		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			sr, errFunc := sdc.StreamExecute(ctx, query, shardVars[sdc.shard], transactionId)
+		func(shard string, transactionID int64, sResults chan<- interface{}) error {
+			sr, errFunc := stc.gateway.StreamExecute(ctx, keyspace, shard, tabletType, query, shardVars[shard], transactionID)
 			if sr != nil {
 				for qr := range sr {
 					sResults <- qr
@@ -439,12 +421,11 @@ func (stc *ScatterConn) Commit(ctx context.Context, session *SafeSession) (err e
 	committing := true
 	for _, shardSession := range session.ShardSessions {
 		tabletType := topo.TabletTypeToProto(shardSession.TabletType)
-		sdc := stc.getConnection(ctx, shardSession.Keyspace, shardSession.Shard, tabletType)
 		if !committing {
-			sdc.Rollback(ctx, shardSession.TransactionId)
+			stc.gateway.Rollback(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId)
 			continue
 		}
-		if err = sdc.Commit(ctx, shardSession.TransactionId); err != nil {
+		if err = stc.gateway.Commit(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId); err != nil {
 			committing = false
 		}
 	}
@@ -459,8 +440,7 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 	}
 	for _, shardSession := range session.ShardSessions {
 		tabletType := topo.TabletTypeToProto(shardSession.TabletType)
-		sdc := stc.getConnection(ctx, shardSession.Keyspace, shardSession.Shard, tabletType)
-		sdc.Rollback(ctx, shardSession.TransactionId)
+		stc.gateway.Rollback(ctx, shardSession.Keyspace, shardSession.Shard, tabletType, shardSession.TransactionId)
 	}
 	session.Reset()
 	return nil
@@ -471,14 +451,15 @@ func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err
 // appending that shard's keyrange to the splits. Aggregates all splits across
 // all shards in no specific order and returns.
 func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, keyRangeByShard map[string]kproto.KeyRange, keyspace string) ([]proto.SplitQueryPart, error) {
-	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
+	tabletType := pb.TabletType_RDONLY
+	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
-		queries, err := sdc.SplitQuery(ctx, sql, bindVariables, splitColumn, splitCount)
+		queries, err := stc.gateway.SplitQuery(ctx, keyspace, shard, tabletType, sql, bindVariables, splitColumn, splitCount)
 		if err != nil {
 			return err
 		}
 		// Append the keyrange for this shard to all the splits received
-		keyranges := []kproto.KeyRange{keyRangeByShard[sdc.shard]}
+		keyranges := []kproto.KeyRange{keyRangeByShard[shard]}
 		splits := []proto.SplitQueryPart{}
 		for _, query := range queries {
 			krq := &proto.KeyRangeQuery{
@@ -503,7 +484,7 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 	for shard := range keyRangeByShard {
 		shards = append(shards, shard)
 	}
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, pb.TabletType_RDONLY, NewSafeSession(&proto.Session{}), false, actionFunc)
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
 	splits := []proto.SplitQueryPart{}
 	for s := range allSplits {
 		splits = append(splits, s.([]proto.SplitQueryPart)...)
@@ -521,9 +502,10 @@ func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bind
 // splits. Aggregates all splits across all shards in no specific
 // order and returns.
 func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, shards []string, keyspace string) ([]proto.SplitQueryPart, error) {
-	actionFunc := func(sdc *ShardConn, transactionID int64, results chan<- interface{}) error {
+	tabletType := pb.TabletType_RDONLY
+	actionFunc := func(shard string, transactionID int64, results chan<- interface{}) error {
 		// Get all splits from this shard
-		queries, err := sdc.SplitQuery(ctx, sql, bindVariables, splitColumn, splitCount)
+		queries, err := stc.gateway.SplitQuery(ctx, keyspace, shard, tabletType, sql, bindVariables, splitColumn, splitCount)
 		if err != nil {
 			return err
 		}
@@ -534,7 +516,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 				Sql:           query.Query.Sql,
 				BindVariables: query.Query.BindVariables,
 				Keyspace:      keyspace,
-				Shards:        []string{sdc.shard},
+				Shards:        []string{shard},
 				TabletType:    topo.TYPE_RDONLY,
 			}
 			split := proto.SplitQueryPart{
@@ -548,7 +530,7 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 		return nil
 	}
 
-	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, pb.TabletType_RDONLY, NewSafeSession(&proto.Session{}), false, actionFunc)
+	allSplits, allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, NewSafeSession(&proto.Session{}), false, actionFunc)
 	splits := []proto.SplitQueryPart{}
 	for s := range allSplits {
 		splits = append(splits, s.([]proto.SplitQueryPart)...)
@@ -560,15 +542,9 @@ func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string
 	return splits, nil
 }
 
-// Close closes the underlying ShardConn connections.
+// Close closes the underlying Gateway.
 func (stc *ScatterConn) Close() error {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-	for _, v := range stc.shardConns {
-		v.Close()
-	}
-	stc.shardConns = make(map[string]*ShardConn)
-	return nil
+	return stc.gateway.Close()
 }
 
 // ScatterConnError is the ScatterConn specific error.
@@ -612,7 +588,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 }
 
 // multiGo performs the requested 'action' on the specified shards in parallel.
-// For each shard, it obtains a ShardConn connection. If the requested
+// For each shard, if the requested
 // session is in a transaction, it opens a new transactions on the connection,
 // and updates the Session with the transaction id. If the session already
 // contains a transaction id for the shard, it reuses it.
@@ -642,14 +618,13 @@ func (stc *ScatterConn) multiGo(
 			startTime := time.Now()
 			defer stc.timings.Record(statsKey, startTime)
 
-			sdc := stc.getConnection(ctx, keyspace, shard, tabletType)
-			transactionID, err := stc.updateSession(ctx, sdc, keyspace, shard, tabletType, session, notInTransaction)
+			transactionID, err := stc.updateSession(ctx, keyspace, shard, tabletType, session, notInTransaction)
 			if err != nil {
 				allErrors.RecordError(err)
 				stc.tabletCallErrorCount.Add(statsKey, 1)
 				return
 			}
-			err = action(sdc, transactionID, results)
+			err = action(shard, transactionID, results)
 			if err != nil {
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
@@ -679,22 +654,8 @@ func (stc *ScatterConn) multiGo(
 	return results, allErrors
 }
 
-func (stc *ScatterConn) getConnection(ctx context.Context, keyspace, shard string, tabletType pb.TabletType) *ShardConn {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, strings.ToLower(tabletType.String()))
-	sdc, ok := stc.shardConns[key]
-	if !ok {
-		sdc = NewShardConn(ctx, stc.toposerv, stc.cell, keyspace, shard, tabletType, stc.retryDelay, stc.retryCount, stc.connTimeoutTotal, stc.connTimeoutPerConn, stc.connLife, stc.tabletConnectTimings)
-		stc.shardConns[key] = sdc
-	}
-	return sdc
-}
-
 func (stc *ScatterConn) updateSession(
 	ctx context.Context,
-	sdc *ShardConn,
 	keyspace, shard string,
 	tabletType pb.TabletType,
 	session *SafeSession,
@@ -717,7 +678,7 @@ func (stc *ScatterConn) updateSession(
 	if notInTransaction {
 		return 0, nil
 	}
-	transactionID, err = sdc.Begin(ctx)
+	transactionID, err = stc.gateway.Begin(ctx, keyspace, shard, tabletType)
 	if err != nil {
 		return 0, err
 	}

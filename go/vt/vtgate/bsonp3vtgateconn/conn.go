@@ -211,21 +211,7 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []p
 }
 
 func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	req := &pb.StreamExecuteRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Query:      tproto.BoundQueryToProto3(query, bindVars),
-		TabletType: tabletType,
-	}
-	sr := make(chan *pb.StreamExecuteResponse, 10)
-	c := conn.rpcConn.StreamGo("VTGateP3.StreamExecute", req, sr)
-	srr := make(chan streamResult)
-	go func() {
-		for v := range sr {
-			srr <- streamResult{qr: v.Result, err: v.Error}
-		}
-		close(srr)
-	}()
-	return sendStreamResults(c, srr)
+	return conn.StreamExecute2(ctx, query, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
@@ -247,23 +233,7 @@ func (conn *vtgateConn) StreamExecute2(ctx context.Context, query string, bindVa
 }
 
 func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	req := &pb.StreamExecuteShardsRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Query:      tproto.BoundQueryToProto3(query, bindVars),
-		Keyspace:   keyspace,
-		Shards:     shards,
-		TabletType: tabletType,
-	}
-	sr := make(chan *pb.StreamExecuteShardsResponse, 10)
-	c := conn.rpcConn.StreamGo("VTGateP3.StreamExecuteShards", req, sr)
-	srr := make(chan streamResult)
-	go func() {
-		for v := range sr {
-			srr <- streamResult{qr: v.Result, err: v.Error}
-		}
-		close(srr)
-	}()
-	return sendStreamResults(c, srr)
+	return conn.StreamExecuteShards2(ctx, query, keyspace, shards, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, keyspace string, shards []string, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
@@ -287,23 +257,7 @@ func (conn *vtgateConn) StreamExecuteShards2(ctx context.Context, query string, 
 }
 
 func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string, keyspace string, keyRanges []*topopb.KeyRange, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	req := &pb.StreamExecuteKeyRangesRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Query:      tproto.BoundQueryToProto3(query, bindVars),
-		Keyspace:   keyspace,
-		KeyRanges:  keyRanges,
-		TabletType: tabletType,
-	}
-	sr := make(chan *pb.StreamExecuteKeyRangesResponse, 10)
-	c := conn.rpcConn.StreamGo("VTGateP3.StreamExecuteKeyRanges", req, sr)
-	srr := make(chan streamResult)
-	go func() {
-		for v := range sr {
-			srr <- streamResult{qr: v.Result, err: v.Error}
-		}
-		close(srr)
-	}()
-	return sendStreamResults(c, srr)
+	return conn.StreamExecuteKeyRanges2(ctx, query, keyspace, keyRanges, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query string, keyspace string, keyRanges []*topopb.KeyRange, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
@@ -327,23 +281,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges2(ctx context.Context, query strin
 }
 
 func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
-	req := &pb.StreamExecuteKeyspaceIdsRequest{
-		CallerId:    callerid.EffectiveCallerIDFromContext(ctx),
-		Query:       tproto.BoundQueryToProto3(query, bindVars),
-		Keyspace:    keyspace,
-		KeyspaceIds: keyspaceIds,
-		TabletType:  tabletType,
-	}
-	sr := make(chan *pb.StreamExecuteKeyspaceIdsResponse, 10)
-	c := conn.rpcConn.StreamGo("VTGateP3.StreamExecuteKeyspaceIds", req, sr)
-	srr := make(chan streamResult)
-	go func() {
-		for v := range sr {
-			srr <- streamResult{qr: v.Result, err: v.Error}
-		}
-		close(srr)
-	}()
-	return sendStreamResults(c, srr)
+	return conn.StreamExecuteKeyspaceIds2(ctx, query, keyspace, keyspaceIds, bindVars, tabletType)
 }
 
 func (conn *vtgateConn) StreamExecuteKeyspaceIds2(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topopb.TabletType) (<-chan *mproto.QueryResult, vtgateconn.ErrFunc, error) {
@@ -402,34 +340,15 @@ func sendStreamResults(c *rpcplus.Call, sr chan streamResult) (<-chan *mproto.Qu
 }
 
 func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
-	request := &pb.BeginRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-	}
-	response := &pb.BeginResponse{}
-	if err := conn.rpcConn.Call(ctx, "VTGateP3.Begin", request, response); err != nil {
-		return nil, err
-	}
-	return response.Session, nil
+	return conn.Begin2(ctx)
 }
 
 func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
-	s := session.(*pb.Session)
-	request := &pb.CommitRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Session:  s,
-	}
-	response := &pb.CommitResponse{}
-	return conn.rpcConn.Call(ctx, "VTGateP3.Commit", request, response)
+	return conn.Commit2(ctx, session)
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
-	s := session.(*pb.Session)
-	request := &pb.RollbackRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Session:  s,
-	}
-	response := &pb.RollbackResponse{}
-	return conn.rpcConn.Call(ctx, "VTGateP3.Rollback", request, response)
+	return conn.Rollback2(ctx, session)
 }
 
 func (conn *vtgateConn) Begin2(ctx context.Context) (interface{}, error) {

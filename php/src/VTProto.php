@@ -48,6 +48,7 @@ class VTTabletType {
 }
 
 class VTBindVariable {
+	const TYPE_NULL = 0;
 	const TYPE_BYTES = 1;
 	const TYPE_INT = 2;
 	const TYPE_UINT = 3;
@@ -61,7 +62,11 @@ class VTBindVariable {
 	 * buildBsonP3 creates a BindVariable bsonp3 object.
 	 */
 	public static function buildBsonP3($value) {
-		if (is_string($value)) {
+		if (is_null($value)) {
+			return array(
+					'Type' => self::TYPE_NULL 
+			);
+		} else if (is_string($value)) {
 			return array(
 					'Type' => self::TYPE_BYTES,
 					'ValueBytes' => new MongoBinData($value) 
@@ -84,14 +89,117 @@ class VTBindVariable {
 							'ValueUint' => $value->bsonValue 
 					);
 			}
+		} else if (is_array($value)) {
+			return self::buildBsonP3ForList($value);
 		}
-		// TODO(enisoc): Implement list bind vars.
+		
+		throw new Exception('Unknown bind variable type.');
+	}
+
+	public static function buildBsonP3ForList(array $list) {
+		if (count($list) == 0) {
+			// The list is empty, so it has no type. VTTablet will reject an empty
+			// list anyway, so we'll just pretend it was a list of bytes.
+			return array(
+					'Type' => self::TYPE_BYTES_LIST 
+			);
+		}
+		
+		// Check type of first item to determine type of list.
+		// We only support lists whose elements have uniform types.
+		if (is_string($list[0])) {
+			$value = array();
+			foreach ($list as $val) {
+				$value[] = new MongoBinData($val);
+			}
+			return array(
+					'Type' => self::TYPE_BYTES_LIST,
+					'ValueBytesList' => $value 
+			);
+		} else if (is_int($list[0])) {
+			return array(
+					'Type' => self::TYPE_INT_LIST,
+					'ValueIntList' => $list 
+			);
+		} else if (is_float($list[0])) {
+			return array(
+					'Type' => self::TYPE_FLOAT_LIST,
+					'ValueFloatList' => $list 
+			);
+		} else if (is_object($list[0])) {
+			switch (get_class($list[0])) {
+				case 'VTUnsignedInt':
+					$value = array();
+					foreach ($list as $val) {
+						$value[] = $val->bsonValue;
+					}
+					return array(
+							'Type' => self::TYPE_UINT_LIST,
+							'ValueUintList' => $value 
+					);
+			}
+		}
+		
+		throw new Exception('Unknown list bind variable type.');
+	}
+
+	/**
+	 * fromBsonP3 returns a PHP object from a bsonp3 BindVariable object.
+	 */
+	public static function fromBsonP3($bson) {
+		if (! array_key_exists('Type', $bson)) {
+			return NULL;
+		}
+		switch ($bson['Type']) {
+			case self::TYPE_NULL:
+				return NULL;
+			case self::TYPE_BYTES:
+				return $bson['ValueBytes'];
+			case self::TYPE_INT:
+				return $bson['ValueInt'];
+			case self::TYPE_UINT:
+				return new VTUnsignedInt($bson['ValueUint']);
+			case self::TYPE_FLOAT:
+				return $bson['ValueFloat'];
+			case self::TYPE_BYTES_LIST:
+				return $bson['ValueBytesList'];
+			case self::TYPE_INT_LIST:
+				return $bson['ValueIntList'];
+			case self::TYPE_UINT_LIST:
+				$result = array();
+				foreach ($bson['ValueUintList'] as $val) {
+					$result[] = new VTUnsignedInt($val);
+				}
+				return $result;
+			case self::TYPE_FLOAT_LIST:
+				return $bson['ValueFloatList'];
+		}
 		
 		throw new Exception('Unknown bind variable type.');
 	}
 }
 
 class VTBoundQuery {
+	public $query;
+	public $bindVars;
+
+	public function __construct($query = '', $bindVars = array()) {
+		$this->query = $query;
+		$this->bindVars = $bindVars;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTBoundQuery();
+		if (array_key_exists('Sql', $bson)) {
+			$result->query = $bson['Sql'];
+		}
+		if (array_key_exists('BindVariables', $bson)) {
+			foreach ($bson['BindVariables'] as $key => $val) {
+				$result->bindVars[$key] = VTBindVariable::fromBsonP3($val);
+			}
+		}
+		return $result;
+	}
 
 	/**
 	 * buildBsonP3 creates a BoundQuery bsonp3 object.
@@ -218,16 +326,18 @@ class VTField {
 	public $type = 0;
 	public $flags = 0;
 
-	public function __construct($bson) {
+	public static function fromBsonP3($bson) {
+		$result = new VTField();
 		if (array_key_exists('Name', $bson)) {
-			$this->name = $bson['Name'];
+			$result->name = $bson['Name'];
 		}
 		if (array_key_exists('Type', $bson)) {
-			$this->type = $bson['Type'];
+			$result->type = $bson['Type'];
 		}
 		if (array_key_exists('Flags', $bson)) {
-			$this->flags = $bson['Flags'];
+			$result->flags = $bson['Flags'];
 		}
+		return $result;
 	}
 }
 
@@ -237,23 +347,25 @@ class VTQueryResult {
 	public $insertId = 0;
 	public $rows = array();
 
-	public function __construct($bson) {
+	public static function fromBsonP3($bson) {
+		$result = new VTQueryResult();
 		if (array_key_exists('Fields', $bson)) {
 			foreach ($bson['Fields'] as $field) {
-				$this->fields[] = new VTField($field);
+				$result->fields[] = VTField::fromBsonP3($field);
 			}
 		}
 		if (array_key_exists('RowsAffected', $bson)) {
-			$this->rowsAffected = $bson['RowsAffected'];
+			$result->rowsAffected = $bson['RowsAffected'];
 		}
 		if (array_key_exists('InsertId', $bson)) {
-			$this->insertId = $bson['InsertId'];
+			$result->insertId = $bson['InsertId'];
 		}
 		if (array_key_exists('Rows', $bson)) {
 			foreach ($bson['Rows'] as $row) {
-				$this->rows[] = $row['Values'];
+				$result->rows[] = $row['Values'];
 			}
 		}
+		return $result;
 	}
 }
 
@@ -296,6 +408,20 @@ class VTKeyRange {
 		}
 		return $result;
 	}
+
+	public static function fromBsonP3($bson) {
+		$result = array(
+				'',
+				'' 
+		);
+		if (array_key_exists('Start', $bson)) {
+			$result[0] = $bson['Start'];
+		}
+		if (array_key_exists('End', $bson)) {
+			$result[1] = $bson['End'];
+		}
+		return $result;
+	}
 }
 
 class VTKeyspaceId {
@@ -311,6 +437,11 @@ class VTKeyspaceId {
 		}
 		return $result;
 	}
+}
+
+class VTKeyspaceIdType {
+	const UINT64 = 1;
+	const BYTES = 2;
 }
 
 class VTEntityId {
@@ -354,6 +485,161 @@ class VTEntityId {
 			$eid = self::buildBsonP3($entity_id);
 			$eid['KeyspaceId'] = new MongoBinData($keyspace_id);
 			$result[] = $eid;
+		}
+		return $result;
+	}
+}
+
+class VTSplitQueryKeyRangePart {
+	public $keyspace = '';
+	public $keyRanges = array();
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSplitQueryKeyRangePart();
+		if (array_key_exists('Keyspace', $bson)) {
+			$result->keyspace = $bson['Keyspace'];
+		}
+		if (array_key_exists('KeyRanges', $bson) && $bson['KeyRanges']) {
+			foreach ($bson['KeyRanges'] as $val) {
+				$result->keyRanges[] = VTKeyRange::fromBsonP3($val);
+			}
+		}
+		return $result;
+	}
+}
+
+class VTSplitQueryShardPart {
+	public $keyspace = '';
+	public $shards = array();
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSplitQueryShardPart();
+		if (array_key_exists('Keyspace', $bson)) {
+			$result->keyspace = $bson['Keyspace'];
+		}
+		if (array_key_exists('Shards', $bson)) {
+			$result->shards = $bson['Shards'];
+		}
+		return $result;
+	}
+}
+
+class VTSplitQueryPart {
+	public $query = '';
+	public $keyRangePart;
+	public $shardPart;
+	public $size = 0;
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSplitQueryPart();
+		if (array_key_exists('Query', $bson)) {
+			$result->query = VTBoundQuery::fromBsonP3($bson['Query']);
+		}
+		if (array_key_exists('KeyRangePart', $bson) && $bson['KeyRangePart']) {
+			$result->keyRangePart = VTSplitQueryKeyRangePart::fromBsonP3($bson['KeyRangePart']);
+		}
+		if (array_key_exists('ShardPart', $bson) && $bson['ShardPart']) {
+			$result->shardPart = VTSplitQueryShardPart::fromBsonP3($bson['ShardPart']);
+		}
+		if (array_key_exists('Size', $bson)) {
+			$result->size = $bson['Size'];
+		}
+		return $result;
+	}
+}
+
+class VTShardReference {
+	public $name;
+	public $keyRange;
+
+	public function __construct($name = '', $keyRange = array('','')) {
+		$this->name = $name;
+		$this->keyRange = $keyRange;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTShardReference();
+		if (array_key_exists('Name', $bson)) {
+			$result->name = $bson['Name'];
+		}
+		if (array_key_exists('KeyRange', $bson)) {
+			$result->keyRange = VTKeyRange::fromBsonP3($bson['KeyRange']);
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspacePartition {
+	public $servedType;
+	public $shardReferences;
+
+	public function __construct($servedType = 0, $shardReferences = array()) {
+		$this->servedType = $servedType;
+		$this->shardReferences = $shardReferences;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspacePartition();
+		if (array_key_exists('ServedType', $bson)) {
+			$result->servedType = $bson['ServedType'];
+		}
+		if (array_key_exists('ShardReferences', $bson) && $bson['ShardReferences']) {
+			foreach ($bson['ShardReferences'] as $val) {
+				$result->shardReferences[] = VTShardReference::fromBsonP3($val);
+			}
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspaceServedFrom {
+	public $tabletType;
+	public $keyspace;
+
+	public function __construct($tabletType = 0, $keyspace = '') {
+		$this->tabletType = $tabletType;
+		$this->keyspace = $keyspace;
+	}
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspaceServedFrom();
+		if (array_key_exists('TabletType', $bson)) {
+			$result->tabletType = $bson['TabletType'];
+		}
+		if (array_key_exists('Keyspace', $bson)) {
+			$result->keyspace = $bson['Keyspace'];
+		}
+		return $result;
+	}
+}
+
+class VTSrvKeyspace {
+	public $partitions = array();
+	public $shardingColumnName = '';
+	public $shardingColumnType = 0;
+	public $servedFrom = array();
+	public $splitShardCount = 0;
+
+	public static function fromBsonP3($bson) {
+		$result = new VTSrvKeyspace();
+		if (array_key_exists('Partitions', $bson) && $bson['Partitions']) {
+			foreach ($bson['Partitions'] as $val) {
+				$result->partitions[] = VTSrvKeyspacePartition::fromBsonP3($val);
+			}
+		}
+		if (array_key_exists('ShardingColumnName', $bson)) {
+			$result->shardingColumnName = $bson['ShardingColumnName'];
+		}
+		if (array_key_exists('ShardingColumnType', $bson)) {
+			$result->shardingColumnType = $bson['ShardingColumnType'];
+		}
+		if (array_key_exists('ServedFrom', $bson)) {
+			foreach ($bson['ServedFrom'] as $val) {
+				$result->servedFrom[] = VTSrvKeyspaceServedFrom::fromBsonP3($val);
+			}
+		}
+		if (array_key_exists('SplitShardCount', $bson)) {
+			$result->splitShardCount = $bson['SplitShardCount'];
 		}
 		return $result;
 	}

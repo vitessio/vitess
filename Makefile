@@ -30,8 +30,9 @@ build:
 	echo $$(date): Building source tree
 	godep go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
-# Set VT_TEST_FLAGS to pass flags to python tests.
-# For example, verbose output: export VT_TEST_FLAGS=-v
+# To pass extra flags, run test.go manually.
+# For example: go run test.go -docker=false -- --extra-flag
+# For more info see: go run test.go -help
 test:
 	go run test.go -docker=false
 
@@ -107,6 +108,17 @@ docker_bootstrap:
 	docker/bootstrap/build.sh common
 	docker/bootstrap/build.sh mariadb
 	docker/bootstrap/build.sh mysql56
+
+docker_base:
+	# Fix permissions before copying files, to avoid AUFS bug.
+	chmod -R o=g *
+	docker build -t vitess/base .
+
+docker_lite:
+	cd docker/lite && ./build.sh
+
+docker_guestbook:
+	cd examples/kubernetes/guestbook && ./build.sh
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.

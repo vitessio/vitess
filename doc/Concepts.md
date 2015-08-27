@@ -62,7 +62,7 @@ Each MySQL instance within a shard has the same data or should have the same dat
 
 A keyspace that does not use sharding effectively has one shard. Vitess names the shard <code>0</code> by convention. When sharded a keyspace has <code>N</code> shards with non-overlapping data. Usually, <code>N</code> is a power of 2.
 
-Vitess supports [dynamic resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.md), in which one shard is split into multiple shards for instance. During dynamic resharding, the data in the source shard is split into the destination shards. Then the source shard is deleted.
+Vitess supports [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding), in which one shard is split into multiple shards for instance. During dynamic resharding, the data in the source shard is split into the destination shards. Then the source shard is deleted.
 
 ## Tablet
 

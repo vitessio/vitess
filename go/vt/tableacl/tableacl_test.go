@@ -48,8 +48,9 @@ func TestInitWithValidConfig(t *testing.T) {
 func TestInitFromProto(t *testing.T) {
 	setUpTableACL(&simpleacl.Factory{})
 	readerACL := Authorized("my_test_table", READER)
-	if !reflect.DeepEqual(readerACL, acl.DenyAllACL{}) {
-		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, acl.DenyAllACL{})
+	want := &ACLResult{ACL: acl.DenyAllACL{}, GroupName: ""}
+	if !reflect.DeepEqual(readerACL, want) {
+		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, want)
 	}
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -67,7 +68,7 @@ func TestInitFromProto(t *testing.T) {
 	}
 
 	readerACL = Authorized("unknown_table", READER)
-	if !reflect.DeepEqual(acl.DenyAllACL{}, readerACL) {
+	if !reflect.DeepEqual(readerACL, want) {
 		t.Fatalf("there is no config for unknown_table, should deny by default")
 	}
 
