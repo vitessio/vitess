@@ -35,7 +35,7 @@ type vtgateConn struct {
 }
 
 func dial(ctx context.Context, addr string, timeout time.Duration) (vtgateconn.Impl, error) {
-	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}
