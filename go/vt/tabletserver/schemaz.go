@@ -24,6 +24,7 @@ var (
 			<th>TableRows</th>
 			<th>DataLength</th>
 			<th>IndexLength</th>
+			<th>DataFree</th>
 		</tr>
 	`)
 	schemazTmpl = template.Must(template.New("example").Parse(`
@@ -35,6 +36,7 @@ var (
 			<td>{{index $top.TableRows .TableRows}}</td>
 			<td>{{index $top.DataLength .DataLength}}</td>
 			<td>{{index $top.IndexLength .IndexLength}}</td>
+			<td>{{index $top.DataFree .DataFree}}</td>
 		</tr>{{end}}
 	`))
 )

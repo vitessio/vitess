@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length FROM information_schema.tables WHERE table_schema = database()"
+const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free FROM information_schema.tables WHERE table_schema = database()"
 
 const maxTableCount = 10000
 
@@ -144,6 +144,7 @@ func NewSchemaInfo(
 		_ = stats.NewMultiCountersFunc(statsPrefix+"TableRows", []string{"Table"}, si.getTableRows)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"DataLength", []string{"Table"}, si.getDataLength)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"IndexLength", []string{"Table"}, si.getIndexLength)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"DataFree", []string{"Table"}, si.getDataFree)
 	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
@@ -188,7 +189,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 		if err != nil {
 			panic(PrefixTabletError(ErrFatal, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
 		}
-		tableInfo.SetMysqlStats(row[4], row[5], row[6])
+		tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
 		si.tables[tableName] = tableInfo
 	}
 	if schemaOverrides != nil {
@@ -281,7 +282,7 @@ func (si *SchemaInfo) Reload() {
 			si.CreateOrUpdateTable(ctx, tableName)
 		} else {
 			// Only update table_rows, data_length, index_length
-			si.tables[tableName].SetMysqlStats(row[4], row[5], row[6])
+			si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7])
 		}
 
 	}
@@ -333,12 +334,13 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		// This can happen if DDLs race with each other.
 		return
 	}
+	row := tables.Rows[0]
 	tableInfo, err := NewTableInfo(
 		conn,
 		tableName,
-		tables.Rows[0][1].String(), // table_type
-		tables.Rows[0][2],          // create_time
-		tables.Rows[0][3].String(), // table_comment
+		row[1].String(), // table_type
+		row[2],          // create_time
+		row[3].String(), // table_comment
 		si.cachePool,
 	)
 	if err != nil {
@@ -346,7 +348,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		return
 	}
 	// table_rows, data_length, index_length
-	tableInfo.SetMysqlStats(tables.Rows[0][4], tables.Rows[0][5], tables.Rows[0][6])
+	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
 	if _, ok := si.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
@@ -559,6 +561,16 @@ func (si *SchemaInfo) getIndexLength() map[string]int64 {
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
 		tstats[k] = v.IndexLength
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getDataFree() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.DataFree
 	}
 	return tstats
 }

@@ -524,6 +524,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	tr1 := tableInfo.TableRows
 	dl1 := tableInfo.DataLength
 	il1 := tableInfo.IndexLength
+	df1 := tableInfo.DataFree
 	// Update existing table with new stats.
 	db.AddQuery(baseShowTables, &mproto.QueryResult{
 		RowsAffected: 1,
@@ -536,7 +537,8 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	tr2 := tableInfo.TableRows
 	dl2 := tableInfo.DataLength
 	il2 := tableInfo.IndexLength
-	if tr1 == tr2 || dl1 == dl2 || il1 == il2 {
+	df2 := tableInfo.DataFree
+	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 {
 		t.Fatalf("MysqlStats() results failed to change between queries. ")
 	}
 }
@@ -721,6 +723,7 @@ func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
 		sqltypes.MakeNumeric([]byte("1")),
 		sqltypes.MakeNumeric([]byte("2")),
 		sqltypes.MakeNumeric([]byte("3")),
+		sqltypes.MakeNumeric([]byte("4")),
 	}
 }
 
@@ -733,6 +736,7 @@ func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
 		sqltypes.MakeNumeric([]byte("4")),
 		sqltypes.MakeNumeric([]byte("5")),
 		sqltypes.MakeNumeric([]byte("6")),
+		sqltypes.MakeNumeric([]byte("7")),
 	}
 }
 
@@ -785,6 +789,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeNumeric([]byte("1")),
 					sqltypes.MakeNumeric([]byte("2")),
 					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_02")),
@@ -794,6 +799,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeNumeric([]byte("1")),
 					sqltypes.MakeNumeric([]byte("2")),
 					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table_03")),
@@ -803,6 +809,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeNumeric([]byte("1")),
 					sqltypes.MakeNumeric([]byte("2")),
 					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
 		},
