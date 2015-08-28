@@ -73,18 +73,18 @@ func (t *HorizontalReshardingTask) Run(parameters map[string]string) ([]*pb.Task
 		newTasks = append(newTasks, splitDiffTask)
 	}
 
-	// TODO(mberlin): Implement "MigrateServedTypes" task and uncomment this.
-	//	for _, servedType := range []string{"rdonly", "replica", "master"} {
-	//		migrateServedTypesTasks := NewTaskContainer()
-	//		for _, sourceShard := range sourceShards {
-	//			AddTask(migrateServedTypesTasks, "MigrateServedTypes", map[string]string{
-	//				"keyspace":    keyspace,
-	//				"shard":       sourceShard,
-	//				"served_type": servedType,
-	//			})
-	//		}
-	//		newTasks = append(newTasks, migrateServedTypesTasks)
-	//	}
+	for _, servedType := range []string{"rdonly", "replica", "master"} {
+		migrateServedTypesTasks := NewTaskContainer()
+		for _, sourceShard := range sourceShards {
+			AddTask(migrateServedTypesTasks, "MigrateServedTypesTask", map[string]string{
+				"keyspace":        keyspace,
+				"source_shard":    sourceShard,
+				"type":            servedType,
+				"vtctld_endpoint": vtctldEndpoint,
+			})
+		}
+		newTasks = append(newTasks, migrateServedTypesTasks)
+	}
 
 	return newTasks, "", nil
 }
