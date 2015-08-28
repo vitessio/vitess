@@ -538,8 +538,7 @@ func (si *SchemaInfo) getTableRows() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		tableRows, _, _ := v.MysqlStats()
-		tstats[k] = tableRows
+		tstats[k] = v.TableRows
 	}
 	return tstats
 }
@@ -549,8 +548,7 @@ func (si *SchemaInfo) getDataLength() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		_, dataLength, _ := v.MysqlStats()
-		tstats[k] = dataLength
+		tstats[k] = v.DataLength
 	}
 	return tstats
 }
@@ -560,8 +558,7 @@ func (si *SchemaInfo) getIndexLength() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		_, _, indexLength := v.MysqlStats()
-		tstats[k] = indexLength
+		tstats[k] = v.IndexLength
 	}
 	return tstats
 }

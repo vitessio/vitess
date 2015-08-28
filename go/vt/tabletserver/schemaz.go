@@ -21,6 +21,9 @@ var (
 			<th>Columns</th>
 			<th>Indexes</th>
 			<th>CacheType</th>
+			<th>TableRows</th>
+			<th>DataLength</th>
+			<th>IndexLength</th>
 		</tr>
 	`)
 	schemazTmpl = template.Must(template.New("example").Parse(`
@@ -29,6 +32,9 @@ var (
 			<td>{{range .Columns}}{{.Name}}: {{index $top.ColumnCategory .Category}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
 			<td>{{range .Indexes}}{{.Name}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
 			<td>{{index $top.CacheType .CacheType}}</td>
+			<td>{{index $top.TableRows .TableRows}}</td>
+			<td>{{index $top.DataLength .DataLength}}</td>
+			<td>{{index $top.IndexLength .IndexLength}}</td>
 		</tr>{{end}}
 	`))
 )

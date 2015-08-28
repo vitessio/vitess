@@ -521,7 +521,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", tableName)
 	}
-	tr1, dl1, il1 := tableInfo.MysqlStats()
+	tr1 := tableInfo.TableRows
+	dl1 := tableInfo.DataLength
+	il1 := tableInfo.IndexLength
 	// Update existing table with new stats.
 	db.AddQuery(baseShowTables, &mproto.QueryResult{
 		RowsAffected: 1,
@@ -531,7 +533,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	schemaInfo.Reload()
 	tableInfo = schemaInfo.GetTable(tableName)
-	tr2, dl2, il2 := tableInfo.MysqlStats()
+	tr2 := tableInfo.TableRows
+	dl2 := tableInfo.DataLength
+	il2 := tableInfo.IndexLength
 	if tr1 == tr2 || dl1 == dl2 || il1 == il2 {
 		t.Fatalf("MysqlStats() results failed to change between queries. ")
 	}
