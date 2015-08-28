@@ -36,6 +36,7 @@ import (
 )
 
 const errDupKey = "errno 1062"
+const errOutOfRange = "errno 1264"
 const errTxPoolFull = "tx_pool_full"
 
 var (
@@ -697,6 +698,8 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 	errStr := err.Error() + ", vtgate: " + servenv.ListeningURL.String()
 	if strings.Contains(errStr, errDupKey) {
 		infoErrors.Add("DupKey", 1)
+	} else if strings.Contains(errStr, errOutOfRange) {
+		infoErrors.Add("OutOfRange", 1)
 	} else if strings.Contains(errStr, errTxPoolFull) {
 		normalErrors.Add(statsKey, 1)
 	} else {
