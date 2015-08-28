@@ -122,7 +122,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *pb.ExecuteKeyR
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyRanges(request.KeyRanges),
+		request.KeyRanges,
 		request.TabletType,
 		proto.ProtoToSession(request.Session),
 		request.NotInTransaction,
@@ -294,7 +294,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *pb.StreamExecuteKeyRangesRequ
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyRanges(request.KeyRanges),
+		request.KeyRanges,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteKeyRangesResponse{

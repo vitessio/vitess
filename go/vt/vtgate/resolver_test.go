@@ -48,20 +48,12 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		kid10, err := key.HexKeyspaceId("10").Unhex()
-		if err != nil {
-			return nil, err
-		}
-		kid25, err := key.HexKeyspaceId("25").Unhex()
-		if err != nil {
-			return nil, err
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
 			pb.TabletType_MASTER,
 			nil,
 			false)
@@ -175,28 +167,16 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverStreamExecuteKeyRanges(t *testing.T) {
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid15, err := key.HexKeyspaceId("15").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid25, err := key.HexKeyspaceId("25").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid15}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)
@@ -208,11 +188,11 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)

@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -92,7 +93,7 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 // This function implements the restriction of handling one keyrange
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
-func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, krs []key.KeyRange) (string, []string, error) {
+func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, krs []*pb.KeyRange) (string, []string, error) {
 	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
@@ -115,10 +116,10 @@ func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangeToShards(allShards []topo.ShardReference, kr key.KeyRange) ([]string, error) {
+func resolveKeyRangeToShards(allShards []topo.ShardReference, kr *pb.KeyRange) ([]string, error) {
 	shards := make([]string, 0, 1)
 
-	if !kr.IsPartial() {
+	if !key.KeyRangeIsPartial(kr) {
 		for j := 0; j < len(allShards); j++ {
 			shards = append(shards, allShards[j].Name)
 		}
@@ -126,7 +127,7 @@ func resolveKeyRangeToShards(allShards []topo.ShardReference, kr key.KeyRange) (
 	}
 	for j := 0; j < len(allShards); j++ {
 		shard := allShards[j]
-		if key.KeyRangesIntersect(kr, shard.KeyRange) {
+		if key.KeyRangesIntersect(key.ProtoToKeyRange(kr), shard.KeyRange) {
 			shards = append(shards, shard.Name)
 		}
 	}
@@ -135,26 +136,26 @@ func resolveKeyRangeToShards(allShards []topo.ShardReference, kr key.KeyRange) (
 
 // mapExactShards maps a keyrange to shards only if there's a complete
 // match. If there's any partial match the function returns no match.
-func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, kr key.KeyRange) (newkeyspace string, shards []string, err error) {
+func mapExactShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, kr *pb.KeyRange) (newkeyspace string, shards []string, err error) {
 	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	shardnum := 0
 	for shardnum < len(allShards) {
-		if kr.Start == allShards[shardnum].KeyRange.Start {
+		if bytes.Compare(kr.Start, []byte(allShards[shardnum].KeyRange.Start)) == 0 {
 			break
 		}
 		shardnum++
 	}
 	for shardnum < len(allShards) {
 		shards = append(shards, allShards[shardnum].Name)
-		if kr.End == allShards[shardnum].KeyRange.End {
+		if bytes.Compare(kr.End, []byte(allShards[shardnum].KeyRange.End)) == 0 {
 			return keyspace, shards, nil
 		}
 		shardnum++
 	}
-	return keyspace, nil, fmt.Errorf("keyrange %v does not exactly match shards", kr)
+	return keyspace, nil, fmt.Errorf("keyrange %v does not exactly match shards", key.KeyRangeString(kr))
 }
 
 func boundShardQueriesToScatterBatchRequest(boundQueries []proto.BoundShardQuery) *scatterBatchRequest {

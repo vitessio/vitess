@@ -202,19 +202,19 @@ func (rtr *Router) paramsSelectKeyrange(vcursor *requestContext, plan *planbuild
 	return newScatterParams(plan.Rewritten, ks, vcursor.bindVariables, shards), nil
 }
 
-func getKeyRange(keys []interface{}) (key.KeyRange, error) {
+func getKeyRange(keys []interface{}) (*pb.KeyRange, error) {
 	var ksids []key.KeyspaceId
 	for _, k := range keys {
 		switch k := k.(type) {
 		case string:
 			ksids = append(ksids, key.KeyspaceId(k))
 		default:
-			return key.KeyRange{}, fmt.Errorf("expecting strings for keyrange: %+v", keys)
+			return nil, fmt.Errorf("expecting strings for keyrange: %+v", keys)
 		}
 	}
-	return key.KeyRange{
-		Start: ksids[0],
-		End:   ksids[1],
+	return &pb.KeyRange{
+		Start: []byte(ksids[0]),
+		End:   []byte(ksids[1]),
 	}, nil
 }
 

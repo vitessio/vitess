@@ -274,14 +274,13 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kr, err := key.ParseKeyRangeParts("", "20")
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = rpcVTGate.ExecuteKeyRanges(context.Background(),
+	err := rpcVTGate.ExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		nil,
 		false,
@@ -310,7 +309,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		session,
 		false,
@@ -335,11 +334,10 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want 1, got %v", commitCount)
 	}
 	// Test for multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "30")
 	rpcVTGate.ExecuteKeyRanges(context.Background(), "query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x30}}},
 		pb.TabletType_MASTER,
 		nil,
 		false, qr)
@@ -684,14 +682,13 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	s.MapTestConn("-20", sbc)
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
-	kr, err := key.ParseKeyRangeParts("", "20")
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
+	err := rpcVTGate.StreamExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
@@ -708,12 +705,11 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	}
 
 	// Test for successful execution - multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "40")
 	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)

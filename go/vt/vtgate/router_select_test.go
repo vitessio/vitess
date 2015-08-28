@@ -490,7 +490,7 @@ func TestSelectKeyrangeFail(t *testing.T) {
 	_, err = routerExec(router, "select * from user where keyrange('', :aa)", map[string]interface{}{
 		"aa": "\x21",
 	})
-	want = "paramsSelectKeyrange: keyrange {Start: , End: 21} does not exactly match shards"
+	want = "paramsSelectKeyrange: keyrange -21 does not exactly match shards"
 	if err == nil || err.Error() != want {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}

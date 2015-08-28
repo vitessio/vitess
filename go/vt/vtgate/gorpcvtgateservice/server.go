@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -110,7 +111,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyRanges,
+		key.KeyRangesToProto(request.KeyRanges),
 		topo.TabletTypeToProto(request.TabletType),
 		request.Session,
 		request.NotInTransaction,
@@ -346,7 +347,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, request *proto.Ke
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyRanges,
+		key.KeyRangesToProto(request.KeyRanges),
 		topo.TabletTypeToProto(request.TabletType),
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
@@ -364,7 +365,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyRanges,
+		key.KeyRangesToProto(request.KeyRanges),
 		topo.TabletTypeToProto(request.TabletType),
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
