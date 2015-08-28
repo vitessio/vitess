@@ -53,6 +53,9 @@ const (
 	// ErrDataTooLong is C.ER_DATA_TOO_LONG
 	ErrDataTooLong = C.ER_DATA_TOO_LONG
 
+	// ErrDataOutOfRange is C.ER_WARN_DATA_OUT_OF_RANGE
+	ErrDataOutOfRange = C.ER_WARN_DATA_OUT_OF_RANGE
+
 	// ErrServerLost is C.CR_SERVER_LOST.
 	// It's hard-coded for now because it causes problems on import.
 	ErrServerLost = 2013
