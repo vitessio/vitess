@@ -66,7 +66,7 @@ func main() {
 
 	fmt.Println("Connecting to Automation Server:", *automationServer)
 
-	conn, err := grpc.Dial(*automationServer)
+	conn, err := grpc.Dial(*automationServer, grpc.WithInsecure())
 	if err != nil {
 		fmt.Println("Cannot create connection:", err)
 		os.Exit(3)

@@ -19,7 +19,7 @@ import (
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
-	// stats updated by sqlquery.go
+	// rowcache stats updated by query_executor.go and query_engine.go.
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
