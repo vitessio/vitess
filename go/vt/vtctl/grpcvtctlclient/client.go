@@ -25,7 +25,7 @@ type gRPCVtctlClient struct {
 
 func gRPCVtctlClientFactory(addr string, dialTimeout time.Duration) (vtctlclient.VtctlClient, error) {
 	// create the RPC client
-	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
+	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
 		return nil, err
 	}
