@@ -5,10 +5,10 @@
 package vindexes
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -27,33 +27,33 @@ func (Numeric) Cost() int {
 }
 
 // Verify returns true if id and ksid match.
-func (Numeric) Verify(_ planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (Numeric) Verify(_ planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	var keybytes [8]byte
 	num, err := getNumber(id)
 	if err != nil {
 		return false, fmt.Errorf("Numeric.Verify: %v", err)
 	}
 	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-	return key.KeyspaceId(keybytes[:]) == ksid, nil
+	return bytes.Compare(keybytes[:], ksid) == 0, nil
 }
 
 // Map returns the associated keyspae ids for the given ids.
-func (Numeric) Map(_ planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
-	var keybytes [8]byte
-	out := make([]key.KeyspaceId, 0, len(ids))
+func (Numeric) Map(_ planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
 		num, err := getNumber(id)
 		if err != nil {
 			return nil, fmt.Errorf("Numeric.Map: %v", err)
 		}
+		var keybytes [8]byte
 		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-		out = append(out, key.KeyspaceId(keybytes[:]))
+		out = append(out, []byte(keybytes[:]))
 	}
 	return out, nil
 }
 
 // ReverseMap returns the associated id for the ksid.
-func (Numeric) ReverseMap(_ planbuilder.VCursor, ksid key.KeyspaceId) (interface{}, error) {
+func (Numeric) ReverseMap(_ planbuilder.VCursor, ksid []byte) (interface{}, error) {
 	if len(ksid) != 8 {
 		return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspace is not 8: %d", len(ksid))
 	}
