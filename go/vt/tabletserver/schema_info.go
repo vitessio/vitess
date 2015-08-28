@@ -20,14 +20,14 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
-	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
 
-const baseShowTables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
+const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free FROM information_schema.tables WHERE table_schema = database()"
 
 const maxTableCount = 10000
 
@@ -45,7 +45,7 @@ type ExecPlan struct {
 	TableInfo  *TableInfo
 	Fields     []mproto.Field
 	Rules      *QueryRules
-	Authorized tacl.ACL
+	Authorized *tableacl.ACLResult
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -142,6 +142,10 @@ func NewSchemaInfo(
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
 		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"TableRows", []string{"Table"}, si.getTableRows)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"DataLength", []string{"Table"}, si.getDataLength)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"IndexLength", []string{"Table"}, si.getIndexLength)
+		_ = stats.NewMultiCountersFunc(statsPrefix+"DataFree", []string{"Table"}, si.getDataFree)
 	}
 	for _, ep := range endpoints {
 		http.Handle(ep, si)
@@ -160,13 +164,13 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	defer conn.Recycle()
 
 	if strictMode && !conn.VerifyStrict() {
-		panic(NewTabletError(ErrFatal, "Could not verify strict mode"))
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
 	}
 
 	si.cachePool = cachePool
 	tables, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFatal, err, "Could not get table list: "))
+		panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
@@ -184,8 +188,9 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 			si.cachePool,
 		)
 		if err != nil {
-			panic(PrefixTabletError(ErrFatal, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
+			panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
 		}
+		tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
 		si.tables[tableName] = tableInfo
 	}
 	if schemaOverrides != nil {
@@ -195,7 +200,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	si.lastChange = curTime
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
-	si.ticks.Start(func() { si.Reload() })
+	si.ticks.Start(si.Reload)
 }
 
 func (si *SchemaInfo) override() {
@@ -262,7 +267,7 @@ func (si *SchemaInfo) Reload() {
 	func() {
 		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.Exec(ctx, fmt.Sprintf("%s and unix_timestamp(create_time) >= %v", baseShowTables, si.lastChange.Unix()), maxTableCount, false)
+		tables, err = conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
@@ -271,8 +276,16 @@ func (si *SchemaInfo) Reload() {
 	log.Infof("Reloading schema")
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
-		log.Infof("Reloading: %s", tableName)
-		si.CreateOrUpdateTable(ctx, tableName)
+		createTime, _ := row[2].ParseInt64()
+		// Check if we know about the table or it has been recreated.
+		if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange.Unix() {
+			log.Infof("Reloading: %s", tableName)
+			si.CreateOrUpdateTable(ctx, tableName)
+		} else {
+			// Only update table_rows, data_length, index_length
+			si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7])
+		}
+
 	}
 	si.lastChange = curTime
 }
@@ -282,14 +295,14 @@ func (si *SchemaInfo) mysqlTime(ctx context.Context) time.Time {
 	defer conn.Recycle()
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, "Could not get MySQL time: "))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(ErrFail, "Unexpected result for MySQL time: %+v", tm.Rows))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(ErrFail, "Could not parse time %+v: %v", tm, err))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
 	}
 	return time.Unix(t, 0)
 }
@@ -316,24 +329,27 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	defer conn.Recycle()
 	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
 	}
 	if len(tables.Rows) != 1 {
 		// This can happen if DDLs race with each other.
 		return
 	}
+	row := tables.Rows[0]
 	tableInfo, err := NewTableInfo(
 		conn,
 		tableName,
-		tables.Rows[0][1].String(), // table_type
-		tables.Rows[0][2],          // create_time
-		tables.Rows[0][3].String(), // table_comment
+		row[1].String(), // table_type
+		row[2],          // create_time
+		row[3].String(), // table_comment
 		si.cachePool,
 	)
 	if err != nil {
 		// This can happen if DDLs race with each other.
 		return
 	}
+	// table_rows, data_length, index_length
+	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
 	if _, ok := si.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
@@ -392,7 +408,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql 
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, ""))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
@@ -408,7 +424,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql 
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSql(sql, start)
 			if err != nil {
-				panic(PrefixTabletError(ErrFail, err, "Error fetching fields: "))
+				panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
 			}
 			plan.Fields = r.Fields
 		}
@@ -434,7 +450,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(ErrFail, err, ""))
+		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = QueryRuleSources.filterByPlan(sql, plan.PlanId, plan.TableName)
@@ -470,7 +486,7 @@ func (si *SchemaInfo) getQuery(sql string) *ExecPlan {
 // SetQueryCacheSize sets the query cache size.
 func (si *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
-		panic(NewTabletError(ErrFail, "cache size %v out of range", size))
+		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
 	}
 	si.queries.SetCapacity(int64(size))
 }
@@ -516,6 +532,46 @@ func (si *SchemaInfo) getRowcacheInvalidations() map[string]int64 {
 			_, _, _, invalidations := v.Stats()
 			tstats[k] = invalidations
 		}
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getTableRows() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.TableRows
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getDataLength() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.DataLength
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getIndexLength() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.IndexLength
+	}
+	return tstats
+}
+
+func (si *SchemaInfo) getDataFree() map[string]int64 {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	tstats := make(map[string]int64)
+	for k, v := range si.tables {
+		tstats[k] = v.DataFree
 	}
 	return tstats
 }

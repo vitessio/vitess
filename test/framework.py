@@ -10,7 +10,9 @@ import unittest
 
 import utils
 
+
 class TestCase(unittest.TestCase):
+
   @classmethod
   def setenv(cls, env):
     cls.env = env
@@ -18,26 +20,30 @@ class TestCase(unittest.TestCase):
   def assertContains(self, b, a):
     self.assertIn(a, b)
 
+
 class MultiDict(dict):
+
   def __getattr__(self, name):
     v = self[name]
-    if type(v)==dict:
-      v=MultiDict(v)
+    if type(v) == dict:
+      v = MultiDict(v)
     return v
 
   def mget(self, mkey, default=None):
-    keys = mkey.split(".")
+    keys = mkey.split('.')
     try:
       v = self
       for key in keys:
         v = v[key]
     except KeyError:
       v = default
-    if type(v)==dict:
+    if type(v) == dict:
       v = MultiDict(v)
     return v
 
+
 class Tailer(object):
+
   def __init__(self, filepath, flush=None, sleep=0, timeout=10.0):
     self.filepath = filepath
     self.flush = flush
@@ -75,7 +81,7 @@ class Tailer(object):
     self.f.seek(0, os.SEEK_END)
     newpos = self.f.tell()
     if newpos < self.pos:
-      return ""
+      return ''
     self.f.seek(self.pos, os.SEEK_SET)
     size = newpos-self.pos
     self.pos = newpos
@@ -85,6 +91,7 @@ class Tailer(object):
     """Returns a list of read lines."""
     return self.read().splitlines()
 
+
 # FIXME: Hijacked from go/vt/tabletserver/test.py
 # Reuse when things come together
 def execute(cmd, trap_output=False, verbose=False, **kargs):
@@ -93,7 +100,7 @@ def execute(cmd, trap_output=False, verbose=False, **kargs):
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
   if verbose:
-    print "Execute:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
+    print 'Execute:', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()

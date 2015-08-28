@@ -31,7 +31,7 @@ class VTGateTx {
 		}
 		VTProto::checkError($resp);
 		
-		return new VTQueryResult($resp['Result']);
+		return VTQueryResult::fromBsonP3($resp['Result']);
 	}
 
 	private function callExecuteBatch(VTContext $ctx, $queries, $tablet_type, $as_transaction, $method, $req = array()) {
@@ -56,7 +56,7 @@ class VTGateTx {
 		
 		$results = array();
 		foreach ($resp['Results'] as $result) {
-			$results[] = new VTQueryResult($result);
+			$results[] = VTQueryResult::fromBsonP3($result);
 		}
 		return $results;
 	}
@@ -113,7 +113,7 @@ class VTGateTx {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Commit', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Commit2', $req)->reply;
 		$this->session = NULL;
 	}
 
@@ -128,7 +128,7 @@ class VTGateTx {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Rollback', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Rollback2', $req)->reply;
 		$this->session = NULL;
 	}
 }
@@ -150,7 +150,7 @@ class VTGateConn {
 		$resp = $this->client->call($ctx, $method, $req)->reply;
 		VTProto::checkError($resp);
 		
-		return new VTQueryResult($resp['Result']);
+		return VTQueryResult::fromBsonP3($resp['Result']);
 	}
 
 	private function callExecuteBatch(VTContext $ctx, $queries, $tablet_type, $as_transaction, $method, $req = array()) {
@@ -165,10 +165,24 @@ class VTGateConn {
 		VTProto::checkError($resp);
 		
 		$results = array();
-		foreach ($resp['Results'] as $result) {
-			$results[] = new VTQueryResult($result);
+		if (array_key_exists('Results', $resp)) {
+			foreach ($resp['Results'] as $result) {
+				$results[] = VTQueryResult::fromBsonP3($result);
+			}
 		}
 		return $results;
+	}
+
+	private function callStreamExecute(VTContext $ctx, $query, array $bind_vars, $tablet_type, $method, $req = array()) {
+		$req['Query'] = VTBoundQuery::buildBsonP3($query, $bind_vars);
+		$req['TabletType'] = $tablet_type;
+		if ($ctx->getCallerId()) {
+			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
+		}
+		
+		$this->client->streamCall($ctx, $method, $req);
+		
+		return new VTStreamResults($ctx, $this->client);
 	}
 
 	public function execute(VTContext $ctx, $query, array $bind_vars, $tablet_type) {
@@ -212,18 +226,114 @@ class VTGateConn {
 		return $this->callExecuteBatch($ctx, VTBoundKeyspaceIdQuery::buildBsonP3Array($bound_keyspace_id_queries), $tablet_type, $as_transaction, 'VTGateP3.ExecuteBatchKeyspaceIds');
 	}
 
+	public function streamExecute(VTContext $ctx, $query, array $bind_vars, $tablet_type) {
+		return $this->callStreamExecute($ctx, $query, $bind_vars, $tablet_type, 'VTGateP3.StreamExecute2');
+	}
+
+	public function streamExecuteShards(VTContext $ctx, $query, $keyspace, array $shards, array $bind_vars, $tablet_type) {
+		return $this->callStreamExecute($ctx, $query, $bind_vars, $tablet_type, 'VTGateP3.StreamExecuteShards2', array(
+				'Keyspace' => $keyspace,
+				'Shards' => $shards 
+		));
+	}
+
+	public function streamExecuteKeyspaceIds(VTContext $ctx, $query, $keyspace, array $keyspace_ids, array $bind_vars, $tablet_type) {
+		return $this->callStreamExecute($ctx, $query, $bind_vars, $tablet_type, 'VTGateP3.StreamExecuteKeyspaceIds2', array(
+				'Keyspace' => $keyspace,
+				'KeyspaceIds' => VTKeyspaceId::buildBsonP3Array($keyspace_ids) 
+		));
+	}
+
+	public function streamExecuteKeyRanges(VTContext $ctx, $query, $keyspace, array $key_ranges, array $bind_vars, $tablet_type) {
+		return $this->callStreamExecute($ctx, $query, $bind_vars, $tablet_type, 'VTGateP3.StreamExecuteKeyRanges2', array(
+				'Keyspace' => $keyspace,
+				'KeyRanges' => VTKeyRange::buildBsonP3Array($key_ranges) 
+		));
+	}
+
 	public function begin(VTContext $ctx) {
 		$req = array();
 		if ($ctx->getCallerId()) {
 			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
 		}
 		
-		$resp = $this->client->call($ctx, 'VTGateP3.Begin', $req)->reply;
+		$resp = $this->client->call($ctx, 'VTGateP3.Begin2', $req)->reply;
 		
 		return new VTGateTx($this->client, $resp['Session']);
 	}
 
+	public function splitQuery(VTContext $ctx, $keyspace, $query, array $bind_vars, $split_column, $split_count) {
+		$req = array(
+				'Keyspace' => $keyspace,
+				'Query' => VTBoundQuery::buildBsonP3($query, $bind_vars),
+				'SplitColumn' => $split_column,
+				'SplitCount' => $split_count 
+		);
+		if ($ctx->getCallerId()) {
+			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
+		}
+		
+		$resp = $this->client->call($ctx, 'VTGateP3.SplitQuery', $req)->reply;
+		
+		$results = array();
+		if (array_key_exists('Splits', $resp)) {
+			foreach ($resp['Splits'] as $split) {
+				$results[] = VTSplitQueryPart::fromBsonP3($split);
+			}
+		}
+		return $results;
+	}
+
+	public function getSrvKeyspace(VTContext $ctx, $keyspace) {
+		$req = array(
+				'Keyspace' => $keyspace 
+		);
+		if ($ctx->getCallerId()) {
+			$req['CallerId'] = $ctx->getCallerId()->toBsonP3();
+		}
+		
+		$resp = $this->client->call($ctx, 'VTGateP3.GetSrvKeyspace', $req)->reply;
+		return VTSrvKeyspace::fromBsonP3($resp['SrvKeyspace']);
+	}
+
 	public function close() {
 		$this->client->close();
+	}
+}
+
+class VTStreamResults {
+	private $ctx;
+	private $client;
+
+	public function __construct($ctx, $client) {
+		$this->ctx = $ctx;
+		$this->client = $client;
+	}
+
+	/**
+	 * fetch reads and returns the next VTQueryResult from the stream.
+	 *
+	 * If there are no more results and the stream has finished successfully,
+	 * it returns FALSE.
+	 */
+	public function fetch() {
+		$resp = $this->client->streamNext($this->ctx);
+		if ($resp === FALSE) {
+			return FALSE;
+		}
+		VTProto::checkError($resp->reply);
+		return VTQueryResult::fromBsonP3($resp->reply['Result']);
+	}
+
+	/**
+	 * fetchAll calls fetch in a loop until it returns FALSE, and then returns the
+	 * results as an array.
+	 */
+	public function fetchAll() {
+		$results = array();
+		while (($result = $this->fetch()) !== FALSE) {
+			$results[] = $result;
+		}
+		return $results;
 	}
 }

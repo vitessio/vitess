@@ -2,8 +2,9 @@
 
 import protocols_flavor
 
+
 class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
-  """Overrides to use go rpc everywhere"""
+  """Overrides to use go rpc everywhere."""
 
   def binlog_player_protocol(self):
     return 'gorpc'

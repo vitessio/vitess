@@ -121,7 +121,7 @@ class TestPythonClient(unittest.TestCase):
   def _open_stream_keyranges_cursor(self):
     kr = keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)
     return self.conn.cursor(
-        'keyspace', 'master',  keyranges=[kr],
+        'keyspace', 'master', keyranges=[kr],
         cursorclass=vtgate_cursor.StreamVTGateCursor)
 
   def _open_stream_keyspace_ids_cursor(self):
@@ -195,11 +195,10 @@ class TestPythonClient(unittest.TestCase):
     # Special query that makes vtgateclienttest match effective_caller_id.
     effective_caller_id_test_query = (
         'callerid://{"principal":"pr", "component":"co", "subcomponent":"su"}')
-    good_effective_caller_id = {
-        'Principal': 'pr', 'Component': 'co', 'Subcomponent': 'su'}
-    bad_effective_caller_id = {
-        'Principal': 'pr_wrong',
-        'Component': 'co_wrong', 'Subcomponent': 'su_wrong'}
+    good_effective_caller_id = vtgate_client.CallerID(
+        principal='pr', component='co', subcomponent='su')
+    bad_effective_caller_id = vtgate_client.CallerID(
+        principal='pr_wrong', component='co_wrong', subcomponent='su_wrong')
 
     def check_good_and_bad_effective_caller_ids(cursor, cursor_execute_method):
       cursor_execute_method(cursor, good_effective_caller_id)
@@ -262,8 +261,6 @@ class TestPythonClient(unittest.TestCase):
     check_good_and_bad_effective_caller_ids(
         self._open_stream_keyranges_cursor(),
         cursor_stream_execute_keyranges_method)
-
-
 
 if __name__ == '__main__':
   utils.main()

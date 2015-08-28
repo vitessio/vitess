@@ -24,6 +24,8 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // Allowed state transitions:
@@ -87,10 +89,11 @@ type SqlQuery struct {
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	qe        *QueryEngine
-	sessionID int64
-	dbconfig  *dbconfigs.DBConfig
-	target    *pb.Target
+	qe          *QueryEngine
+	invalidator *RowcacheInvalidator
+	sessionID   int64
+	dbconfig    *dbconfigs.DBConfig
+	target      *pb.Target
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -107,6 +110,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
 	}
 	sq.qe = NewQueryEngine(config)
+	sq.invalidator = NewRowcacheInvalidator(config.StatsPrefix, sq.qe, config.EnablePublishStats)
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
 			sq.mu.Lock()
@@ -151,7 +155,7 @@ func (sq *SqlQuery) allowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfi
 	if sq.state != StateNotServing {
 		state := sq.state
 		sq.mu.Unlock()
-		return NewTabletError(ErrFatal, "cannot start query service, current state: %s", state)
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot start query service, current state: %s", state)
 	}
 	// state is StateNotServing
 	sq.setState(StateInitializing)
@@ -180,12 +184,27 @@ func (sq *SqlQuery) allowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfi
 		sq.mu.Unlock()
 	}()
 
-	sq.qe.Open(dbconfigs, schemaOverrides, mysqld)
+	sq.qe.Open(dbconfigs, schemaOverrides)
+	// Start the invalidator after qe.
+	if needInvalidator(target, dbconfigs) {
+		sq.invalidator.Open(dbconfigs.App.DbName, mysqld)
+	}
 	sq.dbconfig = &dbconfigs.App
 	sq.target = target
 	sq.sessionID = Rand()
 	log.Infof("Session id: %d", sq.sessionID)
 	return nil
+}
+
+// needInvalidator returns true if the rowcache invalidator needs to be enabled.
+func needInvalidator(target *pb.Target, dbconfigs *dbconfigs.DBConfigs) bool {
+	if !dbconfigs.App.EnableRowcache {
+		return false
+	}
+	if target == nil {
+		return dbconfigs.App.EnableInvalidator
+	}
+	return target.TabletType != topodata.TabletType_MASTER
 }
 
 // disallowQueries shuts down the query service if it's StateServing.
@@ -242,6 +261,8 @@ func (sq *SqlQuery) disallowQueries() {
 		sq.mu.Unlock()
 	}()
 	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
+	// Close invalidator before qe.
+	sq.invalidator.Close()
 	sq.qe.Close()
 	sq.sessionID = 0
 	sq.dbconfig = &dbconfigs.DBConfig{}
@@ -272,10 +293,10 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	defer sq.endRequest()
 
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
-		return NewTabletError(ErrFatal, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
 	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfig.Shard) {
-		return NewTabletError(ErrFatal, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = sq.sessionID
 	return nil
@@ -361,7 +382,7 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
 		sq.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		return NewTabletError(ErrFail, "%v: uncaught panic for %v", err, query)
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
 	}
 	var myError error
 	if sq.config.TerseErrors && terr.SqlError != 0 && len(query.BindVariables) != 0 {
@@ -436,7 +457,7 @@ func (sq *SqlQuery) Execute(ctx context.Context, target *pb.Target, query *proto
 func (sq *SqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
-		return NewTabletError(ErrFail, "Transactions not supported with streaming")
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Transactions not supported with streaming")
 	}
 
 	logStats := newSqlQueryStats("StreamExecute", ctx)
@@ -473,10 +494,10 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query 
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (sq *SqlQuery) ExecuteBatch(ctx context.Context, target *pb.Target, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	if len(queryList.Queries) == 0 {
-		return NewTabletError(ErrFail, "Empty query list")
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Empty query list")
 	}
 	if queryList.AsTransaction && queryList.TransactionId != 0 {
-		return NewTabletError(ErrFail, "cannot start a new transaction in the scope of an existing one")
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
@@ -544,7 +565,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, target *pb.Target, req *prot
 	splitter := NewQuerySplitter(&(req.Query), req.SplitColumn, req.SplitCount, sq.qe.schemaInfo)
 	err = splitter.validateQuery()
 	if err != nil {
-		return NewTabletError(ErrFail, "splitQuery: query validation error: %s, request: %#v", err, req)
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query validation error: %s, request: %#v", err, req)
 	}
 
 	qre := &QueryExecutor{
@@ -566,7 +587,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, target *pb.Target, req *prot
 	}
 	reply.Queries, err = splitter.split(columnType, pkMinMax)
 	if err != nil {
-		return NewTabletError(ErrFail, "splitQuery: query split error: %s, request: %#v", err, req)
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "splitQuery: query split error: %s, request: %#v", err, req)
 	}
 	return nil
 }
@@ -636,7 +657,7 @@ func (sq *SqlQuery) startRequest(target *pb.Target, sessionID int64, ignoreSessi
 	if allowShutdown && sq.state == StateShuttingTx {
 		goto verifySession
 	}
-	return NewTabletError(ErrRetry, "operation not allowed in state %s", stateName[sq.state])
+	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[sq.state])
 
 verifySession:
 	if ignoreSession {
@@ -645,18 +666,18 @@ verifySession:
 	if target != nil && sq.target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != sq.target.Keyspace {
-			return NewTabletError(ErrRetry, "Invalid keyspace %v", target.Keyspace)
+			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
 		}
 		if target.Shard != sq.target.Shard {
-			return NewTabletError(ErrRetry, "Invalid shard %v", target.Shard)
+			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
 		}
 		if target.TabletType != sq.target.TabletType {
-			return NewTabletError(ErrRetry, "Invalid tablet type %v", target.TabletType)
+			return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type %v", target.TabletType)
 		}
 		goto ok
 	}
 	if sessionID == 0 || sessionID != sq.sessionID {
-		return NewTabletError(ErrRetry, "Invalid session Id %v", sessionID)
+		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
 	}
 
 ok:
@@ -701,7 +722,7 @@ func getColumnType(qre *QueryExecutor, columnName, tableName string) (int64, err
 		return mproto.VT_NULL, err
 	}
 	if result == nil || len(result.Fields) != 1 {
-		return mproto.VT_NULL, NewTabletError(ErrFail, "failed to get column type for column: %v, invalid result: %v", columnName, result)
+		return mproto.VT_NULL, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "failed to get column type for column: %v, invalid result: %v", columnName, result)
 	}
 	return result.Fields[0].Type, nil
 }

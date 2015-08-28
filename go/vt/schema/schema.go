@@ -35,11 +35,15 @@ type TableColumn struct {
 }
 
 type Table struct {
-	Name      string
-	Columns   []TableColumn
-	Indexes   []*Index
-	PKColumns []int
-	CacheType int
+	Name        string
+	Columns     []TableColumn
+	Indexes     []*Index
+	PKColumns   []int
+	CacheType   int
+	TableRows   int64
+	DataLength  int64
+	IndexLength int64
+	DataFree    int64
 }
 
 func NewTable(name string) *Table {
@@ -92,6 +96,14 @@ func (ta *Table) AddIndex(name string) (index *Index) {
 	index = NewIndex(name)
 	ta.Indexes = append(ta.Indexes, index)
 	return index
+}
+
+// SetMysqlStats receives the values found in the mysql information_schema.tables table
+func (ta *Table) SetMysqlStats(tr, dl, il, df sqltypes.Value) {
+	ta.TableRows, _ = tr.ParseInt64()
+	ta.DataLength, _ = dl.ParseInt64()
+	ta.IndexLength, _ = il.ParseInt64()
+	ta.DataFree, _ = df.ParseInt64()
 }
 
 type Index struct {

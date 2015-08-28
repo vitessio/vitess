@@ -16,7 +16,8 @@ import (
 
 var fakezkConfig = flag.String("fakezk-config", "", "If set, will read the json config file, use it to seed a fakezk and register it as 'fakezk' topology implementation")
 
-func init() {
+// initFakeZK will register a fakezk topo server if necessary.
+func initFakeZK() {
 	if *fakezkConfig != "" {
 		topo.RegisterServer("fakezk", zktopo.NewServer(fakezk.NewConnFromFile(*fakezkConfig)))
 	}

@@ -16,8 +16,8 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/fakecacheservice"
@@ -25,6 +25,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
@@ -946,11 +949,10 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	})
 
 	username := "u2"
-	callInfo := &fakeCallInfo{
-		remoteAddr: "1.2.3.4",
-		username:   username,
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group01",
@@ -992,12 +994,10 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	})
 
 	username := "u2"
-	callInfo := &fakeCallInfo{
-		remoteAddr: "1.2.3.4",
-		username:   username,
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
-
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group02",
@@ -1058,11 +1058,10 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	})
 
 	username := "u2"
-	callInfo := &fakeCallInfo{
-		remoteAddr: "1.2.3.4",
-		username:   username,
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -1100,11 +1099,11 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
 	sqlQuery.qe.exemptACL = username
-	callInfo = &fakeCallInfo{
-		remoteAddr: "1.2.3.4",
-		username:   username,
+	callerID = &querypb.VTGateCallerID{
+		Username: username,
 	}
-	ctx = callinfo.NewContext(context.Background(), callInfo)
+	ctx = callerid.NewContext(context.Background(), nil, callerID)
+
 	qre = newTestQueryExecutor(ctx, sqlQuery, query, 0)
 	_, err = qre.Execute()
 	if err != nil {
@@ -1129,11 +1128,10 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	})
 
 	username := "u2"
-	callInfo := &fakeCallInfo{
-		remoteAddr: "1.2.3.4",
-		username:   username,
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -1149,7 +1147,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 
 	tableACLStatsKey := strings.Join([]string{
 		"test_table",
-		username,
+		"group02",
 		planbuilder.PLAN_PASS_SELECT.String(),
 		username,
 	}, ".")
@@ -1431,7 +1429,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 		"select unix_timestamp()": &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": &mproto.QueryResult{
@@ -1446,8 +1444,12 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
 		},
@@ -1512,8 +1514,12 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
 		},

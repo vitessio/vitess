@@ -196,7 +196,14 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def _add_caller_id(self, req, caller_id):
     if caller_id:
-      req['CallerID'] = caller_id
+      caller_id_dict = {}
+      if caller_id.principal:
+        caller_id_dict['Principal'] = caller_id.principal
+      if caller_id.component:
+        caller_id_dict['Component'] = caller_id.component
+      if caller_id.subcomponent:
+        caller_id_dict['Subcomponent'] = caller_id.subcomponent
+      req['CallerID'] = caller_id_dict
 
   def _add_session(self, req):
     if self.session:

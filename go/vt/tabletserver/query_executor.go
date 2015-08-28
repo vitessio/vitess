@@ -14,7 +14,9 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -77,7 +79,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_DML:
 			if qre.qe.strictMode.Get() != 0 {
-				return nil, NewTabletError(ErrFail, "DML too complex")
+				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 		case planbuilder.PLAN_INSERT_PK:
@@ -99,7 +101,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 		switch qre.plan.PlanId {
 		case planbuilder.PLAN_PASS_SELECT:
 			if qre.plan.Reason == planbuilder.REASON_LOCK {
-				return nil, NewTabletError(ErrFail, "Disallowed outside transaction")
+				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			reply, err = qre.execSelect()
 		case planbuilder.PLAN_PK_IN:
@@ -117,7 +119,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 			reply, err = qre.execSQL(conn, qre.query, true)
 		default:
 			if !qre.qe.enableAutoCommit {
-				return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
+				return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 			}
 			reply, err = qre.execDmlAutoCommit()
 		}
@@ -173,7 +175,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	switch qre.plan.PlanId {
 	case planbuilder.PLAN_PASS_DML:
 		if qre.qe.strictMode.Get() != 0 {
-			return nil, NewTabletError(ErrFail, "DML too complex")
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DML too complex")
 		}
 		reply, err = qre.directFetch(conn, qre.plan.FullQuery, qre.bindVars, nil)
 	case planbuilder.PLAN_INSERT_PK:
@@ -187,7 +189,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 	case planbuilder.PLAN_UPSERT_PK:
 		reply, err = qre.execUpsertPK(conn, invalidator)
 	default:
-		return nil, NewTabletError(ErrFatal, "unsupported query: %s", qre.query)
+		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 	}
 	return reply, err
 }
@@ -210,25 +212,32 @@ func (qre *QueryExecutor) checkPermissions() error {
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QR_FAIL:
-		return NewTabletError(ErrFail, "Query disallowed due to rule: %s", desc)
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
 	case QR_FAIL_RETRY:
-		return NewTabletError(ErrRetry, "Query disallowed due to rule: %s", desc)
+		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
+	}
+
+	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+	if callerID == nil {
+		if qre.qe.strictTableAcl {
+			return NewTabletError(ErrFail, vtrpc.ErrorCode_UNAUTHENTICATED, "missing caller id")
+		}
+		return nil
 	}
 
 	// a superuser that exempts from table ACL checking.
-	if qre.qe.exemptACL == username {
+	if qre.qe.exemptACL == callerID.Username {
 		qre.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
+	if qre.plan.Authorized == nil {
+		return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
+	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName,
-		// TODO(shengzhe): use table group instead of username.
-		username,
+		qre.plan.Authorized.GroupName,
 		qre.plan.PlanId.String(),
-		username,
-	}
-	if qre.plan.Authorized == nil {
-		return NewTabletError(ErrFail, "table acl error: nil acl")
+		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(username) {
@@ -241,7 +250,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
-			return NewTabletError(ErrFail, "%s", errStr)
+			return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
@@ -252,7 +261,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 func (qre *QueryExecutor) execDDL() (*mproto.QueryResult, error) {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		return nil, NewTabletError(ErrFail, "DDL is not understood")
+		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
 	txid := qre.qe.txPool.Begin(qre.ctx)
@@ -297,7 +306,9 @@ func (qre *QueryExecutor) execSubquery() (*mproto.QueryResult, error) {
 
 func (qre *QueryExecutor) fetchMulti(pkRows [][]sqltypes.Value, limit int64) (*mproto.QueryResult, error) {
 	if qre.plan.Fields == nil {
-		return nil, NewTabletError(ErrFatal, "query plan.Fields is empty")
+		// TODO(aaijazi): Is this due to a bad query, or an internal error? We might want to change
+		// this to ErrFail and ErrorCode_BAD_INPUT instead.
+		return nil, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "query plan.Fields is empty")
 	}
 	result := &mproto.QueryResult{Fields: qre.plan.Fields}
 	if len(pkRows) == 0 || limit == 0 {
@@ -456,7 +467,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn poolConn) (*mproto.QueryResult
 		return &mproto.QueryResult{RowsAffected: 0}, nil
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		return nil, NewTabletError(ErrFail, "Subquery length does not match column list")
+		return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "Subquery length does not match column list")
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -574,77 +585,77 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 	case "vt_pool_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_pool_size = %v, want to int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_pool_size = %v, want int64", err)
 		}
 		qre.qe.connPool.SetCapacity(int(val))
 	case "vt_stream_pool_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_stream_pool_size = %v, want int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_stream_pool_size = %v, want int64", err)
 		}
 		qre.qe.streamConnPool.SetCapacity(int(val))
 	case "vt_transaction_cap":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_transaction_cap = %v, want int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_transaction_cap = %v, want int64", err)
 		}
 		qre.qe.txPool.pool.SetCapacity(int(val))
 	case "vt_transaction_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_transaction_timeout = %v, want int64 or float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_transaction_timeout = %v, want int64 or float64", err)
 		}
 		qre.qe.txPool.SetTimeout(val)
 	case "vt_schema_reload_time":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_schema_reload_time = %v, want int64 or float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_schema_reload_time = %v, want int64 or float64", err)
 		}
 		qre.qe.schemaInfo.SetReloadTime(val)
 	case "vt_query_cache_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_query_cache_size = %v, want int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_cache_size = %v, want int64", err)
 		}
 		qre.qe.schemaInfo.SetQueryCacheSize(int(val))
 	case "vt_max_result_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_max_result_size = %v, want int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_max_result_size = %v, want int64", err)
 		}
 		if val < 1 {
-			return nil, NewTabletError(ErrFail, "vt_max_result_size out of range %v", val)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_max_result_size out of range %v", val)
 		}
 		qre.qe.maxResultSize.Set(val)
 	case "vt_max_dml_rows":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_max_dml_rows = %v, want to int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_max_dml_rows = %v, want int64", err)
 		}
 		if val < 1 {
-			return nil, NewTabletError(ErrFail, "vt_max_dml_rows out of range %v", val)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_max_dml_rows out of range %v", val)
 		}
 		qre.qe.maxDMLRows.Set(val)
 	case "vt_stream_buffer_size":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_stream_buffer_size = %v, want int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_stream_buffer_size = %v, want int64", err)
 		}
 
 		if val < 1024 {
-			return nil, NewTabletError(ErrFail, "vt_stream_buffer_size out of range %v", val)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "vt_stream_buffer_size out of range %v", val)
 		}
 		qre.qe.streamBufferSize.Set(val)
 	case "vt_query_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_query_timeout = %v, want int64 or float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_query_timeout = %v, want int64 or float64", err)
 		}
 		qre.qe.queryTimeout.Set(val)
 	case "vt_idle_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_idle_timeout = %v, want int64 or float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_idle_timeout = %v, want int64 or float64", err)
 		}
 		qre.qe.connPool.SetIdleTimeout(val)
 		qre.qe.streamConnPool.SetIdleTimeout(val)
@@ -652,19 +663,19 @@ func (qre *QueryExecutor) execSet() (*mproto.QueryResult, error) {
 	case "vt_spot_check_ratio":
 		val, err := parseFloat64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_spot_check_ratio = %v, want float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_spot_check_ratio = %v, want float64", err)
 		}
 		qre.qe.spotCheckFreq.Set(int64(val * spotCheckMultiplier))
 	case "vt_strict_mode":
 		val, err := parseInt64(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_strict_mode = %v, want to int64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_strict_mode = %v, want to int64", err)
 		}
 		qre.qe.strictMode.Set(val)
 	case "vt_txpool_timeout":
 		val, err := parseDuration(qre.plan.SetValue)
 		if err != nil {
-			return nil, NewTabletError(ErrFail, "got set vt_txpool_timeout = %v, want int64 or float64", err)
+			return nil, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got set vt_txpool_timeout = %v, want int64 or float64", err)
 		}
 		qre.qe.txPool.SetPoolTimeout(val)
 	default:
@@ -682,7 +693,7 @@ func parseInt64(v interface{}) (int64, error) {
 	if ival, ok := v.(int64); ok {
 		return ival, nil
 	}
-	return -1, NewTabletError(ErrFail, "got %v, want int64", v)
+	return -1, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got %v, want int64", v)
 }
 
 func parseFloat64(v interface{}) (float64, error) {
@@ -692,7 +703,7 @@ func parseFloat64(v interface{}) (float64, error) {
 	if fval, ok := v.(float64); ok {
 		return fval, nil
 	}
-	return -1, NewTabletError(ErrFail, "got %v, want int64 or float64", v)
+	return -1, NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "got %v, want int64 or float64", v)
 }
 
 func parseDuration(v interface{}) (time.Duration, error) {
@@ -730,7 +741,7 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	case ErrConnPoolClosed:
 		return nil, err
 	}
-	return nil, NewTabletErrorSql(ErrFatal, err)
+	return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 }
 
 func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
@@ -745,7 +756,7 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 		conn, err := qre.qe.connPool.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = NewTabletErrorSql(ErrFatal, err)
+			q.Err = NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qre.execSQL(conn, sql, false)
@@ -791,7 +802,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		return "", NewTabletError(ErrFail, "%s", err)
+		return "", NewTabletError(ErrFail, vtrpc.ErrorCode_BAD_INPUT, "%s", err)
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
@@ -811,7 +822,8 @@ func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(
 	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()))
 	qre.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
-		return NewTabletErrorSql(ErrFail, err)
+		// MySQL error that isn't due to a connection issue
+		return NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }

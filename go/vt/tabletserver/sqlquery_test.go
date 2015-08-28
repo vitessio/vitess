@@ -13,6 +13,9 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -1004,7 +1007,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	defer sqlQuery.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, "tablet error"))
+	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
@@ -1026,7 +1029,7 @@ func TestTerseErrors1(t *testing.T) {
 	sqlQuery := NewSqlQuery(config)
 	sqlQuery.config.TerseErrors = true
 	defer sqlQuery.handleExecError(&query, &err, logStats)
-	panic(NewTabletError(ErrFatal, "tablet error"))
+	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {
@@ -1081,6 +1084,38 @@ func TestTerseErrors3(t *testing.T) {
 	})
 }
 
+func TestNeedInvalidator(t *testing.T) {
+	testUtils := newTestUtils()
+	dbconfigs := testUtils.newDBConfigs()
+
+	// EnableRowCache is false
+	if needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
+
+	// EnableInvalidator is false
+	dbconfigs.App.EnableRowcache = true
+	if needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
+
+	dbconfigs.App.EnableInvalidator = true
+	if !needInvalidator(nil, &dbconfigs) {
+		t.Errorf("got false, want true")
+	}
+
+	target := &pb.Target{}
+	// TabletType is not MASTER
+	if !needInvalidator(target, &dbconfigs) {
+		t.Errorf("got false, want true")
+	}
+
+	target.TabletType = topodata.TabletType_MASTER
+	if needInvalidator(target, &dbconfigs) {
+		t.Errorf("got true, want false")
+	}
+}
+
 func setUpSQLQueryTest() *fakesqldb.DB {
 	db := fakesqldb.Register()
 	for query, result := range getSupportedQueries() {
@@ -1121,6 +1156,10 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeString([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte("2")),
+					sqltypes.MakeString([]byte("3")),
+					sqltypes.MakeString([]byte("4")),
 				},
 			},
 		},
@@ -1188,6 +1227,10 @@ func getSupportedQueries() map[string]*mproto.QueryResult {
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeString([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte("2")),
+					sqltypes.MakeString([]byte("3")),
+					sqltypes.MakeString([]byte("4")),
 				},
 			},
 		},

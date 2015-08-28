@@ -18,6 +18,21 @@ body {
   font-family:"Open Sans",Arial,sans-serif;
   color:#444;
   }
+.base,p,ul,ol {
+  font-size:16px;
+  line-height:1.6250em;
+  padding-top:0.8em;
+  padding-bottom:0
+}
+.table-of-contents li {
+  margin-bottom: 0;
+}
+.table-of-contents li ul {
+  padding-top: 0;
+}
+table tr {
+  border-bottom: inherit;
+}
 h1, h2, h3, h4, h5, h6 {
   color:#444;
   font-weight: normal;
@@ -170,6 +185,7 @@ ul.chevron .submenu > a:after, ul.chevron .sub-submenu > a:after,ul.chevron .asi
   margin-left: -20px;
 }
 @media screen and (min-width:801px) {
+  .xxlarge {font-size: 54px;}
   .aside-nav .count-number {
 	 margin-left:-1.25em;	
 	 float:right;	
@@ -203,7 +219,7 @@ a.categories-toggle:before {
 .aside-nav ul li a.categories-toggle {
   padding-left: 0;
 }
-.aside-nav ul li a { font-size: 16px; padding-left: 20px; }
+.aside-nav ul li a { font-size: 14px; padding-left: 20px; }
 .aside-nav ul li.last a { border-bottom: 0; }
 .aside-nav li li a, .aside-nav li li.active-item a, .aside-nav li li.aside-sub-submenu li a, 
 .aside-nav > ul > li > a, .aside-nav > ul > li.active-item > a:link, .aside-nav > ul > li.active-item > a:visited, .aside-nav li > ul,
@@ -224,7 +240,7 @@ a.categories-toggle:before {
 }
 .aside-nav li a {
   display:block;
-  padding:0.5em;
+  padding:0.3em;
   border-bottom:1px solid #d2d2d2; 
 }
 .aside-nav > ul > li:last-child a {border-bottom:0 none;}
