@@ -10,7 +10,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -37,12 +36,12 @@ func TestLookupHashAutoMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := [][]key.KeyspaceId{{
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x06\xe7\xea\"Βp\x8f",
+	want := [][][]byte{{
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
 	}, {
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x06\xe7\xea\"Βp\x8f",
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -90,7 +89,7 @@ func TestLookupHashAutoMapBadData(t *testing.T) {
 
 func TestLookupHashAutoVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lha.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -101,7 +100,7 @@ func TestLookupHashAutoVerify(t *testing.T) {
 
 func TestLookupHashAutoVerifyNomatch(t *testing.T) {
 	vc := &vcursor{}
-	success, err := lha.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lha.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -112,7 +111,7 @@ func TestLookupHashAutoVerifyNomatch(t *testing.T) {
 
 func TestLookupHashAutoCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lha.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lha.(planbuilder.Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -130,7 +129,7 @@ func TestLookupHashAutoCreate(t *testing.T) {
 
 func TestLookupHashAutoGenerate(t *testing.T) {
 	vc := &vcursor{}
-	got, err := lha.(planbuilder.LookupGenerator).Generate(vc, "\x16k@\xb4J\xbaK\xd6")
+	got, err := lha.(planbuilder.LookupGenerator).Generate(vc, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -158,7 +157,7 @@ func TestLookupHashAutoReverse(t *testing.T) {
 
 func TestLookupHashAutoDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	err := lha.(planbuilder.Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

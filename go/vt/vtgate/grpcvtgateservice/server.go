@@ -11,7 +11,6 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/servenv"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -92,7 +91,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *pb.ExecuteKe
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		proto.ProtoToSession(request.Session),
 		request.NotInTransaction,
@@ -274,7 +273,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *pb.StreamExecuteKeyspaceIds
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		func(value *proto.QueryResult) error {
 			return stream.Send(&pb.StreamExecuteKeyspaceIdsResponse{

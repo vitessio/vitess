@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -98,7 +97,7 @@ func (vtg *VTGateP3) ExecuteKeyspaceIds(ctx context.Context, request *pb.Execute
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		proto.ProtoToSession(request.Session),
 		request.NotInTransaction,
@@ -295,7 +294,7 @@ func (vtg *VTGateP3) StreamExecuteKeyspaceIds2(ctx context.Context, request *pb.
 		string(request.Query.Sql),
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
-		key.ProtoToKeyspaceIds(request.KeyspaceIds),
+		request.KeyspaceIds,
 		request.TabletType,
 		func(reply *proto.QueryResult) error {
 			return sendReply(&pb.StreamExecuteKeyspaceIdsResponse{

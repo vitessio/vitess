@@ -87,7 +87,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyspaceIds,
+		key.KeyspaceIdsToProto(request.KeyspaceIds),
 		topo.TabletTypeToProto(request.TabletType),
 		request.Session,
 		request.NotInTransaction,
@@ -296,7 +296,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, request *proto.
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyspaceIds,
+		key.KeyspaceIdsToProto(request.KeyspaceIds),
 		topo.TabletTypeToProto(request.TabletType),
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
@@ -314,7 +314,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 		request.Sql,
 		request.BindVariables,
 		request.Keyspace,
-		request.KeyspaceIds,
+		key.KeyspaceIdsToProto(request.KeyspaceIds),
 		topo.TabletTypeToProto(request.TabletType),
 		func(value *proto.QueryResult) error {
 			return sendReply(value)
