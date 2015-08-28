@@ -404,7 +404,7 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 	switch terr.SqlError {
 	case mysql.ErrDupEntry:
 		return myError
-	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong:
+	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
 		logMethod = log.Infof
 	case 0:
 		if strings.Contains(terr.Error(), "Row count exceeded") {
