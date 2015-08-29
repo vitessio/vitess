@@ -743,7 +743,10 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_read(self):
     try:
-      vtgate_conn = get_connection()
+      # Since we're going to kill the tablet, there will be a race between the
+      # client timeout here and the vtgate->vttablet connection timeout, so we
+      # increase it for this test.
+      vtgate_conn = get_connection(timeout=30)
     except Exception, e:
       self.fail('Connection to vtgate failed with error %s' % (str(e)))
     self.replica_tablet.kill_vttablet()
@@ -785,7 +788,10 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_stream_execute(self):
     try:
-      vtgate_conn = get_connection()
+      # Since we're going to kill the tablet, there will be a race between the
+      # client timeout here and the vtgate->vttablet connection timeout, so we
+      # increase it for this test.
+      vtgate_conn = get_connection(timeout=30)
     except Exception, e:
       self.fail('Connection to vtgate failed with error %s' % (str(e)))
     stream_cursor = vtgate_conn.cursor(
@@ -862,7 +868,10 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_fail_write(self):
     try:
-      vtgate_conn = get_connection()
+      # Since we're going to kill the tablet, there will be a race between the
+      # client timeout here and the vtgate->vttablet connection timeout, so we
+      # increase it for this test.
+      vtgate_conn = get_connection(timeout=30)
     except Exception, e:
       self.fail('Connection to shard0 master failed with error %s' % str(e))
     with self.assertRaises(dbexceptions.DatabaseError):
