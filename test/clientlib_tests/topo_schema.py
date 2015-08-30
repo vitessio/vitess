@@ -6,9 +6,9 @@ different schema types and relationships.
 
 from vtdb import shard_constants
 
-KS_UNSHARDED = ("KS_UNSHARDED", shard_constants.UNSHARDED)
-KS_RANGE_SHARDED = ("KS_RANGE_SHARDED", shard_constants.RANGE_SHARDED)
-KS_LOOKUP = ("KS_LOOKUP", shard_constants.UNSHARDED)
+KS_UNSHARDED = ('KS_UNSHARDED', shard_constants.UNSHARDED)
+KS_RANGE_SHARDED = ('KS_RANGE_SHARDED', shard_constants.RANGE_SHARDED)
+KS_LOOKUP = ('KS_LOOKUP', shard_constants.UNSHARDED)
 
 #KS_UNSHARDED tables
 create_vt_unsharded = '''create table vt_unsharded (
@@ -72,13 +72,17 @@ primary key (song_id)
 
 keyspaces = [KS_UNSHARDED, KS_RANGE_SHARDED, KS_LOOKUP]
 
-keyspace_table_map = {KS_UNSHARDED[0]: [('vt_unsharded', create_vt_unsharded),],
-                      KS_RANGE_SHARDED[0]: [('vt_user', create_vt_user),
-                                           ('vt_user_email', create_vt_user_email),
-                                           ('vt_song', create_vt_song),
-                                           ('vt_song_detail', create_vt_song_detail),
-                                          ],
-                      KS_LOOKUP[0]: [('vt_username_lookup', create_vt_username_lookup),
-                                     ('vt_song_user_lookup', create_vt_song_user_lookup),
-                                   ],
-                      }
+keyspace_table_map = {
+    KS_UNSHARDED[0]: [
+        ('vt_unsharded', create_vt_unsharded),],
+    KS_RANGE_SHARDED[0]: [
+        ('vt_user', create_vt_user),
+        ('vt_user_email', create_vt_user_email),
+        ('vt_song', create_vt_song),
+        ('vt_song_detail', create_vt_song_detail),
+    ],
+    KS_LOOKUP[0]: [
+        ('vt_username_lookup', create_vt_username_lookup),
+        ('vt_song_user_lookup', create_vt_song_user_lookup),
+    ],
+}

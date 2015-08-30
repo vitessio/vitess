@@ -78,3 +78,7 @@ def set_protocols_flavor(flavor):
   __protocols_flavor = klass()
 
   logging.debug('Using protocols flavor %s', flavor)
+
+
+def register_flavor(key, cls):
+  __knows_protocols_flavor_map[key] = cls

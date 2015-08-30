@@ -154,7 +154,7 @@ class TestKeyRange(unittest.TestCase):
     self.assertEqual(len(stm.keyrange_list), 1)
     where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(
         stm.keyrange_list[0])
-    self.assertEqual(where_clause, "")
+    self.assertEqual(where_clause, '')
     self.assertEqual(bind_vars, {})
 
 if __name__ == '__main__':

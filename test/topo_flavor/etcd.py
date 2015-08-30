@@ -11,7 +11,7 @@ import server
 
 
 class EtcdCluster:
-  """Sets up a global or cell-local etcd cluster"""
+  """Sets up a global or cell-local etcd cluster."""
 
   def __init__(self, name):
     import environment
@@ -49,7 +49,7 @@ class EtcdCluster:
 
 
 class EtcdTopoServer(server.TopoServer):
-  """Implementation of TopoServer for etcd"""
+  """Implementation of TopoServer for etcd."""
 
   clusters = {}
 

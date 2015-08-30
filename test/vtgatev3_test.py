@@ -1,16 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import hmac
 import json
 import logging
-import os
-import struct
-import threading
-import time
-import traceback
 import unittest
-import urllib
 
 import environment
 import keyspace_util
@@ -225,6 +218,7 @@ def setUpModule():
     tearDownModule()
     raise
 
+
 def tearDownModule():
   logging.debug('in tearDownModule')
   if utils.options.skip_teardown:
@@ -245,6 +239,7 @@ def get_connection(user=None, password=None):
 
 
 class TestVTGateFunctions(unittest.TestCase):
+
   def setUp(self):
     self.master_tablet = shard_1_master
 
@@ -701,7 +696,7 @@ class TestVTGateFunctions(unittest.TestCase):
         'insert into vt_user_extra(user_id, email) values (:v1, :v2)',
         bindvars=[10, 'test 10'])
 
-    out, err = utils.vtgate.vtclient(
+    out, _ = utils.vtgate.vtclient(
         'select * from vt_user_extra where user_id = :v1', bindvars=[10])
     self.assertEqual(out, ['Index\tuser_id\temail', '0\t10\ttest 10'])
 

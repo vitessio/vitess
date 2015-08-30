@@ -168,12 +168,13 @@ class LocalDatabase(object):
       # Reached end of line
       if line and not line.isspace():
         if source_root and not cmd and line.startswith('source '):
-          commands.extend(get_sql_commands_from_file(self,
-                              os.path.join(source_root, line[7:]),
-                              source_root=source_root))
+          commands.extend(get_sql_commands_from_file(
+              self,
+              os.path.join(source_root, line[7:]),
+              source_root=source_root))
         else:
           cmd += line
-          cmd += "\n"
+          cmd += '\n'
 
     # Accept last command even if it doesn't end in semicolon
     cmd = cmd.strip()

@@ -133,8 +133,8 @@ class TabletConnection(object):
     if self.transaction_id:
       raise dbexceptions.NotSupportedError('Nested transactions not supported')
     req = {
-      'ImmediateCallerID': {'Username': self.caller_id},
-      'SessionId': self.session_id
+        'ImmediateCallerID': {'Username': self.caller_id},
+        'SessionId': self.session_id
     }
     try:
       response = self.rpc_call_and_extract_error('SqlQuery.Begin2', req)
@@ -147,9 +147,9 @@ class TabletConnection(object):
       return
 
     req = {
-      'ImmediateCallerID': {'Username': self.caller_id},
-      'TransactionId': self.transaction_id,
-      'SessionId': self.session_id
+        'ImmediateCallerID': {'Username': self.caller_id},
+        'TransactionId': self.transaction_id,
+        'SessionId': self.session_id
     }
 
     # NOTE(msolomon) Unset the transaction_id irrespective of the RPC's
@@ -170,9 +170,9 @@ class TabletConnection(object):
       return
 
     req = {
-      'ImmediateCallerID': {'Username': self.caller_id},
-      'TransactionId': self.transaction_id,
-      'SessionId': self.session_id
+        'ImmediateCallerID': {'Username': self.caller_id},
+        'TransactionId': self.transaction_id,
+        'SessionId': self.session_id
     }
 
     # NOTE(msolomon) Unset the transaction_id irrespective of the RPC. If the
@@ -214,13 +214,13 @@ class TabletConnection(object):
 
   def _execute(self, sql, bind_variables):
     req = {
-      'QueryRequest': {
-        'Sql': sql,
-        'BindVariables': field_types.convert_bind_vars(bind_variables),
-        'SessionId': self.session_id,
-        'TransactionId': self.transaction_id
-      },
-      'ImmediateCallerID': {'Username': self.caller_id}
+        'QueryRequest': {
+            'Sql': sql,
+            'BindVariables': field_types.convert_bind_vars(bind_variables),
+            'SessionId': self.session_id,
+            'TransactionId': self.transaction_id
+        },
+        'ImmediateCallerID': {'Username': self.caller_id}
     }
 
     fields = []
@@ -259,13 +259,13 @@ class TabletConnection(object):
 
     try:
       req = {
-        'QueryBatch': {
-          'Queries': query_list,
-          'SessionId': self.session_id,
-          'AsTransaction': as_transaction,
-          'TransactionId': self.transaction_id
+          'QueryBatch': {
+              'Queries': query_list,
+              'SessionId': self.session_id,
+              'AsTransaction': as_transaction,
+              'TransactionId': self.transaction_id
           },
-        'ImmediateCallerID': {'Username': self.caller_id}
+          'ImmediateCallerID': {'Username': self.caller_id}
       }
 
       response = self.rpc_call_and_extract_error('SqlQuery.ExecuteBatch2', req)
@@ -298,13 +298,13 @@ class TabletConnection(object):
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables):
     req = {
-      'Query': {
-        'Sql': sql,
-        'BindVariables': field_types.convert_bind_vars(bind_variables),
-        'SessionId': self.session_id,
-        'TransactionId': self.transaction_id
-      },
-      'ImmediateCallerID': {'Username': self.caller_id}
+        'Query': {
+            'Sql': sql,
+            'BindVariables': field_types.convert_bind_vars(bind_variables),
+            'SessionId': self.session_id,
+            'TransactionId': self.transaction_id
+        },
+        'ImmediateCallerID': {'Username': self.caller_id}
     }
 
     self._stream_fields = []

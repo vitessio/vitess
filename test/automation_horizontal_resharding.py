@@ -40,34 +40,35 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
     source_shard_list = '0'
     dest_shard_list = '-80,80-'
     _, vtctld_endpoint = utils.vtctld.rpc_endpoint()
-    utils.run(environment.binary_argstr('automation_client') +
-              ' --server localhost:' + str(automation_server_port) +
-              ' --task HorizontalReshardingTask' +
-              ' --param keyspace=' + self.KEYSPACE +
-              ' --param source_shard_list=' + source_shard_list +
-              ' --param dest_shard_list=' + dest_shard_list +
-              ' --param vtctld_endpoint=' + vtctld_endpoint +
-              ' --param vtworker_endpoint=' + vtworker_endpoint)
+    utils.run(
+        environment.binary_argstr('automation_client') +
+        ' --server localhost:' + str(automation_server_port) +
+        ' --task HorizontalReshardingTask' +
+        ' --param keyspace=' + self.KEYSPACE +
+        ' --param source_shard_list=' + source_shard_list +
+        ' --param dest_shard_list=' + dest_shard_list +
+        ' --param vtctld_endpoint=' + vtctld_endpoint +
+        ' --param vtworker_endpoint=' + vtworker_endpoint)
 
     self.verify()
 
     utils.kill_sub_process(automation_server_proc, soft=True)
     utils.kill_sub_process(worker_proc, soft=True)
-    
+
   def verify(self):
     self.assert_shard_data_equal(0, worker.shard_master,
                                  worker.shard_0_tablets.replica)
     self.assert_shard_data_equal(1, worker.shard_master,
                                  worker.shard_1_tablets.replica)
-    
+
     # Verify effect of MigrateServedTypes. Dest shards are serving now.
     utils.check_srv_keyspace('test_nj', self.KEYSPACE,
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n')
-    
+
     # Check that query service is disabled (source shard) or enabled (dest).
-    
+
     # The 'rdonly' tablet requires an explicit healthcheck first because
     # the following sequence of events is happening in this test:
     # - SplitDiff returns 'rdonly' as 'spare' tablet (NOT_SERVING)
@@ -89,25 +90,31 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
     utils.run_vtctl(['RunHealthCheck', worker.shard_rdonly1.tablet_alias,
                      'rdonly'],
                     auto_log=True)
-    
+
     # source shard: query service must be disabled after MigrateServedTypes.
-    utils.check_tablet_query_service(self, worker.shard_rdonly1,
+    utils.check_tablet_query_service(
+        self, worker.shard_rdonly1,
         serving=False, tablet_control_disabled=True)
-    utils.check_tablet_query_service(self, worker.shard_replica,
+    utils.check_tablet_query_service(
+        self, worker.shard_replica,
         serving=False, tablet_control_disabled=True)
-    utils.check_tablet_query_service(self, worker.shard_master,
+    utils.check_tablet_query_service(
+        self, worker.shard_master,
         serving=False, tablet_control_disabled=True)
-    
+
     # dest shard -80: query service must be disabled after MigrateServedTypes.
     # Run explicit healthcheck because 'rdonly' tablet may still be 'spare'.
     utils.run_vtctl(['RunHealthCheck', worker.shard_0_rdonly1.tablet_alias,
                      'rdonly'],
                     auto_log=True)
-    utils.check_tablet_query_service(self, worker.shard_0_rdonly1,
+    utils.check_tablet_query_service(
+        self, worker.shard_0_rdonly1,
         serving=True, tablet_control_disabled=False)
-    utils.check_tablet_query_service(self, worker.shard_0_replica,
+    utils.check_tablet_query_service(
+        self, worker.shard_0_replica,
         serving=True, tablet_control_disabled=False)
-    utils.check_tablet_query_service(self, worker.shard_0_master,
+    utils.check_tablet_query_service(
+        self, worker.shard_0_master,
         serving=True, tablet_control_disabled=False)
 
     # dest shard 80-: query service must be disabled after MigrateServedTypes.
@@ -115,11 +122,14 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
     utils.run_vtctl(['RunHealthCheck', worker.shard_1_rdonly1.tablet_alias,
                      'rdonly'],
                     auto_log=True)
-    utils.check_tablet_query_service(self, worker.shard_1_rdonly1,
+    utils.check_tablet_query_service(
+        self, worker.shard_1_rdonly1,
         serving=True, tablet_control_disabled=False)
-    utils.check_tablet_query_service(self, worker.shard_1_replica,
+    utils.check_tablet_query_service(
+        self, worker.shard_1_replica,
         serving=True, tablet_control_disabled=False)
-    utils.check_tablet_query_service(self, worker.shard_1_master,
+    utils.check_tablet_query_service(
+        self, worker.shard_1_master,
         serving=True, tablet_control_disabled=False)
 
 if __name__ == '__main__':

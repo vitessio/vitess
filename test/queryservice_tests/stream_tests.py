@@ -10,7 +10,9 @@ from vtdb import dbexceptions
 import environment
 import framework
 
+
 class TestStream(framework.TestCase):
+
   def tearDown(self):
     self.env.conn.begin()
     self.env.execute("delete from vtocc_big")
@@ -44,15 +46,19 @@ class TestStream(framework.TestCase):
         self.env.change_customrules()
         time.sleep(3)
         try:
-          self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
-                       cursorclass=cursor.StreamCursor)
+          self.env.execute(
+              "select * from vtocc_test where intval=:asdfg", bv,
+              cursorclass=cursor.StreamCursor)
         except dbexceptions.DatabaseError as e:
-          self.fail("Bindvar asdfg should be allowed after a change of custom rule, Err=" + str(e))
+          self.fail(
+              "Bindvar asdfg should be allowed after a change of custom rule, "
+              "Err=" + str(e))
         self.env.restore_customrules()
         time.sleep(3)
         try:
-          self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
-                       cursorclass=cursor.StreamCursor)
+          self.env.execute(
+              "select * from vtocc_test where intval=:asdfg", bv,
+              cursorclass=cursor.StreamCursor)
           self.fail("Bindvar asdfg should not be allowed by custom rule")
         except dbexceptions.DatabaseError as e:
           self.assertContains(str(e), "error: Query disallowed")
@@ -97,8 +103,15 @@ class TestStream(framework.TestCase):
     row[11] = None
     row[20] = None
     row[25] = None
-    self.assertEqual(row, [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C', 'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FF 10', 'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L, 'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C', 'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None, 'FF 0', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
-  
+    self.assertEqual(
+        row,
+        [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C',
+         'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FF 10',
+         'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L,
+         'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C',
+         'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None,
+         'FF 0', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
+
   def test_streaming_terminate(self):
     try:
       self._populate_vtocc_big_table(100)
@@ -112,54 +125,62 @@ class TestStream(framework.TestCase):
       thd.join()
       with self.assertRaises(dbexceptions.DatabaseError) as cm:
         cu.fetchall()
-      errMsg1 = "error: the query was killed either because it timed out or was canceled: Lost connectioy to MySQL server during query (errno 2013)"
+      errMsg1 = (
+          "error: the query was killed either because it timed out or was "
+          "canceled: Lost connectioy to MySQL server during query (errno 2013)")
       errMsg2 = "error: Query execution was interrupted (errno 1317)"
-      self.assertNotIn(cm.exception, (errMsg1, errMsg2), "did not raise interruption error: %s" % str(cm.exception))
+      self.assertNotIn(
+          cm.exception, (errMsg1, errMsg2),
+          "did not raise interruption error: %s" % str(cm.exception))
       cu.close()
     except Exception, e:
       self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
 
   def _populate_vtocc_big_table(self, num_rows):
-      self.env.conn.begin()
-      for i in xrange(num_rows):
-        self.env.execute("insert into vtocc_big values " +
-                       "(" + str(i) + ", " +
-                       "'AAAAAAAAAAAAAAAAAA " + str(i) + "', " +
-                       "'BBBBBBBBBBBBBBBBBB " + str(i) + "', " +
-                       "'C', " +
-                       "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
-                       "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
-                       "now()," +
-                       "'FF " + str(i) + "', " +
-                       "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
-                       str(i) + ", " +
-                       str(i) + ", " +
-                       "now()," +
-                       str(i) + ", " +
-                       str(i%100) + ")")
-      self.env.conn.commit()
+    self.env.conn.begin()
+    for i in xrange(num_rows):
+      self.env.execute(
+          "insert into vtocc_big values " +
+          "(" + str(i) + ", " +
+          "'AAAAAAAAAAAAAAAAAA " + str(i) + "', " +
+          "'BBBBBBBBBBBBBBBBBB " + str(i) + "', " +
+          "'C', " +
+          "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
+          "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
+          "now()," +
+          "'FF " + str(i) + "', " +
+          "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
+          str(i) + ", " +
+          str(i) + ", " +
+          "now()," +
+          str(i) + ", " +
+          str(i%100) + ")")
+    self.env.conn.commit()
 
   # Initiate a slow stream query
   def _stream_exec(self, cu, query):
-      cu.execute(query, {})
+    cu.execute(query, {})
 
-  # Get the connection id from status page 
+  # Get the connection id from status page
   def _get_conn_id(self, tablet_addr):
-      streamqueryz_url = tablet_addr +  "/streamqueryz?format=json" 
-      retries = 3
-      streaming_queries = []
-      while len(streaming_queries) == 0:
-        content = urllib.urlopen(streamqueryz_url).read()
-        streaming_queries = json.loads(content)
-        retries -= 1
-        if retries == 0:
-            self.fail("unable to fetch streaming queries from %s" % streamqueryz_url)
-        else:
-            time.sleep(1) 
-      connId = streaming_queries[0]['ConnID']
-      return connId
+    streamqueryz_url = tablet_addr +  "/streamqueryz?format=json"
+    retries = 3
+    streaming_queries = []
+    while len(streaming_queries) == 0:
+      content = urllib.urlopen(streamqueryz_url).read()
+      streaming_queries = json.loads(content)
+      retries -= 1
+      if retries == 0:
+        self.fail(
+            "unable to fetch streaming queries from %s" % streamqueryz_url)
+      else:
+        time.sleep(1)
+    connId = streaming_queries[0]['ConnID']
+    return connId
 
   # Terminate the query via streamqueryz admin page
   def _terminate_query(self, tablet_addr, connId):
-      terminate_url = tablet_addr + "/streamqueryz/terminate?format=json&connID=" + str(connId)
-      urllib.urlopen(terminate_url).read()
+    terminate_url = (
+        tablet_addr + "/streamqueryz/terminate?format=json&connID=" +
+        str(connId))
+    urllib.urlopen(terminate_url).read()

@@ -13,6 +13,7 @@ import server
 
 class ZkTopoServer(server.TopoServer):
   """Implementation of TopoServer for ZooKeeper"""
+
   def __init__(self):
     self.ports_assigned = False
 
