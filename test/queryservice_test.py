@@ -30,7 +30,7 @@ def main():
       '-e', '--env', default='vttablet',
       help='Environment that will be used. Valid options: vttablet, vtocc')
   utils.add_options(parser)
-  options, _ = parser.parse_args()
+  options, args = parser.parse_args()
 
   logging.getLogger().setLevel(logging.ERROR)
   utils.set_options(options)
