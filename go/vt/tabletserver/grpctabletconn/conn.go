@@ -361,21 +361,23 @@ func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
 }
 
-// tabletErrorFromGRPC returns a tabletconn.OperationalError from the
-// gRPC error.
+// tabletErrorFromGRPC returns a tabletconn.ServerError or a
+// tabletconn.OperationalError from the gRPC error.
 func tabletErrorFromGRPC(err error) error {
-	if grpc.Code(err) == codes.Internal {
-		// server side error, convert it
+	// TODO(aaijazi): Unfortunately, there's no better way to check for a gRPC server
+	// error (vs a client error).
+	// See: https://github.com/grpc/grpc-go/issues/319
+	if strings.Contains(err.Error(), "rpc error: code = ") {
 		var code int
-		errStr := err.Error()
-		switch {
-		case strings.Contains(errStr, "fatal: "):
+		// server side error, convert it
+		switch grpc.Code(err) {
+		case codes.Internal:
 			code = tabletconn.ERR_FATAL
-		case strings.Contains(errStr, "retry: "):
+		case codes.FailedPrecondition:
 			code = tabletconn.ERR_RETRY
-		case strings.Contains(errStr, "tx_pool_full: "):
+		case codes.ResourceExhausted:
 			code = tabletconn.ERR_TX_POOL_FULL
-		case strings.Contains(errStr, "not_in_tx: "):
+		case codes.Aborted:
 			code = tabletconn.ERR_NOT_IN_TX
 		default:
 			code = tabletconn.ERR_NORMAL
