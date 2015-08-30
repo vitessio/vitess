@@ -8,6 +8,7 @@ import (
 	"expvar"
 	"math/rand"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,19 +22,47 @@ import (
 	"golang.org/x/net/context"
 )
 
+func TestSqlQueryGetState(t *testing.T) {
+	states := []int64{
+		StateNotConnected,
+		StateNotServing,
+		StateServing,
+		StateTransitioning,
+		StateShuttingDown,
+	}
+	// Don't reuse stateName.
+	names := []string{
+		"NOT_SERVING",
+		"NOT_SERVING",
+		"SERVING",
+		"NOT_SERVING",
+		"SHUTTING_DOWN",
+	}
+	setUpSQLQueryTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	for i, state := range states {
+		sqlQuery.setState(state)
+		if stateName := sqlQuery.GetState(); stateName != names[i] {
+			t.Errorf("GetState: %s, want %s", stateName, names[i])
+		}
+	}
+}
+
 func TestSqlQueryAllowQueriesFailBadConn(t *testing.T) {
 	db := setUpSQLQueryTest()
 	db.EnableConnFail()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.allowQueries should fail")
+		t.Fatalf("SqlQuery.StartService should fail")
 	}
-	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 }
 
 func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
@@ -43,15 +72,15 @@ func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
 	// disable strict mode
 	config.StrictMode = false
 	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.allowQueries should fail because strict mode is disabled while rowcache is enabled.")
+		t.Fatalf("SqlQuery.StartService should fail because strict mode is disabled while rowcache is enabled.")
 	}
-	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 }
 
 func TestSqlQueryAllowQueries(t *testing.T) {
@@ -59,20 +88,194 @@ func TestSqlQueryAllowQueries(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, "NOT_SERVING")
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
 	sqlQuery.setState(StateServing)
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	sqlQuery.disallowQueries()
-	if err != nil {
-		t.Fatalf("SqlQuery.allowQueries should success, but get error: %v", err)
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	sqlQuery.StopService()
+	want := "cannot start tabletserver"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("SqlQuery.StartService: %v, must contain %s", err, want)
 	}
-	sqlQuery.setState(StateShuttingTx)
-	err = sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	sqlQuery.setState(StateShuttingDown)
+	err = sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.allowQueries should fail")
+		t.Fatalf("SqlQuery.StartService should fail")
 	}
-	sqlQuery.disallowQueries()
+	sqlQuery.StopService()
+}
+
+func TestSqlQueryInitDBConfig(t *testing.T) {
+	setUpSQLQueryTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	sqlQuery.setState(StateServing)
+	err := sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	want := "InitDBConfig failed"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+	}
+	sqlQuery.setState(StateNotConnected)
+	err = sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDecideAction(t *testing.T) {
+	setUpSQLQueryTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	err := sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	want := "cannot SetServingType"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+	}
+
+	target := &pb.Target{}
+	err = sqlQuery.InitDBConfig(target, nil, nil, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sqlQuery.setState(StateNotConnected)
+	action, err := sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+
+	sqlQuery.setState(StateNotConnected)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionFullStart {
+		t.Errorf("decideAction: %v, want %v", action, actionFullStart)
+	}
+	if sqlQuery.state != StateTransitioning {
+		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	}
+
+	sqlQuery.setState(StateNotServing)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionNone {
+		t.Errorf("decideAction: %v, want %v", action, actionNone)
+	}
+
+	sqlQuery.setState(StateNotServing)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionServeNewType {
+		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
+	}
+	if sqlQuery.state != StateTransitioning {
+		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	}
+
+	sqlQuery.setState(StateServing)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionGracefulStop {
+		t.Errorf("decideAction: %v, want %v", action, actionGracefulStop)
+	}
+	if sqlQuery.state != StateShuttingDown {
+		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateShuttingDown)
+	}
+
+	sqlQuery.setState(StateServing)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	if err != nil {
+		t.Error(err)
+	}
+	if action != actionServeNewType {
+		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
+	}
+	if sqlQuery.state != StateTransitioning {
+		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	}
+
+	sqlQuery.setState(StateTransitioning)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	want = "cannot SetServingType"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+	}
+
+	sqlQuery.setState(StateShuttingDown)
+	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	want = "cannot SetServingType"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+	}
+}
+
+func TestSetServingType(t *testing.T) {
+	setUpSQLQueryTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	sqlQuery := NewSqlQuery(config)
+	dbconfigs := testUtils.newDBConfigs()
+
+	err := sqlQuery.InitDBConfig(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, true)
+	want := "cannot SetServingType"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+	}
+
+	target := &pb.Target{}
+	err = sqlQuery.InitDBConfig(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, false)
+	if err != nil {
+		t.Error(err)
+	}
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+
+	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, true)
+	if err != nil {
+		t.Error(err)
+	}
+	checkSQLQueryState(t, sqlQuery, StateServing)
+
+	err = sqlQuery.SetServingType(topodata.TabletType_RDONLY, true)
+	if err != nil {
+		t.Error(err)
+	}
+	checkSQLQueryState(t, sqlQuery, StateServing)
+
+	err = sqlQuery.SetServingType(topodata.TabletType_SPARE, false)
+	if err != nil {
+		t.Error(err)
+	}
+	checkSQLQueryState(t, sqlQuery, StateNotServing)
+
+	sqlQuery.StopService()
+	checkSQLQueryState(t, sqlQuery, StateNotConnected)
 }
 
 func TestSqlQueryCheckMysql(t *testing.T) {
@@ -81,14 +284,23 @@ func TestSqlQueryCheckMysql(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.disallowQueries()
+	target := &pb.Target{}
+	err := sqlQuery.StartService(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer sqlQuery.StopService()
 	if err != nil {
-		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
+		t.Fatal(err)
 	}
-	if !sqlQuery.checkMySQL() {
-		t.Fatalf("checkMySQL should return true")
+	if !sqlQuery.CheckMySQL() {
+		t.Error("CheckMySQL should return true")
 	}
+	err = sqlQuery.SetServingType(topodata.TabletType_SPARE, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sqlQuery.CheckMySQL() {
+		t.Error("CheckMySQL should return true")
+	}
+	checkSQLQueryState(t, sqlQuery, StateNotServing)
 }
 
 func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
@@ -97,15 +309,15 @@ func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.disallowQueries()
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer sqlQuery.StopService()
 	if err != nil {
-		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
+		t.Fatalf("SqlQuery.StartService should success but get error: %v", err)
 	}
 	// make mysql conn fail
 	db.EnableConnFail()
-	if sqlQuery.checkMySQL() {
-		t.Fatalf("checkMySQL should return false")
+	if sqlQuery.CheckMySQL() {
+		t.Fatalf("CheckMySQL should return false")
 	}
 }
 
@@ -117,28 +329,29 @@ func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
 	dbconfigs := testUtils.newDBConfigs()
 	// this causes QueryEngine not being initialized properly
 	sqlQuery.setState(StateServing)
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.disallowQueries()
-	if err != nil {
-		t.Fatalf("SqlQuery.allowQueries should success but get error: %v", err)
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer sqlQuery.StopService()
+	want := "cannot start tabletserver"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("SqlQuery.StartService: %v, must contain %s", err, want)
 	}
-	// QueryEngine.CheckMySQL shoudl panic and checkMySQL should return false
-	if sqlQuery.checkMySQL() {
-		t.Fatalf("checkMySQL should return false")
+	// QueryEngine.CheckMySQL shoudl panic and CheckMySQL should return false
+	if sqlQuery.CheckMySQL() {
+		t.Fatalf("CheckMySQL should return false")
 	}
 }
 
-func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
+func TestSqlQueryCheckMysqlInUnintialized(t *testing.T) {
 	setUpSQLQueryTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnablePublishStats = true
 	sqlQuery := NewSqlQuery(config)
-	// sqlquery start request fail because we are in StateNotServing;
-	// however, checkMySQL should return true. Here, we always assume
+	// sqlquery start request fail because we are in StateNotConnected;
+	// however, CheckMySQL should return true. Here, we always assume
 	// MySQL is healthy unless we've verified it is not.
-	if !sqlQuery.checkMySQL() {
-		t.Fatalf("checkMySQL should return true")
+	if !sqlQuery.CheckMySQL() {
+		t.Fatalf("CheckMySQL should return true")
 	}
 	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
 	if tabletState == nil {
@@ -148,8 +361,8 @@ func TestSqlQueryCheckMysqlInNotServingState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invalid state reported by expvar, should be a valid state code, but got: %s", tabletState.String())
 	}
-	if varzState != StateNotServing {
-		t.Fatalf("queryservice should be in NOT_SERVING state, but exposed varz reports: %s", stateName[varzState])
+	if varzState != StateNotConnected {
+		t.Fatalf("queryservice should be in %d state, but exposed varz reports: %s", StateNotConnected, varzState)
 	}
 }
 
@@ -164,11 +377,11 @@ func TestSqlQueryGetSessionId(t *testing.T) {
 	keyspace := "test_keyspace"
 	shard := "0"
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	sessionInfo := proto.SessionInfo{}
 	err = sqlQuery.GetSessionId(
 		&proto.SessionParams{Keyspace: keyspace, Shard: shard},
@@ -204,11 +417,11 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	session := proto.Session{
 		SessionId:     0,
@@ -303,11 +516,11 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	session := proto.Session{
 		SessionId:     sqlQuery.sessionID,
@@ -348,11 +561,11 @@ func TestSqlQueryRollback(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	session := proto.Session{
 		SessionId:     sqlQuery.sessionID,
@@ -394,11 +607,11 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	session := proto.Session{
 		SessionId:     sqlQuery.sessionID,
@@ -441,11 +654,11 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -477,11 +690,11 @@ func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries:   []proto.BoundQuery{},
@@ -501,11 +714,11 @@ func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -534,11 +747,11 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -568,11 +781,11 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -616,11 +829,11 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -671,11 +884,11 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	config.EnableAutoCommit = true
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -703,11 +916,11 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -741,11 +954,11 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -817,11 +1030,11 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -878,11 +1091,11 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -943,11 +1156,11 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	sqlQuery := NewSqlQuery(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.allowQueries(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
-		t.Fatalf("allowQueries failed: %v", err)
+		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.disallowQueries()
+	defer sqlQuery.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -1124,9 +1337,12 @@ func setUpSQLQueryTest() *fakesqldb.DB {
 	return db
 }
 
-func checkSQLQueryState(t *testing.T, sqlQuery *SqlQuery, expectState string) {
-	if sqlQuery.GetState() != expectState {
-		t.Fatalf("sqlquery should in state: %s, but get state: %s", expectState, sqlQuery.GetState())
+func checkSQLQueryState(t *testing.T, sqlQuery *SqlQuery, expectState int64) {
+	sqlQuery.mu.Lock()
+	state := sqlQuery.state
+	sqlQuery.mu.Unlock()
+	if state != expectState {
+		t.Fatalf("sqlquery should in state: %d, but get state: %d", expectState, state)
 	}
 }
 
