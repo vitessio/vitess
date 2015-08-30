@@ -18,7 +18,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
@@ -258,8 +257,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 	terr, ok := err.(*TabletError)
 	if ok {
 		return &mproto.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: int64(terr.ErrorType) + vterrors.TabletError,
+			Code: int64(terr.ErrorCode),
 			// Make sure the the VitessError message is identical to the TabletError
 			// err, so that downstream consumers will see identical messages no matter
 			// which server version they're using.
@@ -269,7 +267,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 
 	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    vterrors.UnknownTabletError,
+		Code:    int64(vtrpc.ErrorCode_UNKNOWN_ERROR),
 		Message: err.Error(),
 	}
 }
@@ -344,26 +342,4 @@ func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 		return
 	}
 	reply.Err = rpcErrFromTabletError(err)
-}
-
-// TabletErrorToRPCError transforms the provided error to a RPCError,
-// if any.
-func TabletErrorToRPCError(err error) *vtrpc.RPCError {
-	if err == nil {
-		return nil
-	}
-	if terr, ok := err.(*TabletError); ok {
-		return &vtrpc.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: vtrpc.ErrorCodeDeprecated(int64(terr.ErrorType) + vterrors.TabletError),
-			// Make sure the the VitessError message is identical to the TabletError
-			// err, so that downstream consumers will see identical messages no matter
-			// which endpoint they're using.
-			Message: terr.Error(),
-		}
-	}
-	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCodeDeprecated_UnknownTabletError,
-		Message: err.Error(),
-	}
 }

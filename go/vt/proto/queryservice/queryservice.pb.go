@@ -13,6 +13,8 @@ It has these top-level messages:
 package queryservice
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 import query "github.com/youtube/vitess/go/vt/proto/query"
 
 import (
@@ -21,11 +23,13 @@ import (
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
+var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ = proto.Marshal
+var _ context.Context
+var _ grpc.ClientConn
 
 // Client API for Query service
 

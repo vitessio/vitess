@@ -638,13 +638,13 @@ func tabletError(err error) error {
 }
 
 func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
-	// see if the range is in the tablet error range
-	if ve.Code >= vterrors.TabletError && ve.Code <= vterrors.UnknownTabletError {
-		return &tabletconn.ServerError{
-			Code: int(ve.Code - vterrors.TabletError),
-			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
-		}
-	}
+	// // see if the range is in the tablet error range
+	// if ve.Code >= vterrors.TabletError && ve.Code <= vterrors.UnknownTabletError {
+	// 	return &tabletconn.ServerError{
+	// 		Code: int(ve.Code - vterrors.TabletError),
+	// 		Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
+	// 	}
+	// }
 
 	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
 }

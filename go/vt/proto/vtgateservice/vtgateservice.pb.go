@@ -13,6 +13,8 @@ It has these top-level messages:
 package vtgateservice
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 import vtgate "github.com/youtube/vitess/go/vt/proto/vtgate"
 
 import (
@@ -21,49 +23,69 @@ import (
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
+var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ = proto.Marshal
+var _ context.Context
+var _ grpc.ClientConn
 
 // Client API for Vitess service
 
 type VitessClient interface {
-	// Execute executes tries to route the query to the right shard.
-	// (this is a vtgate v3 API, use carefully)
+	// Execute tries to route the query to the right shard.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// API group: v3 API (alpha)
 	Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
+	// API group: Custom Sharding
 	ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
+	// API group: Range Based Sharding
 	ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
+	// API group: Range Based Sharding
 	ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
+	// API group: Range Based Sharding
 	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
+	// API group: Custom Sharding
 	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
+	// API group: Range Based Sharding
 	ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecute exectures a streaming query based on shards.
-	// (this is a vtgate v3 API, use carefully)
+	// StreamExecute executes a streaming query based on shards.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// Use this method if the query returns a large number of rows.
+	// API group: v3 API (alpha)
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
-	// StreamExecuteShard exectures a streaming query based on shards.
+	// StreamExecuteShards executes a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
+	// API group: Custom Sharding
 	StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error)
-	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
+	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range Based Sharding
 	StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error)
-	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
+	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range Based Sharding
 	StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error)
 	// Begin a transaction.
+	// API group: Transactions
 	Begin(ctx context.Context, in *vtgate.BeginRequest, opts ...grpc.CallOption) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
+	// API group: Transactions
 	Commit(ctx context.Context, in *vtgate.CommitRequest, opts ...grpc.CallOption) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
+	// API group: Transactions
 	Rollback(ctx context.Context, in *vtgate.RollbackRequest, opts ...grpc.CallOption) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
+	// API group: Map Reduce
 	SplitQuery(ctx context.Context, in *vtgate.SplitQueryRequest, opts ...grpc.CallOption) (*vtgate.SplitQueryResponse, error)
 	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
 	// This method is provided as a convenient way for clients to take a
@@ -72,6 +94,7 @@ type VitessClient interface {
 	// information may change, use the Execute calls for that).
 	// It is convenient for monitoring applications for instance, or if
 	// using custom sharding.
+	// API group: Topology
 	GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 
@@ -322,40 +345,58 @@ func (c *vitessClient) GetSrvKeyspace(ctx context.Context, in *vtgate.GetSrvKeys
 // Server API for Vitess service
 
 type VitessServer interface {
-	// Execute executes tries to route the query to the right shard.
-	// (this is a vtgate v3 API, use carefully)
+	// Execute tries to route the query to the right shard.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// API group: v3 API (alpha)
 	Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error)
 	// ExecuteShards executes the query on the specified shards.
+	// API group: Custom Sharding
 	ExecuteShards(context.Context, *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
+	// API group: Range Based Sharding
 	ExecuteKeyspaceIds(context.Context, *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
+	// API group: Range Based Sharding
 	ExecuteKeyRanges(context.Context, *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
+	// API group: Range Based Sharding
 	ExecuteEntityIds(context.Context, *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
+	// API group: Custom Sharding
 	ExecuteBatchShards(context.Context, *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
+	// API group: Range Based Sharding
 	ExecuteBatchKeyspaceIds(context.Context, *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
-	// StreamExecute exectures a streaming query based on shards.
-	// (this is a vtgate v3 API, use carefully)
+	// StreamExecute executes a streaming query based on shards.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// Use this method if the query returns a large number of rows.
+	// API group: v3 API (alpha)
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error
-	// StreamExecuteShard exectures a streaming query based on shards.
+	// StreamExecuteShards executes a streaming query based on shards.
 	// Use this method if the query returns a large number of rows.
+	// API group: Custom Sharding
 	StreamExecuteShards(*vtgate.StreamExecuteShardsRequest, Vitess_StreamExecuteShardsServer) error
-	// StreamExecuteKeyspaceIds exectures a streaming query based on keyspace ids.
+	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range Based Sharding
 	StreamExecuteKeyspaceIds(*vtgate.StreamExecuteKeyspaceIdsRequest, Vitess_StreamExecuteKeyspaceIdsServer) error
-	// StreamExecuteKeyRanges exectures a streaming query based on key ranges.
+	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
+	// API group: Range Based Sharding
 	StreamExecuteKeyRanges(*vtgate.StreamExecuteKeyRangesRequest, Vitess_StreamExecuteKeyRangesServer) error
 	// Begin a transaction.
+	// API group: Transactions
 	Begin(context.Context, *vtgate.BeginRequest) (*vtgate.BeginResponse, error)
 	// Commit a transaction.
+	// API group: Transactions
 	Commit(context.Context, *vtgate.CommitRequest) (*vtgate.CommitResponse, error)
 	// Rollback a transaction.
+	// API group: Transactions
 	Rollback(context.Context, *vtgate.RollbackRequest) (*vtgate.RollbackResponse, error)
 	// Split a query into non-overlapping sub queries
+	// API group: Map Reduce
 	SplitQuery(context.Context, *vtgate.SplitQueryRequest) (*vtgate.SplitQueryResponse, error)
 	// GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
 	// This method is provided as a convenient way for clients to take a
@@ -364,6 +405,7 @@ type VitessServer interface {
 	// information may change, use the Execute calls for that).
 	// It is convenient for monitoring applications for instance, or if
 	// using custom sharding.
+	// API group: Topology
 	GetSrvKeyspace(context.Context, *vtgate.GetSrvKeyspaceRequest) (*vtgate.GetSrvKeyspaceResponse, error)
 }
 

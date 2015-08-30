@@ -9,25 +9,18 @@ package vterrors
 import (
 	"fmt"
 
-	mproto "github.com/youtube/vitess/go/mysql/proto"
-	pb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-)
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 
-const (
-	// TabletError is the base VtTablet error. All VtTablet errors should be 4 digits, starting with 1.
-	TabletError = 1000
-	// UnknownTabletError is the code for an unknown error that came from VtTablet.
-	UnknownTabletError = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors should be 4 digits, starting with 2.
-	VtgateError = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	UnknownVtgateError = 2999
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 // VitessError is the error type that we use internally for passing structured errors
 type VitessError struct {
 	// Error code of the Vitess error
-	Code int64
+	Code vtrpc.ErrorCode
 	// Additional context string, distinct from the error message. For example, if
 	// you wanted an error like "foo error: original error", the Message string
 	// should be "foo error: "
@@ -52,7 +45,7 @@ func (e *VitessError) AsString() string {
 }
 
 // FromError returns a VitessError with the supplied error code and wrapped error.
-func FromError(code int64, err error) error {
+func FromError(code vtrpc.ErrorCode, err error) error {
 	return &VitessError{
 		Code: code,
 		err:  err,
@@ -66,19 +59,19 @@ func FromRPCError(rpcErr *mproto.RPCError) error {
 		return nil
 	}
 	return &VitessError{
-		Code: rpcErr.Code,
+		Code: vtrpc.ErrorCode(rpcErr.Code),
 		err:  fmt.Errorf("%v", rpcErr.Message),
 	}
 }
 
 // FromVtRPCError recovers a VitessError from a *vtrpc.RPCError (which is how VitessErrors
 // are transmitted across proto3 RPC boundaries).
-func FromVtRPCError(rpcErr *pb.RPCError) *VitessError {
+func FromVtRPCError(rpcErr *vtrpc.RPCError) *VitessError {
 	if rpcErr == nil {
 		return nil
 	}
 	return &VitessError{
-		Code: int64(rpcErr.Code),
+		Code: rpcErr.Code,
 		err:  fmt.Errorf("%v", rpcErr.Message),
 	}
 }
@@ -95,4 +88,61 @@ func WithPrefix(prefix string, in error) error {
 		err:     vtErr.err,
 		Message: fmt.Sprintf("%s: %s", prefix, vtErr.Message),
 	}
+}
+
+// errorCodeToGRPCCode maps a vtrpc.ErrorCode to a gRPC codes.Code
+func errorCodeToGRPCCode(code vtrpc.ErrorCode) codes.Code {
+	switch code {
+	case vtrpc.ErrorCode_SUCCESS:
+		return codes.OK
+	case vtrpc.ErrorCode_CANCELLED:
+		return codes.Canceled
+	case vtrpc.ErrorCode_UNKNOWN_ERROR:
+		return codes.Unknown
+	case vtrpc.ErrorCode_BAD_INPUT:
+		return codes.InvalidArgument
+	case vtrpc.ErrorCode_DEADLINE_EXCEEDED:
+		return codes.DeadlineExceeded
+	case vtrpc.ErrorCode_INTEGRITY_ERROR:
+		return codes.AlreadyExists
+	case vtrpc.ErrorCode_PERMISSION_DENIED:
+		return codes.PermissionDenied
+	case vtrpc.ErrorCode_RESOURCE_EXHAUSTED:
+		return codes.ResourceExhausted
+	case vtrpc.ErrorCode_QUERY_NOT_SERVED:
+		return codes.FailedPrecondition
+	case vtrpc.ErrorCode_NOT_IN_TX:
+		return codes.Aborted
+	case vtrpc.ErrorCode_INTERNAL_ERROR:
+		return codes.Internal
+	case vtrpc.ErrorCode_TRANSIENT_ERROR:
+		return codes.Unavailable
+	case vtrpc.ErrorCode_UNAUTHENTICATED:
+		return codes.Unauthenticated
+	default:
+		return codes.Unknown
+	}
+}
+
+// toGRPCCode will attempt to determine the best gRPC code for a particular error.
+func toGRPCCode(err error) codes.Code {
+	if err == nil {
+		return codes.OK
+	}
+	if vtErr, ok := err.(*VitessError); ok {
+		return errorCodeToGRPCCode(vtErr.Code)
+	}
+	if tErr, ok := err.(*tabletserver.TabletError); ok {
+		return errorCodeToGRPCCode(tErr.ErrorCode)
+	}
+	// Returns the underlying grpc Code, or codes.Unknown if one doesn't exist
+	return grpc.Code(err)
+}
+
+// ToGRPCError returns an error as a grpc error, with the appropriate error code
+func ToGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return grpc.Errorf(toGRPCCode(err), "%v", err)
 }

@@ -15,9 +15,13 @@ It has these top-level messages:
 package vtrpc
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
 
 // ErrorCode is the enum values for Errors. Internally, errors should
 // be created with one of these codes. These will then be translated over the wire
@@ -128,45 +132,6 @@ func (x ErrorCode) String() string {
 	return proto.EnumName(ErrorCode_name, int32(x))
 }
 
-// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
-// should instead be using ErrorCode.
-type ErrorCodeDeprecated int32
-
-const (
-	// NoError means there was no error, and the message should be ignored.
-	ErrorCodeDeprecated_NoError ErrorCodeDeprecated = 0
-	// TabletError is the base VtTablet error. All VtTablet errors
-	// should be 4 digits, starting with 1.
-	ErrorCodeDeprecated_TabletError ErrorCodeDeprecated = 1000
-	// UnknownTabletError is the code for an unknown error that came
-	// from VtTablet.
-	ErrorCodeDeprecated_UnknownTabletError ErrorCodeDeprecated = 1999
-	// VtgateError is the base VTGate error code. All VTGate errors
-	// should be 4 digits, starting with 2.
-	ErrorCodeDeprecated_VtgateError ErrorCodeDeprecated = 2000
-	// UnknownVtgateError is the code for an unknown error that came from VTGate.
-	ErrorCodeDeprecated_UnknownVtgateError ErrorCodeDeprecated = 2999
-)
-
-var ErrorCodeDeprecated_name = map[int32]string{
-	0:    "NoError",
-	1000: "TabletError",
-	1999: "UnknownTabletError",
-	2000: "VtgateError",
-	2999: "UnknownVtgateError",
-}
-var ErrorCodeDeprecated_value = map[string]int32{
-	"NoError":            0,
-	"TabletError":        1000,
-	"UnknownTabletError": 1999,
-	"VtgateError":        2000,
-	"UnknownVtgateError": 2999,
-}
-
-func (x ErrorCodeDeprecated) String() string {
-	return proto.EnumName(ErrorCodeDeprecated_name, int32(x))
-}
-
 // CallerID is passed along RPCs to identify the originating client
 // for a request. It is not meant to be secure, but only
 // informational.  The client can put whatever info they want in these
@@ -201,8 +166,8 @@ func (*CallerID) ProtoMessage()    {}
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	Code    ErrorCodeDeprecated `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCodeDeprecated" json:"code,omitempty"`
-	Message string              `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	Code    ErrorCode `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCode" json:"code,omitempty"`
+	Message string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
 }
 
 func (m *RPCError) Reset()         { *m = RPCError{} }
@@ -211,5 +176,4 @@ func (*RPCError) ProtoMessage()    {}
 
 func init() {
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
-	proto.RegisterEnum("vtrpc.ErrorCodeDeprecated", ErrorCodeDeprecated_name, ErrorCodeDeprecated_value)
 }

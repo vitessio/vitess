@@ -19,6 +19,8 @@ It has these top-level messages:
 package mysqlctl
 
 import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 import (
 	context "golang.org/x/net/context"
@@ -26,11 +28,9 @@ import (
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
-// Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
+var _ = fmt.Errorf
+var _ = math.Inf
 
 type StartRequest struct {
 }
@@ -74,6 +74,10 @@ type RunMysqlUpgradeResponse struct {
 func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse{} }
 func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
 func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
 
 // Client API for MysqlCtl service
 

@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -17,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
@@ -38,7 +38,7 @@ func (q *query) GetSessionId(ctx context.Context, request *pb.GetSessionIdReques
 		Keyspace: request.Keyspace,
 		Shard:    request.Shard,
 	}, sessionInfo); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	return &pb.GetSessionIdResponse{
@@ -60,7 +60,7 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	}, reply); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &pb.ExecuteResponse{
 		Result: mproto.QueryResultToProto3(reply),
@@ -81,7 +81,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *pb.ExecuteBatchReques
 		AsTransaction: request.AsTransaction,
 		TransactionId: request.TransactionId,
 	}, reply); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &pb.ExecuteBatchResponse{
 		Results: proto.QueryResultListToProto3(reply.List),
@@ -104,7 +104,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 			Result: mproto.QueryResultToProto3(reply),
 		})
 	}); err != nil {
-		return grpc.Errorf(codes.Internal, "%v", err)
+		return vterrors.ToGRPCError(err)
 	}
 	return nil
 }
@@ -120,7 +120,7 @@ func (q *query) Begin(ctx context.Context, request *pb.BeginRequest) (response *
 	if err := q.server.Begin(ctx, request.Target, &proto.Session{
 		SessionId: request.SessionId,
 	}, txInfo); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	return &pb.BeginResponse{
@@ -139,7 +139,7 @@ func (q *query) Commit(ctx context.Context, request *pb.CommitRequest) (response
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	}); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &pb.CommitResponse{}, nil
 }
@@ -155,7 +155,7 @@ func (q *query) Rollback(ctx context.Context, request *pb.RollbackRequest) (resp
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
 	}); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 
 	return &pb.RollbackResponse{}, nil
@@ -175,7 +175,7 @@ func (q *query) SplitQuery(ctx context.Context, request *pb.SplitQueryRequest) (
 		SplitCount:  int(request.SplitCount),
 		SessionID:   request.SessionId,
 	}, reply); err != nil {
-		return nil, grpc.Errorf(codes.Internal, "%v", err)
+		return nil, vterrors.ToGRPCError(err)
 	}
 	return &pb.SplitQueryResponse{
 		Queries: proto.QuerySplitsToProto3(reply.Queries),
