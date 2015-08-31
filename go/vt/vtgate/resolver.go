@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 var (
@@ -168,7 +169,7 @@ func (res *Resolver) ExecuteEntityIds(
 	bindVariables map[string]interface{},
 	keyspace string,
 	entityColumnName string,
-	entityKeyspaceIDs []proto.EntityId,
+	entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId,
 	tabletType pb.TabletType,
 	session *proto.Session,
 	notInTransaction bool,

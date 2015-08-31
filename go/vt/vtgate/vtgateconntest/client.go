@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -230,14 +231,14 @@ type queryExecuteEntityIds struct {
 	BindVariables     map[string]interface{}
 	Keyspace          string
 	EntityColumnName  string
-	EntityKeyspaceIDs []proto.EntityId
+	EntityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId
 	TabletType        pb.TabletType
 	Session           *proto.Session
 	NotInTransaction  bool
 }
 
 // ExecuteEntityIds is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -258,6 +259,9 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 		EntityKeyspaceIDs: entityKeyspaceIDs,
 		Session:           session,
 		NotInTransaction:  notInTransaction,
+	}
+	if len(query.EntityKeyspaceIDs) == 1 && len(query.EntityKeyspaceIDs[0].XidBytes) == 0 {
+		query.EntityKeyspaceIDs[0].XidBytes = nil
 	}
 	if !reflect.DeepEqual(query, execCase.entityIdsQuery) {
 		f.t.Errorf("ExecuteEntityIds: %+v, want %+v", query, execCase.entityIdsQuery)
@@ -926,7 +930,7 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.reply.Result)
 	}
 
-	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []proto.EntityId{}, nil, pb.TabletType_REPLICA)
+	_, err = conn.ExecuteEntityIds(ctx, "none", "", "", []*pbg.ExecuteEntityIdsRequest_EntityId{}, nil, pb.TabletType_REPLICA)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -2204,10 +2208,11 @@ var execMap = map[string]struct {
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
-			EntityKeyspaceIDs: []proto.EntityId{
-				proto.EntityId{
-					ExternalID: []byte{105, 100, 49},
-					KeyspaceID: key.KeyspaceId("k"),
+			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+					XidBytes:   []byte{105, 100, 49},
+					KeyspaceId: []byte{0x6B},
 				},
 			},
 			TabletType: pb.TabletType_RDONLY,
@@ -2304,10 +2309,11 @@ var execMap = map[string]struct {
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
-			EntityKeyspaceIDs: []proto.EntityId{
-				proto.EntityId{
-					ExternalID: []byte{105, 100, 49},
-					KeyspaceID: key.KeyspaceId("k"),
+			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+					XidBytes:   []byte{105, 100, 49},
+					KeyspaceId: []byte{0x6B},
 				},
 			},
 			TabletType: pb.TabletType_RDONLY,
@@ -2404,10 +2410,11 @@ var execMap = map[string]struct {
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
-			EntityKeyspaceIDs: []proto.EntityId{
-				proto.EntityId{
-					ExternalID: []byte{105, 100, 49},
-					KeyspaceID: key.KeyspaceId("k"),
+			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
+					XidInt:     -12345,
+					KeyspaceId: []byte{0x6B},
 				},
 			},
 			TabletType: pb.TabletType_RDONLY,
@@ -2508,10 +2515,11 @@ var execMap = map[string]struct {
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
-			EntityKeyspaceIDs: []proto.EntityId{
-				proto.EntityId{
-					ExternalID: []byte{105, 100, 49},
-					KeyspaceID: key.KeyspaceId("k"),
+			EntityKeyspaceIDs: []*pbg.ExecuteEntityIdsRequest_EntityId{
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
+					XidInt:     123456,
+					KeyspaceId: []byte{0x6B},
 				},
 			},
 			TabletType:       pb.TabletType_RDONLY,

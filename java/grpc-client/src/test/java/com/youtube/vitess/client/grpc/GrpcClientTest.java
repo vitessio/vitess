@@ -107,7 +107,7 @@ public class GrpcClientTest {
           .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
           .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
-      "[{123 010203} {2 040506} {[1 2 3] 070809}]";
+      "[xid_type:TYPE_INT xid_int:123 keyspace_id:\"\\001\\002\\003\"  xid_type:TYPE_FLOAT xid_float:2 keyspace_id:\"\\004\\005\\006\"  xid_type:TYPE_BYTES xid_bytes:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
 
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();

@@ -140,7 +140,7 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	return mproto.Proto3ToQueryResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, bindVars map[string]interface{}, tabletType pbt.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
+func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*pb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType pbt.TabletType, notInTransaction bool, session interface{}) (*mproto.QueryResult, interface{}, error) {
 	var s *pb.Session
 	if session != nil {
 		s = session.(*pb.Session)
@@ -151,7 +151,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 		Query:             tproto.BoundQueryToProto3(query, bindVars),
 		Keyspace:          keyspace,
 		EntityColumnName:  entityColumnName,
-		EntityKeyspaceIds: proto.EntityIdsToProto(entityKeyspaceIDs),
+		EntityKeyspaceIds: entityKeyspaceIDs,
 		TabletType:        tabletType,
 		NotInTransaction:  notInTransaction,
 	}

@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -344,21 +345,18 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = rpcVTGate.ExecuteEntityIds(context.Background(),
+	err := rpcVTGate.ExecuteEntityIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]proto.EntityId{
-			proto.EntityId{
-				ExternalID: "id1",
-				KeyspaceID: kid10,
+		[]*pbg.ExecuteEntityIdsRequest_EntityId{
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+				XidBytes:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
 			},
 		},
 		pb.TabletType_MASTER,
@@ -390,10 +388,11 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]proto.EntityId{
-			proto.EntityId{
-				ExternalID: "id1",
-				KeyspaceID: kid10,
+		[]*pbg.ExecuteEntityIdsRequest_EntityId{
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+				XidBytes:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
 			},
 		},
 		pb.TabletType_MASTER,
@@ -418,22 +417,20 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	}
 
 	// Test for multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	rpcVTGate.ExecuteEntityIds(context.Background(), "query",
 		nil,
 		"TestVTGateExecuteEntityIds",
 		"kid",
-		[]proto.EntityId{
-			proto.EntityId{
-				ExternalID: "id1",
-				KeyspaceID: kid10,
+		[]*pbg.ExecuteEntityIdsRequest_EntityId{
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+				XidBytes:   []byte("id1"),
+				KeyspaceId: []byte{0x10},
 			},
-			proto.EntityId{
-				ExternalID: "id2",
-				KeyspaceID: kid30,
+			&pbg.ExecuteEntityIdsRequest_EntityId{
+				XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+				XidBytes:   []byte("id2"),
+				KeyspaceId: []byte{0x30},
 			},
 		},
 		pb.TabletType_MASTER,
