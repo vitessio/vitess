@@ -26,20 +26,12 @@ import (
 
 func TestResolverExecuteKeyspaceIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
-		kid10, err := key.HexKeyspaceId("10").Unhex()
-		if err != nil {
-			return nil, err
-		}
-		kid25, err := key.HexKeyspaceId("25").Unhex()
-		if err != nil {
-			return nil, err
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteKeyspaceIds",
-			[]key.KeyspaceId{kid10, kid25},
+			[][]byte{[]byte{0x10}, []byte{0x25}},
 			pb.TabletType_MASTER,
 			nil,
 			false)
@@ -48,20 +40,12 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 
 func TestResolverExecuteKeyRanges(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteKeyRanges", func() (*mproto.QueryResult, error) {
-		kid10, err := key.HexKeyspaceId("10").Unhex()
-		if err != nil {
-			return nil, err
-		}
-		kid25, err := key.HexKeyspaceId("25").Unhex()
-		if err != nil {
-			return nil, err
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
 			pb.TabletType_MASTER,
 			nil,
 			false)
@@ -129,27 +113,15 @@ func TestResolverExecuteBatchKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid15, err := key.HexKeyspaceId("15").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid25, err := key.HexKeyspaceId("25").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
 	createSandbox("TestResolverStreamExecuteKeyspaceIds")
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(context.Background(),
+		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
-			[]key.KeyspaceId{kid10, kid15},
+			[][]byte{[]byte{0x10}, []byte{0x15}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)
@@ -160,11 +132,11 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyspaceIds", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyspaceIds(context.Background(),
+		err := res.StreamExecuteKeyspaceIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyspaceIds",
-			[]key.KeyspaceId{kid10, kid15, kid25},
+			[][]byte{[]byte{0x10}, []byte{0x15}, []byte{0x25}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)
@@ -175,28 +147,16 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 }
 
 func TestResolverStreamExecuteKeyRanges(t *testing.T) {
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid15, err := key.HexKeyspaceId("15").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	kid25, err := key.HexKeyspaceId("25").Unhex()
-	if err != nil {
-		t.Errorf(err.Error())
-	}
 	createSandbox("TestResolverStreamExecuteKeyRanges")
 	// streaming a single shard
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid15}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x15}}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)
@@ -208,11 +168,11 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 	testResolverStreamGeneric(t, "TestResolverStreamExecuteKeyRanges", func() (*mproto.QueryResult, error) {
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		qr := new(mproto.QueryResult)
-		err = res.StreamExecuteKeyRanges(context.Background(),
+		err := res.StreamExecuteKeyRanges(context.Background(),
 			"query",
 			nil,
 			"TestResolverStreamExecuteKeyRanges",
-			[]key.KeyRange{key.KeyRange{Start: kid10, End: kid25}},
+			[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x25}}},
 			pb.TabletType_MASTER,
 			func(r *mproto.QueryResult) error {
 				appendResult(qr, r)
@@ -495,14 +455,6 @@ func TestResolverBuildEntityIds(t *testing.T) {
 }
 
 func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("Error encoding keyspace id")
-	}
-	kid25, err := key.HexKeyspaceId("25").Unhex()
-	if err != nil {
-		t.Errorf("Error encoding keyspace id")
-	}
 	res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 
 	s := createSandbox("TestResolverDmlOnMultipleKeyspaceIds")
@@ -512,11 +464,11 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	s.MapTestConn("20-40", sbc1)
 
 	errStr := "DML should not span multiple keyspace_ids"
-	_, err = res.ExecuteKeyspaceIds(context.Background(),
+	_, err := res.ExecuteKeyspaceIds(context.Background(),
 		"update table set a = b",
 		nil,
 		"TestResolverExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10, kid25},
+		[][]byte{[]byte{0x10}, []byte{0x25}},
 		pb.TabletType_MASTER,
 		nil,
 		false)

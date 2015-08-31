@@ -189,17 +189,13 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+	err := rpcVTGate.ExecuteKeyspaceIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10},
+		[][]byte{[]byte{0x10}},
 		pb.TabletType_MASTER,
 		nil,
 		false,
@@ -228,7 +224,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10},
+		[][]byte{[]byte{0x10}},
 		pb.TabletType_MASTER,
 		session,
 		false,
@@ -250,15 +246,11 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 	// Test for multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	rpcVTGate.ExecuteKeyspaceIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10, kid30},
+		[][]byte{[]byte{0x10}, []byte{0x30}},
 		pb.TabletType_MASTER,
 		session,
 		false,
@@ -274,14 +266,13 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	sbc2 := &sandboxConn{}
 	s.MapTestConn("-20", sbc1)
 	s.MapTestConn("20-40", sbc2)
-	kr, err := key.ParseKeyRangeParts("", "20")
 	// Test for successful execution
 	qr := new(proto.QueryResult)
-	err = rpcVTGate.ExecuteKeyRanges(context.Background(),
+	err := rpcVTGate.ExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		nil,
 		false,
@@ -310,7 +301,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		"query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		session,
 		false,
@@ -335,11 +326,10 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 		t.Errorf("want 1, got %v", commitCount)
 	}
 	// Test for multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "30")
 	rpcVTGate.ExecuteKeyRanges(context.Background(), "query",
 		nil,
 		"TestVTGateExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x30}}},
 		pb.TabletType_MASTER,
 		nil,
 		false, qr)
@@ -607,17 +597,13 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 	s.MapTestConn("-20", sbc)
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
-	kid10, err := key.HexKeyspaceId("10").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
+	err := rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10},
+		[][]byte{[]byte{0x10}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
@@ -635,15 +621,11 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 
 	// Test for successful execution - multiple keyspaceids in single shard
 	qrs = nil
-	kid15, err := key.HexKeyspaceId("15").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10, kid15},
+		[][]byte{[]byte{0x10}, []byte{0x15}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
@@ -659,15 +641,11 @@ func TestVTGateStreamExecuteKeyspaceIds(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", want, qrs)
 	}
 	// Test for successful execution - multiple keyspaceids in multiple shards
-	kid30, err := key.HexKeyspaceId("30").Unhex()
-	if err != nil {
-		t.Errorf("want nil, got %+v", err)
-	}
 	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyspaceIds",
-		[]key.KeyspaceId{kid10, kid30},
+		[][]byte{[]byte{0x10}, []byte{0x30}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
@@ -684,14 +662,13 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	s.MapTestConn("-20", sbc)
 	sbc1 := &sandboxConn{}
 	s.MapTestConn("20-40", sbc1)
-	kr, err := key.ParseKeyRangeParts("", "20")
 	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
+	err := rpcVTGate.StreamExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{End: []byte{0x20}}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)
@@ -708,12 +685,11 @@ func TestVTGateStreamExecuteKeyRanges(t *testing.T) {
 	}
 
 	// Test for successful execution - multiple shards
-	kr, err = key.ParseKeyRangeParts("10", "40")
 	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
 		"query",
 		nil,
 		"TestVTGateStreamExecuteKeyRanges",
-		[]key.KeyRange{kr},
+		[]*pb.KeyRange{&pb.KeyRange{Start: []byte{0x10}, End: []byte{0x40}}},
 		pb.TabletType_MASTER,
 		func(r *proto.QueryResult) error {
 			qrs = append(qrs, r)

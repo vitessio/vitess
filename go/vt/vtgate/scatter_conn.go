@@ -276,7 +276,7 @@ func (stc *ScatterConn) ExecuteBatch(
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
 				// are caused by client queries and are not VTGate's fault.
-				if !strings.Contains(err.Error(), errDupKey) {
+				if !strings.Contains(err.Error(), errDupKey) && !strings.Contains(err.Error(), errOutOfRange) {
 					stc.tabletCallErrorCount.Add(statsKey, 1)
 				}
 				return
@@ -629,7 +629,7 @@ func (stc *ScatterConn) multiGo(
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
 				// are caused by client queries and are not VTGate's fault.
-				if !strings.Contains(err.Error(), errDupKey) {
+				if !strings.Contains(err.Error(), errDupKey) && !strings.Contains(err.Error(), errOutOfRange) {
 					stc.tabletCallErrorCount.Add(statsKey, 1)
 				}
 				return

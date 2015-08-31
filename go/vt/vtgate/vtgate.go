@@ -36,6 +36,7 @@ import (
 )
 
 const errDupKey = "errno 1062"
+const errOutOfRange = "errno 1264"
 const errTxPoolFull = "tx_pool_full"
 
 var (
@@ -227,7 +228,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
-func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -259,7 +260,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 }
 
 // ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
-func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -447,7 +448,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple KeyspaceIds to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds []key.KeyspaceId, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyspaceIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -496,7 +497,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // The api supports supplying multiple keyranges to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []key.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*pb.KeyRange, tabletType pb.TabletType, sendReply func(*proto.QueryResult) error) error {
 	startTime := time.Now()
 	statsKey := []string{"StreamExecuteKeyRanges", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)
@@ -697,6 +698,8 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 	errStr := err.Error() + ", vtgate: " + servenv.ListeningURL.String()
 	if strings.Contains(errStr, errDupKey) {
 		infoErrors.Add("DupKey", 1)
+	} else if strings.Contains(errStr, errOutOfRange) {
+		infoErrors.Add("OutOfRange", 1)
 	} else if strings.Contains(errStr, errTxPoolFull) {
 		normalErrors.Add(statsKey, 1)
 	} else {

@@ -2,9 +2,12 @@
 
 import protocols_flavor
 
+
 class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
   """Overrides to use gRPC everywhere where it is supported.
-  If not supported yet, use GoRPC."""
+
+  If not supported yet, use GoRPC.
+  """
 
   def binlog_player_protocol(self):
     return 'grpc'

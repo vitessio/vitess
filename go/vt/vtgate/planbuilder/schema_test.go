@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/youtube/vitess/go/vt/key"
 )
 
 // stFU satisfies Functional, Unique.
@@ -17,11 +15,11 @@ type stFU struct {
 	Params map[string]interface{}
 }
 
-func (*stFU) Cost() int                                                 { return 1 }
-func (*stFU) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) { return false, nil }
-func (*stFU) Map(VCursor, []interface{}) ([]key.KeyspaceId, error)      { return nil, nil }
-func (*stFU) Create(VCursor, interface{}) error                         { return nil }
-func (*stFU) Delete(VCursor, []interface{}, key.KeyspaceId) error       { return nil }
+func (*stFU) Cost() int                                         { return 1 }
+func (*stFU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
+func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
+func (*stFU) Create(VCursor, interface{}) error                 { return nil }
+func (*stFU) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
 func NewSTFU(params map[string]interface{}) (Vindex, error) {
 	return &stFU{Params: params}, nil
@@ -32,8 +30,8 @@ type stF struct {
 	Params map[string]interface{}
 }
 
-func (*stF) Cost() int                                                 { return 0 }
-func (*stF) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) { return false, nil }
+func (*stF) Cost() int                                         { return 0 }
+func (*stF) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
 
 func NewSTF(params map[string]interface{}) (Vindex, error) {
 	return &stF{Params: params}, nil
@@ -44,11 +42,11 @@ type stLN struct {
 	Params map[string]interface{}
 }
 
-func (*stLN) Cost() int                                                 { return 0 }
-func (*stLN) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) { return false, nil }
-func (*stLN) Map(VCursor, []interface{}) ([][]key.KeyspaceId, error)    { return nil, nil }
-func (*stLN) Create(VCursor, interface{}, key.KeyspaceId) error         { return nil }
-func (*stLN) Delete(VCursor, []interface{}, key.KeyspaceId) error       { return nil }
+func (*stLN) Cost() int                                         { return 0 }
+func (*stLN) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
+func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)    { return nil, nil }
+func (*stLN) Create(VCursor, interface{}, []byte) error         { return nil }
+func (*stLN) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
 func NewSTLN(params map[string]interface{}) (Vindex, error) {
 	return &stLN{Params: params}, nil
@@ -59,11 +57,11 @@ type stLU struct {
 	Params map[string]interface{}
 }
 
-func (*stLU) Cost() int                                                 { return 2 }
-func (*stLU) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) { return false, nil }
-func (*stLU) Map(VCursor, []interface{}) ([]key.KeyspaceId, error)      { return nil, nil }
-func (*stLU) Create(VCursor, interface{}, key.KeyspaceId) error         { return nil }
-func (*stLU) Delete(VCursor, []interface{}, key.KeyspaceId) error       { return nil }
+func (*stLU) Cost() int                                         { return 2 }
+func (*stLU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
+func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
+func (*stLU) Create(VCursor, interface{}, []byte) error         { return nil }
+func (*stLU) Delete(VCursor, []interface{}, []byte) error       { return nil }
 
 func NewSTLU(params map[string]interface{}) (Vindex, error) {
 	return &stLU{Params: params}, nil

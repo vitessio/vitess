@@ -48,7 +48,7 @@ type gRPCQueryClient struct {
 func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard string, tabletType pbt.TabletType, timeout time.Duration) (tabletconn.TabletConn, error) {
 	// create the RPC client
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["grpc"])
-	cc, err := grpc.Dial(addr, grpc.WithBlock(), grpc.WithTimeout(timeout))
+	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(timeout))
 	if err != nil {
 		return nil, err
 	}

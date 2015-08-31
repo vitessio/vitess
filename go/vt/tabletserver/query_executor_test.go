@@ -1429,7 +1429,7 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 		"select unix_timestamp()": &mproto.QueryResult{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{sqltypes.MakeString([]byte("1427325875"))},
+				[]sqltypes.Value{sqltypes.MakeNumeric([]byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": &mproto.QueryResult{
@@ -1444,8 +1444,12 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
 		},
@@ -1510,8 +1514,12 @@ func getQueryExecutorSupportedQueries() map[string]*mproto.QueryResult {
 				[]sqltypes.Value{
 					sqltypes.MakeString([]byte("test_table")),
 					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
+					sqltypes.MakeNumeric([]byte("1427325875")),
 					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeNumeric([]byte("1")),
+					sqltypes.MakeNumeric([]byte("2")),
+					sqltypes.MakeNumeric([]byte("3")),
+					sqltypes.MakeNumeric([]byte("4")),
 				},
 			},
 		},

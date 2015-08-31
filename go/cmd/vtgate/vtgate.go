@@ -31,6 +31,8 @@ var (
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
 var topoReader *TopoReader
 
+var initFakeZK func()
+
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.InitServiceMapForBsonRpcService("toporeader")
@@ -43,6 +45,9 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 
+	if initFakeZK != nil {
+		initFakeZK()
+	}
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
