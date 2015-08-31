@@ -106,7 +106,7 @@ func (sc *SlaveConnection) StartBinlogDump(startPos proto.ReplicationPosition) (
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SqlError); ok && sqlErr.Number() == mysql.ErrServerLost {
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
 					// ErrServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.

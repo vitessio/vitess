@@ -248,7 +248,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSqlError(mysql.ErrDupEntry, "err"),
+		sqldb.NewSQLError(mysql.ErrDupEntry, "err"),
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &mproto.QueryResult{})
 	_, err = qre.Execute()
@@ -259,7 +259,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
-		sqldb.NewSqlError(mysql.ErrDupEntry, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+		sqldb.NewSQLError(mysql.ErrDupEntry, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
 	)
 	db.AddQuery(
 		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",

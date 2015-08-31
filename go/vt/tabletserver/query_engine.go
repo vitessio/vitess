@@ -104,7 +104,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 	// If there's a problem with getting a connection out of the pool, that is
 	// probably not due to the query itself. The query might succeed on a different
 	// tablet.
-	panic(NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+	panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.

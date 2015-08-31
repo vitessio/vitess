@@ -25,7 +25,7 @@ type DBConnection struct {
 }
 
 func (dbc *DBConnection) handleError(err error) {
-	if sqlErr, ok := err.(*sqldb.SqlError); ok {
+	if sqlErr, ok := err.(*sqldb.SQLError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dbc.Close()
 		}

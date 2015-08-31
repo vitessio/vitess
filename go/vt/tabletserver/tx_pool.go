@@ -149,11 +149,11 @@ func (axp *TxPool) Begin(ctx context.Context) int64 {
 			axp.LogActive()
 			panic(NewTabletError(ErrTxPoolFull, vtrpc.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"))
 		}
-		panic(NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		panic(NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(transactionID, newTxConnection(conn, transactionID, axp))
@@ -173,7 +173,7 @@ func (axp *TxPool) SafeCommit(ctx context.Context, transactionID int64) (invalid
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, fetchErr := conn.Exec(ctx, "commit", 1, false); fetchErr != nil {
 		conn.Close()
-		err = NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, fetchErr)
+		err = NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, fetchErr)
 	}
 	return
 }
@@ -185,7 +185,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) {
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err))
 	}
 }
 
@@ -281,9 +281,9 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	if err != nil {
 		if IsConnErr(err) {
 			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
+		return nil, NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }

@@ -501,7 +501,7 @@ func (qre *QueryExecutor) execUpsertPK(conn poolConn, invalidator CacheInvalidat
 	if !ok {
 		return result, err
 	}
-	if terr.SqlError != mysql.ErrDupEntry {
+	if terr.SQLError != mysql.ErrDupEntry {
 		return nil, err
 	}
 	// If the error didn't match pk, just return the error without updating.
@@ -741,7 +741,7 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	case ErrConnPoolClosed:
 		return nil, err
 	}
-	return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+	return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 }
 
 func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
@@ -756,7 +756,7 @@ func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser
 		conn, err := qre.qe.connPool.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			q.Err = NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qre.execSQL(conn, sql, false)
@@ -823,7 +823,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(
 	qre.logStats.AddRewrittenSql(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
-		return NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
+		return NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }

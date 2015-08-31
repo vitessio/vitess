@@ -61,7 +61,7 @@ var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 type TabletError struct {
 	ErrorType int
 	Message   string
-	SqlError  int
+	SQLError  int
 	// ErrorCode will be used to transmit the error across RPC boundaries
 	ErrorCode vtrpc.ErrorCode
 }
@@ -80,8 +80,8 @@ func NewTabletError(errorType int, errCode vtrpc.ErrorCode, format string, args 
 	}
 }
 
-// NewTabletErrorSql returns a TabletError based on the error
-func NewTabletErrorSql(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
+// NewTabletErrorSQL returns a TabletError based on the error
+func NewTabletErrorSQL(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
@@ -102,7 +102,7 @@ func NewTabletErrorSql(errorType int, errCode vtrpc.ErrorCode, err error) *Table
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(errstr),
-		SqlError:  errnum,
+		SQLError:  errnum,
 		ErrorCode: errCode,
 	}
 }
@@ -152,7 +152,7 @@ func IsConnErr(err error) bool {
 	var sqlError int
 	switch err := err.(type) {
 	case *TabletError:
-		sqlError = err.SqlError
+		sqlError = err.SQLError
 	case hasNumber:
 		sqlError = err.Number()
 	default:
@@ -191,7 +191,7 @@ func (te *TabletError) Prefix() string {
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
-	if te.SqlError == mysql.ErrServerLost {
+	if te.SQLError == mysql.ErrServerLost {
 		prefix = prefix + "the query was killed either because it timed out or was canceled: "
 	}
 	return prefix
@@ -209,7 +209,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	case ErrNotInTx:
 		queryServiceStats.ErrorStats.Add("NotInTx", 1)
 	default:
-		switch te.SqlError {
+		switch te.SQLError {
 		case mysql.ErrDupEntry:
 			queryServiceStats.InfoErrors.Add("DupKey", 1)
 		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
@@ -237,7 +237,7 @@ func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QuerySe
 		case ErrTxPoolFull:
 			logTxPoolFull.Errorf("%v", terr)
 		default:
-			switch terr.SqlError {
+			switch terr.SQLError {
 			// MySQL deadlock errors are (usually) due to client behavior, not server
 			// behavior, and therefore logged at the INFO level.
 			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:

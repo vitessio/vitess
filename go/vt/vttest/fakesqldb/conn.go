@@ -286,7 +286,7 @@ func Register() *DB {
 }
 
 func newConnError() error {
-	return &sqldb.SqlError{
+	return &sqldb.SQLError{
 		Num:     2012,
 		Message: "connection fail",
 		Query:   "",
