@@ -89,6 +89,12 @@ func WithPrefix(prefix string, in error) error {
 	}
 }
 
+// This is the string that we prefix gRPC server errors with. This is necessary
+// because there is currently no good way, in gRPC, to differentiate between an
+// error from a server vs the client.
+// See: https://github.com/grpc/grpc-go/issues/319
+const GRPCServerErrPrefix = "gRPCServerError: "
+
 // ErrorCodeToGRPCCode maps a vtrpc.ErrorCode to a gRPC codes.Code
 func ErrorCodeToGRPCCode(code vtrpc.ErrorCode) codes.Code {
 	switch code {
@@ -140,5 +146,5 @@ func ToGRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return grpc.Errorf(toGRPCCode(err), "%v", err)
+	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, err)
 }

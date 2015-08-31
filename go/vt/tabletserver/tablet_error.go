@@ -131,7 +131,7 @@ func ToGRPCError(err error) error {
 		code = vterrors.ErrorCodeToGRPCCode(tErr.ErrorCode)
 	}
 
-	return grpc.Errorf(code, "%v", err)
+	return grpc.Errorf(code, "%v %v", vterrors.GRPCServerErrPrefix, err)
 }
 
 func printable(in string) string {

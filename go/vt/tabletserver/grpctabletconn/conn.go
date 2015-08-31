@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -367,22 +368,22 @@ func tabletErrorFromGRPC(err error) error {
 	// TODO(aaijazi): Unfortunately, there's no better way to check for a gRPC server
 	// error (vs a client error).
 	// See: https://github.com/grpc/grpc-go/issues/319
-	if strings.Contains(err.Error(), "rpc error: code = ") {
-		var code int
-		// server side error, convert it
-		switch grpc.Code(err) {
-		case codes.Internal:
-			code = tabletconn.ERR_FATAL
-		case codes.FailedPrecondition:
-			code = tabletconn.ERR_RETRY
-		case codes.ResourceExhausted:
-			code = tabletconn.ERR_TX_POOL_FULL
-		case codes.Aborted:
-			code = tabletconn.ERR_NOT_IN_TX
-		default:
-			code = tabletconn.ERR_NORMAL
-		}
-		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+	if !strings.Contains(err.Error(), vterrors.GRPCServerErrPrefix) {
+		return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
 	}
-	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
+	// server side error, convert it
+	var code int
+	switch grpc.Code(err) {
+	case codes.Internal:
+		code = tabletconn.ERR_FATAL
+	case codes.FailedPrecondition:
+		code = tabletconn.ERR_RETRY
+	case codes.ResourceExhausted:
+		code = tabletconn.ERR_TX_POOL_FULL
+	case codes.Aborted:
+		code = tabletconn.ERR_NOT_IN_TX
+	default:
+		code = tabletconn.ERR_NORMAL
+	}
+	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
 }
