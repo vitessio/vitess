@@ -170,7 +170,7 @@ class LocalDatabase(object):
         if source_root and not cmd and line.startswith('source '):
           commands.extend(self.get_sql_commands_from_file(
               os.path.join(source_root, line[7:]),
-y              source_root=source_root))
+              source_root=source_root))
         else:
           cmd += line
           cmd += '\n'
