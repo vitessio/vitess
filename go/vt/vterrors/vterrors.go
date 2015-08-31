@@ -43,6 +43,18 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
+// NewVitessError returs a VitessError backed error with the given arguments.
+// Usually, this is not what you want to use. It's only useful if you want to
+// create a VitessError that wraps an existing error, but has a completely
+// different error string.
+func NewVitessError(code vtrpc.ErrorCode, msg string, err error) error {
+	return &VitessError{
+		Code:    code,
+		Message: msg,
+		err:     err,
+	}
+}
+
 // FromError returns a VitessError with the supplied error code and wrapped error.
 func FromError(code vtrpc.ErrorCode, err error) error {
 	return &VitessError{

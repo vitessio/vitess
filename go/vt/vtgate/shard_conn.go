@@ -17,9 +17,11 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var danglingTabletConn = stats.NewInt("DanglingTabletConn")
@@ -55,7 +57,10 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	getAddresses := func() (*pb.EndPoints, error) {
 		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
-			return nil, fmt.Errorf("endpoints fetch error: %v", err)
+			return nil, vterrors.FromError(
+				vtrpc.ErrorCode_INTERNAL_ERROR,
+				fmt.Errorf("endpoints fetch error: %v", err),
+			)
 		}
 		return endpoints, nil
 	}
@@ -289,10 +294,16 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 	}
 	if len(endPoints) == 0 {
 		// No valid endpoint
-		return nil, nil, false, fmt.Errorf("no valid endpoint")
+		return nil, nil, false, vterrors.FromError(
+			vtrpc.ErrorCode_INTERNAL_ERROR,
+			fmt.Errorf("no valid endpoint"),
+		)
 	}
 	if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
-		return nil, nil, true, fmt.Errorf("timeout when getting endpoints")
+		return nil, nil, true, vterrors.FromError(
+			vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+			fmt.Errorf("timeout when getting endpoints"),
+		)
 	}
 
 	// Iterate through all endpoints to create a connection
@@ -310,10 +321,19 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		}
 		// Markdown the endpoint if it failed to connect
 		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
-		allErrors.RecordError(fmt.Errorf("%v %+v", err, endPoint))
+		vtErr := vterrors.NewVitessError(
+			tabletconn.RecoverServerCode(err),
+			fmt.Sprintf("%v %+v", err, endPoint),
+			err,
+		)
+		allErrors.RecordError(vtErr)
 		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {
-			err = fmt.Errorf("timeout when connecting to %+v", endPoint)
+			err = vterrors.FromError(
+				vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+				fmt.Errorf("timeout when connecting to %+v", endPoint),
+			)
 			allErrors.RecordError(err)
+			// TODO(aaijazi): use a custom aggregation for this, not just concatenation.
 			return nil, nil, true, allErrors.Error()
 		}
 	}
