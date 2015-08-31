@@ -28,43 +28,33 @@ import (
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// Allowed state transitions:
-// StateNotServing -> StateInitializing -> StateServing/StateNotServing,
-// StateServing -> StateShuttingTx
-// StateShuttingTx -> StateShuttingQueries
-// StateShuttingQueries -> StateNotServing
 const (
-	// StateNotServing is the not serving state.
-	StateNotServing = iota
-	// StateInitializing is the initializing state.
-	// This is a transient state. It's only informational.
-	StateInitializing
-	// StateServing is the serving state.
-	// All operations are allowed.
+	// StateNotConnected is the state where tabletserver is not
+	// connected to an underlying mysql instance.
+	StateNotConnected = iota
+	// StateNotServing is the state where tabletserver is connected
+	// to an underlying mysql instance, but is not serving queries.
+	StateNotServing
+	// StateServing is where queries are allowed.
 	StateServing
-	// StateShuttingTx means that the query service is shutting
-	// down and has disallowed new transactions.
-	// New queries are still allowed as long as they
-	// are part of an existing transaction. We remain in this state
-	// until all existing transactions are completed.
-	StateShuttingTx
-	// StateShuttingQueries comes after StateShuttingTx.
-	// It means that the query service has disallowed
-	// new queries. We enter this state after all existing
-	// transactions have completed. We remain in this
-	// state until all existing queries are completed.
-	// The next state after this is StateNotServing.
-	StateShuttingQueries
+	// StateTransitioning is a transient state indicating that
+	// the tabletserver is tranisitioning to a new state.
+	StateTransitioning
+	// StateShuttingDown is a transient state indicating that
+	// the tabletserver is shutting down. This state differs from
+	// StateTransitioning because we allow queries for transactions
+	// that are still in flight.
+	StateShuttingDown
 )
 
 // stateName names every state. The number of elements must
-// match the number of states.
+// match the number of states. Names can overlap.
 var stateName = []string{
 	"NOT_SERVING",
-	"INITIALIZING",
+	"NOT_SERVING",
 	"SERVING",
-	"SHUTTING_TX",
-	"SHUTTING_QUERIES",
+	"NOT_SERVING",
+	"SHUTTING_DOWN",
 }
 
 var (
@@ -75,25 +65,31 @@ var (
 // SqlQuery implements the RPC interface for the query service.
 type SqlQuery struct {
 	config Config
-	// mu is used to access state. It's also used to ensure
-	// that state does not change out of StateServing or StateShuttingTx
-	// while we do requests.Add.
-	// At the time of shut down, once we change the state to
-	// StateShuttingQueries, no new requests will be honored.
-	// At this time, it's safe to perform requests.Wait outside
-	// the lock. Once the wait completes, we can transition
-	// to StateNotServing.
+	// mu is used to access state. The lock should only be held
+	// for short periods. For longer periods, you have to transition
+	// the state to a transient value and release the lock.
+	// Once the operation is complete, you can then transition
+	// the state back to a stable value.
+	// Only the function that moved the state to a transient one is
+	// allowed to change it to a stable value.
 	mu       sync.Mutex
 	state    int64
 	requests sync.WaitGroup
+
+	// The following variables should be initialized only once
+	// before starting the tabletserver. For backward compatibility,
+	// we temporarily allow them to be changed until the migration
+	// to the new API is complete.
+	target          *pb.Target
+	dbconfigs       *dbconfigs.DBConfigs
+	schemaOverrides []SchemaOverride
+	mysqld          mysqlctl.MysqlDaemon
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	qe          *QueryEngine
 	invalidator *RowcacheInvalidator
 	sessionID   int64
-	dbconfig    *dbconfigs.DBConfig
-	target      *pb.Target
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -108,6 +104,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{
 		config:          config,
 		streamHealthMap: make(map[int]chan<- *pb.StreamHealthResponse),
+		sessionID:       Rand(),
 	}
 	sq.qe = NewQueryEngine(config)
 	sq.invalidator = NewRowcacheInvalidator(config.StatsPrefix, sq.qe, config.EnablePublishStats)
@@ -138,61 +135,150 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state = state
 }
 
-// allowQueries starts the query service.
-// If the state is other than StateServing or StateNotServing, it fails.
-// If allowQuery succeeds, the resulting state is StateServing.
-// Otherwise, it reverts back to StateNotServing.
-// While allowQuery is running, the state is set to StateInitializing.
-// If waitForMysql is set to true, allowQueries will not return
-// until it's able to connect to mysql.
-// No other operations are allowed when allowQueries is running.
-func (sq *SqlQuery) allowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+// InitDBConfig inititalizes the db config variables for SqlQuery. You must call this function before
+// calling StartService or SetServingType.
+func (sq *SqlQuery) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
 	sq.mu.Lock()
-	if sq.state == StateServing {
-		sq.mu.Unlock()
-		return nil
+	defer sq.mu.Unlock()
+	if sq.state != StateNotConnected {
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %d", sq.state)
 	}
-	if sq.state != StateNotServing {
+	sq.target = target
+	sq.dbconfigs = dbconfigs
+	sq.schemaOverrides = schemaOverrides
+	sq.mysqld = mysqld
+	return nil
+}
+
+// StartService starts the query service. It returns an
+// error if the state is anything other than StateNotConnected.
+// If it succeeds, the resulting state is StateServing.
+// Otherwise, it reverts back to StateNotConnected.
+func (sq *SqlQuery) StartService(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) (err error) {
+	sq.mu.Lock()
+	if sq.state != StateNotConnected {
 		state := sq.state
 		sq.mu.Unlock()
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot start query service, current state: %s", state)
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot start tabletserver, current state: %d", state)
 	}
-	// state is StateNotServing
-	sq.setState(StateInitializing)
+
+	// Same as InitDBConfig
+	sq.target = target
+	sq.dbconfigs = dbconfigs
+	sq.schemaOverrides = schemaOverrides
+	sq.mysqld = mysqld
+
+	sq.setState(StateTransitioning)
 	sq.mu.Unlock()
 
-	c, err := dbconnpool.NewDBConnection(&dbconfigs.App.ConnParams, sq.qe.queryServiceStats.MySQLStats)
+	return sq.fullStart()
+}
+
+const (
+	actionNone = iota
+	actionFullStart
+	actionServeNewType
+	actionGracefulStop
+)
+
+// SetServingType changes the serving type of the tabletserver. It starts or
+// stops internal services as deemed necessary.
+func (sq *SqlQuery) SetServingType(tabletType topodata.TabletType, serving bool) error {
+	action, err := sq.decideAction(tabletType, serving)
 	if err != nil {
-		log.Infof("allowQueries failed: %v", err)
-		sq.mu.Lock()
-		sq.setState(StateNotServing)
-		sq.mu.Unlock()
 		return err
+	}
+	switch action {
+	case actionNone:
+		return nil
+	case actionFullStart:
+		return sq.fullStart()
+	case actionServeNewType:
+		return sq.serveNewType()
+	case actionGracefulStop:
+		sq.gracefulStop()
+		return nil
+	}
+	panic("unreachable")
+}
+
+func (sq *SqlQuery) decideAction(tabletType topodata.TabletType, serving bool) (action int, err error) {
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	if sq.target == nil {
+		return actionNone, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot SetServingType if existing target is nil")
+	}
+	sq.target.TabletType = tabletType
+	switch sq.state {
+	case StateNotConnected:
+		if serving {
+			sq.setState(StateTransitioning)
+			return actionFullStart, nil
+		}
+	case StateNotServing:
+		if serving {
+			sq.setState(StateTransitioning)
+			return actionServeNewType, nil
+		}
+	case StateServing:
+		if !serving {
+			sq.setState(StateShuttingDown)
+			return actionGracefulStop, nil
+		}
+		sq.setState(StateTransitioning)
+		return actionServeNewType, nil
+	case StateTransitioning, StateShuttingDown:
+		return actionNone, NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", sq.state)
+	default:
+		panic("uncreachable")
+	}
+	return actionNone, nil
+}
+
+func (sq *SqlQuery) fullStart() (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("Could not start tabletserver: %v", x)
+			sq.qe.Close()
+			sq.mu.Lock()
+			sq.setState(StateNotConnected)
+			sq.mu.Unlock()
+			err = x.(error)
+		}
+	}()
+
+	c, err := dbconnpool.NewDBConnection(&sq.dbconfigs.App.ConnParams, sq.qe.queryServiceStats.MySQLStats)
+	if err != nil {
+		panic(err)
 	}
 	c.Close()
 
+	sq.qe.Open(sq.dbconfigs, sq.schemaOverrides)
+	return sq.serveNewType()
+}
+
+func (sq *SqlQuery) serveNewType() (err error) {
 	defer func() {
-		state := int64(StateServing)
 		if x := recover(); x != nil {
-			err = x.(*TabletError)
-			log.Errorf("Could not start query service: %v", err)
+			log.Errorf("Could not start tabletserver: %v", x)
 			sq.qe.Close()
-			state = StateNotServing
+			sq.mu.Lock()
+			sq.setState(StateNotConnected)
+			sq.mu.Unlock()
+			err = x.(error)
 		}
-		sq.mu.Lock()
-		sq.setState(state)
-		sq.mu.Unlock()
 	}()
 
-	sq.qe.Open(dbconfigs, schemaOverrides)
-	// Start the invalidator after qe.
-	if needInvalidator(target, dbconfigs) {
-		sq.invalidator.Open(dbconfigs.App.DbName, mysqld)
+	if needInvalidator(sq.target, sq.dbconfigs) {
+		sq.invalidator.Open(sq.dbconfigs.App.DbName, sq.mysqld)
+	} else {
+		sq.invalidator.Close()
 	}
-	sq.dbconfig = &dbconfigs.App
-	sq.target = target
 	sq.sessionID = Rand()
 	log.Infof("Session id: %d", sq.sessionID)
+	sq.mu.Lock()
+	sq.setState(StateServing)
+	sq.mu.Unlock()
 	return nil
 }
 
@@ -207,20 +293,52 @@ func needInvalidator(target *pb.Target, dbconfigs *dbconfigs.DBConfigs) bool {
 	return target.TabletType != topodata.TabletType_MASTER
 }
 
-// disallowQueries shuts down the query service if it's StateServing.
-// It first transitions to StateShuttingTx, then waits for existing
-// transactions to complete. During this state, no new
-// transactions or queries are allowed. However, existing
-// transactions can still receive queries.
-// Then, it transitions to StateShuttingQueries to wait for existing
-// queries to complete. In this state no new requests are allowed.
-// Once all queries are done, it shuts down the query engine
-// and marks the state as StateNotServing.
-func (sq *SqlQuery) disallowQueries() {
-	// Setup a time bomb at 10x query timeout. If this function
-	// takes too long, it's better to crash.
+func (sq *SqlQuery) gracefulStop() {
+	defer close(sq.setTimeBomb())
+
+	sq.qe.WaitForTxEmpty()
+	sq.qe.streamQList.TerminateAll()
+	sq.requests.Wait()
+	sq.mu.Lock()
+	sq.setState(StateNotServing)
+	sq.mu.Unlock()
+}
+
+// StopService shuts down the tabletserver to the uninitialized state.
+// It first transitions to StateShuttingDown, then waits for existing
+// transactions to complete. Once all transactions are resolved, it shuts
+// down the rest of the services nad transitions to StateNotConnected.
+func (sq *SqlQuery) StopService() {
+	defer close(sq.setTimeBomb())
+
+	sq.mu.Lock()
+	if sq.state != StateServing && sq.state != StateNotServing {
+		sq.mu.Unlock()
+		return
+	}
+	sq.setState(StateShuttingDown)
+	sq.mu.Unlock()
+
+	// Same as gracefulStop.
+	log.Infof("Executing graceful transition to NotServing")
+	sq.qe.WaitForTxEmpty()
+	sq.qe.streamQList.TerminateAll()
+	sq.requests.Wait()
+
+	defer func() {
+		sq.mu.Lock()
+		sq.setState(StateNotConnected)
+		sq.mu.Unlock()
+	}()
+	log.Infof("Shutting down query service")
+
+	sq.invalidator.Close()
+	sq.qe.Close()
+	sq.sessionID = Rand()
+}
+
+func (sq *SqlQuery) setTimeBomb() chan struct{} {
 	done := make(chan struct{})
-	defer close(done)
 	go func() {
 		qt := sq.qe.queryTimeout.Get()
 		if qt == 0 {
@@ -230,53 +348,39 @@ func (sq *SqlQuery) disallowQueries() {
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
-			log.Fatal("disallowQueries took too long. Crashing")
+			log.Fatal("Shutdown took too long. Crashing")
 		case <-done:
 		}
 	}()
-
-	// StateServing -> StateShuttingTx
-	sq.mu.Lock()
-	if sq.state != StateServing {
-		sq.mu.Unlock()
-		return
-	}
-	sq.setState(StateShuttingTx)
-	sq.mu.Unlock()
-	sq.qe.WaitForTxEmpty()
-
-	// StateShuttingTx -> StateShuttingQueries
-	sq.mu.Lock()
-	sq.setState(StateShuttingQueries)
-	sq.mu.Unlock()
-	// Terminate all streaming queries
-	sq.qe.streamQList.TerminateAll()
-	// Wait for outstanding requests to finish.
-	sq.requests.Wait()
-
-	defer func() {
-		// StateShuttingQueries -> StateNotServing
-		sq.mu.Lock()
-		sq.setState(StateNotServing)
-		sq.mu.Unlock()
-	}()
-	log.Infof("Stopping query service. Session id: %d", sq.sessionID)
-	// Close invalidator before qe.
-	sq.invalidator.Close()
-	sq.qe.Close()
-	sq.sessionID = 0
-	sq.dbconfig = &dbconfigs.DBConfig{}
-	sq.target = nil
+	return done
 }
 
-// checkMySQL returns true if we can connect to MySQL.
-// The function returns false only if the query service is running
-// and we're unable to make a connection.
-func (sq *SqlQuery) checkMySQL() bool {
-	if err := sq.startRequest(nil, 0, true, false); err != nil {
+// CheckMySQL returns true if we can connect to MySQL.
+// The function returns false only if the query service is
+// in StateServing or StateNotServing.
+func (sq *SqlQuery) CheckMySQL() bool {
+	sq.mu.Lock()
+	switch sq.state {
+	case StateServing:
+		// Prevent transition out of this state by
+		// reserving a request.
+		sq.requests.Add(1)
+		defer sq.requests.Done()
+	case StateNotServing:
+		// Prevent transition out of this state by
+		// temporarily switching to StateTransitioning.
+		sq.setState(StateTransitioning)
+		defer func() {
+			sq.mu.Lock()
+			sq.setState(StateNotServing)
+			sq.mu.Unlock()
+		}()
+	default:
+		sq.mu.Unlock()
 		return true
 	}
-	defer sq.endRequest()
+	sq.mu.Unlock()
+
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Checking MySQL, unexpected error: %v", x)
@@ -287,16 +391,16 @@ func (sq *SqlQuery) checkMySQL() bool {
 
 // GetSessionId returns a sessionInfo response if the state is StateServing.
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if err := sq.startRequest(nil, 0, true, false); err != nil {
-		return err
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	if sq.state != StateServing {
+		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[sq.state])
 	}
-	defer sq.endRequest()
-
-	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
+	if sessionParams.Keyspace != sq.dbconfigs.App.Keyspace {
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Keyspace mismatch, expecting %v, received %v", sq.dbconfigs.App.Keyspace, sessionParams.Keyspace)
 	}
-	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfig.Shard) {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
+	if strings.ToLower(sessionParams.Shard) != strings.ToLower(sq.dbconfigs.App.Shard) {
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Shard mismatch, expecting %v, received %v", sq.dbconfigs.App.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = sq.sessionID
 	return nil
@@ -308,7 +412,7 @@ func (sq *SqlQuery) Begin(ctx context.Context, target *pb.Target, session *proto
 	logStats.OriginalSql = "begin"
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(target, session.SessionId, false, false); err != nil {
+	if err = sq.startRequest(target, session.SessionId, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.txPool.PoolTimeout())
@@ -330,7 +434,7 @@ func (sq *SqlQuery) Commit(ctx context.Context, target *pb.Target, session *prot
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = sq.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -351,7 +455,7 @@ func (sq *SqlQuery) Rollback(ctx context.Context, target *pb.Target, session *pr
 	logStats.TransactionID = session.TransactionId
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
 
-	if err = sq.startRequest(target, session.SessionId, false, true); err != nil {
+	if err = sq.startRequest(target, session.SessionId, true); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -421,7 +525,7 @@ func (sq *SqlQuery) Execute(ctx context.Context, target *pb.Target, query *proto
 	defer sq.handleExecError(query, &err, logStats)
 
 	allowShutdown := (query.TransactionId != 0)
-	if err = sq.startRequest(target, query.SessionId, false, allowShutdown); err != nil {
+	if err = sq.startRequest(target, query.SessionId, allowShutdown); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -463,7 +567,7 @@ func (sq *SqlQuery) StreamExecute(ctx context.Context, target *pb.Target, query 
 	logStats := newSqlQueryStats("StreamExecute", ctx)
 	defer sq.handleExecError(query, &err, logStats)
 
-	if err = sq.startRequest(target, query.SessionId, false, false); err != nil {
+	if err = sq.startRequest(target, query.SessionId, false); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -501,7 +605,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, target *pb.Target, queryLi
 	}
 
 	allowShutdown := (queryList.TransactionId != 0)
-	if err = sq.startRequest(target, queryList.SessionId, false, allowShutdown); err != nil {
+	if err = sq.startRequest(target, queryList.SessionId, allowShutdown); err != nil {
 		return err
 	}
 	defer sq.endRequest()
@@ -553,7 +657,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, target *pb.Target, queryLi
 func (sq *SqlQuery) SplitQuery(ctx context.Context, target *pb.Target, req *proto.SplitQueryRequest, reply *proto.SplitQueryResult) (err error) {
 	logStats := newSqlQueryStats("SplitQuery", ctx)
 	defer handleError(&err, logStats, sq.qe.queryServiceStats)
-	if err = sq.startRequest(target, req.SessionID, false, false); err != nil {
+	if err = sq.startRequest(target, req.SessionID, false); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, sq.qe.queryTimeout.Get())
@@ -645,24 +749,20 @@ func (sq *SqlQuery) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats)
 // startRequest validates the current state and sessionID and registers
 // the request (a waitgroup) as started. Every startRequest requires one
 // and only one corresponding endRequest. When the service shuts down,
-// disallowQueries will wait on this waitgroup to ensure that there are
+// StopService will wait on this waitgroup to ensure that there are
 // no requests in flight.
-// ignoreSession is passed in as true for valid internal requests that don't have a session id.
-func (sq *SqlQuery) startRequest(target *pb.Target, sessionID int64, ignoreSession, allowShutdown bool) (err error) {
+func (sq *SqlQuery) startRequest(target *pb.Target, sessionID int64, allowShutdown bool) (err error) {
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
 	if sq.state == StateServing {
 		goto verifySession
 	}
-	if allowShutdown && sq.state == StateShuttingTx {
+	if allowShutdown && sq.state == StateShuttingDown {
 		goto verifySession
 	}
 	return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[sq.state])
 
 verifySession:
-	if ignoreSession {
-		goto ok
-	}
 	if target != nil && sq.target != nil {
 		// a valid target can be used instead of a valid session
 		if target.Keyspace != sq.target.Keyspace {
@@ -676,7 +776,7 @@ verifySession:
 		}
 		goto ok
 	}
-	if sessionID == 0 || sessionID != sq.sessionID {
+	if sessionID != sq.sessionID {
 		return NewTabletError(ErrRetry, vtrpc.ErrorCode_QUERY_NOT_SERVED, "Invalid session Id %v", sessionID)
 	}
 

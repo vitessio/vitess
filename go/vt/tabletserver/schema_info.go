@@ -254,6 +254,24 @@ func (si *SchemaInfo) Close() {
 	si.queries.Clear()
 }
 
+// ClearRowcache invalidates all items in the rowcache.
+func (si *SchemaInfo) ClearRowcache() error {
+	if si.cachePool.IsClosed() {
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
+	}
+	ctx := context.Background()
+	conn := si.cachePool.Get(ctx)
+	defer func() { si.cachePool.Put(conn) }()
+
+	err := conn.FlushAll()
+	if err != nil {
+		conn.Close()
+		conn = nil
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err)
+	}
+	return nil
+}
+
 // Reload reloads the schema info from the db. Any tables that have changed
 // since the last load are updated.
 func (si *SchemaInfo) Reload() {

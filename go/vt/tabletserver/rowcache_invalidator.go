@@ -80,6 +80,10 @@ func NewRowcacheInvalidator(statsPrefix string, qe *QueryEngine, enablePublishSt
 
 // Open runs the invalidation loop.
 func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon) {
+	// Perform an early check to see if we're already running.
+	if rci.svm.State() == sync2.SERVICE_RUNNING {
+		return
+	}
 	rp, err := mysqld.MasterPosition()
 	if err != nil {
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: cannot determine replication position: %v", err))
@@ -87,6 +91,11 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon)
 	if mysqld.Cnf().BinLogPath == "" {
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
 	}
+	err = rci.qe.schemaInfo.ClearRowcache()
+	if err != nil {
+		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
+	}
+
 	rci.dbname = dbname
 	rci.mysqld = mysqld
 	rci.SetPosition(rp)
