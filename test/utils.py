@@ -21,7 +21,8 @@ import environment
 from vtctl import vtctl_client
 from mysql_flavor import set_mysql_flavor
 from mysql_flavor import mysql_flavor
-from protocols_flavor import set_protocols_flavor, protocols_flavor
+from protocols_flavor import set_protocols_flavor
+from protocols_flavor import protocols_flavor
 from topo_flavor.server import set_topo_server_flavor
 
 options = None
@@ -41,6 +42,7 @@ environment.setup()
 
 
 class LoggingStream(object):
+
   def __init__(self):
     self.line = ''
 
@@ -102,7 +104,7 @@ def main(mod=None, test_options=None):
     test_options: a function which adds OptionParser options that are specific
       to a test file.
   """
-  if mod == None:
+  if mod is None:
     mod = sys.modules['__main__']
 
   global options
@@ -180,6 +182,8 @@ def pause(prompt):
 # sub-process management
 pid_map = {}
 already_killed = []
+
+
 def _add_proc(proc):
   pid_map[proc.pid] = proc
   with open(environment.tmproot+'/test-pids', 'a') as f:
@@ -273,7 +277,7 @@ def run_bg(cmd, **kargs):
     kargs['env'] = os.environ.copy()
     if kargs['extra_env']:
       kargs['env'].update(kargs['extra_env'])
-    del(kargs['extra_env'])
+    del kargs['extra_env']
   if isinstance(cmd, str):
     args = shlex.split(cmd)
   else:
@@ -307,12 +311,12 @@ def validate_topology(ping_tablets=False):
 
 
 def zk_ls(path):
-  out, err = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
+  out, _ = run(environment.binary_argstr('zk')+' ls '+path, trap_output=True)
   return sorted(out.splitlines())
 
 
 def zk_cat(path):
-  out, err = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
+  out, _ = run(environment.binary_argstr('zk')+' cat '+path, trap_output=True)
   return out
 
 
@@ -340,9 +344,9 @@ def wait_step(msg, timeout, sleep_time=1.0):
 
 # vars helpers
 def get_vars(port):
-  """
-  Returns the dict for vars, from a vtxxx process, or None
-  if we can't get them.
+  """Returns the dict for vars from a vtxxx process.
+
+  Returns None if we can't get them.
   """
   try:
     url = 'http://localhost:%d/debug/vars' % int(port)
@@ -372,7 +376,7 @@ def wait_for_vars(name, port, var=None):
 def poll_for_vars(
     name, port, condition_msg, timeout=60.0, condition_fn=None,
     require_vars=False):
-  """Polls for debug variables to exist, or match specific conditions, within a timeout.
+  """Polls for debug variables to exist or match specific conditions.
 
   This function polls in a tight loop, with no sleeps. This is useful for
   variables that are expected to be short-lived (e.g., a 'Done' state
@@ -403,11 +407,15 @@ def poll_for_vars(
   start_time = time.time()
   while True:
     if (time.time() - start_time) >= timeout:
-      raise TestError('Timed out polling for vars from %s; condition "%s" not met' % (name, condition_msg))
+      raise TestError(
+          'Timed out polling for vars from %s; condition "%s" not met' %
+          (name, condition_msg))
     _vars = get_vars(port)
     if _vars is None:
       if require_vars:
-        raise TestError('Expected vars to exist on %s, but they do not; process probably exited earlier than expected.' % (name,))
+        raise TestError(
+            'Expected vars to exist on %s, but they do not; '
+            'process probably exited earlier than expected.' % (name,))
       continue
     if condition_fn is None:
       return _vars
@@ -448,11 +456,11 @@ def wait_for_replication_pos(tablet_a, tablet_b, timeout=60.0):
     if mysql_flavor().position_at_least(replication_pos_b, replication_pos_a):
       break
     timeout = wait_step(
-      "%s's replication position to catch up %s's; "
-      'currently at: %s, waiting to catch up to: %s' % (
-          tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b,
-          replication_pos_a),
-      timeout, sleep_time=0.1)
+        "%s's replication position to catch up %s's; "
+        'currently at: %s, waiting to catch up to: %s' % (
+            tablet_b.tablet_alias, tablet_a.tablet_alias, replication_pos_b,
+            replication_pos_a),
+        timeout, sleep_time=0.1)
 
 # Save the first running instance of vtgate. It is saved when 'start'
 # is called, and cleared when kill is called.
@@ -460,8 +468,7 @@ vtgate = None
 
 
 class VtGate(object):
-  """VtGate object represents a vtgate process.
-  """
+  """VtGate object represents a vtgate process."""
 
   def __init__(self, port=None):
     """Creates the Vtgate instance and reserve the ports if necessary.
@@ -519,13 +526,16 @@ class VtGate(object):
       vtgate = self
 
   def kill(self):
-    """Terminates the vtgate process, and waits for it to exit.  If this
-    process is the one saved in the global vtgate variable, clears it.
+    """Terminates the vtgate process, and waits for it to exit.
+
+    If this process is the one saved in the global vtgate variable,
+    clears it.
 
     Note if the test is using just one global vtgate process, and
     starting it with the test, and killing it at the end of the test,
     there is no need to call this kill() method,
     utils.kill_sub_processes() will do a good enough job.
+
     """
     if self.proc is None:
       return
@@ -538,36 +548,30 @@ class VtGate(object):
       vtgate = None
 
   def addr(self):
-    """addr returns the address of the vtgate process.
-    """
+    """Returns the address of the vtgate process."""
     return 'localhost:%d' % self.port
 
   def secure_addr(self):
-    """secure_addr returns the secure address of the vtgate process.
-    """
+    """Returns the secure address of the vtgate process."""
     return 'localhost:%d' % self.secure_port
 
   def rpc_endpoint(self):
-    """rpc_endpoint returns the endpoint to use for RPCs.
-    """
+    """Returns the endpoint to use for RPCs."""
     if protocols_flavor().vtgate_protocol() == 'grpc':
       return 'localhost:%d' % self.grpc_port
     return self.addr()
 
   def get_status(self):
-    """get_status returns the status page for this process.
-    """
+    """Returns the status page for this process."""
     return get_status(self.port)
 
   def get_vars(self):
-    """get_vars returns the vars for this process.
-    """
+    """Returns the vars for this process."""
     return get_vars(self.port)
 
   def vtclient(self, sql, tablet_type='master', bindvars=None,
                streaming=False, verbose=False, raise_on_error=False):
-    """vtclient uses the vtclient binary to send a query to vtgate.
-    """
+    """Uses the vtclient binary to send a query to vtgate."""
     args = environment.binary_args('vtclient') + [
         '-server', self.rpc_endpoint(),
         '-tablet_type', tablet_type,
@@ -585,8 +589,7 @@ class VtGate(object):
     return out, err
 
   def execute(self, sql, tablet_type='master', bindvars=None):
-    """execute uses 'vtctl VtGateExecute' to execute a command.
-    """
+    """Uses 'vtctl VtGateExecute' to execute a command."""
     args = ['VtGateExecute',
             '-server', self.rpc_endpoint(),
             '-tablet_type', tablet_type]
@@ -597,8 +600,7 @@ class VtGate(object):
 
   def execute_shard(self, sql, keyspace, shards, tablet_type='master',
                     bindvars=None):
-    """execute_shard uses 'vtctl VtGateExecuteShard' to execute a command.
-    """
+    """Uses 'vtctl VtGateExecuteShard' to execute a command."""
     args = ['VtGateExecuteShard',
             '-server', self.rpc_endpoint(),
             '-keyspace', keyspace,
@@ -610,9 +612,7 @@ class VtGate(object):
     return run_vtctl_json(args)
 
   def split_query(self, sql, keyspace, split_count, bindvars=None):
-    """split_query uses 'vtctl VtGateSplitQuery' to cut a query up
-    in chunks.
-    """
+    """Uses 'vtctl VtGateSplitQuery' to cut a query up in chunks."""
     args = ['VtGateSplitQuery',
             '-server', self.rpc_endpoint(),
             '-keyspace', keyspace,
@@ -756,21 +756,29 @@ def _get_vtworker_cmd(clargs, auto_log=False):
 def run_vtworker_client(args, rpc_port):
   """Runs vtworkerclient to execute a command on a remote vtworker.
 
+  Args:
+    args: Atr string to send to binary.
+    rpc_port: Port number.
+
   Returns:
-    out  - stdout of the vtworkerclient invocation
-    err  - stderr of the vtworkerclient invocation
+    out: stdout of the vtworkerclient invocation
+    err: stderr of the vtworkerclient invocation
   """
-  out, err = run(environment.binary_args('vtworkerclient') +
-                 ['-vtworker_client_protocol',
-                  protocols_flavor().vtworker_client_protocol(),
-                  '-server', 'localhost:%d' % rpc_port,
-                  '-stderrthreshold', get_log_level()] + args,
-                 trap_output=True)
+  out, err = run(
+      environment.binary_args('vtworkerclient') +
+      ['-vtworker_client_protocol',
+       protocols_flavor().vtworker_client_protocol(),
+       '-server', 'localhost:%d' % rpc_port,
+       '-stderrthreshold', get_log_level()] + args,
+      trap_output=True)
   return out, err
 
 
 def run_automation_server(auto_log=False):
   """Starts a background automation_server process.
+
+  Args:
+    auto_log: True to log.
 
   Returns:
     rpc_port - int with the port number of the RPC interface
@@ -918,7 +926,8 @@ def check_tablet_query_service(
     expected_state = 'SERVING'
   else:
     expected_state = 'NOT_SERVING'
-  testcase.assertEqual(tablet_vars['TabletStateName'], expected_state,
+  testcase.assertEqual(
+      tablet_vars['TabletStateName'], expected_state,
       'tablet %s (%s/%s, %s) is not in the right serving state: got %s'
       ' expected %s' % (tablet.tablet_alias, tablet.keyspace, tablet.shard,
                         tablet.tablet_type,
@@ -1087,9 +1096,10 @@ class Vtctld(object):
       log_level = 'ERROR'
 
     protocol, endpoint = self.rpc_endpoint()
-    out, err = run(environment.binary_args('vtctlclient') +
-                   ['-vtctl_client_protocol', protocol,
-                    '-server', endpoint,
-                    '-stderrthreshold', log_level] + args,
-                   trap_output=True)
+    out, _ = run(
+        environment.binary_args('vtctlclient') +
+        ['-vtctl_client_protocol', protocol,
+         '-server', endpoint,
+         '-stderrthreshold', log_level] + args,
+        trap_output=True)
     return out

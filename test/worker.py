@@ -5,17 +5,18 @@
 # be found in the LICENSE file.
 """Tests the robustness and resiliency of vtworkers."""
 
-import logging
-import unittest
+from collections import namedtuple
 import urllib
 import urllib2
-from collections import namedtuple
+
+import logging
+import unittest
 
 from vtdb import keyrange_constants
 
 import environment
-import utils
 import tablet
+import utils
 
 
 KEYSPACE_ID_TYPE = keyrange_constants.KIT_UINT64
@@ -67,7 +68,7 @@ shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 shard_1_rdonly1 = tablet.Tablet()
 
-shard_tablets = ShardTablets(shard_master, [shard_replica], [shard_rdonly1])
+all_shard_tablets = ShardTablets(shard_master, [shard_replica], [shard_rdonly1])
 shard_0_tablets = ShardTablets(
     shard_0_master, [shard_0_replica], [shard_0_rdonly1])
 shard_1_tablets = ShardTablets(
@@ -76,8 +77,9 @@ shard_1_tablets = ShardTablets(
 
 def init_keyspace():
   """Creates a `test_keyspace` keyspace with a sharding key."""
-  utils.run_vtctl(['CreateKeyspace', '-sharding_column_name', 'keyspace_id',
-    '-sharding_column_type', KEYSPACE_ID_TYPE, 'test_keyspace'])
+  utils.run_vtctl(
+      ['CreateKeyspace', '-sharding_column_name', 'keyspace_id',
+       '-sharding_column_type', KEYSPACE_ID_TYPE, 'test_keyspace'])
 
 
 def setUpModule():
@@ -153,9 +155,9 @@ class TestBaseSplitClone(unittest.TestCase):
     Args:
       shard_name: the name of the shard to start tablets in
       shard_tablets: an instance of ShardTablets for the given shard
-      wait_state: string, the vttablet state that we should wait for
       create_db: boolean, True iff we should create a db on the tablets
       create_table: boolean, True iff we should create a table on the tablets
+      wait_state: string, the vttablet state that we should wait for
     """
     # If requested, create databases.
     for tablet in shard_tablets.all_tablets:
@@ -207,13 +209,13 @@ class TestBaseSplitClone(unittest.TestCase):
       tablet.wait_for_vttablet_state(wait_state)
 
     create_table_sql = (
-      'create table worker_test('
-      'id bigint unsigned,'
-      'msg varchar(64),'
-      'keyspace_id bigint(20) unsigned not null,'
-      'primary key (id),'
-      'index by_msg (msg)'
-      ') Engine=InnoDB'
+        'create table worker_test('
+        'id bigint unsigned,'
+        'msg varchar(64),'
+        'keyspace_id bigint(20) unsigned not null,'
+        'primary key (id),'
+        'index by_msg (msg)'
+        ') Engine=InnoDB'
     )
 
     if create_table:
@@ -272,11 +274,12 @@ class TestBaseSplitClone(unittest.TestCase):
     shard_width = keyspace_id_range / num_shards
     shard_offsets = [i * shard_width for i in xrange(num_shards)]
     for shard_num in xrange(num_shards):
-        self._insert_values(tablet,
-                            shard_offsets[shard_num] + offset,
-                            'msg-shard-%d' % shard_num,
-                            shard_offsets[shard_num],
-                            num_values)
+      self._insert_values(
+          tablet,
+          shard_offsets[shard_num] + offset,
+          'msg-shard-%d' % shard_num,
+          shard_offsets[shard_num],
+          num_values)
 
   def assert_shard_data_equal(
       self, shard_num, source_tablet, destination_tablet):
@@ -313,18 +316,22 @@ class TestBaseSplitClone(unittest.TestCase):
       source_tablets: ShardTablets instance for the source shard
       destination_tablets: ShardTablets instance for the destination shard
     """
+    _ = source_tablets, destination_tablets
     logging.debug('Running vtworker SplitDiff for %s', keyspace_shard)
-    stdout, stderr = utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff',
-      keyspace_shard], auto_log=True)
+    _, _ = utils.run_vtworker(
+        ['-cell', 'test_nj', 'SplitDiff',
+         keyspace_shard], auto_log=True)
 
   def setUp(self):
     """Creates shards, starts the tablets, and inserts some data."""
-    self.run_shard_tablets('0', shard_tablets)
+    self.run_shard_tablets('0', all_shard_tablets)
     # create the split shards
-    self.run_shard_tablets('-80', shard_0_tablets, create_db=False,
-      create_table=False, wait_state='NOT_SERVING')
-    self.run_shard_tablets('80-', shard_1_tablets, create_db=False,
-      create_table=False, wait_state='NOT_SERVING')
+    self.run_shard_tablets(
+        '-80', shard_0_tablets, create_db=False,
+        create_table=False, wait_state='NOT_SERVING')
+    self.run_shard_tablets(
+        '80-', shard_1_tablets, create_db=False,
+        create_table=False, wait_state='NOT_SERVING')
 
     logging.debug(
         'Start inserting initial data: %s rows', utils.options.num_insert_rows)
@@ -340,7 +347,7 @@ class TestBaseSplitClone(unittest.TestCase):
     When benchmarked, this seemed to take around 30% of the time of
     (setupModule + tearDownModule).
     """
-    for shard_tablet in [shard_tablets, shard_0_tablets, shard_1_tablets]:
+    for shard_tablet in [all_shard_tablets, shard_0_tablets, shard_1_tablets]:
       for tablet in shard_tablet.all_tablets:
         tablet.reset_replication()
         tablet.clean_dbs()
@@ -460,8 +467,8 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
     utils.wait_procs([worker_proc])
 
     # Make sure that everything is caught up to the same replication point
-    self.run_split_diff('test_keyspace/-80', shard_tablets, shard_0_tablets)
-    self.run_split_diff('test_keyspace/80-', shard_tablets, shard_1_tablets)
+    self.run_split_diff('test_keyspace/-80', all_shard_tablets, shard_0_tablets)
+    self.run_split_diff('test_keyspace/80-', all_shard_tablets, shard_1_tablets)
 
     self.assert_shard_data_equal(0, shard_master, shard_0_tablets.replica)
     self.assert_shard_data_equal(1, shard_master, shard_1_tablets.replica)

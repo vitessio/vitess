@@ -14,13 +14,13 @@ import time
 import urllib2
 import uuid
 
-from vtdb import tablet as tablet_conn
 from vtdb import cursor
 from vtdb import dbexceptions
+from vtdb import tablet as tablet_conn
 
-import framework
 import cases_framework
 import environment
+import framework
 import tablet
 import utils
 
@@ -34,7 +34,7 @@ class TestEnv(object):
   port = 0
   querylog = None
 
-  txlog_file = os.path.join(environment.vtlogroot, "txlog")
+  txlog_file = os.path.join(environment.vtlogroot, 'txlog')
 
   tablet = tablet.Tablet(62344)
   vttop = environment.vttop
@@ -51,10 +51,12 @@ class TestEnv(object):
 
   @property
   def address(self):
-    return "localhost:%s" % self.port
+    return 'localhost:%s' % self.port
 
   def connect(self):
-    c = tablet_conn.connect(self.address, '', 'test_keyspace', '0', 2, user='dev', password='vtpass', caller_id='dev')
+    c = tablet_conn.connect(
+        self.address, '', 'test_keyspace', '0', 2, user='dev',
+        password='vtpass', caller_id='dev')
     c.max_attempts = 1
     return c
 
@@ -70,7 +72,7 @@ class TestEnv(object):
     return curs
 
   def url(self, path):
-    return "http://localhost:%s/" % (self.port) + path
+    return 'http://localhost:%s/' % (self.port) + path
 
   def http_get(self, path, use_json=True):
     data = urllib2.urlopen(self.url(path)).read()
@@ -79,16 +81,16 @@ class TestEnv(object):
     return data
 
   def debug_vars(self):
-    return framework.MultiDict(self.http_get("/debug/vars"))
+    return framework.MultiDict(self.http_get('/debug/vars'))
 
   def table_stats(self):
-    return framework.MultiDict(self.http_get("/debug/table_stats"))
+    return framework.MultiDict(self.http_get('/debug/table_stats'))
 
   def query_stats(self):
-    return self.http_get("/debug/query_stats")
+    return self.http_get('/debug/query_stats')
 
   def health(self):
-    return self.http_get("/debug/health", use_json=False)
+    return self.http_get('/debug/health', use_json=False)
 
   def check_full_streamlog(self, fi):
     # FIXME(szopa): better test?
@@ -99,7 +101,7 @@ class TestEnv(object):
     return 0
 
   def create_customrules(self, filename):
-    with open(filename, "w") as f:
+    with open(filename, 'w') as f:
       f.write("""[{
         "Name": "r1",
         "Description": "disallow bindvar 'asdfg'",
@@ -109,14 +111,18 @@ class TestEnv(object):
           "Operator": "NOOP"
         }]
       }]""")
-    if self.env == "vttablet":
+    if self.env == 'vttablet':
       if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(environment.binary_argstr('zk') + ' touch -p /zk/test_ca/config/customrules/testrules')
-        utils.run(environment.binary_argstr('zk') + ' cp ' + filename + ' /zk/test_ca/config/customrules/testrules')
+        utils.run(
+            environment.binary_argstr('zk') +
+            ' touch -p /zk/test_ca/config/customrules/testrules')
+        utils.run(
+            environment.binary_argstr('zk') + ' cp ' + filename +
+            ' /zk/test_ca/config/customrules/testrules')
 
   def change_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
-    with open(customrules, "w") as f:
+    with open(customrules, 'w') as f:
       f.write("""[{
         "Name": "r2",
         "Description": "disallow bindvar 'gfdsa'",
@@ -126,19 +132,23 @@ class TestEnv(object):
           "Operator": "NOOP"
         }]
       }]""")
-    if self.env == "vttablet":
+    if self.env == 'vttablet':
       if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+        utils.run(
+            environment.binary_argstr('zk') + ' cp ' + customrules +
+            ' /zk/test_ca/config/customrules/testrules')
 
   def restore_customrules(self):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     self.create_customrules(customrules)
-    if self.env == "vttablet":
+    if self.env == 'vttablet':
       if environment.topo_server().flavor() == 'zookeeper':
-        utils.run(environment.binary_argstr('zk') + ' cp ' + customrules + ' /zk/test_ca/config/customrules/testrules')
+        utils.run(
+            environment.binary_argstr('zk') + ' cp ' + customrules +
+            ' /zk/test_ca/config/customrules/testrules')
 
   def create_schema_override(self, filename):
-    with open(filename, "w") as f:
+    with open(filename, 'w') as f:
       f.write("""[{
         "Name": "vtocc_view",
         "PKColumns": ["key2"],
@@ -172,28 +182,30 @@ class TestEnv(object):
       try:
         failures = case.run(curs, self)
       except Exception:
-        print "Exception in", case
+        print 'Exception in', case
         raise
       error_count += len(failures)
       for fail in failures:
-        print "FAIL:", case, fail
+        print 'FAIL:', case, fail
     error_count += self.check_full_streamlog(open(self.querylog.path_full, 'r'))
     return error_count
 
   def setUp(self):
     utils.wait_procs([self.tablet.init_mysql()])
-    self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
+    self.tablet.mquery(
+        '', ['create database vt_test_keyspace', 'set global read_only = off'])
 
     self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')
-    with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
+    with open(
+        os.path.join(self.vttop, 'test', 'test_data', 'test_schema.sql')) as f:
       self.clean_sqls = []
       self.init_sqls = []
       clean_mode = False
       for line in f:
         line = line.rstrip()
-        if line == "# clean":
+        if line == '# clean':
           clean_mode = True
-        if line=='' or line.startswith("#"):
+        if line=='' or line.startswith('#'):
           continue
         if clean_mode:
           self.clean_sqls.append(line)
@@ -208,7 +220,8 @@ class TestEnv(object):
     customrules = os.path.join(environment.tmproot, 'customrules.json')
     schema_override = os.path.join(environment.tmproot, 'schema_override.json')
     self.create_schema_override(schema_override)
-    table_acl_config = os.path.join(environment.vttop, 'test', 'test_data', 'table_acl_config.json')
+    table_acl_config = os.path.join(
+        environment.vttop, 'test', 'test_data', 'table_acl_config.json')
 
     if self.env == 'vttablet':
       environment.topo_server().setup()
@@ -217,34 +230,38 @@ class TestEnv(object):
       self.tablet.init_tablet('master', 'test_keyspace', '0')
       if environment.topo_server().flavor() == 'zookeeper':
         self.tablet.start_vttablet(
-                memcache=self.memcache,
-                zkcustomrules='/zk/test_ca/config/customrules/testrules',
-                schema_override=schema_override,
-                table_acl_config=table_acl_config,
-                auth=True,
+            memcache=self.memcache,
+            zkcustomrules='/zk/test_ca/config/customrules/testrules',
+            schema_override=schema_override,
+            table_acl_config=table_acl_config,
+            auth=True,
         )
       else:
         self.tablet.start_vttablet(
-                memcache=self.memcache,
-                filecustomrules=customrules,
-                schema_override=schema_override,
-                table_acl_config=table_acl_config,
-                auth=True,
+            memcache=self.memcache,
+            filecustomrules=customrules,
+            schema_override=schema_override,
+            table_acl_config=table_acl_config,
+            auth=True,
         )
     else:
       self.create_customrules(customrules);
       self.tablet.start_vtocc(
-              memcache=self.memcache,
-              filecustomrules=customrules,
-              schema_override=schema_override,
-              table_acl_config=table_acl_config,
-              auth=True,
-              keyspace="test_keyspace", shard="0",
+          memcache=self.memcache,
+          filecustomrules=customrules,
+          schema_override=schema_override,
+          table_acl_config=table_acl_config,
+          auth=True,
+          keyspace='test_keyspace', shard='0',
       )
     self.conn = self.connect()
-    self.txlogger = utils.curl(self.url('/debug/txlog'), background=True, stdout=open(self.txlog_file, 'w'))
+    self.txlogger = utils.curl(
+        self.url('/debug/txlog'), background=True,
+        stdout=open(self.txlog_file, 'w'))
     self.txlog = framework.Tailer(self.txlog_file, flush=self.tablet.flush)
-    self.log = framework.Tailer(os.path.join(environment.vtlogroot, '%s.INFO' % self.env), flush=self.tablet.flush)
+    self.log = framework.Tailer(
+        os.path.join(environment.vtlogroot, '%s.INFO' % self.env),
+        flush=self.tablet.flush)
     self.querylog = Querylog(self)
 
   def tearDown(self):
@@ -263,7 +280,7 @@ class TestEnv(object):
     except:
       # FIXME: remove
       pass
-    if getattr(self, "txlogger", None):
+    if getattr(self, 'txlogger', None):
       self.txlogger.terminate()
     if self.env == 'vttablet':
       environment.topo_server().teardown()
@@ -277,8 +294,12 @@ class Querylog(object):
   def __init__(self, env):
     self.env = env
     self.id = str(uuid.uuid4())
-    self.curl = utils.curl(self.env.url('/debug/querylog'), background=True, stdout=open(self.path, 'w'))
-    self.curl_full = utils.curl(self.env.url('/debug/querylog?full=true'), background=True, stdout=open(self.path_full, 'w'))
+    self.curl = utils.curl(
+        self.env.url('/debug/querylog'), background=True,
+        stdout=open(self.path, 'w'))
+    self.curl_full = utils.curl(
+        self.env.url('/debug/querylog?full=true'), background=True,
+        stdout=open(self.path_full, 'w'))
     self.tailer = framework.Tailer(self.path, sleep=0.02)
     self.tailer_full = framework.Tailer(self.path_full, sleep=0.02)
 

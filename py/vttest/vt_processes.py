@@ -63,7 +63,8 @@ class VtProcess(object):
                                       stderr=subprocess.STDOUT)
       timeout = time.time() + 20.0
       while time.time() < timeout:
-        if environment.process_is_healthy(self.name, self.addr()) and self.get_vars():
+        if environment.process_is_healthy(
+            self.name, self.addr()) and self.get_vars():
           logging.info('%s started.', self.name)
           return
         elif self.process.poll() is not None:

@@ -45,7 +45,7 @@ class Log(object):
        self.cache_invalidations,
        self.error) = line.strip().split('\t')
     except ValueError:
-      print "Wrong looking line: %r" % line
+      print 'Wrong looking line: %r' % line
       raise
 
   def check(self, case):
@@ -68,7 +68,7 @@ class Log(object):
     return failures
 
   def fail(self, reason, should, is_):
-    return "FAIL: %s: %r != %r" % (reason, should, is_)
+    return 'FAIL: %s: %r != %r' % (reason, should, is_)
 
   def check_original_sql(self, case):
     # The following is necessary because Python and Go use different
@@ -81,27 +81,33 @@ class Log(object):
 
   def check_rowcount(self, case):
     if case.rowcount is not None and int(self.rowcount) != case.rowcount:
-      return self.fail("Bad rowcount", case.rowcount, self.rowcount)
+      return self.fail('Bad rowcount', case.rowcount, self.rowcount)
 
   def check_cache_hits(self, case):
     if case.cache_hits is not None and int(self.cache_hits) != case.cache_hits:
-      return self.fail("Bad Cache Hits", case.cache_hits, self.cache_hits)
+      return self.fail('Bad Cache Hits', case.cache_hits, self.cache_hits)
 
   def check_cache_absent(self, case):
-    if case.cache_absent is not None and int(self.cache_absent) != case.cache_absent:
-      return self.fail("Bad Cache Absent", case.cache_absent, self.cache_absent)
+    if (case.cache_absent is not None and
+        int(self.cache_absent) != case.cache_absent):
+      return self.fail('Bad Cache Absent', case.cache_absent, self.cache_absent)
 
   def check_cache_misses(self, case):
-    if case.cache_misses is not None and int(self.cache_misses) != case.cache_misses:
-      return self.fail("Bad Cache Misses", case.cache_misses, self.cache_misses)
+    if (case.cache_misses is not None and
+        int(self.cache_misses) != case.cache_misses):
+      return self.fail(
+          'Bad Cache Misses', case.cache_misses, self.cache_misses)
 
   def check_cache_invalidations(self, case):
-    if case.cache_invalidations is not None and int(self.cache_invalidations) != case.cache_invalidations:
-      return self.fail("Bad Cache Invalidations", case.cache_invalidations, self.cache_invalidations)
+    if (case.cache_invalidations is not None and
+        int(self.cache_invalidations) != case.cache_invalidations):
+      return self.fail(
+          'Bad Cache Invalidations', case.cache_invalidations,
+          self.cache_invalidations)
 
   def check_query_plan(self, case):
     if case.query_plan is not None and case.query_plan != self.plan_type:
-      return self.fail("Bad query plan", case.query_plan, self.plan_type)
+      return self.fail('Bad query plan', case.query_plan, self.plan_type)
 
   def check_rewritten_sql(self, case):
     if case.rewritten is None:
@@ -112,19 +118,23 @@ class Log(object):
       if q and q != '*/':
         queries.append(q)
     if case.rewritten != queries:
-      return self.fail("Bad rewritten SQL", case.rewritten, queries)
+      return self.fail('Bad rewritten SQL', case.rewritten, queries)
 
   def check_number_of_queries(self, case):
-    if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):
-      return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
+    if (case.rewritten is not None and
+        int(self.number_of_queries) != len(case.rewritten)):
+      return self.fail(
+          'wrong number of queries', len(case.rewritten),
+          int(self.number_of_queries))
 
 
 class Case(object):
 
-  def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
-               rowcount=None, cache_table=None, query_plan=None, cache_hits=None,
-               cache_misses=None, cache_absent=None, cache_invalidations=None,
-               remote_address="[::1]"):
+  def __init__(
+      self, sql, bindings=None, result=None, rewritten=None, doc='',
+      rowcount=None, cache_table=None, query_plan=None, cache_hits=None,
+      cache_misses=None, cache_absent=None, cache_invalidations=None,
+      remote_address='[::1]'):
     # For all cache_* parameters, a number n means "check this value
     # is exactly n," while None means "I am not interested in this
     # value, leave it alone."
@@ -138,7 +148,7 @@ class Case(object):
     self.doc = doc
     self.query_plan = query_plan
     self.cache_table = cache_table
-    self.cache_hits= cache_hits
+    self.cache_hits = cache_hits
     self.cache_misses = cache_misses
     self.cache_absent = cache_absent
     self.cache_invalidations = cache_invalidations
@@ -163,7 +173,7 @@ class Case(object):
     if self.result is not None:
       result = list(cursor)
       if self.result != result:
-        failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
+        failures.append('%r:\n%s !=\n%s' % (self.sql, self.result, result))
     for i in range(30):
       lines = env.querylog.tailer.readLines()
       if not lines:
@@ -178,16 +188,26 @@ class Case(object):
     if self.is_testing_cache:
       tdelta = self.table_stats_delta(tstart, env)
       if self.cache_hits is not None and tdelta['Hits'] != self.cache_hits:
-        failures.append("Bad Cache Hits: %s != %s" % (self.cache_hits, tdelta['Hits']))
+        failures.append(
+            'Bad Cache Hits: %s != %s' % (self.cache_hits, tdelta['Hits']))
 
-      if self.cache_absent is not None and tdelta['Absent'] != self.cache_absent:
-        failures.append("Bad Cache Absent: %s != %s" % (self.cache_absent, tdelta['Absent']))
+      if (self.cache_absent is not None and
+          tdelta['Absent'] != self.cache_absent):
+        failures.append(
+            'Bad Cache Absent: %s != %s' %
+            (self.cache_absent, tdelta['Absent']))
 
-      if self.cache_misses is not None and tdelta['Misses'] != self.cache_misses:
-        failures.append("Bad Cache Misses: %s != %s" % (self.cache_misses, tdelta['Misses']))
+      if (self.cache_misses is not None and
+          tdelta['Misses'] != self.cache_misses):
+        failures.append(
+            'Bad Cache Misses: %s != %s' %
+            (self.cache_misses, tdelta['Misses']))
 
-      if self.cache_invalidations is not None and tdelta['Invalidations'] != self.cache_invalidations:
-        failures.append("Bad Cache Invalidations: %s != %s" % (self.cache_invalidations, tdelta['Invalidations']))
+      if (self.cache_invalidations is not None and
+          tdelta['Invalidations'] != self.cache_invalidations):
+        failures.append(
+            'Bad Cache Invalidations: %s != %s' %
+            (self.cache_invalidations, tdelta['Invalidations']))
 
     return failures
 
@@ -202,7 +222,7 @@ class Case(object):
     return env.http_get('/debug/table_stats')[self.cache_table]
 
   def __str__(self):
-    return "Case %r" % self.doc
+    return 'Case %r' % self.doc
 
 
 class MultiCase(object):
@@ -227,4 +247,4 @@ class MultiCase(object):
     return iter(self.sqls_and_cases)
 
   def __str__(self):
-    return "MultiCase: %s" % self.doc
+    return 'MultiCase: %s' % self.doc

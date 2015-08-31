@@ -758,6 +758,7 @@ class OrExprs(SQLOperator):
 
     "col BETWEEN 10 AND 20 OR col = 30".
   """
+
   def __init__(self, *values):
     """Initialize with multiple BaseWhereExprs or literal values.
 
@@ -768,6 +769,9 @@ class OrExprs(SQLOperator):
 
     Args:
       *values: List of 2 or more BaseWhereExprs or literals.
+
+    Raises:
+      ValueError: On bad input.
     """
     if len(values) < 2:
       raise ValueError('Two or more arguments expected.')
@@ -962,7 +966,7 @@ class AfterPrevValues(BaseWhereExpr):
 
     Args:
       prev_value_pairs: Ordered list of (column, prev_value) pairs.
-        Example: [('x', 3), ('y', 5), ('z', 7)].
+        Example - [('x', 3), ('y', 5), ('z', 7)].
       asc: If True, scan forward.
       inclusive: If True, also include starting point.
     """

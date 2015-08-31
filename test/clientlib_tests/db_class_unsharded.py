@@ -8,9 +8,10 @@ import topo_schema
 from vtdb import db_object_unsharded
 from vtdb import database_context
 
+
 class VtUnsharded(db_object_unsharded.DBObjectUnsharded):
   keyspace = topo_schema.KS_UNSHARDED[0]
-  table_name = "vt_unsharded"
+  table_name = 'vt_unsharded'
   columns_list = ['id', 'msg']
   id_column_name = 'id'
 

@@ -9,8 +9,8 @@ import logging
 import unittest
 
 import environment
-import utils
 import tablet
+import utils
 
 use_mysqlctld = True
 
@@ -91,7 +91,9 @@ class TestBackup(unittest.TestCase):
         index, write=True)
 
   def test_backup(self):
-    """test_backup will:
+    """Test backup flow.
+
+    test_backup will:
     - create a shard with master and replica1 only
     - run InitShardMaster
     - insert some data
@@ -154,9 +156,10 @@ class TestBackup(unittest.TestCase):
     self.assertTrue(backups[0].startswith(tablet_replica1.tablet_alias))
 
     # remove the backup
-    utils.run_vtctl(tablet.get_backup_storage_flags() +
-                    ['RemoveBackup', 'test_keyspace/0', backups[0]],
-                     auto_log=True, mode=utils.VTCTL_VTCTL)
+    utils.run_vtctl(
+        tablet.get_backup_storage_flags() +
+        ['RemoveBackup', 'test_keyspace/0', backups[0]],
+        auto_log=True, mode=utils.VTCTL_VTCTL)
 
     # make sure the list of backups is empty now
     backups, err = utils.run_vtctl(tablet.get_backup_storage_flags() +

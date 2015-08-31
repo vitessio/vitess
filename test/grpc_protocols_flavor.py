@@ -51,4 +51,5 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'bsonrpc-vt-vtgateservice',
         ]
 
-protocols_flavor.__knows_protocols_flavor_map['grpc'] = GRpcProtocolsFlavor
+
+protocols_flavor.register_flavor('grpc', GRpcProtocolsFlavor)

@@ -52,17 +52,21 @@ class MysqlFlavor(object):
     raise NotImplementedError()
 
   def position_after(self, a, b):
-    """Returns true if position 'a' is after 'b.'"""
+    """Returns true if position 'a' is after 'b'."""
     return self.position_at_least(a, b) and not self.position_equal(a, b)
 
   def position_append(self, pos, gtid):
-    """Returns a new position with the given GTID appended"""
+    """Returns a new position with the given GTID appended."""
     raise NotImplementedError()
 
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
 
-    Returns False if the flavor doesn't support binlog_checksum.
+    Arg:
+      tablet: A tablet.Tablet object.
+
+    Returns:
+      False if the flavor doesn't support binlog_checksum.
     """
     tablet.mquery("", "SET @@global.binlog_checksum=1")
     return True

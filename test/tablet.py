@@ -382,9 +382,11 @@ class Tablet(object):
       self, binary, port=None, auth=False, memcache=False,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
-      repl_extra_flags={}, table_acl_config=None,
+      repl_extra_flags=None, table_acl_config=None,
       lameduck_period=None, security_policy=None,
       extra_args=None, extra_env=None):
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     environment.prog_compile(binary)
     args = environment.binary_args(binary)
     args.extend(['-port', '%s' % (port or self.port),
@@ -481,7 +483,7 @@ class Tablet(object):
     args.extend(['-tablet-path', self.tablet_alias])
     args.extend(environment.topo_server().flags())
     args.extend(['-binlog_player_protocol',
-                protocols_flavor().binlog_player_protocol()])
+                 protocols_flavor().binlog_player_protocol()])
     args.extend(['-tablet_manager_protocol',
                  protocols_flavor().tablet_manager_protocol()])
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
@@ -564,7 +566,7 @@ class Tablet(object):
   def start_vtocc(self, port=None, auth=False, memcache=False,
                   wait_for_state='SERVING', filecustomrules=None,
                   schema_override=None,
-                  repl_extra_flags={}, table_acl_config=None,
+                  repl_extra_flags=None, table_acl_config=None,
                   lameduck_period=None, security_policy=None,
                   keyspace=None, shard=False,
                   extra_args=None):
@@ -572,6 +574,8 @@ class Tablet(object):
 
     The process is also saved in self.proc, so it's easy to kill as well.
     """
+    if repl_extra_flags is None:
+      repl_extra_flags = {}
     self.keyspace = keyspace
     self.shard = shard
     self.dbname = 'vt_' + (self.keyspace or 'database')

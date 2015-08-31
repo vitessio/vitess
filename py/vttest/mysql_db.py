@@ -5,6 +5,7 @@
 """This module defines the interface for the MySQL database.
 """
 
+
 class MySqlDB(object):
   """A MySqlDB contains basic info about a MySQL instance."""
 
@@ -14,23 +15,23 @@ class MySqlDB(object):
 
   def setup(self, port):
     """Starts the MySQL database."""
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def teardown(self):
     """Stops the MySQL database."""
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def username(self):
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def password(self):
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def hostname(self):
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def port(self):
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')
 
   def unix_socket(self):
-    raise NotImplemented('MySqlDB is the base class.')
+    raise NotImplementedError('MySqlDB is the base class.')

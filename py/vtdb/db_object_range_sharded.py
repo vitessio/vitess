@@ -419,7 +419,6 @@ class DBObjectEntityRangeSharded(DBObjectRangeSharded):
                                entity_id_lookup_column,
                                new_entity_id)
 
-
   @db_object.write_db_class_method
   def insert_primary(class_, cursor, **bind_vars):
     if class_.columns_list is None:

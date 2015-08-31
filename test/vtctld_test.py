@@ -11,7 +11,6 @@ import environment
 import tablet
 import utils
 from zk import zkocc
-from vtctl import vtctl_client
 
 
 # range '' - 80
@@ -60,7 +59,7 @@ def tearDownModule():
 class TestVtctld(unittest.TestCase):
 
   @classmethod
-  def setUpClass(klass):
+  def setUpClass(cls):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     utils.run_vtctl(
         ['CreateKeyspace', '--served_from',
@@ -130,14 +129,14 @@ class TestVtctld(unittest.TestCase):
       alias = parts[0]
       line_map[alias] = parts
     for tablet in tablets:
-      if not tablet.tablet_alias in line_map:
-         self.assertFalse('tablet %s is not in the result: %s' % (
-                          tablet.tablet_alias, str(line_map)))
+      if tablet.tablet_alias not in line_map:
+        self.assertFalse('tablet %s is not in the result: %s' % (
+            tablet.tablet_alias, str(line_map)))
 
   def test_vtctl(self):
     # standalone RPC client to vtctld
-    out, err = utils.run_vtctl(['ListAllTablets', 'test_nj'],
-                               mode=utils.VTCTL_VTCTLCLIENT)
+    out, _ = utils.run_vtctl(
+        ['ListAllTablets', 'test_nj'], mode=utils.VTCTL_VTCTLCLIENT)
     self._check_all_tablets(out)
 
     # vtctl querying the topology directly

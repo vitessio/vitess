@@ -27,6 +27,7 @@ def create_keyspace_id(sharding_key):
 
 
 class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
+
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
@@ -38,6 +39,7 @@ class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
 
 
 class VtEntityRangeBase(db_object_range_sharded.DBObjectEntityRangeSharded):
+
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
@@ -50,37 +52,37 @@ class VtEntityRangeBase(db_object_range_sharded.DBObjectEntityRangeSharded):
 
 class VtUser(VtEntityRangeBase):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
-  table_name = "vt_user"
-  columns_list = ["id", "username", "msg", "keyspace_id"]
-  sharding_key_column_name = "id"
-  entity_id_lookup_map = {"username": db_class_lookup.VtUsernameLookup}
-  column_lookup_name_map = {"id":"user_id"}
-  id_column_name = "id"
+  table_name = 'vt_user'
+  columns_list = ['id', 'username', 'msg', 'keyspace_id']
+  sharding_key_column_name = 'id'
+  entity_id_lookup_map = {'username': db_class_lookup.VtUsernameLookup}
+  column_lookup_name_map = {'id': 'user_id'}
+  id_column_name = 'id'
 
 
 class VtSong(VtEntityRangeBase):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
-  table_name = "vt_song"
-  columns_list = ["id", "user_id", "title", "keyspace_id"]
-  sharding_key_column_name = "user_id"
-  entity_id_lookup_map = {"id": db_class_lookup.VtSongUserLookup}
-  column_lookup_name_map = {"id":"song_id"}
-  id_column_name = "id"
+  table_name = 'vt_song'
+  columns_list = ['id', 'user_id', 'title', 'keyspace_id']
+  sharding_key_column_name = 'user_id'
+  entity_id_lookup_map = {'id': db_class_lookup.VtSongUserLookup}
+  column_lookup_name_map = {'id': 'song_id'}
+  id_column_name = 'id'
 
 
 class VtUserEmail(VtRangeBase):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
-  table_name = "vt_user_email"
-  columns_list = ["user_id", "email", "email_hash", "keyspace_id"]
-  sharding_key_column_name = "user_id"
+  table_name = 'vt_user_email'
+  columns_list = ['user_id', 'email', 'email_hash', 'keyspace_id']
+  sharding_key_column_name = 'user_id'
   entity_id_lookup_map = None
-  id_column_name = "user_id"
+  id_column_name = 'user_id'
 
 
 class VtSongDetail(VtRangeBase):
   keyspace = topo_schema.KS_RANGE_SHARDED[0]
-  table_name = "vt_song_detail"
-  columns_list = ["song_id", "album_name", "artist", "keyspace_id"]
+  table_name = 'vt_song_detail'
+  columns_list = ['song_id', 'album_name', 'artist', 'keyspace_id']
   sharding_key_column_name = None
-  entity_id_lookup_map = {"song_id": db_class_lookup.VtSongUserLookup}
-  id_column_name = "song_id"
+  entity_id_lookup_map = {'song_id': db_class_lookup.VtSongUserLookup}
+  id_column_name = 'song_id'
