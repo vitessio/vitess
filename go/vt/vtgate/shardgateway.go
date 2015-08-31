@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	gatewayImplementation = "shardconn"
+	gatewayImplementation = "shardgateway"
 )
 
 func init() {

@@ -20,7 +20,7 @@ import (
 
 var (
 	// GatewayImplementation controls the implementation of Gateway.
-	GatewayImplementation = flag.String("gateway_implementation", "shardconn", "The implementation of gateway")
+	GatewayImplementation = flag.String("gateway_implementation", "shardgateway", "The implementation of gateway")
 )
 
 // A Gateway is the query processing module for each shard,
