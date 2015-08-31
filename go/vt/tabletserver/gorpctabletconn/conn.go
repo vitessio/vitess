@@ -24,6 +24,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const protocolName = "gorpc"
@@ -614,6 +615,8 @@ func tabletError(err error) error {
 	if ve, ok := err.(*vterrors.VitessError); ok {
 		return tabletErrorFromVitessError(ve)
 	}
+	// Needed for endpoints that don't return RPCErrors in their response
+	// (e.g., Commit, Rollback)
 	if _, ok := err.(rpcplus.ServerError); ok {
 		var code int
 		errStr := err.Error()
@@ -631,6 +634,7 @@ func tabletError(err error) error {
 		}
 		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
 	}
+
 	if err == context.Canceled {
 		return tabletconn.Cancelled
 	}
@@ -638,13 +642,20 @@ func tabletError(err error) error {
 }
 
 func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
-	// see if the range is in the tablet error range
-	if ve.Code >= vterrors.TabletError && ve.Code <= vterrors.UnknownTabletError {
-		return &tabletconn.ServerError{
-			Code: int(ve.Code - vterrors.TabletError),
-			Err:  fmt.Sprintf("vttablet: %v", ve.Error()),
-		}
+	var code int
+
+	switch ve.Code {
+	case vtrpc.ErrorCode_INTERNAL_ERROR:
+		code = tabletconn.ERR_FATAL
+	case vtrpc.ErrorCode_QUERY_NOT_SERVED:
+		code = tabletconn.ERR_RETRY
+	case vtrpc.ErrorCode_RESOURCE_EXHAUSTED:
+		code = tabletconn.ERR_TX_POOL_FULL
+	case vtrpc.ErrorCode_NOT_IN_TX:
+		code = tabletconn.ERR_NOT_IN_TX
+	default:
+		code = tabletconn.ERR_NORMAL
 	}
 
-	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", ve.Message))
+	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", ve.Error())}
 }

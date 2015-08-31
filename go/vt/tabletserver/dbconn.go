@@ -60,20 +60,20 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return r, nil
 		case !IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
-			return nil, NewTabletErrorSql(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
 			// If the MySQL connection is bad, we assume that there is nothing wrong with
 			// the query itself, and retrying it might succeed. The MySQL connection might
 			// fix itself, or the query could succeed on a different VtTablet.
-			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
 			go checkMySQL()
-			return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
+			return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
-	return nil, NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
+	return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, errors.New("dbconn.Exec: unreachable code"))
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {

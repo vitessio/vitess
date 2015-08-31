@@ -16,11 +16,20 @@ func rpcErrFromVtGateError(err error) *mproto.RPCError {
 	if err == nil {
 		return nil
 	}
-	// TODO(aaijazi): for now, we don't have any differentiation of VtGate errors.
-	// However, we should have them soon, so that clients don't have to parse the
-	// returned error string.
+	vtErr, ok := err.(*vterrors.VitessError)
+	if ok {
+		return &mproto.RPCError{
+			Code: int64(vtErr.Code),
+			// Make sure the the RPCError message is identical to the VitessError
+			// err, so that downstream consumers will see identical messages no matter
+			// which server version they're using.
+			Message: vtErr.Error(),
+		}
+	}
+
+	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    vterrors.UnknownVtgateError,
+		Code:    int64(vtrpc.ErrorCode_UNKNOWN_ERROR),
 		Message: err.Error(),
 	}
 }
@@ -91,7 +100,7 @@ func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
 		message = errString
 	}
 	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCodeDeprecated_UnknownVtgateError,
+		Code:    vtrpc.ErrorCode_UNKNOWN_ERROR,
 		Message: message,
 	}
 }

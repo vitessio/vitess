@@ -117,33 +117,11 @@ enum ErrorCode {
   UNAUTHENTICATED = 12;
 }
 
-// ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we
-// should instead be using ErrorCode.
-enum ErrorCodeDeprecated {
-  // NoError means there was no error, and the message should be ignored.
-  NoError = 0;
-
-  // TabletError is the base VtTablet error. All VtTablet errors
-  // should be 4 digits, starting with 1.
-  TabletError = 1000;
-
-  // UnknownTabletError is the code for an unknown error that came
-  // from VtTablet.
-  UnknownTabletError = 1999;
-
-  // VtgateError is the base VTGate error code. All VTGate errors
-  // should be 4 digits, starting with 2.
-  VtgateError = 2000;
-
-  // UnknownVtgateError is the code for an unknown error that came from VTGate.
-  UnknownVtgateError = 2999;
-}
-
 // RPCError is an application-level error structure returned by
 // VtTablet (and passed along by VtGate if appropriate).
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 message RPCError {
-  ErrorCodeDeprecated code = 1;
+  ErrorCode code = 1;
   string message = 2;
 }

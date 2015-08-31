@@ -489,8 +489,8 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 		return NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
 	}
 	var myError error
-	if sq.config.TerseErrors && terr.SqlError != 0 && len(query.BindVariables) != 0 {
-		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SqlError, query.Sql)
+	if sq.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
+		myError = fmt.Errorf("%s(errno %d) during query: %s", terr.Prefix(), terr.SQLError, query.Sql)
 	} else {
 		myError = terr
 	}
@@ -505,7 +505,7 @@ func (sq *SqlQuery) handleExecErrorNoPanic(query *proto.Query, err interface{}, 
 		logMethod = log.Errorf
 	}
 	// We want to suppress/demote some MySQL error codes (regardless of the ErrorType)
-	switch terr.SqlError {
+	switch terr.SQLError {
 	case mysql.ErrDupEntry:
 		return myError
 	case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:

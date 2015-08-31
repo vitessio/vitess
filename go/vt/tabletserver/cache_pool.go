@@ -229,7 +229,7 @@ func (cp *CachePool) Get(ctx context.Context) cacheservice.CacheService {
 	}
 	r, err := pool.Get(ctx)
 	if err != nil {
-		panic(NewTabletErrorSql(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
+		panic(NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err))
 	}
 	return r.(cacheservice.CacheService)
 }

@@ -6,20 +6,20 @@ package sqldb
 
 import "fmt"
 
-// SqlError is the error structure returned from calling a db library function
-type SqlError struct {
+// SQLError is the error structure returned from calling a db library function
+type SQLError struct {
 	Num     int
 	Message string
 	Query   string
 }
 
-// NewSqlError returns a new SqlError
-func NewSqlError(number int, format string, args ...interface{}) *SqlError {
-	return &SqlError{Num: number, Message: fmt.Sprintf(format, args...)}
+// NewSQLError returns a new SQLError
+func NewSQLError(number int, format string, args ...interface{}) *SQLError {
+	return &SQLError{Num: number, Message: fmt.Sprintf(format, args...)}
 }
 
 // Error implements the error interface
-func (se *SqlError) Error() string {
+func (se *SQLError) Error() string {
 	if se.Query == "" {
 		return fmt.Sprintf("%v (errno %v)", se.Message, se.Num)
 	}
@@ -27,6 +27,6 @@ func (se *SqlError) Error() string {
 }
 
 // Number returns the internal mysql error code
-func (se *SqlError) Number() int {
+func (se *SQLError) Number() int {
 	return se.Num
 }

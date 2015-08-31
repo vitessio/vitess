@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -59,7 +61,7 @@ var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 type TabletError struct {
 	ErrorType int
 	Message   string
-	SqlError  int
+	SQLError  int
 	// ErrorCode will be used to transmit the error across RPC boundaries
 	ErrorCode vtrpc.ErrorCode
 }
@@ -78,8 +80,8 @@ func NewTabletError(errorType int, errCode vtrpc.ErrorCode, format string, args 
 	}
 }
 
-// NewTabletErrorSql returns a TabletError based on the error
-func NewTabletErrorSql(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
+// NewTabletErrorSQL returns a TabletError based on the error
+func NewTabletErrorSQL(errorType int, errCode vtrpc.ErrorCode, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	if sqlErr, ok := err.(hasNumber); ok {
@@ -100,7 +102,7 @@ func NewTabletErrorSql(errorType int, errCode vtrpc.ErrorCode, err error) *Table
 	return &TabletError{
 		ErrorType: errorType,
 		Message:   printable(errstr),
-		SqlError:  errnum,
+		SQLError:  errnum,
 		ErrorCode: errCode,
 	}
 }
@@ -113,6 +115,23 @@ func PrefixTabletError(errorType int, errCode vtrpc.ErrorCode, err error, prefix
 		return NewTabletError(terr.ErrorType, terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
 	return NewTabletError(errorType, errCode, "%s%s", prefix, err)
+}
+
+// ToGRPCError returns a TabletError as a grpc error, with the
+// appropriate error code. This function lives here, instead of in vterrors,
+// so that the vterrors package doesn't have to import tabletserver.
+func ToGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	code := grpc.Code(err)
+	if tErr, ok := err.(*TabletError); ok {
+		// If we got a TabletError, prefer its error code
+		code = vterrors.ErrorCodeToGRPCCode(tErr.ErrorCode)
+	}
+
+	return grpc.Errorf(code, "%v %v", vterrors.GRPCServerErrPrefix, err)
 }
 
 func printable(in string) string {
@@ -133,7 +152,7 @@ func IsConnErr(err error) bool {
 	var sqlError int
 	switch err := err.(type) {
 	case *TabletError:
-		sqlError = err.SqlError
+		sqlError = err.SQLError
 	case hasNumber:
 		sqlError = err.Number()
 	default:
@@ -172,7 +191,7 @@ func (te *TabletError) Prefix() string {
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
-	if te.SqlError == mysql.ErrServerLost {
+	if te.SQLError == mysql.ErrServerLost {
 		prefix = prefix + "the query was killed either because it timed out or was canceled: "
 	}
 	return prefix
@@ -190,7 +209,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	case ErrNotInTx:
 		queryServiceStats.ErrorStats.Add("NotInTx", 1)
 	default:
-		switch te.SqlError {
+		switch te.SQLError {
 		case mysql.ErrDupEntry:
 			queryServiceStats.InfoErrors.Add("DupKey", 1)
 		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
@@ -218,7 +237,7 @@ func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QuerySe
 		case ErrTxPoolFull:
 			logTxPoolFull.Errorf("%v", terr)
 		default:
-			switch terr.SqlError {
+			switch terr.SQLError {
 			// MySQL deadlock errors are (usually) due to client behavior, not server
 			// behavior, and therefore logged at the INFO level.
 			case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
@@ -258,8 +277,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 	terr, ok := err.(*TabletError)
 	if ok {
 		return &mproto.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: int64(terr.ErrorType) + vterrors.TabletError,
+			Code: int64(terr.ErrorCode),
 			// Make sure the the VitessError message is identical to the TabletError
 			// err, so that downstream consumers will see identical messages no matter
 			// which server version they're using.
@@ -269,7 +287,7 @@ func rpcErrFromTabletError(err error) *mproto.RPCError {
 
 	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    vterrors.UnknownTabletError,
+		Code:    int64(vtrpc.ErrorCode_UNKNOWN_ERROR),
 		Message: err.Error(),
 	}
 }
@@ -344,26 +362,4 @@ func AddTabletErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 		return
 	}
 	reply.Err = rpcErrFromTabletError(err)
-}
-
-// TabletErrorToRPCError transforms the provided error to a RPCError,
-// if any.
-func TabletErrorToRPCError(err error) *vtrpc.RPCError {
-	if err == nil {
-		return nil
-	}
-	if terr, ok := err.(*TabletError); ok {
-		return &vtrpc.RPCError{
-			// Transform TabletError code to VitessError code
-			Code: vtrpc.ErrorCodeDeprecated(int64(terr.ErrorType) + vterrors.TabletError),
-			// Make sure the the VitessError message is identical to the TabletError
-			// err, so that downstream consumers will see identical messages no matter
-			// which endpoint they're using.
-			Message: terr.Error(),
-		}
-	}
-	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCodeDeprecated_UnknownTabletError,
-		Message: err.Error(),
-	}
 }

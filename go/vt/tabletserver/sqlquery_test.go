@@ -1267,7 +1267,7 @@ func TestTerseErrors2(t *testing.T) {
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
-		SqlError:  10,
+		SQLError:  10,
 	})
 }
 
@@ -1293,7 +1293,7 @@ func TestTerseErrors3(t *testing.T) {
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
-		SqlError:  10,
+		SQLError:  10,
 	})
 }
 
