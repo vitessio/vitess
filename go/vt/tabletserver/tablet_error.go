@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -18,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
@@ -112,6 +115,23 @@ func PrefixTabletError(errorType int, errCode vtrpc.ErrorCode, err error, prefix
 		return NewTabletError(terr.ErrorType, terr.ErrorCode, "%s%s", prefix, terr.Message)
 	}
 	return NewTabletError(errorType, errCode, "%s%s", prefix, err)
+}
+
+// ToGRPCError returns a TabletError as a grpc error, with the
+// appropriate error code. This function lives here, instead of in vterrors,
+// so that the vterrors package doesn't have to import tabletserver.
+func ToGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	code := grpc.Code(err)
+	if tErr, ok := err.(*TabletError); ok {
+		// If we got a TabletError, prefer its error code
+		code = vterrors.ErrorCodeToGRPCCode(tErr.ErrorCode)
+	}
+
+	return grpc.Errorf(code, "%v", err)
 }
 
 func printable(in string) string {

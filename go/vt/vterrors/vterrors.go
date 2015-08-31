@@ -14,7 +14,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 // VitessError is the error type that we use internally for passing structured errors
@@ -90,8 +89,8 @@ func WithPrefix(prefix string, in error) error {
 	}
 }
 
-// errorCodeToGRPCCode maps a vtrpc.ErrorCode to a gRPC codes.Code
-func errorCodeToGRPCCode(code vtrpc.ErrorCode) codes.Code {
+// ErrorCodeToGRPCCode maps a vtrpc.ErrorCode to a gRPC codes.Code
+func ErrorCodeToGRPCCode(code vtrpc.ErrorCode) codes.Code {
 	switch code {
 	case vtrpc.ErrorCode_SUCCESS:
 		return codes.OK
@@ -130,10 +129,7 @@ func toGRPCCode(err error) codes.Code {
 		return codes.OK
 	}
 	if vtErr, ok := err.(*VitessError); ok {
-		return errorCodeToGRPCCode(vtErr.Code)
-	}
-	if tErr, ok := err.(*tabletserver.TabletError); ok {
-		return errorCodeToGRPCCode(tErr.ErrorCode)
+		return ErrorCodeToGRPCCode(vtErr.Code)
 	}
 	// Returns the underlying grpc Code, or codes.Unknown if one doesn't exist
 	return grpc.Code(err)
