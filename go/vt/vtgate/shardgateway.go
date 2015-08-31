@@ -14,9 +14,11 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
@@ -56,9 +58,49 @@ type shardGateway struct {
 	shardConns map[string]*ShardConn
 }
 
-// Dial creates the ShardConn for the specified keyspace, shard, and tablet type.
-func (sg *shardGateway) Dial(ctx context.Context, keyspace string, shard string, tabletType pb.TabletType) error {
-	return sg.getConnection(ctx, keyspace, shard, tabletType).Dial(ctx)
+// InitializeConnections pre-initializes connections for all shards.
+// It also populates topology cache by accessing it.
+// It is not necessary to call this function before serving queries,
+// but it would reduce connection overhead when serving.
+func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
+	ksNames, err := sg.toposerv.GetSrvKeyspaceNames(ctx, sg.cell)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	var errRecorder concurrency.AllErrorRecorder
+	for _, ksName := range ksNames {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			// get SrvKeyspace for cell/keyspace
+			ks, err := sg.toposerv.GetSrvKeyspace(ctx, sg.cell, keyspace)
+			if err != nil {
+				errRecorder.RecordError(err)
+				return
+			}
+			// work on all shards of all serving tablet types
+			for tabletType, ksPartition := range ks.Partitions {
+				tt := topo.TabletTypeToProto(tabletType)
+				for _, shard := range ksPartition.ShardReferences {
+					wg.Add(1)
+					go func(shardName string, tabletType pb.TabletType) {
+						defer wg.Done()
+						err = sg.getConnection(ctx, keyspace, shardName, tabletType).Dial(ctx)
+						if err != nil {
+							errRecorder.RecordError(err)
+							return
+						}
+					}(shard.Name, tt)
+				}
+			}
+		}(ksName)
+	}
+	wg.Wait()
+	if errRecorder.HasErrors() {
+		return errRecorder.Error()
+	}
+	return nil
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.

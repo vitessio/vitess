@@ -26,8 +26,8 @@ var (
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
 type Gateway interface {
-	// Dial creates the connection for the specified keyspace, shard, and tablet type.
-	Dial(ctx context.Context, keyspace, shard string, tabletType pb.TabletType) error
+	// InitializeConnections creates connections to VTTablets.
+	InitializeConnections(ctx context.Context) error
 
 	// Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
 	Execute(ctx context.Context, keyspace, shard string, tabletType pb.TabletType, query string, bindVars map[string]interface{}, transactionID int64) (*mproto.QueryResult, error)
