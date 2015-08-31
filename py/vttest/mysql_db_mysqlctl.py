@@ -20,14 +20,15 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
     super(MySqlDBMysqlctl, self).__init__(directory, port)
 
   def setup(self):
-    cmd = [environment.mysqlctl_binary,
-           '-alsologtostderr',
-           '-tablet_uid', '1',
-           '-mysql_port', str(self._port),
-           '-db-config-dba-charset', 'utf8',
-           '-db-config-dba-uname', 'vt_dba',
-           'init',
-           '-bootstrap_archive', 'mysql-db-dir_10.0.13-MariaDB.tbz',
+    cmd = [
+        environment.mysqlctl_binary,
+        '-alsologtostderr',
+        '-tablet_uid', '1',
+        '-mysql_port', str(self._port),
+        '-db-config-dba-charset', 'utf8',
+        '-db-config-dba-uname', 'vt_dba',
+        'init',
+        '-bootstrap_archive', 'mysql-db-dir_10.0.13-MariaDB.tbz',
     ]
     env = os.environ
     env['VTDATAROOT'] = self._directory
@@ -36,13 +37,14 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
       raise Exception('mysqlctl failed', result)
 
   def teardown(self):
-    cmd = [environment.mysqlctl_binary,
-           '-alsologtostderr',
-           '-tablet_uid', '1',
-           '-mysql_port', str(self._port),
-           '-db-config-dba-charset', 'utf8',
-           '-db-config-dba-uname', 'vt_dba',
-           'shutdown',
+    cmd = [
+        environment.mysqlctl_binary,
+        '-alsologtostderr',
+        '-tablet_uid', '1',
+        '-mysql_port', str(self._port),
+        '-db-config-dba-charset', 'utf8',
+        '-db-config-dba-uname', 'vt_dba',
+        'shutdown',
     ]
     result = subprocess.call(cmd)
     if result != 0:

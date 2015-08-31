@@ -10,15 +10,15 @@ KS_UNSHARDED = ('KS_UNSHARDED', shard_constants.UNSHARDED)
 KS_RANGE_SHARDED = ('KS_RANGE_SHARDED', shard_constants.RANGE_SHARDED)
 KS_LOOKUP = ('KS_LOOKUP', shard_constants.UNSHARDED)
 
-#KS_UNSHARDED tables
+# KS_UNSHARDED tables
 create_vt_unsharded = '''create table vt_unsharded (
 id bigint NOT NULL AUTO_INCREMENT,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
 
-#KS_RANGE_SHARDED tables
-#entity user, entity_id username, lookup vt_username_lookup
+# KS_RANGE_SHARDED tables
+# entity user, entity_id username, lookup vt_username_lookup
 create_vt_user = '''create table vt_user (
 id bigint,
 username varchar(64),
@@ -37,7 +37,7 @@ PRIMARY KEY (user_id),
 KEY email_hash (email_hash(4))
 ) ENGINE=InnoDB'''
 
-#entity song, entity_id id, lookup vt_song_user_lookup
+# entity song, entity_id id, lookup vt_song_user_lookup
 create_vt_song = '''create table vt_song (
 id bigint,
 user_id bigint,
@@ -55,7 +55,7 @@ keyspace_id bigint(20) unsigned NOT NULL,
 primary key (song_id)
 ) Engine=InnoDB'''
 
-#KS_LOOKUP tables
+# KS_LOOKUP tables
 create_vt_username_lookup = '''create table vt_username_lookup (
 user_id bigint(20) NOT NULL AUTO_INCREMENT,
 username varchar(20) NOT NULL,

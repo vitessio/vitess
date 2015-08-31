@@ -1,7 +1,8 @@
 import datetime
 from decimal import Decimal
 
-from cases_framework import Case, MultiCase
+from cases_framework import Case
+from cases_framework import MultiCase
 
 cases = [
     Case(doc='union',
@@ -151,7 +152,6 @@ cases = [
              'from vtocc_a as a right join vtocc_b as b '
              'on a.eid = b.eid and a.id = b.id limit 10001']),
 
-
     Case(doc='complex select list',
          sql='select /* complex select list */ eid+1, id from vtocc_a',
          result=[(2L, 1L), (2L, 2L)],
@@ -241,29 +241,31 @@ cases = [
              'select /* (condition) */ * from vtocc_a '
              'where (eid = 1) limit 10001']),
 
-    Case(doc='inequality',
-         sql='select /* inequality */ * from vtocc_a where id > 1',
-         result=[(1L, 2L, 'bcde', 'fghi')],
-         rowcount=1,
-         rewritten=[
-           'select * from vtocc_a where 1 != 1',
-           'select /* inequality */ * from vtocc_a where id > 1 limit 10001']),
-    Case(doc='in',
-         sql='select /* in */ * from vtocc_a where id in (1, 2)',
-         result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rowcount=2,
-         rewritten=[
-           'select * from vtocc_a where 1 != 1',
-           'select /* in */ * from vtocc_a where id in (1, 2) limit 10001']),
-
-    Case(doc='between',
-         sql='select /* between */ * from vtocc_a where id between 1 and 2',
-         result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rowcount=2,
-         rewritten=[
-           'select * from vtocc_a where 1 != 1',
-           'select /* between */ * from vtocc_a '
-           'where id between 1 and 2 limit 10001']),
+    Case(
+        doc='inequality',
+        sql='select /* inequality */ * from vtocc_a where id > 1',
+        result=[(1L, 2L, 'bcde', 'fghi')],
+        rowcount=1,
+        rewritten=[
+            'select * from vtocc_a where 1 != 1',
+            'select /* inequality */ * from vtocc_a where id > 1 limit 10001']),
+    Case(
+        doc='in',
+        sql='select /* in */ * from vtocc_a where id in (1, 2)',
+        result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
+        rowcount=2,
+        rewritten=[
+            'select * from vtocc_a where 1 != 1',
+            'select /* in */ * from vtocc_a where id in (1, 2) limit 10001']),
+    Case(
+        doc='between',
+        sql='select /* between */ * from vtocc_a where id between 1 and 2',
+        result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
+        rowcount=2,
+        rewritten=[
+            'select * from vtocc_a where 1 != 1',
+            'select /* between */ * from vtocc_a '
+            'where id between 1 and 2 limit 10001']),
 
     Case(doc='order',
          sql='select /* order */ * from vtocc_a order by id desc',
@@ -349,7 +351,7 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid = 2 and id = 1',
               result=[(2L, 1L, 'aaaa', 'bbbb')]),
-        'begin',
+         'begin',
          Case(sql="insert /* simple */ ignore into vtocc_a values "
               "(2, 1, 'cccc', 'cccc')",
               rewritten="insert /* simple */ ignore into vtocc_a values "
@@ -443,8 +445,8 @@ cases = [
     MultiCase(
         'bind values',
         ['begin',
-         Case(sql="insert /* bind values */ into vtocc_a(eid, id, name, foo) "
-              "values (:eid, :id, :name, :foo)",
+         Case(sql='insert /* bind values */ into vtocc_a(eid, id, name, foo) '
+              'values (:eid, :id, :name, :foo)',
               bindings={'eid': 4, 'id': 1, 'name': 'aaaa', 'foo': 'cccc'},
               rewritten="insert /* bind values */ into vtocc_a(eid, id, name, "
               "foo) values (4, 1, 'aaaa', 'cccc') "
@@ -495,7 +497,7 @@ cases = [
         ['begin',
          Case(sql='insert /* subquery */ into vtocc_a(eid, name, foo) '
               'select eid, name, foo from vtocc_c',
-              rewritten =[
+              rewritten=[
                   'select eid, name, foo from vtocc_c limit 10001',
                   "insert /* subquery */ into vtocc_a(eid, name, foo) "
                   "values (10, 'abcd', '20'), (11, 'bcde', '30') "
@@ -517,7 +519,7 @@ cases = [
               rowcount=2),
          'commit',
          Case(sql='select eid, id, name, foo from vtocc_e',
-           result=[(20L, 10L, 'abcd', '20'), (21L, 11L, 'bcde', '30')]),
+              result=[(20L, 10L, 'abcd', '20'), (21L, 11L, 'bcde', '30')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'delete from vtocc_c where eid<10',
@@ -622,7 +624,6 @@ cases = [
          "update vtocc_a set foo='efgh' where id=1",
          'commit']),
 
-
     MultiCase(
         'single in update',
         ['begin',
@@ -680,66 +681,67 @@ cases = [
          "update vtocc_a set foo='fghi' where id=2",
          'commit']),
 
-  MultiCase(
-      'pk change update',
-      ['begin',
-       Case(sql="update vtocc_a set eid = 2 where eid = 1 and id = 1",
-            rewritten='update vtocc_a set eid = 2 where '
-            '(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )',
-            rowcount=1),
-       'commit',
-       Case(sql='select eid from vtocc_a where id = 1',
-            result=[(2L,)]),
-       'begin',
-       'update vtocc_a set eid=1 where id=1',
-       'commit']),
+    MultiCase(
+        'pk change update',
+        ['begin',
+         Case(sql='update vtocc_a set eid = 2 where eid = 1 and id = 1',
+              rewritten='update vtocc_a set eid = 2 where '
+              '(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )',
+              rowcount=1),
+         'commit',
+         Case(sql='select eid from vtocc_a where id = 1',
+              result=[(2L,)]),
+         'begin',
+         'update vtocc_a set eid=1 where id=1',
+         'commit']),
 
-  MultiCase(
-      'pk change with qualifed column name update',
-      ['begin',
-       Case(sql='update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1',
-            rewritten='update vtocc_a set vtocc_a.eid = 2 where '
-            '(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )',
-            rowcount=1),
-       'commit',
-       Case(sql='select eid from vtocc_a where id = 1',
-            result=[(2L,)]),
-       'begin',
-       'update vtocc_a set eid=1 where id=1',
-       'commit']),
+    MultiCase(
+        'pk change with qualifed column name update',
+        ['begin',
+         Case(sql='update vtocc_a set vtocc_a.eid = 2 where eid = 1 and id = 1',
+              rewritten='update vtocc_a set vtocc_a.eid = 2 where '
+              '(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 ) (2 1 )',
+              rowcount=1),
+         'commit',
+         Case(sql='select eid from vtocc_a where id = 1',
+              result=[(2L,)]),
+         'begin',
+         'update vtocc_a set eid=1 where id=1',
+         'commit']),
 
-  MultiCase(
-      'partial pk update',
-      ['begin',
-       Case(sql="update /* pk */ vtocc_a set foo='bar' where id = 1",
-            rewritten=[
-                'select eid, id from vtocc_a where id = 1 '
-                'limit 10001 for update',
-                "update /* pk */ vtocc_a set foo = 'bar' where "
-                "(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 )"],
-            rowcount=1),
-       'commit',
-       Case(sql='select foo from vtocc_a where id = 1',
-            result=[('bar',)]),
-       'begin',
-       "update vtocc_a set foo='efgh' where id=1",
-       'commit']),
+    MultiCase(
+        'partial pk update',
+        ['begin',
+         Case(sql="update /* pk */ vtocc_a set foo='bar' where id = 1",
+              rewritten=[
+                  'select eid, id from vtocc_a where id = 1 '
+                  'limit 10001 for update',
+                  "update /* pk */ vtocc_a set foo = 'bar' where "
+                  "(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 )"],
+              rowcount=1),
+         'commit',
+         Case(sql='select foo from vtocc_a where id = 1',
+              result=[('bar',)]),
+         'begin',
+         "update vtocc_a set foo='efgh' where id=1",
+         'commit']),
 
-  MultiCase(
-      'limit update',
-      ['begin',
-       Case(sql="update /* pk */ vtocc_a set foo='bar' where eid = 1 limit 1",
-            rewritten=[
-                'select eid, id from vtocc_a where eid = 1 limit 1 for update',
-                "update /* pk */ vtocc_a set foo = 'bar' where "
-                "(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 )"],
-            rowcount=1),
-       'commit',
-       Case(sql='select foo from vtocc_a where id = 1',
-            result=[('bar',)]),
-       'begin',
-       "update vtocc_a set foo='efgh' where id=1",
-       'commit']),
+    MultiCase(
+        'limit update',
+        ['begin',
+         Case(sql="update /* pk */ vtocc_a set foo='bar' where eid = 1 limit 1",
+              rewritten=[
+                  'select eid, id from vtocc_a '
+                  'where eid = 1 limit 1 for update',
+                  "update /* pk */ vtocc_a set foo = 'bar' where "
+                  "(eid = 1 and id = 1) /* _stream vtocc_a (eid id ) (1 1 )"],
+              rowcount=1),
+         'commit',
+         Case(sql='select foo from vtocc_a where id = 1',
+              result=[('bar',)]),
+         'begin',
+         "update vtocc_a set foo='efgh' where id=1",
+         'commit']),
 
     MultiCase(
         'order by update',
@@ -759,345 +761,355 @@ cases = [
          "update vtocc_a set foo='fghi' where id=2",
          'commit']),
 
-  MultiCase(
-      'missing where update',
-      ['begin',
-       Case(sql="update vtocc_a set foo='bar'",
-            rewritten=[
-                'select eid, id from vtocc_a limit 10001 for update',
-                "update vtocc_a set foo = 'bar' "
-                "where (eid = 1 and id = 1) or (eid = 1 and id = 2) "
-                "/* _stream vtocc_a (eid id ) (1 1 ) (1 2 )"],
-            rowcount=2),
-       'commit',
-       Case(sql='select * from vtocc_a',
-            result=[(1L, 1L, 'abcd', 'bar'), (1L, 2L, 'bcde', 'bar')]),
-       'begin',
-       "update vtocc_a set foo='efgh' where id=1",
-       "update vtocc_a set foo='fghi' where id=2",
-       'commit']),
+    MultiCase(
+        'missing where update',
+        ['begin',
+         Case(sql="update vtocc_a set foo='bar'",
+              rewritten=[
+                  'select eid, id from vtocc_a limit 10001 for update',
+                  "update vtocc_a set foo = 'bar' "
+                  "where (eid = 1 and id = 1) or (eid = 1 and id = 2) "
+                  "/* _stream vtocc_a (eid id ) (1 1 ) (1 2 )"],
+              rowcount=2),
+         'commit',
+         Case(sql='select * from vtocc_a',
+              result=[(1L, 1L, 'abcd', 'bar'), (1L, 2L, 'bcde', 'bar')]),
+         'begin',
+         "update vtocc_a set foo='efgh' where id=1",
+         "update vtocc_a set foo='fghi' where id=2",
+         'commit']),
 
-  MultiCase(
-      'single pk update one row update',
-      ['begin',
-       "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
-       'commit',
-       'begin',
-       Case(sql="update vtocc_f set id=2 where vb='a'",
-            rewritten=[
-                "update vtocc_f set id = 2 where vb in ('a') "
-                "/* _stream vtocc_f (vb ) ('YQ==' )"],
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_f',
-            result=[('a', 2L), ('b', 2L)]),
-       'begin',
-       'delete from vtocc_f',
-       'commit']),
+    MultiCase(
+        'single pk update one row update',
+        ['begin',
+         "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
+         'commit',
+         'begin',
+         Case(sql="update vtocc_f set id=2 where vb='a'",
+              rewritten=[
+                  "update vtocc_f set id = 2 where vb in ('a') "
+                  "/* _stream vtocc_f (vb ) ('YQ==' )"],
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_f',
+              result=[('a', 2L), ('b', 2L)]),
+         'begin',
+         'delete from vtocc_f',
+         'commit']),
 
-  MultiCase(
-      'single pk update two rows',
-      ['begin',
-       "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
-       'commit',
-       'begin',
-       Case(sql="update vtocc_f set id=3 where vb in ('a', 'b')",
-            rewritten=[
-                "update vtocc_f set id = 3 where vb in ('a', 'b') "
-                "/* _stream vtocc_f (vb ) ('YQ==' ) ('Yg==' )"],
-            rowcount=2),
-       'commit',
-       Case(sql='select * from vtocc_f',
-            result=[('a', 3L), ('b', 3L)]),
-       'begin',
-       'delete from vtocc_f',
-       'commit']),
+    MultiCase(
+        'single pk update two rows',
+        ['begin',
+         "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
+         'commit',
+         'begin',
+         Case(sql="update vtocc_f set id=3 where vb in ('a', 'b')",
+              rewritten=[
+                  "update vtocc_f set id = 3 where vb in ('a', 'b') "
+                  "/* _stream vtocc_f (vb ) ('YQ==' ) ('Yg==' )"],
+              rowcount=2),
+         'commit',
+         Case(sql='select * from vtocc_f',
+              result=[('a', 3L), ('b', 3L)]),
+         'begin',
+         'delete from vtocc_f',
+         'commit']),
 
-  MultiCase(
-      'single pk update subquery',
-      ['begin',
-       "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
-       'commit',
-       'begin',
-       Case(sql='update vtocc_f set id=4 where id >= 0',
-            rewritten=[
-                'select vb from vtocc_f where id >= 0 limit 10001 for update',
-                "update vtocc_f set id = 4 where vb in ('a', 'b') "
-                "/* _stream vtocc_f (vb ) ('YQ==' ) ('Yg==' )"],
-            rowcount=2),
-       'commit',
-       Case(sql='select * from vtocc_f',
-            result=[('a', 4L), ('b', 4L)]),
-       'begin',
-       'delete from vtocc_f',
-       'commit']),
+    MultiCase(
+        'single pk update subquery',
+        ['begin',
+         "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
+         'commit',
+         'begin',
+         Case(sql='update vtocc_f set id=4 where id >= 0',
+              rewritten=[
+                  'select vb from vtocc_f where id >= 0 limit 10001 for update',
+                  "update vtocc_f set id = 4 where vb in ('a', 'b') "
+                  "/* _stream vtocc_f (vb ) ('YQ==' ) ('Yg==' )"],
+              rowcount=2),
+         'commit',
+         Case(sql='select * from vtocc_f',
+              result=[('a', 4L), ('b', 4L)]),
+         'begin',
+         'delete from vtocc_f',
+         'commit']),
 
-  MultiCase(
-      'single pk update subquery no rows',
-      ['begin',
-       "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
-       'commit',
-       'begin',
-       Case(sql='update vtocc_f set id=4 where id < 0',
-            rewritten=[
-                'select vb from vtocc_f where id < 0 limit 10001 for update']),
-       'commit',
-       Case(sql='select * from vtocc_f',
-            result=[('a', 1L), ('b', 2L)]),
-       'begin',
-       'delete from vtocc_f',
-       'commit']),
+    MultiCase(
+        'single pk update subquery no rows',
+        ['begin',
+         "insert into vtocc_f(vb,id) values ('a', 1), ('b', 2)",
+         'commit',
+         'begin',
+         Case(
+             sql='update vtocc_f set id=4 where id < 0',
+             rewritten=[
+                 'select vb from vtocc_f where id < 0 limit 10001 for update']),
+         'commit',
+         Case(sql='select * from vtocc_f', result=[('a', 1L), ('b', 2L)]),
+         'begin',
+         'delete from vtocc_f',
+         'commit']),
 
-  MultiCase(
-      'delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete /* pk */ from vtocc_a where eid = 2 and id = 1',
-            rewritten='delete /* pk */ from vtocc_a where '
-            '(eid = 2 and id = 1) /* _stream vtocc_a (eid id ) (2 1 )',
-            rowcount=1),
-       'commit',
-       Case('select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete /* pk */ from vtocc_a where eid = 2 and id = 1',
+              rewritten='delete /* pk */ from vtocc_a where '
+              '(eid = 2 and id = 1) /* _stream vtocc_a (eid id ) (2 1 )',
+              rowcount=1),
+         'commit',
+         Case('select * from vtocc_a where eid=2',
+              result=[])]),
 
-  MultiCase(
-      'single in delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete /* pk */ from vtocc_a where eid = 2 and id in (1, 2)',
-            rewritten='delete /* pk */ from vtocc_a where '
-            '(eid = 2 and id = 1) or (eid = 2 and id = 2) '
-            '/* _stream vtocc_a (eid id ) (2 1 ) (2 2 )',
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'single in delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete /* pk */ from vtocc_a where eid = 2 and id in (1, 2)',
+              rewritten='delete /* pk */ from vtocc_a where '
+              '(eid = 2 and id = 1) or (eid = 2 and id = 2) '
+              '/* _stream vtocc_a (eid id ) (2 1 ) (2 2 )',
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2',
+              result=[])]),
 
-  MultiCase(
-      'double in delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete /* pk */ from vtocc_a where eid in (2) and '
-            'id in (1, 2)',
-            rewritten=[
-                'select eid, id from vtocc_a where eid in (2) and '
-                'id in (1, 2) limit 10001 for update',
-                'delete /* pk */ from vtocc_a where (eid = 2 and id = 1) '
-                '/* _stream vtocc_a (eid id ) (2 1 )',],
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'double in delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete /* pk */ from vtocc_a where eid in (2) and '
+              'id in (1, 2)',
+              rewritten=[
+                  'select eid, id from vtocc_a where eid in (2) and '
+                  'id in (1, 2) limit 10001 for update',
+                  'delete /* pk */ from vtocc_a where (eid = 2 and id = 1) '
+                  '/* _stream vtocc_a (eid id ) (2 1 )',],
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2',
+              result=[])]),
 
-  MultiCase(
-      'double in 2 delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete /* pk */ from vtocc_a where eid in (2, 3) and '
-            'id in (1, 2)',
-            rewritten=[
-                'select eid, id from vtocc_a where eid in (2, 3) and '
-                'id in (1, 2) limit 10001 for update',
-                'delete /* pk */ from vtocc_a where (eid = 2 and id = 1) '
-                '/* _stream vtocc_a (eid id ) (2 1 )'],
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'double in 2 delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete /* pk */ from vtocc_a where eid in (2, 3) and '
+              'id in (1, 2)',
+              rewritten=[
+                  'select eid, id from vtocc_a where eid in (2, 3) and '
+                  'id in (1, 2) limit 10001 for update',
+                  'delete /* pk */ from vtocc_a where (eid = 2 and id = 1) '
+                  '/* _stream vtocc_a (eid id ) (2 1 )'],
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2', result=[])]),
 
-  MultiCase(
-      'complex where delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete from vtocc_a where eid = 1+1 and id = 1',
-            rewritten=[
-                'select eid, id from vtocc_a where eid = 1 + 1 and id = 1 '
-                'limit 10001 for update',
-                'delete from vtocc_a where (eid = 2 and id = 1) '
-                '/* _stream vtocc_a (eid id ) (2 1 )'],
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'complex where delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete from vtocc_a where eid = 1+1 and id = 1',
+              rewritten=[
+                  'select eid, id from vtocc_a where eid = 1 + 1 and id = 1 '
+                  'limit 10001 for update',
+                  'delete from vtocc_a where (eid = 2 and id = 1) '
+                  '/* _stream vtocc_a (eid id ) (2 1 )'],
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2',
+              result=[])]),
 
-  MultiCase(
-      'partial pk delete',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql='delete from vtocc_a where eid = 2',
-            rewritten=[
-                'select eid, id from vtocc_a where eid = 2 limit 10001 '
-                'for update',
-                'delete from vtocc_a where (eid = 2 and id = 1) '
-                '/* _stream vtocc_a (eid id ) (2 1 )'],
-            rowcount=1),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
+    MultiCase(
+        'partial pk delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(sql='delete from vtocc_a where eid = 2',
+              rewritten=[
+                  'select eid, id from vtocc_a where eid = 2 limit 10001 '
+                  'for update',
+                  'delete from vtocc_a where (eid = 2 and id = 1) '
+                  '/* _stream vtocc_a (eid id ) (2 1 )'],
+              rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2',
+              result=[])]),
 
-  MultiCase(
-      'limit delete',
-      ['begin',
-      "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-      Case(sql='delete from vtocc_a where eid = 2 limit 1',
-           rewritten=[
-               'select eid, id from vtocc_a where eid = 2 limit 1 for update',
-               'delete from vtocc_a where (eid = 2 and id = 1) '
-               '/* _stream vtocc_a (eid id ) (2 1 )'],
-           rowcount=1),
-      'commit',
-      Case(sql='select * from vtocc_a where eid=2',
-           result=[])]),
+    MultiCase(
+        'limit delete',
+        ['begin',
+         "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
+         Case(
+             sql='delete from vtocc_a where eid = 2 limit 1',
+             rewritten=[
+                 'select eid, id from vtocc_a where eid = 2 limit 1 for update',
+                 'delete from vtocc_a where (eid = 2 and id = 1) '
+                 '/* _stream vtocc_a (eid id ) (2 1 )'],
+             rowcount=1),
+         'commit',
+         Case(sql='select * from vtocc_a where eid=2', result=[])]),
 
-  # data types test
-  MultiCase(
-      'integer data types',
-      ['begin',
-       Case(sql='insert into vtocc_ints values(:tiny, :tinyu, :small, :smallu, '
-            ':medium, :mediumu, :normal, :normalu, :big, :bigu, :year)',
-            bindings={
-                'tiny': -128, 'tinyu': 255, 'small': -32768, 'smallu': 65535,
-                'medium': -8388608, 'mediumu': 16777215, 'normal': -2147483648,
-                'normalu': 4294967295, 'big': -9223372036854775808,
-                'bigu': 18446744073709551615, 'year': 2012},
-         rewritten='insert into vtocc_ints values '
-            '(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, '
-            '4294967295, -9223372036854775808, 18446744073709551615, 2012) '
-            '/* _stream vtocc_ints (tiny ) (-128 )'),
-       'commit',
-       Case(sql='select * from vtocc_ints where tiny = -128',
-            result=[(-128, 255, -32768, 65535, -8388608, 16777215,
-                     -2147483648L, 4294967295L, -9223372036854775808L,
-                     18446744073709551615L, 2012)],
-            rewritten=[
-                'select * from vtocc_ints where 1 != 1',
-                'select * from vtocc_ints where tiny = -128 limit 10001']),
-       Case(sql='select * from vtocc_ints where tiny = -128',
-            result=[(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L,
-                     4294967295L, -9223372036854775808L, 18446744073709551615L,
-                     2012)],
-            rewritten=[
-                'select * from vtocc_ints where tiny = -128 limit 10001']),
-       'begin',
-       Case(sql='insert into vtocc_ints select 2, tinyu, small, smallu, '
-            'medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints',
-            rewritten=[
-                'select 2, tinyu, small, smallu, medium, mediumu, normal, '
-                'normalu, big, bigu, y from vtocc_ints limit 10001',
-                'insert into vtocc_ints values (2, 255, -32768, 65535, '
-                '-8388608, 16777215, -2147483648, 4294967295, '
-                '-9223372036854775808, 18446744073709551615, 2012) '
-                '/* _stream vtocc_ints (tiny ) (2 )']),
-       'commit',
-       'begin',
-       'delete from vtocc_ints',
-       'commit']),
+    # data types test
+    MultiCase(
+        'integer data types',
+        ['begin',
+         Case(
+             sql='insert into vtocc_ints values(:tiny, :tinyu, :small, '
+             ':smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, '
+             ':year)',
+             bindings={
+                 'tiny': -128, 'tinyu': 255, 'small': -32768, 'smallu': 65535,
+                 'medium': -8388608, 'mediumu': 16777215, 'normal': -2147483648,
+                 'normalu': 4294967295, 'big': -9223372036854775808,
+                 'bigu': 18446744073709551615, 'year': 2012},
+             rewritten='insert into vtocc_ints values '
+             '(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, '
+             '4294967295, -9223372036854775808, 18446744073709551615, 2012) '
+             '/* _stream vtocc_ints (tiny ) (-128 )'),
+         'commit',
+         Case(sql='select * from vtocc_ints where tiny = -128',
+              result=[(-128, 255, -32768, 65535, -8388608, 16777215,
+                       -2147483648L, 4294967295L, -9223372036854775808L,
+                       18446744073709551615L, 2012)],
+              rewritten=[
+                  'select * from vtocc_ints where 1 != 1',
+                  'select * from vtocc_ints where tiny = -128 limit 10001']),
+         Case(sql='select * from vtocc_ints where tiny = -128',
+              result=[
+                  (-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L,
+                   4294967295L, -9223372036854775808L, 18446744073709551615L,
+                   2012)],
+              rewritten=[
+                  'select * from vtocc_ints where tiny = -128 limit 10001']),
+         'begin',
+         Case(
+             sql='insert into vtocc_ints select 2, tinyu, small, smallu, '
+             'medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints',
+             rewritten=[
+                 'select 2, tinyu, small, smallu, medium, mediumu, normal, '
+                 'normalu, big, bigu, y from vtocc_ints limit 10001',
+                 'insert into vtocc_ints values (2, 255, -32768, 65535, '
+                 '-8388608, 16777215, -2147483648, 4294967295, '
+                 '-9223372036854775808, 18446744073709551615, 2012) '
+                 '/* _stream vtocc_ints (tiny ) (2 )']),
+         'commit',
+         'begin',
+         'delete from vtocc_ints',
+         'commit']),
 
-  MultiCase(
-      'fractional data types',
-      ['begin',
-       Case(sql='insert into vtocc_fracts values(:id, :deci, :num, :f, :d)',
-            bindings={'id': 1, 'deci': Decimal('1.99'), 'num': Decimal('2.99'),
-                      'f': 3.99, 'd': 4.99},
-            rewritten="insert into vtocc_fracts values "
-            "(1, '1.99', '2.99', 3.99, 4.99) "
-            "/* _stream vtocc_fracts (id ) (1 )"),
-       'commit',
-       Case(sql='select * from vtocc_fracts where id = 1',
-         result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002, 4.9900000000000002)],
-         rewritten=[
-             'select * from vtocc_fracts where 1 != 1',
-             'select * from vtocc_fracts where id = 1 limit 10001']),
-       Case(sql='select * from vtocc_fracts where id = 1',
-            result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002,
-                     4.9900000000000002)],
-            rewritten=['select * from vtocc_fracts where id = 1 limit 10001']),
-       'begin',
-       Case(sql='insert into vtocc_fracts select 2, deci, num, f, d '
-            'from vtocc_fracts',
-            rewritten=[
-                'select 2, deci, num, f, d from vtocc_fracts limit 10001',
-                'insert into vtocc_fracts values (2, 1.99, 2.99, 3.99, 4.99) '
-                '/* _stream vtocc_fracts (id ) (2 )']),
-       'commit',
-       'begin',
-       'delete from vtocc_fracts',
-       'commit']),
+    MultiCase(
+        'fractional data types',
+        ['begin',
+         Case(
+             sql='insert into vtocc_fracts values(:id, :deci, :num, :f, :d)',
+             bindings={'id': 1, 'deci': Decimal('1.99'), 'num': Decimal('2.99'),
+                       'f': 3.99, 'd': 4.99},
+             rewritten="insert into vtocc_fracts values "
+             "(1, '1.99', '2.99', 3.99, 4.99) "
+             "/* _stream vtocc_fracts (id ) (1 )"),
+         'commit',
+         Case(
+             sql='select * from vtocc_fracts where id = 1',
+             result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002,
+                      4.9900000000000002)],
+             rewritten=[
+                 'select * from vtocc_fracts where 1 != 1',
+                 'select * from vtocc_fracts where id = 1 limit 10001']),
+         Case(
+             sql='select * from vtocc_fracts where id = 1',
+             result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002,
+                      4.9900000000000002)],
+             rewritten=[
+                 'select * from vtocc_fracts where id = 1 limit 10001']),
+         'begin',
+         Case(
+             sql='insert into vtocc_fracts select 2, deci, num, f, d '
+             'from vtocc_fracts',
+             rewritten=[
+                 'select 2, deci, num, f, d from vtocc_fracts limit 10001',
+                 'insert into vtocc_fracts values (2, 1.99, 2.99, 3.99, 4.99) '
+                 '/* _stream vtocc_fracts (id ) (2 )']),
+         'commit',
+         'begin',
+         'delete from vtocc_fracts',
+         'commit']),
 
-  MultiCase(
-      'string data types',
-      ['begin',
-       Case(
-           sql='insert into vtocc_strings values '
-           '(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)',
-           bindings={'vb': 'a', 'c': 'b', 'vc': 'c', 'b': 'd', 'tb': 'e',
-                     'bl': 'f', 'ttx': 'g', 'tx': 'h', 'en': 'a', 's': 'a,b'},
-           rewritten="insert into vtocc_strings values "
-           "('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b') "
-           "/* _stream vtocc_strings (vb ) ('YQ==' )"),
-       'commit',
-       Case(
-           sql="select * from vtocc_strings where vb = 'a'",
-           result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h',
-                    'a', 'a,b')],
-           rewritten=[
-               'select * from vtocc_strings where 1 != 1',
-               "select * from vtocc_strings where vb = 'a' limit 10001"]),
-       Case(
-           sql="select * from vtocc_strings where vb = 'a'",
-           result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h',
-                    'a', 'a,b')],
-           rewritten=[
-               "select * from vtocc_strings where vb = 'a' limit 10001"]),
-       'begin',
-       Case(
-           sql='insert into vtocc_strings select '
-           "'b', c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings",
-           rewritten=[
-               "select 'b', c, vc, b, tb, bl, ttx, tx, en, s "
-               "from vtocc_strings limit 10001",
-               "insert into vtocc_strings values "
-               "('b', 'b', 'c', 'd\\0\\0\\0', 'e', 'f', 'g', 'h', 'a', 'a,b') "
-               "/* _stream vtocc_strings (vb ) ('Yg==' )"]),
-       'commit',
-       'begin',
-       'delete from vtocc_strings',
-       'commit']),
+    MultiCase(
+        'string data types',
+        ['begin',
+         Case(
+             sql='insert into vtocc_strings values '
+             '(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)',
+             bindings={'vb': 'a', 'c': 'b', 'vc': 'c', 'b': 'd', 'tb': 'e',
+                       'bl': 'f', 'ttx': 'g', 'tx': 'h', 'en': 'a', 's': 'a,b'},
+             rewritten="insert into vtocc_strings values "
+             "('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b') "
+             "/* _stream vtocc_strings (vb ) ('YQ==' )"),
+         'commit',
+         Case(
+             sql="select * from vtocc_strings where vb = 'a'",
+             result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h',
+                      'a', 'a,b')],
+             rewritten=[
+                 'select * from vtocc_strings where 1 != 1',
+                 "select * from vtocc_strings where vb = 'a' limit 10001"]),
+         Case(
+             sql="select * from vtocc_strings where vb = 'a'",
+             result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h',
+                      'a', 'a,b')],
+             rewritten=[
+                 "select * from vtocc_strings where vb = 'a' limit 10001"]),
+         'begin',
+         Case(
+             sql='insert into vtocc_strings select '
+             "'b', c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings",
+             rewritten=[
+                 "select 'b', c, vc, b, tb, bl, ttx, tx, en, s "
+                 "from vtocc_strings limit 10001",
+                 "insert into vtocc_strings values "
+                 "('b', 'b', 'c', 'd\\0\\0\\0', 'e', 'f', 'g', 'h', 'a', "
+                 "'a,b') /* _stream vtocc_strings (vb ) ('Yg==' )"]),
+         'commit',
+         'begin',
+         'delete from vtocc_strings',
+         'commit']),
 
-  MultiCase(
-      'misc data types',
-      ['begin',
-       Case(sql='insert into vtocc_misc values(:id, :b, :d, :dt, :t)',
-            bindings={
-                'id': 1, 'b': '\x01', 'd': '2012-01-01',
-                'dt': '2012-01-01 15:45:45', 't': '15:45:45'},
-            rewritten="insert into vtocc_misc values "
-            "(1, '\1', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') "
-            "/* _stream vtocc_misc (id ) (1 )"),
-       'commit',
-       Case(sql='select * from vtocc_misc where id = 1',
-         result=[
-             (1L, '\x01', datetime.date(2012, 1, 1),
-              datetime.datetime(2012, 1, 1, 15, 45, 45),
-              datetime.timedelta(0, 56745))],
-         rewritten=[
-           'select * from vtocc_misc where 1 != 1',
-           'select * from vtocc_misc where id = 1 limit 10001']),
-       Case(sql='select * from vtocc_misc where id = 1',
-         result=[
-             (1L, '\x01', datetime.date(2012, 1, 1),
-              datetime.datetime(2012, 1, 1, 15, 45, 45),
-              datetime.timedelta(0, 56745))],
-         rewritten=['select * from vtocc_misc where id = 1 limit 10001']),
-       'begin',
-       Case(sql='insert into vtocc_misc select 2, b, d, dt, t from vtocc_misc',
-         rewritten=[
-             'select 2, b, d, dt, t from vtocc_misc limit 10001',
-             "insert into vtocc_misc values "
-             "(2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') "
-             "/* _stream vtocc_misc (id ) (2 )"]),
-       'commit',
-       'begin',
-       'delete from vtocc_misc',
-       'commit']),
+    MultiCase(
+        'misc data types',
+        ['begin',
+         Case(sql='insert into vtocc_misc values(:id, :b, :d, :dt, :t)',
+              bindings={
+                  'id': 1, 'b': '\x01', 'd': '2012-01-01',
+                  'dt': '2012-01-01 15:45:45', 't': '15:45:45'},
+              rewritten="insert into vtocc_misc values "
+              "(1, '\1', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') "
+              "/* _stream vtocc_misc (id ) (1 )"),
+         'commit',
+         Case(sql='select * from vtocc_misc where id = 1',
+              result=[
+                  (1L, '\x01', datetime.date(2012, 1, 1),
+                   datetime.datetime(2012, 1, 1, 15, 45, 45),
+                   datetime.timedelta(0, 56745))],
+              rewritten=[
+                  'select * from vtocc_misc where 1 != 1',
+                  'select * from vtocc_misc where id = 1 limit 10001']),
+         Case(sql='select * from vtocc_misc where id = 1',
+              result=[
+                  (1L, '\x01', datetime.date(2012, 1, 1),
+                   datetime.datetime(2012, 1, 1, 15, 45, 45),
+                   datetime.timedelta(0, 56745))],
+              rewritten=['select * from vtocc_misc where id = 1 limit 10001']),
+         'begin',
+         Case(
+             sql='insert into vtocc_misc select 2, b, d, dt, t from vtocc_misc',
+             rewritten=[
+                 'select 2, b, d, dt, t from vtocc_misc limit 10001',
+                 "insert into vtocc_misc values "
+                 "(2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') "
+                 "/* _stream vtocc_misc (id ) (2 )"]),
+         'commit',
+         'begin',
+         'delete from vtocc_misc',
+         'commit']),
 ]

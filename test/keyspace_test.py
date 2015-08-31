@@ -9,8 +9,8 @@ import unittest
 from vtdb import vtgate_client
 
 import environment
-import utils
 import tablet
+import utils
 from protocols_flavor import protocols_flavor
 
 SHARDED_KEYSPACE = 'TEST_KEYSPACE_SHARDED'

@@ -34,43 +34,43 @@ cases = [
     # (1)
 
     Case1(
-      doc='PK_IN (empty cache)',
-      query_plan='PK_IN',
-      sql='select * from vtocc_cached1 where eid in (1, 3, 6)',
-      result=[(1L, 'a', 'abcd'), (3L, 'c', 'abcd')],
-      rowcount=2,
-      rewritten=[
-          'select * from vtocc_cached1 where 1 != 1',
-          'select eid, name, foo from vtocc_cached1 where eid in (3, 6)'],
-      cache_hits=1,
-      cache_misses=1,
-      cache_absent=1),
+        doc='PK_IN (empty cache)',
+        query_plan='PK_IN',
+        sql='select * from vtocc_cached1 where eid in (1, 3, 6)',
+        result=[(1L, 'a', 'abcd'), (3L, 'c', 'abcd')],
+        rowcount=2,
+        rewritten=[
+            'select * from vtocc_cached1 where 1 != 1',
+            'select eid, name, foo from vtocc_cached1 where eid in (3, 6)'],
+        cache_hits=1,
+        cache_misses=1,
+        cache_absent=1),
     # (1, 3)
 
     Case1(
-      doc='PK_IN limit 0',
-      query_plan='PK_IN',
-      sql='select * from vtocc_cached1 where eid in (1, 3, 6) limit 0',
-      result=[],
-      rowcount=0,
-      rewritten=['select * from vtocc_cached1 where 1 != 1'],
-      cache_hits=0,
-      cache_misses=0,
-      cache_absent=0),
+        doc='PK_IN limit 0',
+        query_plan='PK_IN',
+        sql='select * from vtocc_cached1 where eid in (1, 3, 6) limit 0',
+        result=[],
+        rowcount=0,
+        rewritten=['select * from vtocc_cached1 where 1 != 1'],
+        cache_hits=0,
+        cache_misses=0,
+        cache_absent=0),
     # (1, 3)
 
     Case1(
-      doc='PK_IN limit 1',
-      query_plan='PK_IN',
-      sql='select * from vtocc_cached1 where eid in (1, 3, 6) limit 1',
-      result=[(1L, 'a', 'abcd')],
-      rowcount=1,
-      rewritten=[
-          'select * from vtocc_cached1 where 1 != 1',
-          'select eid, name, foo from vtocc_cached1 where eid in (6)'],
-      cache_hits=2,
-      cache_misses=0,
-      cache_absent=1),
+        doc='PK_IN limit 1',
+        query_plan='PK_IN',
+        sql='select * from vtocc_cached1 where eid in (1, 3, 6) limit 1',
+        result=[(1L, 'a', 'abcd')],
+        rowcount=1,
+        rewritten=[
+            'select * from vtocc_cached1 where 1 != 1',
+            'select eid, name, foo from vtocc_cached1 where eid in (6)'],
+        cache_hits=2,
+        cache_misses=0,
+        cache_absent=1),
     # (1, 3)
 
     Case1(
@@ -103,14 +103,15 @@ cases = [
     # (1, 2, 3)
 
     Case1(
-      doc='covering index',
-      query_plan='PASS_SELECT',
-      sql="select eid, name from vtocc_cached1 where name = 'a'",
-      result=[(1L, 'a'), (2L, 'a')],
-      rowcount=2,
-      rewritten=[
-          'select eid, name from vtocc_cached1 where 1 != 1',
-          "select eid, name from vtocc_cached1 where name = 'a' limit 10001"]),
+        doc='covering index',
+        query_plan='PASS_SELECT',
+        sql="select eid, name from vtocc_cached1 where name = 'a'",
+        result=[(1L, 'a'), (2L, 'a')],
+        rowcount=2,
+        rewritten=[
+            'select eid, name from vtocc_cached1 where 1 != 1',
+            'select eid, name from vtocc_cached1 '
+            "where name = 'a' limit 10001"]),
     # (1, 2, 3)
 
     Case1(

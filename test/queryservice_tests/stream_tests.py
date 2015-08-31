@@ -15,13 +15,13 @@ class TestStream(framework.TestCase):
 
   def tearDown(self):
     self.env.conn.begin()
-    self.env.execute("delete from vtocc_big")
+    self.env.execute('delete from vtocc_big')
     self.env.conn.commit()
 
   # UNION queries like this used to crash vtocc, only straight SELECT
   # would go through. This is a unit test to show it is fixed.
   def test_union(self):
-    cu = self.env.execute("select 1 from dual union select 1 from dual",
+    cu = self.env.execute('select 1 from dual union select 1 from dual',
                           cursorclass=cursor.StreamCursor)
     count = 0
     while True:
@@ -34,34 +34,34 @@ class TestStream(framework.TestCase):
   def test_customrules(self):
     bv = {'asdfg': 1}
     try:
-      self.env.execute("select * from vtocc_test where intval=:asdfg", bv,
+      self.env.execute('select * from vtocc_test where intval=:asdfg', bv,
                        cursorclass=cursor.StreamCursor)
-      self.fail("Bindvar asdfg should not be allowed by custom rule")
+      self.fail('Bindvar asdfg should not be allowed by custom rule')
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Query disallowed")
+      self.assertContains(str(e), 'error: Query disallowed')
     # Test dynamic custom rule for vttablet
-    if self.env.env == "vttablet":
+    if self.env.env == 'vttablet':
       if environment.topo_server().flavor() == 'zookeeper':
         # Make a change to the rule
         self.env.change_customrules()
         time.sleep(3)
         try:
           self.env.execute(
-              "select * from vtocc_test where intval=:asdfg", bv,
+              'select * from vtocc_test where intval=:asdfg', bv,
               cursorclass=cursor.StreamCursor)
         except dbexceptions.DatabaseError as e:
           self.fail(
-              "Bindvar asdfg should be allowed after a change of custom rule, "
-              "Err=" + str(e))
+              'Bindvar asdfg should be allowed after a change of custom rule, '
+              'Err=' + str(e))
         self.env.restore_customrules()
         time.sleep(3)
         try:
           self.env.execute(
-              "select * from vtocc_test where intval=:asdfg", bv,
+              'select * from vtocc_test where intval=:asdfg', bv,
               cursorclass=cursor.StreamCursor)
-          self.fail("Bindvar asdfg should not be allowed by custom rule")
+          self.fail('Bindvar asdfg should not be allowed by custom rule')
         except dbexceptions.DatabaseError as e:
-          self.assertContains(str(e), "error: Query disallowed")
+          self.assertContains(str(e), 'error: Query disallowed')
 
   def test_basic_stream(self):
     self._populate_vtocc_big_table(100)
@@ -69,17 +69,17 @@ class TestStream(framework.TestCase):
 
     # select lots of data using a non-streaming query
     if True:
-      for i in xrange(loop_count):
-        cu = self.env.execute("select * from vtocc_big b1, vtocc_big b2")
+      for _ in xrange(loop_count):
+        cu = self.env.execute('select * from vtocc_big b1, vtocc_big b2')
         rows = cu.fetchall()
         self.assertEqual(len(rows), 10000)
         self.check_row_10(rows[10])
 
     # select lots of data using a streaming query
     if True:
-      for i in xrange(loop_count):
+      for _ in xrange(loop_count):
         cu = cursor.StreamCursor(self.env.conn)
-        cu.execute("select * from vtocc_big b1, vtocc_big b2", {})
+        cu.execute('select * from vtocc_big b1, vtocc_big b2', {})
         count = 0
         while True:
           row = cu.fetchone()
@@ -90,11 +90,10 @@ class TestStream(framework.TestCase):
           count += 1
         self.assertEqual(count, 10000)
 
-
   def test_streaming_error(self):
     with self.assertRaises(dbexceptions.DatabaseError):
-      cu = self.env.execute("select count(abcd) from vtocc_big b1",
-                            cursorclass=cursor.StreamCursor)
+      self.env.execute('select count(abcd) from vtocc_big b1',
+                       cursorclass=cursor.StreamCursor)
 
   def check_row_10(self, row):
     # null the dates so they match
@@ -117,44 +116,44 @@ class TestStream(framework.TestCase):
       self._populate_vtocc_big_table(100)
       query = 'select * from vtocc_big b1, vtocc_big b2, vtocc_big b3'
       cu = cursor.StreamCursor(self.env.conn)
-      thd = threading.Thread(target=self._stream_exec, args=(cu,query))
+      thd = threading.Thread(target=self._stream_exec, args=(cu, query))
       thd.start()
-      tablet_addr = "http://" + self.env.conn.addr
+      tablet_addr = 'http://' + self.env.conn.addr
       connId = self._get_conn_id(tablet_addr)
       self._terminate_query(tablet_addr, connId)
       thd.join()
       with self.assertRaises(dbexceptions.DatabaseError) as cm:
         cu.fetchall()
       errMsg1 = (
-          "error: the query was killed either because it timed out or was "
-          "canceled: Lost connectioy to MySQL server during query (errno 2013)")
-      errMsg2 = "error: Query execution was interrupted (errno 1317)"
+          'error: the query was killed either because it timed out or was '
+          'canceled: Lost connection to MySQL server during query (errno 2013)')
+      errMsg2 = 'error: Query execution was interrupted (errno 1317)'
       self.assertNotIn(
           cm.exception, (errMsg1, errMsg2),
-          "did not raise interruption error: %s" % str(cm.exception))
+          'did not raise interruption error: %s' % str(cm.exception))
       cu.close()
     except Exception, e:
-      self.fail("Failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
 
   def _populate_vtocc_big_table(self, num_rows):
     self.env.conn.begin()
     for i in xrange(num_rows):
       self.env.execute(
-          "insert into vtocc_big values " +
-          "(" + str(i) + ", " +
-          "'AAAAAAAAAAAAAAAAAA " + str(i) + "', " +
-          "'BBBBBBBBBBBBBBBBBB " + str(i) + "', " +
-          "'C', " +
-          "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
-          "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
-          "now()," +
-          "'FF " + str(i) + "', " +
+          'insert into vtocc_big values '
+          '(' + str(i) + ', '
+          "'AAAAAAAAAAAAAAAAAA " + str(i) + "', "
+          "'BBBBBBBBBBBBBBBBBB " + str(i) + "', "
+          "'C', "
+          "'DDDDDDDDDDDDDDDDDD " + str(i) + "', "
+          "'EEEEEEEEEEEEEEEEEE " + str(i) + "', "
+          'now(),'
+          "'FF " + str(i) + "', "
           "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
-          str(i) + ", " +
-          str(i) + ", " +
-          "now()," +
-          str(i) + ", " +
-          str(i%100) + ")")
+          str(i) + ', ' +
+          str(i) + ', '
+          'now(),' +
+          str(i) + ', ' +
+          str(i%100) + ')')
     self.env.conn.commit()
 
   # Initiate a slow stream query
@@ -163,16 +162,16 @@ class TestStream(framework.TestCase):
 
   # Get the connection id from status page
   def _get_conn_id(self, tablet_addr):
-    streamqueryz_url = tablet_addr +  "/streamqueryz?format=json"
+    streamqueryz_url = tablet_addr +  '/streamqueryz?format=json'
     retries = 3
     streaming_queries = []
-    while len(streaming_queries) == 0:
+    while not streaming_queries:
       content = urllib.urlopen(streamqueryz_url).read()
       streaming_queries = json.loads(content)
       retries -= 1
       if retries == 0:
         self.fail(
-            "unable to fetch streaming queries from %s" % streamqueryz_url)
+            'unable to fetch streaming queries from %s' % streamqueryz_url)
       else:
         time.sleep(1)
     connId = streaming_queries[0]['ConnID']
@@ -181,6 +180,6 @@ class TestStream(framework.TestCase):
   # Terminate the query via streamqueryz admin page
   def _terminate_query(self, tablet_addr, connId):
     terminate_url = (
-        tablet_addr + "/streamqueryz/terminate?format=json&connID=" +
+        tablet_addr + '/streamqueryz/terminate?format=json&connID=' +
         str(connId))
     urllib.urlopen(terminate_url).read()

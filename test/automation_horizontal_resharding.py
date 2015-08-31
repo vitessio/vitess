@@ -14,6 +14,7 @@ def setUpModule():
   worker.setUpModule()
   utils.Vtctld().start()
 
+
 def tearDownModule():
   worker.tearDownModule()
 

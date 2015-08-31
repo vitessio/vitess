@@ -119,8 +119,8 @@ class LocalDatabase(object):
       # Strip newline and other trailing whitespace
       line = line.rstrip()
 
-      if not inside_single_quotes and not inside_double_quotes and \
-         line.startswith('--'):
+      if (not inside_single_quotes and not inside_double_quotes and
+          line.startswith('--')):
         # Line starts with '--', skip line
         continue
 
@@ -168,10 +168,9 @@ class LocalDatabase(object):
       # Reached end of line
       if line and not line.isspace():
         if source_root and not cmd and line.startswith('source '):
-          commands.extend(get_sql_commands_from_file(
-              self,
+          commands.extend(self.get_sql_commands_from_file(
               os.path.join(source_root, line[7:]),
-              source_root=source_root))
+y              source_root=source_root))
         else:
           cmd += line
           cmd += '\n'

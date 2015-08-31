@@ -344,7 +344,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_cache(self):
     self.env.execute("set vt_query_cache_size=1")
-    bv={"ival1": 1, "ival2": 1}
+    bv = {"ival1": 1, "ival2": 1}
     self.env.execute("select * from vtocc_test where intval=:ival1", bv)
     self.env.execute("select * from vtocc_test where intval=:ival2", bv)
     vend = self.env.debug_vars()
@@ -539,7 +539,7 @@ class TestNocache(framework.TestCase):
   def test_batch(self):
     queries = ["select * from vtocc_a where id = :a",
                "select * from vtocc_b where id = :b"]
-    bvars = [{"a":2}, {"b":2}]
+    bvars = [{"a": 2}, {"b": 2}]
     results = self.env.conn._execute_batch(queries, bvars, False)
     self.assertEqual(
         results,

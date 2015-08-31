@@ -148,7 +148,7 @@ class Case(object):
     self.doc = doc
     self.query_plan = query_plan
     self.cache_table = cache_table
-    self.cache_hits= cache_hits
+    self.cache_hits = cache_hits
     self.cache_misses = cache_misses
     self.cache_absent = cache_absent
     self.cache_invalidations = cache_invalidations
@@ -194,7 +194,8 @@ class Case(object):
       if (self.cache_absent is not None and
           tdelta['Absent'] != self.cache_absent):
         failures.append(
-            'Bad Cache Absent: %s != %s' % (self.cache_absent, tdelta['Absent']))
+            'Bad Cache Absent: %s != %s' %
+            (self.cache_absent, tdelta['Absent']))
 
       if (self.cache_misses is not None and
           tdelta['Misses'] != self.cache_misses):

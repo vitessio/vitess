@@ -27,6 +27,7 @@ def create_keyspace_id(sharding_key):
 
 
 class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
+
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)
@@ -38,6 +39,7 @@ class VtRangeBase(db_object_range_sharded.DBObjectRangeSharded):
 
 
 class VtEntityRangeBase(db_object_range_sharded.DBObjectEntityRangeSharded):
+
   @classmethod
   def sharding_key_to_keyspace_id(class_, sharding_key):
     keyspace_id = create_keyspace_id(sharding_key)

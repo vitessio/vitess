@@ -5,6 +5,7 @@
 """This module defines the interface for the MySQL database.
 """
 
+
 class MySqlDB(object):
   """A MySqlDB contains basic info about a MySQL instance."""
 
