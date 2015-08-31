@@ -16,19 +16,15 @@
 # In particular, this happens when the system is under load and threads do not
 # get scheduled as fast as usual. Then, the expected timings do not match.
 
-blacklist="misc/flaky_unit_tests.txt"
-
 if [ -n "$VT_GO_PARALLEL" ]; then
   GO_PARALLEL="-p $VT_GO_PARALLEL"
 fi
 
-# Go packages which have flaky tests.
-# (Filters out comments and gets only the package names.)
-flaky_packages=$(grep -oE '^[^#[:space:]]+' $blacklist | sort)
-
 # All Go packages with test files.
+# Output per line: <full Go package name> <all _test.go files in the package>*
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
 
+# Flaky tests have the suffix "_flaky_test.go".
 all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1)
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
@@ -38,7 +34,7 @@ if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo
   echo "This should NOT happen. Did you introduce a flaky unit test?"
-  echo "If so, please enable retries for it in: $blacklist and re-run this test."
+  echo "If so, please rename it to the suffix _flaky_test.go."
   exit 1
 fi
 
@@ -50,7 +46,7 @@ for pkg in $flaky_tests; do
   until godep go test -timeout 30s $GO_PARALLEL $pkg; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
-      echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please fix them."
+      echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."
       exit 1
     fi
   done
