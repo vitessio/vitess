@@ -15,6 +15,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -42,6 +43,8 @@ var (
 type ServerError struct {
 	Code int
 	Err  string
+	// ServerCode is the error code that we got from the server.
+	ServerCode vtrpc.ErrorCode
 }
 
 func (e *ServerError) Error() string { return e.Err }

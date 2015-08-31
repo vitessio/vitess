@@ -95,6 +95,40 @@ func WithPrefix(prefix string, in error) error {
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError: "
 
+// GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpc.ErrorCode
+func GRPCCodeToErrorCode(code codes.Code) vtrpc.ErrorCode {
+	switch code {
+	case codes.OK:
+		return vtrpc.ErrorCode_SUCCESS
+	case codes.Canceled:
+		return vtrpc.ErrorCode_CANCELLED
+	case codes.Unknown:
+		return vtrpc.ErrorCode_UNKNOWN_ERROR
+	case codes.InvalidArgument:
+		return vtrpc.ErrorCode_BAD_INPUT
+	case codes.DeadlineExceeded:
+		return vtrpc.ErrorCode_DEADLINE_EXCEEDED
+	case codes.AlreadyExists:
+		return vtrpc.ErrorCode_INTEGRITY_ERROR
+	case codes.PermissionDenied:
+		return vtrpc.ErrorCode_PERMISSION_DENIED
+	case codes.ResourceExhausted:
+		return vtrpc.ErrorCode_RESOURCE_EXHAUSTED
+	case codes.FailedPrecondition:
+		return vtrpc.ErrorCode_QUERY_NOT_SERVED
+	case codes.Aborted:
+		return vtrpc.ErrorCode_NOT_IN_TX
+	case codes.Internal:
+		return vtrpc.ErrorCode_INTERNAL_ERROR
+	case codes.Unavailable:
+		return vtrpc.ErrorCode_TRANSIENT_ERROR
+	case codes.Unauthenticated:
+		return vtrpc.ErrorCode_UNAUTHENTICATED
+	default:
+		return vtrpc.ErrorCode_UNKNOWN_ERROR
+	}
+}
+
 // ErrorCodeToGRPCCode maps a vtrpc.ErrorCode to a gRPC codes.Code
 func ErrorCodeToGRPCCode(code vtrpc.ErrorCode) codes.Code {
 	switch code {

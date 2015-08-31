@@ -385,5 +385,10 @@ func tabletErrorFromGRPC(err error) error {
 	default:
 		code = tabletconn.ERR_NORMAL
 	}
-	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+
+	return &tabletconn.ServerError{
+		Code:       code,
+		Err:        fmt.Sprintf("vttablet: %v", err),
+		ServerCode: vterrors.GRPCCodeToErrorCode(grpc.Code(err)),
+	}
 }
