@@ -93,7 +93,9 @@ func testPid(t *testing.T, port string, want int) {
 		resp, err = http.Get(fmt.Sprintf("http://localhost:%s%s", port, pidURL))
 		var retryableErr bool
 		if err != nil {
-			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "EOF") {
+			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "EOF") ||
+				strings.Contains(err.Error(), "net/http: transport closed before response was received") ||
+				strings.Contains(err.Error(), "http: can't write HTTP request on broken connection") {
 				retryableErr = true
 			}
 		}
