@@ -26,8 +26,6 @@ import (
 // ScatterConn is used for executing queries across
 // multiple shard level connections.
 type ScatterConn struct {
-	toposerv             SrvTopoServer
-	cell                 string
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
 	gateway              Gateway
@@ -52,8 +50,6 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 	connTimings := stats.NewMultiTimings(tabletConnectStatsName, []string{"Keyspace", "ShardName", "DbType"})
 	gateway := GetGatewayCreator()(serv, cell, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connTimings)
 	return &ScatterConn{
-		toposerv:             serv,
-		cell:                 cell,
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		gateway:              gateway,
@@ -65,44 +61,7 @@ func NewScatterConn(serv SrvTopoServer, statsName, cell string, retryDelay time.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving.
 func (stc *ScatterConn) InitializeConnections(ctx context.Context) error {
-	ksNames, err := stc.toposerv.GetSrvKeyspaceNames(ctx, stc.cell)
-	if err != nil {
-		return err
-	}
-	var wg sync.WaitGroup
-	var errRecorder concurrency.AllErrorRecorder
-	for _, ksName := range ksNames {
-		wg.Add(1)
-		go func(keyspace string) {
-			defer wg.Done()
-			// get SrvKeyspace for cell/keyspace
-			ks, err := stc.toposerv.GetSrvKeyspace(ctx, stc.cell, keyspace)
-			if err != nil {
-				errRecorder.RecordError(err)
-				return
-			}
-			// work on all shards of all serving tablet types
-			for tabletType, ksPartition := range ks.Partitions {
-				tt := topo.TabletTypeToProto(tabletType)
-				for _, shard := range ksPartition.ShardReferences {
-					wg.Add(1)
-					go func(shardName string, tabletType pb.TabletType) {
-						defer wg.Done()
-						err = stc.gateway.Dial(ctx, keyspace, shardName, tabletType)
-						if err != nil {
-							errRecorder.RecordError(err)
-							return
-						}
-					}(shard.Name, tt)
-				}
-			}
-		}(ksName)
-	}
-	wg.Wait()
-	if errRecorder.HasErrors() {
-		return errRecorder.Error()
-	}
-	return nil
+	return stc.gateway.InitializeConnections(ctx)
 }
 
 // Execute executes a non-streaming query on the specified shards.

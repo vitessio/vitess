@@ -609,8 +609,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, inSession *proto.Session) error
 // greater than or equal to SplitQueryRequest.SplitCount, where N is the
 // number of shards.
 func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int, reply *proto.SplitQueryResult) error {
-	sc := vtg.resolver.scatterConn
-	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, sc.toposerv, sc.cell, keyspace, pb.TabletType_RDONLY)
+	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, pb.TabletType_RDONLY)
 	if err != nil {
 		return err
 	}
@@ -646,7 +645,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 
 // GetSrvKeyspace is part of the vtgate service API.
 func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
-	return vtg.resolver.scatterConn.toposerv.GetSrvKeyspace(ctx, vtg.resolver.scatterConn.cell, keyspace)
+	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
