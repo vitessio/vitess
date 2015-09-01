@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 const errDupKey = "errno 1062"
@@ -292,7 +293,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
-func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	startTime := time.Now()
 	statsKey := []string{"ExecuteEntityIds", keyspace, strings.ToLower(tabletType.String())}
 	defer vtg.timings.Record(statsKey, startTime)

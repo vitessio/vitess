@@ -136,7 +136,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		request.BindVariables,
 		request.Keyspace,
 		request.EntityColumnName,
-		request.EntityKeyspaceIDs,
+		proto.EntityIdsToProto(request.EntityKeyspaceIDs),
 		topo.TabletTypeToProto(request.TabletType),
 		request.Session,
 		request.NotInTransaction,

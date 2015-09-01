@@ -20,6 +20,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // EchoPrefix is the prefix to send with queries so they go
@@ -146,7 +147,7 @@ func (c *echoClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVaria
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
-func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		reply.Result = echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),

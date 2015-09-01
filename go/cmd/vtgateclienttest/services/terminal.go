@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 var errTerminal = errors.New("vtgate test client, errTerminal")
@@ -47,7 +48,7 @@ func (c *terminalClient) ExecuteKeyRanges(ctx context.Context, sql string, bindV
 	return errTerminal
 }
 
-func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	return errTerminal
 }
 

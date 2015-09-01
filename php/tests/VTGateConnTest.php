@@ -26,7 +26,7 @@ class VTGateConnTest extends PHPUnit_Framework_TestCase {
 	private static $KEY_RANGES_ECHO = '[end:"\200\000\000\000\000\000\000\000"  start:"\200\000\000\000\000\000\000\000" ]';
 	private static $ENTITY_COLUMN_NAME = 'test_column';
 	private static $ENTITY_KEYSPACE_IDS; // initialized in setUpBeforeClass()
-	private static $ENTITY_KEYSPACE_IDS_ECHO = '[{1.5 1234567800000002} {123 1234567800000000} {456 1234567800000001}]';
+	private static $ENTITY_KEYSPACE_IDS_ECHO = '[xid_type:TYPE_FLOAT xid_float:1.5 keyspace_id:"\0224Vx\000\000\000\002"  xid_type:TYPE_INT xid_int:123 keyspace_id:"\0224Vx\000\000\000\000"  xid_type:TYPE_UINT xid_uint:456 keyspace_id:"\0224Vx\000\000\000\001" ]';
 	private static $SESSION_ECHO = 'InTransaction: true, ShardSession: []';
 
 	public static function setUpBeforeClass() {

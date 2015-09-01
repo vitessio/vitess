@@ -152,7 +152,7 @@ func (vtg *VTGateP3) ExecuteEntityIds(ctx context.Context, request *pb.ExecuteEn
 		tproto.Proto3ToBindVariables(request.Query.BindVariables),
 		request.Keyspace,
 		request.EntityColumnName,
-		proto.ProtoToEntityIds(request.EntityKeyspaceIds),
+		request.EntityKeyspaceIds,
 		request.TabletType,
 		proto.ProtoToSession(request.Session),
 		request.NotInTransaction,

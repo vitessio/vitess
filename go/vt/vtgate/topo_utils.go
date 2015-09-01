@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 func mapKeyspaceIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, keyspaceIds [][]byte) (string, []string, error) {
@@ -75,18 +76,29 @@ func getShardForKeyspaceID(allShards []topo.ShardReference, keyspaceID []byte) (
 	return "", fmt.Errorf("KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
 }
 
-func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, entityIds []proto.EntityId, tabletType pb.TabletType) (string, map[string][]interface{}, error) {
+func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, entityIds []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType) (string, map[string][]interface{}, error) {
 	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	var shards = make(map[string][]interface{})
 	for _, eid := range entityIds {
-		shard, err := getShardForKeyspaceID(allShards, []byte(eid.KeyspaceID))
+		shard, err := getShardForKeyspaceID(allShards, eid.KeyspaceId)
 		if err != nil {
 			return "", nil, err
 		}
-		shards[shard] = append(shards[shard], eid.ExternalID)
+		switch eid.XidType {
+		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_NULL:
+			shards[shard] = append(shards[shard], nil)
+		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES:
+			shards[shard] = append(shards[shard], eid.XidBytes)
+		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT:
+			shards[shard] = append(shards[shard], eid.XidInt)
+		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_UINT:
+			shards[shard] = append(shards[shard], eid.XidUint)
+		case pbg.ExecuteEntityIdsRequest_EntityId_TYPE_FLOAT:
+			shards[shard] = append(shards[shard], eid.XidFloat)
+		}
 	}
 	return keyspace, shards, nil
 }

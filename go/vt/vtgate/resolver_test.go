@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // This file uses the sandbox_test framework.
@@ -54,28 +55,22 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 
 func TestResolverExecuteEntityIds(t *testing.T) {
 	testResolverGeneric(t, "TestResolverExecuteEntityIds", func() (*mproto.QueryResult, error) {
-		kid10, err := key.HexKeyspaceId("10").Unhex()
-		if err != nil {
-			return nil, err
-		}
-		kid25, err := key.HexKeyspaceId("25").Unhex()
-		if err != nil {
-			return nil, err
-		}
 		res := NewResolver(new(sandboxTopo), "", "aa", retryDelay, 0, connTimeoutTotal, connTimeoutPerConn, connLife)
 		return res.ExecuteEntityIds(context.Background(),
 			"query",
 			nil,
 			"TestResolverExecuteEntityIds",
 			"col",
-			[]proto.EntityId{
-				proto.EntityId{
-					ExternalID: 0,
-					KeyspaceID: kid10,
+			[]*pbg.ExecuteEntityIdsRequest_EntityId{
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_INT,
+					XidInt:     0,
+					KeyspaceId: []byte{0x10},
 				},
-				proto.EntityId{
-					ExternalID: "1",
-					KeyspaceID: kid25,
+				&pbg.ExecuteEntityIdsRequest_EntityId{
+					XidType:    pbg.ExecuteEntityIdsRequest_EntityId_TYPE_BYTES,
+					XidBytes:   []byte("1"),
+					KeyspaceId: []byte{0x25},
 				},
 			},
 			pb.TabletType_MASTER,

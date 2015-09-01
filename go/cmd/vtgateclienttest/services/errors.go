@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
 // errorClient implements vtgateservice.VTGateService
@@ -64,7 +65,7 @@ func (c *errorClient) ExecuteKeyRanges(ctx context.Context, sql string, bindVari
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
-func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if sql == "return integrity error" {
 		return fmt.Errorf("vtgate test client, errorClient.ExecuteEntityIds returning integrity error (errno 1062)")
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
 	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -92,7 +93,7 @@ func (c *callerIDClient) ExecuteKeyRanges(ctx context.Context, sql string, bindV
 	return c.fallbackClient.ExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, session, notInTransaction, reply)
 }
 
-func (c *callerIDClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []proto.EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
+func (c *callerIDClient) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*pbg.ExecuteEntityIdsRequest_EntityId, tabletType pb.TabletType, session *proto.Session, notInTransaction bool, reply *proto.QueryResult) error {
 	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return err
 	}
