@@ -638,17 +638,25 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>WORKER</code> | <code>10</code> |  |
 | <code>SCRAP</code> | <code>11</code> |  |
 
-### vtrpc.ErrorCodeDeprecated
+### vtrpc.ErrorCode
 
- ErrorCodeDeprecated is the enum values for Errors. These are deprecated errors, we should instead be using ErrorCode.
+ ErrorCode is the enum values for Errors. Internally, errors should be created with one of these codes. These will then be translated over the wire by various RPC frameworks.
 
 | Name |Value |Description |
 | :-------- | :-------- | :-------- 
-| <code>NoError</code> | <code>0</code> | NoError means there was no error, and the message should be ignored.  |
-| <code>TabletError</code> | <code>1000</code> | TabletError is the base VtTablet error. All VtTablet errors should be 4 digits, starting with 1.  |
-| <code>UnknownTabletError</code> | <code>1999</code> | UnknownTabletError is the code for an unknown error that came from VtTablet.  |
-| <code>VtgateError</code> | <code>2000</code> | VtgateError is the base VTGate error code. All VTGate errors should be 4 digits, starting with 2.  |
-| <code>UnknownVtgateError</code> | <code>2999</code> | UnknownVtgateError is the code for an unknown error that came from VTGate.  |
+| <code>SUCCESS</code> | <code>0</code> | SUCCESS is returned from a successful call  |
+| <code>CANCELLED</code> | <code>1</code> | CANCELLED means that the context was cancelled (and noticed in the app layer, as opposed to the RPC layer)  |
+| <code>UNKNOWN_ERROR</code> | <code>2</code> | UNKNOWN_ERROR includes: 1. MySQL error codes that we don't explicitly handle. 2. MySQL response that wasn't as expected. For example, we might expect a MySQL timestamp to be returned in a particular way, but it wasn't. 3. Anything else that doesn't fall into a different bucket.  |
+| <code>BAD_INPUT</code> | <code>3</code> | BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly, or tries a query that isn't supported by Vitess.  |
+| <code>DEADLINE_EXCEEDED</code> | <code>4</code> | DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.  |
+| <code>INTEGRITY_ERROR</code> | <code>5</code> | INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to duplicate primary keys  |
+| <code>PERMISSION_DENIED</code> | <code>6</code> | PERMISSION_DENIED errors are returned when a user requests access to something that they don't have permissions for.  |
+| <code>RESOURCE_EXHAUSTED</code> | <code>7</code> | RESOURCE_EXHAUSTED is returned when a query exceeds its quota in some dimension and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED should not be retried, as it could be detrimental to the server's health. Examples of errors that will cause the RESOURCE_EXHAUSTED code: 1. TxPoolFull: this is retried server-side, and is only returned as an error if the server-side retries failed. 2. Query is killed due to it taking too long.  |
+| <code>QUERY_NOT_SERVED</code> | <code>8</code> | QUERY_NOT_SERVED means that a query could not be served right now. Client can interpret it as: "the tablet that you sent this query to cannot serve the query right now, try a different tablet or try again later." This could be due to various reasons: QueryService is not serving, should not be serving, wrong shard, wrong tablet type, blacklisted table, etc. Clients that receive this error should usually retry the query, but after taking the appropriate steps to make sure that the query will get sent to the correct tablet.  |
+| <code>NOT_IN_TX</code> | <code>9</code> | NOT_IN_TX means that we're not currently in a transaction, but we should be.  |
+| <code>INTERNAL_ERROR</code> | <code>10</code> | INTERNAL_ERRORs are problems that only the server can fix, not the client. These errors are not due to a query itself, but rather due to the state of the system. Generally, we don't expect the errors to go away by themselves, but they may go away after human intervention. Examples of scenarios where INTERNAL_ERROR is returned: 1. Something is not configured correctly internally. 2. A necessary resource is not available, and we don't expect it to become available by itself. 3. A sanity check fails 4. Some other internal error occurs Clients should not retry immediately, as there is little chance of success. However, it's acceptable for retries to happen internally, for example to multiple backends, in case only a subset of backend are not functional.  |
+| <code>TRANSIENT_ERROR</code> | <code>11</code> | TRANSIENT_ERROR is used for when there is some error that we expect we can recover from automatically - often due to a resource limit temporarily being reached. Retrying this error, with an exponential backoff, should succeed. Clients should be able to successfully retry the query on the same backends. Examples of things that can trigger this error: 1. Query has been throttled 2. VtGate could have request backlog  |
+| <code>UNAUTHENTICATED</code> | <code>12</code> | UNAUTHENTICATED errors are returned when a user requests access to something, and we're unable to verify the user's authentication.  |
 
 ## Messages
 
@@ -927,6 +935,6 @@ RPCError is an application-level error structure returned by VtTablet (and passe
 
 | Name |Description |
 | :-------- | :-------- 
-| <code>code</code> <br>[ErrorCodeDeprecated](#vtrpc.errorcodedeprecated)| |
+| <code>code</code> <br>[ErrorCode](#vtrpc.errorcode)| |
 | <code>message</code> <br>string| |
 
