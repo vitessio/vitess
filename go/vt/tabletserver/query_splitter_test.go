@@ -444,26 +444,23 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	}
 	got := []proto.BoundQuery{}
 	for _, split := range splits {
-		if split.RowCount != 24019198012642645 {
-			t.Errorf("wrong RowCount, got: %v, want: %v", split.RowCount, 1431655765)
-		}
 		got = append(got, split.Query)
 	}
 	want := []proto.BoundQuery{
 		{
 			Sql:           "select * from test_table where (count > :count) and (id < :" + endBindVarName + ")",
-			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt64(0x55555555)[4:]},
+			BindVariables: map[string]interface{}{endBindVarName: hexToByteUInt32(0x55555555)},
 		},
 		{
 			Sql: fmt.Sprintf("select * from test_table where (count > :count) and (id >= :%s and id < :%s)", startBindVarName, endBindVarName),
 			BindVariables: map[string]interface{}{
-				startBindVarName: hexToByteUInt64(0x55555555)[4:],
-				endBindVarName:   hexToByteUInt64(0xAAAAAAAA)[4:],
+				startBindVarName: hexToByteUInt32(0x55555555),
+				endBindVarName:   hexToByteUInt32(0xAAAAAAAA),
 			},
 		},
 		{
 			Sql:           "select * from test_table where (count > :count) and (id >= :" + startBindVarName + ")",
-			BindVariables: map[string]interface{}{startBindVarName: hexToByteUInt64(0xAAAAAAAA)[4:]},
+			BindVariables: map[string]interface{}{startBindVarName: hexToByteUInt32(0xAAAAAAAA)},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -471,8 +468,8 @@ func TestSplitQueryStringColumn(t *testing.T) {
 	}
 }
 
-func hexToByteUInt64(val uint64) []byte {
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, val)
+func hexToByteUInt32(val uint32) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, val)
 	return buf
 }
