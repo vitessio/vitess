@@ -65,7 +65,6 @@ func main() {
 		exit.Return(1)
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
-
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

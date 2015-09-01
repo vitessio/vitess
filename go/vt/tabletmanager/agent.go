@@ -241,6 +241,41 @@ func NewTestActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *p
 	return agent
 }
 
+// NewComboActionAgent creates an agent tailored specifically to run
+// within the vtcombo binary. It cannot be called concurrently,
+// as it changes the flags.
+func NewComboActionAgent(batchCtx context.Context, ts topo.Server, tabletAlias *pb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.QueryServiceControl, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+	agent := &ActionAgent{
+		QueryServiceControl: queryServiceControl,
+		HealthReporter:      health.DefaultAggregator,
+		batchCtx:            batchCtx,
+		TopoServer:          ts,
+		TabletAlias:         tabletAlias,
+		MysqlDaemon:         mysqlDaemon,
+		DBConfigs:           dbcfgs,
+		SchemaOverrides:     nil,
+		BinlogPlayerMap:     nil,
+		History:             history.New(historyLength),
+		lastHealthMapCount:  new(stats.Int),
+		_healthy:            fmt.Errorf("healthcheck not run yet"),
+	}
+
+	// initialize the tablet
+	*initDbNameOverride = dbname
+	*initKeyspace = keyspace
+	*initShard = shard
+	*initTabletType = tabletType
+	if err := agent.InitTablet(vtPort, grpcPort); err != nil {
+		panic(fmt.Errorf("agent.InitTablet failed: %v", err))
+	}
+
+	// and start the agent
+	if err := agent.Start(batchCtx, 0, vtPort, grpcPort); err != nil {
+		panic(fmt.Errorf("agent.Start(%v) failed: %v", tabletAlias, err))
+	}
+	return agent
+}
+
 func (agent *ActionAgent) updateState(ctx context.Context, oldTablet *pb.Tablet, reason string) error {
 	agent.mutex.Lock()
 	newTablet := agent._tablet.Tablet
