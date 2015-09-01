@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 
+import os
+import sys
+
 import logging
 import optparse
 import traceback
 import unittest
-import sys
-import os
 
 import utils
 import framework
 
 from queryservice_tests import cache_tests
 from queryservice_tests import nocache_tests
-from queryservice_tests import stream_tests
 from queryservice_tests import status_tests
+from queryservice_tests import stream_tests
 from queryservice_tests import test_env
 
 from mysql_flavor import set_mysql_flavor
@@ -29,7 +30,7 @@ def main():
       '-e', '--env', default='vttablet',
       help='Environment that will be used. Valid options: vttablet, vtocc')
   utils.add_options(parser)
-  (options, args) = parser.parse_args()
+  options, args = parser.parse_args()
 
   logging.getLogger().setLevel(logging.ERROR)
   utils.set_options(options)

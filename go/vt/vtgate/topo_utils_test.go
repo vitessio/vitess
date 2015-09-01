@@ -41,16 +41,16 @@ func TestKeyRangeToShardMap(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		var keyRange key.KeyRange
+		var keyRange *pb.KeyRange
 		var err error
 		if testCase.keyRange == "" {
-			keyRange = key.KeyRange{Start: "", End: ""}
+			keyRange = &pb.KeyRange{}
 		} else {
 			krArray, err := key.ParseShardingSpec(testCase.keyRange)
 			if err != nil {
 				t.Errorf("Got error while parsing sharding spec %v", err)
 			}
-			keyRange = krArray[0]
+			keyRange = key.KeyRangeToProto(krArray[0])
 		}
 		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER)
 		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
@@ -73,11 +73,11 @@ func TestMapExactShards(t *testing.T) {
 	}{
 		{keyspace: KsTestSharded, keyRange: "20-40", shards: []string{"20-40"}},
 		// check for partial keyrange, spanning one shard
-		{keyspace: KsTestSharded, keyRange: "10-18", shards: nil, err: "keyrange {Start: 10, End: 18} does not exactly match shards"},
+		{keyspace: KsTestSharded, keyRange: "10-18", shards: nil, err: "keyrange 10-18 does not exactly match shards"},
 		// check for keyrange intersecting with multiple shards
-		{keyspace: KsTestSharded, keyRange: "10-40", shards: nil, err: "keyrange {Start: 10, End: 40} does not exactly match shards"},
+		{keyspace: KsTestSharded, keyRange: "10-40", shards: nil, err: "keyrange 10-40 does not exactly match shards"},
 		// check for keyrange intersecting with multiple shards
-		{keyspace: KsTestSharded, keyRange: "1c-2a", shards: nil, err: "keyrange {Start: 1c, End: 2a} does not exactly match shards"},
+		{keyspace: KsTestSharded, keyRange: "1c-2a", shards: nil, err: "keyrange 1c-2a does not exactly match shards"},
 		// check for keyrange where kr.End is Max Key ""
 		{keyspace: KsTestSharded, keyRange: "80-", shards: []string{"80-a0", "a0-c0", "c0-e0", "e0-"}},
 		// test for sharded, non-partial keyrange spanning the entire space.
@@ -85,16 +85,16 @@ func TestMapExactShards(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		var keyRange key.KeyRange
+		var keyRange *pb.KeyRange
 		var err error
 		if testCase.keyRange == "" {
-			keyRange = key.KeyRange{Start: "", End: ""}
+			keyRange = &pb.KeyRange{}
 		} else {
 			krArray, err := key.ParseShardingSpec(testCase.keyRange)
 			if err != nil {
 				t.Errorf("Got error while parsing sharding spec %v", err)
 			}
-			keyRange = krArray[0]
+			keyRange = key.KeyRangeToProto(krArray[0])
 		}
 		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER, keyRange)
 		if err != nil && err.Error() != testCase.err {

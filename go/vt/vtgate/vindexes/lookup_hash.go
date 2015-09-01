@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -42,22 +41,22 @@ func (vind *LookupHash) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHash) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
+func (vind *LookupHash) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
 	return vind.lkp.Map2(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (vind *LookupHash) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHash) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHash) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -84,27 +83,27 @@ func (vind *LookupHashAuto) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
+func (vind *LookupHashAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
 	return vind.lkp.Map2(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHashAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (vind *LookupHashAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Generate reserves the id by inserting it into the vindex table.
-func (vind *LookupHashAuto) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
+func (vind *LookupHashAuto) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
 	return vind.lkp.Generate(vcursor, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -130,22 +129,22 @@ func (vind *LookupHashUnique) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
+func (vind *LookupHashUnique) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
 	return vind.lkp.Map1(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHashUnique) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (vind *LookupHashUnique) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashUnique) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashUnique) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -172,27 +171,27 @@ func (vind *LookupHashUniqueAuto) Cost() int {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *LookupHashUniqueAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
+func (vind *LookupHashUniqueAuto) Map(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
 	return vind.lkp.Map1(vcursor, ids)
 }
 
 // Verify returns true if id maps to ksid.
-func (vind *LookupHashUniqueAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (vind *LookupHashUniqueAuto) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	return vind.lkp.Verify(vcursor, id, ksid)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUniqueAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashUniqueAuto) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
 	return vind.lkp.Create(vcursor, id, ksid)
 }
 
 // Generate reserves the id by inserting it into the vindex table.
-func (vind *LookupHashUniqueAuto) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
+func (vind *LookupHashUniqueAuto) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
 	return vind.lkp.Generate(vcursor, ksid)
 }
 
 // Delete deletes the entry from the vindex table.
-func (vind *LookupHashUniqueAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+func (vind *LookupHashUniqueAuto) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	return vind.lkp.Delete(vcursor, ids, ksid)
 }
 
@@ -223,8 +222,8 @@ func (lkp *lookup) Init(m map[string]interface{}) {
 }
 
 // Map1 is for a unique vindex.
-func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([]key.KeyspaceId, error) {
-	out := make([]key.KeyspaceId, 0, len(ids))
+func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([][]byte, error) {
+	out := make([][]byte, 0, len(ids))
 	bq := &tproto.BoundQuery{
 		Sql: lkp.sel,
 	}
@@ -237,7 +236,7 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([]key.K
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
 		if len(result.Rows) == 0 {
-			out = append(out, "")
+			out = append(out, []byte{})
 			continue
 		}
 		if len(result.Rows) != 1 {
@@ -257,8 +256,8 @@ func (lkp *lookup) Map1(vcursor planbuilder.VCursor, ids []interface{}) ([]key.K
 }
 
 // Map2 is for a non-unique vindex.
-func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key.KeyspaceId, error) {
-	out := make([][]key.KeyspaceId, 0, len(ids))
+func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][][]byte, error) {
+	out := make([][][]byte, 0, len(ids))
 	bq := &tproto.BoundQuery{
 		Sql: lkp.sel,
 	}
@@ -270,7 +269,7 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
-		var ksids []key.KeyspaceId
+		var ksids [][]byte
 		for _, row := range result.Rows {
 			inum, err := mproto.Convert(result.Fields[0], row[0])
 			if err != nil {
@@ -288,7 +287,7 @@ func (lkp *lookup) Map2(vcursor planbuilder.VCursor, ids []interface{}) ([][]key
 }
 
 // Verify returns true if id maps to ksid.
-func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) (bool, error) {
+func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid []byte) (bool, error) {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
@@ -311,7 +310,7 @@ func (lkp *lookup) Verify(vcursor planbuilder.VCursor, id interface{}, ksid key.
 }
 
 // Create creates an association between id and ksid by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.KeyspaceId) error {
+func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid []byte) error {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
@@ -330,7 +329,7 @@ func (lkp *lookup) Create(vcursor planbuilder.VCursor, id interface{}, ksid key.
 }
 
 // Generate generates an id and associates the ksid to the new id.
-func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (id int64, err error) {
+func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid []byte) (id int64, err error) {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return 0, fmt.Errorf("lookup.Generate: %v", err)
@@ -350,7 +349,7 @@ func (lkp *lookup) Generate(vcursor planbuilder.VCursor, ksid key.KeyspaceId) (i
 }
 
 // Delete deletes the association between ids and ksid.
-func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid key.KeyspaceId) error {
+func (lkp *lookup) Delete(vcursor planbuilder.VCursor, ids []interface{}, ksid []byte) error {
 	val, err := vunhash(ksid)
 	if err != nil {
 		return fmt.Errorf("lookup.Delete: %v", err)

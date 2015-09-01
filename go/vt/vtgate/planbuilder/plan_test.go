@@ -17,19 +17,18 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/key"
 )
 
 // hashIndex satisfies Functional, Unique.
 type hashIndex struct{}
 
 func (*hashIndex) Cost() int { return 1 }
-func (*hashIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+func (*hashIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
-func (*hashIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-func (*hashIndex) Create(VCursor, interface{}) error                    { return nil }
-func (*hashIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
+func (*hashIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, nil }
+func (*hashIndex) Create(VCursor, interface{}) error            { return nil }
+func (*hashIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
 func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{}, nil }
 
@@ -37,12 +36,12 @@ func newHashIndex(map[string]interface{}) (Vindex, error) { return &hashIndex{},
 type lookupIndex struct{}
 
 func (*lookupIndex) Cost() int { return 2 }
-func (*lookupIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+func (*lookupIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
-func (*lookupIndex) Map(VCursor, []interface{}) ([]key.KeyspaceId, error) { return nil, nil }
-func (*lookupIndex) Create(VCursor, interface{}, key.KeyspaceId) error    { return nil }
-func (*lookupIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error  { return nil }
+func (*lookupIndex) Map(VCursor, []interface{}) ([][]byte, error) { return nil, nil }
+func (*lookupIndex) Create(VCursor, interface{}, []byte) error    { return nil }
+func (*lookupIndex) Delete(VCursor, []interface{}, []byte) error  { return nil }
 
 func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupIndex{}, nil }
 
@@ -50,12 +49,12 @@ func newLookupIndex(map[string]interface{}) (Vindex, error) { return &lookupInde
 type multiIndex struct{}
 
 func (*multiIndex) Cost() int { return 3 }
-func (*multiIndex) Verify(VCursor, interface{}, key.KeyspaceId) (bool, error) {
+func (*multiIndex) Verify(VCursor, interface{}, []byte) (bool, error) {
 	return false, nil
 }
-func (*multiIndex) Map(VCursor, []interface{}) ([][]key.KeyspaceId, error) { return nil, nil }
-func (*multiIndex) Create(VCursor, interface{}, key.KeyspaceId) error      { return nil }
-func (*multiIndex) Delete(VCursor, []interface{}, key.KeyspaceId) error    { return nil }
+func (*multiIndex) Map(VCursor, []interface{}) ([][][]byte, error) { return nil, nil }
+func (*multiIndex) Create(VCursor, interface{}, []byte) error      { return nil }
+func (*multiIndex) Delete(VCursor, []interface{}, []byte) error    { return nil }
 
 func newMultiIndex(map[string]interface{}) (Vindex, error) { return &multiIndex{}, nil }
 
@@ -107,7 +106,7 @@ func testFile(t *testing.T, filename string, schema *Schema) {
 		}
 		out := string(bout)
 		if out != tcase.output {
-			t.Error(fmt.Sprintf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out))
+			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
 		}
 	}
 }

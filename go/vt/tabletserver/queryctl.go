@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -176,6 +177,12 @@ type QueryServiceControl interface {
 	// AddStatusPart adds the status part to the status page
 	AddStatusPart()
 
+	// InitDBConfig sets up the db config vars.
+	InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
+
+	// SetServingType transitions the query service to the required serving type.
+	SetServingType(tabletType topodata.TabletType, serving bool) error
+
 	// AllowQueries enables queries.
 	AllowQueries(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error
 
@@ -207,6 +214,12 @@ type TestQueryServiceControl struct {
 	// QueryServiceEnabled is a state variable
 	QueryServiceEnabled bool
 
+	// InitDBConfigError is the return value for InitDBConfig
+	InitDBConfigError error
+
+	// SetServingTypeError is the return value for SetServingType
+	SetServingTypeError error
+
 	// AllowQueriesError is the return value for AllowQueries
 	AllowQueriesError error
 
@@ -222,6 +235,7 @@ type TestQueryServiceControl struct {
 func NewTestQueryServiceControl() *TestQueryServiceControl {
 	return &TestQueryServiceControl{
 		QueryServiceEnabled: false,
+		InitDBConfigError:   nil,
 		AllowQueriesError:   nil,
 		IsHealthyError:      nil,
 		ReloadSchemaCount:   0,
@@ -234,6 +248,18 @@ func (tqsc *TestQueryServiceControl) Register() {
 
 // AddStatusPart is part of the QueryServiceControl interface
 func (tqsc *TestQueryServiceControl) AddStatusPart() {
+}
+
+// InitDBConfig is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) InitDBConfig(*pb.Target, *dbconfigs.DBConfigs, []SchemaOverride, mysqlctl.MysqlDaemon) error {
+	tqsc.QueryServiceEnabled = tqsc.InitDBConfigError == nil
+	return tqsc.InitDBConfigError
+}
+
+// SetServingType is part of the QueryServiceControl interface
+func (tqsc *TestQueryServiceControl) SetServingType(topodata.TabletType, bool) error {
+	tqsc.QueryServiceEnabled = tqsc.SetServingTypeError == nil
+	return tqsc.SetServingTypeError
 }
 
 // AllowQueries is part of the QueryServiceControl interface
@@ -311,9 +337,19 @@ func (rqsc *realQueryServiceControl) Register() {
 	rqsc.registerStreamQueryzHandlers()
 }
 
+// InitDBConfig sets up the db config vars.
+func (rqsc *realQueryServiceControl) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
+	return rqsc.sqlQueryRPCService.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
+}
+
+// SetServingType transitions the serving type to the required state.
+func (rqsc *realQueryServiceControl) SetServingType(tabletType topodata.TabletType, serving bool) error {
+	return rqsc.sqlQueryRPCService.SetServingType(tabletType, serving)
+}
+
 // AllowQueries starts the query service.
 func (rqsc *realQueryServiceControl) AllowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	return rqsc.sqlQueryRPCService.allowQueries(target, dbconfigs, schemaOverrides, mysqld)
+	return rqsc.sqlQueryRPCService.StartService(target, dbconfigs, schemaOverrides, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
@@ -321,7 +357,7 @@ func (rqsc *realQueryServiceControl) AllowQueries(target *pb.Target, dbconfigs *
 // and also for house keeping goroutines to be terminated.
 func (rqsc *realQueryServiceControl) DisallowQueries() {
 	defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
-	rqsc.sqlQueryRPCService.disallowQueries()
+	rqsc.sqlQueryRPCService.StopService()
 }
 
 // IsServing is part of the QueryServiceControl interface
@@ -352,7 +388,7 @@ func (rqsc *realQueryServiceControl) registerCheckMySQL() {
 			checkMySLQThrottler.Release()
 		}()
 		defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
-		if rqsc.sqlQueryRPCService.checkMySQL() {
+		if rqsc.sqlQueryRPCService.CheckMySQL() {
 			return
 		}
 		log.Infof("Check MySQL failed. Shutting down query service")

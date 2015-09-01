@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -361,26 +362,28 @@ func (conn *gRPCQueryClient) EndPoint() *pbt.EndPoint {
 	return conn.endPoint
 }
 
-// tabletErrorFromGRPC returns a tabletconn.OperationalError from the
-// gRPC error.
+// tabletErrorFromGRPC returns a tabletconn.ServerError or a
+// tabletconn.OperationalError from the gRPC error.
 func tabletErrorFromGRPC(err error) error {
-	if grpc.Code(err) == codes.Internal {
-		// server side error, convert it
-		var code int
-		errStr := err.Error()
-		switch {
-		case strings.Contains(errStr, "fatal: "):
-			code = tabletconn.ERR_FATAL
-		case strings.Contains(errStr, "retry: "):
-			code = tabletconn.ERR_RETRY
-		case strings.Contains(errStr, "tx_pool_full: "):
-			code = tabletconn.ERR_TX_POOL_FULL
-		case strings.Contains(errStr, "not_in_tx: "):
-			code = tabletconn.ERR_NOT_IN_TX
-		default:
-			code = tabletconn.ERR_NORMAL
-		}
-		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+	// TODO(aaijazi): Unfortunately, there's no better way to check for a gRPC server
+	// error (vs a client error).
+	// See: https://github.com/grpc/grpc-go/issues/319
+	if !strings.Contains(err.Error(), vterrors.GRPCServerErrPrefix) {
+		return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
 	}
-	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
+	// server side error, convert it
+	var code int
+	switch grpc.Code(err) {
+	case codes.Internal:
+		code = tabletconn.ERR_FATAL
+	case codes.FailedPrecondition:
+		code = tabletconn.ERR_RETRY
+	case codes.ResourceExhausted:
+		code = tabletconn.ERR_TX_POOL_FULL
+	case codes.Aborted:
+		code = tabletconn.ERR_NOT_IN_TX
+	default:
+		code = tabletconn.ERR_NORMAL
+	}
+	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
 }

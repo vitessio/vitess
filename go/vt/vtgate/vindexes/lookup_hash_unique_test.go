@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -35,9 +34,9 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []key.KeyspaceId{
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x16k@\xb4J\xbaK\xd6",
+	want := [][]byte{
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -46,7 +45,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 func TestLookupHashUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhu.Verify(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := lhu.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -57,7 +56,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Create(vc, 1, "\x16k@\xb4J\xbaK\xd6")
+	err := lhu.(planbuilder.Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -89,7 +88,7 @@ func TestLookupHashUniqueReverse(t *testing.T) {
 
 func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(planbuilder.Lookup).Delete(vc, []interface{}{1}, "\x16k@\xb4J\xbaK\xd6")
+	err := lhu.(planbuilder.Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

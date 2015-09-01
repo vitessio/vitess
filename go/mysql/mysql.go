@@ -53,6 +53,9 @@ const (
 	// ErrDataTooLong is C.ER_DATA_TOO_LONG
 	ErrDataTooLong = C.ER_DATA_TOO_LONG
 
+	// ErrDataOutOfRange is C.ER_WARN_DATA_OUT_OF_RANGE
+	ErrDataOutOfRange = C.ER_WARN_DATA_OUT_OF_RANGE
+
 	// ErrServerLost is C.CR_SERVER_LOST.
 	// It's hard-coded for now because it causes problems on import.
 	ErrServerLost = 2013
@@ -63,7 +66,7 @@ const (
 
 func handleError(err *error) {
 	if x := recover(); x != nil {
-		terr := x.(*sqldb.SqlError)
+		terr := x.(*sqldb.SQLError)
 		*err = terr
 	}
 }
@@ -124,7 +127,7 @@ func (conn *Connection) IsClosed() bool {
 // ExecuteFetch executes the query on the connection
 func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	if conn.IsClosed() {
-		return nil, sqldb.NewSqlError(2006, "Connection is closed")
+		return nil, sqldb.NewSQLError(2006, "Connection is closed")
 	}
 
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 0) != 0 {
@@ -140,7 +143,7 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 	}
 
 	if qr.RowsAffected > uint64(maxrows) {
-		return nil, &sqldb.SqlError{
+		return nil, &sqldb.SQLError{
 			Num:     0,
 			Message: fmt.Sprintf("Row count exceeded %d", maxrows),
 			Query:   string(query),
@@ -178,7 +181,7 @@ func (conn *Connection) ExecuteFetchMap(query string) (map[string]string, error)
 // on the Connection until it returns nil or error
 func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
-		return sqldb.NewSqlError(2006, "Connection is closed")
+		return sqldb.NewSQLError(2006, "Connection is closed")
 	}
 	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 1) != 0 {
 		return conn.lastError(query)
@@ -270,13 +273,13 @@ func (conn *Connection) ID() int64 {
 
 func (conn *Connection) lastError(query string) error {
 	if err := C.vt_error(&conn.c); *err != 0 {
-		return &sqldb.SqlError{
+		return &sqldb.SQLError{
 			Num:     int(C.vt_errno(&conn.c)),
 			Message: C.GoString(err),
 			Query:   query,
 		}
 	}
-	return &sqldb.SqlError{
+	return &sqldb.SQLError{
 		Num:     0,
 		Message: "Dummy",
 		Query:   string(query),

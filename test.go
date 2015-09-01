@@ -106,6 +106,9 @@ type Test struct {
 	// Shard is used to split tests among workers.
 	Shard int
 
+	// Maximum number of times a test will be retried. If 0, flag *retryMax is used.
+	RetryMax int
+
 	name     string
 	runIndex int
 
@@ -318,6 +321,10 @@ func main() {
 		}()
 
 		for _, test := range tests {
+			tryMax := *retryMax
+			if test.RetryMax != 0 {
+				tryMax = test.RetryMax
+			}
 			for try := 1; ; try++ {
 				select {
 				case <-stop:
@@ -326,14 +333,14 @@ func main() {
 				default:
 				}
 
-				if try > *retryMax {
+				if try > tryMax {
 					// Every try failed.
 					test.logf("retry limit exceeded")
 					failed++
 					break
 				}
 
-				test.logf("running (try %v/%v)...", try, *retryMax)
+				test.logf("running (try %v/%v)...", try, tryMax)
 
 				// Make a unique VTDATAROOT.
 				dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
@@ -370,7 +377,7 @@ func main() {
 
 				if err != nil {
 					// This try failed.
-					test.logf("FAILED (try %v/%v) in %v: %v", try, *retryMax, duration, err)
+					test.logf("FAILED (try %v/%v) in %v: %v", try, tryMax, duration, err)
 					testFailed(test.name)
 					continue
 				}

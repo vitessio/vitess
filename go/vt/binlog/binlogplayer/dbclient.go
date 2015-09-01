@@ -28,7 +28,7 @@ func NewDbClient(params *sqldb.ConnParams) *DBClient {
 
 func (dc *DBClient) handleError(err error) {
 	// log.Errorf("in DBClient handleError %v", err.(error))
-	if sqlErr, ok := err.(*sqldb.SqlError); ok {
+	if sqlErr, ok := err.(*sqldb.SQLError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
 		}

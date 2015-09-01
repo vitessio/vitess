@@ -49,4 +49,4 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
         'bsonrpc-vt-vtgateservice',
         ]
 
-protocols_flavor.__knows_protocols_flavor_map['gorpc'] = GoRpcProtocolsFlavor
+protocols_flavor.register_flavor('gorpc', GoRpcProtocolsFlavor)

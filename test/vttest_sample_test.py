@@ -23,15 +23,18 @@ process makes it clean up.
 import json
 import os
 import subprocess
-import unittest
 import urllib
+
+import unittest
 
 from vttest import fakezk_config
 
 import utils
 import environment
 
+
 class TestMysqlctl(unittest.TestCase):
+
   def test_fakezk_config(self):
     """This unit test makes sure the fake zk config is correct."""
 
@@ -85,8 +88,8 @@ class TestMysqlctl(unittest.TestCase):
     f = urllib.urlopen(url)
     data = f.read()
     f.close()
-    vars = json.loads(data)
-    self.assertIn('vtgate', vars['cmdline'][0])
+    json_vars = json.loads(data)
+    self.assertIn('vtgate', json_vars['cmdline'][0])
 
     # and we're done, clean-up
     sp.stdin.write('\n')

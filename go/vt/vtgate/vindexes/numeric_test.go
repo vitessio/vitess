@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -29,16 +28,16 @@ func TestNumericMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []key.KeyspaceId{
-		"\x00\x00\x00\x00\x00\x00\x00\x01",
-		"\x00\x00\x00\x00\x00\x00\x00\x02",
-		"\x00\x00\x00\x00\x00\x00\x00\x03",
-		"\x00\x00\x00\x00\x00\x00\x00\x04",
-		"\x00\x00\x00\x00\x00\x00\x00\x05",
-		"\x00\x00\x00\x00\x00\x00\x00\x06",
+	want := [][]byte{
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x02"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x03"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x04"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x05"),
+		[]byte("\x00\x00\x00\x00\x00\x00\x00\x06"),
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
+		t.Errorf("Map(): %+v, want %+v", got, want)
 	}
 }
 
@@ -51,7 +50,7 @@ func TestNumericMapBadData(t *testing.T) {
 }
 
 func TestNumericVerify(t *testing.T) {
-	success, err := numeric.Verify(nil, 1, "\x00\x00\x00\x00\x00\x00\x00\x01")
+	success, err := numeric.Verify(nil, 1, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -61,7 +60,7 @@ func TestNumericVerify(t *testing.T) {
 }
 
 func TestNumericVerifyBadData(t *testing.T) {
-	_, err := numeric.Verify(nil, 1.1, "\x00\x00\x00\x00\x00\x00\x00\x01")
+	_, err := numeric.Verify(nil, 1.1, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
 	want := `Numeric.Verify: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)
@@ -91,7 +90,7 @@ func TestNumericGenerate(t *testing.T) {
 }
 
 func TestNumericReverseMap(t *testing.T) {
-	got, err := numeric.(planbuilder.Reversible).ReverseMap(nil, "\x00\x00\x00\x00\x00\x00\x00\x01")
+	got, err := numeric.(planbuilder.Reversible).ReverseMap(nil, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -101,7 +100,7 @@ func TestNumericReverseMap(t *testing.T) {
 }
 
 func TestNumericReverseMapBadData(t *testing.T) {
-	_, err := numeric.(planbuilder.Reversible).ReverseMap(nil, "aa")
+	_, err := numeric.(planbuilder.Reversible).ReverseMap(nil, []byte("aa"))
 	want := `Numeric.ReverseMap: length of keyspace is not 8: 2`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)

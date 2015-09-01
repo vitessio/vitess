@@ -13,7 +13,6 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
@@ -47,7 +46,7 @@ func TestHashAutoConvert(t *testing.T) {
 		if got != want {
 			t.Errorf("vhash(%d): %#v, want %q", c.in, got, want)
 		}
-		back, err := vunhash(key.KeyspaceId(got))
+		back, err := vunhash([]byte(got))
 		if err != nil {
 			t.Error(err)
 		}
@@ -58,7 +57,7 @@ func TestHashAutoConvert(t *testing.T) {
 }
 
 func TestHashAutoFail(t *testing.T) {
-	_, err := vunhash(key.KeyspaceId("aa"))
+	_, err := vunhash([]byte("aa"))
 	want := "invalid keyspace id: 6161"
 	if err == nil || err.Error() != want {
 		t.Errorf(`vunhash("aa"): %v, want %s`, err, want)
@@ -82,13 +81,13 @@ func TestHashAutoMap(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	want := []key.KeyspaceId{
-		"\x16k@\xb4J\xbaK\xd6",
-		"\x06\xe7\xea\"Βp\x8f",
-		"N\xb1\x90ɢ\xfa\x16\x9c",
-		"\xd2\xfd\x88g\xd5\r-\xfe",
-		"p\xbb\x02<\x81\f\xa8z",
-		"\xf0\x98H\n\xc4ľq",
+	want := [][]byte{
+		[]byte("\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x06\xe7\xea\"Βp\x8f"),
+		[]byte("N\xb1\x90ɢ\xfa\x16\x9c"),
+		[]byte("\xd2\xfd\x88g\xd5\r-\xfe"),
+		[]byte("p\xbb\x02<\x81\f\xa8z"),
+		[]byte("\xf0\x98H\n\xc4ľq"),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
@@ -104,7 +103,7 @@ func TestHashAutoMapFail(t *testing.T) {
 }
 
 func TestHashAutoVerify(t *testing.T) {
-	success, err := hashAuto.Verify(nil, 1, "\x16k@\xb4J\xbaK\xd6")
+	success, err := hashAuto.Verify(nil, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -114,7 +113,7 @@ func TestHashAutoVerify(t *testing.T) {
 }
 
 func TestHashAutoVerifyFail(t *testing.T) {
-	_, err := hashAuto.Verify(nil, 1.1, "\x16k@\xb4J\xbaK\xd6")
+	_, err := hashAuto.Verify(nil, 1.1, []byte("\x16k@\xb4J\xbaK\xd6"))
 	want := "hash.Verify: unexpected type for 1.1: float64"
 	if err == nil || err.Error() != want {
 		t.Errorf("hashAuto.Verify: %v, want %v", err, want)
@@ -122,7 +121,7 @@ func TestHashAutoVerifyFail(t *testing.T) {
 }
 
 func TestHashAutoReverseMap(t *testing.T) {
-	got, err := hashAuto.(planbuilder.Reversible).ReverseMap(nil, "\x16k@\xb4J\xbaK\xd6")
+	got, err := hashAuto.(planbuilder.Reversible).ReverseMap(nil, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -225,7 +224,7 @@ func TestHashAutoGenerateFail(t *testing.T) {
 
 func TestHashAutoDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := hashAuto.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
+	err := hashAuto.(planbuilder.Functional).Delete(vc, []interface{}{1}, []byte{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -242,7 +241,7 @@ func TestHashAutoDelete(t *testing.T) {
 
 func TestHashAutoDeleteFail(t *testing.T) {
 	vc := &vcursor{mustFail: true}
-	err := hashAuto.(planbuilder.Functional).Delete(vc, []interface{}{1}, "")
+	err := hashAuto.(planbuilder.Functional).Delete(vc, []interface{}{1}, []byte{})
 	want := "hash.Delete: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("hashAuto.Delete: %v, want %v", err, want)

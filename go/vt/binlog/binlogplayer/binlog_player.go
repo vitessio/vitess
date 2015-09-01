@@ -223,7 +223,7 @@ func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok boo
 		if _, err = blp.exec(string(stmt.Sql)); err == nil {
 			continue
 		}
-		if sqlErr, ok := err.(*sqldb.SqlError); ok && sqlErr.Number() == 1213 {
+		if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == 1213 {
 			// Deadlock: ask for retry
 			log.Infof("Deadlock: %v", err)
 			if err = blp.dbClient.Rollback(); err != nil {

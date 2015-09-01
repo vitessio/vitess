@@ -31,13 +31,17 @@ import tablet
 
 from vtdb import topology
 
+
 class Tablet(tablet.Tablet):
+
   def __init__(self, shard, type):
     super(Tablet, self).__init__()
     self.shard = shard
     self.type = type
 
+
 class TestEnv(object):
+
   def __init__(self, options):
     self.keyspace = options.keyspace
     self.schema = options.schema

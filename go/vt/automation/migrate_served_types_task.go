@@ -20,8 +20,8 @@ type MigrateServedTypesTask struct {
 func (t *MigrateServedTypesTask) Run(parameters map[string]string) ([]*pb.TaskContainer, string, error) {
 	keyspaceAndShard := fmt.Sprintf("%v/%v", parameters["keyspace"], parameters["source_shard"])
 	args := []string{"MigrateServedTypes"}
-	if reverse, ok := parameters["reverse"]; ok {
-		args = append(args, "--reverse="+reverse)
+	if parameters["reverse"] != "" {
+		args = append(args, "--reverse="+parameters["reverse"])
 	}
 	args = append(args, keyspaceAndShard, parameters["type"])
 	output, err := ExecuteVtctl(context.TODO(), parameters["vtctld_endpoint"], args)

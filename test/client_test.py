@@ -148,8 +148,8 @@ def start_tablets():
   for ks in topo_schema.keyspaces:
     ks_name = ks[0]
     ks_type = ks[1]
-    utils.run_vtctl(['RebuildKeyspaceGraph', ks_name],
-                     auto_log=True)
+    utils.run_vtctl(
+        ['RebuildKeyspaceGraph', ks_name], auto_log=True)
     if ks_type == shard_constants.RANGE_SHARDED:
       utils.check_srv_keyspace('test_nj', ks_name,
                                'Partitions(master): -80 80-\n'

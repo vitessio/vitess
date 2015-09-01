@@ -13,8 +13,8 @@ from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
 import environment
-import utils
 import tablet
+import utils
 from protocols_flavor import protocols_flavor
 
 # source keyspace, with 4 tables
@@ -121,7 +121,7 @@ index by_msg (msg)
         'source_keyspace', 'master',
         keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
         writable=True)
-    for i in xrange(count):
+    for _ in xrange(count):
       conn.begin()
       cursor.execute("insert into %s (id, msg) values(%d, 'value %d')" % (
           table, self.insert_index, self.insert_index), {})
@@ -274,8 +274,8 @@ index by_msg (msg)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
                     auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
-                             'ServedFrom(rdonly): source_keyspace\n' +
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
+                             'ServedFrom(rdonly): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
 
     destination_master.init_tablet('master', 'destination_keyspace', '0')
@@ -286,8 +286,8 @@ index by_msg (msg)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
                     auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
-                             'ServedFrom(rdonly): source_keyspace\n' +
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
+                             'ServedFrom(rdonly): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
 
     # create databases so vttablet can start behaving normally
@@ -364,7 +364,7 @@ index by_msg (msg)
 
     # add values to source, make sure they're replicated
     moving1_first_add1 = self._insert_values('moving1', 100)
-    staying1_first_add1 = self._insert_values('staying1', 100)
+    _ = self._insert_values('staying1', 100)
     moving2_first_add1 = self._insert_values('moving2', 100)
     self._check_values_timeout(destination_master, 'vt_destination_keyspace',
                                'moving1', moving1_first_add1, 100)
@@ -409,8 +409,8 @@ index by_msg (msg)
     utils.run_vtctl(['MigrateServedFrom', '--cells=test_ny',
                      'destination_keyspace/0', 'rdonly'],
                     auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
-                             'ServedFrom(rdonly): source_keyspace\n' +
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
+                             'ServedFrom(rdonly): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
@@ -452,7 +452,7 @@ index by_msg (msg)
     # now serve rdonly from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],
                     auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
@@ -477,7 +477,7 @@ index by_msg (msg)
     # move replica back and forth
     utils.run_vtctl(['MigrateServedFrom', '-reverse',
                      'destination_keyspace/0', 'replica'], auto_log=True)
-    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n'
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)

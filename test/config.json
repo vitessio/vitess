@@ -202,11 +202,11 @@
 			"File": "",
 			"Args": [],
 			"Command": [
-				"make",
-				"unit_test"
+				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 0
+			"Shard": 0,
+			"RetryMax": 1
 		},
 		"unit_race": {
 			"File": "",

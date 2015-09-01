@@ -51,20 +51,25 @@ def main(port, topology, schema_dir):
 if __name__ == '__main__':
 
   parser = optparse.OptionParser()
-  parser.add_option('-p', '--port', type='int',
-                    help='Port to use for vtgate. If this is 0, a random port'
-                         ' will be chosen.')
-  parser.add_option('-t', '--topology',
-                    help='Define which shards exist in the test topology in the'                         ' form <keyspace>/<shardrange>:<dbname>,... The dbname'
-                         ' must be unique among all shards, since they share'
-                         ' a MySQL instance in the test environment.')
-  parser.add_option('-s', '--schema_dir',
-                    help='Directory for initial schema files. Within this dir,'
-                         ' there should be a subdir for each keyspace. Within'
-                         ' each keyspace dir, each file is executed as SQL'
-                         ' after the database is created on each shard.')
-  parser.add_option('-v', '--verbose', action='store_true',
-                    help='Display extra error messages.')
+  parser.add_option(
+      '-p', '--port', type='int',
+      help='Port to use for vtgate. If this is 0, a random port '
+      'will be chosen.')
+  parser.add_option(
+      '-t', '--topology',
+      help='Define which shards exist in the test topology in the'
+      ' form <keyspace>/<shardrange>:<dbname>,... The dbname'
+      ' must be unique among all shards, since they share'
+      ' a MySQL instance in the test environment.')
+  parser.add_option(
+      '-s', '--schema_dir',
+      help='Directory for initial schema files. Within this dir,'
+      ' there should be a subdir for each keyspace. Within'
+      ' each keyspace dir, each file is executed as SQL'
+      ' after the database is created on each shard.')
+  parser.add_option(
+      '-v', '--verbose', action='store_true',
+      help='Display extra error messages.')
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)

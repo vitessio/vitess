@@ -90,14 +90,15 @@ public class GrpcClientTest {
 
   private static final List<byte[]> KEYSPACE_IDS =
       Arrays.asList(new byte[] {1, 2, 3, 4}, new byte[] {5, 6, 7, 8});
-  private static final String KEYSPACE_IDS_ECHO = "[01020304 05060708]";
+  private static final String KEYSPACE_IDS_ECHO = "[[1 2 3 4] [5 6 7 8]]";
+  private static final String KEYSPACE_IDS_ECHO_OLD = "[01020304 05060708]";
 
   private static final List<KeyRange> KEY_RANGES = Arrays.asList(
       KeyRange.newBuilder()
           .setStart(ByteString.copyFrom(new byte[] {1, 2, 3, 4}))
           .setEnd(ByteString.copyFrom(new byte[] {5, 6, 7, 8}))
           .build());
-  private static final String KEY_RANGES_ECHO = "[{Start: 01020304, End: 05060708}]";
+  private static final String KEY_RANGES_ECHO = "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]";
 
   private static final Map<byte[], Object> ENTITY_KEYSPACE_IDS =
       new ImmutableMap.Builder<byte[], Object>()
@@ -106,7 +107,7 @@ public class GrpcClientTest {
           .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
           .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
-      "[{123 010203} {2 040506} {[1 2 3] 070809}]";
+      "[xid_type:TYPE_INT xid_int:123 keyspace_id:\"\\001\\002\\003\"  xid_type:TYPE_FLOAT xid_float:2 keyspace_id:\"\\004\\005\\006\"  xid_type:TYPE_BYTES xid_bytes:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
 
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
@@ -202,7 +203,7 @@ public class GrpcClientTest {
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO_OLD, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
   }
@@ -326,7 +327,7 @@ public class GrpcClientTest {
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
-    Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
+    Assert.assertEquals(KEYSPACE_IDS_ECHO_OLD, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
