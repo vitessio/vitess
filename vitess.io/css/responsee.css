@@ -64,6 +64,10 @@ table tr td, table tr th {padding:0.625em;}
 table tfoot, table thead {background:none repeat scroll 0 0 #f6f6f6;}
 table tbody {background:none repeat scroll 0 0 #fff;}
 table tr:nth-of-type(2n) {background:none repeat scroll 0 0 #f6f6f6;}
+#api-method-summary tr td.api-method-summary-group {
+  background:#f6f6f6;
+}
+#api-method-summary tr {background:#fff;}
 th {border-right:1px solid #e0e0e0;}
 td {border-right:1px solid #e0e0e0;}
 .api-styles table th {

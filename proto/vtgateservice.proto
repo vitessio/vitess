@@ -23,15 +23,15 @@ service Vitess {
   rpc ExecuteShards(vtgate.ExecuteShardsRequest) returns (vtgate.ExecuteShardsResponse) {};
 
   // ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc ExecuteKeyspaceIds(vtgate.ExecuteKeyspaceIdsRequest) returns (vtgate.ExecuteKeyspaceIdsResponse) {};
 
   // ExecuteKeyRanges executes the query based on the specified key ranges.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc ExecuteKeyRanges(vtgate.ExecuteKeyRangesRequest) returns (vtgate.ExecuteKeyRangesResponse) {};
 
   // ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc ExecuteEntityIds(vtgate.ExecuteEntityIdsRequest) returns (vtgate.ExecuteEntityIdsResponse) {};
 
   // ExecuteBatchShards executes the list of queries on the specified shards.
@@ -39,7 +39,7 @@ service Vitess {
   rpc ExecuteBatchShards(vtgate.ExecuteBatchShardsRequest) returns (vtgate.ExecuteBatchShardsResponse) {};
 
   // ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc ExecuteBatchKeyspaceIds(vtgate.ExecuteBatchKeyspaceIdsRequest) returns (vtgate.ExecuteBatchKeyspaceIdsResponse) {};
 
   // StreamExecute executes a streaming query based on shards.
@@ -56,12 +56,12 @@ service Vitess {
 
   // StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
   // Use this method if the query returns a large number of rows.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc StreamExecuteKeyspaceIds(vtgate.StreamExecuteKeyspaceIdsRequest) returns (stream vtgate.StreamExecuteKeyspaceIdsResponse) {};
 
   // StreamExecuteKeyRanges executes a streaming query based on key ranges.
   // Use this method if the query returns a large number of rows.
-  // API group: Range Based Sharding
+  // API group: Range-based Sharding
   rpc StreamExecuteKeyRanges(vtgate.StreamExecuteKeyRangesRequest) returns (stream vtgate.StreamExecuteKeyRangesResponse) {};
 
   // Begin a transaction.
