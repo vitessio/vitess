@@ -35,8 +35,6 @@ var initFakeZK func()
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.InitServiceMapForBsonRpcService("toporeader")
-	servenv.InitServiceMapForBsonRpcService("vtgateservice")
 }
 
 func main() {

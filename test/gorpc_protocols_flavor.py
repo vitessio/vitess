@@ -43,10 +43,15 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
+        'bsonrpc-auth-vt-queryservice',
+        'bsonrpc-vt-queryservice',
+        'bsonrpc-vt-tabletmanager',
+        'bsonrpc-vt-toporeader',
+        'bsonrpc-vt-updatestream',
+        'bsonrpc-vt-vtctl',
+        'bsonrpc-vt-vtgateservice',
         'grpc-vtworker',
         'grpc-queryservice',
-        # enabled for vtgate_python_protocol
-        'bsonrpc-vt-vtgateservice',
         ]
 
 protocols_flavor.register_flavor('gorpc', GoRpcProtocolsFlavor)

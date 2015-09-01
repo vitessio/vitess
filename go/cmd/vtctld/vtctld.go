@@ -36,7 +36,6 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.InitServiceMapForBsonRpcService("vtctl")
 }
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
