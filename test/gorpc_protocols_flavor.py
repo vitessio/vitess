@@ -43,7 +43,6 @@ class GoRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
-        'bsonrpc-auth-vt-queryservice',
         'bsonrpc-vt-queryservice',
         'bsonrpc-vt-tabletmanager',
         'bsonrpc-vt-toporeader',
