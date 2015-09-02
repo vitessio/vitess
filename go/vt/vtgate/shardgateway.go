@@ -98,10 +98,7 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 	}
 	wg.Wait()
 	if errRecorder.HasErrors() {
-		// TODO(aaijazi): how to aggregate and return these errors with an error code?
-		// Probably okay to stick with UNKNOWN for now...
-		// Maybe have an interface for things that implement ErrorCode()?
-		return errRecorder.Error()
+		return errRecorder.AggrError(aggregateVtGateErrors)
 	}
 	return nil
 }

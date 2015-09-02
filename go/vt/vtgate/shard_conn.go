@@ -339,7 +339,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 			)
 			allErrors.RecordError(err)
 			// TODO(aaijazi): use a custom aggregation for this, not just concatenation.
-			return nil, nil, true, allErrors.Error()
+			return nil, nil, true, allErrors.AggrError(aggregateVtGateErrors)
 		}
 	}
 	return nil, nil, false, allErrors.Error()
