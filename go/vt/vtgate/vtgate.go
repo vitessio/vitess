@@ -649,6 +649,11 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.S
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
+// GetSrvShard is part of the vtgate service API.
+func (vtg *VTGate) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+	return vtg.resolver.toposerv.GetSrvShard(ctx, vtg.resolver.cell, keyspace, shard)
+}
+
 // Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
 // as errors in those components, but logged to Info in VTGate itself.
 func logError(err error, query map[string]interface{}, logger *logutil.ThrottledLogger) {
