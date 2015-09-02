@@ -240,14 +240,14 @@ func (qre *QueryExecutor) checkPermissions() error {
 		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
-	if !qre.plan.Authorized.IsMember(username) {
+	if !qre.plan.Authorized.IsMember(callerID.Username) {
 		if qre.qe.enableTableAclDryRun {
 			qre.qe.tableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
-			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanId, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 			return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "%s", errStr)
