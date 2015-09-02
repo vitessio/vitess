@@ -91,6 +91,10 @@ func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 
+func (c fallbackClient) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+	return c.fallback.GetSrvShard(ctx, keyspace, shard)
+}
+
 func (c fallbackClient) HandlePanic(err *error) {
 	c.fallback.HandlePanic(err)
 }

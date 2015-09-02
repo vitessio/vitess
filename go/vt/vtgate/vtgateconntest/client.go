@@ -632,6 +632,11 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return getSrvKeyspaceResult, nil
 }
 
+// GetSrvShard is part of the VTGateService interface
+func (f *fakeVTGateService) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+	panic(fmt.Errorf("GetSrvShard is not tested here"))
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	return &fakeVTGateService{
