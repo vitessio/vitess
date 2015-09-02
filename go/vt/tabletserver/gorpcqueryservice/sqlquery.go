@@ -30,10 +30,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.GetSessionId(sessionParams, sessionInfo)
 	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // GetSessionId2 should not be used by anything other than tests.
@@ -43,10 +40,7 @@ func (sq *SqlQuery) GetSessionId2(sessionIdReq *proto.GetSessionIdRequest, sessi
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.GetSessionId(&sessionIdReq.Params, sessionInfo)
 	tabletserver.AddTabletErrorToSessionInfo(tErr, sessionInfo)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Begin is exposing tabletserver.SqlQuery.Begin
@@ -54,10 +48,7 @@ func (sq *SqlQuery) Begin(ctx context.Context, session *proto.Session, txInfo *p
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Begin(callinfo.RPCWrapCallInfo(ctx), nil, session, txInfo)
 	tabletserver.AddTabletErrorToTransactionInfo(tErr, txInfo)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Begin2 should not be used by anything other than tests.
@@ -77,10 +68,7 @@ func (sq *SqlQuery) Begin2(ctx context.Context, beginRequest *proto.BeginRequest
 	// Convert from TxInfo => beginResponse for the output
 	beginResponse.TransactionId = txInfo.TransactionId
 	tabletserver.AddTabletErrorToBeginResponse(tErr, beginResponse)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Commit is exposing tabletserver.SqlQuery.Commit
@@ -104,10 +92,7 @@ func (sq *SqlQuery) Commit2(ctx context.Context, commitRequest *proto.CommitRequ
 	)
 	tErr := sq.server.Commit(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(commitRequest.Target), session)
 	tabletserver.AddTabletErrorToCommitResponse(tErr, commitResponse)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Rollback is exposing tabletserver.SqlQuery.Rollback
@@ -131,10 +116,7 @@ func (sq *SqlQuery) Rollback2(ctx context.Context, rollbackRequest *proto.Rollba
 	)
 	tErr := sq.server.Rollback(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(rollbackRequest.Target), session)
 	tabletserver.AddTabletErrorToRollbackResponse(tErr, rollbackResponse)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Execute is exposing tabletserver.SqlQuery.Execute
@@ -142,10 +124,7 @@ func (sq *SqlQuery) Execute(ctx context.Context, query *proto.Query, reply *mpro
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), nil, query, reply)
 	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // Execute2 should not be used by anything other than tests
@@ -159,10 +138,7 @@ func (sq *SqlQuery) Execute2(ctx context.Context, executeRequest *proto.ExecuteR
 	)
 	tErr := sq.server.Execute(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(executeRequest.Target), &executeRequest.QueryRequest, reply)
 	tabletserver.AddTabletErrorToQueryResult(tErr, reply)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // StreamExecute is exposing tabletserver.SqlQuery.StreamExecute
@@ -191,18 +167,15 @@ func (sq *SqlQuery) StreamExecute2(ctx context.Context, req *proto.StreamExecute
 	if tErr == nil {
 		return nil
 	}
-	if *tabletserver.RPCErrorOnlyInReply {
-		// If there was an app error, send a QueryResult back with it.
-		qr := new(mproto.QueryResult)
-		tabletserver.AddTabletErrorToQueryResult(tErr, qr)
-		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-		// problems where the client will get out of sync with the number of QueryResults sent.
-		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-		// (signalling that all clients are able to handle new-style errors).
-		return sendReply(qr)
-	}
-	return tErr
+	// If there was an app error, send a QueryResult back with it.
+	qr := new(mproto.QueryResult)
+	tabletserver.AddTabletErrorToQueryResult(tErr, qr)
+	// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
+	// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
+	// problems where the client will get out of sync with the number of QueryResults sent.
+	// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
+	// (signalling that all clients are able to handle new-style errors).
+	return sendReply(qr)
 }
 
 // ExecuteBatch is exposing tabletserver.SqlQuery.ExecuteBatch
@@ -210,10 +183,7 @@ func (sq *SqlQuery) ExecuteBatch(ctx context.Context, queryList *proto.QueryList
 	defer sq.server.HandlePanic(&err)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), nil, queryList, reply)
 	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // ExecuteBatch2 should not be used by anything other than tests
@@ -230,10 +200,7 @@ func (sq *SqlQuery) ExecuteBatch2(ctx context.Context, req *proto.ExecuteBatchRe
 	)
 	tErr := sq.server.ExecuteBatch(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), &req.QueryBatch, reply)
 	tabletserver.AddTabletErrorToQueryResultList(tErr, reply)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // SplitQuery is exposing tabletserver.SqlQuery.SplitQuery
@@ -245,10 +212,7 @@ func (sq *SqlQuery) SplitQuery(ctx context.Context, req *proto.SplitQueryRequest
 	)
 	tErr := sq.server.SplitQuery(callinfo.RPCWrapCallInfo(ctx), proto.TargetToProto3(req.Target), req, reply)
 	tabletserver.AddTabletErrorToSplitQueryResult(tErr, reply)
-	if *tabletserver.RPCErrorOnlyInReply {
-		return nil
-	}
-	return tErr
+	return nil
 }
 
 // StreamHealth is exposing tabletserver.SqlQuery.StreamHealthRegister and

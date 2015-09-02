@@ -45,10 +45,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *proto.Query, reply *pro
 		request.NotInTransaction,
 		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -69,10 +66,7 @@ func (vtg *VTGate) ExecuteShard(ctx context.Context, request *proto.QueryShard, 
 		request.NotInTransaction,
 		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteKeyspaceIds is the RPC version of vtgateservice.VTGateService method
@@ -93,10 +87,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *proto.Keyspa
 		request.NotInTransaction,
 		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteKeyRanges is the RPC version of vtgateservice.VTGateService method
@@ -117,10 +108,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *proto.KeyRange
 		request.NotInTransaction,
 		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteEntityIds is the RPC version of vtgateservice.VTGateService method
@@ -142,10 +130,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *proto.EntityId
 		request.NotInTransaction,
 		reply)
 	vtgate.AddVtGateErrorToQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteBatchShard is the RPC version of vtgateservice.VTGateService method
@@ -163,10 +148,7 @@ func (vtg *VTGate) ExecuteBatchShard(ctx context.Context, request *proto.BatchQu
 		request.Session,
 		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // ExecuteBatchKeyspaceIds is the RPC version of
@@ -185,10 +167,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *proto.K
 		request.Session,
 		reply)
 	vtgate.AddVtGateErrorToQueryResultList(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
@@ -222,18 +201,10 @@ func (vtg *VTGate) StreamExecute2(ctx context.Context, request *proto.Query, sen
 	if vtgErr == nil {
 		return nil
 	}
-	if *vtgate.RPCErrorOnlyInReply {
-		// If there was an app error, send a QueryResult back with it.
-		qr := new(proto.QueryResult)
-		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
-		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-		// problems where the client will get out of sync with the number of QueryResults sent.
-		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-		// (signalling that all clients are able to handle new-style errors).
-		return sendReply(qr)
-	}
-	return vtgErr
+	// If there was an app error, send a QueryResult back with it.
+	qr := new(proto.QueryResult)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+	return sendReply(qr)
 }
 
 // StreamExecuteShard is the RPC version of vtgateservice.VTGateService method
@@ -271,18 +242,10 @@ func (vtg *VTGate) StreamExecuteShard2(ctx context.Context, request *proto.Query
 	if vtgErr == nil {
 		return nil
 	}
-	if *vtgate.RPCErrorOnlyInReply {
-		// If there was an app error, send a QueryResult back with it.
-		qr := new(proto.QueryResult)
-		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
-		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-		// problems where the client will get out of sync with the number of QueryResults sent.
-		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-		// (signalling that all clients are able to handle new-style errors).
-		return sendReply(qr)
-	}
-	return vtgErr
+	// If there was an app error, send a QueryResult back with it.
+	qr := new(proto.QueryResult)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+	return sendReply(qr)
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
@@ -322,18 +285,10 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds2(ctx context.Context, request *proto
 	if vtgErr == nil {
 		return nil
 	}
-	if *vtgate.RPCErrorOnlyInReply {
-		// If there was an app error, send a QueryResult back with it.
-		qr := new(proto.QueryResult)
-		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
-		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-		// problems where the client will get out of sync with the number of QueryResults sent.
-		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-		// (signalling that all clients are able to handle new-style errors).
-		return sendReply(qr)
-	}
-	return vtgErr
+	// If there was an app error, send a QueryResult back with it.
+	qr := new(proto.QueryResult)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+	return sendReply(qr)
 }
 
 // StreamExecuteKeyRanges is the RPC version of
@@ -373,18 +328,10 @@ func (vtg *VTGate) StreamExecuteKeyRanges2(ctx context.Context, request *proto.K
 	if vtgErr == nil {
 		return nil
 	}
-	if *vtgate.RPCErrorOnlyInReply {
-		// If there was an app error, send a QueryResult back with it.
-		qr := new(proto.QueryResult)
-		vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
-		// Sending back errors this way is not backwards compatible. If a (new) server sends an additional
-		// QueryResult with an error, and the (old) client doesn't know how to read it, it will cause
-		// problems where the client will get out of sync with the number of QueryResults sent.
-		// That's why this the error is only sent this way when the --rpc_errors_only_in_reply flag is set
-		// (signalling that all clients are able to handle new-style errors).
-		return sendReply(qr)
-	}
-	return vtgErr
+	// If there was an app error, send a QueryResult back with it.
+	qr := new(proto.QueryResult)
+	vtgate.AddVtGateErrorToQueryResult(vtgErr, qr)
+	return sendReply(qr)
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -423,10 +370,7 @@ func (vtg *VTGate) Begin2(ctx context.Context, request *proto.BeginRequest, repl
 	reply.Session = &proto.Session{}
 	vtgErr := vtg.server.Begin(ctx, reply.Session)
 	vtgate.AddVtGateErrorToBeginResponse(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // Commit2 is the RPC version of vtgateservice.VTGateService method
@@ -439,10 +383,7 @@ func (vtg *VTGate) Commit2(ctx context.Context, request *proto.CommitRequest, re
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.Commit(ctx, request.Session)
 	vtgate.AddVtGateErrorToCommitResponse(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // Rollback2 is the RPC version of vtgateservice.VTGateService method
@@ -455,10 +396,7 @@ func (vtg *VTGate) Rollback2(ctx context.Context, request *proto.RollbackRequest
 		callerid.NewImmediateCallerID("gorpc client"))
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
 	vtgate.AddVtGateErrorToRollbackResponse(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
@@ -477,10 +415,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *proto.SplitQueryRequ
 		request.SplitCount,
 		reply)
 	vtgate.AddVtGateErrorToSplitQueryResult(vtgErr, reply)
-	if *vtgate.RPCErrorOnlyInReply {
-		return nil
-	}
-	return vtgErr
+	return nil
 }
 
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method

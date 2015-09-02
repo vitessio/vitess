@@ -338,7 +338,6 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 				fmt.Errorf("timeout when connecting to %+v", endPoint),
 			)
 			allErrors.RecordError(err)
-			// TODO(aaijazi): use a custom aggregation for this, not just concatenation.
 			return nil, nil, true, allErrors.AggrError(aggregateVtGateErrors)
 		}
 	}

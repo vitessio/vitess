@@ -97,7 +97,7 @@ var RegisterVTGates []RegisterVTGate
 
 var (
 	// RPCErrorOnlyInReply informs vtgateservice(s) about how to return errors.
-	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", false, "if true, supported RPC calls from vtgateservice(s) will only return errors as part of the RPC server response")
+	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", true, "if true, supported RPC calls from vtgateservice(s) will only return errors as part of the RPC server response")
 )
 
 // Init initializes VTGate server.
