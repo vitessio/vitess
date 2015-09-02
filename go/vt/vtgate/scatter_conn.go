@@ -519,15 +519,18 @@ func (stc *ScatterConn) Close() error {
 // ScatterConnError is the ScatterConn specific error.
 type ScatterConnError struct {
 	Code int
-	// ServerCode is the error code to use for all the server errors in aggregate
-	ServerCode vtrpc.ErrorCode
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
+	// serverCode is the error code to use for all the server errors in aggregate
+	serverCode vtrpc.ErrorCode
 }
 
 func (e *ScatterConnError) Error() string {
 	return fmt.Sprintf("%v", vterrors.ConcatenateErrors(e.Errs))
 }
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *ScatterConnError) VtErrorCode() vtrpc.ErrorCode { return e.serverCode }
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
@@ -551,7 +554,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	return &ScatterConnError{
 		Code:       code,
 		Errs:       errors,
-		ServerCode: aggregateVtGateErrorCodes(errors),
+		serverCode: aggregateVtGateErrorCodes(errors),
 	}
 }
 

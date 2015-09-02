@@ -49,13 +49,8 @@ type ServerError struct {
 
 func (e *ServerError) Error() string { return e.Err }
 
-// RecoverServerCode attempts to recover an error code from a ServerError
-func RecoverServerCode(err error) vtrpc.ErrorCode {
-	if se, ok := err.(*ServerError); ok {
-		return se.ServerCode
-	}
-	return vtrpc.ErrorCode_UNKNOWN_ERROR
-}
+// VtErrorCode returns the underlying Vitess error code
+func (e *ServerError) VtErrorCode() vtrpc.ErrorCode { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to
 // communicate with vttablet.

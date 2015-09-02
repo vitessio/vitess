@@ -75,10 +75,12 @@ func rpcErrFromVtGateError(err error) *mproto.RPCError {
 // aggregateVtGateErrorCodes aggregates a list of errors into a single error code.
 // It does so by finding the highest priority error code in the list.
 func aggregateVtGateErrorCodes(errors []error) vtrpc.ErrorCode {
-	var highCode vtrpc.ErrorCode
+	highCode := vtrpc.ErrorCode_SUCCESS
 	for _, e := range errors {
-		var code vtrpc.ErrorCode
-		// get the type of error, and recover the error code
+		code := vtrpc.ErrorCode_UNKNOWN_ERROR
+		if vtErr, ok := e.(vterrors.VtError); ok {
+			code = vtErr.VtErrorCode()
+		}
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
 		}

@@ -26,6 +26,19 @@ func ConcatenateErrors(errors []error) error {
 	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
 }
 
+// VtError is implemented by any type that exposes a vtrpc.ErrorCode
+type VtError interface {
+	VtErrorCode() vtrpc.ErrorCode
+}
+
+// RecoverVtErrorCode attempts to recover a vtrpc.ErrorCode from an error
+func RecoverVtErrorCode(err error) vtrpc.ErrorCode {
+	if vtErr, ok := err.(VtError); ok {
+		return vtErr.VtErrorCode()
+	}
+	return vtrpc.ErrorCode_UNKNOWN_ERROR
+}
+
 // VitessError is the error type that we use internally for passing structured errors
 type VitessError struct {
 	// Error code of the Vitess error
@@ -48,6 +61,11 @@ func (e *VitessError) Error() string {
 		return fmt.Sprintf("%v", e.err)
 	}
 	return e.Message
+}
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *VitessError) VtErrorCode() vtrpc.ErrorCode {
+	return e.Code
 }
 
 // AsString returns a VitessError as a string, with more detailed information than Error().
@@ -208,8 +226,8 @@ func toGRPCCode(err error) codes.Code {
 	if err == nil {
 		return codes.OK
 	}
-	if vtErr, ok := err.(*VitessError); ok {
-		return ErrorCodeToGRPCCode(vtErr.Code)
+	if vtErr, ok := err.(VtError); ok {
+		return ErrorCodeToGRPCCode(vtErr.VtErrorCode())
 	}
 	// Returns the underlying grpc Code, or codes.Unknown if one doesn't exist
 	return grpc.Code(err)

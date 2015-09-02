@@ -100,8 +100,8 @@ type ShardConnError struct {
 	InTransaction   bool
 	// Preserve the original error, so that we don't need to parse the error string.
 	Err error
-	// EndpointCode is the error code to use for all the endpoint errors in aggregate
-	EndpointCode vtrpc.ErrorCode
+	// endpointCode is the error code to use for all the endpoint errors in aggregate
+	endpointCode vtrpc.ErrorCode
 }
 
 func (e *ShardConnError) Error() string {
@@ -110,6 +110,9 @@ func (e *ShardConnError) Error() string {
 	}
 	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
 }
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *ShardConnError) VtErrorCode() vtrpc.ErrorCode { return e.endpointCode }
 
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
@@ -325,7 +328,7 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
 		vtErr := vterrors.NewVitessError(
 			// TODO(aaijazi): what about OperationalErrors here?
-			tabletconn.RecoverServerCode(err), err,
+			vterrors.RecoverVtErrorCode(err), err,
 			"%v %+v", err, endPoint,
 		)
 		allErrors.RecordError(vtErr)
