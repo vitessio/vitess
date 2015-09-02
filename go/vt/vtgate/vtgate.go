@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	// import vindexes implementations
@@ -34,6 +35,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const errDupKey = "errno 1062"
@@ -51,7 +53,10 @@ var (
 	errorsByKeyspace  *stats.Rates
 	errorsByDbType    *stats.Rates
 
-	errTooManyInFlight = errors.New("request_backlog: too many requests in flight")
+	errTooManyInFlight = vterrors.FromError(
+		vtrpc.ErrorCode_TRANSIENT_ERROR,
+		errors.New("request_backlog: too many requests in flight"),
+	)
 
 	// Error counters should be global so they can be set from anywhere
 	normalErrors   *stats.MultiCounters
@@ -179,6 +184,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 			"Session":          session,
 			"NotInTransaction": notInTransaction,
 		}
+		// TODO(aaijazi): add the right information to reply.Err as well
 		reply.Error = handleExecuteError(err, statsKey, query, vtg.logExecute)
 	}
 	reply.Session = session
@@ -713,7 +719,8 @@ func formatError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("%v, vtgate: %v", err, servenv.ListeningURL.String())
+	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
+	return vterrors.WithSuffix(err, s)
 }
 
 // HandlePanic recovers from panics, and logs / increment counters

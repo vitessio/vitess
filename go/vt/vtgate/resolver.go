@@ -17,11 +17,13 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -82,7 +84,10 @@ func isConnError(err error) (int, bool) {
 // on being able to uniquely route a write.
 func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType pb.TabletType, session *proto.Session, notInTransaction bool) (*mproto.QueryResult, error) {
 	if isDml(sql) && len(keyspaceIds) > 1 {
-		return nil, fmt.Errorf("DML should not span multiple keyspace_ids")
+		return nil, vterrors.FromError(
+			vtrpc.ErrorCode_BAD_INPUT,
+			fmt.Errorf("DML should not span multiple keyspace_ids"),
+		)
 	}
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(

@@ -57,9 +57,9 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	getAddresses := func() (*pb.EndPoints, error) {
 		endpoints, _, err := serv.GetEndPoints(ctx, cell, keyspace, shard, tabletType)
 		if err != nil {
-			return nil, vterrors.FromError(
-				vtrpc.ErrorCode_INTERNAL_ERROR,
-				fmt.Errorf("endpoints fetch error: %v", err),
+			return nil, vterrors.NewVitessError(
+				vtrpc.ErrorCode_INTERNAL_ERROR, err,
+				"endpoints fetch error: %v", err,
 			)
 		}
 		return endpoints, nil
@@ -322,9 +322,9 @@ func (sdc *ShardConn) getNewConn(ctx context.Context) (conn tabletconn.TabletCon
 		// Markdown the endpoint if it failed to connect
 		sdc.balancer.MarkDown(endPoint.Uid, err.Error())
 		vtErr := vterrors.NewVitessError(
-			tabletconn.RecoverServerCode(err),
-			fmt.Sprintf("%v %+v", err, endPoint),
-			err,
+			// TODO(aaijazi): what about OperationalErrors here?
+			tabletconn.RecoverServerCode(err), err,
+			"%v %+v", err, endPoint,
 		)
 		allErrors.RecordError(vtErr)
 		if time.Now().Sub(startTime) >= sdc.connTimeoutTotal {

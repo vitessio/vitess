@@ -20,19 +20,24 @@ import (
 type VitessError struct {
 	// Error code of the Vitess error
 	Code vtrpc.ErrorCode
-	// Additional context string, distinct from the error message. For example, if
-	// you wanted an error like "foo error: original error", the Message string
-	// should be "foo error: "
+	// Error message that should be returned. This allows us to change an error message
+	// without losing the underlying error. For example, if you have an error like
+	// context.DeadlikeExceeded, you don't want to modify it - otherwise you would lose
+	// the ability to programatically check for that error. However, you might want to
+	// add some context to the error, giving you a message like "command failed: deadline exceeded".
+	// To do that, you can create a NewVitessError to wrap the original error, but redefine
+	// the error message.
 	Message string
 	err     error
 }
 
-// Error implements the error interface. For now, it should exactly recreate the original error string.
-// It intentionally (for now) does not expose all the information that VitessError has. This
-// is so that it can be used in the mixed state where parts of the stack are trying to parse
-// error strings.
+// Error implements the error interface. It will return the redefined error message, if there
+// is one. If there isn't, it will return the original error message.
 func (e *VitessError) Error() string {
-	return fmt.Sprintf("%v", e.err)
+	if e.Message == "" {
+		return fmt.Sprintf("%v", e.err)
+	}
+	return e.Message
 }
 
 // AsString returns a VitessError as a string, with more detailed information than Error().
@@ -43,19 +48,21 @@ func (e *VitessError) AsString() string {
 	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
 }
 
-// NewVitessError returs a VitessError backed error with the given arguments.
-// Usually, this is not what you want to use. It's only useful if you want to
-// create a VitessError that wraps an existing error, but has a completely
-// different error string.
-func NewVitessError(code vtrpc.ErrorCode, msg string, err error) error {
+// NewVitessError returns a VitessError backed error with the given arguments.
+// Useful for preserving an underlying error while creating a new error message.
+func NewVitessError(code vtrpc.ErrorCode, err error, format string, args ...interface{}) error {
 	return &VitessError{
 		Code:    code,
-		Message: msg,
+		Message: fmt.Sprintf(format, args...),
 		err:     err,
 	}
 }
 
-// FromError returns a VitessError with the supplied error code and wrapped error.
+// TODO(aaijazi): add FromErrorWithCode which tries to recover the error code
+// from the error that we're wrapping. we'll need an ErrorCode interface for it to work.
+
+// FromError returns a VitessError with the supplied error code by wrapping an
+// existing error.
 func FromError(code vtrpc.ErrorCode, err error) error {
 	return &VitessError{
 		Code: code,
@@ -63,7 +70,7 @@ func FromError(code vtrpc.ErrorCode, err error) error {
 	}
 }
 
-// FromRPCError recovers a VitessError from a *RPCError (which is how VitessErrors
+// FromRPCError recovers a VitessError from a *mproto.RPCError (which is how VitessErrors
 // are transmitted across RPC boundaries).
 func FromRPCError(rpcErr *mproto.RPCError) error {
 	if rpcErr == nil {
@@ -87,17 +94,31 @@ func FromVtRPCError(rpcErr *vtrpc.RPCError) *VitessError {
 	}
 }
 
-// WithPrefix allows a string to be prefixed to an error, without nesting a new VitessError.
+// WithPrefix allows a string to be prefixed to an error, without chaining a new VitessError.
 func WithPrefix(prefix string, in error) error {
 	vtErr, ok := in.(*VitessError)
 	if !ok {
-		return fmt.Errorf("%s: %s", prefix, in)
+		return fmt.Errorf("%s%s", prefix, in)
 	}
 
 	return &VitessError{
 		Code:    vtErr.Code,
 		err:     vtErr.err,
-		Message: fmt.Sprintf("%s: %s", prefix, vtErr.Message),
+		Message: fmt.Sprintf("%s%s", prefix, vtErr.Message),
+	}
+}
+
+// WithSuffix allows a string to be suffixed to an error, without chaining a new VitessError.
+func WithSuffix(in error, suffix string) error {
+	vtErr, ok := in.(*VitessError)
+	if !ok {
+		return fmt.Errorf("%s%s", in, suffix)
+	}
+
+	return &VitessError{
+		Code:    vtErr.Code,
+		err:     vtErr.err,
+		Message: fmt.Sprintf("%s%s", vtErr.Message, suffix),
 	}
 }
 
