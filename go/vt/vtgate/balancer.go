@@ -15,6 +15,8 @@ import (
 	log "github.com/golang/glog"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var resetDownConnDelay = flag.Duration("reset-down-conn-delay", 10*time.Minute, "delay to reset a marked down tabletconn")
@@ -129,7 +131,10 @@ func (blc *Balancer) refresh() error {
 		i++
 	}
 	if len(blc.addressNodes) == 0 {
-		return fmt.Errorf("no available addresses")
+		return vterrors.FromError(
+			vtrpc.ErrorCode_INTERNAL_ERROR,
+			fmt.Errorf("no available addresses"),
+		)
 	}
 	// Sort endpoints by timeRetry (from ZERO to largest)
 	sort.Sort(AddressList(blc.addressNodes))

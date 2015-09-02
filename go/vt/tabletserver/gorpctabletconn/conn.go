@@ -622,7 +622,11 @@ func tabletError(err error) error {
 		default:
 			code = tabletconn.ERR_NORMAL
 		}
-		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+		return &tabletconn.ServerError{
+			Code:       code,
+			Err:        fmt.Sprintf("vttablet: %v", err),
+			ServerCode: vtrpc.ErrorCode_UNKNOWN_ERROR,
+		}
 	}
 
 	if err == context.Canceled {
@@ -647,5 +651,9 @@ func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
 		code = tabletconn.ERR_NORMAL
 	}
 
-	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", ve.Error())}
+	return &tabletconn.ServerError{
+		Code:       code,
+		Err:        fmt.Sprintf("vttablet: %v", ve.Error()),
+		ServerCode: ve.Code,
+	}
 }

@@ -177,6 +177,11 @@ func (te *TabletError) Error() string {
 	return te.Prefix() + te.Message
 }
 
+// VtErrorCode returns the underlying Vitess error code
+func (te *TabletError) VtErrorCode() vtrpc.ErrorCode {
+	return te.ErrorCode
+}
+
 // Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "

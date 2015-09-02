@@ -17,9 +17,11 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	kproto "github.com/youtube/vitess/go/vt/key"
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -235,6 +237,7 @@ func (stc *ScatterConn) ExecuteBatch(
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
 				// are caused by client queries and are not VTGate's fault.
+				// TODO(aaijazi): get rid of this string parsing, and handle all cases of invalid input
 				if !strings.Contains(err.Error(), errDupKey) && !strings.Contains(err.Error(), errOutOfRange) {
 					stc.tabletCallErrorCount.Add(statsKey, 1)
 				}
@@ -257,6 +260,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		if session.InTransaction() {
 			errstr := allErrors.Error().Error()
 			// We cannot recover from these errors
+			// TODO(aaijazi): get rid of this string parsing
 			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
 				stc.Rollback(ctx, session)
 			}
@@ -372,10 +376,16 @@ func (stc *ScatterConn) StreamExecuteMulti(
 // Commit commits the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Commit(ctx context.Context, session *SafeSession) (err error) {
 	if session == nil {
-		return fmt.Errorf("cannot commit: empty session")
+		return vterrors.FromError(
+			vtrpc.ErrorCode_BAD_INPUT,
+			fmt.Errorf("cannot commit: empty session"),
+		)
 	}
 	if !session.InTransaction() {
-		return fmt.Errorf("cannot commit: not in transaction")
+		return vterrors.FromError(
+			vtrpc.ErrorCode_NOT_IN_TX,
+			fmt.Errorf("cannot commit: not in transaction"),
+		)
 	}
 	committing := true
 	for _, shardSession := range session.ShardSessions {
@@ -511,15 +521,16 @@ type ScatterConnError struct {
 	Code int
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
+	// serverCode is the error code to use for all the server errors in aggregate
+	serverCode vtrpc.ErrorCode
 }
 
 func (e *ScatterConnError) Error() string {
-	errStrings := make([]string, 0, len(e.Errs))
-	for _, err := range e.Errs {
-		errStrings = append(errStrings, fmt.Sprintf("%v", err))
-	}
-	return fmt.Sprintf("%v", strings.Join(errStrings, "\n"))
+	return fmt.Sprintf("%v", vterrors.ConcatenateErrors(e.Errs))
 }
+
+// VtErrorCode returns the underlying Vitess error code
+func (e *ScatterConnError) VtErrorCode() vtrpc.ErrorCode { return e.serverCode }
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	if len(errors) == 0 {
@@ -541,8 +552,9 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	}
 
 	return &ScatterConnError{
-		Code: code,
-		Errs: errors,
+		Code:       code,
+		Errs:       errors,
+		serverCode: aggregateVtGateErrorCodes(errors),
 	}
 }
 
@@ -588,6 +600,7 @@ func (stc *ScatterConn) multiGo(
 				allErrors.RecordError(err)
 				// Don't increment the error counter for duplicate keys, as those errors
 				// are caused by client queries and are not VTGate's fault.
+				// TODO(aaijazi): get rid of this string parsing, and handle all cases of invalid input
 				if !strings.Contains(err.Error(), errDupKey) && !strings.Contains(err.Error(), errOutOfRange) {
 					stc.tabletCallErrorCount.Add(statsKey, 1)
 				}
@@ -603,6 +616,8 @@ func (stc *ScatterConn) multiGo(
 			if session.InTransaction() {
 				errstr := allErrors.Error().Error()
 				// We cannot recover from these errors
+				// TODO(aaijazi): get rid of this string parsing. Might want a function that searches
+				// through a deeply nested error chain a particular error.
 				if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
 					stc.Rollback(ctx, session)
 				}
