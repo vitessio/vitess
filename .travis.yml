@@ -67,7 +67,7 @@ env:
     - PHP_FLAGS="-d extension=$HOME/php/mongo.so"
     - PATH="$HOME/php:$PATH"
     # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
-    - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
+    - TEST_FLAGS="-docker=false -timeout=10m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
   matrix:
     # NOTE: Travis CI schedules up to 5 tests simultaneously.
     #       All our tests should be spread out as evenly as possible across these 5 slots.
