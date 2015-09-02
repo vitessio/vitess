@@ -8,6 +8,7 @@ package vterrors
 
 import (
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -15,6 +16,15 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+// ConcatenateErrors aggregates an array of errors into a single error by string concatenation
+func ConcatenateErrors(errors []error) error {
+	errStrs := make([]string, 0, len(errors))
+	for _, e := range errors {
+		errStrs = append(errStrs, fmt.Sprintf("%v", e))
+	}
+	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
+}
 
 // VitessError is the error type that we use internally for passing structured errors
 type VitessError struct {
@@ -57,9 +67,6 @@ func NewVitessError(code vtrpc.ErrorCode, err error, format string, args ...inte
 		err:     err,
 	}
 }
-
-// TODO(aaijazi): add FromErrorWithCode which tries to recover the error code
-// from the error that we're wrapping. we'll need an ErrorCode interface for it to work.
 
 // FromError returns a VitessError with the supplied error code by wrapping an
 // existing error.

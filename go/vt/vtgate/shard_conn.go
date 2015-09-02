@@ -100,6 +100,8 @@ type ShardConnError struct {
 	InTransaction   bool
 	// Preserve the original error, so that we don't need to parse the error string.
 	Err error
+	// EndpointCode is the error code to use for all the endpoint errors in aggregate
+	EndpointCode vtrpc.ErrorCode
 }
 
 func (e *ShardConnError) Error() string {
