@@ -107,7 +107,7 @@ repos="github.com/golang/glog \
 
 # Packages for uploading code coverage to coveralls.io (used by Travis CI).
 # TODO(mberlin): Replace "deplist" fork with the original repo "github.com/cespare/deplist" when our changes are merged there.
-repos+=" github.com/axw/gocov/gocov github.com/mattn/goveralls github.com/michael-berlin/deplist"
+repos+=" github.com/wadey/gocovmerge github.com/mattn/goveralls github.com/michael-berlin/deplist"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
 source tools/shell_functions.inc

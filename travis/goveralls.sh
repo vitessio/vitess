@@ -51,14 +51,8 @@ else
 fi
 [ -f unit_test_goveralls.txt ] && rm unit_test_goveralls.txt
 
-# Merge all .coverprofile files. The output is a JSON file which is only
-# supported by gocov and goveralls, but not by the default Go tools.
-# NOTE: In the past, we used github.com/modocache/gover to concatenate all
-# .coverprofile files. That approach worked because the packages covered by
-# each file were disjoint. With a custom -coverpkg this approach of simple
-# concatenation no longer works, because goveralls or (?) coveralls.io itself
-# does not properly merge the information. Therefore, we're using gocov now.
-find -name .coverprofile | xargs gocov convert > gocov.json
+# Merge all .coverprofile files.
+find -name .coverprofile | xargs gocovmerge > all.coverprofile
 # -shallow ensures that goveralls does not return with a failure \
 # if Coveralls returns a 500 http error or higher (e.g. when the site is in read-only mode). \
-goveralls -shallow -gocovdata=gocov.json -service=travis-ci
+goveralls -shallow -coverprofile=all.coverprofile -service=travis-ci
