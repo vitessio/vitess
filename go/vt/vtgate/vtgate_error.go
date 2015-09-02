@@ -54,20 +54,8 @@ func rpcErrFromVtGateError(err error) *mproto.RPCError {
 	if err == nil {
 		return nil
 	}
-	vtErr, ok := err.(*vterrors.VitessError)
-	if ok {
-		return &mproto.RPCError{
-			Code: int64(vtErr.Code),
-			// Make sure the the RPCError message is identical to the VitessError
-			// err, so that downstream consumers will see identical messages no matter
-			// which server version they're using.
-			Message: vtErr.Error(),
-		}
-	}
-
-	// We don't know exactly what the passed in error was
 	return &mproto.RPCError{
-		Code:    int64(vtrpc.ErrorCode_UNKNOWN_ERROR),
+		Code:    int64(vterrors.RecoverVtErrorCode(err)),
 		Message: err.Error(),
 	}
 }
@@ -153,6 +141,9 @@ func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 }
 
 // VtGateErrorToVtRPCError converts a vtgate error into a vtrpc error.
+// TODO(aaijazi): rename this guy, and correct the usage of it everywhere. As it's currently used,
+// it will almost never return the correct error code, as it's only getting executeErr and reply.Error.
+// It should actually just use reply.Err.
 func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
 	if err == nil && errString == "" {
 		return nil
@@ -164,7 +155,7 @@ func VtGateErrorToVtRPCError(err error, errString string) *vtrpc.RPCError {
 		message = errString
 	}
 	return &vtrpc.RPCError{
-		Code:    vtrpc.ErrorCode_UNKNOWN_ERROR,
+		Code:    vterrors.RecoverVtErrorCode(err),
 		Message: message,
 	}
 }
