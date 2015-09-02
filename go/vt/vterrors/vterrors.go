@@ -151,7 +151,7 @@ func WithSuffix(in error, suffix string) error {
 // because there is currently no good way, in gRPC, to differentiate between an
 // error from a server vs the client.
 // See: https://github.com/grpc/grpc-go/issues/319
-const GRPCServerErrPrefix = "gRPCServerError: "
+const GRPCServerErrPrefix = "gRPCServerError:"
 
 // GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpc.ErrorCode
 func GRPCCodeToErrorCode(code codes.Code) vtrpc.ErrorCode {
