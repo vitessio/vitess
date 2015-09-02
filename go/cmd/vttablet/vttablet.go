@@ -42,9 +42,6 @@ var (
 
 func init() {
 	servenv.RegisterDefaultFlags()
-	servenv.InitServiceMapForBsonRpcService("tabletmanager")
-	servenv.InitServiceMapForBsonRpcService("queryservice")
-	servenv.InitServiceMapForBsonRpcService("updatestream")
 }
 
 func main() {

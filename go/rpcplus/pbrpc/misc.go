@@ -14,17 +14,7 @@ func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Clien
 	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout)
 }
 
-// DialAuthHTTP with Protobuf codec.
-func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout)
-}
-
 // ServeRPC with Protobuf codec.
 func ServeRPC() {
 	rpcwrap.ServeRPC(codecName, NewServerCodec)
-}
-
-// ServeAuthRPC with Protobuf codec.
-func ServeAuthRPC() {
-	rpcwrap.ServeAuthRPC(codecName, NewServerCodec)
 }

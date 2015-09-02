@@ -481,7 +481,7 @@ class VtGate(object):
 
   def start(self, cell='test_nj', retry_delay=1, retry_count=2,
             topo_impl=None, cache_ttl='1s',
-            auth=False, timeout_total='4s', timeout_per_conn='2s',
+            timeout_total='4s', timeout_per_conn='2s',
             extra_args=None):
     """Starts the process for this vtgate instance.
 
@@ -508,10 +508,6 @@ class VtGate(object):
       args.extend(['-topo_implementation', topo_impl])
     else:
       args.extend(environment.topo_server().flags())
-    if auth:
-      args.extend(['-auth-credentials',
-                   os.path.join(environment.vttop, 'test', 'test_data',
-                                'authcredentials_test.json')])
     if extra_args:
       args.extend(extra_args)
 

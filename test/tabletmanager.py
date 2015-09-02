@@ -222,31 +222,6 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.kill_vttablet()
 
-  def test_vttablet_authenticated(self):
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
-    utils.validate_topology()
-    self._check_srv_shard()
-
-    tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
-                          self._populate_vt_select_test)
-    tablet_62344.start_vttablet(auth=True)
-    utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
-
-    # make sure we can connect using secure connection
-    conn = tablet_62344.conn(user='ala', password=r'ma kota')
-    results, rowcount, lastrowid, fields = conn._execute(
-        'select * from vt_select_test', {})
-    logging.debug('Got results: %s', str(results))
-    self.assertEqual(
-        len(results), 4, 'got wrong result length: %s' % str(results))
-    conn.close()
-
-    tablet_62344.kill_vttablet()
-    # TODO(szopa): Test that non-authenticated queries do not pass
-    # through (when we get to that point).
-
   def _run_hook(self, params, expectedStatus, expectedStdout, expectedStderr):
     hr = utils.run_vtctl_json(['ExecuteHook', tablet_62344.tablet_alias] +
                               params)

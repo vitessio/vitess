@@ -68,7 +68,7 @@ func startListening() net.Listener {
 }
 
 func createAddr(l net.Listener) string {
-	return "http://" + l.Addr().String() + GetRpcPath("json", false)
+	return "http://" + l.Addr().String() + GetRpcPath("json")
 }
 
 func TestSuccess(t *testing.T) {

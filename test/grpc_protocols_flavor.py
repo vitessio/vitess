@@ -41,14 +41,14 @@ class GRpcProtocolsFlavor(protocols_flavor.ProtocolsFlavor):
 
   def service_map(self):
     return [
+        'bsonrpc-vt-toporeader',
+        'bsonrpc-vt-vtgateservice',
         'grpc-queryservice',
         'grpc-updatestream',
         'grpc-vtctl',
         'grpc-vtworker',
         'grpc-tabletmanager',
         'grpc-vtgateservice',
-        # enabled for vtgate_python_protocol
-        'bsonrpc-vt-vtgateservice',
         ]
 
 

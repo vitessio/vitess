@@ -12,15 +12,13 @@ import (
 // returns one that has CallInfo filled in.
 func RPCWrapCallInfo(ctx context.Context) context.Context {
 	remoteAddr, _ := proto.RemoteAddr(ctx)
-	username, _ := proto.Username(ctx)
 	return NewContext(ctx, &rpcWrapCallInfoImpl{
 		remoteAddr: remoteAddr,
-		username:   username,
 	})
 }
 
 type rpcWrapCallInfoImpl struct {
-	remoteAddr, username string
+	remoteAddr string
 }
 
 func (rwci *rpcWrapCallInfoImpl) RemoteAddr() string {
@@ -28,13 +26,13 @@ func (rwci *rpcWrapCallInfoImpl) RemoteAddr() string {
 }
 
 func (rwci *rpcWrapCallInfoImpl) Username() string {
-	return rwci.username
+	return ""
 }
 
 func (rwci *rpcWrapCallInfoImpl) Text() string {
-	return fmt.Sprintf("%s@%s", rwci.username, rwci.remoteAddr)
+	return fmt.Sprintf("%s", rwci.remoteAddr)
 }
 
 func (rwci *rpcWrapCallInfoImpl) HTML() template.HTML {
-	return template.HTML("<b>RemoteAddr:</b> " + rwci.remoteAddr + "</br>\n" + "<b>Username:</b> " + rwci.username + "</br>\n")
+	return template.HTML("<b>RemoteAddr:</b> " + rwci.remoteAddr + "</br>\n")
 }
