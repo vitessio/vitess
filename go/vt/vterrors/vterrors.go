@@ -240,3 +240,14 @@ func ToGRPCError(err error) error {
 	}
 	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, err)
 }
+
+// FromGRPCError return a grpc error as a VitessError, translating between error codes
+func FromGRPCError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &VitessError{
+		Code: GRPCCodeToErrorCode(grpc.Code(err)),
+		err:  err,
+	}
+}

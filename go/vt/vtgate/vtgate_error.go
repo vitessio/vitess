@@ -142,6 +142,9 @@ func AddVtGateErrorToRollbackResponse(err error, reply *proto.RollbackResponse) 
 
 // RPCErrorToVtRPCError converts a VTGate error into a vtrpc error.
 func RPCErrorToVtRPCError(rpcErr *mproto.RPCError) *vtrpc.RPCError {
+	if rpcErr == nil {
+		return nil
+	}
 	return &vtrpc.RPCError{
 		Code:    vtrpc.ErrorCode(rpcErr.Code),
 		Message: rpcErr.Message,
