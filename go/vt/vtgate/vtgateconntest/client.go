@@ -304,6 +304,7 @@ func (f *fakeVTGateService) ExecuteBatchShards(ctx context.Context, queries []pr
 		return nil
 	}
 	reply.Error = execCase.reply.Error
+	reply.Err = execCase.reply.Err
 	if reply.Error == "" && execCase.reply.Result != nil {
 		reply.List = []mproto.QueryResult{*execCase.reply.Result}
 	}
@@ -344,6 +345,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 		return nil
 	}
 	reply.Error = execCase.reply.Error
+	reply.Err = execCase.reply.Err
 	if reply.Error == "" && execCase.reply.Result != nil {
 		reply.List = []mproto.QueryResult{*execCase.reply.Result}
 	}
@@ -2360,6 +2362,10 @@ var execMap = map[string]struct {
 			Result:  nil,
 			Session: nil,
 			Error:   "app error",
+			Err: &mproto.RPCError{
+				Code:    int64(pbv.ErrorCode_UNKNOWN_ERROR),
+				Message: "app error",
+			},
 		},
 	},
 	"txRequest": {

@@ -30,22 +30,26 @@ def setUpModule():
   global vtgateclienttest_port
   global vtgateclienttest_grpc_port
 
-  environment.topo_server().setup()
+  try:
+    environment.topo_server().setup()
 
-  vtgateclienttest_port = environment.reserve_ports(1)
-  args = environment.binary_args('vtgateclienttest') + [
-      '-log_dir', environment.vtlogroot,
-      '-port', str(vtgateclienttest_port),
-      ]
+    vtgateclienttest_port = environment.reserve_ports(1)
+    args = environment.binary_args('vtgateclienttest') + [
+        '-log_dir', environment.vtlogroot,
+        '-port', str(vtgateclienttest_port),
+        ]
 
-  if protocols_flavor().vtgate_python_protocol() == 'grpc':
-    vtgateclienttest_grpc_port = environment.reserve_ports(1)
-    args.extend(['-grpc_port', str(vtgateclienttest_grpc_port)])
-  if protocols_flavor().service_map():
-    args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
+    if protocols_flavor().vtgate_python_protocol() == 'grpc':
+      vtgateclienttest_grpc_port = environment.reserve_ports(1)
+      args.extend(['-grpc_port', str(vtgateclienttest_grpc_port)])
+    if protocols_flavor().service_map():
+      args.extend(['-service_map', ','.join(protocols_flavor().service_map())])
 
-  vtgateclienttest_process = utils.run_bg(args)
-  utils.wait_for_vars('vtgateclienttest', vtgateclienttest_port)
+    vtgateclienttest_process = utils.run_bg(args)
+    utils.wait_for_vars('vtgateclienttest', vtgateclienttest_port)
+  except:
+    tearDownModule()
+    raise
 
 
 def tearDownModule():

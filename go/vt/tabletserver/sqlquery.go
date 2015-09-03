@@ -59,7 +59,7 @@ var stateName = []string{
 
 var (
 	// RPCErrorOnlyInReply is the flag to control how errors will be sent over RPCs for all queryservice implementations.
-	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", false, "if true, supported RPC calls will only return errors as part of the RPC server response")
+	RPCErrorOnlyInReply = flag.Bool("rpc-error-only-in-reply", true, "if true, supported RPC calls will only return errors as part of the RPC server response")
 )
 
 // SqlQuery implements the RPC interface for the query service.

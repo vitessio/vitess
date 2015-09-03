@@ -125,8 +125,10 @@ type EntityIdsQuery struct {
 type QueryResult struct {
 	Result  *mproto.QueryResult
 	Session *Session
-	Error   string
-	Err     *mproto.RPCError
+	// Error field is deprecated, as it only returns a string. New users should use the
+	// Err field below, which contains a string and an error code.
+	Error string
+	Err   *mproto.RPCError
 }
 
 //go:generate bsongen -file $GOFILE -type QueryResult -o query_result_bson.go
@@ -181,8 +183,10 @@ type KeyspaceIdBatchQuery struct {
 type QueryResultList struct {
 	List    []mproto.QueryResult
 	Session *Session
-	Error   string
-	Err     *mproto.RPCError
+	// Error field is deprecated, as it only returns a string. New users should use the
+	// Err field below, which contains a string and an error code.
+	Error string
+	Err   *mproto.RPCError
 }
 
 // SplitQueryRequest is a request to split a query into multiple parts
