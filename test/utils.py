@@ -1078,7 +1078,7 @@ class Vtctld(object):
       if python:
         from vtctl import grpc_vtctl_client
       rpc_port = self.grpc_port
-    return (protocol, 'localhost:%d' % rpc_port)
+    return (protocol, '%s:%d' % (socket.getfqdn(), rpc_port))
 
   def process_args(self):
     return ['-vtctld_addr', 'http://localhost:%d/' % self.port]
