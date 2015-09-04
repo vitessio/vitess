@@ -174,9 +174,7 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 	}
 
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	// TODO(sougou): Fix this in the parser.
 	si.tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
-	si.tables["DUAL"] = &TableInfo{Table: schema.NewTable("DUAL")}
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		tableInfo, err := NewTableInfo(
