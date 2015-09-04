@@ -22,7 +22,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestSqlQueryGetState(t *testing.T) {
+func TestTabletServerGetState(t *testing.T) {
 	states := []int64{
 		StateNotConnected,
 		StateNotServing,
@@ -38,115 +38,115 @@ func TestSqlQueryGetState(t *testing.T) {
 		"NOT_SERVING",
 		"SHUTTING_DOWN",
 	}
-	setUpSQLQueryTest()
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	for i, state := range states {
-		sqlQuery.setState(state)
-		if stateName := sqlQuery.GetState(); stateName != names[i] {
+		tsv.setState(state)
+		if stateName := tsv.GetState(); stateName != names[i] {
 			t.Errorf("GetState: %s, want %s", stateName, names[i])
 		}
 	}
 }
 
-func TestSqlQueryAllowQueriesFailBadConn(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
+	db := setUpTabletServerTest()
 	db.EnableConnFail()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	tsv := NewTabletServer(config)
+	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.StartService should fail")
+		t.Fatalf("TabletServer.StartService should fail")
 	}
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	checkTabletServerState(t, tsv, StateNotConnected)
 }
 
-func TestSqlQueryAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerAllowQueriesFailStrictModeConflictWithRowCache(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	// disable strict mode
 	config.StrictMode = false
-	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	tsv := NewTabletServer(config)
+	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
 	// enable rowcache
 	dbconfigs.App.EnableRowcache = true
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.StartService should fail because strict mode is disabled while rowcache is enabled.")
+		t.Fatalf("TabletServer.StartService should fail because strict mode is disabled while rowcache is enabled.")
 	}
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	checkTabletServerState(t, tsv, StateNotConnected)
 }
 
-func TestSqlQueryAllowQueries(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerAllowQueries(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	tsv := NewTabletServer(config)
+	checkTabletServerState(t, tsv, StateNotConnected)
 	dbconfigs := testUtils.newDBConfigs()
-	sqlQuery.setState(StateServing)
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	sqlQuery.StopService()
+	tsv.setState(StateServing)
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	tsv.StopService()
 	want := "cannot start tabletserver"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Fatalf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
-	sqlQuery.setState(StateShuttingDown)
-	err = sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	tsv.setState(StateShuttingDown)
+	err = tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err == nil {
-		t.Fatalf("SqlQuery.StartService should fail")
+		t.Fatalf("TabletServer.StartService should fail")
 	}
-	sqlQuery.StopService()
+	tsv.StopService()
 }
 
-func TestSqlQueryInitDBConfig(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerInitDBConfig(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	sqlQuery.setState(StateServing)
-	err := sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	tsv := NewTabletServer(config)
+	tsv.setState(StateServing)
+	err := tsv.InitDBConfig(nil, nil, nil, nil)
 	want := "InitDBConfig failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
-	sqlQuery.setState(StateNotConnected)
-	err = sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	tsv.setState(StateNotConnected)
+	err = tsv.InitDBConfig(nil, nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestDecideAction(t *testing.T) {
-	setUpSQLQueryTest()
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	err := sqlQuery.InitDBConfig(nil, nil, nil, nil)
+	tsv := NewTabletServer(config)
+	err := tsv.InitDBConfig(nil, nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	_, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	want := "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 
 	target := &pb.Target{}
-	err = sqlQuery.InitDBConfig(target, nil, nil, nil)
+	err = tsv.InitDBConfig(target, nil, nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
 
-	sqlQuery.setState(StateNotConnected)
-	action, err := sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	tsv.setState(StateNotConnected)
+	action, err := tsv.decideAction(topodata.TabletType_MASTER, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -154,20 +154,20 @@ func TestDecideAction(t *testing.T) {
 		t.Errorf("decideAction: %v, want %v", action, actionNone)
 	}
 
-	sqlQuery.setState(StateNotConnected)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	tsv.setState(StateNotConnected)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, true)
 	if err != nil {
 		t.Error(err)
 	}
 	if action != actionFullStart {
 		t.Errorf("decideAction: %v, want %v", action, actionFullStart)
 	}
-	if sqlQuery.state != StateTransitioning {
-		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
 	}
 
-	sqlQuery.setState(StateNotServing)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	tsv.setState(StateNotServing)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -175,182 +175,182 @@ func TestDecideAction(t *testing.T) {
 		t.Errorf("decideAction: %v, want %v", action, actionNone)
 	}
 
-	sqlQuery.setState(StateNotServing)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	tsv.setState(StateNotServing)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, true)
 	if err != nil {
 		t.Error(err)
 	}
 	if action != actionServeNewType {
 		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
 	}
-	if sqlQuery.state != StateTransitioning {
-		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
 	}
 
-	sqlQuery.setState(StateServing)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	if err != nil {
 		t.Error(err)
 	}
 	if action != actionGracefulStop {
 		t.Errorf("decideAction: %v, want %v", action, actionGracefulStop)
 	}
-	if sqlQuery.state != StateShuttingDown {
-		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateShuttingDown)
+	if tsv.state != StateShuttingDown {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateShuttingDown)
 	}
 
-	sqlQuery.setState(StateServing)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, true)
+	tsv.setState(StateServing)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, true)
 	if err != nil {
 		t.Error(err)
 	}
 	if action != actionServeNewType {
 		t.Errorf("decideAction: %v, want %v", action, actionServeNewType)
 	}
-	if sqlQuery.state != StateTransitioning {
-		t.Errorf("sqlQuery.state: %v, want %v", sqlQuery.state, StateTransitioning)
+	if tsv.state != StateTransitioning {
+		t.Errorf("tsv.state: %v, want %v", tsv.state, StateTransitioning)
 	}
 
-	sqlQuery.setState(StateTransitioning)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	tsv.setState(StateTransitioning)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	want = "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 
-	sqlQuery.setState(StateShuttingDown)
-	action, err = sqlQuery.decideAction(topodata.TabletType_MASTER, false)
+	tsv.setState(StateShuttingDown)
+	action, err = tsv.decideAction(topodata.TabletType_MASTER, false)
 	want = "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 }
 
 func TestSetServingType(t *testing.T) {
-	setUpSQLQueryTest()
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
 
-	err := sqlQuery.InitDBConfig(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.InitDBConfig(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, true)
+	err = tsv.SetServingType(topodata.TabletType_REPLICA, true)
 	want := "cannot SetServingType"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Errorf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 
 	target := &pb.Target{}
-	err = sqlQuery.InitDBConfig(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err = tsv.InitDBConfig(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, false)
+	err = tsv.SetServingType(topodata.TabletType_REPLICA, false)
 	if err != nil {
 		t.Error(err)
 	}
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	checkTabletServerState(t, tsv, StateNotConnected)
 
-	err = sqlQuery.SetServingType(topodata.TabletType_REPLICA, true)
+	err = tsv.SetServingType(topodata.TabletType_REPLICA, true)
 	if err != nil {
 		t.Error(err)
 	}
-	checkSQLQueryState(t, sqlQuery, StateServing)
+	checkTabletServerState(t, tsv, StateServing)
 
-	err = sqlQuery.SetServingType(topodata.TabletType_RDONLY, true)
+	err = tsv.SetServingType(topodata.TabletType_RDONLY, true)
 	if err != nil {
 		t.Error(err)
 	}
-	checkSQLQueryState(t, sqlQuery, StateServing)
+	checkTabletServerState(t, tsv, StateServing)
 
-	err = sqlQuery.SetServingType(topodata.TabletType_SPARE, false)
+	err = tsv.SetServingType(topodata.TabletType_SPARE, false)
 	if err != nil {
 		t.Error(err)
 	}
-	checkSQLQueryState(t, sqlQuery, StateNotServing)
+	checkTabletServerState(t, tsv, StateNotServing)
 
-	sqlQuery.StopService()
-	checkSQLQueryState(t, sqlQuery, StateNotConnected)
+	tsv.StopService()
+	checkTabletServerState(t, tsv, StateNotConnected)
 }
 
-func TestSqlQueryCheckMysql(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerCheckMysql(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
 	target := &pb.Target{}
-	err := sqlQuery.StartService(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.StopService()
+	err := tsv.StartService(target, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sqlQuery.CheckMySQL() {
+	if !tsv.CheckMySQL() {
 		t.Error("CheckMySQL should return true")
 	}
-	err = sqlQuery.SetServingType(topodata.TabletType_SPARE, false)
+	err = tsv.SetServingType(topodata.TabletType_SPARE, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !sqlQuery.CheckMySQL() {
+	if !tsv.CheckMySQL() {
 		t.Error("CheckMySQL should return true")
 	}
-	checkSQLQueryState(t, sqlQuery, StateNotServing)
+	checkTabletServerState(t, tsv, StateNotServing)
 }
 
-func TestSqlQueryCheckMysqlFailInvalidConn(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.StopService()
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
 	if err != nil {
-		t.Fatalf("SqlQuery.StartService should success but get error: %v", err)
+		t.Fatalf("TabletServer.StartService should success but get error: %v", err)
 	}
 	// make mysql conn fail
 	db.EnableConnFail()
-	if sqlQuery.CheckMySQL() {
+	if tsv.CheckMySQL() {
 		t.Fatalf("CheckMySQL should return false")
 	}
 }
 
-func TestSqlQueryCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerCheckMysqlFailUninitializedQueryEngine(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
 	// this causes QueryEngine not being initialized properly
-	sqlQuery.setState(StateServing)
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
-	defer sqlQuery.StopService()
+	tsv.setState(StateServing)
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	defer tsv.StopService()
 	want := "cannot start tabletserver"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("SqlQuery.StartService: %v, must contain %s", err, want)
+		t.Fatalf("TabletServer.StartService: %v, must contain %s", err, want)
 	}
 	// QueryEngine.CheckMySQL shoudl panic and CheckMySQL should return false
-	if sqlQuery.CheckMySQL() {
+	if tsv.CheckMySQL() {
 		t.Fatalf("CheckMySQL should return false")
 	}
 }
 
-func TestSqlQueryCheckMysqlInUnintialized(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnablePublishStats = true
-	sqlQuery := NewSqlQuery(config)
-	// sqlquery start request fail because we are in StateNotConnected;
+	tsv := NewTabletServer(config)
+	// TabletServer start request fail because we are in StateNotConnected;
 	// however, CheckMySQL should return true. Here, we always assume
 	// MySQL is healthy unless we've verified it is not.
-	if !sqlQuery.CheckMySQL() {
+	if !tsv.CheckMySQL() {
 		t.Fatalf("CheckMySQL should return true")
 	}
 	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
@@ -366,43 +366,43 @@ func TestSqlQueryCheckMysqlInUnintialized(t *testing.T) {
 	}
 }
 
-func TestSqlQueryGetSessionId(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerGetSessionId(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	if err := sqlQuery.GetSessionId(nil, nil); err == nil {
+	tsv := NewTabletServer(config)
+	if err := tsv.GetSessionId(nil, nil); err == nil {
 		t.Fatalf("call GetSessionId should get an error")
 	}
 	keyspace := "test_keyspace"
 	shard := "0"
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	sessionInfo := proto.SessionInfo{}
-	err = sqlQuery.GetSessionId(
+	err = tsv.GetSessionId(
 		&proto.SessionParams{Keyspace: keyspace, Shard: shard},
 		&sessionInfo,
 	)
 	if err != nil {
 		t.Fatalf("got GetSessionId error: %v", err)
 	}
-	if sessionInfo.SessionId != sqlQuery.sessionID {
+	if sessionInfo.SessionId != tsv.sessionID {
 		t.Fatalf("call GetSessionId returns an unexpected session id, "+
-			"expect seesion id: %d but got %d", sqlQuery.sessionID,
+			"expect seesion id: %d but got %d", tsv.sessionID,
 			sessionInfo.SessionId)
 	}
-	err = sqlQuery.GetSessionId(
+	err = tsv.GetSessionId(
 		&proto.SessionParams{Keyspace: keyspace},
 		&sessionInfo,
 	)
 	if err == nil {
 		t.Fatalf("call GetSessionId should fail because of missing shard in request")
 	}
-	err = sqlQuery.GetSessionId(
+	err = tsv.GetSessionId(
 		&proto.SessionParams{Shard: shard},
 		&sessionInfo,
 	)
@@ -411,33 +411,33 @@ func TestSqlQueryGetSessionId(t *testing.T) {
 	}
 }
 
-func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerCommandFailUnMatchedSessionId(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	session := proto.Session{
 		SessionId:     0,
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err == nil {
-		t.Fatalf("call SqlQuery.Begin should fail because of an invalid session id: 0")
+	if err = tsv.Begin(ctx, nil, &session, &txInfo); err == nil {
+		t.Fatalf("call TabletServer.Begin should fail because of an invalid session id: 0")
 	}
 
-	if err = sqlQuery.Commit(ctx, nil, &session); err == nil {
-		t.Fatalf("call SqlQuery.Commit should fail because of an invalid session id: 0")
+	if err = tsv.Commit(ctx, nil, &session); err == nil {
+		t.Fatalf("call TabletServer.Commit should fail because of an invalid session id: 0")
 	}
 
-	if err = sqlQuery.Rollback(ctx, nil, &session); err == nil {
-		t.Fatalf("call SqlQuery.Rollback should fail because of an invalid session id: 0")
+	if err = tsv.Rollback(ctx, nil, &session); err == nil {
+		t.Fatalf("call TabletServer.Rollback should fail because of an invalid session id: 0")
 	}
 
 	query := proto.Query{
@@ -447,13 +447,13 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("call SqlQuery.Execute should fail because of an invalid session id: 0")
+	if err := tsv.Execute(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("call TabletServer.Execute should fail because of an invalid session id: 0")
 	}
 
 	streamSendReply := func(*mproto.QueryResult) error { return nil }
-	if err = sqlQuery.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
-		t.Fatalf("call SqlQuery.StreamExecute should fail because of an invalid session id: 0")
+	if err = tsv.StreamExecute(ctx, nil, &query, streamSendReply); err == nil {
+		t.Fatalf("call TabletServer.StreamExecute should fail because of an invalid session id: 0")
 	}
 
 	batchQuery := proto.QueryList{
@@ -472,8 +472,8 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err = sqlQuery.ExecuteBatch(ctx, nil, &batchQuery, &batchReply); err == nil {
-		t.Fatalf("call SqlQuery.ExecuteBatch should fail because of an invalid session id: 0")
+	if err = tsv.ExecuteBatch(ctx, nil, &batchQuery, &batchReply); err == nil {
+		t.Fatalf("call TabletServer.ExecuteBatch should fail because of an invalid session id: 0")
 	}
 
 	splitQuery := proto.SplitQueryRequest{
@@ -496,13 +496,13 @@ func TestSqlQueryCommandFailUnMatchedSessionId(t *testing.T) {
 			},
 		},
 	}
-	if err = sqlQuery.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
-		t.Fatalf("call SqlQuery.SplitQuery should fail because of an invalid session id: 0")
+	if err = tsv.SplitQuery(ctx, nil, &splitQuery, &splitQueryReply); err == nil {
+		t.Fatalf("call TabletServer.SplitQuery should fail because of an invalid session id: 0")
 	}
 }
 
-func TestSqlQueryCommitTransaciton(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerCommitTransaciton(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
@@ -514,21 +514,21 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	session := proto.Session{
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
-		t.Fatalf("call SqlQuery.Begin failed")
+	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
+		t.Fatalf("call TabletServer.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
@@ -538,16 +538,16 @@ func TestSqlQueryCommitTransaciton(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err != nil {
+	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
-	if err := sqlQuery.Commit(ctx, nil, &session); err != nil {
-		t.Fatalf("call SqlQuery.Commit failed")
+	if err := tsv.Commit(ctx, nil, &session); err != nil {
+		t.Fatalf("call TabletServer.Commit failed")
 	}
 }
 
-func TestSqlQueryRollback(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerRollback(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
@@ -559,21 +559,21 @@ func TestSqlQueryRollback(t *testing.T) {
 	}
 	db.AddQuery(executeSQL, executeSQLResult)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	session := proto.Session{
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
-		t.Fatalf("call SqlQuery.Begin failed")
+	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
+		t.Fatalf("call TabletServer.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
@@ -583,16 +583,16 @@ func TestSqlQueryRollback(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	reply := mproto.QueryResult{}
-	if err := sqlQuery.Execute(ctx, nil, &query, &reply); err != nil {
+	if err := tsv.Execute(ctx, nil, &query, &reply); err != nil {
 		t.Fatalf("failed to execute query: %s", query.Sql)
 	}
-	if err := sqlQuery.Rollback(ctx, nil, &session); err != nil {
-		t.Fatalf("call SqlQuery.Rollback failed")
+	if err := tsv.Rollback(ctx, nil, &session); err != nil {
+		t.Fatalf("call TabletServer.Rollback failed")
 	}
 }
 
-func TestSqlQueryStreamExecute(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerStreamExecute(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
@@ -605,21 +605,21 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 	db.AddQuery(executeSQL, executeSQLResult)
 
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	session := proto.Session{
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 		TransactionId: 0,
 	}
 	txInfo := proto.TransactionInfo{TransactionId: 0}
-	if err = sqlQuery.Begin(ctx, nil, &session, &txInfo); err != nil {
-		t.Fatalf("call SqlQuery.Begin failed")
+	if err = tsv.Begin(ctx, nil, &session, &txInfo); err != nil {
+		t.Fatalf("call TabletServer.Begin failed")
 	}
 	session.TransactionId = txInfo.TransactionId
 	query := proto.Query{
@@ -629,21 +629,21 @@ func TestSqlQueryStreamExecute(t *testing.T) {
 		TransactionId: session.TransactionId,
 	}
 	sendReply := func(*mproto.QueryResult) error { return nil }
-	if err := sqlQuery.StreamExecute(ctx, nil, &query, sendReply); err == nil {
-		t.Fatalf("SqlQuery.StreamExecute should fail: %s", query.Sql)
+	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err == nil {
+		t.Fatalf("TabletServer.StreamExecute should fail: %s", query.Sql)
 	}
-	if err := sqlQuery.Rollback(ctx, nil, &session); err != nil {
-		t.Fatalf("call SqlQuery.Rollback failed")
+	if err := tsv.Rollback(ctx, nil, &session); err != nil {
+		t.Fatalf("call TabletServer.Rollback failed")
 	}
 	query.TransactionId = 0
-	if err := sqlQuery.StreamExecute(ctx, nil, &query, sendReply); err != nil {
-		t.Fatalf("SqlQuery.StreamExecute should success: %s, but get error: %v",
+	if err := tsv.StreamExecute(ctx, nil, &query, sendReply); err != nil {
+		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			query.Sql, err)
 	}
 }
 
-func TestSqlQueryExecuteBatch(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerExecuteBatch(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
@@ -652,13 +652,13 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -668,7 +668,7 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 			},
 		},
 		AsTransaction: true,
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -678,47 +678,47 @@ func TestSqlQueryExecuteBatch(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should success: %v, but get error: %v",
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
+		t.Fatalf("TabletServer.ExecuteBatch should success: %v, but get error: %v",
 			query, err)
 	}
 }
 
-func TestSqlQueryExecuteBatchFailEmptyQueryList(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries:   []proto.BoundQuery{},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
 		List: []mproto.QueryResult{},
 	}
-	err = sqlQuery.ExecuteBatch(ctx, nil, &query, &reply)
+	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
 }
 
-func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -727,7 +727,7 @@ func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 		AsTransaction: true,
 		TransactionId: 1,
 	}
@@ -735,23 +735,23 @@ func TestSqlQueryExecuteBatchFailAsTransaction(t *testing.T) {
 	reply := proto.QueryResultList{
 		List: []mproto.QueryResult{},
 	}
-	err = sqlQuery.ExecuteBatch(ctx, nil, &query, &reply)
+	err = tsv.ExecuteBatch(ctx, nil, &query, &reply)
 	verifyTabletError(t, err, ErrFail)
 }
 
-func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// make "begin" query fail
 	db.AddRejectedQuery("begin", errRejected)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -760,7 +760,7 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -768,24 +768,24 @@ func TestSqlQueryExecuteBatchBeginFail(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
 
-func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	// make "commit" query fail
 	db.AddRejectedQuery("commit", errRejected)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -798,7 +798,7 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -807,13 +807,13 @@ func TestSqlQueryExecuteBatchCommitFail(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
 
-func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
@@ -827,13 +827,13 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	db.AddRejectedQuery(expanedSQL, errRejected)
 
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -843,7 +843,7 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 			},
 		},
 		AsTransaction: true,
-		SessionId:     sqlQuery.sessionID,
+		SessionId:     tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -858,8 +858,8 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 		t.Fatalf("rollback should not be executed.")
 	}
 
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 
 	if db.GetQueryCalledNum("rollback") != 1 {
@@ -867,8 +867,8 @@ func TestSqlQueryExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	}
 }
 
-func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
@@ -882,13 +882,13 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 
 	config := testUtils.newQueryServiceConfig()
 	config.EnableAutoCommit = true
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -897,7 +897,7 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -905,22 +905,22 @@ func TestSqlQueryExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 			*sqlResult,
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should succeed")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err != nil {
+		t.Fatalf("TabletServer.ExecuteBatch should succeed")
 	}
 }
 
-func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	setUpSQLQueryTest()
+func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
+	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -929,7 +929,7 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -937,13 +937,13 @@ func TestSqlQueryExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.ExecuteBatch should fail")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.ExecuteBatch should fail")
 	}
 }
 
 func TestExecuteBatchNestedTransaction(t *testing.T) {
-	db := setUpSQLQueryTest()
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &mproto.QueryResult{}
@@ -952,13 +952,13 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	db.AddQuery(sql, sqlResult)
 	db.AddQuery(expanedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.QueryList{
 		Queries: []proto.BoundQuery{
@@ -983,7 +983,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 				BindVariables: nil,
 			},
 		},
-		SessionId: sqlQuery.sessionID,
+		SessionId: tsv.sessionID,
 	}
 
 	reply := proto.QueryResultList{
@@ -995,14 +995,14 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 			mproto.QueryResult{},
 		},
 	}
-	if err := sqlQuery.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.Execute should fail because of nested transaction")
+	if err := tsv.ExecuteBatch(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
-	sqlQuery.qe.txPool.SetTimeout(10)
+	tsv.qe.txPool.SetTimeout(10)
 }
 
-func TestSqlQuerySplitQuery(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerSplitQuery(t *testing.T) {
+	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
@@ -1028,13 +1028,13 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 	})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -1042,7 +1042,7 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 			BindVariables: nil,
 		},
 		SplitCount: 10,
-		SessionID:  sqlQuery.sessionID,
+		SessionID:  tsv.sessionID,
 	}
 
 	reply := proto.SplitQueryResult{
@@ -1056,14 +1056,14 @@ func TestSqlQuerySplitQuery(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err != nil {
-		t.Fatalf("SqlQuery.SplitQuery should success: %v, but get error: %v",
+	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err != nil {
+		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v",
 			query, err)
 	}
 }
 
-func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
+	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &mproto.QueryResult{
 		Fields: []mproto.Field{
 			mproto.Field{Name: "pk", Type: mproto.VT_LONG},
@@ -1089,13 +1089,13 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 	})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -1104,7 +1104,7 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 			BindVariables: nil,
 		},
 		SplitCount: 10,
-		SessionID:  sqlQuery.sessionID,
+		SessionID:  tsv.sessionID,
 	}
 
 	reply := proto.SplitQueryResult{
@@ -1118,13 +1118,13 @@ func TestSqlQuerySplitQueryInvalidQuery(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.SplitQuery should fail")
+	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }
 
-func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
-	db := setUpSQLQueryTest()
+func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
+	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
 	pkMinMaxQueryResp := &mproto.QueryResult{
@@ -1154,13 +1154,13 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 	db.AddQuery(pkMinMaxQuery, pkMinMaxQueryResp)
 
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs()
-	err := sqlQuery.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
+	err := tsv.StartService(nil, &dbconfigs, []SchemaOverride{}, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	defer sqlQuery.StopService()
+	defer tsv.StopService()
 	ctx := context.Background()
 	query := proto.SplitQueryRequest{
 		Query: proto.BoundQuery{
@@ -1168,7 +1168,7 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 			BindVariables: nil,
 		},
 		SplitCount: 10,
-		SessionID:  sqlQuery.sessionID,
+		SessionID:  tsv.sessionID,
 	}
 
 	reply := proto.SplitQueryResult{
@@ -1182,14 +1182,14 @@ func TestSqlQuerySplitQueryInvalidMinMax(t *testing.T) {
 			},
 		},
 	}
-	if err := sqlQuery.SplitQuery(ctx, nil, &query, &reply); err == nil {
-		t.Fatalf("SqlQuery.SplitQuery should fail")
+	if err := tsv.SplitQuery(ctx, nil, &query, &reply); err == nil {
+		t.Fatalf("TabletServer.SplitQuery should fail")
 	}
 }
 
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
-	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	logStats := newLogStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
 		BindVariables: nil,
@@ -1197,14 +1197,14 @@ func TestHandleExecUnknownError(t *testing.T) {
 	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	defer sqlQuery.handleExecError(&query, &err, logStats)
+	tsv := NewTabletServer(config)
+	defer tsv.handleExecError(&query, &err, logStats)
 	panic("unknown exec error")
 }
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
-	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	logStats := newLogStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
 		BindVariables: nil,
@@ -1218,14 +1218,14 @@ func TestHandleExecTabletError(t *testing.T) {
 	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	defer sqlQuery.handleExecError(&query, &err, logStats)
+	tsv := NewTabletServer(config)
+	defer tsv.handleExecError(&query, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors1(t *testing.T) {
 	ctx := context.Background()
-	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	logStats := newLogStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
 		BindVariables: nil,
@@ -1239,15 +1239,15 @@ func TestTerseErrors1(t *testing.T) {
 	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	sqlQuery.config.TerseErrors = true
-	defer sqlQuery.handleExecError(&query, &err, logStats)
+	tsv := NewTabletServer(config)
+	tsv.config.TerseErrors = true
+	defer tsv.handleExecError(&query, &err, logStats)
 	panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_UNKNOWN_ERROR, "tablet error"))
 }
 
 func TestTerseErrors2(t *testing.T) {
 	ctx := context.Background()
-	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	logStats := newLogStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
 		BindVariables: map[string]interface{}{"a": 1},
@@ -1261,9 +1261,9 @@ func TestTerseErrors2(t *testing.T) {
 	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	sqlQuery.config.TerseErrors = true
-	defer sqlQuery.handleExecError(&query, &err, logStats)
+	tsv := NewTabletServer(config)
+	tsv.config.TerseErrors = true
+	defer tsv.handleExecError(&query, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
@@ -1273,7 +1273,7 @@ func TestTerseErrors2(t *testing.T) {
 
 func TestTerseErrors3(t *testing.T) {
 	ctx := context.Background()
-	logStats := newSqlQueryStats("TestHandleExecError", ctx)
+	logStats := newLogStats("TestHandleExecError", ctx)
 	query := proto.Query{
 		Sql:           "select * from test_table",
 		BindVariables: nil,
@@ -1287,9 +1287,9 @@ func TestTerseErrors3(t *testing.T) {
 	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	sqlQuery := NewSqlQuery(config)
-	sqlQuery.config.TerseErrors = true
-	defer sqlQuery.handleExecError(&query, &err, logStats)
+	tsv := NewTabletServer(config)
+	tsv.config.TerseErrors = true
+	defer tsv.handleExecError(&query, &err, logStats)
 	panic(&TabletError{
 		ErrorType: ErrFail,
 		Message:   "msg",
@@ -1329,7 +1329,7 @@ func TestNeedInvalidator(t *testing.T) {
 	}
 }
 
-func setUpSQLQueryTest() *fakesqldb.DB {
+func setUpTabletServerTest() *fakesqldb.DB {
 	db := fakesqldb.Register()
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
@@ -1337,12 +1337,12 @@ func setUpSQLQueryTest() *fakesqldb.DB {
 	return db
 }
 
-func checkSQLQueryState(t *testing.T, sqlQuery *SqlQuery, expectState int64) {
-	sqlQuery.mu.Lock()
-	state := sqlQuery.state
-	sqlQuery.mu.Unlock()
+func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) {
+	tsv.mu.Lock()
+	state := tsv.state
+	tsv.mu.Unlock()
 	if state != expectState {
-		t.Fatalf("sqlquery should in state: %d, but get state: %d", expectState, state)
+		t.Fatalf("TabletServer should in state: %d, but get state: %d", expectState, state)
 	}
 }
 

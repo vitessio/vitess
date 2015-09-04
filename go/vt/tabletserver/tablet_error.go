@@ -225,7 +225,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	}
 }
 
-func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QueryServiceStats) {
+func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {

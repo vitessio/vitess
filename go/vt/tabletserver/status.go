@@ -87,9 +87,9 @@ type queryserviceStatus struct {
 func (rqsc *realQueryServiceControl) AddStatusPart() {
 	servenv.AddStatusPart("Queryservice", queryserviceStatusTemplate, func() interface{} {
 		status := queryserviceStatus{
-			State: rqsc.sqlQueryRPCService.GetState(),
+			State: rqsc.tabletServerRPCService.GetState(),
 		}
-		rates := rqsc.sqlQueryRPCService.qe.queryServiceStats.QPSRates.Get()
+		rates := rqsc.tabletServerRPCService.qe.queryServiceStats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
 

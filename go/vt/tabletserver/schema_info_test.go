@@ -382,7 +382,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
+	logStats := newLogStats("GetPlanStats", ctx)
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info GetPlan should fail because of empty query",
@@ -422,8 +422,8 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 
-	firstSQLQuery := "select * from test_table_01"
-	secondSQLQuery := "select * from test_table_02"
+	firstQuery := "select * from test_table_01"
+	secondQuery := "select * from test_table_02"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &mproto.QueryResult{})
 
@@ -439,18 +439,18 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
+	logStats := newLogStats("GetPlanStats", ctx)
 	schemaInfo.SetQueryCacheSize(1)
-	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstSQLQuery)
+	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstQuery)
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondSQLQuery)
+	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondQuery)
 	if secondPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
 	expvar.Do(func(kv expvar.KeyValue) {
-		kv.Value.String()
+		_ = kv.Value.String()
 	})
 	schemaInfo.ClearQueryPlanCache()
 }
@@ -470,7 +470,7 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
 	defer schemaInfo.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
-		kv.Value.String()
+		_ = kv.Value.String()
 	})
 }
 
@@ -549,7 +549,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	sqlQuery := "select * from test_table_01"
+	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
@@ -561,8 +561,8 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	defer schemaInfo.Close()
 	// warm up cache
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
-	schemaInfo.GetPlan(ctx, logStats, sqlQuery)
+	logStats := newLogStats("GetPlanStats", ctx)
+	schemaInfo.GetPlan(ctx, logStats, query)
 
 	request, _ := http.NewRequest("GET", schemaInfo.endpoints[debugQueryPlansKey], nil)
 	response := httptest.NewRecorder()

@@ -16,12 +16,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestSqlQueryStats(t *testing.T) {
-	logStats := newSqlQueryStats("test", context.Background())
-	logStats.AddRewrittenSql("sql1", time.Now())
+func TestLogStats(t *testing.T) {
+	logStats := newLogStats("test", context.Background())
+	logStats.AddRewrittenSQL("sql1", time.Now())
 
-	if !strings.Contains(logStats.RewrittenSql(), "sql1") {
-		t.Fatalf("RewrittenSql should contains sql: sql1")
+	if !strings.Contains(logStats.RewrittenSQL(), "sql1") {
+		t.Fatalf("RewrittenSQL should contains sql: sql1")
 	}
 
 	if logStats.SizeOfResponse() != 0 {
@@ -38,8 +38,8 @@ func TestSqlQueryStats(t *testing.T) {
 	logStats.Format(url.Values(params))
 }
 
-func TestSqlQueryStatsFormatBindVariables(t *testing.T) {
-	logStats := newSqlQueryStats("test", context.Background())
+func TestLogStatsFormatBindVariables(t *testing.T) {
+	logStats := newLogStats("test", context.Background())
 	logStats.BindVariables = make(map[string]interface{})
 	logStats.BindVariables["key_1"] = "val_1"
 	logStats.BindVariables["key_2"] = 789
@@ -68,8 +68,8 @@ func TestSqlQueryStatsFormatBindVariables(t *testing.T) {
 	}
 }
 
-func TestSqlQueryStatsFormatQuerySources(t *testing.T) {
-	logStats := newSqlQueryStats("test", context.Background())
+func TestLogStatsFormatQuerySources(t *testing.T) {
+	logStats := newLogStats("test", context.Background())
 	if logStats.FmtQuerySources() != "none" {
 		t.Fatalf("should return none since log stats does not have any query source, but got: %s", logStats.FmtQuerySources())
 	}
@@ -90,20 +90,20 @@ func TestSqlQueryStatsFormatQuerySources(t *testing.T) {
 	}
 }
 
-func TestSqlQueryStatsContextHTML(t *testing.T) {
+func TestLogStatsContextHTML(t *testing.T) {
 	html := "HtmlContext"
 	callInfo := &fakeCallInfo{
 		html: html,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats := newSqlQueryStats("test", ctx)
+	logStats := newLogStats("test", ctx)
 	if string(logStats.ContextHTML()) != html {
 		t.Fatalf("expect to get html: %s, but got: %s", html, string(logStats.ContextHTML()))
 	}
 }
 
-func TestSqlQueryStatsErrorStr(t *testing.T) {
-	logStats := newSqlQueryStats("test", context.Background())
+func TestLogStatsErrorStr(t *testing.T) {
+	logStats := newLogStats("test", context.Background())
 	if logStats.ErrorStr() != "" {
 		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
 	}
@@ -114,8 +114,8 @@ func TestSqlQueryStatsErrorStr(t *testing.T) {
 	}
 }
 
-func TestSqlQueryStatsRemoteAddrUsername(t *testing.T) {
-	logStats := newSqlQueryStats("test", context.Background())
+func TestLogStatsRemoteAddrUsername(t *testing.T) {
+	logStats := newLogStats("test", context.Background())
 	addr, user := logStats.RemoteAddrUsername()
 	if addr != "" {
 		t.Fatalf("remote addr should be empty")
@@ -131,7 +131,7 @@ func TestSqlQueryStatsRemoteAddrUsername(t *testing.T) {
 		username:   username,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats = newSqlQueryStats("test", ctx)
+	logStats = newLogStats("test", ctx)
 	addr, user = logStats.RemoteAddrUsername()
 	if addr != remoteAddr {
 		t.Fatalf("expected to get remote addr: %s, but got: %s", remoteAddr, addr)

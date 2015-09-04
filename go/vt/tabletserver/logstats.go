@@ -19,8 +19,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// SqlQueryLogger is the main stream logger object
-var SqlQueryLogger = streamlog.New("SqlQuery", 50)
+// StatsLogger is the main stream logger object
+var StatsLogger = streamlog.New("TabletServer", 50)
 
 const (
 	// QuerySourceRowcache means query result is found in rowcache.
@@ -31,11 +31,11 @@ const (
 	QuerySourceMySQL
 )
 
-// SQLQueryStats records the stats for a single query
-type SQLQueryStats struct {
+// LogStats records the stats for a single query
+type LogStats struct {
 	Method               string
 	PlanType             string
-	OriginalSql          string
+	OriginalSQL          string
 	BindVariables        map[string]interface{}
 	rewrittenSqls        []string
 	RowsAffected         int
@@ -55,8 +55,8 @@ type SQLQueryStats struct {
 	Error                error
 }
 
-func newSqlQueryStats(methodName string, ctx context.Context) *SQLQueryStats {
-	return &SQLQueryStats{
+func newLogStats(methodName string, ctx context.Context) *LogStats {
+	return &LogStats{
 		Method:    methodName,
 		StartTime: time.Now(),
 		ctx:       ctx,
@@ -64,13 +64,13 @@ func newSqlQueryStats(methodName string, ctx context.Context) *SQLQueryStats {
 }
 
 // Send finalizes a record and sends it
-func (stats *SQLQueryStats) Send() {
+func (stats *LogStats) Send() {
 	stats.EndTime = time.Now()
-	SqlQueryLogger.Send(stats)
+	StatsLogger.Send(stats)
 }
 
-// AddRewrittenSql adds a single sql statement to the rewritten list
-func (stats *SQLQueryStats) AddRewrittenSql(sql string, start time.Time) {
+// AddRewrittenSQL adds a single sql statement to the rewritten list
+func (stats *LogStats) AddRewrittenSQL(sql string, start time.Time) {
 	stats.QuerySources |= QuerySourceMySQL
 	stats.NumberOfQueries++
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
@@ -78,20 +78,20 @@ func (stats *SQLQueryStats) AddRewrittenSql(sql string, start time.Time) {
 }
 
 // TotalTime returns how long this query has been running
-func (stats *SQLQueryStats) TotalTime() time.Duration {
+func (stats *LogStats) TotalTime() time.Duration {
 	return stats.EndTime.Sub(stats.StartTime)
 }
 
-// RewrittenSql returns a semicolon separated list of SQL statements
+// RewrittenSQL returns a semicolon separated list of SQL statements
 // that were executed.
-func (stats *SQLQueryStats) RewrittenSql() string {
+func (stats *LogStats) RewrittenSQL() string {
 	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
 // SizeOfResponse returns the approximate size of the response in
 // bytes (this does not take in account BSON encoding). It will return
 // 0 for streaming requests.
-func (stats *SQLQueryStats) SizeOfResponse() int {
+func (stats *LogStats) SizeOfResponse() int {
 	if stats.Rows == nil {
 		return 0
 	}
@@ -107,7 +107,7 @@ func (stats *SQLQueryStats) SizeOfResponse() int {
 // FmtBindVariables returns the map of bind variables as JSON. For
 // values that are strings or byte slices it only reports their type
 // and length.
-func (stats *SQLQueryStats) FmtBindVariables(full bool) string {
+func (stats *LogStats) FmtBindVariables(full bool) string {
 	var out map[string]interface{}
 	if full {
 		out = stats.BindVariables
@@ -137,7 +137,7 @@ func (stats *SQLQueryStats) FmtBindVariables(full bool) string {
 // FmtQuerySources returns a comma separated list of query
 // sources. If there were no query sources, it returns the string
 // "none".
-func (stats *SQLQueryStats) FmtQuerySources() string {
+func (stats *LogStats) FmtQuerySources() string {
 	if stats.QuerySources == 0 {
 		return "none"
 	}
@@ -159,14 +159,14 @@ func (stats *SQLQueryStats) FmtQuerySources() string {
 }
 
 // ContextHTML returns the HTML version of the context that was used, or "".
-// This is a method on SQLQueryStats instead of a field so that it doesn't need
+// This is a method on LogStats instead of a field so that it doesn't need
 // to be passed by value everywhere.
-func (stats *SQLQueryStats) ContextHTML() template.HTML {
+func (stats *LogStats) ContextHTML() template.HTML {
 	return callinfo.HTMLFromContext(stats.ctx)
 }
 
 // ErrorStr returns the error string or ""
-func (stats *SQLQueryStats) ErrorStr() string {
+func (stats *LogStats) ErrorStr() string {
 	if stats.Error != nil {
 		return stats.Error.Error()
 	}
@@ -174,7 +174,7 @@ func (stats *SQLQueryStats) ErrorStr() string {
 }
 
 // RemoteAddrUsername returns some parts of CallInfo if set
-func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
+func (stats *LogStats) RemoteAddrUsername() (string, string) {
 	ci, ok := callinfo.FromContext(stats.ctx)
 	if !ok {
 		return "", ""
@@ -183,7 +183,7 @@ func (stats *SQLQueryStats) RemoteAddrUsername() (string, string) {
 }
 
 // Format returns a tab separated list of logged fields.
-func (stats *SQLQueryStats) Format(params url.Values) string {
+func (stats *LogStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 
 	remoteAddr, username := stats.RemoteAddrUsername()
@@ -196,10 +196,10 @@ func (stats *SQLQueryStats) Format(params url.Values) string {
 		stats.EndTime.Format(time.StampMicro),
 		stats.TotalTime().Seconds(),
 		stats.PlanType,
-		stats.OriginalSql,
+		stats.OriginalSQL,
 		stats.FmtBindVariables(fullBindParams),
 		stats.NumberOfQueries,
-		stats.RewrittenSql(),
+		stats.RewrittenSQL(),
 		stats.FmtQuerySources(),
 		stats.MysqlResponseTime.Seconds(),
 		stats.WaitingForConnection.Seconds(),
