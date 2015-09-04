@@ -403,7 +403,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 }
 
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
-func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql string) *ExecPlan {
+func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql string) *ExecPlan {
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
 		return plan
@@ -440,7 +440,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *SQLQueryStats, sql 
 			sql := plan.FieldQuery.Query
 			start := time.Now()
 			r, err := conn.Exec(ctx, sql, 1, true)
-			logStats.AddRewrittenSql(sql, start)
+			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
 				panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
 			}

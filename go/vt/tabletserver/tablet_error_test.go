@@ -163,7 +163,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 
 func TestTabletErrorHandleUncaughtError(t *testing.T) {
 	var err error
-	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	logStats := newLogStats("TestTabletErrorHandleError", context.Background())
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)
@@ -178,7 +178,7 @@ func TestTabletErrorHandleUncaughtError(t *testing.T) {
 func TestTabletErrorHandleRetryError(t *testing.T) {
 	var err error
 	tabletErr := NewTabletErrorSQL(ErrRetry, vtrpc.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(1000, "test"))
-	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	logStats := newLogStats("TestTabletErrorHandleError", context.Background())
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)
@@ -193,7 +193,7 @@ func TestTabletErrorHandleRetryError(t *testing.T) {
 func TestTabletErrorHandleTxPoolFullError(t *testing.T) {
 	var err error
 	tabletErr := NewTabletErrorSQL(ErrTxPoolFull, vtrpc.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(1000, "test"))
-	logStats := newSqlQueryStats("TestTabletErrorHandleError", context.Background())
+	logStats := newLogStats("TestTabletErrorHandleError", context.Background())
 	queryServiceStats := NewQueryServiceStats("", false)
 	defer func() {
 		_, ok := err.(*TabletError)

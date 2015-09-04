@@ -300,7 +300,7 @@ func (qe *QueryEngine) Close() {
 }
 
 // Commit commits the specified transaction.
-func (qe *QueryEngine) Commit(ctx context.Context, logStats *SQLQueryStats, transactionID int64) {
+func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transactionID int64) {
 	dirtyTables, err := qe.txPool.SafeCommit(ctx, transactionID)
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := qe.schemaInfo.GetTable(tableName)

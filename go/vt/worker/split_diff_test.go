@@ -27,15 +27,15 @@ import (
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// destinationSQLQuery is a local QueryService implementation to
+// destinationTabletServer is a local QueryService implementation to
 // support the tests
-type destinationSQLQuery struct {
+type destinationTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *destinationSQLQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -44,7 +44,7 @@ func (sq *destinationSQLQuery) StreamExecute(ctx context.Context, target *pb.Tar
 		sq.t.Errorf("Sql query on destination should not contain a keyspace_id WHERE clause; query received: %v", query.Sql)
 	}
 
-	sq.t.Logf("destinationSQLQuery: got query: %v", *query)
+	sq.t.Logf("destinationTabletServer: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -84,14 +84,14 @@ func (sq *destinationSQLQuery) StreamExecute(ctx context.Context, target *pb.Tar
 	return nil
 }
 
-// sourceSQLQuery is a local QueryService implementation to support the tests
-type sourceSQLQuery struct {
+// sourceTabletServer is a local QueryService implementation to support the tests
+type sourceTabletServer struct {
 	queryservice.ErrorQueryService
 	t             *testing.T
 	excludedTable string
 }
 
-func (sq *sourceSQLQuery) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *pb.Target, query *proto.Query, sendReply func(reply *mproto.QueryResult) error) error {
 	if strings.Contains(query.Sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, query.Sql)
 	}
@@ -103,7 +103,7 @@ func (sq *sourceSQLQuery) StreamExecute(ctx context.Context, target *pb.Target, 
 		}
 	}
 
-	sq.t.Logf("sourceSQLQuery: got query: %v", *query)
+	sq.t.Logf("sourceTabletServer: got query: %v", *query)
 
 	// Send the headers
 	if err := sendReply(&mproto.QueryResult{
@@ -215,10 +215,10 @@ func TestSplitDiff(t *testing.T) {
 		}
 	}
 
-	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationSQLQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationSQLQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceSQLQuery{t: t, excludedTable: excludedTable})
-	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceSQLQuery{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly1.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(leftRdonly2.RPCServer, &destinationTabletServer{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly1.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
+	grpcqueryservice.RegisterForTest(sourceRdonly2.RPCServer, &sourceTabletServer{t: t, excludedTable: excludedTable})
 
 	err := wrk.Run(ctx)
 	status := wrk.StatusAsText()
