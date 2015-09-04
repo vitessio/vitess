@@ -32,7 +32,7 @@ const (
 )
 
 func init() {
-	sandboxMap = make(map[string]*sandbox)
+	ksToSandbox = make(map[string]*sandbox)
 	createSandbox(KsTestSharded)
 	createSandbox(KsTestUnsharded)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
@@ -40,28 +40,28 @@ func init() {
 }
 
 var sandboxMu sync.Mutex
-var sandboxMap map[string]*sandbox
+var ksToSandbox map[string]*sandbox
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	s := &sandbox{}
 	s.Reset()
-	sandboxMap[keyspace] = s
+	ksToSandbox[keyspace] = s
 	return s
 }
 
 func getSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	return sandboxMap[keyspace]
+	return ksToSandbox[keyspace]
 }
 
 func addSandboxServedFrom(keyspace, servedFrom string) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	sandboxMap[keyspace].KeyspaceServedFrom = servedFrom
-	sandboxMap[servedFrom] = sandboxMap[keyspace]
+	ksToSandbox[keyspace].KeyspaceServedFrom = servedFrom
+	ksToSandbox[servedFrom] = ksToSandbox[keyspace]
 }
 
 type sandbox struct {
@@ -235,7 +235,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)
-	for k := range sandboxMap {
+	for k := range ksToSandbox {
 		keyspaces = append(keyspaces, k)
 	}
 	return keyspaces, nil
