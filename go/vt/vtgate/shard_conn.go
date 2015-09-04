@@ -436,7 +436,7 @@ func (sdc *ShardConn) WrapError(in error, endPoint *pb.EndPoint, inTransaction b
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
-		endpointCode: vterrors.RecoverVtErrorCode(in)
+		endpointCode:    vterrors.RecoverVtErrorCode(in),
 	}
 	return shardConnErr
 }

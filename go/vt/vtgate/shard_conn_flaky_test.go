@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // This file uses the sandbox_test framework.
@@ -29,7 +32,7 @@ var (
 )
 
 func TestShardConnExecute(t *testing.T) {
-	testShardConnGeneric(t, "TestShardConnExecute", func() error {
+	testShardConnGeneric(t, "TestShardConnExecute", false, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecute", "0", pb.TabletType_REPLICA, retryDelay, retryCount, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, err := sdc.Execute(context.Background(), "query", nil, 0)
 		return err
@@ -42,7 +45,7 @@ func TestShardConnExecute(t *testing.T) {
 }
 
 func TestShardConnExecuteBatch(t *testing.T) {
-	testShardConnGeneric(t, "TestShardConnExecuteBatch", func() error {
+	testShardConnGeneric(t, "TestShardConnExecuteBatch", false, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteBatch", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(context.Background(), queries, false, 0)
@@ -57,7 +60,7 @@ func TestShardConnExecuteBatch(t *testing.T) {
 }
 
 func TestShardConnExecuteStream(t *testing.T) {
-	testShardConnGeneric(t, "TestShardConnExecuteStream", func() error {
+	testShardConnGeneric(t, "TestShardConnExecuteStream", true, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnExecuteStream", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, errfunc := sdc.StreamExecute(context.Background(), "query", nil, 0)
 		return errfunc()
@@ -70,7 +73,7 @@ func TestShardConnExecuteStream(t *testing.T) {
 }
 
 func TestShardConnBegin(t *testing.T) {
-	testShardConnGeneric(t, "TestShardConnBegin", func() error {
+	testShardConnGeneric(t, "TestShardConnBegin", false, func() error {
 		sdc := NewShardConn(context.Background(), new(sandboxTopo), "aa", "TestShardConnBegin", "0", pb.TabletType_REPLICA, 1*time.Millisecond, 3, connTimeoutTotal, connTimeoutPerConn, connLife, connectTimings)
 		_, err := sdc.Begin(context.Background())
 		return err
@@ -91,15 +94,27 @@ func TestShardConnRollback(t *testing.T) {
 	})
 }
 
-func testShardConnGeneric(t *testing.T, name string, f func() error) {
+func verifyError(t *testing.T, err error, wantErr string, wantCode vtrpc.ErrorCode) {
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
+	}
+	if _, ok := err.(*ShardConnError); !ok {
+		t.Errorf("wanted error type *ShardConnError, got error type: %v", reflect.TypeOf(err))
+	}
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != wantCode {
+		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
+	}
+}
+
+func testShardConnGeneric(t *testing.T, name string, streaming bool, f func() error) {
 	// Topo failure
 	s := createSandbox(name)
 	s.EndPointMustFail = retryCount + 1
-	err := f()
+
 	want := fmt.Sprintf("shard, host: %v.0.replica, <nil>, endpoints fetch error: topo error", name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	err := f()
+	verifyError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
 
 	if epCount := s.EndPointCounter.Get(); epCount != int64(retryCount+1) {
 		t.Errorf("want %v, got %v", (retryCount + 1), epCount)
@@ -112,9 +127,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s.DialMustFail = 4
 	err = f()
 	want = fmt.Sprintf("shard, host: %v.0.replica, %+v, conn error %+v", name, nil, sbc.EndPoint())
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	verifyError(t, err, want, vtrpc.ErrorCode_UNKNOWN_ERROR)
 	// Ensure we dialed 4 times before failing.
 	if s.DialCounter != 4 {
 		t.Errorf("want 4, got %v", s.DialCounter)
@@ -128,9 +141,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s.MapTestConn("0", sbc)
 	err = f()
 	want = fmt.Sprintf("shard, host: %v.0.replica, %+v, no valid endpoint", name, nil)
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	verifyError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
 	// Ensure we dialed 2 times before failing.
 	if s.DialCounter != 2 {
 		t.Errorf("want 2, got %v", s.DialCounter)
@@ -159,19 +170,29 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 
 	// fatal error (one failure)
 	s.Reset()
-	sbc = &sandboxConn{mustFailRetry: 1}
+	sbc = &sandboxConn{mustFailFatal: 1}
 	s.MapTestConn("0", sbc)
 	err = f()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
+	// streaming queries don't retry on fatal
+	if streaming {
+		want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , fatal: err", name)
+		verifyError(t, err, want, vtrpc.ErrorCode_INTERNAL_ERROR)
+	} else {
+		if err != nil {
+			t.Errorf("want nil, got %v", err)
+		}
+	}
+	wantCounter := 2
+	if streaming {
+		wantCounter = 1
 	}
 	// Ensure we dialed twice (second one succeeded)
-	if s.DialCounter != 2 {
-		t.Errorf("want 2, got %v", s.DialCounter)
+	if s.DialCounter != wantCounter {
+		t.Errorf("want %v, got %v", wantCounter, s.DialCounter)
 	}
 	// Ensure we executed twice (second one succeeded)
-	if execCount := sbc.ExecCount.Get(); execCount != 2 {
-		t.Errorf("want 2, got %v", execCount)
+	if execCount := sbc.ExecCount.Get(); execCount != int64(wantCounter) {
+		t.Errorf("want %v, got %v", wantCounter, execCount)
 	}
 
 	// server error
@@ -180,9 +201,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s.MapTestConn("0", sbc)
 	err = f()
 	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name)
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	verifyError(t, err, want, vtrpc.ErrorCode_UNKNOWN_ERROR)
 	// Ensure we did not redial.
 	if s.DialCounter != 1 {
 		t.Errorf("want 1, got %v", s.DialCounter)
@@ -199,6 +218,7 @@ func testShardConnGeneric(t *testing.T, name string, f func() error) {
 	s.MapTestConn("0", sbc)
 	err = f()
 	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: conn", name)
+	verifyError(t, err, want, vtrpc.ErrorCode_UNKNOWN_ERROR)
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}
