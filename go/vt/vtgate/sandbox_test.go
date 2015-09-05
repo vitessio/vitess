@@ -21,6 +21,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -32,7 +33,7 @@ const (
 )
 
 func init() {
-	sandboxMap = make(map[string]*sandbox)
+	ksToSandbox = make(map[string]*sandbox)
 	createSandbox(KsTestSharded)
 	createSandbox(KsTestUnsharded)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
@@ -40,28 +41,28 @@ func init() {
 }
 
 var sandboxMu sync.Mutex
-var sandboxMap map[string]*sandbox
+var ksToSandbox map[string]*sandbox
 
 func createSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	s := &sandbox{}
 	s.Reset()
-	sandboxMap[keyspace] = s
+	ksToSandbox[keyspace] = s
 	return s
 }
 
 func getSandbox(keyspace string) *sandbox {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	return sandboxMap[keyspace]
+	return ksToSandbox[keyspace]
 }
 
 func addSandboxServedFrom(keyspace, servedFrom string) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
-	sandboxMap[keyspace].KeyspaceServedFrom = servedFrom
-	sandboxMap[servedFrom] = sandboxMap[keyspace]
+	ksToSandbox[keyspace].KeyspaceServedFrom = servedFrom
+	ksToSandbox[servedFrom] = ksToSandbox[keyspace]
 }
 
 type sandbox struct {
@@ -235,7 +236,7 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)
-	for k := range sandboxMap {
+	for k := range ksToSandbox {
 		keyspaces = append(keyspaces, k)
 	}
 	return keyspaces, nil
@@ -353,15 +354,27 @@ func (sbc *sandboxConn) getError() error {
 	}
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_RETRY, Err: "retry: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_RETRY,
+			Err:        "retry: err",
+			ServerCode: vtrpc.ErrorCode_QUERY_NOT_SERVED,
+		}
 	}
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_FATAL, Err: "fatal: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_FATAL,
+			Err:        "fatal: err",
+			ServerCode: vtrpc.ErrorCode_INTERNAL_ERROR,
+		}
 	}
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_NORMAL, Err: "error: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_NORMAL,
+			Err:        "error: err",
+			ServerCode: vtrpc.ErrorCode_BAD_INPUT,
+		}
 	}
 	if sbc.mustFailConn > 0 {
 		sbc.mustFailConn--
@@ -369,11 +382,19 @@ func (sbc *sandboxConn) getError() error {
 	}
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_TX_POOL_FULL, Err: "tx_pool_full: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_TX_POOL_FULL,
+			Err:        "tx_pool_full: err",
+			ServerCode: vtrpc.ErrorCode_RESOURCE_EXHAUSTED,
+		}
 	}
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
-		return &tabletconn.ServerError{Code: tabletconn.ERR_NOT_IN_TX, Err: "not_in_tx: err"}
+		return &tabletconn.ServerError{
+			Code:       tabletconn.ERR_NOT_IN_TX,
+			Err:        "not_in_tx: err",
+			ServerCode: vtrpc.ErrorCode_NOT_IN_TX,
+		}
 	}
 	return nil
 }
