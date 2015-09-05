@@ -8,6 +8,7 @@ package vterrors
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -23,6 +24,8 @@ func ConcatenateErrors(errors []error) error {
 	for _, e := range errors {
 		errStrs = append(errStrs, fmt.Sprintf("%v", e))
 	}
+	// sort the error strings so we always have deterministic ordering
+	sort.Strings(errStrs)
 	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
 }
 

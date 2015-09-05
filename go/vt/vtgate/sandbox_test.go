@@ -373,7 +373,7 @@ func (sbc *sandboxConn) getError() error {
 		return &tabletconn.ServerError{
 			Code:       tabletconn.ERR_NORMAL,
 			Err:        "error: err",
-			ServerCode: vtrpc.ErrorCode_UNKNOWN_ERROR,
+			ServerCode: vtrpc.ErrorCode_BAD_INPUT,
 		}
 	}
 	if sbc.mustFailConn > 0 {

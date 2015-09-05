@@ -14,10 +14,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.
@@ -86,6 +88,19 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	})
 }
 
+func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpc.ErrorCode) {
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
+	}
+	if _, ok := err.(*ScatterConnError); !ok {
+		t.Errorf("wanted error type *ScatterConnError, got error type: %v", reflect.TypeOf(err))
+	}
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != wantCode {
+		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
+	}
+}
+
 func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (*mproto.QueryResult, error)) {
 	// no shard
 	s := createSandbox(name)
@@ -120,11 +135,27 @@ func testScatterConnGeneric(t *testing.T, name string, f func(shards []string) (
 	s.MapTestConn("1", sbc1)
 	_, err = f([]string{"0", "1"})
 	// Verify server errors are consolidated.
-	want1 := fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
-	want2 := fmt.Sprintf("shard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
-	if err == nil || (err.Error() != want1 && err.Error() != want2) {
-		t.Errorf("\nwant\n%s\ngot\n%v", want1, err)
+	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , error: err", name, name)
+	verifyScatterConnError(t, err, want, vtrpc.ErrorCode_BAD_INPUT)
+	// Ensure that we tried only once.
+	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v", execCount)
 	}
+	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+		t.Errorf("want 1, got %v", execCount)
+	}
+
+	// two shards with different errors
+	s.Reset()
+	sbc0 = &sandboxConn{mustFailServer: 1}
+	s.MapTestConn("0", sbc0)
+	sbc1 = &sandboxConn{mustFailTxPool: 1}
+	s.MapTestConn("1", sbc1)
+	_, err = f([]string{"0", "1"})
+	// Verify server errors are consolidated.
+	want = fmt.Sprintf("shard, host: %v.0.replica, host:\"0\" port_map:<key:\"vt\" value:1 > , error: err\nshard, host: %v.1.replica, host:\"1\" port_map:<key:\"vt\" value:1 > , tx_pool_full: err", name, name)
+	// We should only surface the higher priority error code
+	verifyScatterConnError(t, err, want, vtrpc.ErrorCode_BAD_INPUT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -356,7 +387,7 @@ func TestScatterConnError(t *testing.T) {
 	}
 
 	errString := err.Error()
-	wantErrString := "tabletconn error\ngeneric error\nvttablet: Connection Closed"
+	wantErrString := "generic error\ntabletconn error\nvttablet: Connection Closed"
 
 	if errString != wantErrString {
 		t.Errorf("got: %v, want: %v", errString, wantErrString)
