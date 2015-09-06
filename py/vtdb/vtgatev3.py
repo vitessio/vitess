@@ -88,14 +88,14 @@ def _create_req(sql, new_binds, tablet_type, not_in_transaction):
 
 class VTGateConnection(object):
   """This utilizes the V3 API of VTGate."""
-  session = None
-  _stream_fields = None
-  _stream_conversions = None
-  _stream_result = None
-  _stream_result_index = None
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
+    self._stream_fields = None
+    self._stream_conversions = None
+    self._stream_result = None
+    self._stream_result_index = None
+    self.session = None
     self.addr = addr
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,

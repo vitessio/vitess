@@ -67,16 +67,16 @@ class TabletConnection(object):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
-  transaction_id = 0
-  session_id = 0
-  _stream_fields = None
-  _stream_conversions = None
-  _stream_result = None
-  _stream_result_index = None
 
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
       password=None, keyfile=None, certfile=None, caller_id=None):
+    self.transaction_id = 0
+    self.session_id = 0
+    self._stream_fields = None
+    self._stream_conversions = None
+    self._stream_result = None
+    self._stream_result_index = None
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace

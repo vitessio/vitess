@@ -6,16 +6,15 @@ from vtdb import dbexceptions
 
 
 class BaseCursor(object):
-  arraysize = 1
-  lastrowid = None
-  rowcount = 0
-  results = None
-  connection = None
-  description = None
-  index = None
 
   def __init__(self, connection):
     self.connection = connection
+    self.arraysize = 1
+    self.lastrowid = None
+    self.rowcount = 0
+    self.results = None
+    self.description = None
+    self.index = None
 
   def close(self):
     self.connection = None
@@ -139,15 +138,14 @@ class BatchQueryItem(object):
 
 
 class StreamCursor(object):
-  arraysize = 1
-  conversions = None
-  connection = None
-  description = None
-  index = None
-  fetchmany_done = False
 
   def __init__(self, connection):
     self.connection = connection
+    self.arraysize = 1
+    self.conversions = None
+    self.description = None
+    self.index = None
+    self.fetchmany_done = False
 
   def close(self):
     self.connection = None

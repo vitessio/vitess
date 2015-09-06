@@ -2,23 +2,20 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from vtdb import cursor
 from vtdb import dbexceptions
 
 
 class Cursor(object):
-  _conn = None
-  tablet_type = None
-  arraysize = 1
-  lastrowid = None
-  rowcount = 0
-  results = None
-  description = None
-  index = None
 
   def __init__(self, connection, tablet_type):
     self._conn = connection
     self.tablet_type = tablet_type
+    self.arraysize = 1
+    self.lastrowid = None
+    self.rowcount = 0
+    self.results = None
+    self.description = None
+    self.index = None
 
   def close(self):
     self.results = None
@@ -111,12 +108,10 @@ class Cursor(object):
 
 
 class StreamCursor(Cursor):
-  arraysize = 1
-  conversions = None
-  connection = None
-  description = None
-  index = None
-  fetchmany_done = False
+
+  def __init__(self, connection, tablet_type):
+    super(StreamCursor, self).__init__(connection, tablet_type)
+    self.fetchmany_done = False
 
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
