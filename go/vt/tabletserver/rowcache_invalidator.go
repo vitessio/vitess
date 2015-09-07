@@ -91,7 +91,7 @@ func (rci *RowcacheInvalidator) Open(dbname string, mysqld mysqlctl.MysqlDaemon)
 	if mysqld.Cnf().BinLogPath == "" {
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcache invalidator aborting: binlog path not specified"))
 	}
-	err = rci.qe.schemaInfo.ClearRowcache()
+	err = rci.qe.ClearRowcache()
 	if err != nil {
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Rowcahe is not reachable"))
 	}

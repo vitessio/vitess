@@ -113,22 +113,7 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{enableAutoCommit: config.EnableAutoCommit}
 	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
-	qe.schemaInfo = NewSchemaInfo(
-		config.QueryCacheSize,
-		config.StatsPrefix,
-		map[string]string{
-			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
-			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
-			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
-			debugSchemaKey:     config.DebugURLPrefix + "/schema",
-		},
-		time.Duration(config.SchemaReloadTime*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		qe.queryServiceStats,
-	)
 
-	// Pools
 	qe.cachePool = NewCachePool(
 		config.PoolNamePrefix+"Rowcache",
 		config.RowCache,
@@ -137,6 +122,22 @@ func NewQueryEngine(config Config) *QueryEngine {
 		config.EnablePublishStats,
 		qe.queryServiceStats,
 	)
+	qe.schemaInfo = NewSchemaInfo(
+		config.StatsPrefix,
+		config.QueryCacheSize,
+		time.Duration(config.SchemaReloadTime*1e9),
+		time.Duration(config.IdleTimeout*1e9),
+		qe.cachePool,
+		map[string]string{
+			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
+			debugTableStatsKey: config.DebugURLPrefix + "/table_stats",
+			debugSchemaKey:     config.DebugURLPrefix + "/schema",
+		},
+		config.EnablePublishStats,
+		qe.queryServiceStats,
+	)
+
 	qe.connPool = NewConnPool(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
@@ -152,7 +153,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 		qe.queryServiceStats,
 	)
 
-	// Services
 	qe.txPool = NewTxPool(
 		config.PoolNamePrefix+"TransactionPool",
 		config.StatsPrefix,
@@ -167,7 +167,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
 
-	// Vars
 	qe.queryTimeout.Set(time.Duration(config.QueryTimeout * 1e9))
 	qe.spotCheckFreq = sync2.NewAtomicInt64(int64(config.SpotCheckRatio * spotCheckMultiplier))
 	if config.StrictMode {
@@ -180,13 +179,11 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	// Loggers
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
 	var tableACLAllowedName string
 	var tableACLDeniedName string
 	var tableACLPseudoDeniedName string
-	// Stats
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
@@ -237,7 +234,7 @@ func (qe *QueryEngine) Open(dbconfigs *dbconfigs.DBConfigs, schemaOverrides []Sc
 	start := time.Now()
 	// schemaInfo depends on cachePool. Every table that has a rowcache
 	// points to the cachePool.
-	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, qe.cachePool, strictMode)
+	qe.schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	qe.connPool.Open(&appParams, &dbaParams)
@@ -320,4 +317,22 @@ func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transacti
 	if err != nil {
 		panic(err)
 	}
+}
+
+// ClearRowcache invalidates all items in the rowcache.
+func (qe *QueryEngine) ClearRowcache() error {
+	if qe.cachePool.IsClosed() {
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
+	}
+	ctx := context.Background()
+	conn := qe.cachePool.Get(ctx)
+	defer func() { qe.cachePool.Put(conn) }()
+
+	err := conn.FlushAll()
+	if err != nil {
+		conn.Close()
+		conn = nil
+		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err)
+	}
+	return nil
 }

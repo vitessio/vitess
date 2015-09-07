@@ -282,8 +282,7 @@ func newTestTableInfo(cachePool *CachePool, tableType string, comment string) (*
 	defer conn.Recycle()
 
 	tableName := "test_table"
-	createTime := sqltypes.MakeString([]byte("1427325875"))
-	tableInfo, err := NewTableInfo(conn, tableName, tableType, createTime, comment, cachePool)
+	tableInfo, err := NewTableInfo(conn, tableName, tableType, comment, cachePool)
 	if err != nil {
 		return nil, err
 	}
