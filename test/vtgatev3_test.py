@@ -334,7 +334,7 @@ class TestVTGateFunctions(unittest.TestCase):
     stream_cursor = vtgate_conn.cursor(
         'master', cursorclass=cursorv3.StreamCursor)
     stream_cursor.execute('select * from vt_user', {})
-    self.assertEqual(cursor.description, [('id', 8L), ('name', 253L)])
+    self.assertEqual(stream_cursor.description, [('id', 8L), ('name', 253L)])
     rows = []
     for row in stream_cursor:
       rows.append(row)

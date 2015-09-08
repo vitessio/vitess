@@ -67,16 +67,13 @@ class TabletConnection(object):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
+  stream_execute_returns_generator = True
 
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
       password=None, keyfile=None, certfile=None, caller_id=None):
     self.transaction_id = 0
     self.session_id = 0
-    self._stream_fields = None
-    self._stream_conversions = None
-    self._stream_result = None
-    self._stream_result_index = None
     self.addr = addr
     self.tablet_type = tablet_type
     self.keyspace = keyspace
@@ -129,7 +126,8 @@ class TabletConnection(object):
   def is_closed(self):
     return self.client.is_closed()
 
-  def begin(self):
+  def begin(self, effective_caller_id=None):
+    _ = effective_caller_id
     if self.transaction_id:
       raise dbexceptions.NotSupportedError('Nested transactions not supported')
     req = {
@@ -242,7 +240,7 @@ class TabletConnection(object):
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
@@ -288,7 +286,7 @@ class TabletConnection(object):
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables_list)
       raise convert_exception(e, str(self), sql_list)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return rowsets
@@ -307,10 +305,8 @@ class TabletConnection(object):
         'ImmediateCallerID': {'Username': self.caller_id}
     }
 
-    self._stream_fields = []
-    self._stream_conversions = []
-    self._stream_result = None
-    self._stream_result_index = 0
+    stream_fields = []
+    stream_conversions = []
     try:
       self.client.stream_call('SqlQuery.StreamExecute2', req)
       first_response = self.client.stream_next()
@@ -321,49 +317,36 @@ class TabletConnection(object):
             'Message', 'Missing error message'))
 
       for field in reply['Fields']:
-        self._stream_fields.append((field['Name'], field['Type']))
-        self._stream_conversions.append(
+        stream_fields.append((field['Name'], field['Type']))
+        stream_conversions.append(
             field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
-    return None, 0, 0, self._stream_fields
 
-  def _stream_next(self):
-    # Terminating condition
-    if self._stream_result_index is None:
-      return None
+    def row_generator():
+      while True:
+        try:
+          stream_result = self.client.stream_next()
+          if stream_result is None:
+            break
+          if stream_result.reply.get('Err'):
+            self.__drain_conn_after_streaming_app_error()
+            raise gorpc.AppError(stream_result.reply['Err'].get(
+                'Message', 'Missing error message'))
+          for result_item in stream_result.reply['Rows']:
+            yield tuple(_make_row(result_item, stream_conversions))
+        except gorpc.GoRpcError as e:
+          raise convert_exception(e, str(self))
+        except Exception:
+          logging.exception('gorpc low-level error')
+          raise
 
-    # See if we need to read more or whether we just pop the next row.
-    if self._stream_result is None:
-      try:
-        self._stream_result = self.client.stream_next()
-        if self._stream_result is None:
-          self._stream_result_index = None
-          return None
-        if self._stream_result.reply.get('Err'):
-          self.__drain_conn_after_streaming_app_error()
-          raise gorpc.AppError(self._stream_result.reply['Err'].get(
-              'Message', 'Missing error message'))
-      except gorpc.GoRpcError as e:
-        raise convert_exception(e, str(self))
-      except:
-        logging.exception('gorpc low-level error')
-        raise
+    return row_generator(), stream_fields
 
-    row = tuple(
-        _make_row(self._stream_result.reply['Rows'][self._stream_result_index],
-                  self._stream_conversions))
-    # If we are reading the last row, set us up to read more data.
-    self._stream_result_index += 1
-    if self._stream_result_index == len(self._stream_result.reply['Rows']):
-      self._stream_result = None
-      self._stream_result_index = 0
-
-    return row
 
   def __drain_conn_after_streaming_app_error(self):
     """Drains the connection of all incoming streaming packets (ignoring them).

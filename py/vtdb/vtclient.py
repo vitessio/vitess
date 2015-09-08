@@ -54,6 +54,7 @@ def reconnect(method):
 
 # Provide compatibility with the MySQLdb query param style and prune bind_vars
 class VtOCCConnection(object):
+
   cursorclass = cursor.TabletCursor
 
   def __init__(self, topo_client, keyspace, shard, db_type, timeout, user=None,
@@ -116,6 +117,9 @@ class VtOCCConnection(object):
         db_params = params.copy()
         host_addr = db_params['addr']
         self.conn = tablet.TabletConnection(**db_params)
+        self.stream_execute_returns_generator = (
+            self.conn.stream_execute_returns_generator)
+
         self.conn.dial()
         self.conn_db_params = db_params
         return self.conn

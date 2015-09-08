@@ -5,6 +5,7 @@
 """
 
 from vtdb import vtgate_cursor
+from vtdb import dbexceptions
 
 # mapping from protocol to python class.
 vtgate_client_conn_classes = dict()
@@ -76,6 +77,8 @@ class VTGateClient(object):
   It should also be maintained by the cursor only.
   """
 
+  stream_execute_returns_generator = False
+
   def __init__(self, addr, timeout):
     """Initialize a vtgate connection.
 
@@ -83,21 +86,18 @@ class VTGateClient(object):
       addr: server address. Can be protocol dependent.
       timeout: connection timeout (float, in seconds).
     """
-    pass
 
   def dial(self):
     """Dial to the server.
 
     If successful, call close() to close the connection.
     """
-    pass
 
   def close(self):
     """Close the connection.
 
     This object may be re-used again by calling dial().
     """
-    pass
 
   def is_closed(self):
     """Checks the connection status.
@@ -105,7 +105,6 @@ class VTGateClient(object):
     Returns:
       True if this connection is closed.
     """
-    pass
 
   def cursor(self, *pargs, **kwargs):
     """Creates a cursor instance associated with this connection.
@@ -117,13 +116,7 @@ class VTGateClient(object):
     Returns:
       A new cursor to use on this connection.
     """
-    cursorclass = None
-    if 'cursorclass' in kwargs:
-      cursorclass = kwargs['cursorclass']
-      del kwargs['cursorclass']
-
-    if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+    cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self, effective_caller_id=None):
@@ -146,7 +139,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def commit(self):
     """Commits the current transaction.
@@ -164,7 +156,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def rollback(self):
     """Rolls the current transaction back.
@@ -182,7 +173,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def _execute(self, sql, bind_variables, tablet_type,
                keyspace=None,
@@ -241,7 +231,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def _execute_batch(
       self, sql_list, bind_variables_list, tablet_type,
@@ -286,7 +275,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def _stream_execute(
       self, sql, bind_variables, tablet_type, keyspace=None, shards=None,
@@ -316,10 +304,10 @@ class VTGateClient(object):
       effective_caller_id: CallerID object.
 
     Returns:
-      None
-      0
-      0
-      fields: the field definitions.
+      If stream_execute_returns_generator is True, then the return
+      value is a (row generator, fields) pair. Otherwise, a 4-element
+      (None, 0, 0, fields) tuple is returned. (TODO: always return the
+      (row generator, fields) pair.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -332,7 +320,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
 
   def _stream_next(self):
     """Returns the next result for a streaming query.
@@ -351,7 +338,10 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-    pass
+    if self.stream_execute_returns_generator:
+      raise dbexceptions.ProgrammingError(
+          '_stream_next is not part of this interface. Use the '
+          'generator returned by _stream_executed.')
 
   def get_srv_keyspace(self, keyspace):
     """Returns a SrvKeyspace object.
@@ -365,4 +355,3 @@ class VTGateClient(object):
     Raises:
       TBD
     """
-    pass

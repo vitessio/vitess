@@ -588,14 +588,11 @@ class TestVTGateFunctions(unittest.TestCase):
             keyspace_ids=[pack_kid(kid_list[i])])
         self.assertEqual(result, [(kid_list[i],)])
         if i % 10 == 0:
-          vtgate_conn._stream_execute(
+          generator, _ = vtgate_conn._stream_execute(
               query, {'kid': kid_list[i]}, KEYSPACE_NAME,
               tablet_type,
               keyspace_ids=[pack_kid(kid_list[i])])
-          while 1:
-            result = vtgate_conn._stream_next()
-            if not result:
-              break
+          for result in generator:
             self.assertEqual(result, (kid_list[i],))
       thd.join()
     except Exception, e:

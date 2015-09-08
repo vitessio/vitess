@@ -8,6 +8,7 @@ import itertools
 import operator
 import re
 
+from vtdb import base_cursor
 from vtdb import dbexceptions
 
 write_sql_pattern = re.compile(r'\s*(insert|update|delete)', re.IGNORECASE)
@@ -18,48 +19,40 @@ def ascii_lower(string):
     return string.encode('utf8').lower().decode('utf8')
 
 
-class VTGateCursor(object):
-  arraysize = 1
-  lastrowid = None
-  rowcount = 0
-  results = None
-  _conn = None
-  description = None
-  index = None
-  keyspace = None
-  tablet_type = None
-  keyspace_ids = None
-  keyranges = None
-  _writable = None
-  routing = None
+class VTGateCursorMixin(object):
+
+  def connection_list(self):
+    return [self._conn]
+
+  def is_writable(self):
+    return self._writable
+
+
+
+class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
+  """A cursor for execute statements to VTGate.
+
+  Results are stored as a list.
+  """
 
   def __init__(
       self, connection, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, writable=False):
     self._conn = connection
-    self.keyspace = keyspace
-    self.tablet_type = tablet_type
-    self.keyspace_ids = keyspace_ids
-    self.keyranges = keyranges
     self._writable = writable
-
-  def connection_list(self):
-    return [self._conn]
+    self.description = None
+    self.index = None
+    self.keyranges = keyranges
+    self.keyspace = keyspace
+    self.keyspace_ids = keyspace_ids
+    self.lastrowid = None
+    self.results = None
+    self.routing = None
+    self.rowcount = 0
+    self.tablet_type = tablet_type
 
   def close(self):
     self.results = None
-
-  def is_writable(self):
-    return self._writable
-
-  def commit(self):
-    return self._conn.commit()
-
-  def begin(self, effective_caller_id=None):
-    return self._conn.begin(effective_caller_id)
-
-  def rollback(self):
-    return self._conn.rollback()
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
@@ -69,17 +62,8 @@ class VTGateCursor(object):
     self.description = None
     self.lastrowid = None
     effective_caller_id = kargs.get('effective_caller_id')
-    sql_check = sql.strip().lower()
-    if sql_check == 'begin':
-      self.begin(effective_caller_id)
+    if self._handle_transaction_sql(sql, effective_caller_id):
       return
-    elif sql_check == 'commit':
-      self.commit()
-      return
-    elif sql_check == 'rollback':
-      self.rollback()
-      return
-
     write_query = bool(write_sql_pattern.match(sql))
     # NOTE: This check may also be done at higher layers but adding it
     # here for completion.
@@ -127,32 +111,6 @@ class VTGateCursor(object):
     self.index = 0
     return self.rowcount
 
-  def fetchone(self):
-    if self.results is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
-
-    if self.index >= len(self.results):
-      return None
-    self.index += 1
-    return self.results[self.index-1]
-
-  def fetchmany(self, size=None):
-    if self.results is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
-
-    if self.index >= len(self.results):
-      return []
-    if size is None:
-      size = self.arraysize
-    res = self.results[self.index:self.index+size]
-    self.index += size
-    return res
-
-  def fetchall(self):
-    if self.results is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
-    return self.fetchmany(len(self.results)-self.index)
-
   def fetch_aggregate_function(self, func):
     return func(row[0] for row in self.fetchall())
 
@@ -176,35 +134,6 @@ class VTGateCursor(object):
     neutered_rows = [row[len(order_by_columns):] for row in sorted_rows]
     return neutered_rows
 
-  def callproc(self):
-    raise dbexceptions.NotSupportedError
-
-  def executemany(self, *pargs):
-    _ = pargs
-    raise dbexceptions.NotSupportedError
-
-  def nextset(self):
-    raise dbexceptions.NotSupportedError
-
-  def setinputsizes(self, sizes):
-    pass
-
-  def setoutputsize(self, size, column=None):
-    pass
-
-  @property
-  def rownumber(self):
-    return self.index
-
-  def __iter__(self):
-    return self
-
-  def next(self):
-    val = self.fetchone()
-    if val is None:
-      raise StopIteration
-    return val
-
 
 class BatchVTGateCursor(VTGateCursor):
   """Batch Cursor for VTGate.
@@ -224,7 +153,8 @@ class BatchVTGateCursor(VTGateCursor):
     self.bind_vars_list = []
     self.keyspace_list = []
     self.keyspace_ids_list = []
-    VTGateCursor.__init__(self, connection, '', tablet_type, writable=writable)
+    super(BatchVTGateCursor, self).__init__(
+        connection, '', tablet_type, writable=writable)
 
   def execute(self, sql, bind_variables, keyspace, keyspace_ids):
     self.query_list.append(sql)
@@ -247,20 +177,32 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_ids_list = []
 
 
-class StreamVTGateCursor(VTGateCursor):
-  arraysize = 1
-  conversions = None
-  connection = None
-  description = None
-  index = None
-  fetchmany_done = False
+class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
+  """A cursor for streaming statements to VTGate.
+
+  Results are returned as a generator.
+  """
 
   def __init__(
       self, connection, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, writable=False):
-    VTGateCursor.__init__(
-        self, connection, keyspace, tablet_type, keyspace_ids=keyspace_ids,
-        keyranges=keyranges)
+    self._conn = connection
+    self._writable = writable
+    self.conversions = None
+    self.description = None
+    self.fetchmany_done = False
+    self.generator = None
+    self.index = None
+    self.keyranges = keyranges
+    self.keyspace = keyspace
+    self.keyspace_ids = keyspace_ids
+    self.lastrowid = None
+    self.routing = None
+    self.rowcount = 0
+    self.tablet_type = tablet_type
+
+  def is_writable(self):
+    return self._writable
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
@@ -269,7 +211,8 @@ class StreamVTGateCursor(VTGateCursor):
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
 
     self.description = None
-    _, _, _, self.description = self._conn._stream_execute(
+    self.generator = None
+    result = self._conn._stream_execute(
         sql,
         bind_variables,
         self.keyspace,
@@ -278,71 +221,8 @@ class StreamVTGateCursor(VTGateCursor):
         keyranges=self.keyranges,
         not_in_transaction=not self.is_writable(),
         effective_caller_id=kargs.get('effective_caller_id'))
-
-    self.index = 0
+    self._parse_stream_execute_result(self._conn, result)
     return 0
-
-  def fetchone(self):
-    if self.description is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
-
-    self.index += 1
-    return self._conn._stream_next()
-
-  # fetchmany can be called until it returns no rows. Returning less rows
-  # than what we asked for is also an indication we ran out, but the cursor
-  # API in PEP249 is silent about that.
-  def fetchmany(self, size=None):
-    if size is None:
-      size = self.arraysize
-    result = []
-    if self.fetchmany_done:
-      self.fetchmany_done = False
-      return result
-    for _ in xrange(size):
-      row = self.fetchone()
-      if row is None:
-        self.fetchmany_done = True
-        break
-      result.append(row)
-    return result
-
-  def fetchall(self):
-    result = []
-    while True:
-      row = self.fetchone()
-      if row is None:
-        break
-      result.append(row)
-    return result
-
-  def callproc(self):
-    raise dbexceptions.NotSupportedError
-
-  def executemany(self, *pargs):
-    raise dbexceptions.NotSupportedError
-
-  def nextset(self):
-    raise dbexceptions.NotSupportedError
-
-  def setinputsizes(self, sizes):
-    pass
-
-  def setoutputsize(self, size, column=None):
-    pass
-
-  @property
-  def rownumber(self):
-    return self.index
-
-  def __iter__(self):
-    return self
-
-  def next(self):
-    val = self.fetchone()
-    if val is None:
-      raise StopIteration
-    return val
 
 
 # assumes the leading columns are used for sorting

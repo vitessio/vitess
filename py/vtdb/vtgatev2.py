@@ -116,14 +116,12 @@ class VTGateConnection(vtgate_client.VTGateClient):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
-  session = None
-  _stream_fields = None
-  _stream_conversions = None
-  _stream_result = None
-  _stream_result_index = None
+
+  stream_execute_returns_generator = True
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
+    self.session = None
     self.addr = addr
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(
@@ -150,13 +148,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     return self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
-    cursorclass = None
-    if 'cursorclass' in kwargs:
-      cursorclass = kwargs['cursorclass']
-      del kwargs['cursorclass']
-
-    if cursorclass is None:
-      cursorclass = vtgate_cursor.VTGateCursor
+    cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
   def begin(self, effective_caller_id=None):
@@ -263,7 +255,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
@@ -317,7 +309,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, entity_keyspace_id_map,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return results, rowcount, lastrowid, fields
@@ -372,7 +364,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       self.logger_object.log_private_data(bind_variables_list)
       raise convert_exception(e, str(self), sql_list, keyspace_ids_list,
                               keyspace='', tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
     return rowsets
@@ -403,63 +395,44 @@ class VTGateConnection(vtgate_client.VTGateClient):
     self._add_caller_id(req, effective_caller_id)
     self._add_session(req)
 
-    self._stream_fields = []
-    self._stream_conversions = []
-    self._stream_result = None
-    self._stream_result_index = 0
+    stream_fields = []
+    stream_conversions = []
     try:
       self.client.stream_call(exec_method, req)
       first_response = self.client.stream_next()
       if first_response:
         reply = first_response.reply['Result']
         for field in reply['Fields']:
-          self._stream_fields.append((field['Name'], field['Type']))
-          self._stream_conversions.append(
+          stream_fields.append((field['Name'], field['Type']))
+          stream_conversions.append(
               field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
       self.logger_object.log_private_data(bind_variables)
       raise convert_exception(e, str(self), sql, keyspace_ids, keyranges,
                               keyspace=keyspace, tablet_type=tablet_type)
-    except:
+    except Exception:
       logging.exception('gorpc low-level error')
       raise
-    return None, 0, 0, self._stream_fields
 
-  def _stream_next(self):
-    # Terminating condition
-    if self._stream_result_index is None:
-      return None
+    def row_generator():
+      while True:
+        try:
+          stream_result = self.client.stream_next()
+          if stream_result is None:
+            break
+          # A session message, if any, comes separately with no rows
+          if stream_result.reply.get('Session'):
+            self.session = stream_result.reply['Session']
+          else:
+            for result_item in stream_result.reply['Result']['Rows']:
+              yield tuple(_make_row(result_item, stream_conversions))
+        except gorpc.GoRpcError as e:
+          raise convert_exception(e, str(self))
+        except Exception:
+          logging.exception('gorpc low-level error')
+          raise
 
-    # See if we need to read more or whether we just pop the next row.
-    while self._stream_result is None:
-      try:
-        self._stream_result = self.client.stream_next()
-        if self._stream_result is None:
-          self._stream_result_index = None
-          return None
-        # A session message, if any comes separately with no rows
-        if self._stream_result.reply.get('Session'):
-          self.session = self._stream_result.reply['Session']
-          self._stream_result = None
-          continue
-      except gorpc.GoRpcError as e:
-        raise convert_exception(e, str(self))
-      except:
-        logging.exception('gorpc low-level error')
-        raise
-
-    row = tuple(_make_row(
-        self._stream_result.reply['Result']['Rows'][self._stream_result_index],
-        self._stream_conversions))
-
-    # If we are reading the last row, set us up to read more data.
-    self._stream_result_index += 1
-    if (self._stream_result_index ==
-        len(self._stream_result.reply['Result']['Rows'])):
-      self._stream_result = None
-      self._stream_result_index = 0
-
-    return row
+    return row_generator(), stream_fields
 
   def get_srv_keyspace(self, name):
     try:
