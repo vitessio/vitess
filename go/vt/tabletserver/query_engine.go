@@ -320,16 +320,14 @@ func (qe *QueryEngine) Commit(ctx context.Context, logStats *LogStats, transacti
 }
 
 // ClearRowcache invalidates all items in the rowcache.
-func (qe *QueryEngine) ClearRowcache() error {
+func (qe *QueryEngine) ClearRowcache(ctx context.Context) error {
 	if qe.cachePool.IsClosed() {
 		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
 	}
-	ctx := context.Background()
 	conn := qe.cachePool.Get(ctx)
 	defer func() { qe.cachePool.Put(conn) }()
 
-	err := conn.FlushAll()
-	if err != nil {
+	if err := conn.FlushAll(); err != nil {
 		conn.Close()
 		conn = nil
 		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err)
