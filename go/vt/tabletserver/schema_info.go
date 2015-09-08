@@ -99,34 +99,40 @@ type SchemaOverride struct {
 // SchemaInfo stores the schema info and performs operations that
 // keep itself and the rowcache up-to-date.
 type SchemaInfo struct {
-	mu                sync.Mutex
-	tables            map[string]*TableInfo
-	overrides         []SchemaOverride
+	mu         sync.Mutex
+	tables     map[string]*TableInfo
+	overrides  []SchemaOverride
+	lastChange int64
+	reloadTime time.Duration
+
+	// The following vars are either read-only or have
+	// their own synchronization.
 	queries           *cache.LRUCache
 	connPool          *ConnPool
 	cachePool         *CachePool
-	lastChange        time.Time
 	ticks             *timer.Timer
-	reloadTime        time.Duration
 	endpoints         map[string]string
 	queryServiceStats *QueryServiceStats
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(
-	queryCacheSize int,
 	statsPrefix string,
-	endpoints map[string]string,
+	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
+	cachePool *CachePool,
+	endpoints map[string]string,
 	enablePublishStats bool,
 	queryServiceStats *QueryServiceStats) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:    cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:   NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats),
-		ticks:      timer.NewTimer(reloadTime),
-		endpoints:  endpoints,
-		reloadTime: reloadTime,
+		queries:           cache.NewLRUCache(int64(queryCacheSize)),
+		connPool:          NewConnPool("", 2, idleTimeout, enablePublishStats, queryServiceStats),
+		cachePool:         cachePool,
+		ticks:             timer.NewTimer(reloadTime),
+		endpoints:         endpoints,
+		reloadTime:        reloadTime,
+		queryServiceStats: queryServiceStats,
 	}
 	if enablePublishStats {
 		stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
@@ -154,7 +160,7 @@ func NewSchemaInfo(
 }
 
 // Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
-func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrides []SchemaOverride, cachePool *CachePool, strictMode bool) {
+func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrides []SchemaOverride, strictMode bool) {
 	ctx := context.Background()
 	si.connPool.Open(appParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
@@ -167,21 +173,19 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 		panic(NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"))
 	}
 
-	si.cachePool = cachePool
-	tables, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	if err != nil {
 		panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
 
-	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	si.tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
-	for _, row := range tables.Rows {
+	tables := make(map[string]*TableInfo, len(tableData.Rows))
+	tables["dual"] = &TableInfo{Table: schema.NewTable("dual")}
+	for _, row := range tableData.Rows {
 		tableName := row[0].String()
 		tableInfo, err := NewTableInfo(
 			conn,
 			tableName,
 			row[1].String(), // table_type
-			row[2],          // create_time
 			row[3].String(), // table_comment
 			si.cachePool,
 		)
@@ -189,18 +193,24 @@ func (si *SchemaInfo) Open(appParams, dbaParams *sqldb.ConnParams, schemaOverrid
 			panic(PrefixTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err, fmt.Sprintf("Could not get load table %s: ", tableName)))
 		}
 		tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
-		si.tables[tableName] = tableInfo
+		tables[tableName] = tableInfo
 	}
-	if schemaOverrides != nil {
-		si.overrides = schemaOverrides
-		si.override()
-	}
-	si.lastChange = curTime
+	func() {
+		si.mu.Lock()
+		defer si.mu.Unlock()
+		si.tables = tables
+		if schemaOverrides != nil {
+			si.overrides = schemaOverrides
+			si.override()
+		}
+		si.lastChange = curTime
+	}()
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
 	si.ticks.Start(si.Reload)
 }
 
+// override should be called with a lock on mu held.
 func (si *SchemaInfo) override() {
 	for _, override := range si.overrides {
 		table, ok := si.tables[override.Name]
@@ -247,27 +257,12 @@ func (si *SchemaInfo) override() {
 func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
 	si.connPool.Close()
+	si.queries.Clear()
+
+	si.mu.Lock()
+	defer si.mu.Unlock()
 	si.tables = nil
 	si.overrides = nil
-	si.queries.Clear()
-}
-
-// ClearRowcache invalidates all items in the rowcache.
-func (si *SchemaInfo) ClearRowcache() error {
-	if si.cachePool.IsClosed() {
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "rowcache is not up")
-	}
-	ctx := context.Background()
-	conn := si.cachePool.Get(ctx)
-	defer func() { si.cachePool.Put(conn) }()
-
-	err := conn.FlushAll()
-	if err != nil {
-		conn.Close()
-		conn = nil
-		return NewTabletError(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, "%s", err)
-	}
-	return nil
 }
 
 // Reload reloads the schema info from the db. Any tables that have changed
@@ -278,35 +273,44 @@ func (si *SchemaInfo) Reload() {
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime(ctx)
 
-	var tables *mproto.QueryResult
+	var tableData *mproto.QueryResult
 	var err error
 	func() {
 		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tables, err = conn.Exec(ctx, baseShowTables, maxTableCount, false)
+		tableData, err = conn.Exec(ctx, baseShowTables, maxTableCount, false)
 	}()
 	if err != nil {
 		log.Warningf("Could not get table list for reload: %v", err)
 		return
 	}
 	log.Infof("Reloading schema")
-	for _, row := range tables.Rows {
-		tableName := row[0].String()
-		createTime, _ := row[2].ParseInt64()
-		// Check if we know about the table or it has been recreated.
-		if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange.Unix() {
-			log.Infof("Reloading: %s", tableName)
-			si.CreateOrUpdateTable(ctx, tableName)
-		} else {
+	// The following section requires us to hold mu.
+	func() {
+		si.mu.Lock()
+		defer si.mu.Unlock()
+		for _, row := range tableData.Rows {
+			tableName := row[0].String()
+			createTime, _ := row[2].ParseInt64()
+			// Check if we know about the table or it has been recreated.
+			if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange {
+				func() {
+					// Unlock so CreateOrUpdateTable can lock.
+					si.mu.Unlock()
+					defer si.mu.Lock()
+					log.Infof("Reloading: %s", tableName)
+					si.CreateOrUpdateTable(ctx, tableName)
+				}()
+				continue
+			}
 			// Only update table_rows, data_length, index_length
 			si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7])
 		}
-
-	}
-	si.lastChange = curTime
+		si.lastChange = curTime
+	}()
 }
 
-func (si *SchemaInfo) mysqlTime(ctx context.Context) time.Time {
+func (si *SchemaInfo) mysqlTime(ctx context.Context) int64 {
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
@@ -320,7 +324,7 @@ func (si *SchemaInfo) mysqlTime(ctx context.Context) time.Time {
 	if err != nil {
 		panic(NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
 	}
-	return time.Unix(t, 0)
+	return t
 }
 
 // safe to call this if Close has been called, as si.ticks will be stopped
@@ -331,32 +335,26 @@ func (si *SchemaInfo) triggerReload() {
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
 func (si *SchemaInfo) ClearQueryPlanCache() {
-	si.mu.Lock()
-	defer si.mu.Unlock()
 	si.queries.Clear()
 }
 
 // CreateOrUpdateTable must be called if a DDL was applied to that table.
 func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
-	tables, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
+	tableData, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
 	if err != nil {
 		panic(PrefixTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err, fmt.Sprintf("Error fetching table %s: ", tableName)))
 	}
-	if len(tables.Rows) != 1 {
+	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
 		return
 	}
-	row := tables.Rows[0]
+	row := tableData.Rows[0]
 	tableInfo, err := NewTableInfo(
 		conn,
 		tableName,
 		row[1].String(), // table_type
-		row[2],          // create_time
 		row[3].String(), // table_comment
 		si.cachePool,
 	)
@@ -366,6 +364,10 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	}
 	// table_rows, data_length, index_length
 	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7])
+
+	// Need to acquire lock now.
+	si.mu.Lock()
+	defer si.mu.Unlock()
 	if _, ok := si.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
@@ -407,6 +409,12 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 		return plan
 	}
 
+	// TODO(sougou): It's not correct to hold this lock here because the code
+	// below runs queries against MySQL. But if we don't hold the lock, there
+	// are other race conditions where identical queries will end up building
+	// plans and compete with populating the query cache. In other words, we
+	// need a more elaborate scheme that blocks less, but still prevents these
+	// race conditions.
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	// Recheck. A plan might have been built by someone else.
@@ -557,7 +565,7 @@ func (si *SchemaInfo) getTableRows() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		tstats[k] = v.TableRows
+		tstats[k] = v.TableRows.Get()
 	}
 	return tstats
 }
@@ -567,7 +575,7 @@ func (si *SchemaInfo) getDataLength() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		tstats[k] = v.DataLength
+		tstats[k] = v.DataLength.Get()
 	}
 	return tstats
 }
@@ -577,7 +585,7 @@ func (si *SchemaInfo) getIndexLength() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		tstats[k] = v.IndexLength
+		tstats[k] = v.IndexLength.Get()
 	}
 	return tstats
 }
@@ -587,7 +595,7 @@ func (si *SchemaInfo) getDataFree() map[string]int64 {
 	defer si.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range si.tables {
-		tstats[k] = v.DataFree
+		tstats[k] = v.DataFree.Get()
 	}
 	return tstats
 }

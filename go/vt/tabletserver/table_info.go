@@ -10,12 +10,13 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/schema"
 	"golang.org/x/net/context"
 )
 
+// TableInfo contains the tabletserver related info for a table.
+// It's a superset of schema.Table.
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
@@ -23,12 +24,13 @@ type TableInfo struct {
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn *DBConn, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
+// NewTableInfo creates a new TableInfo.
+func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string, cachePool *CachePool) (ti *TableInfo, err error) {
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
 	}
-	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
+	ti.initRowCache(conn, tableType, comment, cachePool)
 	return ti, nil
 }
 
@@ -54,6 +56,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn) error {
 	return nil
 }
 
+// SetPK sets the pk columns for a TableInfo.
 func (ti *TableInfo) SetPK(colnames []string) error {
 	pkIndex := schema.NewIndex("PRIMARY")
 	colnums := make([]int, len(colnames))
@@ -132,7 +135,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 	return nil
 }
 
-func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
@@ -162,6 +165,7 @@ func (ti *TableInfo) initRowCache(conn *DBConn, tableType string, createTime sql
 	ti.Cache = NewRowCache(ti, cachePool)
 }
 
+// StatsJSON retuns a JSON representation of the TableInfo stats.
 func (ti *TableInfo) StatsJSON() string {
 	if ti.Cache == nil {
 		return fmt.Sprintf("null")
@@ -170,6 +174,7 @@ func (ti *TableInfo) StatsJSON() string {
 	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}", h, a, m, i)
 }
 
+// Stats returns the stats for TableInfo.
 func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
 	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
 }
