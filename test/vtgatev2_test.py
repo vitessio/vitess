@@ -307,7 +307,7 @@ class TestVTGateFunctions(unittest.TestCase):
       rowcount = cursor.execute('select * from vt_insert_test', {})
       self.assertEqual(rowcount, row_counts[0] + row_counts[1])
     except Exception, e:
-      logging.debug('failed with error %s, %s', str(e), traceback.print_exc())
+      logging.debug('failed with error %s, %s', str(e), traceback.format_exc())
       raise
 
   def test_rollback(self):
@@ -345,7 +345,7 @@ class TestVTGateFunctions(unittest.TestCase):
       do_write(10, self.shard_index)
     except Exception, e:
       self.fail('Write failed with error %s %s' %
-                (str(e), traceback.print_exc()))
+                (str(e), traceback.format_exc()))
 
   def test_execute_entity_ids(self):
     try:
@@ -374,7 +374,7 @@ class TestVTGateFunctions(unittest.TestCase):
     except Exception, e:
       self.fail('Execute entity ids failed with error %s %s' %
                 (str(e),
-                 traceback.print_exc()))
+                 traceback.format_exc()))
 
   def test_batch_read(self):
     try:
@@ -416,7 +416,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(cursor.rowsets[1][1], count)
     except Exception, e:
       self.fail('Write failed with error %s %s' % (str(e),
-                                                   traceback.print_exc()))
+                                                   traceback.format_exc()))
 
   def test_batch_write(self):
     try:
@@ -474,7 +474,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(rowcount, fetch_size)
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_fetchall(self):
     try:
@@ -492,7 +492,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(rowcount, count)
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_fetchone(self):
     try:
@@ -509,7 +509,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertTrue(type(rows) == tuple, 'Received a valid row')
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_multishards(self):
     try:
@@ -528,7 +528,7 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(rowcount, count*2)
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_zero_results(self):
     try:
@@ -548,7 +548,7 @@ class TestVTGateFunctions(unittest.TestCase):
       rowcount = len(list(rows))
       self.assertEqual(rowcount, 0)
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_interleaving(self):
     tablet_type = 'master'
@@ -596,7 +596,7 @@ class TestVTGateFunctions(unittest.TestCase):
             self.assertEqual(result, (kid_list[i],))
       thd.join()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_field_types(self):
     try:

@@ -195,7 +195,7 @@ class TestUpdateStream(unittest.TestCase):
           break
     except Exception, e:
       self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
-                (str(e), traceback.print_exc()))
+                (str(e), traceback.format_exc()))
     thd.join(timeout=30)
 
     v = utils.get_vars(replica_tablet.port)
@@ -231,7 +231,7 @@ class TestUpdateStream(unittest.TestCase):
           str(e))
     except Exception, e:
       logging.error('Exception: %s', str(e))
-      logging.error('Traceback: %s', traceback.print_exc())
+      logging.error('Traceback: %s', traceback.format_exc())
       self.fail("Update stream returned error '%s'" % str(e))
     logging.debug('Streamed %d transactions before exiting', txn_count)
 
