@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: new_docs
 title: "Backing Up Data"
 description:
 modified:

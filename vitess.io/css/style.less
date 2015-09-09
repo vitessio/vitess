@@ -1,0 +1,212 @@
+@import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
+
+// Colors
+@mainBrandColor: #4E5A92;
+@secondBrandColor: #264270;
+@thirdBrandColor: #E8F4FF;
+@inverseBrandColor: #FFFFFF;
+
+@linkColor: @mainBrandColor;
+@linkHoverColor: darken(@linkColor, 10%);
+@codeColor: darken(@linkColor, 20%);
+@codeBkColor: #E8F4FF;
+@wellColor: #F9F9F9;
+@textColor: #6a7476;
+@headingsColor: rgb(81, 91, 93);
+
+// Helper vars
+@vpad: 20px;
+
+// Override Bootstrap defaults
+body {
+    color: @textColor;
+    font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: @mainBrandColor;
+}
+a:hover,
+a:focus {
+  color: @linkHoverColor;
+}
+//a.external:after {
+//    content: "▸"
+//}
+a.disabled {
+    color: #CCCCCC;
+}
+
+
+h1, h2, h3, h4, h5, h6 {
+    color: @headingsColor;
+}
+
+p, li {line-height: 22px;}
+
+p.note {
+    background-color: @thirdBrandColor;
+    padding: 9.5px;
+}
+
+p.note code {
+   background-color: @thirdBrandColor !important;
+}
+
+code {
+    color: @codeColor;
+    background-color: @inverseBrandColor;
+    font-size: 14px;
+}
+
+pre, pre.prettyprint {
+    background-color: @codeBkColor;
+    color: #000000;
+    border: none !important;
+    font-size: 14px !important;
+    padding: 9.5px !important;
+}
+
+//tabs
+.ui-widget-content {
+  font-size:14px !important;
+  font-family: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  color: @textColor !important;
+}
+
+.ui-widget-content a {
+  color: @mainBrandColor !important;
+}
+
+.ui-widget-content a:hover, a:focus {
+  color: @linkHoverColor !important;
+}
+
+// Fix Bootstrap mobile menu colors on inverse navbar.
+.navbar-toggle .icon-bar {
+  background-color: @inverseBrandColor;
+}
+
+// Shared
+.vpad {
+    padding-top: @vpad;
+}
+
+
+.inverse {
+    background-color: @mainBrandColor;
+    color: white;
+
+    &.inverse-light {
+        background-color: @thirdBrandColor;
+    }
+
+    a {
+      color: @inverseBrandColor;
+    }
+    a:hover,
+    a:focus {
+      color: @linkHoverColor;
+    }
+}
+
+.hero {
+    padding-top: 80px;
+    padding-bottom: 40px;
+    text-align: center;
+
+    h1 {
+        font-size: 21px;
+    }
+
+    .logo {
+        width: 270px;
+        padding-bottom: 20px;
+    }
+}
+
+.hero-bar {
+    text-align: center;
+    background-color: @thirdBrandColor;
+    padding-bottom: 10px;
+    padding-top: 20px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.page-title-bar{
+    background-color: @thirdBrandColor;
+    padding-top: 20px;
+    padding-bottom: 30px;
+
+    h1, h2, h3, h4, h5, h6 {
+        color: @mainBrandColor;
+    }
+}
+
+.page-spacer {
+    height: 100px;
+}
+
+#common-nav{
+    margin-bottom: 0px;
+    background-color: @secondBrandColor;
+
+    .logo {
+        width: 60px;
+    }
+}
+
+// Landing page
+.landing-context {
+    .lang-list {
+        font-size: 18px;
+    }
+
+    pre {
+        font-size: 12px;
+    }
+}
+
+// Docs layout specific
+.docs-side-nav {
+    margin-top: 40px;
+}
+
+// FAQ page
+body.faq {
+    h4 {
+        margin-top: 30px;
+    }
+}
+
+// Blog posts list page (all posts)
+.postdate {
+    margin-bottom: 20px;
+    font-size: 12px;
+    // Tuck in the date field closer to headline.
+    position: relative;
+    top:-5px;
+}
+
+body.postslist{
+    .posts-side-nav {
+        margin-top: 20px;
+    }
+
+    article.post {
+        margin-bottom: 40px;
+    }
+}
+
+// Blog post layout (single post)
+body.post {
+    article.post {
+        margin-top: 40px;
+        font-size: 120%;
+    }
+
+    .page-title-bar {
+        padding-bottom: 0;
+    }
+}

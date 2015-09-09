@@ -1,11 +1,6 @@
 **Contents:**
 
-<ul class="table-of-contents">
-  <li><a href="#overview">Overview</a></li>
-  <li><a href="#core-principles">Core principles</a></li>
-  <li><a href="#language-specific-considerations">Language-specific considerations</a></li>
-  <li><a href="#available-libraries">Available libraries</a></li>
-</ul>
+<div id="toc"></div>
 
 ## Overview
 
@@ -43,7 +38,7 @@ Vitess client libraries follow these core principles:
 * A low-level plug-in abstraction enables the transport to be plugged
   in so that the application can use different RPC frameworks. For
   instance, within Google, we use proto2 objects with an internal
-  RPC system.<br><br>**Note:** If the proto3 library is available in
+  RPC system.<br class="bigbreak">**Note:** If the proto3 library is available in
   your language, we recommend that your API calls use the data types
   generated from our .proto files.
 * A high-level object abstraction allows the user to execute transactions
