@@ -6,12 +6,7 @@ Vitess. Vitess uses backups for two purposes:
 
 **Contents:**
 
-* [Prerequisites](#prerequisites)
-* [Creating a backup](#creating-a-backup)
-* [Restoring a backup](#restoring-a-backup)
-* [Managing backups](#managing-backups)
-* [Bootstrapping a new tablet](#bootstrapping-a-new-tablet)
-* [Concurrency](#concurrency)
+<div id="toc"></div>
 
 ## Prerequisites
 
@@ -29,11 +24,27 @@ access to a local file system where you are storing backups. In practice,
 you should always use these flags when starting a tablet that has access
 to backups on a local file system.
 
-| Flag | Description
-| ---- | -----------
-| <nobr><code>--backup_storage_implementation</code></nobr> | Specifies the implementation of the Backup Storage interface to use.<br><br>If you run Vitess on a machine that has access to an NFS directory where you store backups, set the flag's value to file. Otherwise, do not set this flag or either of the other remaining flags.</li></ul>
-| <code>--file_backup_storage_root</code> | Identifies the root directory for backups. Set this flag if the backup_storage_implementation flag is set to file.
-| <code>--restore_from_backup</code> | Indicates that, when started, the tablet should restore the most recent backup from the file_backup_storage_root directory. This flag is only relevant if the other two flags listed above are also set.
+<table class="responsive">
+  <thead>
+    <tr>
+      <th colspan="2">Flags</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><nobr><code>--backup_storage_implementation</code></nobr></td>
+      <td>Specifies the implementation of the Backup Storage interface to use.<br><br>If you run Vitess on a machine that has access to an NFS directory where you store backups, set the flag's value to file. Otherwise, do not set this flag or either of the other remaining flags.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>--file_backup_storage_root</code></nobr></td>
+      <td>Identifies the root directory for backups. Set this flag if the backup_storage_implementation flag is set to file.</td>
+    </tr>
+    <tr>
+      <td><nobr><code>--restore_from_backup</code></nobr></td>
+      <td>Indicates that, when started, the tablet should restore the most recent backup from the file_backup_storage_root directory. This flag is only relevant if the other two flags listed above are also set.</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Creating a backup
 
@@ -94,7 +105,7 @@ vttablet ... -backup_storage_implementation=file \
     existing backups for a keyspace/shard in chronological order.
 
     ``` sh
-'vtctl ListBackups <keyspace/shard>
+vtctl ListBackups <keyspace/shard>
 ```
 
 * [RemoveBackup](/reference/vtctl.html#removebackup) deletes a
@@ -102,7 +113,7 @@ vttablet ... -backup_storage_implementation=file \
 
     ``` sh
 RemoveBackup <keyspace/shard> <backup name>
-``
+```
 
 ## Bootstrapping a new tablet
 
@@ -136,12 +147,12 @@ new tablets as part of the normal lifecyle of a shard:
 
 1. Once the shard is accumulating data, a cron job runs regularly to
     create new backups. Backups are created frequently enough to ensure
-    that one is always available if needed.<br><br>
+    that one is always available if needed.
 
     To determine the proper frequency for creating backups, consider
     the amount of time that you keep replication logs and allow enough
     time to investigate and fix problems in the event that a backup
-    operation fails.<br><br>
+    operation fails.
 
     For example, suppose you typically keep four days of replication logs
     and you create daily backups. In that case, even if a backup fails,
@@ -151,7 +162,7 @@ new tablets as part of the normal lifecyle of a shard:
 1. When a spare tablet comes up, it restores the latest backup, which
     contains data as well as the backup's replication position. The
     tablet then resets its master to the current shard master and starts
-    replicating.<br><br>
+    replicating.
 
     This process is the same for new slave tablets and slave tablets that
     are being restarted. For example, to add a new rdonly tablet to your

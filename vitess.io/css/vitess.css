@@ -1,0 +1,344 @@
+/*
+ * CSS used on vitess.io that deviates from default CSS for Bootstrap and Less.
+ * More generally, these styles could be used in any site.
+ */
+
+@import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
+
+p {
+  margin: 0 0 1em;
+}
+
+table {
+  background:none repeat scroll 0 0 #fff;
+  border:1px solid #D0D0D0;
+  border-bottom:1px solid #D0D0D0;
+  border-collapse:collapse;
+  border-spacing:0;
+  text-align:left;
+  width:100%;
+}
+
+table thead {
+  background-color: #4E5A92;
+}
+
+table tr th {
+  color: #555;
+  font-weight: 500;
+  text-align: left;
+}
+
+table.comparison th {
+  color: #515B5D;
+  font-weight: bold;
+}
+
+table.comparison td {
+  background: #fff;
+  vertical-align: top;
+  width: 47%;
+  border-bottom: solid 1px #e0e0e0;
+  padding: 16px;
+}
+
+table.comparison th, table.comparison td {
+  padding: 1em;
+}
+
+table tbody td {
+  vertical-align: top;
+}
+
+table tr td, table tr th {
+  padding:0.625em;
+}
+table tfoot, table thead {
+  background:none repeat scroll 0 0 #f6f6f6;
+}
+table tbody {
+  background:none repeat scroll 0 0 #fff;
+}
+table tr:nth-of-type(2n) {
+  background:none repeat scroll 0 0 #f6f6f6;
+}
+#api-method-summary tr td.api-method-summary-group {
+  background:#f6f6f6;
+}
+#api-method-summary tr {
+  background:#fff;
+}
+th, td {
+  border-right:1px solid #e0e0e0;
+}
+
+h2, h3, h4, h5 {
+  margin-bottom: 0.8em;
+}
+pre {
+  margin: 0 0 1.2em;
+}
+
+code {
+  background-color: transparent;
+  padding: 0;
+}
+br.bigbreak {
+  line-height: 2em;
+}
+div.indent-details {
+  padding-left: 1.6250em;
+}
+#toc ol, #toc ul {
+  margin: 0;
+}
+#toc li {
+  margin-bottom: 0;
+}
+ol ol, ol ul, ul ol, ul ul {
+  margin: 0.8em 0em;
+}
+ol ol li, ol ul li, ul ol li, ul ul li {
+  margin: 0;
+}
+li, .docs-side-nav ol li, .docs-side-nav ul li {
+  margin-bottom: 0.5em;
+}
+/*
+ * Left nav
+ */
+.docs-side-nav {
+  margin-top: 0;
+}
+.docs-side-nav ol, .docs-side-nav ul {
+  padding-left: 1.625em;
+}
+.docs-side-nav li h4 {
+  margin-top: 1.2em;
+}
+.docs-side-nav li h4.no-top-margin {
+  margin-top: 0;
+}
+.docs-side-nav li a {
+  padding-left: 8px;
+}
+.docs-side-nav li.active-item {
+  border-left: solid 3px #4E5A92;
+  font-weight: bold;
+  margin-left: -3px;
+  text-decoration: none;
+}
+.docs-side-nav li.active-item ul, .docs-side-nav li.active-item ol {
+  border-left: solid 3px #fff;
+  font-weight: normal;
+  margin-left: -3px;
+  margin-top: 0;
+  padding-top: 0.8em;
+}
+
+/*
+ * Responsive tables
+  background: rgba(255, 255, 255, .95);
+  background: rgba(255, 255, 255, .87);
+ */
+table.responsive tr:not(.alt) td td:first-child,
+table.responsive td tr:not(.alt) td:first-child {
+  vertical-align: top;
+}
+table.responsive table.responsive {
+  margin: 0;
+}
+
+table.responsive tr:first-child {
+  border-top: 0;
+}
+
+table.responsive td tr:first-child td {
+  padding-top: 0;
+}
+
+table.responsive td tr:last-child td {
+  padding-bottom: 0;
+}
+
+table.responsive td td:first-child {
+  padding-left: 0;
+}
+table.responsive th:not(:first-child) {
+  display: none;
+}
+@media screen and (max-width: 1000px) {
+  /*
+   * Force responsive tables to lay out completely vertically. The "responsive"
+   * class should only be applied to tables that are composed like a definition
+   * list, with a "term" (say, a property name) in the first column and any
+   * "definitions" (say, type, description, and a sample value) stacked on top
+   * of each other in the second column. This makes it possible to lay out the
+   * table vertically and keep it readable on smaller screens without horizontal
+   * scrolling. This structure and behavior is documented.
+   */
+  table.responsive,
+  table.responsive thead,
+  table.responsive tbody,
+  table.responsive tr,
+  table.responsive th,
+  table.responsive td {
+    display: block;
+  }
+}
+
+/*
+ * App bar changing color when scrolled
+ */
+/*** main layout ***/
+
+#home-page-logo {
+  margin: 40px;
+  text-align: center;
+  width: 402px;
+  height: 228px;
+}
+.page-title-bar {
+  margin: 60px 0px;
+}
+
+.app-bar {
+  background: #4E5A92 url(/images/bg-990x320.jpg) no-repeat top center;
+  background-size: cover;
+  box-shadow: none;
+  z-index: 1;
+}
+.home .app-bar {
+  background: none;
+}
+.app-bar,
+.navdrawer {
+  -webkit-transition: background-color 0.2s ease-out;
+          transition: background-color 0.2s ease-out;
+}
+.app-bar-container {
+  background: none;
+  height: 60px;
+  justify-content: space-between;  /* change the flex layout */
+}
+.navdrawer-container {
+  background: #3f4254;
+}
+.navdrawer-container h4 {
+  height: 60px;
+  color: #3f4254;
+}
+.navdrawer-container a,
+.app-bar .logo {
+  font-family: 'Roboto', 'Roboto Condensed', 'Helvetica', 'Arial', sans-serif;
+  text-transform: uppercase;
+}
+.navdrawer-container a {
+  text-transform: uppercase;
+}
+.app-bar .logo {
+  font-size: 23px;
+  line-height: 60px;
+  color: #FFFFFF;
+  flex: inherit;  /* reset the flex box to center */
+}
+.app-bar .logo a {
+  padding-left: 55px;
+  font-weight: 700;
+  -webkit-font-smoothing: antialiased;
+  font-smoothing: antialiased;
+}
+#menu {
+  background-image: url(/images/hamburger-white.svg);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 24px 24px;
+}
+
+.scrolled .app-bar {
+  color: #000000;
+  background: #FFFFFF;
+  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+}
+.scrolled .app-bar .logo {
+  color: #000000;
+}
+.scrolled .app-bar button:hover {
+  background-color: rgba(78,90,146, 0.1);
+}
+.scrolled .app-bar button:focus {
+  background-color: rgba(78,90,146, 0.2);
+}
+.scrolled .app-bar button:active {
+  background-color: rgba(78,90,146, 0.4);
+}
+.scrolled .app-bar {
+  color: #000000;
+  background: #FFFFFF;
+  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+}
+main .fa {
+  color: #4E5A92;
+}
+.jumbotron {
+  background: #264270;
+  color: #E8F4FF;
+  text-align: center;
+  width: 100%;
+}
+.home-full-width {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media screen and (min-width: 768px) {
+  .navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    -webkit-transition: background-color 0.2s ease-out;
+            transition: background-color 0.2s ease-out;
+  }
+  .navbar-brand {
+    padding: 13px 0px;
+  }
+
+  .navbar .container,
+  .navdrawer-container ul {
+    float: right;
+    display: inline;
+  }
+  .navbar .container,
+  .navdrawer-container ul li {
+    display: inline;
+  }
+  .navbar .container,
+  .navdrawer-container ul li a {
+    display: inline-block;
+    padding: 0 20px;
+    font-size: 17px;
+    line-height: 60px;
+    font-weight: 300;
+    text-transform: uppercase;
+  }
+
+  .scrolled .navdrawer-container ul li a {
+    color: #000000;
+  }
+  .scrolled .navdrawer-container ul li a:hover {
+    background-color: rgba(78,90,146, 0.2);
+  }
+  .scrolled .navdrawer-container ul li a:focus {
+    background-color: rgba(78,90,146, 0.3);
+  }
+  .scrolled .navdrawer-container ul li a:active {
+    background-color: rgba(78,90,146, 0.4);
+  }
+
+  #nav .index {
+    display: none;
+  }
+}

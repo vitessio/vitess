@@ -2,6 +2,10 @@ This step-by-step guide explains how to split an unsharded keyspace into two sha
 
 You can use the same general instructions to reshard a sharded keyspace.
 
+**Contents:**
+
+<div id="toc"></div>
+
 ## Prerequisites
 
 To complete these steps, you must have:
@@ -15,11 +19,12 @@ We recommend that you also review the
 section of the *Sharding* guide.
 
 ## Step 1: Define your Keyspace ID on the Source Shard
-###### Note: Skip this step if your keyspace already has multiple shards.
+
+**Note:** Skip this step if your keyspace already has multiple shards.
 
 In this step, you add a column, which will serve as the <a href="/overview/concepts#keyspace-id">keyspace ID</a> (or sharding key), to each table in the soon-to-be-sharded keyspace. After the keyspace has been sharded, Vitess will use the column's value to route each query to the proper shard. 
 
-### Step 1.1: Add the Keyspace ID to each database table
+### Step 1.1: Add keyspace ID to each database table
 
 For each table in the unsharded keyspace, run the following <code>alter</code> statement:
 
@@ -43,7 +48,7 @@ In the above statement, replace <code>user_keyspace_id</code> with the column na
 
 Backfill each row in each table with the appropriate keyspace ID value. In this example, each <code>user_keyspace_id</code> column contains a 64-bit hash of the user ID in that column's row.
 
-### Step 1.3: Set the Keyspace ID in the Topology Server
+### Step 1.3: Set keyspace ID in topology server
 
 Tell Vitess which column value identifies the keyspace ID by running the following command:
 
@@ -69,7 +74,7 @@ This example shows how to split an unsharded database into two destination shard
 * -80
 * 80-
 
-### Step 2.1: Create the destination shards
+### Step 2.1: Create destination shards
 
 To create the destination shards, call the <code>CreateShard</code> command.
 You would have used the same command to create the source shard. Repeat the
@@ -86,7 +91,7 @@ vtctl CreateShard user_keyspace/80-
 vtctl CreateShard user_keyspace/-80
 ```
 
-### Step 2.2: Create the destination tablets
+### Step 2.2: Create destination tablets
 
 To create the destination master tablets, call the
 <code>InitTablet</code> command. Then call the <code>InitShardMaster</code>
@@ -113,7 +118,7 @@ vtctl InitTablet -keyspace=user_keyspace -shard=user_keyspace/80- \
 vtctl InitShardMaster -force user_keyspace/80- <tablet alias>
 ```
 
-### Step 2.3: Create rdonly tablets in each destination shard
+### Step 2.3: Create rdonly tablets in destination shards
 
 Each destination shard should have two rdonly tablets. Again, use the
 <code>InitTablet</code> command to create each tablet.
@@ -140,7 +145,7 @@ Then you copy the data to the destination shards. At the end of this
 step, the destination tablets will be populated with data but will not
 yet be serving traffic.
 
-### Step 3.1: Copy the schema to destination shards
+### Step 3.1: Copy schema to destination shards
 
 Call the <code>CopySchemaShard</code> command to copy the database schema
 from a rdonly tablet on the source shard to the destination shards:
@@ -193,7 +198,7 @@ shards contain the correct data but do not yet serve traffic.
 The destination shards are also now running
 [filtered replication](#filtered-replication).
 
-### Step 3.3: Restore the rdonly tablet on the source shard
+### Step 3.3: Restore rdonly tablet on source shard
 
 The source tablet is not automatically returned to the serving graph.
 Use the following command to change the tablet's type back to
@@ -203,14 +208,14 @@ Use the following command to change the tablet's type back to
 vtctl ChangeSlaveType <source rdonly tablet alias> rdonly
 ```
 
-## Step 4: Running a diff of the data to verify accuracy
+## Step 4: Run a data diff to verify accuracy
 
 Before the destination shard starts serving data, you want to ensure that
 its data is up-to-date. Remember that the source tablet would not have
 received updates to any of its records while the vtworker process was
 copying data to the destination shards.
 
-### Step 4.1: Catch up to source data changes via filtered replication
+### Step 4.1: Use filtered replication to catch up to source data changes
 
 Vitess uses [filtered replication](#filtered-replication) to ensure that
 data changes on the source shard during step 3 propagate successfully
@@ -271,7 +276,7 @@ The vtworker performs the following tasks:
 If the diff is successful on the first destination shard, repeat it
 on the next destination shard. 
 
-### Step 4.3: Return tablets to the serving graph
+### Step 4.3: Return tablets to serving graph
 
 Put the source and destination rdonly tablets used in step 4.2 back into
 the serving graph:
@@ -328,7 +333,7 @@ For this example, the command is:
 vtctl MigrateServedTypes user_keyspace/0 master
 ```
 
-## Step 6: Scrap the source shard
+## Step 6: Scrap source shard
 
 If all of the other steps were successful, you can remove the source
 shard, which should no longer be in use.
@@ -342,7 +347,7 @@ vtctl ScrapTablet <source tablet alias>`
 vtctl DeleteTablet <source tablet alias>`
 ```
 
-### Step 6.2: Rebuild the serving graph
+### Step 6.2: Rebuild serving graph
 
 Run the following command:
 
@@ -356,7 +361,7 @@ For this example, the command is:
 vtctl RebuildKeyspaceGraph user_keyspace
 ```
 
-### Step 6.3: Delete the source shard
+### Step 6.3: Delete source shard
 
 Run the following command:
 

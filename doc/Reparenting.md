@@ -1,4 +1,10 @@
-Reparenting is the process of changing a shard's master tablet
+**Contents:**
+
+<div id="toc"></div>
+
+## Overview
+
+**Reparenting** is the process of changing a shard's master tablet
 from one host to another or changing a slave tablet to have a
 different master. Reparenting can be initiated manually
 or it can occur automatically in response to particular database
@@ -8,8 +14,8 @@ a master tablet dies.
 
 This document explains the types of reparenting that Vitess supports:
 
-* *[Active reparenting](#active-reparenting)* occurs when the Vitess toolchain manages
-  the entire reparenting process.
+* *[Active reparenting](#active-reparenting)* occurs when the Vitess
+  toolchain manages the entire reparenting process.
 * *[External reparenting](#external-reparenting)* occurs when another tool
   handles the reparenting process, and the Vitess toolchain just updates its
   topology server, replication graph, and serving graph to accurately reflect
@@ -20,11 +26,11 @@ parenting relationships within a shard. That command makes the specified
 tablet the master and makes the other tablets in the shard slaves that
 replicate from that master.
 
-### MySQL requirements
+## MySQL requirements
 
 Vitess supports [MySQL 5.6](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html) and [MariaDB](https://mariadb.com/kb/en/mariadb/global-transaction-id/) implementations.
 
-#### GTIDs
+### GTIDs
 Vitess requires the use of global transaction identifiers
 ([GTIDs](https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html)) for its operations:
 
@@ -37,7 +43,7 @@ Vitess requires the use of global transaction identifiers
   the process by which source tablet data is transferred to the proper
   destination tablets.
 
-#### Semisynchronous replication
+### Semisynchronous replication
 
 Vitess does not depend on
 [semisynchronous replication](https://dev.mysql.com/doc/refman/5.6/en/replication-semisync.html) but does work if it is implemented.
