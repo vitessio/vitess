@@ -379,7 +379,7 @@ class Tablet(object):
                stderr=utils.devnull, stdout=utils.devnull)
 
   def _start_prog(
-      self, binary, port=None, auth=False, memcache=False,
+      self, binary, port=None, memcache=False,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
@@ -399,13 +399,6 @@ class Tablet(object):
       memcache_socket = os.path.join(self.tablet_dir, 'memcache.sock')
       args.extend(['-rowcache-socket', memcache_socket])
       args.extend(['-enable-rowcache'])
-
-    if auth:
-      args.extend(
-          ['-auth-credentials',
-           os.path.join(
-               environment.vttop, 'test', 'test_data',
-               'authcredentials_test.json')])
 
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
@@ -460,7 +453,7 @@ class Tablet(object):
     return self.proc
 
   def start_vttablet(
-      self, port=None, auth=False, memcache=False,
+      self, port=None, memcache=False,
       wait_for_state='SERVING', filecustomrules=None, zkcustomrules=None,
       schema_override=None,
       repl_extra_flags=None, table_acl_config=None,
@@ -553,7 +546,7 @@ class Tablet(object):
       args.extend(extra_args)
 
     return self._start_prog(
-        binary='vttablet', port=port, auth=auth,
+        binary='vttablet', port=port,
         memcache=memcache, wait_for_state=wait_for_state,
         filecustomrules=filecustomrules,
         zkcustomrules=zkcustomrules,
@@ -563,7 +556,7 @@ class Tablet(object):
         lameduck_period=lameduck_period, extra_args=args,
         security_policy=security_policy, extra_env=extra_env)
 
-  def start_vtocc(self, port=None, auth=False, memcache=False,
+  def start_vtocc(self, port=None, memcache=False,
                   wait_for_state='SERVING', filecustomrules=None,
                   schema_override=None,
                   repl_extra_flags=None, table_acl_config=None,
@@ -589,7 +582,7 @@ class Tablet(object):
     if extra_args:
       args.extend(extra_args)
 
-    return self._start_prog(binary='vtocc', port=port, auth=auth,
+    return self._start_prog(binary='vtocc', port=port,
                             memcache=memcache, wait_for_state=wait_for_state,
                             filecustomrules=filecustomrules,
                             schema_override=schema_override,

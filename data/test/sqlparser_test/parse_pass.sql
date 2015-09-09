@@ -146,6 +146,9 @@ select /* limit a */ 1 from t limit a
 select /* limit a,b */ 1 from t limit a, b
 select /* binary unary */ a- -b from t#select /* binary unary */ a - -b from t
 select /* - - */ - -b from t
+select /* dual */ 1 from dual
+select /* Dual */ 1 from Dual#select /* Dual */ 1 from dual
+select /* DUAL */ 1 from Dual#select /* DUAL */ 1 from dual
 insert /* simple */ into a values (1)
 insert /* a.b */ into a.b values (1)
 insert /* multi-value */ into a values (1, 2)

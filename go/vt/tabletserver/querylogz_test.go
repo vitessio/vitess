@@ -17,7 +17,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
+func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	response := httptest.NewRecorder()
 	ch := make(chan interface{}, 1)
@@ -25,15 +25,15 @@ func TestQuerylogzHandlerInvalidSqlQueryStats(t *testing.T) {
 	querylogzHandler(ch, response, req)
 	close(ch)
 	if !strings.Contains(response.Body.String(), "error") {
-		t.Fatalf("should show an error page for an non SqlQueryStats")
+		t.Fatalf("should show an error page for an non LogStats")
 	}
 }
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := newSqlQueryStats("Execute", context.Background())
+	logStats := newLogStats("Execute", context.Background())
 	logStats.PlanType = planbuilder.PLAN_PASS_SELECT.String()
-	logStats.OriginalSql = "select name from test_table limit 1000"
+	logStats.OriginalSQL = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000
 	logStats.NumberOfQueries = 1
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
@@ -138,7 +138,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 }
 
-func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *SQLQueryStats, page []byte) {
+func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *LogStats, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))

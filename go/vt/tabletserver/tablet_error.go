@@ -177,6 +177,11 @@ func (te *TabletError) Error() string {
 	return te.Prefix() + te.Message
 }
 
+// VtErrorCode returns the underlying Vitess error code
+func (te *TabletError) VtErrorCode() vtrpc.ErrorCode {
+	return te.ErrorCode
+}
+
 // Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
@@ -220,7 +225,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	}
 }
 
-func handleError(err *error, logStats *SQLQueryStats, queryServiceStats *QueryServiceStats) {
+func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {

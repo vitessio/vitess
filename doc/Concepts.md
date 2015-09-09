@@ -1,16 +1,6 @@
-# Concepts
-
 Vitess uses the following concepts and terms:
 
-* [keyspace](#keyspace)
-* [shard](#shard)
-* [tablet](#tablet)
-* [keyspace ID](#keyspace-id)
-* [shard graph](#shard-graph)
-* [replication graph](#replication-graph)
-* [serving graph](#serving-graph)
-* [topology service](#topology-service)
-* [cell (data center)](#cell-(data-center))
+<div id="toc"></div>
 
 ## Keyspace
 

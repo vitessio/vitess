@@ -78,7 +78,7 @@ func (zkcr *ZkCustomRule) refreshWatch() error {
 }
 
 // refreshData gets query rules from Zookeeper and refresh internal QueryRules cache
-// this function will also call SqlQuery.SetQueryRules to propagate rule changes to query service
+// this function will also call TabletServer.SetQueryRules to propagate rule changes to query service
 func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.QueryServiceControl, nodeRemoval bool) error {
 	data, stat, err := zkcr.zconn.Get(zkcr.path)
 	zkcr.mu.Lock()

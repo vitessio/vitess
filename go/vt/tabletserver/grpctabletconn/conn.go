@@ -267,7 +267,7 @@ func (conn *gRPCQueryClient) Rollback2(ctx context.Context, transactionID int64)
 	return conn.Rollback(ctx, transactionID)
 }
 
-// SplitQuery is the stub for SqlQuery.SplitQuery RPC
+// SplitQuery is the stub for TabletServer.SplitQuery RPC
 func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQuery, splitColumn string, splitCount int) (queries []tproto.QuerySplit, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -292,7 +292,7 @@ func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, query tproto.BoundQ
 	return tproto.Proto3ToQuerySplits(sqr.Queries), nil
 }
 
-// StreamHealth is the stub for SqlQuery.StreamHealth RPC
+// StreamHealth is the stub for TabletServer.StreamHealth RPC
 func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (<-chan *pb.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -385,5 +385,10 @@ func tabletErrorFromGRPC(err error) error {
 	default:
 		code = tabletconn.ERR_NORMAL
 	}
-	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+
+	return &tabletconn.ServerError{
+		Code:       code,
+		Err:        fmt.Sprintf("vttablet: %v", err),
+		ServerCode: vterrors.GRPCCodeToErrorCode(grpc.Code(err)),
+	}
 }

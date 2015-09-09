@@ -1,5 +1,8 @@
-This guide will walk through the process of sharding an existing unsharded
+This guide walks you through the process of sharding an existing unsharded
 Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace) in Kubernetes.
+
+**Contents:**
+<div id="toc"></div>
 
 ## Prerequisites
 
@@ -176,7 +179,7 @@ If everything is good, you should see something like this:
 Table messages checks out (4 rows processed, 1072961 qps)
 ```
 
-## Switch over to the new shards
+## Switch over to new shards
 
 Now we're ready to switch over to serving from the new shards.
 The [MigrateServedTypes](http://vitess.io/reference/vtctl.html#migrateservedtypes)
@@ -198,7 +201,7 @@ fully catch up on filtered replication before allowing them to begin serving.
 Since filtered replication has been following along with live updates, there
 should only be a few seconds of master unavailability.
 
-## Remove the original shard
+## Remove original shard
 
 Now that all traffic is being served from the new shards, we can remove the
 original one. To do that, we use the `vttablet-down.sh` script from the

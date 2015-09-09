@@ -107,23 +107,12 @@ func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Clien
 	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout)
 }
 
-// DialAuthHTTP dials a HTTP endpoint with bsonrpc codec as authentication enabled
-func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout)
-}
-
 // ServeRPC serves bsonrpc codec with the default rpc server
 func ServeRPC() {
 	rpcwrap.ServeRPC(codecName, NewServerCodec)
 }
 
-// ServeAuthRPC serves bsonrpc codec with the default authentication enabled rpc
-// server
-func ServeAuthRPC() {
-	rpcwrap.ServeAuthRPC(codecName, NewServerCodec)
-}
-
 // ServeCustomRPC serves bsonrpc codec with a custom rpc server
-func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool) {
-	rpcwrap.ServeCustomRPC(handler, server, useAuth, codecName, NewServerCodec)
+func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server) {
+	rpcwrap.ServeCustomRPC(handler, server, codecName, NewServerCodec)
 }

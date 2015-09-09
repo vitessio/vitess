@@ -30,18 +30,18 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	t.Log(schemaInfo)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of underlying "+
 			"connection cannot verify strict mode",
 		ErrFatal,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
 }
 
 func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
@@ -57,15 +57,14 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of it could not get MySQL time",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
 
 func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
@@ -81,15 +80,14 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because of incorrect MySQL row number",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
 
 func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
@@ -105,15 +103,14 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because it could not get MySQL time",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
 
 func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
@@ -129,15 +126,14 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because conn.Exec failed",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
 
 func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
@@ -159,15 +155,14 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info Open should fail because NewTableInfo failed",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, false)
 }
 
 func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
@@ -179,19 +174,18 @@ func TestSchemaInfoOpenWithSchemaOverride(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
 	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo := schemaInfo.GetTable("test_table_01")
 	if testTableInfo.Table.CacheType != schema.CACHE_RW {
 		t.Fatalf("test_table_01's cache type should be RW")
 	}
 	schemaInfo.Close()
 	// test cache type W
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	testTableInfo = schemaInfo.GetTable("test_table_02")
 	if testTableInfo.Table.CacheType != schema.CACHE_W {
 		t.Fatalf("test_table_02's cache type should be W")
@@ -209,11 +203,10 @@ func TestSchemaInfoReload(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, nil, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, nil, true)
 	defer schemaInfo.Close()
 	// this new table does not exist
 	newTable := "test_table_04"
@@ -293,15 +286,14 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	defer handleAndVerifyTabletError(
 		t,
 		"CreateOrUpdateTable should fail because it could not tables from MySQL",
 		ErrFail,
 	)
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), cachePool, false)
+	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
 	defer schemaInfo.Close()
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
 }
@@ -323,10 +315,9 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), cachePool, false)
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table_01")
 	schemaInfo.Close()
 }
@@ -348,10 +339,9 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), cachePool, false)
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, getSchemaInfoTestSchemaOverride(), false)
 	tableInfo := schemaInfo.GetTable(existingTable)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", existingTable)
@@ -373,16 +363,15 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
 	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
+	logStats := newLogStats("GetPlanStats", ctx)
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info GetPlan should fail because of empty query",
@@ -400,12 +389,11 @@ func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
 	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	defer schemaInfo.Close()
 	defer handleAndVerifyTabletError(
 		t,
@@ -422,35 +410,34 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 
-	firstSQLQuery := "select * from test_table_01"
-	secondSQLQuery := "select * from test_table_02"
+	firstQuery := "select * from test_table_01"
+	secondQuery := "select * from test_table_02"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &mproto.QueryResult{})
 
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
 	schemaOverrides := getSchemaInfoTestSchemaOverride()
 	// test cache type RW
-	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, cachePool, true)
+	schemaInfo.Open(&appParams, &dbaParams, schemaOverrides, true)
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
+	logStats := newLogStats("GetPlanStats", ctx)
 	schemaInfo.SetQueryCacheSize(1)
-	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstSQLQuery)
+	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstQuery)
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondSQLQuery)
+	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondQuery)
 	if secondPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
 	expvar.Do(func(kv expvar.KeyValue) {
-		kv.Value.String()
+		_ = kv.Value.String()
 	})
 	schemaInfo.ClearQueryPlanCache()
 }
@@ -464,13 +451,12 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
 	defer schemaInfo.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
-		kv.Value.String()
+		_ = kv.Value.String()
 	})
 }
 
@@ -484,10 +470,9 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(true, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, nil, cachePool, true)
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, nil, true)
 	defer schemaInfo.Close()
 	// Add new table
 	tableName := "mysql_stats_test_table"
@@ -549,20 +534,19 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	sqlQuery := "select * from test_table_01"
+	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &mproto.QueryResult{})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	appParams := sqldb.ConnParams{}
 	dbaParams := sqldb.ConnParams{}
-	cachePool := newTestSchemaInfoCachePool(false, schemaInfo.queryServiceStats)
-	cachePool.Open()
-	defer cachePool.Close()
-	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, cachePool, true)
+	schemaInfo.cachePool.Open()
+	defer schemaInfo.cachePool.Close()
+	schemaInfo.Open(&appParams, &dbaParams, []SchemaOverride{}, true)
 	defer schemaInfo.Close()
 	// warm up cache
 	ctx := context.Background()
-	logStats := newSqlQueryStats("GetPlanStats", ctx)
-	schemaInfo.GetPlan(ctx, logStats, sqlQuery)
+	logStats := newLogStats("GetPlanStats", ctx)
+	schemaInfo.GetPlan(ctx, logStats, query)
 
 	request, _ := http.NewRequest("GET", schemaInfo.endpoints[debugQueryPlansKey], nil)
 	response := httptest.NewRecorder()

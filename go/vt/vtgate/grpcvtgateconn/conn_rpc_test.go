@@ -11,14 +11,13 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconntest"
 	"golang.org/x/net/context"
 )
 
 // This test makes sure the go rpc service works
-func testGRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
+func testGRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
 
@@ -31,7 +30,6 @@ func testGRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	grpcvtgateservice.RegisterForTest(server, service)
-	*vtgate.RPCErrorOnlyInReply = rpcOnlyInReply
 	go server.Serve(listener)
 
 	// Create a Go RPC client connecting to the server
@@ -49,9 +47,5 @@ func testGRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
 }
 
 func TestGRPCVTGateConn(t *testing.T) {
-	testGRPCVTGateConn(t, false)
-}
-
-func TestGRPCVTGateConnWithErrorOnlyInRPCReply(t *testing.T) {
-	testGRPCVTGateConn(t, true)
+	testGRPCVTGateConn(t)
 }

@@ -309,20 +309,15 @@ func (qs *QuerySplitter) splitBoundariesFloatColumn(pkMinMax *mproto.QueryResult
 
 // TODO(shengzhe): support split based on min, max from the string column.
 func (qs *QuerySplitter) splitBoundariesStringColumn() ([]sqltypes.Value, error) {
-	firstRow := int64(0x0)
-	lastRow := int64(0xFFFFFFFFFFFFFF)
-	splitRange := lastRow - firstRow + 1
+	splitRange := int64(0xFFFFFFFF) + 1
 	splitSize := splitRange / int64(qs.splitCount)
-	qs.rowCount = splitSize
+	//TODO(shengzhe): have a better estimated row count based on table size.
+	qs.rowCount = int64(splitSize)
 	var boundaries []sqltypes.Value
 	for i := 1; i < qs.splitCount; i++ {
-		buf := make([]byte, 8)
-		// encode split point into binaries.
-		binary.BigEndian.PutUint64(buf, uint64(firstRow+splitSize*int64(i)))
-		// only converts the lower 4 bytes into hex because the upper 4 bytes are
-		// always 0x00000000 and mysql does byte comparison from the most significant
-		// bits.
-		val, err := sqltypes.BuildValue(buf[4:])
+		buf := make([]byte, 4)
+		binary.BigEndian.PutUint32(buf, uint32(splitSize)*uint32(i))
+		val, err := sqltypes.BuildValue(buf)
 		if err != nil {
 			return nil, err
 		}

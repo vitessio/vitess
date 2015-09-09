@@ -55,8 +55,7 @@ class TestEnv(object):
 
   def connect(self):
     c = tablet_conn.connect(
-        self.address, '', 'test_keyspace', '0', 2, user='dev',
-        password='vtpass', caller_id='dev')
+        self.address, '', 'test_keyspace', '0', 2, caller_id='dev')
     c.max_attempts = 1
     return c
 
@@ -234,7 +233,6 @@ class TestEnv(object):
             zkcustomrules='/zk/test_ca/config/customrules/testrules',
             schema_override=schema_override,
             table_acl_config=table_acl_config,
-            auth=True,
         )
       else:
         self.tablet.start_vttablet(
@@ -242,7 +240,6 @@ class TestEnv(object):
             filecustomrules=customrules,
             schema_override=schema_override,
             table_acl_config=table_acl_config,
-            auth=True,
         )
     else:
       self.create_customrules(customrules);
@@ -251,7 +248,6 @@ class TestEnv(object):
           filecustomrules=customrules,
           schema_override=schema_override,
           table_acl_config=table_acl_config,
-          auth=True,
           keyspace='test_keyspace', shard='0',
       )
     self.conn = self.connect()

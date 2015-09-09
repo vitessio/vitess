@@ -304,13 +304,13 @@ func (tqsc *TestQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *
 
 // realQueryServiceControl implements QueryServiceControl for real
 type realQueryServiceControl struct {
-	sqlQueryRPCService *SqlQuery
+	tabletServerRPCService *TabletServer
 }
 
 // NewQueryServiceControl returns a real implementation of QueryServiceControl
 func NewQueryServiceControl() QueryServiceControl {
 	return &realQueryServiceControl{
-		sqlQueryRPCService: NewSqlQuery(qsConfig),
+		tabletServerRPCService: NewTabletServer(qsConfig),
 	}
 }
 
@@ -339,36 +339,36 @@ func (rqsc *realQueryServiceControl) Register() {
 
 // InitDBConfig sets up the db config vars.
 func (rqsc *realQueryServiceControl) InitDBConfig(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	return rqsc.sqlQueryRPCService.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
+	return rqsc.tabletServerRPCService.InitDBConfig(target, dbconfigs, schemaOverrides, mysqld)
 }
 
 // SetServingType transitions the serving type to the required state.
 func (rqsc *realQueryServiceControl) SetServingType(tabletType topodata.TabletType, serving bool) error {
-	return rqsc.sqlQueryRPCService.SetServingType(tabletType, serving)
+	return rqsc.tabletServerRPCService.SetServingType(tabletType, serving)
 }
 
 // AllowQueries starts the query service.
 func (rqsc *realQueryServiceControl) AllowQueries(target *pb.Target, dbconfigs *dbconfigs.DBConfigs, schemaOverrides []SchemaOverride, mysqld mysqlctl.MysqlDaemon) error {
-	return rqsc.sqlQueryRPCService.StartService(target, dbconfigs, schemaOverrides, mysqld)
+	return rqsc.tabletServerRPCService.StartService(target, dbconfigs, schemaOverrides, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
 func (rqsc *realQueryServiceControl) DisallowQueries() {
-	defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
-	rqsc.sqlQueryRPCService.StopService()
+	defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
+	rqsc.tabletServerRPCService.StopService()
 }
 
 // IsServing is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) IsServing() bool {
-	return rqsc.sqlQueryRPCService.GetState() == "SERVING"
+	return rqsc.tabletServerRPCService.GetState() == "SERVING"
 }
 
 // Reload the schema. If the query service is not running, nothing will happen
 func (rqsc *realQueryServiceControl) ReloadSchema() {
-	defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
-	rqsc.sqlQueryRPCService.qe.schemaInfo.triggerReload()
+	defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
+	rqsc.tabletServerRPCService.qe.schemaInfo.triggerReload()
 }
 
 // checkMySQL verifies that MySQL is still reachable by connecting to it.
@@ -387,8 +387,8 @@ func (rqsc *realQueryServiceControl) registerCheckMySQL() {
 			time.Sleep(1 * time.Second)
 			checkMySLQThrottler.Release()
 		}()
-		defer logError(rqsc.sqlQueryRPCService.qe.queryServiceStats)
-		if rqsc.sqlQueryRPCService.CheckMySQL() {
+		defer logError(rqsc.tabletServerRPCService.qe.queryServiceStats)
+		if rqsc.tabletServerRPCService.CheckMySQL() {
 			return
 		}
 		log.Infof("Check MySQL failed. Shutting down query service")
@@ -402,30 +402,30 @@ func (rqsc *realQueryServiceControl) SetQueryRules(ruleSource string, qrs *Query
 	if err != nil {
 		return err
 	}
-	rqsc.sqlQueryRPCService.qe.schemaInfo.ClearQueryPlanCache()
+	rqsc.tabletServerRPCService.qe.schemaInfo.ClearQueryPlanCache()
 	return nil
 }
 
 // QueryService is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) QueryService() queryservice.QueryService {
-	return rqsc.sqlQueryRPCService
+	return rqsc.tabletServerRPCService
 }
 
 // BroadcastHealth is part of the QueryServiceControl interface
 func (rqsc *realQueryServiceControl) BroadcastHealth(terTimestamp int64, stats *pb.RealtimeStats) {
-	rqsc.sqlQueryRPCService.BroadcastHealth(terTimestamp, stats)
+	rqsc.tabletServerRPCService.BroadcastHealth(terTimestamp, stats)
 }
 
 // IsHealthy returns nil if the query service is healthy (able to
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
 func (rqsc *realQueryServiceControl) IsHealthy() error {
-	return rqsc.sqlQueryRPCService.Execute(
+	return rqsc.tabletServerRPCService.Execute(
 		context.Background(),
 		nil,
 		&proto.Query{
 			Sql:       "select 1 from dual",
-			SessionId: rqsc.sqlQueryRPCService.sessionID,
+			SessionId: rqsc.tabletServerRPCService.sessionID,
 		},
 		new(mproto.QueryResult),
 	)
@@ -448,22 +448,22 @@ func (rqsc *realQueryServiceControl) registerDebugHealthHandler() {
 
 func (rqsc *realQueryServiceControl) registerQueryzHandler() {
 	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(rqsc.sqlQueryRPCService.qe.schemaInfo, w, r)
+		queryzHandler(rqsc.tabletServerRPCService.qe.schemaInfo, w, r)
 	})
 }
 
 func (rqsc *realQueryServiceControl) registerStreamQueryzHandlers() {
 	http.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzHandler(rqsc.sqlQueryRPCService.qe.streamQList, w, r)
+		streamQueryzHandler(rqsc.tabletServerRPCService.qe.streamQList, w, r)
 	})
 	http.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzTerminateHandler(rqsc.sqlQueryRPCService.qe.streamQList, w, r)
+		streamQueryzTerminateHandler(rqsc.tabletServerRPCService.qe.streamQList, w, r)
 	})
 }
 
 func (rqsc *realQueryServiceControl) registerSchemazHandler() {
 	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
-		schemazHandler(rqsc.sqlQueryRPCService.qe.schemaInfo.GetSchema(), w, r)
+		schemazHandler(rqsc.tabletServerRPCService.qe.schemaInfo.GetSchema(), w, r)
 	})
 }
 
@@ -484,7 +484,7 @@ func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) st
 // InitQueryService registers the query service, after loading any
 // necessary config files. It also starts any relevant streaming logs.
 func InitQueryService(qsc QueryServiceControl) {
-	SqlQueryLogger.ServeLogs(*queryLogHandler, buildFmter(SqlQueryLogger))
+	StatsLogger.ServeLogs(*queryLogHandler, buildFmter(StatsLogger))
 	TxLogger.ServeLogs(*txLogHandler, buildFmter(TxLogger))
 	qsc.Register()
 }

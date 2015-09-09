@@ -242,18 +242,30 @@ class TestBaseSplitClone(unittest.TestCase):
       keyspace_id: the value of `keyspace_id` column.
     """
     k = '%d' % keyspace_id
-    values_str = ''
-    for i in xrange(num_values):
-      if i != 0:
-        values_str += ','
-      values_str += "(%d, '%s', 0x%x)" % (id_offset + i, msg, keyspace_id)
-    tablet.mquery(
-        'vt_test_keyspace', [
-            'begin',
-            'insert into worker_test(id, msg, keyspace_id) values%s '
-            '/* EMD keyspace_id:%s*/' % (values_str, k),
-            'commit'],
-        write=True)
+
+    # For maximum performance, multiple values are inserted in one statement.
+    # However, when the statements are too long, queries will timeout and
+    # vttablet will kill them. Therefore, we chunk it into multiple statements.
+    def chunks(full_list, n):
+      """Yield successive n-sized chunks from full_list."""
+      for i in xrange(0, len(full_list), n):
+        yield full_list[i:i+n]
+
+    max_chunk_size = 100*1000
+    for chunk in chunks(range(1, num_values+1), max_chunk_size):
+      logging.debug('Inserting values for range [%d, %d].', chunk[0], chunk[-1])
+      values_str = ''
+      for i in chunk:
+        if i != chunk[0]:
+          values_str += ','
+        values_str += "(%d, '%s', 0x%x)" % (id_offset + i, msg, keyspace_id)
+      tablet.mquery(
+          'vt_test_keyspace', [
+              'begin',
+              'insert into worker_test(id, msg, keyspace_id) values%s '
+              '/* EMD keyspace_id:%s*/' % (values_str, k),
+              'commit'],
+          write=True)
 
   def insert_values(
       self, tablet, num_values, num_shards, offset=0, keyspace_id_range=2**64):

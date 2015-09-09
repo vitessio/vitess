@@ -33,7 +33,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
+	bsonrpc.ServeCustomRPC(handler, server)
 	httpServer := http.Server{
 		Handler: handler,
 	}

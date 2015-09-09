@@ -977,9 +977,10 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 type SQLName string
 
 func (node SQLName) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[strings.ToLower(string(node))]; ok {
-		buf.Myprintf("`%s`", string(node))
+	name := string(node)
+	if _, ok := keywords[strings.ToLower(name)]; ok {
+		buf.Myprintf("`%s`", name)
 		return
 	}
-	buf.Myprintf("%s", string(node))
+	buf.Myprintf("%s", name)
 }

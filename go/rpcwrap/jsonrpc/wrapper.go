@@ -22,9 +22,3 @@ func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Clien
 func ServeRPC() {
 	rpcwrap.ServeRPC("json", oldjson.NewServerCodec)
 }
-
-// ServeAuthRPC serves a json rpc endpoint using authentication enabled default
-// server
-func ServeAuthRPC() {
-	rpcwrap.ServeAuthRPC("json", oldjson.NewServerCodec)
-}

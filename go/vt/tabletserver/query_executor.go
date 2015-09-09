@@ -30,7 +30,7 @@ type QueryExecutor struct {
 	transactionID int64
 	plan          *ExecPlan
 	ctx           context.Context
-	logStats      *SQLQueryStats
+	logStats      *LogStats
 	qe            *QueryEngine
 }
 
@@ -41,7 +41,7 @@ type poolConn interface {
 
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
-	qre.logStats.OriginalSql = qre.query
+	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.BindVariables = qre.bindVars
 	qre.logStats.TransactionID = qre.transactionID
 	planName := qre.plan.PlanId.String()
@@ -129,7 +129,7 @@ func (qre *QueryExecutor) Execute() (reply *mproto.QueryResult, err error) {
 
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) error {
-	qre.logStats.OriginalSql = qre.query
+	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanId.String()
 	defer qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanId.String(), time.Now())
 
@@ -152,7 +152,7 @@ func (qre *QueryExecutor) Stream(sendReply func(*mproto.QueryResult) error) erro
 
 func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err error) {
 	transactionID := qre.qe.txPool.Begin(qre.ctx)
-	qre.logStats.AddRewrittenSql("begin", time.Now())
+	qre.logStats.AddRewrittenSQL("begin", time.Now())
 	defer func() {
 		// TxPool.Get may panic
 		if panicErr := recover(); panicErr != nil {
@@ -160,10 +160,10 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *mproto.QueryResult, err er
 		}
 		if err != nil {
 			qre.qe.txPool.Rollback(qre.ctx, transactionID)
-			qre.logStats.AddRewrittenSql("rollback", time.Now())
+			qre.logStats.AddRewrittenSQL("rollback", time.Now())
 		} else {
 			qre.qe.Commit(qre.ctx, qre.logStats, transactionID)
-			qre.logStats.AddRewrittenSql("commit", time.Now())
+			qre.logStats.AddRewrittenSQL("commit", time.Now())
 		}
 	}()
 	conn := qre.qe.txPool.Get(transactionID)
@@ -240,14 +240,14 @@ func (qre *QueryExecutor) checkPermissions() error {
 		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
-	if !qre.plan.Authorized.IsMember(username) {
+	if !qre.plan.Authorized.IsMember(callerID.Username) {
 		if qre.qe.enableTableAclDryRun {
 			qre.qe.tableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
-			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", username, qre.plan.PlanId, qre.plan.TableName)
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanId, qre.plan.TableName)
 			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Errorf("%s", errStr)
 			return NewTabletError(ErrFail, vtrpc.ErrorCode_PERMISSION_DENIED, "%s", errStr)
@@ -744,7 +744,7 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	return nil, NewTabletErrorSQL(ErrFatal, vtrpc.ErrorCode_INTERNAL_ERROR, err)
 }
 
-func (qre *QueryExecutor) qFetch(logStats *SQLQueryStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -813,14 +813,14 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 }
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*mproto.QueryResult, error) {
-	defer qre.logStats.AddRewrittenSql(sql, time.Now())
+	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, callback func(*mproto.QueryResult) error) error {
 	start := time.Now()
 	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()))
-	qre.logStats.AddRewrittenSql(sql, start)
+	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
 		return NewTabletErrorSQL(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, err)

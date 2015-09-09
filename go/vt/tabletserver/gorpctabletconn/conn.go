@@ -5,7 +5,6 @@
 package gorpctabletconn
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 	"sync"
@@ -29,11 +28,6 @@ import (
 
 const protocolName = "gorpc"
 
-var (
-	tabletBsonUsername = flag.String("tablet-bson-username", "", "user to use for bson rpc connections")
-	tabletBsonPassword = flag.String("tablet-bson-password", "", "password to use for bson rpc connections (ignored if username is empty)")
-)
-
 func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
 }
@@ -55,11 +49,7 @@ func DialTablet(ctx context.Context, endPoint *pbt.EndPoint, keyspace, shard str
 	addr := netutil.JoinHostPort(endPoint.Host, endPoint.PortMap["vt"])
 	conn := &TabletBson{endPoint: endPoint}
 	var err error
-	if *tabletBsonUsername != "" {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, timeout)
-	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, timeout)
-	}
+	conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, timeout)
 	if err != nil {
 		return nil, tabletError(err)
 	}
@@ -632,7 +622,11 @@ func tabletError(err error) error {
 		default:
 			code = tabletconn.ERR_NORMAL
 		}
-		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+		return &tabletconn.ServerError{
+			Code:       code,
+			Err:        fmt.Sprintf("vttablet: %v", err),
+			ServerCode: vtrpc.ErrorCode_UNKNOWN_ERROR,
+		}
 	}
 
 	if err == context.Canceled {
@@ -657,5 +651,9 @@ func tabletErrorFromVitessError(ve *vterrors.VitessError) error {
 		code = tabletconn.ERR_NORMAL
 	}
 
-	return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", ve.Error())}
+	return &tabletconn.ServerError{
+		Code:       code,
+		Err:        fmt.Sprintf("vttablet: %v", ve.Error()),
+		ServerCode: ve.Code,
+	}
 }

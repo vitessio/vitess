@@ -12,14 +12,13 @@ import (
 
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/gorpcvtgateservice"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconntest"
 	"golang.org/x/net/context"
 )
 
 // This test makes sure the go rpc service works
-func testGoRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
+func testGoRPCVTGateConn(t *testing.T) {
 	// fake service
 	service := vtgateconntest.CreateFakeServer(t)
 
@@ -32,11 +31,10 @@ func testGoRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
 	// Create a Go Rpc server and listen on the port
 	server := rpcplus.NewServer()
 	server.Register(gorpcvtgateservice.New(service))
-	*vtgate.RPCErrorOnlyInReply = rpcOnlyInReply
 
 	// create the HTTP server, serve the server from it
 	handler := http.NewServeMux()
-	bsonrpc.ServeCustomRPC(handler, server, false)
+	bsonrpc.ServeCustomRPC(handler, server)
 	httpServer := http.Server{
 		Handler: handler,
 	}
@@ -57,9 +55,5 @@ func testGoRPCVTGateConn(t *testing.T, rpcOnlyInReply bool) {
 }
 
 func TestGoRPCVTGateConn(t *testing.T) {
-	testGoRPCVTGateConn(t, false)
-}
-
-func TestGoRPCVTGateConnWithErrorOnlyInRPCReply(t *testing.T) {
-	testGoRPCVTGateConn(t, true)
+	testGoRPCVTGateConn(t)
 }

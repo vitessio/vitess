@@ -33,10 +33,10 @@ var (
 			<td>{{range .Columns}}{{.Name}}: {{index $top.ColumnCategory .Category}}, {{if .IsAuto}}autoinc{{end}}, {{.Default}}<br>{{end}}</td>
 			<td>{{range .Indexes}}{{.Name}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
 			<td>{{index $top.CacheType .CacheType}}</td>
-			<td>{{index $top.TableRows .TableRows}}</td>
-			<td>{{index $top.DataLength .DataLength}}</td>
-			<td>{{index $top.IndexLength .IndexLength}}</td>
-			<td>{{index $top.DataFree .DataFree}}</td>
+			<td>{{.TableRows.Get}}</td>
+			<td>{{.DataLength.Get}}</td>
+			<td>{{.IndexLength.Get}}</td>
+			<td>{{.DataFree.Get}}</td>
 		</tr>{{end}}
 	`))
 )

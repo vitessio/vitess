@@ -96,6 +96,10 @@ func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*
 	return nil, errTerminal
 }
 
+func (c *terminalClient) GetSrvShard(ctx context.Context, keyspace, shard string) (*pb.SrvShard, error) {
+	return nil, errTerminal
+}
+
 func (c *terminalClient) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))

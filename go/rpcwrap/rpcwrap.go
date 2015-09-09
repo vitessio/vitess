@@ -17,7 +17,6 @@ import (
 
 	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/stats"
 )
@@ -61,32 +60,10 @@ func (bc *BufferedConnection) Close() error {
 // DialHTTP connects to a go HTTP RPC server using the specified codec.
 // use 0 as connectTimeout for no timeout
 func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (*rpc.Client, error) {
-	return dialHTTP(network, address, codecName, cFactory, false, connectTimeout)
+	return dialHTTP(network, address, codecName, cFactory, connectTimeout)
 }
 
-// DialAuthHTTP connects to an authenticated go HTTP RPC server using
-// the specified codec and credentials.
-// use 0 as connectTimeout for no timeout
-func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (conn *rpc.Client, err error) {
-	if conn, err = dialHTTP(network, address, codecName, cFactory, true, connectTimeout); err != nil {
-		return
-	}
-	reply := new(auth.GetNewChallengeReply)
-	if err = conn.Call(context.TODO(), "AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
-		return
-	}
-	proof := auth.CRAMMD5GetExpected(user, password, reply.Challenge)
-
-	if err = conn.Call(
-		context.TODO(),
-		"AuthenticatorCRAMMD5.Authenticate",
-		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
-		return
-	}
-	return
-}
-
-func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool, connectTimeout time.Duration) (*rpc.Client, error) {
+func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (*rpc.Client, error) {
 	var err error
 	var conn net.Conn
 	if connectTimeout != 0 {
@@ -98,7 +75,7 @@ func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, a
 		return nil, err
 	}
 
-	_, err = io.WriteString(conn, "CONNECT "+GetRpcPath(codecName, auth)+" HTTP/1.0\n\n")
+	_, err = io.WriteString(conn, "CONNECT "+GetRpcPath(codecName)+" HTTP/1.0\n\n")
 	if err != nil {
 		return nil, err
 	}
@@ -122,30 +99,18 @@ type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, rpc.DefaultServer, false})
+	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory, rpc.DefaultServer})
 }
 
-// ServeAuthRPC handles authenticated rpc requests using the hijack
-// scheme of rpc
-func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, AuthenticatedServer, true})
+// ServeCustomRPC serves the given rpc requests with the provided ServeMux
+func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, codecName string, cFactory ServerCodecFactory) {
+	handler.Handle(GetRpcPath(codecName), &rpcHandler{cFactory, server})
 }
-
-// ServeCustomRPC serves the given rpc requests with the provided ServeMux,
-// authenticated or not
-func ServeCustomRPC(handler *http.ServeMux, server *rpc.Server, useAuth bool, codecName string, cFactory ServerCodecFactory) {
-	handler.Handle(GetRpcPath(codecName, useAuth), &rpcHandler{cFactory, server, useAuth})
-}
-
-// AuthenticatedServer is an rpc.Server instance that serves
-// authenticated calls.
-var AuthenticatedServer = rpc.NewServer()
 
 // rpcHandler handles rpc queries for a 'CONNECT' method.
 type rpcHandler struct {
 	cFactory ServerCodecFactory
 	server   *rpc.Server
-	useAuth  bool
 }
 
 // ServeHTTP implements http.Handler's ServeHTTP
@@ -164,29 +129,15 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
 	codec := h.cFactory(NewBufferedConnection(conn))
 	ctx := proto.NewContext(req.RemoteAddr)
-	if h.useAuth {
-		if authenticated, err := auth.Authenticate(ctx, codec); !authenticated {
-			if err != nil {
-				log.Errorf("authentication erred at %s: %v", req.RemoteAddr, err)
-			}
-			codec.Close()
-			return
-		}
-	}
 	h.server.ServeCodecWithContext(ctx, codec)
 }
 
 // GetRpcPath returns the toplevel path used for serving RPCs over HTTP
-func GetRpcPath(codecName string, auth bool) string {
-	path := "/_" + codecName + "_rpc_"
-	if auth {
-		path += "/auth"
-	}
-	return path
+func GetRpcPath(codecName string) string {
+	return "/_" + codecName + "_rpc_"
 }
 
-// ServeHTTPRPC serves the given http rpc requests with the provided ServeMux,
-// does not support built-in authentication
+// ServeHTTPRPC serves the given http rpc requests with the provided ServeMux
 func ServeHTTPRPC(
 	handler *http.ServeMux,
 	server *rpc.Server,
@@ -195,7 +146,7 @@ func ServeHTTPRPC(
 	contextCreator func(*http.Request) context.Context) {
 
 	handler.Handle(
-		GetRpcPath(codecName, false),
+		GetRpcPath(codecName),
 		&httpRPCHandler{
 			cFactory:       cFactory,
 			server:         server,
