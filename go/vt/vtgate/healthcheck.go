@@ -15,39 +15,53 @@ import (
 	"golang.org/x/net/context"
 )
 
+// HealthCheckStatsListener is the listener to receive health check stats update.
+type HealthCheckStatsListener interface {
+	StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, stats *pbq.RealtimeStats)
+}
+
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration) *HealthCheck {
-	hc := &HealthCheck{
+func NewHealthCheck(listener HealthCheckStatsListener, connTimeout time.Duration, retryDelay time.Duration) *HealthCheck {
+	return &HealthCheck{
 		addrToConns: make(map[string]*healthCheckConn),
-		targetToEPs: make(map[string]map[string][]*pbt.EndPoint),
+		targetToEPs: make(map[string]map[string]map[pbt.TabletType][]*pbt.EndPoint),
+		listener:    listener,
 		connTimeout: connTimeout,
 		retryDelay:  retryDelay,
 	}
-	return hc
 }
 
 // HealthCheck performs health checking and notifies downstream components about any changes.
 type HealthCheck struct {
-	mu          sync.RWMutex                          // mu protects the two maps, not the parameters.
-	addrToConns map[string]*healthCheckConn           // addrToConns maps from address to the healthCheckConn object.
-	targetToEPs map[string]map[string][]*pbt.EndPoint // targetToEPs maps from keyspace/shard to a list of endpoints.
+	// set at construction time
+	listener    HealthCheckStatsListener
 	connTimeout time.Duration
 	retryDelay  time.Duration
+
+	// mu protects all the following fields
+	mu          sync.RWMutex
+	addrToConns map[string]*healthCheckConn                              // addrToConns maps from address to the healthCheckConn object.
+	targetToEPs map[string]map[string]map[pbt.TabletType][]*pbt.EndPoint // targetToEPs maps from keyspace/shard/tablettype to a list of endpoints.
 }
 
 // healthCheckConn contains details about an endpoint.
 type healthCheckConn struct {
-	mu         sync.RWMutex
-	target     *pbq.Target
+	// set at construction time
+	cell       string
 	cancelFunc context.CancelFunc
-	conn       tabletconn.TabletConn
-	stats      *pbq.RealtimeStats
+
+	// mu protects all the following fields
+	mu     sync.RWMutex
+	conn   tabletconn.TabletConn
+	target *pbq.Target
+	stats  *pbq.RealtimeStats
 }
 
 // checkConn performs health checking on the given endpoint.
-func (hc *HealthCheck) checkConn(endPoint *pbt.EndPoint) {
+func (hc *HealthCheck) checkConn(cell string, endPoint *pbt.EndPoint) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	hcc := &healthCheckConn{
+		cell:       cell,
 		cancelFunc: cancelFunc,
 	}
 
@@ -84,8 +98,7 @@ func (hc *HealthCheck) checkConn(endPoint *pbt.EndPoint) {
 	}
 }
 
-// func to connect to endpoint and start streaming.
-// it makes sure we have a chance to signal the first connection attempt regardless whether it succeeds.
+// connect creates connection to the endpoint and starts streaming.
 func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheck, endPoint *pbt.EndPoint) (<-chan *pbq.StreamHealthResponse, tabletconn.ErrFunc, error) {
 	conn, err := tabletconn.GetDialer()(ctx, endPoint, "" /*keyspace*/, "" /*shard*/, pbt.TabletType_RDONLY, hc.connTimeout)
 	if err != nil {
@@ -96,18 +109,13 @@ func (hcc *healthCheckConn) connect(ctx context.Context, hc *HealthCheck, endPoi
 		conn.Close()
 		return nil, nil, err
 	}
-	err = hcc.processResponse(ctx, hc, endPoint, stream, errfunc)
-	if err != nil {
-		conn.Close()
-		return nil, nil, err
-	}
 	hcc.mu.Lock()
 	hcc.conn = conn
 	hcc.mu.Unlock()
 	return stream, errfunc, nil
 }
 
-// func to read one health check response, and notify downstream component
+// processResponse reads one health check response, and notifies HealthCheckStatsListener.
 func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck, endPoint *pbt.EndPoint, stream <-chan *pbq.StreamHealthResponse, errfunc tabletconn.ErrFunc) error {
 	select {
 	case <-ctx.Done():
@@ -129,8 +137,16 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.mu.Lock()
 			key := hc.endPointToMapKey(endPoint)
 			hc.addrToConns[key] = hcc
-			hc.addEndPointToTargetProtected(hcc.target.Keyspace, hcc.target.Shard, endPoint)
-			// TODO: notify downstream component for endpoint going up
+			hc.addEndPointToTargetProtected(hcc.target, endPoint)
+			hc.mu.Unlock()
+		} else if hcc.target.TabletType != shr.Target.TabletType {
+			hc.mu.Lock()
+			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
+			hcc.mu.Lock()
+			hcc.target = shr.Target
+			hcc.stats = shr.RealtimeStats
+			hcc.mu.Unlock()
+			hc.addEndPointToTargetProtected(shr.Target, endPoint)
 			hc.mu.Unlock()
 		} else {
 			hcc.mu.Lock()
@@ -138,19 +154,18 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hcc.stats = shr.RealtimeStats
 			hcc.mu.Unlock()
 		}
-		// TODO: notify downstream for tablettype and realtimestats
+		// notify downstream for tablettype and realtimestats change
+		hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.stats)
 		return nil
 	}
 }
 
 // AddEndPoint adds the endpoint, and starts health check.
-// It notifies downstram components for endpoint going up after the first health check succeeds.
-func (hc *HealthCheck) AddEndPoint(endPoint *pbt.EndPoint) {
-	go hc.checkConn(endPoint)
+func (hc *HealthCheck) AddEndPoint(cell string, endPoint *pbt.EndPoint) {
+	go hc.checkConn(cell, endPoint)
 }
 
-// RemoveEndPoint removes the endpoint, and cancels the health check.
-// It also notifies downstream components for endpoint going down.
+// RemoveEndPoint removes the endpoint, and stops the health check.
 func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -163,20 +178,42 @@ func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	hcc.cancelFunc()
 	delete(hc.addrToConns, key)
 	if hcc.target != nil {
-		hc.deleteEndPointFromTargetProtected(hcc.target.Keyspace, hcc.target.Shard, endPoint)
+		hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 	}
-	// TODO: notify downstream component for endpoint going down
 }
 
-// GetEndPointFromTarget returns all endpoints for the given keyspace/shard.
-func (hc *HealthCheck) GetEndPointFromTarget(keyspace, shard string) []*pbt.EndPoint {
+// GetEndPointsFromKeyspaceShard returns all endpoints for the given keyspace/shard.
+func (hc *HealthCheck) GetEndPointsFromKeyspaceShard(keyspace, shard string) []*pbt.EndPoint {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 	shardMap, ok := hc.targetToEPs[keyspace]
 	if !ok {
 		return nil
 	}
-	epList, ok := shardMap[shard]
+	ttMap, ok := shardMap[shard]
+	if !ok {
+		return nil
+	}
+	res := make([]*pbt.EndPoint, 0, 1)
+	for _, epList := range ttMap {
+		res = append(res, epList...)
+	}
+	return res
+}
+
+// GetEndPointsFromTarget returns all endpoints for the given target.
+func (hc *HealthCheck) GetEndPointsFromTarget(target *pbq.Target) []*pbt.EndPoint {
+	hc.mu.RLock()
+	defer hc.mu.RUnlock()
+	shardMap, ok := hc.targetToEPs[target.Keyspace]
+	if !ok {
+		return nil
+	}
+	ttMap, ok := shardMap[target.Shard]
+	if !ok {
+		return nil
+	}
+	epList, ok := ttMap[target.TabletType]
 	if !ok {
 		return nil
 	}
@@ -186,40 +223,49 @@ func (hc *HealthCheck) GetEndPointFromTarget(keyspace, shard string) []*pbt.EndP
 
 // addEndPointToTargetProtected adds the endpoint to the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheck) addEndPointToTargetProtected(keyspace, shard string, endPoint *pbt.EndPoint) {
-	shardMap, ok := hc.targetToEPs[keyspace]
+func (hc *HealthCheck) addEndPointToTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
-		shardMap = make(map[string][]*pbt.EndPoint)
-		hc.targetToEPs[keyspace] = shardMap
+		shardMap = make(map[string]map[pbt.TabletType][]*pbt.EndPoint)
+		hc.targetToEPs[target.Keyspace] = shardMap
 	}
-	epList, ok := shardMap[shard]
+	ttMap, ok := shardMap[target.Shard]
+	if !ok {
+		ttMap = make(map[pbt.TabletType][]*pbt.EndPoint)
+		shardMap[target.Shard] = ttMap
+	}
+	epList, ok := ttMap[target.TabletType]
 	if !ok {
 		epList = make([]*pbt.EndPoint, 0, 1)
 	}
 	for _, ep := range epList {
 		if topo.EndPointEquality(ep, endPoint) {
-			log.Warningf("endpoint is already up: %+v", endPoint)
+			log.Warningf("endpoint is already added: %+v", endPoint)
 			return
 		}
 	}
-	shardMap[shard] = append(epList, endPoint)
+	ttMap[target.TabletType] = append(epList, endPoint)
 }
 
 // deleteEndPointFromTargetProtected deletes the endpoint for the given target.
 // LOCK_REQUIRED hc.mu
-func (hc *HealthCheck) deleteEndPointFromTargetProtected(keyspace, shard string, endPoint *pbt.EndPoint) {
-	shardMap, ok := hc.targetToEPs[keyspace]
+func (hc *HealthCheck) deleteEndPointFromTargetProtected(target *pbq.Target, endPoint *pbt.EndPoint) {
+	shardMap, ok := hc.targetToEPs[target.Keyspace]
 	if !ok {
 		return
 	}
-	epList, ok := shardMap[shard]
+	ttMap, ok := shardMap[target.Shard]
+	if !ok {
+		return
+	}
+	epList, ok := ttMap[target.TabletType]
 	if !ok {
 		return
 	}
 	for i, ep := range epList {
 		if topo.EndPointEquality(ep, endPoint) {
 			epList = append(epList[:i], epList[i+1:]...)
-			shardMap[shard] = epList
+			ttMap[target.TabletType] = epList
 			return
 		}
 	}
