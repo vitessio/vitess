@@ -1,4 +1,4 @@
-package vtgate
+package discovery
 
 import (
 	"fmt"
