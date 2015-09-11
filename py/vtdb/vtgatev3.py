@@ -91,31 +91,56 @@ class VTGateConnection(object):
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
     self.session = None
     self.addr = addr
+    self.user = user
+    self.password = password
+    self.keyfile = keyfile
+    self.certfile = certfile
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,
-                                        keyfile=keyfile, certfile=certfile)
+    self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
+
+  def _create_client(self):
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    return bsonrpc.BsonRpcClient(
+          self.addr, self.timeout, self.user, self.password,
+          keyfile=self.keyfile, certfile=self.certfile)
+
+  def _get_client(self):
+    """Get current client or create a new one and connect."""
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    if not self.client:
+      self.client = self._create_client()
+      try:
+        self.client.dial()
+      except gorpc.GoRpcError as e:
+        raise convert_exception(e, str(self))
+    return self.client
 
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
 
   def dial(self):
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
     try:
       if not self.is_closed():
         self.close()
-      self.client.dial()
+      self._get_client().dial()
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def close(self):
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
     if self.session:
       self.rollback()
-    self.client.close()
+    if self.client:
+      self.client.close()
 
   def is_closed(self):
-    return self.client.is_closed()
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    return not self.client or self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
     cursorclass = kwargs.pop('cursorclass', None) or cursorv3.Cursor
@@ -124,7 +149,7 @@ class VTGateConnection(object):
   def begin(self, effective_caller_id=None):
     _ = effective_caller_id  # TODO: Pass effective_caller_id through.
     try:
-      response = self.client.call('VTGate.Begin', None)
+      response = self._get_client().call('VTGate.Begin', None)
       self.session = response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -133,7 +158,7 @@ class VTGateConnection(object):
     try:
       session = self.session
       self.session = None
-      self.client.call('VTGate.Commit', session)
+      self._get_client().call('VTGate.Commit', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -141,7 +166,7 @@ class VTGateConnection(object):
     try:
       session = self.session
       self.session = None
-      self.client.call('VTGate.Rollback', session)
+      self._get_client().call('VTGate.Rollback', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -164,7 +189,7 @@ class VTGateConnection(object):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call('VTGate.Execute', req)
+      response = self._get_client().call('VTGate.Execute', req)
       self._update_session(response)
       reply = response.reply
       if response.reply.get('Error'):
@@ -207,7 +232,7 @@ class VTGateConnection(object):
           'AsTransaction': as_transaction,
       }
       self._add_session(req)
-      response = self.client.call('VTGate.ExecuteBatch', req)
+      response = self._get_client().call('VTGate.ExecuteBatch', req)
       self._update_session(response)
       if response.reply.get('Error'):
         raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatch')
@@ -240,11 +265,13 @@ class VTGateConnection(object):
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
     self._add_session(req)
 
+    rpc_client = self._get_client()
+
     stream_fields = []
     stream_conversions = []
     try:
-      self.client.stream_call('VTGate.StreamExecute', req)
-      first_response = self.client.stream_next()
+      rpc_client.stream_call('VTGate.StreamExecute', req)
+      first_response = rpc_client.stream_next()
       reply = first_response.reply['Result']
 
       for field in reply['Fields']:
@@ -258,30 +285,39 @@ class VTGateConnection(object):
       logging.exception('gorpc low-level error')
       raise
 
+    # Take the BsonRpcClient from VTGateConnection. The row_generator
+    # will manage the BsonRpcClient. This VTGateConnection will connect
+    # to a new client if needed.
+    self.client = None
+
     def row_generator():
-      while True:
-        try:
-          stream_result = self.client.stream_next()
-          if stream_result is None:
-            break
-          # A session message, if any comes separately with no rows.
-          # I am not sure if we can ignore this.
-          if stream_result.reply.get('Session'):
-            self.session = stream_result.reply['Session']
-          else:
-            for result_item in stream_result.reply['Result']['Rows']:
-              yield tuple(_make_row(result_item, stream_conversions))
-        except gorpc.GoRpcError as e:
-          raise convert_exception(e, str(self))
-        except Exception:
-          logging.exception('gorpc low-level error')
-          raise
+      # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+      try:
+        while True:
+          try:
+            stream_result = rpc_client.stream_next()
+            if stream_result is None:
+              break
+            # A session message, if any comes separately with no rows.
+            # I am not sure if we can ignore this.
+            if stream_result.reply.get('Session'):
+              self.session = stream_result.reply['Session']
+            else:
+              for result_item in stream_result.reply['Result']['Rows']:
+                yield tuple(_make_row(result_item, stream_conversions))
+          except gorpc.GoRpcError as e:
+            raise convert_exception(e, str(self))
+          except Exception:
+            logging.exception('gorpc low-level error')
+            raise
+      finally:
+        rpc_client.close()
 
     return row_generator(), stream_fields
 
 
-
 def _make_row(row, conversions):
+  # TODO(dumbunny): Merge? This is very similar to vtgatev2.
   converted_row = []
   for conversion_func, field_data in izip(conversions, row):
     if field_data is None:

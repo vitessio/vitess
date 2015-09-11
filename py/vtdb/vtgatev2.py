@@ -121,15 +121,27 @@ class VTGateConnection(vtgate_client.VTGateClient):
                keyfile=None, certfile=None):
     self.session = None
     self.addr = addr
+    self.user = user
+    self.password = password
+    self.keyfile = keyfile
+    self.certfile = certfile
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(
-        addr, timeout, user, password, keyfile=keyfile, certfile=certfile)
+    self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
-    self._need_reopen = False
+
+  def _create_client(self):
+    return bsonrpc.BsonRpcClient(
+          self.addr, self.timeout, self.user, self.password,
+          keyfile=self.keyfile, certfile=self.certfile)
 
   def _get_client(self):
-    if self._need_reopen:
-      self.dial()
+    """Get current client or create a new one and connect."""
+    if not self.client:
+      self.client = self._create_client()
+      try:
+        self.client.dial()
+      except gorpc.GoRpcError as e:
+        raise convert_exception(e, str(self))
     return self.client
 
   def __str__(self):
@@ -139,17 +151,18 @@ class VTGateConnection(vtgate_client.VTGateClient):
     try:
       if not self.is_closed():
         self.close()
-      self.client.dial()
+      self._get_client().dial()
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def close(self):
     if self.session:
       self.rollback()
-    self.client.close()
+    if self.client:
+      self.client.close()
 
   def is_closed(self):
-    return self.client.is_closed()
+    return not self.client or self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
@@ -373,11 +386,15 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise
     return rowsets
 
-  # we return a generator and the fields for the response.
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _stream_execute(
       self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, not_in_transaction=False, effective_caller_id=None):
+    """Return a generator and the fields for the response.
+
+    This method takes ownership of self.client, since multiple
+    stream_executes can be active at once.
+    """
     exec_method = None
     req = None
     if keyspace_ids is not None:
@@ -399,9 +416,10 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
     stream_fields = []
     stream_conversions = []
+    rpc_client = self._get_client()
     try:
-      self._get_client().stream_call(exec_method, req)
-      first_response = self.client.stream_next()
+      rpc_client.stream_call(exec_method, req)
+      first_response = rpc_client.stream_next()
       if first_response:
         reply = first_response.reply['Result']
         for field in reply['Fields']:
@@ -416,13 +434,16 @@ class VTGateConnection(vtgate_client.VTGateClient):
       logging.exception('gorpc low-level error')
       raise
 
+    # Take the BsonRpcClient from VTGateConnection. The row_generator
+    # will manage the BsonRpcClient. This VTGateConnection will connect
+    # to a new client if needed.
+    self.client = None
+
     def row_generator():
       try:
         while True:
           try:
-            # FIXME: Each stream_execute call needs its own client to allow
-            # multiple executes.
-            stream_result = self.client.stream_next()
+            stream_result = rpc_client.stream_next()
             if stream_result is None:
               break
             # A session message, if any, comes separately with no rows
@@ -437,14 +458,13 @@ class VTGateConnection(vtgate_client.VTGateClient):
             logging.exception('gorpc low-level error')
             raise
       finally:
-        self.close()
-        self._need_reopen = True
+        rpc_client.close()
 
     return row_generator(), stream_fields
 
   def get_srv_keyspace(self, name):
     try:
-      response = self.client.call('VTGate.GetSrvKeyspace', {
+      response = self._get_client().call('VTGate.GetSrvKeyspace', {
           'Keyspace': name,
           })
       return keyspace.Keyspace(name, response.reply)

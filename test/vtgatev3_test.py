@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import itertools
 import json
 import logging
 import unittest
@@ -328,19 +329,29 @@ class TestVTGateFunctions(unittest.TestCase):
     self.assertEqual(
         result,
         ([(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
-          (6L, 'test 6'), (7L, 'test 7')], 6L, 0, [('id', 8L), ('name', 253L)]))
+          (6L, 'test 6'), (7L, 'test 7')], 6L, 0,
+         [('id', 8L), ('name', 253L)]))
 
-    # Test stream
-    stream_cursor = vtgate_conn.cursor(
+    # Test stream over scatter
+    stream_cursor_1 = vtgate_conn.cursor(
         'master', cursorclass=cursorv3.StreamCursor)
-    stream_cursor.execute('select * from vt_user', {})
-    self.assertEqual(stream_cursor.description, [('id', 8L), ('name', 253L)])
-    rows = []
-    for row in stream_cursor:
-      rows.append(row)
-    rows.sort()
+    stream_cursor_1.execute('select * from vt_user', {})
+    stream_cursor_2 = vtgate_conn.cursor(
+        'master', cursorclass=cursorv3.StreamCursor)
+    stream_cursor_2.execute('select * from vt_user', {})
+    self.assertEqual(stream_cursor_1.description, [('id', 8L), ('name', 253L)])
+    self.assertEqual(stream_cursor_2.description, [('id', 8L), ('name', 253L)])
+    rows_1 = []
+    rows_2 = []
+    for row_1, row_2 in itertools.izip(stream_cursor_1, stream_cursor_2):
+      rows_1.append(row_1)
+      rows_2.append(row_2)
     self.assertEqual(
-        rows,
+        sorted(rows_1),
+        [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
+         (6L, 'test 6'), (7L, 'test 7')])
+    self.assertEqual(
+        sorted(rows_2),
         [(1L, 'test 1'), (2L, 'test 2'), (3L, 'test 3'), (4L, 'test 4'),
          (6L, 'test 6'), (7L, 'test 7')])
 

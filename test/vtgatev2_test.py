@@ -471,21 +471,29 @@ class TestVTGateFunctions(BaseTestCase):
       # Fetch a subset of the total size.
       vtgate_conn = get_connection()
 
-      def fetch_first_20_rows():
-        stream_cursor = vtgate_conn.cursor(
+      def get_stream_cursor():
+        return vtgate_conn.cursor(
             KEYSPACE_NAME, 'master',
             keyranges=[self.keyrange],
             cursorclass=vtgate_cursor.StreamVTGateCursor)
-        stream_cursor.execute('select msg from vt_insert_test', {})
-        fetch_size = 10
-        rows = stream_cursor.fetchmany(size=fetch_size)
-        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10)])
-        rows = stream_cursor.fetchmany(size=fetch_size)
-        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
-        stream_cursor.close()
 
-      fetch_first_20_rows()
-      fetch_first_20_rows()
+      def fetch_first_10_rows(stream_cursor):
+        stream_cursor.execute('select msg from vt_insert_test', {})
+        rows = stream_cursor.fetchmany(size=10)
+        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10)])
+
+      def fetch_next_10_rows(stream_cursor):
+        rows = stream_cursor.fetchmany(size=10)
+        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
+
+      stream_cursor_1 = get_stream_cursor()
+      stream_cursor_2 = get_stream_cursor()
+      fetch_first_10_rows(stream_cursor_1)
+      fetch_first_10_rows(stream_cursor_2)
+      fetch_next_10_rows(stream_cursor_1)
+      fetch_next_10_rows(stream_cursor_2)
+      stream_cursor_1.close()
+      stream_cursor_2.close()
     except Exception, e:
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
@@ -1463,7 +1471,7 @@ class TestFailures(BaseTestCase):
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
       self.assertNotIsInstance(e, dbexceptions.TimeoutError)
-    # Fetch all ongoing querie results
+    # Fetch all ongoing query results
     query_results = []
     for async_result in async_results:
       query_results.append(async_result.get())
