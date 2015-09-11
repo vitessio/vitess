@@ -159,7 +159,7 @@ class TestUpdateStream(unittest.TestCase):
     try:
       for stream_event in replica_conn.stream_update(start_position):
         break
-    except Exception, e:
+    except Exception as e:
       self.assertIn('update stream service is not enabled', str(e))
     replica_conn.close()
 
@@ -193,7 +193,7 @@ class TestUpdateStream(unittest.TestCase):
         if stream_event.category == update_stream.StreamEvent.DML:
           logging.debug('Test Service Enabled: Pass')
           break
-    except Exception, e:
+    except Exception as e:
       self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
                 (str(e), traceback.print_exc()))
     thd.join(timeout=30)
@@ -227,12 +227,12 @@ class TestUpdateStream(unittest.TestCase):
         logging.debug('Test Service Switch: FAIL')
         replica_conn.close()
         return
-    except dbexceptions.DatabaseError, e:
+    except dbexceptions.DatabaseError as e:
       self.assertEqual(
           'Fatal Service Error: Disconnecting because the Update Stream '
           'service has been disabled',
           str(e))
-    except Exception, e:
+    except Exception as e:
       logging.error('Exception: %s', str(e))
       logging.error('Traceback: %s', traceback.print_exc())
       self.fail("Update stream returned error '%s'" % str(e))

@@ -11,6 +11,7 @@ from grpc.framework.interfaces.face import face
 from vtproto import binlogdata_pb2
 from vtproto import binlogservice_pb2
 
+from vtdb import dbexceptions
 from vtdb import field_types
 from vtdb import update_stream
 
@@ -80,10 +81,10 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
             sql=stream_event.sql,
             timestamp=stream_event.timestamp,
             transaction_id=stream_event.transaction_id)
-    except face.AbortionError, e:
+    except face.AbortionError as e:
       # FIXME(alainjobart) These exceptions don't print well, so raise
       # one that will.  The real fix is to define a set of exceptions
       # for this library and raise that, but it's more work.
-      raise Exception(e.details, e)
+      raise dbexceptions.OperationalError(e.details, e)
 
 update_stream.register_conn_class('grpc', GRPCUpdateStreamConnection)
