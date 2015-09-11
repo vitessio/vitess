@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: new_docs
 title: "Sharding in Kubernetes"
 description:
 modified:

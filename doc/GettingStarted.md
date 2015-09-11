@@ -4,6 +4,8 @@ You can build Vitess using either [Docker](#docker-build) or a
 If you run into issues or have questions, please post on our
 [forum](https://groups.google.com/forum/#!forum/vitess).
 
+<div id="toc"></div>
+
 ## Docker Build
 
 To run Vitess in Docker, use an
@@ -44,10 +46,10 @@ Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy). It requires 
     [MySQL 5.6](http://dev.mysql.com/downloads/mysql). You can use any
     installation method (src/bin/rpm/deb), but be sure to include the client
     development headers (**libmariadbclient-dev** or **libmysqlclient-dev**).
-    <br><br>
+ 
     The Vitess development team currently tests against MariaDB 10.0.17
     and MySQL 5.6.24.
-    <br><br>
+
     If you are installing MariaDB, note that you must install version 10.0 or
     higher. If you are using <code>apt-get</code>, confirm that your repository
     offers an option to install that version. You can also download the source
@@ -77,7 +79,7 @@ Vitess runs on either Ubuntu 14.04 (Trusty) or Debian 7.0 (Wheezy). It requires 
     - pkg-config
     - bison
     - curl
-    - unzip<br><br>
+    - unzip
 
     These can be installed with the following apt-get command:
 
@@ -122,7 +124,7 @@ export MYSQL_FLAVOR=MySQL56
 export VT_MYSQL_ROOT=/usr/local/mysql
 ```
 
-    <br>Note that the command indicates that the **mysql** executable should
+    Note that the command indicates that the **mysql** executable should
     be found at **/usr/local/mysql/bin/mysql**.
 
 1.  Run <code>mysql_config --version</code> and confirm that you
@@ -151,7 +153,6 @@ export VT_MYSQL_ROOT=/usr/local/mysql
 make build
 ```
 
-    <br>
     If you build Vitess successfully, you can proceed to
     [start a Vitess cluster](#start-a-vitess-cluster).
     If your build attempt fails, see the following section,
@@ -232,7 +233,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 
     Some Linux distributions ship with default file descriptor limits
     that are too low for database servers. This issue could show up
-    as the database crashing with the message "too many open files".<br><br>
+    as the database crashing with the message "too many open files".
 
     Check the system-wide `file-max` setting as well as user-specific
     `ulimit` values. We recommend setting them above 100K to be safe.
@@ -243,7 +244,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 
     If you are still in the same terminal window that
     you used to run the build commands, you can skip to the next
-    step since the environment variables will already be set.<br><br>
+    step since the environment variables will already be set.
 
     Navigate to the directory where you built Vitess
     (**$WORKSPACE/src/github.com/youtube/vitess**) and run the
@@ -253,7 +254,7 @@ lock service. ZooKeeper is included in the Vitess distribution.
 . ./dev.env
 ```
 
-    <br>From that directory, navigate to the directory that contains
+    From that directory, navigate to the directory that contains
     the example scripts:
 
     ``` sh
@@ -272,11 +273,10 @@ cd examples/local
 # Waiting for zk servers to be ready...
 ```
 
-    <br>
     After the ZooKeeper cluster is running, we only need to tell each
     Vitess process how to connect to ZooKeeper. Then, each process can
     find all of the other Vitess processes by coordinating via ZooKeeper.
-    <br><br>
+
     To instruct Vitess processes on how to connect to ZooKeeper, set
     the <code>ZK_CLIENT_CONFIG</code> environment variable to the path
     to the <code>zk-client-conf.json</code> file, which contains the
@@ -293,10 +293,10 @@ cd examples/local
 # Access vtctld at http://localhost:15000
 ```
 
-    <br>Open <code>http://localhost:15000</code> to verify that
+    Open <code>http://localhost:15000</code> to verify that
     <code>vtctld</code> is running. There won't be any information
     there yet, but the menu should come up, which indicates that
-    <code>vtctld</code> is running.<br><br>
+    <code>vtctld</code> is running.
 
     **Note:** The <code>vtctld</code> server accepts commands from
     the <code>vtctlclient</code> tool, which administers the Vitess
@@ -327,7 +327,7 @@ $VTROOT/bin/vtctlclient -server localhost:15000
 # Access tablet test-0000000102 at http://localhost:15102/debug/status
 ```
 
-    <br>After this command completes, go back to the <code>vtctld</code>
+    After this command completes, go back to the <code>vtctld</code>
     web page from the previous step and click the **Topology** link.
     You should see the three tablets listed. If you click the address
     of a tablet, you will see the coordination data stored in ZooKeeper.
@@ -343,7 +343,6 @@ $VTROOT/bin/vtctlclient -server localhost:15000
 $VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspace
 ```
 
-    <br>
     **Note:** Most <code>vtctlclient</code> commands yield no output if
     they run successfully.
 
@@ -353,7 +352,7 @@ $VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspa
     In this step, you designate one of the vttablets to be the master.
     Vitess automatically connects the other replicas' <code>mysqld</code>
     instances so that they start replicating from the master
-    <code>mysqld</code> instance.<br><br>
+    <code>mysqld</code> instance.
 
     Since this is the first time the shard has been started, the
     vttablets are not already doing any replication. As a result,
@@ -365,10 +364,10 @@ $VTROOT/bin/vtctlclient -server localhost:15000 RebuildKeyspaceGraph test_keyspa
 $VTROOT/bin/vtctlclient -server localhost:15000 InitShardMaster -force test_keyspace/0 test-0000000100
 ```
 
-    <br>After running this command, go back to the **Topology** page
+    After running this command, go back to the **Topology** page
     in the <code>vtctld</code> web interface. When you refresh the
     page, you should see that one <code>vttablet</code> is the master
-    and the other two are replicas.<br><br>
+    and the other two are replicas.
 
     You can also run this command on the command line to see the
     same data:
@@ -390,7 +389,7 @@ $VTROOT/bin/vtctlclient -server localhost:15000 ListAllTablets test
 $VTROOT/bin/vtctlclient -server localhost:15000 ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
-    <br>The SQL to create the table is shown below:
+    The SQL to create the table is shown below:
 
     ``` sh
 CREATE TABLE test_table (
@@ -418,11 +417,11 @@ The <code>client.py</code> file is a simple sample application
 that connects to <code>vtgate</code> and executes some queries.
 To run it, you need to either:
 
-1.  Add the Vitess Python packages to your <code>PYTHONPATH</code><br>
-    or
-
-1.  Use the <code>client.sh</code> wrapper script, which temporarily
-    sets up the environment and then runs <code>client.py</code>
+* Add the Vitess Python packages to your <code>PYTHONPATH</code>
+  <br class="bigbreak">
+  or
+* Use the <code>client.sh</code> wrapper script, which temporarily
+  sets up the environment and then runs <code>client.py</code>
 
     ``` sh
 ./client.sh --server=localhost:15001

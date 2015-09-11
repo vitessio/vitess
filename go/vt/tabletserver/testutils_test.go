@@ -147,16 +147,17 @@ func newTestSchemaInfo(
 	name := fmt.Sprintf("TestSchemaInfo-%d-", randID)
 	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
 	return NewSchemaInfo(
-		queryCacheSize,
 		name,
+		queryCacheSize,
+		reloadTime,
+		idleTimeout,
+		newTestSchemaInfoCachePool(enablePublishStats, queryServiceStats),
 		map[string]string{
 			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
 			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
 			debugTableStatsKey: fmt.Sprintf("/debug/table_stats_%d", randID),
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
-		reloadTime,
-		idleTimeout,
 		enablePublishStats,
 		queryServiceStats,
 	)
