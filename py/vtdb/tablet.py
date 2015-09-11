@@ -67,8 +67,6 @@ class TabletConnection(object):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
-  stream_execute_returns_generator = True
-
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
       password=None, keyfile=None, certfile=None, caller_id=None):

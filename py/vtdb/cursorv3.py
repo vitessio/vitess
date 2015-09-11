@@ -9,42 +9,28 @@ from vtdb import dbexceptions
 class Cursor(base_cursor.BaseListCursor):
 
   def __init__(self, connection, tablet_type):
+    super(Cursor, self).__init__()
     self._conn = connection
     self.tablet_type = tablet_type
-    self.lastrowid = None
-    self.rowcount = 0
-    self.results = None
-    self.description = None
-    self.index = None
-
-  def close(self):
-    self.results = None
 
   def execute(self, sql, bind_variables):
-    self.rowcount = 0
-    self.results = None
-    self.description = None
-    self.lastrowid = None
+    self._clear_list_state()
     if self._handle_transaction_sql(sql, effective_caller_id=None):
       return
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self._conn._execute(sql, bind_variables, self.tablet_type))
-    self.index = 0
+        self._get_conn()._execute(sql, bind_variables, self.tablet_type))
     return self.rowcount
 
 
 class StreamCursor(base_cursor.BaseStreamCursor):
 
   def __init__(self, connection, tablet_type):
+    super(StreamCursor, self).__init__()
     self._conn = connection
     self.tablet_type = tablet_type
-    self.fetchmany_done = False
-    self.description = None
-    self.generator = None
 
   def execute(self, sql, bind_variables, **kargs):
-    self.description = None
-    result = self._conn._stream_execute(
+    self._clear_stream_state()
+    self.generator, self.description = self._get_conn()._stream_execute(
         sql, bind_variables, self.tablet_type)
-    self._parse_stream_execute_result(self._conn, result)
     return 0

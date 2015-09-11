@@ -10,6 +10,10 @@ from vtdb import dbexceptions
 class BasePEP0249Cursor(object):
   """Cursor with common PEP0249 implementations."""
 
+  def __init__(self):
+    self._clear_common_state()
+    self._conn = None
+
   def callproc(self):
     """For PEP 0249."""
     raise dbexceptions.NotSupportedError
@@ -46,27 +50,63 @@ class BasePEP0249Cursor(object):
       raise StopIteration
     return val
 
+  def close(self):
+    """For PEP 0249."""
+    raise NotImplementedError
+
+  def fetchone(self):
+    """For PEP 0249."""
+    raise NotImplementedError
+
+  def fetchmany(self, size=None):
+    """For PEP 0249."""
+    raise NotImplementedError
+
+  def fetchall(self):
+    """For PEP 0249."""
+    raise NotImplementedError
+
+  def _clear_common_state(self):
+    self.index = 0
+
+  def _get_conn(self):
+    if not self._conn:
+      raise dbexceptions.ProgrammingError(
+          'Cannot use closed cursor %s.' % self.__class__)
+    return self._conn
+
 
 class BaseListCursor(BasePEP0249Cursor):
   """Base cursor where results are stored as a list.
 
-  An execute call to self._conn returns a (results, rowcount,
-  lastrowid, description) tuple. The fetch commands walk self.results.
+  Execute call should return a (results, rowcount, lastrowid,
+  description) tuple. The fetch commands traverse self.results.
   """
   arraysize = 1
 
+  def __init__(self):
+    super(BaseListCursor, self).__init__()
+    self._clear_list_state()
+
+  def _clear_list_state(self):
+    self._clear_common_state()
+    self.description = None
+    self.lastrowid = None
+    self.rowcount = None
+    self.results = None
+
   def begin(self, effective_caller_id=None):
-    return self._conn.begin(effective_caller_id)
+    return self._get_conn().begin(effective_caller_id)
 
   def commit(self):
-    return self._conn.commit()
+    return self._get_conn().commit()
 
   def rollback(self):
-    return self._conn.rollback()
+    return self._get_conn().rollback()
 
   def _check_fetch(self):
     if self.results is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
+      raise dbexceptions.ProgrammingError('Fetch called before execute.')
 
   def _handle_transaction_sql(self, sql, effective_caller_id):
     sql_check = sql.strip().lower()
@@ -81,6 +121,10 @@ class BaseListCursor(BasePEP0249Cursor):
       return True
     else:
       return False
+
+  def close(self):
+    self._clear_list_state()
+    self._conn = None
 
   def fetchone(self):
     self._check_fetch()
@@ -114,26 +158,23 @@ class BaseStreamCursor(BasePEP0249Cursor):
 
   arraysize = 1
 
-  def _parse_stream_execute_result(self, connection, result):
-    if connection.stream_execute_returns_generator:
-      self.generator, self.description = result
-    else:
-      # Deprecate this code path after all client code is updated.
-      _, _, _, self.description = result
-      self.generator = None
-    self.index = 0
+  def __init__(self):
+    super(BaseStreamCursor, self).__init__()
+    self._clear_stream_state()
+
+  def _clear_stream_state(self):
+    self._clear_common_state()
+    self.description = None
+    self.generator = None
 
   def fetchone(self):
     if self.description is None:
-      raise dbexceptions.ProgrammingError('fetch called before execute')
+      raise dbexceptions.ProgrammingError('Fetch called before execute.')
     self.index += 1
-    if self.generator:
-      try:
-        return self.generator.next()
-      except StopIteration:
-        return None
-    else:
-      return self._conn._stream_next()
+    try:
+      return self.generator.next()
+    except StopIteration:
+      return None
 
   # fetchmany can be called until it returns no rows. Returning less rows
   # than what we asked for is also an indication we ran out, but the cursor
@@ -142,13 +183,9 @@ class BaseStreamCursor(BasePEP0249Cursor):
     if size is None:
       size = self.arraysize
     result = []
-    if self.fetchmany_done:
-      self.fetchmany_done = False
-      return result
     for _ in xrange(size):
       row = self.fetchone()
       if row is None:
-        self.fetchmany_done = True
         break
       result.append(row)
     return result
@@ -165,4 +202,5 @@ class BaseStreamCursor(BasePEP0249Cursor):
   def close(self):
     if self.generator:
       self.generator.close()
-      self.generator = None
+    self._clear_stream_state()
+    self._conn = None

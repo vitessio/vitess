@@ -51,16 +51,10 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.rowcount = 0
     self.tablet_type = tablet_type
 
-  def close(self):
-    self.results = None
-
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
-    self.rowcount = 0
-    self.results = None
-    self.description = None
-    self.lastrowid = None
+    self._clear_list_state()
     effective_caller_id = kargs.get('effective_caller_id')
     if self._handle_transaction_sql(sql, effective_caller_id):
       return
@@ -72,7 +66,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
         raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
 
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self._conn._execute(
+        self._get_conn()._execute(
             sql,
             bind_variables,
             self.keyspace,
@@ -81,16 +75,12 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             keyranges=self.keyranges,
             not_in_transaction=not self.is_writable(),
             effective_caller_id=effective_caller_id))
-    self.index = 0
     return self.rowcount
 
   def execute_entity_ids(
       self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
       effective_caller_id=None):
-    self.rowcount = 0
-    self.results = None
-    self.description = None
-    self.lastrowid = None
+    self._clear_list_state()
 
     # This is by definition a scatter query, so raise exception.
     write_query = bool(write_sql_pattern.match(sql))
@@ -99,7 +89,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
           'execute_entity_ids is not allowed for write queries')
 
     self.results, self.rowcount, self.lastrowid, self.description = (
-        self._conn._execute_entity_ids(
+        self._get_conn()._execute_entity_ids(
             sql,
             bind_variables,
             self.keyspace,
@@ -108,7 +98,6 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             entity_column_name,
             not_in_transaction=not self.is_writable(),
             effective_caller_id=effective_caller_id))
-    self.index = 0
     return self.rowcount
 
   def fetch_aggregate_function(self, func):
@@ -163,7 +152,7 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_ids_list.append(keyspace_ids)
 
   def flush(self, as_transaction=False, effective_caller_id=None):
-    self.rowsets = self._conn._execute_batch(
+    self.rowsets = self._get_conn()._execute_batch(
         self.query_list,
         self.bind_vars_list,
         self.keyspace_list,
@@ -186,19 +175,13 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   def __init__(
       self, connection, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, writable=False):
+    super(StreamVTGateCursor, self).__init__()
     self._conn = connection
     self._writable = writable
-    self.conversions = None
-    self.description = None
-    self.fetchmany_done = False
-    self.generator = None
-    self.index = None
     self.keyranges = keyranges
     self.keyspace = keyspace
     self.keyspace_ids = keyspace_ids
-    self.lastrowid = None
     self.routing = None
-    self.rowcount = 0
     self.tablet_type = tablet_type
 
   def is_writable(self):
@@ -209,10 +192,8 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
   def execute(self, sql, bind_variables, **kargs):
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
-
-    self.description = None
-    self.generator = None
-    result = self._conn._stream_execute(
+    self._clear_stream_state()
+    self.generator, self.description = self._get_conn()._stream_execute(
         sql,
         bind_variables,
         self.keyspace,
@@ -221,7 +202,6 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
         keyranges=self.keyranges,
         not_in_transaction=not self.is_writable(),
         effective_caller_id=kargs.get('effective_caller_id'))
-    self._parse_stream_execute_result(self._conn, result)
     return 0
 
 

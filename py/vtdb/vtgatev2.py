@@ -117,8 +117,6 @@ class VTGateConnection(vtgate_client.VTGateClient):
   one instantiated.
   """
 
-  stream_execute_returns_generator = True
-
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
     self.session = None
@@ -127,6 +125,12 @@ class VTGateConnection(vtgate_client.VTGateClient):
     self.client = bsonrpc.BsonRpcClient(
         addr, timeout, user, password, keyfile=keyfile, certfile=certfile)
     self.logger_object = vtdb_logger.get_logger()
+    self._need_reopen = False
+
+  def _get_client(self):
+    if self._need_reopen:
+      self.dial()
+    return self.client
 
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
@@ -155,7 +159,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     try:
       req = {}
       self._add_caller_id(req, effective_caller_id)
-      response = self.client.call('VTGate.Begin2', req)
+      response = self._get_client().call('VTGate.Begin2', req)
       self.effective_caller_id = effective_caller_id
       self.session = None
       self._update_session(response)
@@ -167,7 +171,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       req = {}
       self._add_caller_id(req, self.effective_caller_id)
       self._add_session(req)
-      self.client.call('VTGate.Commit2', req)
+      self._get_client().call('VTGate.Commit2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
@@ -179,7 +183,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       req = {}
       self._add_caller_id(req, self.effective_caller_id)
       self._add_session(req)
-      self.client.call('VTGate.Rollback2', req)
+      self._get_client().call('VTGate.Rollback2', req)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
     finally:
@@ -234,7 +238,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call(exec_method, req)
+      response = self._get_client().call(exec_method, req)
       self._update_session(response)
       reply = response.reply
       if response.reply.get('Error'):
@@ -288,7 +292,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     rowcount = 0
     lastrowid = 0
     try:
-      response = self.client.call('VTGate.ExecuteEntityIds', req)
+      response = self._get_client().call('VTGate.ExecuteEntityIds', req)
       self._update_session(response)
       reply = response.reply
       if response.reply.get('Error'):
@@ -339,7 +343,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       }
       self._add_caller_id(req, effective_caller_id)
       self._add_session(req)
-      response = self.client.call('VTGate.ExecuteBatchKeyspaceIds', req)
+      response = self._get_client().call('VTGate.ExecuteBatchKeyspaceIds', req)
       self._update_session(response)
       if response.reply.get('Error'):
         raise gorpc.AppError(
@@ -369,9 +373,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise
     return rowsets
 
-  # we return the fields for the response, and the column conversions
-  # the conversions will need to be passed back to _stream_next
-  # (that way we avoid using a member variable here for such a corner case)
+  # we return a generator and the fields for the response.
   @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _stream_execute(
       self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None,
@@ -398,7 +400,7 @@ class VTGateConnection(vtgate_client.VTGateClient):
     stream_fields = []
     stream_conversions = []
     try:
-      self.client.stream_call(exec_method, req)
+      self._get_client().stream_call(exec_method, req)
       first_response = self.client.stream_next()
       if first_response:
         reply = first_response.reply['Result']
@@ -415,22 +417,28 @@ class VTGateConnection(vtgate_client.VTGateClient):
       raise
 
     def row_generator():
-      while True:
-        try:
-          stream_result = self.client.stream_next()
-          if stream_result is None:
-            break
-          # A session message, if any, comes separately with no rows
-          if stream_result.reply.get('Session'):
-            self.session = stream_result.reply['Session']
-          else:
-            for result_item in stream_result.reply['Result']['Rows']:
-              yield tuple(_make_row(result_item, stream_conversions))
-        except gorpc.GoRpcError as e:
-          raise convert_exception(e, str(self))
-        except Exception:
-          logging.exception('gorpc low-level error')
-          raise
+      try:
+        while True:
+          try:
+            # FIXME: Each stream_execute call needs its own client to allow
+            # multiple executes.
+            stream_result = self.client.stream_next()
+            if stream_result is None:
+              break
+            # A session message, if any, comes separately with no rows
+            if stream_result.reply.get('Session'):
+              self.session = stream_result.reply['Session']
+            else:
+              for result_item in stream_result.reply['Result']['Rows']:
+                yield tuple(_make_row(result_item, stream_conversions))
+          except gorpc.GoRpcError as e:
+            raise convert_exception(e, str(self))
+          except Exception:
+            logging.exception('gorpc low-level error')
+            raise
+      finally:
+        self.close()
+        self._need_reopen = True
 
     return row_generator(), stream_fields
 

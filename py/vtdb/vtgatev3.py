@@ -89,8 +89,6 @@ def _create_req(sql, new_binds, tablet_type, not_in_transaction):
 class VTGateConnection(object):
   """This utilizes the V3 API of VTGate."""
 
-  stream_execute_returns_generator = True
-
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
     self.session = None
@@ -237,9 +235,6 @@ class VTGateConnection(object):
       raise
     return rowsets
 
-  # we return the fields for the response, and the column conversions
-  # the conversions will need to be passed back to _stream_next
-  # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(
       self, sql, bind_variables, tablet_type, not_in_transaction=False):
     req = _create_req(sql, bind_variables, tablet_type, not_in_transaction)
@@ -269,8 +264,8 @@ class VTGateConnection(object):
           stream_result = self.client.stream_next()
           if stream_result is None:
             break
-          # A session message, if any comes separately with no rows
-          # wait: i think we need this passed into stream_next.
+          # A session message, if any comes separately with no rows.
+          # I am not sure if we can ignore this.
           if stream_result.reply.get('Session'):
             self.session = stream_result.reply['Session']
           else:

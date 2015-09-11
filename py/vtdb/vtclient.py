@@ -117,8 +117,6 @@ class VtOCCConnection(object):
         db_params = params.copy()
         host_addr = db_params['addr']
         self.conn = tablet.TabletConnection(**db_params)
-        self.stream_execute_returns_generator = (
-            self.conn.stream_execute_returns_generator)
 
         self.conn.dial()
         self.conn_db_params = db_params
@@ -184,11 +182,7 @@ class VtOCCConnection(object):
   @reconnect
   def _stream_execute(self, sql, bind_variables):
     sql, bind_variables = dbapi.prepare_query_bind_vars(sql, bind_variables)
-    result = self.conn._stream_execute(sql, bind_variables)
-    return result
-
-  def _stream_next(self):
-    return self.conn._stream_next()
+    return self.conn._stream_execute(sql, bind_variables)
 
   # This function clears the cached value for the keyspace
   # and re-reads it from the toposerver once per 'n' secs.

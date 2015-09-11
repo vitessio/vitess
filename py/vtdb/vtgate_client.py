@@ -72,12 +72,7 @@ class VTGateClient(object):
   FIXME(alainjobart) transactional state (the Session object) is currently
   maintained by this object. It should be maintained by the cursor, and just
   returned / passed in with every method that makes sense.
-
-  FIXME(alainjobart) streaming state is also maintained by this object.
-  It should also be maintained by the cursor only.
   """
-
-  stream_execute_returns_generator = False
 
   def __init__(self, addr, timeout):
     """Initialize a vtgate connection.
@@ -304,10 +299,7 @@ class VTGateClient(object):
       effective_caller_id: CallerID object.
 
     Returns:
-      If stream_execute_returns_generator is True, then the return
-      value is a (row generator, fields) pair. Otherwise, a 4-element
-      (None, 0, 0, fields) tuple is returned. (TODO: always return the
-      (row generator, fields) pair.
+      A (row generator, fields) pair.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -320,28 +312,6 @@ class VTGateClient(object):
         this is probably an error in the code.
       dbexceptions.FatalError: this query should not be retried.
     """
-
-  def _stream_next(self):
-    """Returns the next result for a streaming query.
-
-    Returns:
-      row: a row of results, or None if done.
-
-    Raises:
-      dbexceptions.TimeoutError: for connection timeout.
-      dbexceptions.RequestBacklog: the server is overloaded, and this query
-        is asked to back off.
-      dbexceptions.IntegrityError: integrity of an index would not be
-        guaranteed with this statement.
-      dbexceptions.DatabaseError: generic database error.
-      dbexceptions.ProgrammingError: the supplied statements are invalid,
-        this is probably an error in the code.
-      dbexceptions.FatalError: this query should not be retried.
-    """
-    if self.stream_execute_returns_generator:
-      raise dbexceptions.ProgrammingError(
-          '_stream_next is not part of this interface. Use the '
-          'generator returned by _stream_executed.')
 
   def get_srv_keyspace(self, keyspace):
     """Returns a SrvKeyspace object.

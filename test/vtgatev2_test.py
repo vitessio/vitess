@@ -37,8 +37,8 @@ shard_1_replica1 = tablet.Tablet()
 shard_1_replica2 = tablet.Tablet()
 
 KEYSPACE_NAME = 'test_keyspace'
-shard_names = ['-80', '80-']
-shard_kid_map = {
+SHARD_NAMES = ['-80', '80-']
+SHARD_KID_MAP = {
     '-80': [
         527875958493693904, 626750931627689502,
         345387386794260318, 332484755310826578,
@@ -53,32 +53,32 @@ shard_kid_map = {
         13379616110062597001, 12826553979133932576],
 }
 
-create_vt_insert_test = '''create table vt_insert_test (
-id bigint auto_increment,
-msg varchar(64),
-keyspace_id bigint(20) unsigned NOT NULL,
-primary key (id)
+CREATE_VT_INSERT_TEST = '''create table vt_insert_test (
+  id bigint auto_increment,
+  msg varchar(64),
+  keyspace_id bigint(20) unsigned NOT NULL,
+  primary key (id)
 ) Engine=InnoDB'''
 
-create_vt_a = '''create table vt_a (
-eid bigint,
-id int,
-keyspace_id bigint(20) unsigned NOT NULL,
-primary key(eid, id)
+CREATE_VT_A = '''create table vt_a (
+  eid bigint,
+  id int,
+  keyspace_id bigint(20) unsigned NOT NULL,
+  primary key(eid, id)
 ) Engine=InnoDB'''
 
-create_vt_field_types = '''create table vt_field_types (
-id bigint(20) auto_increment,
-uint_val bigint(20) unsigned,
-str_val varchar(64),
-unicode_val varchar(64),
-float_val float(5, 1),
-keyspace_id bigint(20) unsigned NOT NULL,
-primary key(id)
+CREATE_VT_FIELD_TYPES = '''create table vt_field_types (
+  id bigint(20) auto_increment,
+  uint_val bigint(20) unsigned,
+  str_val varchar(64),
+  unicode_val varchar(64),
+  float_val float(5, 1),
+  keyspace_id bigint(20) unsigned NOT NULL,
+  primary key(id)
 ) Engine=InnoDB'''
 
 
-create_tables = [create_vt_insert_test, create_vt_a, create_vt_field_types]
+create_tables = [CREATE_VT_INSERT_TEST, CREATE_VT_A, CREATE_VT_FIELD_TYPES]
 pack_kid = struct.Struct('!Q').pack
 
 
@@ -209,17 +209,17 @@ def _delete_all(shard_index, table_name):
   vtgate_conn.begin()
   vtgate_conn._execute('delete from %s' % table_name, {},
                        KEYSPACE_NAME, 'master',
-                       keyranges=[get_keyrange(shard_names[shard_index])])
+                       keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
   vtgate_conn.commit()
 
 
 def do_write(count, shard_index):
-  kid_list = shard_kid_map[shard_names[shard_index]]
+  kid_list = SHARD_KID_MAP[SHARD_NAMES[shard_index]]
   _delete_all(shard_index, 'vt_insert_test')
   vtgate_conn = get_connection()
 
   for x in xrange(count):
-    keyspace_id = kid_list[x%len(kid_list)]
+    keyspace_id = kid_list[x % len(kid_list)]
     cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
                                 keyspace_ids=[pack_kid(keyspace_id)],
                                 writable=True)
@@ -239,11 +239,18 @@ def restart_vtgate(extra_args=None):
   utils.VtGate(port=port).start(extra_args=extra_args)
 
 
-class TestVTGateFunctions(unittest.TestCase):
+class BaseTestCase(unittest.TestCase):
 
   def setUp(self):
+    logging.info('Starting %s.', self.id())
+
+
+class TestVTGateFunctions(BaseTestCase):
+
+  def setUp(self):
+    super(TestVTGateFunctions, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(shard_names[self.shard_index])
+    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
 
@@ -262,7 +269,7 @@ class TestVTGateFunctions(unittest.TestCase):
       vtgate_conn = get_connection()
       _delete_all(self.shard_index, 'vt_insert_test')
       count = 10
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       for x in xrange(count):
         keyspace_id = kid_list[count%len(kid_list)]
         cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
@@ -279,13 +286,13 @@ class TestVTGateFunctions(unittest.TestCase):
       rowcount = cursor.execute('select * from vt_insert_test', {})
       self.assertEqual(rowcount, count, 'master fetch works')
     except Exception, e:
-      logging.debug('Write failed with error %s', e)
+      logging.info('Write failed with error %s', e)
       raise
 
   def test_query_routing(self):
     """Test VtGate routes queries to the right tablets."""
     try:
-      row_counts = [50, 75]
+      row_counts = [20, 30]
       for shard_index in [0, 1]:
         do_write(row_counts[shard_index], shard_index)
       vtgate_conn = get_connection()
@@ -293,21 +300,21 @@ class TestVTGateFunctions(unittest.TestCase):
         # Fetch all rows in each shard
         cursor = vtgate_conn.cursor(
             KEYSPACE_NAME, 'master',
-            keyranges=[get_keyrange(shard_names[shard_index])])
+            keyranges=[get_keyrange(SHARD_NAMES[shard_index])])
         rowcount = cursor.execute('select * from vt_insert_test', {})
         # Verify row count
         self.assertEqual(rowcount, row_counts[shard_index])
         # Verify keyspace id
         for result in cursor.results:
           kid = result[2]
-          self.assertIn(kid, shard_kid_map[shard_names[shard_index]])
+          self.assertIn(kid, SHARD_KID_MAP[SHARD_NAMES[shard_index]])
       # Do a cross shard range query and assert all rows are fetched
       cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
                                   keyranges=[get_keyrange('75-95')])
       rowcount = cursor.execute('select * from vt_insert_test', {})
       self.assertEqual(rowcount, row_counts[0] + row_counts[1])
     except Exception, e:
-      logging.debug('failed with error %s, %s', str(e), traceback.format_exc())
+      logging.info('failed with error %s, %s', str(e), traceback.format_exc())
       raise
 
   def test_rollback(self):
@@ -315,7 +322,7 @@ class TestVTGateFunctions(unittest.TestCase):
       vtgate_conn = get_connection()
       count = 10
       _delete_all(self.shard_index, 'vt_insert_test')
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       for x in xrange(count):
         keyspace_id = kid_list[x%len(kid_list)]
         cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
@@ -353,7 +360,7 @@ class TestVTGateFunctions(unittest.TestCase):
       count = 10
       _delete_all(self.shard_index, 'vt_a')
       eid_map = {}
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       for x in xrange(count):
         keyspace_id = kid_list[x%len(kid_list)]
         eid_map[x] = pack_kid(keyspace_id)
@@ -381,7 +388,7 @@ class TestVTGateFunctions(unittest.TestCase):
       vtgate_conn = get_connection()
       count = 10
       _delete_all(self.shard_index, 'vt_insert_test')
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       for x in xrange(count):
         keyspace_id = kid_list[x%len(kid_list)]
         cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
@@ -423,7 +430,7 @@ class TestVTGateFunctions(unittest.TestCase):
       vtgate_conn = get_connection()
       cursor = vtgate_conn.cursor(
           'master', cursorclass=vtgate_cursor.BatchVTGateCursor)
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       all_ids = [pack_kid(kid) for kid in kid_list]
       count = 10
       cursor.execute(
@@ -459,26 +466,32 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def test_streaming_fetchsubset(self):
     try:
-      count = 100
+      count = 30
       do_write(count, self.shard_index)
       # Fetch a subset of the total size.
       vtgate_conn = get_connection()
-      stream_cursor = vtgate_conn.cursor(
-          KEYSPACE_NAME, 'master',
-          keyranges=[self.keyrange],
-          cursorclass=vtgate_cursor.StreamVTGateCursor)
-      stream_cursor.execute('select * from vt_insert_test', {})
-      fetch_size = 10
-      rows = stream_cursor.fetchmany(size=fetch_size)
-      rowcount = len(list(rows))
-      self.assertEqual(rowcount, fetch_size)
-      stream_cursor.close()
+
+      def fetch_first_20_rows():
+        stream_cursor = vtgate_conn.cursor(
+            KEYSPACE_NAME, 'master',
+            keyranges=[self.keyrange],
+            cursorclass=vtgate_cursor.StreamVTGateCursor)
+        stream_cursor.execute('select msg from vt_insert_test', {})
+        fetch_size = 10
+        rows = stream_cursor.fetchmany(size=fetch_size)
+        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10)])
+        rows = stream_cursor.fetchmany(size=fetch_size)
+        self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
+        stream_cursor.close()
+
+      fetch_first_20_rows()
+      fetch_first_20_rows()
     except Exception, e:
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_fetchall(self):
     try:
-      count = 100
+      count = 30
       do_write(count, self.shard_index)
       # Fetch all.
       vtgate_conn = get_connection()
@@ -496,7 +509,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def test_streaming_fetchone(self):
     try:
-      count = 100
+      count = 30
       do_write(count, self.shard_index)
       # Fetch one.
       vtgate_conn = get_connection()
@@ -513,7 +526,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
   def test_streaming_multishards(self):
     try:
-      count = 100
+      count = 30
       do_write(count, 0)
       do_write(count, 1)
       vtgate_conn = get_connection()
@@ -525,7 +538,7 @@ class TestVTGateFunctions(unittest.TestCase):
       stream_cursor.execute('select * from vt_insert_test', {})
       rows = stream_cursor.fetchall()
       rowcount = len(list(rows))
-      self.assertEqual(rowcount, count*2)
+      self.assertEqual(rowcount, count * 2)
       stream_cursor.close()
     except Exception, e:
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
@@ -559,7 +572,7 @@ class TestVTGateFunctions(unittest.TestCase):
           'delete from vt_insert_test', {},
           KEYSPACE_NAME, tablet_type,
           keyranges=[self.keyrange])
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       count = len(kid_list)
       for x in xrange(count):
         keyspace_id = kid_list[x]
@@ -603,10 +616,10 @@ class TestVTGateFunctions(unittest.TestCase):
       vtgate_conn = get_connection()
       _delete_all(self.shard_index, 'vt_field_types')
       count = 10
-      base_uint = int('8'+'0'*15, base=16)
-      kid_list = shard_kid_map[shard_names[self.shard_index]]
+      base_uint = int('8' + '0' * 15, base=16)
+      kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
       for x in xrange(1, count):
-        keyspace_id = kid_list[count%len(kid_list)]
+        keyspace_id = kid_list[count % len(kid_list)]
         cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
                                     keyspace_ids=[pack_kid(keyspace_id)],
                                     writable=True)
@@ -617,7 +630,7 @@ class TestVTGateFunctions(unittest.TestCase):
             'values (%(uint_val)s, %(str_val)s, %(unicode_val)s, '
             '%(float_val)s, %(keyspace_id)s)',
             {'uint_val': base_uint + x, 'str_val': 'str_%d' % x,
-             'unicode_val': unicode('str_%d' % x), 'float_val': x*1.2,
+             'unicode_val': unicode('str_%d' % x), 'float_val': x * 1.2,
              'keyspace_id': keyspace_id})
         cursor.commit()
       cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
@@ -682,7 +695,7 @@ class TestVTGateFunctions(unittest.TestCase):
       # deliberately eliminating the float test since it is flaky due
       # to mysql float precision handling.
     except Exception, e:
-      logging.debug('Write failed with error %s', e)
+      logging.info('Write failed with error %s', e)
       raise
 
   def _query_lots(
@@ -694,11 +707,12 @@ class TestVTGateFunctions(unittest.TestCase):
       self.assertEqual(result, [tuple(bind_vars.values())])
 
 
-class TestFailures(unittest.TestCase):
+class TestFailures(BaseTestCase):
 
   def setUp(self):
+    super(TestFailures, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(shard_names[self.shard_index])
+    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.master_tablet.kill_vttablet()
     self.tablet_start(self.master_tablet, 'master')
@@ -751,7 +765,7 @@ class TestFailures(unittest.TestCase):
           keyranges=[self.keyrange])
     except Exception, e:
       self.fail('Communication with shard %s replica failed with error %s' %
-                (shard_names[self.shard_index], str(e)))
+                (SHARD_NAMES[self.shard_index], str(e)))
 
   def test_vtgate_restart_read(self):
     try:
@@ -888,7 +902,7 @@ class TestFailures(unittest.TestCase):
     except Exception as e:
       self.fail('Connection to shard0 master failed with error %s' % str(e))
 
-    keyspace_id = shard_kid_map[shard_names[self.shard_index]][0]
+    keyspace_id = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]][0]
     cursor = vtgate_conn.cursor(KEYSPACE_NAME, 'master',
                                 keyspace_ids=[pack_kid(keyspace_id)],
                                 writable=True)
@@ -910,8 +924,8 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail('Connection to shard0 master failed with error %s' % str(e))
     vtgate_conn.begin()
-    keyspace_id = shard_kid_map[shard_names[
-        (self.shard_index+1)%len(shard_names)
+    keyspace_id = SHARD_KID_MAP[SHARD_NAMES[
+        (self.shard_index+1)%len(SHARD_NAMES)
         ]][0]
     try:
       vtgate_conn._execute(
@@ -1316,12 +1330,12 @@ class TestFailures(unittest.TestCase):
     vtgate_conn._execute(
         'delete from vt_a', {},
         KEYSPACE_NAME, 'master',
-        keyranges=[get_keyrange(shard_names[self.shard_index])])
+        keyranges=[get_keyrange(SHARD_NAMES[self.shard_index])])
     vtgate_conn.commit()
     eid_map = {}
     # start transaction
     vtgate_conn.begin()
-    kid_list = shard_kid_map[shard_names[self.shard_index]]
+    kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
 
     # kill vttablet
     self.master_tablet.kill_vttablet()
@@ -1354,7 +1368,7 @@ class TestFailures(unittest.TestCase):
     waiting around till the request deadline expires.
     """
     tablet_type = 'replica'
-    keyranges = [get_keyrange(shard_names[self.shard_index])]
+    keyranges = [get_keyrange(SHARD_NAMES[self.shard_index])]
     query = 'select * from vt_insert_test'
 
     # Execute a query to warm VtGate's caches for connections and endpoints
@@ -1517,11 +1531,12 @@ class VTGateTestLogger(vtdb_logger.VtdbLogger):
 DML_KEYWORDS = ['insert', 'update', 'delete']
 
 
-class TestExceptionLogging(unittest.TestCase):
+class TestExceptionLogging(BaseTestCase):
 
   def setUp(self):
+    super(TestExceptionLogging, self).setUp()
     self.shard_index = 1
-    self.keyrange = get_keyrange(shard_names[self.shard_index])
+    self.keyrange = get_keyrange(SHARD_NAMES[self.shard_index])
     self.master_tablet = shard_1_master
     self.replica_tablet = shard_1_replica1
     vtdb_logger.register_vtdb_logger(VTGateTestLogger())
@@ -1540,7 +1555,7 @@ class TestExceptionLogging(unittest.TestCase):
         keyranges=[self.keyrange])
     vtgate_conn.commit()
 
-    keyspace_id = shard_kid_map[shard_names[self.shard_index]][0]
+    keyspace_id = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]][0]
 
     old_error_count = self.logger.get_integrity_error_count()
     try:
