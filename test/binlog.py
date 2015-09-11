@@ -173,6 +173,7 @@ class TestBinlog(unittest.TestCase):
     for stream_event in stream.stream_update(start_position):
       if stream_event.category == update_stream.StreamEvent.POS:
         break
+    stream.close()
 
     # Check the value.
     data = dst_master.mquery(

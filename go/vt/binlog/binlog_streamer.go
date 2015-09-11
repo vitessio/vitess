@@ -5,9 +5,9 @@
 package binlog
 
 import (
-	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -51,11 +51,11 @@ var (
 type sendTransactionFunc func(trans *proto.BinlogTransaction) error
 
 // getStatementCategory returns the proto.BL_* category for a SQL statement.
-func getStatementCategory(sql []byte) int {
-	if i := bytes.IndexByte(sql, byte(' ')); i >= 0 {
+func getStatementCategory(sql string) int {
+	if i := strings.IndexByte(sql, byte(' ')); i >= 0 {
 		sql = sql[:i]
 	}
-	return statementPrefixes[string(bytes.ToLower(sql))]
+	return statementPrefixes[strings.ToLower(sql)]
 }
 
 // BinlogStreamer streams binlog events from MySQL by connecting as a slave.
@@ -254,7 +254,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			}
 			statements = append(statements, proto.Statement{
 				Category: proto.BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET %s=%d", name, value)),
+				Sql:      fmt.Sprintf("SET %s=%d", name, value),
 			})
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
@@ -263,7 +263,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 			}
 			statements = append(statements, proto.Statement{
 				Category: proto.BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+				Sql:      fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2),
 			})
 		case ev.IsQuery(): // QUERY_EVENT
 			// Extract the query string and group into transactions.
@@ -292,7 +292,7 @@ func (bls *BinlogStreamer) parseEvents(ctx *sync2.ServiceContext, events <-chan 
 				}
 				setTimestamp := proto.Statement{
 					Category: proto.BL_SET,
-					Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+					Sql:      fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp()),
 				}
 				statement := proto.Statement{Category: cat, Sql: q.Sql}
 				// If the statement has a charset and it's different than our client's

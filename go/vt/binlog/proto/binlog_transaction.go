@@ -46,7 +46,7 @@ type BinlogTransaction struct {
 type Statement struct {
 	Category int
 	Charset  *mproto.Charset
-	Sql      []byte
+	Sql      string
 }
 
 //go:generate bsongen -file $GOFILE -type Statement -o statement_bson.go
@@ -54,7 +54,7 @@ type Statement struct {
 // String pretty-prints a statement.
 func (s Statement) String() string {
 	if cat, ok := BL_CATEGORY_NAMES[s.Category]; ok {
-		return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", cat, s.Charset, string(s.Sql))
+		return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", cat, s.Charset, s.Sql)
 	}
-	return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", s.Category, s.Charset, string(s.Sql))
+	return fmt.Sprintf("{Category: %v, Charset: %v, Sql: %q}", s.Category, s.Charset, s.Sql)
 }

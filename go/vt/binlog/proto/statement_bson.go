@@ -27,7 +27,7 @@ func (statement *Statement) MarshalBson(buf *bytes2.ChunkedWriter, key string) {
 	} else {
 		(*statement.Charset).MarshalBson(buf, "Charset")
 	}
-	bson.EncodeBinary(buf, "Sql", statement.Sql)
+	bson.EncodeString(buf, "Sql", statement.Sql)
 
 	lenWriter.Close()
 }
@@ -55,7 +55,7 @@ func (statement *Statement) UnmarshalBson(buf *bytes.Buffer, kind byte) {
 				(*statement.Charset).UnmarshalBson(buf, kind)
 			}
 		case "Sql":
-			statement.Sql = bson.DecodeBinary(buf, kind)
+			statement.Sql = bson.DecodeString(buf, kind)
 		default:
 			bson.Skip(buf, kind)
 		}

@@ -54,7 +54,7 @@ func (q *query) Execute(ctx context.Context, request *pb.ExecuteRequest) (respon
 	)
 	reply := new(mproto.QueryResult)
 	if err := q.server.Execute(ctx, request.Target, &proto.Query{
-		Sql:           string(request.Query.Sql),
+		Sql:           request.Query.Sql,
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
 		TransactionId: request.TransactionId,
@@ -95,7 +95,7 @@ func (q *query) StreamExecute(request *pb.StreamExecuteRequest, stream pbs.Query
 		request.ImmediateCallerId,
 	)
 	if err := q.server.StreamExecute(ctx, request.Target, &proto.Query{
-		Sql:           string(request.Query.Sql),
+		Sql:           request.Query.Sql,
 		BindVariables: proto.Proto3ToBindVariables(request.Query.BindVariables),
 		SessionId:     request.SessionId,
 	}, func(reply *mproto.QueryResult) error {

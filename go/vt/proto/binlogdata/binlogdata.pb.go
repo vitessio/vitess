@@ -133,9 +133,9 @@ type BinlogTransaction_Statement struct {
 	// what type of statement is this?
 	Category BinlogTransaction_Statement_Category `protobuf:"varint,1,opt,name=category,enum=binlogdata.BinlogTransaction_Statement_Category" json:"category,omitempty"`
 	// charset of this statement, if different from pre-negotiated default.
-	Charset *Charset `protobuf:"bytes,3,opt,name=charset" json:"charset,omitempty"`
+	Charset *Charset `protobuf:"bytes,2,opt,name=charset" json:"charset,omitempty"`
 	// the sql
-	Sql []byte `protobuf:"bytes,2,opt,name=sql,proto3" json:"sql,omitempty"`
+	Sql string `protobuf:"bytes,3,opt,name=sql" json:"sql,omitempty"`
 }
 
 func (m *BinlogTransaction_Statement) Reset()         { *m = BinlogTransaction_Statement{} }
