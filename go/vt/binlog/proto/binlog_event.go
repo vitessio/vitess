@@ -104,11 +104,11 @@ func (f BinlogFormat) IsZero() bool {
 type Query struct {
 	Database string
 	Charset  *mproto.Charset
-	Sql      []byte
+	Sql      string
 }
 
 // String pretty-prints a Query.
 func (q Query) String() string {
 	return fmt.Sprintf("{Database: %q, Charset: %v, Sql: %q}",
-		q.Database, q.Charset, string(q.Sql))
+		q.Database, q.Charset, q.Sql)
 }

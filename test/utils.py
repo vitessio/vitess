@@ -191,6 +191,14 @@ def _add_proc(proc):
 
 
 def kill_sub_processes():
+  # FIXME(alainjobart): this part is not really related to sub-processes,
+  # but it's a general clean-up. Maybe a utils.clean_up() might be better,
+  # as all integration tests end up running this anyway.
+  global vtctld_connection
+  if vtctld_connection:
+    vtctld_connection.close()
+    vtctld_connection = None
+
   for proc in pid_map.values():
     if proc.pid and proc.returncode is None:
       proc.kill()

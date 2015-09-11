@@ -43,19 +43,19 @@ type VitessClient interface {
 	// API group: Custom Sharding
 	ExecuteShards(ctx context.Context, in *vtgate.ExecuteShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteKeyspaceIds(ctx context.Context, in *vtgate.ExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteKeyRangesRequest, opts ...grpc.CallOption) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
 	// API group: Custom Sharding
 	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteBatchKeyspaceIds(ctx context.Context, in *vtgate.ExecuteBatchKeyspaceIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
 	// StreamExecute executes a streaming query based on shards.
 	// It depends on the query and bind variables to provide enough
@@ -69,11 +69,11 @@ type VitessClient interface {
 	StreamExecuteShards(ctx context.Context, in *vtgate.StreamExecuteShardsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteShardsClient, error)
 	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	StreamExecuteKeyspaceIds(ctx context.Context, in *vtgate.StreamExecuteKeyspaceIdsRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyspaceIdsClient, error)
 	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	StreamExecuteKeyRanges(ctx context.Context, in *vtgate.StreamExecuteKeyRangesRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteKeyRangesClient, error)
 	// Begin a transaction.
 	// API group: Transactions
@@ -354,19 +354,19 @@ type VitessServer interface {
 	// API group: Custom Sharding
 	ExecuteShards(context.Context, *vtgate.ExecuteShardsRequest) (*vtgate.ExecuteShardsResponse, error)
 	// ExecuteKeyspaceIds executes the query based on the specified keyspace ids.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteKeyspaceIds(context.Context, *vtgate.ExecuteKeyspaceIdsRequest) (*vtgate.ExecuteKeyspaceIdsResponse, error)
 	// ExecuteKeyRanges executes the query based on the specified key ranges.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteKeyRanges(context.Context, *vtgate.ExecuteKeyRangesRequest) (*vtgate.ExecuteKeyRangesResponse, error)
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteEntityIds(context.Context, *vtgate.ExecuteEntityIdsRequest) (*vtgate.ExecuteEntityIdsResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
 	// API group: Custom Sharding
 	ExecuteBatchShards(context.Context, *vtgate.ExecuteBatchShardsRequest) (*vtgate.ExecuteBatchShardsResponse, error)
 	// ExecuteBatchKeyspaceIds executes the list of queries based on the specified keyspace ids.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	ExecuteBatchKeyspaceIds(context.Context, *vtgate.ExecuteBatchKeyspaceIdsRequest) (*vtgate.ExecuteBatchKeyspaceIdsResponse, error)
 	// StreamExecute executes a streaming query based on shards.
 	// It depends on the query and bind variables to provide enough
@@ -380,11 +380,11 @@ type VitessServer interface {
 	StreamExecuteShards(*vtgate.StreamExecuteShardsRequest, Vitess_StreamExecuteShardsServer) error
 	// StreamExecuteKeyspaceIds executes a streaming query based on keyspace ids.
 	// Use this method if the query returns a large number of rows.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	StreamExecuteKeyspaceIds(*vtgate.StreamExecuteKeyspaceIdsRequest, Vitess_StreamExecuteKeyspaceIdsServer) error
 	// StreamExecuteKeyRanges executes a streaming query based on key ranges.
 	// Use this method if the query returns a large number of rows.
-	// API group: Range Based Sharding
+	// API group: Range-based Sharding
 	StreamExecuteKeyRanges(*vtgate.StreamExecuteKeyRangesRequest, Vitess_StreamExecuteKeyRangesServer) error
 	// Begin a transaction.
 	// API group: Transactions

@@ -26,7 +26,7 @@ func TargetToProto3(target *Target) *pb.Target {
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
 func BoundQueryToProto3(sql string, bindVars map[string]interface{}) *pb.BoundQuery {
 	result := &pb.BoundQuery{
-		Sql: []byte(sql),
+		Sql: sql,
 	}
 	if len(bindVars) > 0 {
 		result.BindVariables = make(map[string]*pb.BindVariable)
