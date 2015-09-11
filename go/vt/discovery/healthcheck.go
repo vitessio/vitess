@@ -17,7 +17,16 @@ import (
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
-	StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, stats *pbq.RealtimeStats)
+	StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
+}
+
+// EndPointStats is returned when getting the initial set of endpoints.
+type EndPointStats struct {
+	EndPoint                            *pbt.EndPoint
+	Cell                                string
+	Target                              *pbq.Target
+	TabletExternallyReparentedTimestamp int64
+	Stats                               *pbq.RealtimeStats
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -39,6 +48,7 @@ type HealthCheck struct {
 	retryDelay  time.Duration
 
 	// mu protects all the following fields
+	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
 	mu          sync.RWMutex
 	addrToConns map[string]*healthCheckConn                              // addrToConns maps from address to the healthCheckConn object.
 	targetToEPs map[string]map[string]map[pbt.TabletType][]*pbt.EndPoint // targetToEPs maps from keyspace/shard/tablettype to a list of endpoints.
@@ -51,10 +61,12 @@ type healthCheckConn struct {
 	cancelFunc context.CancelFunc
 
 	// mu protects all the following fields
-	mu     sync.RWMutex
-	conn   tabletconn.TabletConn
-	target *pbq.Target
-	stats  *pbq.RealtimeStats
+	// when locking both mutex from HealthCheck and healthCheckConn, HealthCheck.mu goes first.
+	mu                                  sync.RWMutex
+	conn                                tabletconn.TabletConn
+	target                              *pbq.Target
+	tabletExternallyReparentedTimestamp int64
+	stats                               *pbq.RealtimeStats
 }
 
 // checkConn performs health checking on the given endpoint.
@@ -132,10 +144,11 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			// The first time we see response for the endpoint.
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.mu.Unlock()
 			hc.mu.Lock()
-			key := hc.endPointToMapKey(endPoint)
+			key := endPointToMapKey(endPoint)
 			hc.addrToConns[key] = hcc
 			hc.addEndPointToTargetProtected(hcc.target, endPoint)
 			hc.mu.Unlock()
@@ -144,6 +157,7 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 			hc.deleteEndPointFromTargetProtected(hcc.target, endPoint)
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.mu.Unlock()
 			hc.addEndPointToTargetProtected(shr.Target, endPoint)
@@ -151,11 +165,12 @@ func (hcc *healthCheckConn) processResponse(ctx context.Context, hc *HealthCheck
 		} else {
 			hcc.mu.Lock()
 			hcc.target = shr.Target
+			hcc.tabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 			hcc.stats = shr.RealtimeStats
 			hcc.mu.Unlock()
 		}
 		// notify downstream for tablettype and realtimestats change
-		hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.stats)
+		hc.listener.StatsUpdate(endPoint, hcc.cell, hcc.target, hcc.tabletExternallyReparentedTimestamp, hcc.stats)
 		return nil
 	}
 }
@@ -170,7 +185,7 @@ func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := hc.endPointToMapKey(endPoint)
+	key := endPointToMapKey(endPoint)
 	hcc, ok := hc.addrToConns[key]
 	if !ok {
 		return
@@ -182,42 +197,60 @@ func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 	}
 }
 
-// GetEndPointsFromKeyspaceShard returns all endpoints for the given keyspace/shard.
-func (hc *HealthCheck) GetEndPointsFromKeyspaceShard(keyspace, shard string) []*pbt.EndPoint {
+// GetEndPointStatsFromKeyspaceShard returns all EndPointStats for the given keyspace/shard.
+func (hc *HealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
+	res := make([]*EndPointStats, 0, 1)
 	shardMap, ok := hc.targetToEPs[keyspace]
 	if !ok {
-		return nil
+		return res
 	}
 	ttMap, ok := shardMap[shard]
 	if !ok {
-		return nil
+		return res
 	}
-	res := make([]*pbt.EndPoint, 0, 1)
+
 	for _, epList := range ttMap {
-		res = append(res, epList...)
+		for _, ep := range epList {
+			key := endPointToMapKey(ep)
+			hcc, ok := hc.addrToConns[key]
+			if !ok {
+				continue
+			}
+			hcc.mu.RLock()
+			eps := &EndPointStats{
+				EndPoint: ep,
+				Cell:     hcc.cell,
+				TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
+				Target: hcc.target,
+				Stats:  hcc.stats,
+			}
+			hcc.mu.RUnlock()
+			res = append(res, eps)
+		}
 	}
 	return res
 }
 
 // GetEndPointsFromTarget returns all endpoints for the given target.
-func (hc *HealthCheck) GetEndPointsFromTarget(target *pbq.Target) []*pbt.EndPoint {
+func (hc *HealthCheck) GetEndPointsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*pbt.EndPoint {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
-	shardMap, ok := hc.targetToEPs[target.Keyspace]
-	if !ok {
-		return nil
-	}
-	ttMap, ok := shardMap[target.Shard]
-	if !ok {
-		return nil
-	}
-	epList, ok := ttMap[target.TabletType]
-	if !ok {
-		return nil
-	}
 	res := make([]*pbt.EndPoint, 0, 1)
+	shardMap, ok := hc.targetToEPs[keyspace]
+	if !ok {
+		return res
+	}
+	ttMap, ok := shardMap[shard]
+	if !ok {
+		return res
+	}
+	epList, ok := ttMap[tabletType]
+	if !ok {
+		return res
+	}
+
 	return append(res, epList...)
 }
 
@@ -272,7 +305,7 @@ func (hc *HealthCheck) deleteEndPointFromTargetProtected(target *pbq.Target, end
 }
 
 // endPointToMapKey creates a key to the map from endpoint's host and ports.
-func (hc *HealthCheck) endPointToMapKey(endPoint *pbt.EndPoint) string {
+func endPointToMapKey(endPoint *pbt.EndPoint) string {
 	parts := make([]string, 0, 1)
 	for name, port := range endPoint.PortMap {
 		parts = append(parts, name+":"+string(port))
