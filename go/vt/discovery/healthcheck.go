@@ -20,7 +20,7 @@ type HealthCheckStatsListener interface {
 	StatsUpdate(endPoint *pbt.EndPoint, cell string, target *pbq.Target, tabletExternallyReparentedTimestamp int64, stats *pbq.RealtimeStats)
 }
 
-// EndPointStats is returned when getting the initial set of endpoints.
+// EndPointStats is returned when getting the set of endpoints.
 type EndPointStats struct {
 	EndPoint                            *pbt.EndPoint
 	Cell                                string
@@ -201,16 +201,16 @@ func (hc *HealthCheck) RemoveEndPoint(endPoint *pbt.EndPoint) {
 func (hc *HealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string) []*EndPointStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
-	res := make([]*EndPointStats, 0, 1)
+
 	shardMap, ok := hc.targetToEPs[keyspace]
 	if !ok {
-		return res
+		return nil
 	}
 	ttMap, ok := shardMap[shard]
 	if !ok {
-		return res
+		return nil
 	}
-
+	res := make([]*EndPointStats, 0, 1)
 	for _, epList := range ttMap {
 		for _, ep := range epList {
 			key := endPointToMapKey(ep)
@@ -233,25 +233,42 @@ func (hc *HealthCheck) GetEndPointStatsFromKeyspaceShard(keyspace, shard string)
 	return res
 }
 
-// GetEndPointsFromTarget returns all endpoints for the given target.
-func (hc *HealthCheck) GetEndPointsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*pbt.EndPoint {
+// GetEndPointStatsFromTarget returns all EndPointStats for the given target.
+func (hc *HealthCheck) GetEndPointStatsFromTarget(keyspace, shard string, tabletType pbt.TabletType) []*EndPointStats {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
-	res := make([]*pbt.EndPoint, 0, 1)
+
 	shardMap, ok := hc.targetToEPs[keyspace]
 	if !ok {
-		return res
+		return nil
 	}
 	ttMap, ok := shardMap[shard]
 	if !ok {
-		return res
+		return nil
 	}
 	epList, ok := ttMap[tabletType]
 	if !ok {
-		return res
+		return nil
 	}
-
-	return append(res, epList...)
+	res := make([]*EndPointStats, 0, 1)
+	for _, ep := range epList {
+		key := endPointToMapKey(ep)
+		hcc, ok := hc.addrToConns[key]
+		if !ok {
+			continue
+		}
+		hcc.mu.RLock()
+		eps := &EndPointStats{
+			EndPoint: ep,
+			Cell:     hcc.cell,
+			TabletExternallyReparentedTimestamp: hcc.tabletExternallyReparentedTimestamp,
+			Target: hcc.target,
+			Stats:  hcc.stats,
+		}
+		hcc.mu.RUnlock()
+		res = append(res, eps)
+	}
+	return res
 }
 
 // addEndPointToTargetProtected adds the endpoint to the given target.

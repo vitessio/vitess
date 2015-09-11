@@ -38,7 +38,7 @@ func TestHealthCheck(t *testing.T) {
 	// no endpoint before getting first StreamHealthResponse
 	epsList := hc.GetEndPointStatsFromKeyspaceShard("k", "s")
 	if len(epsList) != 0 {
-		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want []`, epsList)
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
 	}
 
 	// one endpoint after receiving a StreamHealthResponse
@@ -71,12 +71,22 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
+	want = &EndPointStats{
+		EndPoint: ep,
+		Cell:     "cell",
+		Target:   &pbq.Target{Keyspace: "k", Shard: "s", TabletType: pbt.TabletType_REPLICA},
+		Stats:    &pbq.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+		TabletExternallyReparentedTimestamp: 0,
+	}
 	input <- shr
-	<-l.output // wait till the shr is processed
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
-	epList := hc.GetEndPointsFromTarget("k", "s", pbt.TabletType_REPLICA)
-	if len(epList) != 1 || !reflect.DeepEqual(epList[0], ep) {
-		t.Errorf(`hc.GetEndPointsFromTarget("k", "s", REPLICA) = %+v; want %+v`, epList, ep)
+	res = <-l.output
+	if !reflect.DeepEqual(res, want) {
+		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+	}
+	epsList = hc.GetEndPointStatsFromTarget("k", "s", pbt.TabletType_REPLICA)
+	if len(epsList) != 1 || !reflect.DeepEqual(epsList[0], want) {
+		t.Errorf(`hc.GetEndPointStatsFromTarget("k", "s", REPLICA) = %+v; want %+v`, epsList, want)
 	}
 
 	// RealtimeStats changed
@@ -104,7 +114,7 @@ func TestHealthCheck(t *testing.T) {
 	t.Logf(`hc.RemoveEndPoint({Host: "a", PortMap: {"vt": 1}})`)
 	epsList = hc.GetEndPointStatsFromKeyspaceShard("k", "s")
 	if len(epsList) != 0 {
-		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want []`, epsList)
+		t.Errorf(`hc.GetEndPointStatsFromKeyspaceShard("k", "s") = %+v; want empty`, epsList)
 	}
 }
 
