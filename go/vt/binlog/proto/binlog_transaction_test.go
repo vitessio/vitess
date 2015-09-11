@@ -28,7 +28,7 @@ type extraBinlogTransaction struct {
 type reflectStatement struct {
 	Category int
 	Charset  *mproto.Charset
-	Sql      []byte
+	Sql      string
 }
 
 func TestBinlogTransaction(t *testing.T) {
@@ -37,7 +37,7 @@ func TestBinlogTransaction(t *testing.T) {
 			{
 				Category: 1,
 				Charset:  &mproto.Charset{Client: 12, Conn: 34, Server: 56},
-				Sql:      []byte("sql"),
+				Sql:      "sql",
 			},
 		},
 		Timestamp: 456,
@@ -52,7 +52,7 @@ func TestBinlogTransaction(t *testing.T) {
 			{
 				Category: 1,
 				Charset:  &mproto.Charset{Client: 12, Conn: 34, Server: 56},
-				Sql:      []byte("sql"),
+				Sql:      "sql",
 			},
 		},
 		Timestamp: 456,
@@ -88,14 +88,14 @@ func TestBinlogTransaction(t *testing.T) {
 func TestStatementString(t *testing.T) {
 	cs := &mproto.Charset{Client: 12, Conn: 34, Server: 56}
 	table := map[string]Statement{
-		`{Category: BL_UNRECOGNIZED, Charset: &{12 34 56}, Sql: "SQL"}`: Statement{Category: BL_UNRECOGNIZED, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_BEGIN, Charset: &{12 34 56}, Sql: "SQL"}`:        Statement{Category: BL_BEGIN, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_COMMIT, Charset: &{12 34 56}, Sql: "SQL"}`:       Statement{Category: BL_COMMIT, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_ROLLBACK, Charset: &{12 34 56}, Sql: "SQL"}`:     Statement{Category: BL_ROLLBACK, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_DML, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_DML, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_DDL, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_DDL, Charset: cs, Sql: []byte("SQL")},
-		`{Category: BL_SET, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_SET, Charset: cs, Sql: []byte("SQL")},
-		`{Category: 7, Charset: &{12 34 56}, Sql: "SQL"}`:               Statement{Category: 7, Charset: cs, Sql: []byte("SQL")},
+		`{Category: BL_UNRECOGNIZED, Charset: &{12 34 56}, Sql: "SQL"}`: Statement{Category: BL_UNRECOGNIZED, Charset: cs, Sql: "SQL"},
+		`{Category: BL_BEGIN, Charset: &{12 34 56}, Sql: "SQL"}`:        Statement{Category: BL_BEGIN, Charset: cs, Sql: "SQL"},
+		`{Category: BL_COMMIT, Charset: &{12 34 56}, Sql: "SQL"}`:       Statement{Category: BL_COMMIT, Charset: cs, Sql: "SQL"},
+		`{Category: BL_ROLLBACK, Charset: &{12 34 56}, Sql: "SQL"}`:     Statement{Category: BL_ROLLBACK, Charset: cs, Sql: "SQL"},
+		`{Category: BL_DML, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_DML, Charset: cs, Sql: "SQL"},
+		`{Category: BL_DDL, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_DDL, Charset: cs, Sql: "SQL"},
+		`{Category: BL_SET, Charset: &{12 34 56}, Sql: "SQL"}`:          Statement{Category: BL_SET, Charset: cs, Sql: "SQL"},
+		`{Category: 7, Charset: &{12 34 56}, Sql: "SQL"}`:               Statement{Category: 7, Charset: cs, Sql: "SQL"},
 	}
 	for want, input := range table {
 		if got := input.String(); got != want {

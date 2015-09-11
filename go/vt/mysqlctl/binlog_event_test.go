@@ -245,11 +245,11 @@ func TestBinlogEventQuery(t *testing.T) {
 	want := blproto.Query{
 		Database: "vt_test_keyspace",
 		Charset:  &mproto.Charset{Client: 8, Conn: 8, Server: 33},
-		Sql: []byte(`create table if not exists vt_a (
+		Sql: `create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
-) Engine=InnoDB`),
+) Engine=InnoDB`,
 	}
 	got, err := input.Query(f)
 	if err != nil {

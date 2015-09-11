@@ -59,7 +59,10 @@ message BindVariable {
 
 // BoundQuery is a query with its bind variables
 message BoundQuery {
-  bytes sql = 1;
+  // sql is the SQL query to execute
+  string sql = 1;
+
+  // bind_variables is a map of all bind variables to expand in the query
   map<string, BindVariable> bind_variables = 2;
 }
 

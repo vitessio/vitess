@@ -5,10 +5,10 @@
 package binlog
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -21,9 +21,9 @@ import (
 )
 
 var (
-	binlogSetInsertID     = []byte("SET INSERT_ID=")
+	binlogSetInsertID     = "SET INSERT_ID="
 	binlogSetInsertIDLen  = len(binlogSetInsertID)
-	streamCommentStart    = []byte("/* _stream ")
+	streamCommentStart    = "/* _stream "
 	streamCommentStartLen = len(streamCommentStart)
 )
 
@@ -56,8 +56,8 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
 		case proto.BL_SET:
-			if bytes.HasPrefix(stmt.Sql, binlogSetInsertID) {
-				insertid, err = strconv.ParseInt(string(stmt.Sql[binlogSetInsertIDLen:]), 10, 64)
+			if strings.HasPrefix(stmt.Sql, binlogSetInsertID) {
+				insertid, err = strconv.ParseInt(stmt.Sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
 					binlogStreamerErrors.Add("EventStreamer", 1)
 					log.Errorf("%v: %s", err, stmt.Sql)
@@ -69,7 +69,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			if err != nil {
 				dmlEvent = &proto.StreamEvent{
 					Category: "ERR",
-					Sql:      string(stmt.Sql),
+					Sql:      stmt.Sql,
 				}
 			}
 			dmlEvent.Timestamp = trans.Timestamp
@@ -79,7 +79,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 		case proto.BL_DDL:
 			ddlEvent := &proto.StreamEvent{
 				Category:  "DDL",
-				Sql:       string(stmt.Sql),
+				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
@@ -88,7 +88,7 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 		case proto.BL_UNRECOGNIZED:
 			unrecognized := &proto.StreamEvent{
 				Category:  "ERR",
-				Sql:       string(stmt.Sql),
+				Sql:       stmt.Sql,
 				Timestamp: trans.Timestamp,
 			}
 			if err = evs.sendEvent(unrecognized); err != nil {
@@ -116,13 +116,13 @@ The _stream comment is extracted into a StreamEvent.
 */
 // Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (*proto.StreamEvent, int64, error) {
+func (evs *EventStreamer) buildDMLEvent(sql string, insertid int64) (*proto.StreamEvent, int64, error) {
 	// first extract the comment
-	commentIndex := bytes.LastIndex(sql, streamCommentStart)
+	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
 		return nil, insertid, fmt.Errorf("missing stream comment")
 	}
-	dmlComment := string(sql[commentIndex+streamCommentStartLen:])
+	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
 	// then strat building the response
 	dmlEvent := &proto.StreamEvent{

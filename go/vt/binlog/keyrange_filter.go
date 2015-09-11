@@ -5,9 +5,9 @@
 package binlog
 
 import (
-	"bytes"
 	"encoding/base64"
 	"strconv"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
@@ -16,8 +16,8 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
-var SPACE = []byte(" ")
+var KEYSPACE_ID_COMMENT = "/* EMD keyspace_id:"
+var SPACE = " "
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified keyrange. The resulting function can be
@@ -37,28 +37,28 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 			case proto.BL_SET:
 				filtered = append(filtered, statement)
 			case proto.BL_DDL:
-				log.Warningf("Not forwarding DDL: %s", string(statement.Sql))
+				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case proto.BL_DML:
-				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
+				keyspaceIndex := strings.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
 				if keyspaceIndex == -1 {
 					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+					log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 					continue
 				}
 				idstart := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
-				idend := bytes.Index(statement.Sql[idstart:], SPACE)
+				idend := strings.Index(statement.Sql[idstart:], SPACE)
 				if idend == -1 {
 					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+					log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 					continue
 				}
-				textId := string(statement.Sql[idstart : idstart+idend])
+				textId := statement.Sql[idstart : idstart+idend]
 				if isInteger {
 					id, err := strconv.ParseUint(textId, 10, 64)
 					if err != nil {
 						updateStreamErrors.Add("KeyRangeStream", 1)
-						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+						log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 						continue
 					}
 					if !key.KeyRangeContains(keyrange, key.Uint64Key(id).Bytes()) {
@@ -68,7 +68,7 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 					data, err := base64.StdEncoding.DecodeString(textId)
 					if err != nil {
 						updateStreamErrors.Add("KeyRangeStream", 1)
-						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+						log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 						continue
 					}
 					if !key.KeyRangeContains(keyrange, data) {
@@ -79,7 +79,7 @@ func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange *pb.KeyRange, sendReply
 				matched = true
 			case proto.BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
-				log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
 				continue
 			}
 		}
