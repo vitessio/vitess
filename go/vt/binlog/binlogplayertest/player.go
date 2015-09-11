@@ -152,7 +152,7 @@ var testBinlogTransaction = &proto.BinlogTransaction{
 				Conn:   130,
 				Server: 140,
 			},
-			Sql: []byte("my statement"),
+			Sql: "my statement",
 		},
 	},
 	Timestamp:     78,

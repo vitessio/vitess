@@ -39,7 +39,7 @@ func TestEventErrors(t *testing.T) {
 			Statements: []proto.Statement{
 				{
 					Category: proto.BL_DML,
-					Sql:      []byte(sql),
+					Sql:      sql,
 				},
 			},
 		}
@@ -68,7 +68,7 @@ func TestSetErrors(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("SET INSERT_ID=abcd"),
+				Sql:      "SET INSERT_ID=abcd",
 			},
 		},
 	}
@@ -88,16 +88,16 @@ func TestDMLEvent(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("SET TIMESTAMP=2"),
+				Sql:      "SET TIMESTAMP=2",
 			}, {
 				Category: proto.BL_SET,
-				Sql:      []byte("SET INSERT_ID=10"),
+				Sql:      "SET INSERT_ID=10",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
+				Sql:      "query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("query"),
+				Sql:      "query",
 			},
 		},
 		Timestamp:     1,
@@ -141,10 +141,10 @@ func TestDDLEvent(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("SET TIMESTAMP=2"),
+				Sql:      "SET TIMESTAMP=2",
 			}, {
 				Category: proto.BL_DDL,
-				Sql:      []byte("DDL"),
+				Sql:      "DDL",
 			},
 		},
 		Timestamp:     1,

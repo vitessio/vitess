@@ -162,8 +162,8 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -172,8 +172,8 @@ func TestBinlogStreamerParseEventsXID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -209,9 +209,9 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("COMMIT")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "COMMIT"}},
 	}
 
 	events := make(chan proto.BinlogEvent)
@@ -219,8 +219,8 @@ func TestBinlogStreamerParseEventsCommit(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -287,8 +287,8 @@ func TestBinlogStreamerParseEventsClientEOF(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := ErrClientEOF
@@ -344,8 +344,8 @@ func TestBinlogStreamerParseEventsSendErrorXID(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "send reply error: foobar"
@@ -377,9 +377,9 @@ func TestBinlogStreamerParseEventsSendErrorCommit(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("COMMIT")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "COMMIT"}},
 	}
 	want := "send reply error: foobar"
 
@@ -410,7 +410,7 @@ func TestBinlogStreamerParseEventsInvalid(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 		invalidEvent{},
 		xidEvent{},
 	}
@@ -443,8 +443,8 @@ func TestBinlogStreamerParseEventsInvalidFormat(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		invalidFormatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
@@ -476,8 +476,8 @@ func TestBinlogStreamerParseEventsNoFormat(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		//formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
@@ -509,7 +509,7 @@ func TestBinlogStreamerParseEventsInvalidQuery(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 		invalidQueryEvent{},
 		xidEvent{},
 	}
@@ -542,12 +542,12 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("ROLLBACK")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "ROLLBACK"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -565,8 +565,8 @@ func TestBinlogStreamerParseEventsRollback(t *testing.T) {
 		},
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -602,7 +602,7 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -611,8 +611,8 @@ func TestBinlogStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -657,8 +657,8 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 		xidEvent{},
 	}
 
@@ -667,8 +667,8 @@ func TestBinlogStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -713,9 +713,9 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 		intVarEvent{name: "INSERT_ID", value: 101},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -724,9 +724,9 @@ func TestBinlogStreamerParseEventsSetInsertID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET INSERT_ID=101")},
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET INSERT_ID=101"},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -762,9 +762,9 @@ func TestBinlogStreamerParseEventsInvalidIntVar(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 		invalidIntVarEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 	want := "can't parse INTVAR_EVENT:"
@@ -796,9 +796,9 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "other", Sql: []byte("INSERT INTO test values (3, 4)")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "other", Sql: "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -807,8 +807,8 @@ func TestBinlogStreamerParseEventsOtherDB(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -844,9 +844,9 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "other", Sql: []byte("BEGIN")}}, // Check that this doesn't get filtered out.
-		queryEvent{query: proto.Query{Database: "other", Sql: []byte("INSERT INTO test values (3, 4)")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
+		queryEvent{query: proto.Query{Database: "other", Sql: "BEGIN"}}, // Check that this doesn't get filtered out.
+		queryEvent{query: proto.Query{Database: "other", Sql: "INSERT INTO test values (3, 4)"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
 		xidEvent{},
 	}
 
@@ -855,8 +855,8 @@ func TestBinlogStreamerParseEventsOtherDBBegin(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				proto.Statement{Category: proto.BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				proto.Statement{Category: proto.BL_SET, Sql: "SET TIMESTAMP=1407805592"},
+				proto.Statement{Category: proto.BL_DML, Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"},
 			},
 			Timestamp: 1407805592,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -892,9 +892,9 @@ func TestBinlogStreamerParseEventsBeginAgain(t *testing.T) {
 	input := []proto.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")}},
-		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: []byte("BEGIN")}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
+		queryEvent{query: proto.Query{Database: "vt_test_keyspace", Sql: "BEGIN"}},
 	}
 
 	events := make(chan proto.BinlogEvent)
@@ -934,8 +934,8 @@ func TestBinlogStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: charset, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DML, Charset: charset, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
+				proto.Statement{Category: proto.BL_SET, Charset: charset, Sql: "SET TIMESTAMP=1409892744"},
+				proto.Statement{Category: proto.BL_DML, Charset: charset, Sql: "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"},
 			},
 			Timestamp: 1409892744,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -980,8 +980,8 @@ func TestBinlogStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	want := []proto.BinlogTransaction{
 		proto.BinlogTransaction{
 			Statements: []proto.Statement{
-				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("SET TIMESTAMP=1409892744")},
-				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: []byte("create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB")},
+				proto.Statement{Category: proto.BL_SET, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "SET TIMESTAMP=1409892744"},
+				proto.Statement{Category: proto.BL_DDL, Charset: &mproto.Charset{Client: 8, Conn: 8, Server: 33}, Sql: "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB"},
 			},
 			Timestamp: 1409892744,
 			TransactionID: myproto.EncodeGTID(myproto.MariadbGTID{
@@ -1035,7 +1035,7 @@ func TestGetStatementCategory(t *testing.T) {
 	}
 
 	for input, want := range table {
-		if got := getStatementCategory([]byte(input)); got != want {
+		if got := getStatementCategory(input); got != want {
 			t.Errorf("getStatementCategory(%v) = %v, want %v", input, got, want)
 		}
 	}

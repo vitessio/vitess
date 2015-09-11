@@ -20,13 +20,13 @@ func TestTablesFilterPass(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* _stream included1 (id ) (500 ); */"),
+				Sql:      "dml1 /* _stream included1 (id ) (500 ); */",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
+				Sql:      "dml2 /* _stream included2 (id ) (500 ); */",
 			},
 		},
 	}
@@ -47,10 +47,10 @@ func TestTablesFilterSkip(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
+				Sql:      "dml1 /* _stream excluded1 (id ) (500 ); */",
 			},
 		},
 	}
@@ -71,10 +71,10 @@ func TestTablesFilterDDL(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DDL,
-				Sql:      []byte("ddl"),
+				Sql:      "ddl",
 			},
 		},
 	}
@@ -95,13 +95,13 @@ func TestTablesFilterMalformed(t *testing.T) {
 		Statements: []proto.Statement{
 			{
 				Category: proto.BL_SET,
-				Sql:      []byte("set1"),
+				Sql:      "set1",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("ddl"),
+				Sql:      "ddl",
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* _stream excluded1*/"),
+				Sql:      "dml1 /* _stream excluded1*/",
 			},
 		},
 	}
