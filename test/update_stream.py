@@ -10,8 +10,6 @@ import traceback
 import threading
 import unittest
 
-from grpc.framework.interfaces.face import face
-
 import environment
 import tablet
 import utils

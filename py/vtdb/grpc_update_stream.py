@@ -2,8 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import logging
-
 from itertools import izip
 from urlparse import urlparse
 
@@ -45,13 +43,11 @@ class GRPCUpdateStreamConnection(update_stream.UpdateStreamConnection):
     return '<GRPCUpdateStreamConnection %s>' % self.addr
 
   def dial(self):
-    logging.error("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
     p = urlparse('http://' + self.addr)
     channel = implementations.insecure_channel(p.hostname, p.port)
     self.stub = binlogservice_pb2.beta_create_UpdateStream_stub(channel)
 
   def close(self):
-    logging.error("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
     self.stub = None
 
   def is_closed(self):
