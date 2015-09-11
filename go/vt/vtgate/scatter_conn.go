@@ -189,7 +189,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 // scatterBatchRequest needs to be built to perform a scatter batch query.
 // A VTGate batch request will get translated into a differnt set of batches
 // for each keyspace:shard, and those results will map to different positions in the
-// results list. The lenght specifies the total length of the final results
+// results list. The length specifies the total length of the final results
 // list. In each request variable, the resultIndexes specifies the position
 // for each result from the shard.
 type scatterBatchRequest struct {

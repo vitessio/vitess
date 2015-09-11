@@ -282,6 +282,7 @@ func (sct *sandboxTopo) GetEndPoints(ctx context.Context, cell, keyspace, shard 
 		sand.EndPointMustFail--
 		return nil, -1, fmt.Errorf("topo error")
 	}
+
 	conns := sand.TestConns[shard]
 	ep := &pbt.EndPoints{}
 	for _, conn := range conns {
@@ -335,8 +336,12 @@ type sandboxConn struct {
 	CloseCount         sync2.AtomicInt64
 	AsTransactionCount sync2.AtomicInt64
 
-	// Queries stores the requests received.
+	// Queries stores the non-batch requests received.
 	Queries []tproto.BoundQuery
+
+	// BatchQueries stores the batch requests received
+	// Each batch request is inlined as a slice of Queries.
+	BatchQueries [][]tproto.BoundQuery
 
 	// results specifies the results to be returned.
 	// They're consumed as results are returned. If there are
@@ -416,6 +421,7 @@ func (sbc *sandboxConn) ExecuteBatch(ctx context.Context, queries []tproto.Bound
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
+	sbc.BatchQueries = append(sbc.BatchQueries, queries)
 	qrl := &tproto.QueryResultList{}
 	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {

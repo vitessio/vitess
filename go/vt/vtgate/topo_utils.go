@@ -118,9 +118,9 @@ func mapEntityIdsToShards(ctx context.Context, topoServ SrvTopoServer, cell, key
 	return keyspace, shards, nil
 }
 
-// This function implements the restriction of handling one keyrange
-// and one shard since streaming doesn't support merge sorting the results.
-// The input/output api is generic though.
+// Given a collection of key-ranges, returns the set of shards that "intersect"
+// them; that is, a shard is included if and only if its corresponding key-space ids
+// are in one of the key-ranges.
 func mapKeyRangesToShards(ctx context.Context, topoServ SrvTopoServer, cell, keyspace string, tabletType pb.TabletType, krs []*pb.KeyRange) (string, []string, error) {
 	keyspace, _, allShards, err := getKeyspaceShards(ctx, topoServ, cell, keyspace, tabletType)
 	if err != nil {
