@@ -76,7 +76,7 @@ func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
 			t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, se.Code, tabletconn.ERR_NORMAL)
 		}
 	} else {
-		t.Errorf("Unexpected error type from %s: got %v, wanted tabletconn.ServerError", method, reflect.TypeOf(err))
+		t.Errorf("Unexpected error type from %s: got %v, wanted *tabletconn.ServerError", method, reflect.TypeOf(err))
 	}
 	if !strings.Contains(err.Error(), expectedErrMatch) {
 		t.Errorf("Unexpected error from %s: got %v, wanted err containing %v", method, err, expectedErrMatch)

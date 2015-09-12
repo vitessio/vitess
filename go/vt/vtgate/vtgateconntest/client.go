@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -27,7 +28,7 @@ import (
 
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	pbg "github.com/youtube/vitess/go/vt/proto/vtgate"
-	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -42,7 +43,10 @@ type fakeVTGateService struct {
 	errorWait         chan struct{}
 }
 
-var errTestVtGateError = errors.New("test vtgate error")
+const expectedErrMatch string = "test vtgate error"
+const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
+
+var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
 
 func newContext() context.Context {
 	ctx := context.Background()
@@ -649,6 +653,13 @@ func CreateFakeServer(t *testing.T) vtgateservice.VTGateService {
 	}
 }
 
+// RegisterTestDialProtocol registers a vtgateconn implementation under the "test" protocol
+func RegisterTestDialProtocol(impl vtgateconn.Impl) {
+	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
+		return impl, nil
+	})
+}
+
 // HandlePanic is part of the VTGateService interface
 func (f *fakeVTGateService) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -690,6 +701,44 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
 
+	// force a panic at every call, then test that works
+	fs.panics = true
+
+	fs.hasCallerID = false
+	testBeginPanic(t, conn)
+	testCommitPanic(t, conn, fs)
+	testRollbackPanic(t, conn, fs)
+
+	fs.hasCallerID = true
+	testBegin2Panic(t, conn)
+	testCommit2Panic(t, conn, fs)
+	testRollback2Panic(t, conn, fs)
+
+	testExecutePanic(t, conn)
+	testExecuteShardsPanic(t, conn)
+	testExecuteKeyspaceIdsPanic(t, conn)
+	testExecuteKeyRangesPanic(t, conn)
+	testExecuteEntityIdsPanic(t, conn)
+	testExecuteBatchShardsPanic(t, conn)
+	testExecuteBatchKeyspaceIdsPanic(t, conn)
+	testStreamExecutePanic(t, conn)
+	testStreamExecuteShardsPanic(t, conn)
+	testStreamExecuteKeyRangesPanic(t, conn)
+	testStreamExecuteKeyspaceIdsPanic(t, conn)
+	testSplitQueryPanic(t, conn)
+	testGetSrvKeyspacePanic(t, conn)
+	fs.panics = false
+}
+
+// TestErrorSuite runs all the tests that expect errors
+func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
+	if err != nil {
+		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
+	}
+
+	fs := fakeServer.(*fakeVTGateService)
+
 	// return an error for every call, make sure they're handled properly
 	fs.hasError = true
 
@@ -721,34 +770,6 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	fs.hasError = false
-
-	// force a panic at every call, then test that works
-	fs.panics = true
-
-	fs.hasCallerID = false
-	testBeginPanic(t, conn)
-	testCommitPanic(t, conn, fs)
-	testRollbackPanic(t, conn, fs)
-
-	fs.hasCallerID = true
-	testBegin2Panic(t, conn)
-	testCommit2Panic(t, conn, fs)
-	testRollback2Panic(t, conn, fs)
-
-	testExecutePanic(t, conn)
-	testExecuteShardsPanic(t, conn)
-	testExecuteKeyspaceIdsPanic(t, conn)
-	testExecuteKeyRangesPanic(t, conn)
-	testExecuteEntityIdsPanic(t, conn)
-	testExecuteBatchShardsPanic(t, conn)
-	testExecuteBatchKeyspaceIdsPanic(t, conn)
-	testStreamExecutePanic(t, conn)
-	testStreamExecuteShardsPanic(t, conn)
-	testStreamExecuteKeyRangesPanic(t, conn)
-	testStreamExecuteKeyspaceIdsPanic(t, conn)
-	testSplitQueryPanic(t, conn)
-	testGetSrvKeyspacePanic(t, conn)
-	fs.panics = false
 }
 
 func expectPanic(t *testing.T, err error) {
@@ -765,7 +786,25 @@ func verifyError(t *testing.T, err error, method string) {
 		t.Errorf("%s was expecting an error, didn't get one", method)
 		return
 	}
-	if !strings.Contains(err.Error(), errTestVtGateError.Error()) {
+	// verify error code
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != expectedCode {
+		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
+	}
+	// verify error type
+	if _, ok := err.(*vterrors.VitessError); !ok {
+		t.Errorf("Unexpected error type from %s: got %v, wanted *vterrors.VitessError", method, reflect.TypeOf(err))
+	}
+	verifyErrorString(t, err, method)
+}
+
+func verifyErrorString(t *testing.T, err error, method string) {
+	if err == nil {
+		t.Errorf("%s was expecting an error, didn't get one", method)
+		return
+	}
+
+	if !strings.Contains(err.Error(), expectedErrMatch) {
 		t.Errorf("Unexpected error from %s: got %v, wanted err containing: %v", method, err, errTestVtGateError.Error())
 	}
 }
@@ -1120,7 +1159,7 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecute")
+	verifyErrorString(t, err, "StreamExecute")
 }
 
 func testStreamExecute2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1240,7 +1279,7 @@ func testStreamExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fak
 		t.Fatalf("StreamExecuteShards channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecuteShards")
+	verifyErrorString(t, err, "StreamExecuteShards")
 }
 
 func testStreamExecuteShards2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1360,7 +1399,7 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 		t.Fatalf("StreamExecuteKeyRanges channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecuteKeyRanges")
+	verifyErrorString(t, err, "StreamExecuteKeyRanges")
 }
 
 func testStreamExecuteKeyRanges2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1480,7 +1519,7 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 		t.Fatalf("StreamExecuteKeyspaceIds channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecuteKeyspaceIds")
+	verifyErrorString(t, err, "StreamExecuteKeyspaceIds")
 }
 
 func testStreamExecuteKeyspaceIds2Error(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1812,7 +1851,7 @@ func testTx2PassNotInTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
-	verifyError(t, err, "Begin")
+	verifyErrorString(t, err, "Begin")
 }
 
 func testCommitError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1826,7 +1865,7 @@ func testCommitError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGate
 		t.Error(err)
 	}
 	err = tx.Commit(ctx)
-	verifyError(t, err, "Commit")
+	verifyErrorString(t, err, "Commit")
 }
 
 func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
@@ -1840,7 +1879,7 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
-	verifyError(t, err, "Rollback")
+	verifyErrorString(t, err, "Rollback")
 }
 
 func testBegin2Error(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -2136,7 +2175,7 @@ func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testGetSrvKeyspaceError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
-	verifyError(t, err, "GetSrvKeyspace")
+	verifyErrorString(t, err, "GetSrvKeyspace")
 }
 
 func testGetSrvKeyspacePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -2145,7 +2184,7 @@ func testGetSrvKeyspacePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
-var testCallerID = &pbv.CallerID{
+var testCallerID = &vtrpc.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
 	Subcomponent: "test_subcomponent",
@@ -2363,7 +2402,7 @@ var execMap = map[string]struct {
 			Session: nil,
 			Error:   "app error",
 			Err: &mproto.RPCError{
-				Code:    int64(pbv.ErrorCode_UNKNOWN_ERROR),
+				Code:    int64(vtrpc.ErrorCode_BAD_INPUT),
 				Message: "app error",
 			},
 		},
