@@ -21,11 +21,9 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -630,7 +628,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 	if srvKeyspace.ShardingColumnName != "" {
 		// we are using range-based sharding, so the result
 		// will be a list of Splits with KeyRange clauses
-		keyRangeByShard := map[string]key.KeyRange{}
+		keyRangeByShard := make(map[string]*pb.KeyRange)
 		for _, shard := range shards {
 			keyRangeByShard[shard.Name] = shard.KeyRange
 		}
@@ -657,7 +655,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, 
 }
 
 // GetSrvKeyspace is part of the vtgate service API.
-func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 

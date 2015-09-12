@@ -5,29 +5,21 @@
 package topo
 
 import (
+	"bytes"
 	"sort"
 
-	"github.com/youtube/vitess/go/vt/key"
+	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// ShardReference is the structure used by SrvKeyspace to point to a Shard
-type ShardReference struct {
-	// Copied / inferred from Shard
-	Name     string
-	KeyRange key.KeyRange
-}
-
-//go:generate bsongen -file $GOFILE -type ShardReference -o shard_reference_bson.go
-
 // ShardReferenceArray is used for sorting ShardReference arrays
-type ShardReferenceArray []ShardReference
+type ShardReferenceArray []*pb.ShardReference
 
 // Len implements sort.Interface
 func (sra ShardReferenceArray) Len() int { return len(sra) }
 
 // Len implements sort.Interface
 func (sra ShardReferenceArray) Less(i, j int) bool {
-	return sra[i].KeyRange.Start < sra[j].KeyRange.Start
+	return bytes.Compare(sra[i].KeyRange.Start, sra[j].KeyRange.Start) < 0
 }
 
 // Len implements sort.Interface
@@ -38,18 +30,9 @@ func (sra ShardReferenceArray) Swap(i, j int) {
 // Sort will sort the list according to KeyRange.Start
 func (sra ShardReferenceArray) Sort() { sort.Sort(sra) }
 
-// KeyspacePartition represents a continuous set of shards to
-// serve an entire data set.
-type KeyspacePartition struct {
-	// List of non-overlapping continuous shard references sorted by range.
-	ShardReferences []ShardReference
-}
-
-//go:generate bsongen -file $GOFILE -type KeyspacePartition -o keyspace_partition_bson.go
-
-// HasShard returns true if this KeyspacePartition has the shard with
-// the given name in it.
-func (kp *KeyspacePartition) HasShard(name string) bool {
+// KeyspacePartitionHasShard returns true if this KeyspacePartition
+// has the shard with the given name in it.
+func KeyspacePartitionHasShard(kp *pb.SrvKeyspace_KeyspacePartition, name string) bool {
 	for _, shardReference := range kp.ShardReferences {
 		if shardReference.Name == name {
 			return true
@@ -57,22 +40,3 @@ func (kp *KeyspacePartition) HasShard(name string) bool {
 	}
 	return false
 }
-
-// SrvKeyspace is a distilled serving copy of keyspace detail stored
-// in the local cell for fast access. Derived from the global
-// keyspace, shards and local details.
-// By design, it should not contain details about the Shards themselves,
-// but just which shards to use for serving.
-// In zk, it is in /zk/<cell>/vt/ns/<keyspace>
-type SrvKeyspace struct {
-	// Shards to use per type, only contains complete partitions.
-	Partitions map[TabletType]*KeyspacePartition
-
-	// Copied from Keyspace
-	ShardingColumnName string
-	ShardingColumnType key.KeyspaceIdType
-	ServedFrom         map[TabletType]string
-	SplitShardCount    int32
-}
-
-//go:generate bsongen -file $GOFILE -type SrvKeyspace -o srvkeyspace_bson.go
