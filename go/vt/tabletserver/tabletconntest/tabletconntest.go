@@ -19,11 +19,12 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	pb "github.com/youtube/vitess/go/vt/proto/query"
 	pbt "github.com/youtube/vitess/go/vt/proto/topodata"
-	pbv "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // FakeQueryService has the server side of this fake
@@ -46,9 +47,10 @@ func (f *FakeQueryService) HandlePanic(err *error) {
 	}
 }
 
-var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, pbv.ErrorCode_UNKNOWN_ERROR, "generic error")
-
 const expectedErrMatch string = "error: generic error"
+const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
+
+var testTabletError = tabletserver.NewTabletError(tabletserver.ErrFail, expectedCode, "generic error")
 
 // Verifies the returned error has the properties that we expect.
 func verifyError(t *testing.T, err error, method string) {
@@ -56,6 +58,19 @@ func verifyError(t *testing.T, err error, method string) {
 		t.Errorf("%s was expecting an error, didn't get one", method)
 		return
 	}
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != expectedCode {
+		t.Errorf("Unexpected server code from %s: got %v, wanted %v", method, code, expectedCode)
+	}
+	verifyErrorExceptServerCode(t, err, method)
+}
+
+func verifyErrorExceptServerCode(t *testing.T, err error, method string) {
+	if err == nil {
+		t.Errorf("%s was expecting an error, didn't get one", method)
+		return
+	}
+
 	if se, ok := err.(*tabletconn.ServerError); ok {
 		if se.Code != tabletconn.ERR_NORMAL {
 			t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, se.Code, tabletconn.ERR_NORMAL)
@@ -75,7 +90,7 @@ var testTarget = &pb.Target{
 	TabletType: pbt.TabletType_REPLICA,
 }
 
-var testCallerID = &pbv.CallerID{
+var testCallerID = &vtrpc.CallerID{
 	Principal:    "test_principal",
 	Component:    "test_component",
 	Subcomponent: "test_subcomponent",
@@ -238,7 +253,7 @@ func testCommitError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testCommitError")
 	ctx := context.Background()
 	err := conn.Commit(ctx, commitTransactionID)
-	verifyError(t, err, "Commit")
+	verifyErrorExceptServerCode(t, err, "Commit")
 }
 
 func testCommitPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -310,7 +325,7 @@ func testRollbackError(t *testing.T, conn tabletconn.TabletConn) {
 	t.Log("testRollbackError")
 	ctx := context.Background()
 	err := conn.Rollback(ctx, commitTransactionID)
-	verifyError(t, err, "Rollback")
+	verifyErrorExceptServerCode(t, err, "Rollback")
 }
 
 func testRollbackPanics(t *testing.T, conn tabletconn.TabletConn) {
@@ -597,7 +612,7 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, fake *Fake
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
 	err = errFunc()
-	verifyError(t, err, "StreamExecute")
+	verifyErrorExceptServerCode(t, err, "StreamExecute")
 }
 
 func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, fake *FakeQueryService) {
@@ -1101,24 +1116,6 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 	testSplitQuery(t, conn)
 	testStreamHealth(t, conn)
 
-	// fake should return an error, make sure errors are handled properly
-	fake.hasError = true
-	testBeginError(t, conn)
-	testCommitError(t, conn)
-	testRollbackError(t, conn)
-	testExecuteError(t, conn)
-	testStreamExecuteError(t, conn, fake)
-	testExecuteBatchError(t, conn)
-	testSplitQueryError(t, conn)
-
-	testBegin2Error(t, conn)
-	testCommit2Error(t, conn)
-	testRollback2Error(t, conn)
-	testExecute2Error(t, conn)
-	testStreamExecute2Error(t, conn, fake)
-	testExecuteBatch2Error(t, conn)
-	fake.hasError = false
-
 	// create a new connection that expects the extra fields
 	conn.Close()
 	conn, err = tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_REPLICA, 30*time.Second)
@@ -1161,5 +1158,38 @@ func TestSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *Fake
 	testExecuteBatchPanics(t, conn)
 	testStreamExecutePanics(t, conn, fake)
 	fake.panics = false
+	conn.Close()
+}
+
+// TestErrorSuite runs all the tests that expect errors
+func TestErrorSuite(t *testing.T, protocol string, endPoint *pbt.EndPoint, fake *FakeQueryService) {
+	// make sure we use the right client
+	*tabletconn.TabletProtocol = protocol
+
+	// create a connection, using sessionId
+	ctx := context.Background()
+	conn, err := tabletconn.GetDialer()(ctx, endPoint, testTarget.Keyspace, testTarget.Shard, pbt.TabletType_UNKNOWN, 30*time.Second)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+
+	// fake should return an error, make sure errors are handled properly
+	fake.hasError = true
+	testBeginError(t, conn)
+	testCommitError(t, conn)
+	testRollbackError(t, conn)
+	testExecuteError(t, conn)
+	testStreamExecuteError(t, conn, fake)
+	testExecuteBatchError(t, conn)
+	testSplitQueryError(t, conn)
+
+	testBegin2Error(t, conn)
+	testCommit2Error(t, conn)
+	testRollback2Error(t, conn)
+	testExecute2Error(t, conn)
+	testStreamExecute2Error(t, conn, fake)
+	testExecuteBatch2Error(t, conn)
+	fake.hasError = false
+
 	conn.Close()
 }
