@@ -46,6 +46,10 @@ type fakeVTGateService struct {
 const expectedErrMatch string = "test vtgate error"
 const expectedCode vtrpc.ErrorCode = vtrpc.ErrorCode_BAD_INPUT
 
+// the error string that is returned for partial execute errors (i.e., the Execute* rpc call
+// succeeds, but returns an error as part of the response).
+const executePartialErrString string = "execute partial error"
+
 var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
 
 func newContext() context.Context {
@@ -397,8 +401,8 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 			}
 		}
 	}
-	if execCase.reply.Error != "" {
-		return errors.New(execCase.reply.Error)
+	if execCase.reply.Err != nil {
+		return vterrors.FromRPCError(execCase.reply.Err)
 	}
 	return nil
 }
@@ -445,8 +449,8 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 			}
 		}
 	}
-	if execCase.reply.Error != "" {
-		return errors.New(execCase.reply.Error)
+	if execCase.reply.Err != nil {
+		return vterrors.FromRPCError(execCase.reply.Err)
 	}
 	return nil
 }
@@ -493,8 +497,8 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 			}
 		}
 	}
-	if execCase.reply.Error != "" {
-		return errors.New(execCase.reply.Error)
+	if execCase.reply.Err != nil {
+		return vterrors.FromRPCError(execCase.reply.Err)
 	}
 	return nil
 }
@@ -541,8 +545,8 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 			}
 		}
 	}
-	if execCase.reply.Error != "" {
-		return errors.New(execCase.reply.Error)
+	if execCase.reply.Err != nil {
+		return vterrors.FromRPCError(execCase.reply.Err)
 	}
 	return nil
 }
@@ -752,13 +756,13 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testCommit2Error(t, conn, fs)
 	testRollback2Error(t, conn, fs)
 
-	testExecuteError(t, conn)
-	testExecuteShardsError(t, conn)
-	testExecuteKeyspaceIdsError(t, conn)
-	testExecuteKeyRangesError(t, conn)
-	testExecuteEntityIdsError(t, conn)
-	testExecuteBatchShardsError(t, conn)
-	testExecuteBatchKeyspaceIdsError(t, conn)
+	testExecuteError(t, conn, fs)
+	testExecuteShardsError(t, conn, fs)
+	testExecuteKeyspaceIdsError(t, conn, fs)
+	testExecuteKeyRangesError(t, conn, fs)
+	testExecuteEntityIdsError(t, conn, fs)
+	testExecuteBatchShardsError(t, conn, fs)
+	testExecuteBatchKeyspaceIdsError(t, conn, fs)
 	testStreamExecuteError(t, conn, fs)
 	testStreamExecute2Error(t, conn, fs)
 	testStreamExecuteShardsError(t, conn, fs)
@@ -809,6 +813,26 @@ func verifyErrorString(t *testing.T, err error, method string) {
 	}
 }
 
+// Verifies the returned partial Execute* error has the properties that we expect.
+func verifyExecutePartialError(t *testing.T, err error, method string) {
+	if err == nil {
+		t.Errorf("%s was expecting an error, didn't get one", method)
+		return
+	}
+	// verify error code
+	code := vterrors.RecoverVtErrorCode(err)
+	if code != expectedCode {
+		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
+	}
+	// verify error type
+	if _, ok := err.(*vterrors.VitessError); !ok {
+		t.Errorf("Unexpected error type from %s: got %v, wanted *vterrors.VitessError", method, reflect.TypeOf(err))
+	}
+	if err.Error() != executePartialErrString {
+		t.Errorf("Unexpected error from %s: got %v, wanted: %v", method, err, executePartialErrString)
+	}
+}
+
 func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
@@ -826,18 +850,25 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 
+	// TODO(aaijazi): get rid of this case from testExecute*, and instead have only testExecute*Error
 	execCase = execMap["errorRequst"]
 	_, err = conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
+	verifyExecutePartialError(t, err, "Execute")
+
+	fake.hasError = true
+	_, err = conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, execCase.execQuery.TabletType)
 	verifyError(t, err, "Execute")
 }
 
@@ -867,16 +898,22 @@ func testExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
+	verifyExecutePartialError(t, err, "ExecuteShards")
+
+	fake.hasError = true
+	_, err = conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType)
 	verifyError(t, err, "ExecuteShards")
 }
 
@@ -906,16 +943,22 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
+	verifyExecutePartialError(t, err, "ExecuteKeyspaceIds")
+
+	fake.hasError = true
+	_, err = conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType)
 	verifyError(t, err, "ExecuteKeyspaceIds")
 }
 
@@ -945,16 +988,22 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
+	verifyExecutePartialError(t, err, "ExecuteKeyRanges")
+
+	fake.hasError = true
+	_, err = conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType)
 	verifyError(t, err, "ExecuteKeyRanges")
 }
 
@@ -984,16 +1033,22 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteEntityIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteEntityIdsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
+	verifyExecutePartialError(t, err, "ExecuteEntityIds")
+
+	fake.hasError = true
+	_, err = conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType)
 	verifyError(t, err, "ExecuteEntityIds")
 }
 
@@ -1023,16 +1078,22 @@ func testExecuteBatchShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteBatchShardsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteBatchShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
+	verifyExecutePartialError(t, err, "ExecuteBatchShards")
+
+	fake.hasError = true
+	_, err = conn.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction)
 	verifyError(t, err, "ExecuteBatchShards")
 }
 
@@ -1062,16 +1123,22 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	execCase = execMap["errorRequst"]
 	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || err.Error() != want {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
 }
 
-func testExecuteBatchKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteBatchKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
 	ctx := newContext()
-	execCase := execMap["request1"]
+	execCase := execMap["errorRequst"]
+
+	fake.hasError = false
 	_, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
+	verifyExecutePartialError(t, err, "ExecuteBatchKeyspaceIds")
+
+	fake.hasError = true
+	_, err = conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.keyspaceIDBatchQuery.AsTransaction)
 	verifyError(t, err, "ExecuteBatchKeyspaceIds")
 }
 
@@ -1130,7 +1197,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("packet: %+v, want none", packet)
 	}
 	err = errFunc()
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
@@ -1250,7 +1317,7 @@ func testStreamExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("packet: %+v, want none", packet)
 	}
 	err = errFunc()
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
@@ -1370,7 +1437,7 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("packet: %+v, want none", packet)
 	}
 	err = errFunc()
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
@@ -1490,7 +1557,7 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("packet: %+v, want none", packet)
 	}
 	err = errFunc()
-	want = "app error"
+	want = executePartialErrString
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("errorRequst: %v, want %v", err, want)
 	}
@@ -2400,10 +2467,10 @@ var execMap = map[string]struct {
 		reply: &proto.QueryResult{
 			Result:  nil,
 			Session: nil,
-			Error:   "app error",
+			Error:   executePartialErrString,
 			Err: &mproto.RPCError{
-				Code:    int64(vtrpc.ErrorCode_BAD_INPUT),
-				Message: "app error",
+				Code:    int64(expectedCode),
+				Message: executePartialErrString,
 			},
 		},
 	},
