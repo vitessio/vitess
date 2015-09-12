@@ -253,6 +253,13 @@
 			"Manual": false,
 			"Shard": 1
 		},
+		"vtgatev3": {
+			"File": "vtgatev3_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1
+		},
 		"vttest_sample_test": {
 			"File": "vttest_sample_test.py",
 			"Args": [],
