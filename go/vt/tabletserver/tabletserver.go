@@ -475,6 +475,9 @@ func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStat
 	if x := recover(); x != nil {
 		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
 	}
+	if logStats != nil {
+		logStats.Send()
+	}
 }
 
 func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
@@ -482,7 +485,6 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	defer func() {
 		if logStats != nil {
 			logStats.Error = terr
-			logStats.Send()
 		}
 	}()
 	terr, ok := err.(*TabletError)
