@@ -226,7 +226,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 }
 
 func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
-	terr := &TabletError{}
+	var terr *TabletError
 	defer func() {
 		if logStats != nil {
 			logStats.Error = terr
