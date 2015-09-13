@@ -67,6 +67,7 @@ class TabletConnection(object):
   If something goes wrong, this object should be thrown away and a new
   one instantiated.
   """
+
   def __init__(
       self, addr, tablet_type, keyspace, shard, timeout, user=None,
       password=None, keyfile=None, certfile=None, caller_id=None):
@@ -87,8 +88,8 @@ class TabletConnection(object):
 
   def _create_client(self):
     return bsonrpc.BsonRpcClient(
-          self.addr, self.timeout, self.user, self.password,
-          keyfile=self.keyfile, certfile=self.certfile)
+        self.addr, self.timeout, self.user, self.password,
+        keyfile=self.keyfile, certfile=self.certfile)
 
   def _get_client(self):
     """Get current client or create a new one and connect."""
@@ -100,7 +101,6 @@ class TabletConnection(object):
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
     return self.client
-
 
   def __str__(self):
     return '<TabletConnection %s %s %s/%s>' % (

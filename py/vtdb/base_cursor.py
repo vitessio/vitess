@@ -3,9 +3,8 @@
 These classes centralize common code.
 """
 
-import logging
-
 from vtdb import dbexceptions
+
 
 class BasePEP0249Cursor(object):
   """Cursor with common PEP0249 implementations."""

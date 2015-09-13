@@ -186,7 +186,6 @@ def setup_tablets():
 
 
 def get_connection(user=None, password=None, timeout=10.0):
-  conn = None
   vtgate_addrs = {'vt': [utils.vtgate.addr(),]}
   try:
     return conn_class.connect(vtgate_addrs, timeout,
@@ -851,7 +850,7 @@ class TestFailures(BaseTestCase):
     try:
       non_vtgate_errors = (
           utils.vtgate.get_vars()['VtgateInfoErrorCounts']['NonVtgateErrors'])
-    except KeyError as e:
+    except KeyError:
       self.fail(
           "No errors in VTGate that weren't logged as exceptions: "
           "'NonVtgateErrors' vars not found")

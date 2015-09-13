@@ -131,8 +131,8 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
   def _create_client(self):
     return bsonrpc.BsonRpcClient(
-          self.addr, self.timeout, self.user, self.password,
-          keyfile=self.keyfile, certfile=self.certfile)
+        self.addr, self.timeout, self.user, self.password,
+        keyfile=self.keyfile, certfile=self.certfile)
 
   def _get_client(self):
     """Get current client or create a new one and connect."""
@@ -394,6 +394,22 @@ class VTGateConnection(vtgate_client.VTGateClient):
 
     This method takes ownership of self.client, since multiple
     stream_executes can be active at once.
+
+    Args:
+      sql: Str sql.
+      bind_variables: A (str: value) dict.
+      keyspace: Str keyspace.
+      tablet_type: Str tablet_type.
+      keyspace_ids: List of uint64 or bytes keyspace_ids.
+      keyranges: KeyRange objects.
+      not_in_transaction: bool.
+      effective_caller_id: CallerID.
+
+    Returns:
+      Generator, fields pair.
+
+    Raises:
+      dbexceptions.ProgrammingError: On bad input.
     """
     exec_method = None
     req = None

@@ -3,7 +3,6 @@
 # be found in the LICENSE file.
 
 from vtdb import base_cursor
-from vtdb import dbexceptions
 
 
 class BaseCursor(base_cursor.BaseListCursor):

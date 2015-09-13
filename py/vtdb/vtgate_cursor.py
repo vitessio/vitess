@@ -28,7 +28,6 @@ class VTGateCursorMixin(object):
     return self._writable
 
 
-
 class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   """A cursor for execute statements to VTGate.
 
@@ -51,7 +50,6 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.routing = None
     self.rowcount = 0
     self.tablet_type = tablet_type
-
 
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping

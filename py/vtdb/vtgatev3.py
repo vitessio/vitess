@@ -91,7 +91,7 @@ class VTGateConnection(object):
 
   def __init__(self, addr, timeout, user=None, password=None,
                keyfile=None, certfile=None):
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     self.session = None
     self.addr = addr
     self.user = user
@@ -103,14 +103,14 @@ class VTGateConnection(object):
     self.logger_object = vtdb_logger.get_logger()
 
   def _create_client(self):
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     return bsonrpc.BsonRpcClient(
-          self.addr, self.timeout, self.user, self.password,
-          keyfile=self.keyfile, certfile=self.certfile)
+        self.addr, self.timeout, self.user, self.password,
+        keyfile=self.keyfile, certfile=self.certfile)
 
   def _get_client(self):
     """Get current client or create a new one and connect."""
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     if not self.client:
       self.client = self._create_client()
       try:
@@ -123,7 +123,7 @@ class VTGateConnection(object):
     return '<VTGateConnection %s >' % self.addr
 
   def dial(self):
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     try:
       if not self.is_closed():
         self.close()
@@ -132,14 +132,14 @@ class VTGateConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     if self.session:
       self.rollback()
     if self.client:
       self.client.close()
 
   def is_closed(self):
-    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    # TODO: Merge. This is very similar to vtgatev2.
     return not self.client or self.client.is_closed()
 
   def cursor(self, *pargs, **kwargs):
@@ -291,7 +291,7 @@ class VTGateConnection(object):
     self.client = None
 
     def row_generator():
-      # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+      # TODO: Merge. This is very similar to vtgatev2.
       try:
         while True:
           try:
@@ -317,7 +317,7 @@ class VTGateConnection(object):
 
 
 def _make_row(row, conversions):
-  # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+  # TODO: Merge. This is very similar to vtgatev2.
   converted_row = []
   for conversion_func, field_data in izip(conversions, row):
     if field_data is None:
