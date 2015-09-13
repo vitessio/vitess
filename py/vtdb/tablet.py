@@ -323,54 +323,11 @@ class TabletConnection(object):
         },
         'ImmediateCallerID': {'Username': self.caller_id}
     }
-
     rpc_client = self._get_client()
     stream_fields = []
     stream_conversions = []
-    try:
-      rpc_client.stream_call('SqlQuery.StreamExecute2', req)
-      first_response = rpc_client.stream_next()
-      reply = first_response.reply
-      if reply.get('Err'):
-        self.__drain_conn_after_streaming_app_error()
-        raise gorpc.AppError(reply['Err'].get(
-            'Message', 'Missing error message'))
 
-      for field in reply['Fields']:
-        stream_fields.append((field['Name'], field['Type']))
-        stream_conversions.append(
-            field_types.conversions.get(field['Type']))
-    except gorpc.GoRpcError as e:
-      self.logger_object.log_private_data(bind_variables)
-      raise convert_exception(e, str(self), sql)
-    except Exception:
-      logging.exception('gorpc low-level error')
-      raise
-
-    # Take the BsonRpcClient from VTGateConnection. The row_generator
-    # will manage the BsonRpcClient. This VTGateConnection will connect
-    # to a new client if needed.
-    self.client = None
-
-    def row_generator():
-      while True:
-        try:
-          stream_result = rpc_client.stream_next()
-          if stream_result is None:
-            break
-          if stream_result.reply.get('Err'):
-            self.__drain_conn_after_streaming_app_error()
-            raise gorpc.AppError(stream_result.reply['Err'].get(
-                'Message', 'Missing error message'))
-          for result_item in stream_result.reply['Rows']:
-            yield tuple(_make_row(result_item, stream_conversions))
-        except gorpc.GoRpcError as e:
-          raise convert_exception(e, str(self))
-        except Exception:
-          logging.exception('gorpc low-level error')
-          raise
-
-    def __drain_conn_after_streaming_app_error(self):
+    def drain_conn_after_streaming_app_error():
       """Drain connection of all incoming streaming packets (ignoring them).
 
       This is necessary for streaming calls which return application
@@ -391,6 +348,52 @@ class TabletConnection(object):
         raise gorpc.GoRpcError(
             'Connection should only have one packet remaining'
             ' after streaming app error in RPC response.')
+
+    try:
+      rpc_client.stream_call('SqlQuery.StreamExecute2', req)
+      first_response = rpc_client.stream_next()
+      reply = first_response.reply
+      if reply.get('Err'):
+        drain_conn_after_streaming_app_error()
+        raise gorpc.AppError(reply['Err'].get(
+            'Message', 'Missing error message'))
+
+      for field in reply['Fields']:
+        stream_fields.append((field['Name'], field['Type']))
+        stream_conversions.append(
+            field_types.conversions.get(field['Type']))
+    except gorpc.GoRpcError as e:
+      self.logger_object.log_private_data(bind_variables)
+      raise convert_exception(e, str(self), sql)
+    except Exception:
+      logging.exception('gorpc low-level error')
+      raise
+
+    # Take the BsonRpcClient from VTGateConnection. The row_generator
+    # will manage the BsonRpcClient. This VTGateConnection will connect
+    # to a new client if needed.
+    self.client = None
+
+    def row_generator():
+      try:
+        while True:
+          try:
+            stream_result = rpc_client.stream_next()
+            if stream_result is None:
+              break
+            if stream_result.reply.get('Err'):
+              drain_conn_after_streaming_app_error()
+              raise gorpc.AppError(stream_result.reply['Err'].get(
+                  'Message', 'Missing error message'))
+            for result_item in stream_result.reply['Rows']:
+              yield tuple(_make_row(result_item, stream_conversions))
+          except gorpc.GoRpcError as e:
+            raise convert_exception(e, str(self))
+          except Exception:
+            logging.exception('gorpc low-level error')
+            raise
+      finally:
+        rpc_client.close()
 
     return row_generator(), stream_fields
 
