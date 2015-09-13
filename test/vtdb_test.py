@@ -284,7 +284,7 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertEqual(rowsets[1][1], count)
     except Exception, e:
       self.fail('Write failed with error %s %s' % (str(e),
-                                                   traceback.print_exc()))
+                                                   traceback.format_exc()))
 
   def test_batch_write(self):
     try:
@@ -335,7 +335,7 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertEqual(rowcount, fetch_size)
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_fetchall(self):
     try:
@@ -351,7 +351,7 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertEqual(rowcount, count)
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_fetchone(self):
     try:
@@ -366,7 +366,7 @@ class TestTabletFunctions(unittest.TestCase):
       self.assertTrue(type(rows) == tuple, 'Received a valid row')
       stream_cursor.close()
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_streaming_zero_results(self):
     try:
@@ -382,7 +382,7 @@ class TestTabletFunctions(unittest.TestCase):
       rowcount = len(list(rows))
       self.assertEqual(rowcount, 0)
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
 
 class TestFailures(unittest.TestCase):
@@ -441,7 +441,7 @@ class TestFailures(unittest.TestCase):
       with self.assertRaises(dbexceptions.DatabaseError):
         stream_cursor.execute('invalid sql syntax', {})
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_conn_after_stream_execute_failure(self):
     """Check connection After a stream execute failure.
@@ -460,7 +460,7 @@ class TestFailures(unittest.TestCase):
         stream_cursor.execute('invalid sql syntax', {})
       master_conn._execute('select * from vt_insert_test', {})
     except Exception, e:
-      self.fail('Failed with error %s %s' % (str(e), traceback.print_exc()))
+      self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
 
   def test_tablet_restart_begin(self):
     try:
