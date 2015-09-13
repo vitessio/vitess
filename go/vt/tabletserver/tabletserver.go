@@ -473,15 +473,16 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *pb.Target, sessio
 // the supplied error return value.
 func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStats *LogStats) {
 	if x := recover(); x != nil {
-		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
-	}
-	if logStats != nil {
-		logStats.Error = *err
-		logStats.Send()
+		tsv.handleExecErrorNoPanic(query, x, logStats)
 	}
 }
 
 func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
+	defer func() {
+		if logStats != nil {
+			logStats.Send()
+		}
+	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
@@ -516,6 +517,9 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 		}
 	}
 	logMethod("%v: %v", terr, query)
+	if logStats != nil {
+		logStats.Error = terr
+	}
 	return myError
 }
 

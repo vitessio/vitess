@@ -226,6 +226,11 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 }
 
 func handleError(err *error, logStats *LogStats, queryServiceStats *QueryServiceStats) {
+	defer func() {
+		if logStats != nil {
+			logStats.Send()
+		}
+	}()
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -251,10 +256,9 @@ func handleError(err *error, logStats *LogStats, queryServiceStats *QueryService
 				log.Errorf("%v", terr)
 			}
 		}
-	}
-	if logStats != nil {
-		logStats.Error = *err
-		logStats.Send()
+		if logStats != nil {
+			logStats.Error = terr
+		}
 	}
 }
 
