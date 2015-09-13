@@ -473,13 +473,15 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *pb.Target, sessio
 // the supplied error return value.
 func (tsv *TabletServer) handleExecError(query *proto.Query, err *error, logStats *LogStats) {
 	if x := recover(); x != nil {
-		tsv.handleExecErrorNoPanic(query, x, logStats)
+		*err = tsv.handleExecErrorNoPanic(query, x, logStats)
 	}
 }
 
 func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interface{}, logStats *LogStats) error {
+	terr := TabletError{}
 	defer func() {
 		if logStats != nil {
+			logStat.Error = terr
 			logStats.Send()
 		}
 	}()
@@ -487,7 +489,8 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 	if !ok {
 		log.Errorf("Uncaught panic for %v:\n%v\n%s", query, err, tb.Stack(4))
 		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-		return NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		terr = NewTabletError(ErrFail, vtrpc.ErrorCode_UNKNOWN_ERROR, "%v: uncaught panic for %v", err, query)
+		return terr
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(query.BindVariables) != 0 {
@@ -517,9 +520,6 @@ func (tsv *TabletServer) handleExecErrorNoPanic(query *proto.Query, err interfac
 		}
 	}
 	logMethod("%v: %v", terr, query)
-	if logStats != nil {
-		logStats.Error = terr
-	}
 	return myError
 }
 
