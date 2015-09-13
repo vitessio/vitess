@@ -420,11 +420,11 @@ func (si *ShardInfo) GetServedType(tabletType pb.TabletType) *pb.Shard_ServedTyp
 
 // GetServedTypesPerCell returns the list of types this shard is serving
 // in the provided cell.
-func (si *ShardInfo) GetServedTypesPerCell(cell string) []TabletType {
-	result := make([]TabletType, 0, len(si.ServedTypes))
+func (si *ShardInfo) GetServedTypesPerCell(cell string) []pb.TabletType {
+	result := make([]pb.TabletType, 0, len(si.ServedTypes))
 	for _, st := range si.ServedTypes {
 		if InCellList(cell, st.Cells) {
-			result = append(result, ProtoToTabletType(st.TabletType))
+			result = append(result, st.TabletType)
 		}
 	}
 	return result
