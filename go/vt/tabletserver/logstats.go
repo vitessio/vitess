@@ -52,7 +52,7 @@ type LogStats struct {
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
 	ctx                  context.Context
-	Error                TabletError
+	Error                *TabletError
 }
 
 func newLogStats(methodName string, ctx context.Context) *LogStats {
