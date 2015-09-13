@@ -15,7 +15,7 @@ class Cursor(base_cursor.BaseListCursor):
 
   def execute(self, sql, bind_variables):
     self._clear_list_state()
-    if self._handle_transaction_sql(sql, effective_caller_id=None):
+    if self._handle_transaction_sql(sql):
       return
     self.results, self.rowcount, self.lastrowid, self.description = (
         self._get_conn()._execute(sql, bind_variables, self.tablet_type))

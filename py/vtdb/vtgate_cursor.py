@@ -38,6 +38,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   def __init__(
       self, connection, keyspace, tablet_type, keyspace_ids=None,
       keyranges=None, writable=False):
+    super(VTGateCursor, self).__init__()
     self._conn = connection
     self._writable = writable
     self.description = None
@@ -51,12 +52,16 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     self.rowcount = 0
     self.tablet_type = tablet_type
 
+
   # pass kargs here in case higher level APIs need to push more data through
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self._clear_list_state()
+    # FIXME: Remove effective_caller_id from interface.
     effective_caller_id = kargs.get('effective_caller_id')
-    if self._handle_transaction_sql(sql, effective_caller_id):
+    if effective_caller_id:
+      self.set_effective_caller_id(effective_caller_id)
+    if self._handle_transaction_sql(sql):
       return
     write_query = bool(write_sql_pattern.match(sql))
     # NOTE: This check may also be done at higher layers but adding it
@@ -74,12 +79,13 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             keyspace_ids=self.keyspace_ids,
             keyranges=self.keyranges,
             not_in_transaction=not self.is_writable(),
-            effective_caller_id=effective_caller_id))
+            effective_caller_id=self.effective_caller_id))
     return self.rowcount
 
   def execute_entity_ids(
       self, sql, bind_variables, entity_keyspace_id_map, entity_column_name,
       effective_caller_id=None):
+    # FIXME: Remove effective_caller_id from interface.
     self._clear_list_state()
 
     # This is by definition a scatter query, so raise exception.
@@ -87,7 +93,9 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     if write_query:
       raise dbexceptions.DatabaseError(
           'execute_entity_ids is not allowed for write queries')
-
+    # FIXME: Remove effective_caller_id from interface.
+    if effective_caller_id is not None:
+      self.set_effective_caller_id(effective_caller_id)
     self.results, self.rowcount, self.lastrowid, self.description = (
         self._get_conn()._execute_entity_ids(
             sql,
@@ -97,7 +105,7 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
             entity_keyspace_id_map,
             entity_column_name,
             not_in_transaction=not self.is_writable(),
-            effective_caller_id=effective_caller_id))
+            effective_caller_id=self.effective_caller_id))
     return self.rowcount
 
   def fetch_aggregate_function(self, func):
@@ -152,6 +160,9 @@ class BatchVTGateCursor(VTGateCursor):
     self.keyspace_ids_list.append(keyspace_ids)
 
   def flush(self, as_transaction=False, effective_caller_id=None):
+    # FIXME: Remove effective_caller_id from interface.
+    if effective_caller_id is not None:
+      self.set_effective_caller_id(effective_caller_id)
     self.rowsets = self._get_conn()._execute_batch(
         self.query_list,
         self.bind_vars_list,
@@ -159,7 +170,7 @@ class BatchVTGateCursor(VTGateCursor):
         self.keyspace_ids_list,
         self.tablet_type,
         as_transaction,
-        effective_caller_id)
+        self.effective_caller_id)
     self.query_list = []
     self.bind_vars_list = []
     self.keyspace_list = []
@@ -193,6 +204,10 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
     if self._writable:
       raise dbexceptions.ProgrammingError('Streaming query cannot be writable')
     self._clear_stream_state()
+    # FIXME: Remove effective_caller_id from interface.
+    effective_caller_id = kargs.get('effective_caller_id')
+    if effective_caller_id is not None:
+      self.set_effective_caller_id(effective_caller_id)
     self.generator, self.description = self._get_conn()._stream_execute(
         sql,
         bind_variables,
@@ -201,7 +216,7 @@ class StreamVTGateCursor(base_cursor.BaseStreamCursor, VTGateCursorMixin):
         keyspace_ids=self.keyspace_ids,
         keyranges=self.keyranges,
         not_in_transaction=not self.is_writable(),
-        effective_caller_id=kargs.get('effective_caller_id'))
+        effective_caller_id=self.effective_caller_id)
     return 0
 
 

@@ -87,6 +87,7 @@ class BaseListCursor(BasePEP0249Cursor):
   def __init__(self):
     super(BaseListCursor, self).__init__()
     self._clear_list_state()
+    self.effective_caller_id = None
 
   def _clear_list_state(self):
     self._clear_common_state()
@@ -95,8 +96,12 @@ class BaseListCursor(BasePEP0249Cursor):
     self.rowcount = None
     self.results = None
 
-  def begin(self, effective_caller_id=None):
-    return self._get_conn().begin(effective_caller_id)
+  def set_effective_caller_id(self, effective_caller_id):
+    """Set the effective caller id that will be used in upcoming calls."""
+    self.effective_caller_id = effective_caller_id
+
+  def begin(self):
+    return self._get_conn().begin(self.effective_caller_id)
 
   def commit(self):
     return self._get_conn().commit()
@@ -108,10 +113,11 @@ class BaseListCursor(BasePEP0249Cursor):
     if self.results is None:
       raise dbexceptions.ProgrammingError('Fetch called before execute.')
 
-  def _handle_transaction_sql(self, sql, effective_caller_id):
+  def _handle_transaction_sql(self, sql):
     sql_check = sql.strip().lower()
     if sql_check == 'begin':
-      self.begin(effective_caller_id)
+      self.set_effective_caller_id(self.effective_caller_id)
+      self.begin()
       return True
     elif sql_check == 'commit':
       self.commit()
@@ -161,6 +167,11 @@ class BaseStreamCursor(BasePEP0249Cursor):
   def __init__(self):
     super(BaseStreamCursor, self).__init__()
     self._clear_stream_state()
+    self.effective_caller_id = None
+
+  def set_effective_caller_id(self, effective_caller_id):
+    """Set the effective caller id that will be used in upcoming calls."""
+    self.effective_caller_id = effective_caller_id
 
   def _clear_stream_state(self):
     self._clear_common_state()

@@ -73,14 +73,34 @@ class TabletConnection(object):
     self.transaction_id = 0
     self.session_id = 0
     self.addr = addr
-    self.tablet_type = tablet_type
-    self.keyspace = keyspace
-    self.shard = shard
-    self.timeout = timeout
     self.caller_id = caller_id
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password,
-                                        keyfile=keyfile, certfile=certfile)
+    self.certfile = certfile
+    self.keyfile = keyfile
+    self.keyspace = keyspace
+    self.password = password
+    self.shard = shard
+    self.tablet_type = tablet_type
+    self.timeout = timeout
+    self.user = user
+    self.client = self._create_client()
     self.logger_object = vtdb_logger.get_logger()
+
+  def _create_client(self):
+    return bsonrpc.BsonRpcClient(
+          self.addr, self.timeout, self.user, self.password,
+          keyfile=self.keyfile, certfile=self.certfile)
+
+  def _get_client(self):
+    """Get current client or create a new one and connect."""
+    # TODO(dumbunny): Merge? This is very similar to vtgatev2.
+    if not self.client:
+      self.client = self._create_client()
+      try:
+        self.client.dial()
+      except gorpc.GoRpcError as e:
+        raise convert_exception(e, str(self))
+    return self.client
+
 
   def __str__(self):
     return '<TabletConnection %s %s %s/%s>' % (
@@ -97,7 +117,7 @@ class TabletConnection(object):
         # raise dbexceptions.ProgrammingError(
         #     'attempting to reuse TabletConnection')
 
-      self.client.dial()
+      self._get_client().dial()
       req = {
           'Params': {
               'Keyspace': self.keyspace,
@@ -119,10 +139,11 @@ class TabletConnection(object):
     except Exception:
       pass
     self.session_id = 0
-    self.client.close()
+    if self.client:
+      self.client.close()
 
   def is_closed(self):
-    return self.client.is_closed()
+    return not self.client or self.client.is_closed()
 
   def begin(self, effective_caller_id=None):
     _ = effective_caller_id
@@ -196,7 +217,7 @@ class TabletConnection(object):
     Raises:
       gorpc.AppError if there is an app error embedded in the reply
     """
-    response = self.client.call(method_name, request)
+    response = self._get_client().call(method_name, request)
     reply = response.reply
     if not reply or not isinstance(reply, dict):
       return response
@@ -303,11 +324,12 @@ class TabletConnection(object):
         'ImmediateCallerID': {'Username': self.caller_id}
     }
 
+    rpc_client = self._get_client()
     stream_fields = []
     stream_conversions = []
     try:
-      self.client.stream_call('SqlQuery.StreamExecute2', req)
-      first_response = self.client.stream_next()
+      rpc_client.stream_call('SqlQuery.StreamExecute2', req)
+      first_response = rpc_client.stream_next()
       reply = first_response.reply
       if reply.get('Err'):
         self.__drain_conn_after_streaming_app_error()
@@ -325,10 +347,15 @@ class TabletConnection(object):
       logging.exception('gorpc low-level error')
       raise
 
+    # Take the BsonRpcClient from VTGateConnection. The row_generator
+    # will manage the BsonRpcClient. This VTGateConnection will connect
+    # to a new client if needed.
+    self.client = None
+
     def row_generator():
       while True:
         try:
-          stream_result = self.client.stream_next()
+          stream_result = rpc_client.stream_next()
           if stream_result is None:
             break
           if stream_result.reply.get('Err'):
@@ -343,30 +370,29 @@ class TabletConnection(object):
           logging.exception('gorpc low-level error')
           raise
 
+    def __drain_conn_after_streaming_app_error(self):
+      """Drain connection of all incoming streaming packets (ignoring them).
+
+      This is necessary for streaming calls which return application
+      errors inside the RPC response (instead of through the usual GoRPC
+      error return).  This is because GoRPC always expects the last
+      packet to be an error; either the usual GoRPC application error
+      return, or a special "end-of-stream" error.
+
+      If an application error is returned with the RPC response, there
+      will still be at least one more packet coming, as GoRPC has not
+      seen anything that it considers to be an error. If the connection
+      is not drained of this last packet, future reads from the wire
+      will be off by one and will return errors.
+      """
+      next_result = rpc_client.stream_next()
+      if next_result is not None:
+        rpc_client.close()
+        raise gorpc.GoRpcError(
+            'Connection should only have one packet remaining'
+            ' after streaming app error in RPC response.')
+
     return row_generator(), stream_fields
-
-
-  def __drain_conn_after_streaming_app_error(self):
-    """Drains the connection of all incoming streaming packets (ignoring them).
-
-    This is necessary for streaming calls which return application
-    errors inside the RPC response (instead of through the usual GoRPC
-    error return).  This is because GoRPC always expects the last
-    packet to be an error; either the usual GoRPC application error
-    return, or a special "end-of-stream" error.
-
-    If an application error is returned with the RPC response, there
-    will still be at least one more packet coming, as GoRPC has not
-    seen anything that it considers to be an error. If the connection
-    is not drained of this last packet, future reads from the wire
-    will be off by one and will return errors.
-    """
-    next_result = self.client.stream_next()
-    if next_result is not None:
-      self.client.close()
-      raise gorpc.GoRpcError(
-          'Connection should only have one packet remaining'
-          ' after streaming app error in RPC response.')
 
 
 def _make_row(row, conversions):
