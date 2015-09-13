@@ -159,9 +159,9 @@ class TestUpdateStream(unittest.TestCase):
     try:
       for stream_event in replica_conn.stream_update(start_position):
         break
-    except Exception, e:
-      logging.debug(str(e))
+    except Exception as e:
       self.assertIn('update stream service is not enabled', str(e))
+    replica_conn.close()
 
     v = utils.get_vars(replica_tablet.port)
     if v['UpdateStreamState'] != 'Disabled':
@@ -193,10 +193,11 @@ class TestUpdateStream(unittest.TestCase):
         if stream_event.category == update_stream.StreamEvent.DML:
           logging.debug('Test Service Enabled: Pass')
           break
-    except Exception, e:
+    except Exception as e:
       self.fail('Exception in getting stream from replica: %s\n Traceback %s' %
                 (str(e), traceback.format_exc()))
     thd.join(timeout=30)
+    replica_conn.close()
 
     v = utils.get_vars(replica_tablet.port)
     if v['UpdateStreamState'] != 'Enabled':
@@ -222,18 +223,21 @@ class TestUpdateStream(unittest.TestCase):
         else:
           if stream_event.category == update_stream.StreamEvent.POS:
             txn_count += 1
+        # FIXME(alainjobart) gasp, the test fails but we don't assert?
         logging.debug('Test Service Switch: FAIL')
+        replica_conn.close()
         return
-    except dbexceptions.DatabaseError, e:
+    except dbexceptions.DatabaseError as e:
       self.assertEqual(
           'Fatal Service Error: Disconnecting because the Update Stream '
           'service has been disabled',
           str(e))
-    except Exception, e:
+    except Exception as e:
       logging.error('Exception: %s', str(e))
       logging.error('Traceback: %s', traceback.format_exc())
       self.fail("Update stream returned error '%s'" % str(e))
     logging.debug('Streamed %d transactions before exiting', txn_count)
+    replica_conn.close()
 
   def _exec_vt_txn(self, query_list):
     tid = master_tablet.begin(auto_log=False)
@@ -290,6 +294,8 @@ class TestUpdateStream(unittest.TestCase):
           master_data, replica_data,
           "Test failed, data mismatch - master '%s' and replica position '%s'" %
           (master_data, replica_data))
+    master_conn.close()
+    replica_conn.close()
     logging.debug('Test Writes: PASS')
 
   def test_ddl(self):
@@ -300,6 +306,7 @@ class TestUpdateStream(unittest.TestCase):
     for stream_event in master_conn.stream_update(start_position):
       self.assertEqual(stream_event.sql, _create_vt_insert_test,
                        "DDL didn't match original")
+      master_conn.close()
       return
     self.fail("didn't get right sql")
 
@@ -318,6 +325,7 @@ class TestUpdateStream(unittest.TestCase):
       expected_id += 1
     if expected_id != 1000004:
       self.fail('did not get my four values!')
+    master_conn.close()
 
   def test_database_filter(self):
     start_position = _get_master_current_position()
@@ -331,6 +339,7 @@ class TestUpdateStream(unittest.TestCase):
       self.assertNotEqual(
           stream_event.category, update_stream.StreamEvent.DDL,
           "query using other_database wasn't filted out")
+    master_conn.close()
 
   def test_service_switch(self):
     """tests the service switch from disable -> enable -> disable."""
@@ -365,6 +374,7 @@ class TestUpdateStream(unittest.TestCase):
           self.fail('ran out of logs')
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
+    master_conn.close()
 
 if __name__ == '__main__':
   utils.main()

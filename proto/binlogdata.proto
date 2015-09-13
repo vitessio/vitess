@@ -35,10 +35,10 @@ message BinlogTransaction {
     Category category = 1;
 
     // charset of this statement, if different from pre-negotiated default.
-    Charset charset = 3;
+    Charset charset = 2;
 
     // the sql
-    bytes sql = 2;
+    string sql = 3;
   }
 
   // the statements in this transaction

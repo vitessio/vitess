@@ -303,7 +303,9 @@ func (*BindVariable) ProtoMessage()    {}
 
 // BoundQuery is a query with its bind variables
 type BoundQuery struct {
-	Sql           []byte                   `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	// sql is the SQL query to execute
+	Sql string `protobuf:"bytes,1,opt,name=sql" json:"sql,omitempty"`
+	// bind_variables is a map of all bind variables to expand in the query
 	BindVariables map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 }
 
