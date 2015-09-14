@@ -15,6 +15,12 @@ func (sra ShardReferenceArray) Len() int { return len(sra) }
 
 // Len implements sort.Interface
 func (sra ShardReferenceArray) Less(i, j int) bool {
+	if sra[i].KeyRange == nil || len(sra[i].KeyRange.Start) == 0 {
+		return true
+	}
+	if sra[j].KeyRange == nil || len(sra[j].KeyRange.Start) == 0 {
+		return false
+	}
 	return bytes.Compare(sra[i].KeyRange.Start, sra[j].KeyRange.Start) < 0
 }
 

@@ -191,6 +191,15 @@ func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *pb.SrvKeys
 			return fmt.Errorf("keyspace partition for %v in cell %v does not end with max key", tabletType, cell)
 		}
 		for i := range partition.ShardReferences[0 : len(partition.ShardReferences)-1] {
+			fn := partition.ShardReferences[i].KeyRange == nil
+			sn := partition.ShardReferences[i+1].KeyRange == nil
+			if fn != sn {
+				return fmt.Errorf("shards with unconsistent KeyRanges for %v in cell %v at shard %v", tabletType, cell, i)
+			}
+			if fn {
+				// this is the custom sharding case, all KeyRanges must be nil
+				continue
+			}
 			if bytes.Compare(partition.ShardReferences[i].KeyRange.End, partition.ShardReferences[i+1].KeyRange.Start) != 0 {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(partition.ShardReferences[i].KeyRange.End), hex.EncodeToString(partition.ShardReferences[i+1].KeyRange.Start))
 			}
