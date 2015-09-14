@@ -193,7 +193,6 @@ class TestPythonClient(unittest.TestCase):
     effective_caller_id through different vtgate interfaces. Make sure
     the good_effective_caller_id works, and the
     bad_effective_caller_id raises a DatabaseError.
-
     """
 
     # Special query that makes vtgateclienttest match effective_caller_id.
@@ -205,62 +204,54 @@ class TestPythonClient(unittest.TestCase):
         principal='pr_wrong', component='co_wrong', subcomponent='su_wrong')
 
     def check_good_and_bad_effective_caller_ids(cursor, cursor_execute_method):
-      cursor_execute_method(cursor, good_effective_caller_id)
+      cursor.set_effective_caller_id(good_effective_caller_id)
+      cursor_execute_method(cursor)
+      cursor.set_effective_caller_id(bad_effective_caller_id)
       with self.assertRaises(dbexceptions.DatabaseError):
-        cursor_execute_method(cursor, bad_effective_caller_id)
+        cursor_execute_method(cursor)
       cursor.close()
 
-    def cursor_execute_keyspace_ids_method(cursor, effective_caller_id):
-      cursor.execute(
-          effective_caller_id_test_query, {},
-          effective_caller_id=effective_caller_id)
+    def cursor_execute_keyspace_ids_method(cursor):
+      cursor.execute(effective_caller_id_test_query, {})
 
     check_good_and_bad_effective_caller_ids(
         self._open_keyspace_ids_cursor(), cursor_execute_keyspace_ids_method)
 
-    def cursor_execute_key_ranges_method(cursor, effective_caller_id):
-      cursor.execute(
-          effective_caller_id_test_query, {},
-          effective_caller_id=effective_caller_id)
+    def cursor_execute_key_ranges_method(cursor):
+      cursor.execute(effective_caller_id_test_query, {})
 
     check_good_and_bad_effective_caller_ids(
         self._open_keyranges_cursor(), cursor_execute_key_ranges_method)
 
-    def cursor_execute_entity_ids_method(cursor, effective_caller_id):
+    def cursor_execute_entity_ids_method(cursor):
       cursor.execute_entity_ids(
           effective_caller_id_test_query, {},
           entity_keyspace_id_map={1: self.KEYSPACE_ID_0X80},
-          entity_column_name='user_id',
-          effective_caller_id=effective_caller_id)
+          entity_column_name='user_id')
 
     check_good_and_bad_effective_caller_ids(
         self.conn.cursor('keyspace', 'master'),
         cursor_execute_entity_ids_method)
 
-    def cursor_execute_batch_keyspace_ids_method(cursor, effective_caller_id):
+    def cursor_execute_batch_keyspace_ids_method(cursor):
       cursor.execute(
           sql=effective_caller_id_test_query, bind_variables={},
           keyspace='keyspace',
           keyspace_ids=[self.KEYSPACE_ID_0X80])
-      cursor.flush(effective_caller_id=effective_caller_id)
+      cursor.flush()
 
     check_good_and_bad_effective_caller_ids(
-        self._open_batch_cursor(),
-        cursor_execute_batch_keyspace_ids_method)
+        self._open_batch_cursor(), cursor_execute_batch_keyspace_ids_method)
 
-    def cursor_stream_execute_keyspace_ids_method(cursor, effective_caller_id):
-      cursor.execute(
-          sql=effective_caller_id_test_query, bind_variables={},
-          effective_caller_id=effective_caller_id)
+    def cursor_stream_execute_keyspace_ids_method(cursor):
+      cursor.execute(sql=effective_caller_id_test_query, bind_variables={})
 
     check_good_and_bad_effective_caller_ids(
         self._open_stream_keyspace_ids_cursor(),
         cursor_stream_execute_keyspace_ids_method)
 
-    def cursor_stream_execute_keyranges_method(cursor, effective_caller_id):
-      cursor.execute(
-          sql=effective_caller_id_test_query, bind_variables={},
-          effective_caller_id=effective_caller_id)
+    def cursor_stream_execute_keyranges_method(cursor):
+      cursor.execute(sql=effective_caller_id_test_query, bind_variables={})
 
     check_good_and_bad_effective_caller_ids(
         self._open_stream_keyranges_cursor(),
