@@ -182,8 +182,6 @@ Creates the specified keyspace.
 #### Errors
 
 * The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
-* The <code>&lt;sharding_column_type&gt;</code> flag specifies an invalid value.
-* The <code>&lt;served_from&gt;</code> flag specifies a database (tablet) type that is not in the serving graph. The invalid value is: %v
 
 
 ### DeleteKeyspace
@@ -460,7 +458,6 @@ Updates the sharding information for a keyspace.
 #### Errors
 
 * The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;SetKeyspaceShardingInfo&gt;</code> command. The <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> arguments are both optional. This error occurs if the command is not called with between 1 and 3 arguments.
-* The <code>&lt;column type&gt;</code> argument specifies an invalid value for the sharding_column_type.
 
 
 ### ValidateKeyspace
@@ -494,6 +491,9 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 * [VtGateExecute](#vtgateexecute)
 * [VtGateExecuteShard](#vtgateexecuteshard)
 * [VtGateSplitQuery](#vtgatesplitquery)
+* [VtTabletBegin](#vttabletbegin)
+* [VtTabletCommit](#vttabletcommit)
+* [VtTabletRollback](#vttabletrollback)
 * [VtTabletStreamHealth](#vttabletstreamhealth)
 
 ### 
@@ -502,7 +502,7 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 
 ### // VtTablet commands
 
-[-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;,Executes the given query on the given tablet.
+[-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;,Executes the given query on the given tablet.
 
 #### Example
 
@@ -603,6 +603,105 @@ Executes the SplitQuery computation for the given SQL query with the provided bo
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * error connecting to vtgate '%v': %v
 * SplitQuery failed: %v
+
+
+### VtTabletBegin
+
+Starts a transaction on the provided server.
+
+#### Example
+
+<pre class="command-example">VtTabletBegin [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vttablet client |
+| keyspace | string | keyspace the tablet belongs to |
+| shard | string | shard the tablet belongs to |
+| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+
+
+#### Arguments
+
+* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. 
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+
+#### Errors
+
+* the <code>&lt;tablet_alias&gt;</code> argument is required for the <code>&lt;VtTabletBegin&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* cannot get EndPoint from tablet record: %v
+* cannot connect to tablet %v: %v
+* Begin failed: %v
+
+
+### VtTabletCommit
+
+Commits a transaction on the provided server.
+
+#### Example
+
+<pre class="command-example">VtTabletCommit [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vttablet client |
+| keyspace | string | keyspace the tablet belongs to |
+| shard | string | shard the tablet belongs to |
+| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+
+
+#### Arguments
+
+* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. 
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+* <code>&lt;transaction_id&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletCommit&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* cannot get EndPoint from tablet record: %v
+* cannot connect to tablet %v: %v
+
+
+### VtTabletRollback
+
+Rollbacks a transaction on the provided server.
+
+#### Example
+
+<pre class="command-example">VtTabletRollback [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| connect_timeout | Duration | Connection timeout for vttablet client |
+| keyspace | string | keyspace the tablet belongs to |
+| shard | string | shard the tablet belongs to |
+| tablet_type | string | tablet type we expect from the tablet (use unknown to use sessionId) |
+
+
+#### Arguments
+
+* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace. 
+* <code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. 
+* <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>. 
+* <code>&lt;transaction_id&gt;</code> &ndash; Required.
+
+#### Errors
+
+* the <code>&lt;tablet_alias&gt;</code> and <code>&lt;transaction_id&gt;</code> arguments are required for the <code>&lt;VtTabletRollback&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* cannot get EndPoint from tablet record: %v
+* cannot connect to tablet %v: %v
 
 
 ### VtTabletStreamHealth
@@ -718,7 +817,6 @@ Applies the VTGate routing schema.
 #### Errors
 
 * Either the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command.
-* %T does not support <code>&lt;vschema&gt;</code> operations
 
 
 ### CopySchemaShard
@@ -799,7 +897,6 @@ Displays the VTGate routing schema.
 #### Errors
 
 * The <code>&lt;GetVSchema&gt;</code> command does not support any arguments. This error occurs if the command is not called with exactly 0 arguments.
-* %T does not support the vschema operations
 
 
 ### ReloadSchema
@@ -1056,6 +1153,7 @@ Outputs a JSON structure that contains information about the SrvShard.
 * [SourceShardDelete](#sourcesharddelete)
 * [TabletExternallyReparented](#tabletexternallyreparented)
 * [ValidateShard](#validateshard)
+* [WaitForFilteredReplication](#waitforfilteredreplication)
 
 ### CreateShard
 
@@ -1510,6 +1608,35 @@ Validates that all nodes that are reachable from this shard are consistent.
 * The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
+### WaitForFilteredReplication
+
+Blocks until the specified shard has caught up with the filtered replication of its source shard.
+
+#### Example
+
+<pre class="command-example">WaitForFilteredReplication [-max_delay &lt;max_delay, default 30s&gt;] &lt;keyspace/shard&gt;</pre>
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>. 
+
+#### Errors
+
+* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* shard %v/%v has no source shard
+* shard %v/%v has no master
+* cannot get EndPoint for master tablet record: %v record: %v
+* failed to run explicit healthcheck on tablet: %v err: %v
+* cannot connect to tablet %v: %v
+* could not stream health records from tablet: %v err: %v
+* context was done before filtered replication did catch up. Last seen delay: %v context Error: %v
+* stream ended early: %v
+* health record does not include RealtimeStats message. tablet: %v health record: %v
+* tablet is not healthy. tablet: %v health record: %v
+* no filtered replication running on tablet: %v health record: %v
+* last seen delay should never be negative. tablet: %v delay: %v
+
+
 ## Tablets
 
 * [Backup](#backup)
@@ -1558,7 +1685,7 @@ Stops mysqld and uses the BackupStorage service to store a new backup. This func
 
 ### ChangeSlaveType
 
-Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " ")},
+Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.<br><br>NOTE: This command automatically updates the serving graph.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topoproto.MakeStringTypeList(topoproto.SlaveTabletTypes), " ")},
 
 #### Example
 
@@ -1700,7 +1827,7 @@ Outputs a JSON structure that contains information about the Tablet.
 
 ### InitTablet
 
-Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
+Initializes a tablet in the topology.<br><br>Valid &lt;tablet type&gt; values are:<br><br>  strings.Join(topoproto.MakeStringTypeList(topoproto.AllTabletTypes), " ")},
 
 #### Example
 
