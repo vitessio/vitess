@@ -6,7 +6,7 @@ Commands are listed in the following groups:
 * [Keyspaces](#keyspaces)
 * [Queries](#queries)
 * [Replication Graph](#replication-graph)
-* [Schema, Version, Permissions](#schema,-version,-permissions)
+* [Schema, Version, Permissions](#schema-version-permissions)
 * [Serving Graph](#serving-graph)
 * [Shards](#shards)
 * [Tablets](#tablets)

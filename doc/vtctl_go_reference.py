@@ -19,6 +19,10 @@ def get_all_files(directory, filenames):
       filenames[os.path.join(path, filename)] = True
   return filenames
 
+# This needs to produce the same anchor ID as the Markdown processor.
+def anchor_id(heading):
+  return heading.lower().replace(' ', '-').replace(',', '')
+
 def write_header(doc, commands):
   doc.write('This reference guide explains the commands that the ' +
             '<b>vtctl</b> tool supports. **vtctl** is a command-line tool ' +
@@ -27,7 +31,7 @@ def write_header(doc, commands):
             'implementation.\n\nCommands are listed in the ' +
             'following groups:\n\n')
   for group in sorted(commands):
-    group_link = group.lower().replace(' ', '-')
+    group_link = anchor_id(group)
     doc.write('* [' + group + '](#' + group_link + ')\n')
   doc.write('\n\n')
 
@@ -48,7 +52,7 @@ def create_reference_doc(root_directory, commands, arg_definitions):
           re.search(r'HIDDEN', commands[group][command]['definition'])):
         print '\n\n****** ' + command + ' is hidden *******\n\n'
         continue
-      command_link = command.lower().replace(' ', '-')
+      command_link = anchor_id(command)
       doc.write('* [' + command + '](#' + command_link + ')\n')
 
     doc.write('\n')
