@@ -279,12 +279,17 @@ func DbServingGraph(ctx context.Context, ts topo.Server, cell string) (servingGr
 				rec.RecordError(fmt.Errorf("GetSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err))
 				return
 			}
-			kn.ServedFrom = ks.ServedFrom
+			if len(ks.ServedFrom) > 0 {
+				kn.ServedFrom = make(map[topo.TabletType]string)
+				for _, sf := range ks.ServedFrom {
+					kn.ServedFrom[topo.ProtoToTabletType(sf.TabletType)] = sf.Keyspace
+				}
+			}
 
 			displayedShards := make(map[string]bool)
 			for _, partitionTabletType := range servingTypes {
-				kp, ok := ks.Partitions[partitionTabletType]
-				if !ok {
+				kp := topoproto.SrvKeyspaceGetPartition(ks, topo.TabletTypeToProto(partitionTabletType))
+				if kp == nil {
 					continue
 				}
 				for _, srvShard := range kp.ShardReferences {

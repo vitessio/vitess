@@ -8,13 +8,13 @@ import (
 
 // TopoReader returns read only information about the topology.
 type TopoReader interface {
-	// GetSrvKeyspaces returns the names of all the keyspaces in
+	// GetSrvKeyspaceNames returns the names of all the keyspaces in
 	// the topology for the cell.
 	GetSrvKeyspaceNames(context.Context, *GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
 
 	// GetSrvKeyspace returns information about a keyspace in a
 	// particular cell (as specified by the GetSrvKeyspaceArgs).
-	GetSrvKeyspace(context.Context, *GetSrvKeyspaceArgs, *SrvKeyspace) error
+	GetSrvKeyspace(context.Context, *GetSrvKeyspaceArgs, *pb.SrvKeyspace) error
 
 	// GetSrvShard returns information about a shard in a
 	// particular cell and keyspace (as specified by the GetSrvShardArgs).

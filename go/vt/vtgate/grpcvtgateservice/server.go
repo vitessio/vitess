@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -360,7 +359,7 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *pb.GetSrvKeyspac
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}
 	return &pb.GetSrvKeyspaceResponse{
-		SrvKeyspace: topo.SrvKeyspaceToProto(sk),
+		SrvKeyspace: sk,
 	}, nil
 }
 

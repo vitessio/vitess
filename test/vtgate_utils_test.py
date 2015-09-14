@@ -33,6 +33,7 @@ class FakeVtGateConnection(vtgatev2.VTGateConnection):
   def __init__(self):
     self.invoked_intervals = []
     self.keyspace = 'test_keyspace'
+    self.session = None
 
   @vtgate_utils.exponential_backoff_retry(
       retry_exceptions=(SomeException, AnotherException))
