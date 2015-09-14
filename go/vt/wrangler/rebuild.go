@@ -178,7 +178,7 @@ func (wr *Wrangler) orderAndCheckPartitions(cell string, srvKeyspace *pb.SrvKeys
 	// now check them all
 	for _, partition := range srvKeyspace.Partitions {
 		tabletType := partition.ServedType
-		topo.ShardReferenceArray(partition.ShardReferences).Sort()
+		topoproto.ShardReferenceArray(partition.ShardReferences).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,
 		// and the values in between match: End[i] == Start[i+1]
