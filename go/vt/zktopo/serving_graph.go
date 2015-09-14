@@ -210,9 +210,9 @@ func (zkts *Server) DeleteSrvShard(ctx context.Context, cell, keyspace, shard st
 }
 
 // UpdateSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (zkts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
-	data, err := json.MarshalIndent(topo.SrvKeyspaceToProto(srvKeyspace), "", "  ")
+	data, err := json.MarshalIndent(srvKeyspace, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (zkts *Server) DeleteSrvKeyspace(ctx context.Context, cell, keyspace string
 }
 
 // GetSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -252,7 +252,7 @@ func (zkts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (
 			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 		}
 	}
-	return topo.ProtoToSrvKeyspace(srvKeyspace), nil
+	return srvKeyspace, nil
 }
 
 // GetSrvKeyspaceNames is part of the topo.Server interface
@@ -314,10 +314,10 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
-func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
 	filePath := zkPathForVtKeyspace(cell, keyspace)
 
-	notifications := make(chan *topo.SrvKeyspace, 10)
+	notifications := make(chan *pb.SrvKeyspace, 10)
 	stopWatching := make(chan struct{})
 
 	// waitOrInterrupted will return true if stopWatching is triggered
@@ -351,15 +351,13 @@ func (zkts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string)
 
 			// get the initial value, send it, or send nil if no
 			// data
-			var srvKeyspace *topo.SrvKeyspace
+			var srvKeyspace *pb.SrvKeyspace
 			sendIt := true
 			if len(data) > 0 {
-				sk := &pb.SrvKeyspace{}
-				if err := json.Unmarshal([]byte(data), sk); err != nil {
+				srvKeyspace = &pb.SrvKeyspace{}
+				if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
 					log.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 					sendIt = false
-				} else {
-					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
 				}
 			}
 			if sendIt {

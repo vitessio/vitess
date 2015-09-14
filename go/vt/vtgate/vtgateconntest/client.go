@@ -621,7 +621,7 @@ func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql
 }
 
 // GetSrvKeyspace is part of the VTGateService interface
-func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	if f.hasError {
 		return nil, errTestVtGateError
 	}
@@ -2668,24 +2668,28 @@ var splitQueryResult = &proto.SplitQueryResult{
 
 var getSrvKeyspaceKeyspace = "test_keyspace"
 
-var getSrvKeyspaceResult = &topo.SrvKeyspace{
-	Partitions: map[topo.TabletType]*topo.KeyspacePartition{
-		topo.TYPE_REPLICA: &topo.KeyspacePartition{
-			ShardReferences: []topo.ShardReference{
-				topo.ShardReference{
+var getSrvKeyspaceResult = &pb.SrvKeyspace{
+	Partitions: []*pb.SrvKeyspace_KeyspacePartition{
+		&pb.SrvKeyspace_KeyspacePartition{
+			ServedType: pb.TabletType_REPLICA,
+			ShardReferences: []*pb.ShardReference{
+				&pb.ShardReference{
 					Name: "shard0",
-					KeyRange: key.KeyRange{
-						Start: key.KeyspaceId("s"),
-						End:   key.KeyspaceId("e"),
+					KeyRange: &pb.KeyRange{
+						Start: []byte{'s'},
+						End:   []byte{'e'},
 					},
 				},
 			},
 		},
 	},
 	ShardingColumnName: "sharding_column_name",
-	ShardingColumnType: key.KIT_UINT64,
-	ServedFrom: map[topo.TabletType]string{
-		topo.TYPE_MASTER: "other_keyspace",
+	ShardingColumnType: pb.KeyspaceIdType_UINT64,
+	ServedFrom: []*pb.SrvKeyspace_ServedFrom{
+		&pb.SrvKeyspace_ServedFrom{
+			TabletType: pb.TabletType_MASTER,
+			Keyspace:   "other_keyspace",
+		},
 	},
 	SplitShardCount: 128,
 }

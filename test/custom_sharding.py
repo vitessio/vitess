@@ -107,8 +107,8 @@ class TestCustomSharding(unittest.TestCase):
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(len(ks['Partitions']['master']['ShardReferences']), 1)
-    self.assertEqual(len(ks['Partitions']['rdonly']['ShardReferences']), 1)
+    self.assertEqual(len(ks['partitions'][0]['shard_references']), 1)
+    self.assertEqual(len(ks['partitions'][0]['shard_references']), 1)
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
     self.assertEqual(len(s['served_types']), 3)
 
@@ -175,8 +175,8 @@ primary key (id)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
-    self.assertEqual(len(ks['Partitions']['master']['ShardReferences']), 2)
-    self.assertEqual(len(ks['Partitions']['rdonly']['ShardReferences']), 2)
+    self.assertEqual(len(ks['partitions'][0]['shard_references']), 2)
+    self.assertEqual(len(ks['partitions'][0]['shard_references']), 2)
 
     # Now test SplitQuery API works (used in MapReduce usually, but bringing
     # up a full MR-capable cluster is too much for this test environment)

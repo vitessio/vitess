@@ -65,6 +65,9 @@ class Keyspace(object):
     pkid = pack_keyspace_id(keyspace_id)
     shards = self.get_shards(db_type)
     for shard in shards:
+      if 'KeyRange' not in shard or not shard['KeyRange']:
+        # this keyrange is covering the full space
+        return shard['Name']
       if _shard_contain_kid(pkid,
                             shard['KeyRange']['Start'],
                             shard['KeyRange']['End']):
@@ -83,7 +86,7 @@ def read_keyspace(topo_client, keyspace_name):
     if not data:
       raise dbexceptions.OperationalError('invalid empty keyspace',
                                           keyspace_name)
-    return Keyspace(keyspace_name, data)
+    return Keyspace(keyspace_name, keyrange_constants.srv_keyspace_proto3_to_old(data))
   except dbexceptions.OperationalError as e:
     raise e
   except Exception as e:

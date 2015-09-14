@@ -210,13 +210,13 @@ func (s *Server) DeleteSrvShard(ctx context.Context, cellName, keyspace, shard s
 }
 
 // UpdateSrvKeyspace implements topo.Server.
-func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
+func (s *Server) UpdateSrvKeyspace(ctx context.Context, cellName, keyspace string, srvKeyspace *pb.SrvKeyspace) error {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return err
 	}
 
-	data, err := json.MarshalIndent(topo.SrvKeyspaceToProto(srvKeyspace), "", "  ")
+	data, err := json.MarshalIndent(srvKeyspace, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (s *Server) DeleteSrvKeyspace(ctx context.Context, cellName, keyspace strin
 }
 
 // GetSrvKeyspace implements topo.Server.
-func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*topo.SrvKeyspace, error) {
+func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) (*pb.SrvKeyspace, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func (s *Server) GetSrvKeyspace(ctx context.Context, cellName, keyspace string) 
 	if err := json.Unmarshal([]byte(resp.Node.Value), value); err != nil {
 		return nil, fmt.Errorf("bad serving keyspace data (%v): %q", err, resp.Node.Value)
 	}
-	return topo.ProtoToSrvKeyspace(value), nil
+	return value, nil
 }
 
 // GetSrvKeyspaceNames implements topo.Server.
@@ -273,14 +273,14 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 }
 
 // WatchSrvKeyspace is part of the topo.Server interface
-func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *topo.SrvKeyspace, chan<- struct{}, error) {
+func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string) (<-chan *pb.SrvKeyspace, chan<- struct{}, error) {
 	cell, err := s.getCell(cellName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("WatchSrvKeyspace cannot get cell: %v", err)
 	}
 	filePath := srvKeyspaceFilePath(keyspace)
 
-	notifications := make(chan *topo.SrvKeyspace, 10)
+	notifications := make(chan *pb.SrvKeyspace, 10)
 	stopWatching := make(chan struct{})
 
 	// The watch go routine will stop if the 'stop' channel is closed.
@@ -289,7 +289,7 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 	watch := make(chan *etcd.Response)
 	stop := make(chan bool)
 	go func() {
-		var srvKeyspace *topo.SrvKeyspace
+		var srvKeyspace *pb.SrvKeyspace
 		var modifiedVersion int64
 
 		resp, err := cell.Get(filePath, false /* sort */, false /* recursive */)
@@ -297,11 +297,10 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 			// node doesn't exist
 		} else {
 			if resp.Node.Value != "" {
-				sk := &pb.SrvKeyspace{}
-				if err := json.Unmarshal([]byte(resp.Node.Value), sk); err != nil {
+				srvKeyspace = &pb.SrvKeyspace{}
+				if err := json.Unmarshal([]byte(resp.Node.Value), srvKeyspace); err != nil {
 					log.Warningf("bad SrvKeyspace data (%v): %q", err, resp.Node.Value)
 				} else {
-					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
 					modifiedVersion = int64(resp.Node.ModifiedIndex)
 				}
 			}
@@ -336,14 +335,13 @@ func (s *Server) WatchSrvKeyspace(ctx context.Context, cellName, keyspace string
 		for {
 			select {
 			case resp := <-watch:
-				var srvKeyspace *topo.SrvKeyspace
+				var srvKeyspace *pb.SrvKeyspace
 				if resp.Node != nil && resp.Node.Value != "" {
-					sk := &pb.SrvKeyspace{}
-					if err := json.Unmarshal([]byte(resp.Node.Value), sk); err != nil {
+					srvKeyspace = &pb.SrvKeyspace{}
+					if err := json.Unmarshal([]byte(resp.Node.Value), srvKeyspace); err != nil {
 						log.Errorf("failed to Unmarshal EndPoints for %v: %v", filePath, err)
 						continue
 					}
-					srvKeyspace = topo.ProtoToSrvKeyspace(sk)
 				}
 				notifications <- srvKeyspace
 			case <-stopWatching:

@@ -41,7 +41,7 @@ const (
 type SrvTopoServer interface {
 	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
 
-	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error)
 
 	GetSrvShard(ctx context.Context, cell, keyspace, shard string) (*pb.SrvShard, error)
 
@@ -123,7 +123,7 @@ type srvKeyspaceEntry struct {
 	mutex sync.Mutex
 
 	insertionTime time.Time
-	value         *topo.SrvKeyspace
+	value         *pb.SrvKeyspace
 	lastError     error
 	lastErrorCtx  context.Context
 }
@@ -270,7 +270,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, c
 }
 
 // GetSrvKeyspace returns SrvKeyspace object for the given cell and keyspace.
-func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (server *ResilientSrvTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
 	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
@@ -513,7 +513,7 @@ func (skncsl SrvKeyspaceNamesCacheStatusList) Swap(i, j int) {
 type SrvKeyspaceCacheStatus struct {
 	Cell         string
 	Keyspace     string
-	Value        *topo.SrvKeyspace
+	Value        *pb.SrvKeyspace
 	LastError    error
 	LastErrorCtx context.Context
 }
@@ -541,8 +541,8 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 
 	if len(st.Value.ServedFrom) > 0 {
 		result += "<b>ServedFrom:</b><br>"
-		for tabletType, keyspace := range st.Value.ServedFrom {
-			result += "&nbsp;<b>" + string(tabletType) + "</b>&nbsp;" + keyspace + "<br>"
+		for _, sf := range st.Value.ServedFrom {
+			result += "&nbsp;<b>" + strings.ToLower(sf.TabletType.String()) + "</b>&nbsp;" + sf.Keyspace + "<br>"
 		}
 	}
 

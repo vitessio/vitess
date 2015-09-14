@@ -18,7 +18,6 @@ import (
 	pb "github.com/youtube/vitess/go/vt/proto/topodata"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
@@ -80,8 +79,8 @@ func (sg *shardGateway) InitializeConnections(ctx context.Context) error {
 				return
 			}
 			// work on all shards of all serving tablet types
-			for tabletType, ksPartition := range ks.Partitions {
-				tt := topo.TabletTypeToProto(tabletType)
+			for _, ksPartition := range ks.Partitions {
+				tt := ksPartition.ServedType
 				for _, shard := range ksPartition.ShardReferences {
 					wg.Add(1)
 					go func(shardName string, tabletType pb.TabletType) {

@@ -365,7 +365,7 @@ func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, que
 }
 
 // GetSrvKeyspace please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return nil, fmt.Errorf("NYI")
 }
 

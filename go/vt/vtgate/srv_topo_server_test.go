@@ -201,10 +201,10 @@ func (ft *fakeTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]str
 	return []string{ft.keyspace}, nil
 }
 
-func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topo.SrvKeyspace, error) {
+func (ft *fakeTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*pb.SrvKeyspace, error) {
 	ft.callCount++
 	if keyspace == ft.keyspace {
-		return &topo.SrvKeyspace{}, nil
+		return &pb.SrvKeyspace{}, nil
 	}
 	return nil, fmt.Errorf("Unknown keyspace")
 }

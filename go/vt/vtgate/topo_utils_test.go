@@ -50,7 +50,7 @@ func TestKeyRangeToShardMap(t *testing.T) {
 			if err != nil {
 				t.Errorf("Got error while parsing sharding spec %v", err)
 			}
-			keyRange = key.KeyRangeToProto(krArray[0])
+			keyRange = krArray[0]
 		}
 		_, _, allShards, err := getKeyspaceShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER)
 		gotShards, err := resolveKeyRangeToShards(allShards, keyRange)
@@ -94,7 +94,7 @@ func TestMapExactShards(t *testing.T) {
 			if err != nil {
 				t.Errorf("Got error while parsing sharding spec %v", err)
 			}
-			keyRange = key.KeyRangeToProto(krArray[0])
+			keyRange = krArray[0]
 		}
 		_, gotShards, err := mapExactShards(context.Background(), ts, "", testCase.keyspace, pb.TabletType_MASTER, keyRange)
 		if err != nil && err.Error() != testCase.err {

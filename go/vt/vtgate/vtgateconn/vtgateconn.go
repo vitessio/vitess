@@ -11,7 +11,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 	"golang.org/x/net/context"
 
@@ -204,7 +203,7 @@ func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query s
 }
 
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
-func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error) {
+func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error) {
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
 }
 
@@ -403,7 +402,7 @@ type Impl interface {
 	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int) ([]proto.SplitQueryPart, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
-	GetSrvKeyspace(ctx context.Context, keyspace string) (*topo.SrvKeyspace, error)
+	GetSrvKeyspace(ctx context.Context, keyspace string) (*pb.SrvKeyspace, error)
 
 	// Close must be called for releasing resources.
 	Close()
