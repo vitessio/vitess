@@ -369,6 +369,10 @@ def main(root_directory):
     # Add logic to capture command data from those commands.
     for line in vtctl_go_data:
 
+      # skip comments and empty lines
+      if line.strip() == '' or line.strip().startswith('//'):
+        continue
+
       if is_func_init and line.strip() == '}':
         #get_commands = False
         is_func_init = False
