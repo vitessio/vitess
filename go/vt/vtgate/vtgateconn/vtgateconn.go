@@ -27,21 +27,6 @@ var (
 	vtgateProtocol = flag.String("vtgate_protocol", GoRPCProtocol, "how to talk to vtgate")
 )
 
-// ServerError represents an error that was returned from
-// a vtgate server.
-type ServerError struct {
-	Code int
-	Err  string
-}
-
-func (e *ServerError) Error() string { return e.Err }
-
-// OperationalError represents an error due to a failure to
-// communicate with vtgate.
-type OperationalError string
-
-func (e OperationalError) Error() string { return string(e) }
-
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method.
 // It can be used concurrently across goroutines.

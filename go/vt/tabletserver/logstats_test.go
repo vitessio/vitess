@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -108,9 +107,12 @@ func TestLogStatsErrorStr(t *testing.T) {
 		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
 	}
 	errStr := "unknown error"
-	logStats.Error = fmt.Errorf(errStr)
-	if logStats.ErrorStr() != errStr {
-		t.Fatalf("expect to get error string: %s, but got: %s", errStr, logStats.ErrorStr())
+	logStats.Error = &TabletError{
+		ErrorType: ErrFail,
+		Message:   errStr,
+	}
+	if !strings.Contains(logStats.ErrorStr(), errStr) {
+		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
 	}
 }
 
