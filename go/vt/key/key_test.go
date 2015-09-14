@@ -211,7 +211,7 @@ func TestIntersectOverlap(t *testing.T) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		right := &pb.KeyRange{Start: c, End: d}
-		if c := KeyRangesIntersect3(left, right); c != el.intersects {
+		if c := KeyRangesIntersect(left, right); c != el.intersects {
 			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
 		}
 		overlap, err := KeyRangesOverlap(left, right)

@@ -140,10 +140,6 @@ type KeyRange struct {
 
 //go:generate bsongen -file $GOFILE -type KeyRange -o key_range_bson.go
 
-func (kr KeyRange) MapKey() string {
-	return string(kr.Start) + "-" + string(kr.End)
-}
-
 func (kr KeyRange) Contains(i KeyspaceId) bool {
 	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
 }
@@ -161,21 +157,8 @@ func (kr KeyRange) String() string {
 	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
-// Parse a start and end hex values and build a KeyRange
-func ParseKeyRangeParts(start, end string) (KeyRange, error) {
-	s, err := HexKeyspaceId(start).Unhex()
-	if err != nil {
-		return KeyRange{}, err
-	}
-	e, err := HexKeyspaceId(end).Unhex()
-	if err != nil {
-		return KeyRange{}, err
-	}
-	return KeyRange{Start: s, End: e}, nil
-}
-
-// ParseKeyRangeParts3 parses a start and end hex values and build a proto KeyRange
-func ParseKeyRangeParts3(start, end string) (*pb.KeyRange, error) {
+// ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
+func ParseKeyRangeParts(start, end string) (*pb.KeyRange, error) {
 	s, err := hex.DecodeString(start)
 	if err != nil {
 		return nil, err
@@ -185,11 +168,6 @@ func ParseKeyRangeParts3(start, end string) (*pb.KeyRange, error) {
 		return nil, err
 	}
 	return &pb.KeyRange{Start: s, End: e}, nil
-}
-
-// Returns true if the KeyRange does not cover the entire space.
-func (kr KeyRange) IsPartial() bool {
-	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
 // KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
@@ -241,13 +219,7 @@ func KeyRangeEndEqual(left, right *pb.KeyRange) bool {
 // overlap = min(b, d) - max(c, a)
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect(first, second KeyRange) bool {
-	return (first.End == MaxKey || second.Start < first.End) &&
-		(second.End == MaxKey || first.Start < second.End)
-}
-
-// KeyRangesIntersect3 returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect3(first, second *pb.KeyRange) bool {
+func KeyRangesIntersect(first, second *pb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
@@ -258,7 +230,7 @@ func KeyRangesIntersect3(first, second *pb.KeyRange) bool {
 // KeyRangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
 func KeyRangesOverlap(first, second *pb.KeyRange) (*pb.KeyRange, error) {
-	if !KeyRangesIntersect3(first, second) {
+	if !KeyRangesIntersect(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
 	if first == nil {

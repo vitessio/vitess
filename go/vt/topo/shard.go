@@ -93,7 +93,7 @@ func ValidateShardName(shard string) (string, *pb.KeyRange, error) {
 		return "", nil, fmt.Errorf("invalid shardId, can only contain one '-': %v", shard)
 	}
 
-	keyRange, err := key.ParseKeyRangeParts3(parts[0], parts[1])
+	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
 	if err != nil {
 		return "", nil, err
 	}
@@ -254,7 +254,7 @@ func (ts Server) CreateShard(ctx context.Context, keyspace, shard string) error 
 			return err
 		}
 		for _, si := range sis {
-			if si.KeyRange == nil || key.KeyRangesIntersect3(si.KeyRange, keyRange) {
+			if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
 				for _, st := range si.ServedTypes {
 					delete(servedTypes, st.TabletType)
 				}

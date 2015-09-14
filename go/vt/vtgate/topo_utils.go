@@ -156,7 +156,7 @@ func resolveKeyRangeToShards(allShards []*pb.ShardReference, kr *pb.KeyRange) ([
 	}
 	for j := 0; j < len(allShards); j++ {
 		shard := allShards[j]
-		if key.KeyRangesIntersect3(kr, shard.KeyRange) {
+		if key.KeyRangesIntersect(kr, shard.KeyRange) {
 			shards = append(shards, shard.Name)
 		}
 	}
