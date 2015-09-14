@@ -88,6 +88,8 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	})
 }
 
+// verifyScatterConnError checks that a returned error has the expected message,
+// type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpc.ErrorCode) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
@@ -98,6 +100,14 @@ func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vt
 	code := vterrors.RecoverVtErrorCode(err)
 	if code != wantCode {
 		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
+	}
+}
+
+// verifyErrorCode checks the error code for an error
+func verifyErrorCode(t *testing.T, err error, wantCode vtrpc.ErrorCode) {
+	code := vterrors.RecoverVtErrorCode(err)
+	if err == nil || code != wantCode {
+		t.Errorf("vterrors.RecoverVtErrorCode(%v) => %v, want %v", err, code, wantCode)
 	}
 }
 
@@ -256,19 +266,17 @@ func TestScatterCommitRollbackIncorrectSession(t *testing.T) {
 
 	// nil session
 	err := stc.Commit(context.Background(), nil)
-	if err == nil {
-		t.Errorf("want error, got nil")
-	}
+	verifyErrorCode(t, err, vtrpc.ErrorCode_BAD_INPUT)
+
 	err = stc.Rollback(context.Background(), nil)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
+
 	// not in transaction
 	session := NewSafeSession(&proto.Session{})
 	err = stc.Commit(context.Background(), session)
-	if err == nil {
-		t.Errorf("want error, got nil")
-	}
+	verifyErrorCode(t, err, vtrpc.ErrorCode_NOT_IN_TX)
 }
 
 func TestScatterConnCommitSuccess(t *testing.T) {

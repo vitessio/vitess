@@ -65,10 +65,7 @@ func rpcErrFromVtGateError(err error) *mproto.RPCError {
 func aggregateVtGateErrorCodes(errors []error) vtrpc.ErrorCode {
 	highCode := vtrpc.ErrorCode_SUCCESS
 	for _, e := range errors {
-		code := vtrpc.ErrorCode_UNKNOWN_ERROR
-		if vtErr, ok := e.(vterrors.VtError); ok {
-			code = vtErr.VtErrorCode()
-		}
+		code := vterrors.RecoverVtErrorCode(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
 		}
