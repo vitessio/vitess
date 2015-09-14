@@ -1,4 +1,4 @@
-This document describe the testing strategy we use for all Vitess components.
+This document describe the testing strategy we use for all Vitess components, and the progression in scope / complexity.
 
 ## Unit Tests
 
@@ -12,7 +12,9 @@ All client libraries should be tested with vtgateclienttest. It is meant to vali
 
 It is a single stand-alone process, light-weight enough that it runs very quickly and doesn't take many resources at all, and just requires a port to listen on.
 
-# vttest Library, run\_local\_database.py
+(note the go version is run in-process, doesn't even fork vtgateclienttest).
+
+## vttest Library, run\_local\_database.py
 
 This set of helpers has two purposes:
 
@@ -28,19 +30,27 @@ This framework supports an initial schema to apply to all keyspaces / shards, pe
 
 Due to its constant nature, this is not an appropriate framework to test cluster events, like re-sharding, re-parenting, advanced query routing, ... No replication is setup on the single MySQL instance, obviously.
 
-# Integration Tests
+## Integration Tests
 
 These tests run more complicated setups, and take a lot more resources. They are meant to test end-to-end behaviours of the Vitess echosystem, and complement the unit tests.
 
 For instance, we test each RPC interaction independently (client to vtgate, vtgate to vttablet, vttablet to MySQL, see previous sections). But is is also good to have an end-to-end test that validates everything works together.
 
-These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production processes, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ...
+These tests almost always launch a topology service, a few mysqld instances, a few vttablets, a vtctld process, a few vtgates, ... They use the real production processes, and real replication. This setup is mandatory for properly testing re-sharding, cluster operations, ... They all however run on the same machine, so they might be limited by the environment.
 
-# Consolidation Work
+## Sandbox Tests
+
+The vitest sandbox is a multi-server framework that runs production processes exactly as they would be running in production, in a cloud environment. It is very mature and powerful. It is also used for benchmarking, not just workflow tests.
+
+We have made a lot of progress for the Google internal sandbox, however the external one (on Kubernetes) is not there yet.
+
+## Consolidation Work
 
 The following action items exist to make it all consistent:
 
 * Consolidate to use use vttest everywhere, instead of the old google3-only run\_local\_database.py. Note vttest library is working in Google3 and passes unit test scenarios. Haven't had time to clean up the old stuff yet.
+
+* switch the end-to-end google3 tests that require a production setup from vtocc to vtgate. This is a small subset of tests (about 100, not the thousands of YouTube tests that use run\_local\_database.py), so using vttablet is not too bad.
 
 * Switch query\_service.py tests to unit tests using vttest. Sugu is on it, first thing is to let vttest only launch a MySQL (and nothing else), and fix its MySQL parameters.
 
@@ -56,3 +66,4 @@ The following action items exist to make it all consistent:
 
 * the python client tests (using vtgateclienttest) are in test/python\_client\_test.py. They need to be finished. Note these are hard to differentiate from the tests in vtgatev2\_test.py. The rule of thumb is if you are testing a client-library feature, tests should be in test/python\_client\_test.py. If you are testing an end-to-end behaviour, tests should be in vtgatev2\_test.py.
 
+* Have an external equivalent of the sandbox that can run on a regular basis in Kubernetes / GCE.
